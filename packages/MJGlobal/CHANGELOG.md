@@ -1,5 +1,35 @@
 # Change Log - @memberjunction/global
 
+## 5.22.0
+
+### Patch Changes
+
+- f2a6bec: Universal lazy loading via ClassFactory async API. Fixes HomeApplication being tree-shaken by moving lazy loading from consumer-specific retry patterns into ClassFactory itself with RegisterLazyLoader, CreateInstanceAsync, and GetRegistrationAsync. Lazy config now uses compound keys (BaseClassName::Key) to support any base class. Adds coverage audit to codegen to detect gaps.
+
+## 5.21.0
+
+## 5.20.0
+
+## 5.19.0
+
+## 5.18.0
+
+## 5.17.0
+
+## 5.16.0
+
+## 5.15.0
+
+## 5.14.0
+
+## 5.13.0
+
+### Patch Changes
+
+- f72b538: Replace HookRegistry and DynamicPackageLoader with @RegisterClass + ClassFactory middleware pattern, and add GetResolverPaths() to BaseServerMiddleware for auto-discovery of middleware-contributed GraphQL resolvers
+
+## 5.12.0
+
 ## 5.11.0
 
 ## 5.10.1

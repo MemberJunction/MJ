@@ -15,10 +15,11 @@
 import { DataContext } from '@memberjunction/data-context';
 import type { SkipMessage } from './conversation-types';
 import type { SkipEntityInfo } from './entity-metadata-types';
-import type { SkipQueryInfo } from './query-types';
+import type { SkipQueryInfo, SkipQueryCatalogEntry } from './query-types';
 import type { SkipAPIRequestAPIKey } from './auth-types';
 import type { SkipAPIArtifact } from './artifact-types';
 import type { SkipAPIAgentNote, SkipAPIAgentNoteType } from './agent-types';
+import type { DatabasePlatform } from '@memberjunction/sql-dialect';
 
 /**
  * Describes the different request phases that are used to communicate with the Skip API Server
@@ -147,6 +148,15 @@ export class SkipAPIRequest {
     queries: SkipQueryInfo[];
 
     /**
+     * Lightweight catalog of ALL query names and category paths (regardless of status).
+     * Always populated regardless of the includeQueries flag, enabling accurate
+     * collision detection without the overhead of full query metadata.
+     * Includes all statuses because the database enforces name+category uniqueness
+     * across all queries, not just approved ones.
+     */
+    queryCatalog?: SkipQueryCatalogEntry[];
+
+    /**
      * The conversation ID
      */
     conversationID: string;
@@ -219,6 +229,13 @@ export class SkipAPIRequest {
      * the caller's execution tracking and Skip's execution tracking.
      */
     externalReferenceID?: string;
+
+    /**
+     * The database platform used by the calling MJ environment. This tells Skip which SQL dialect
+     * to use when generating queries (e.g., SQL Server vs PostgreSQL syntax differences).
+     * If not provided, Skip should default to 'sqlserver' for backward compatibility.
+     */
+    databasePlatform?: DatabasePlatform;
 }
 
 /**

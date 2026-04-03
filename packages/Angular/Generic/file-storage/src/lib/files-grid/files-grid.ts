@@ -4,8 +4,22 @@ import { RunView } from '@memberjunction/core';
 import { MJFileEntity } from '@memberjunction/core-entities';
 import { GraphQLDataProvider, gql } from '@memberjunction/graphql-dataprovider';
 import { SharedService } from '@memberjunction/ng-shared';
+import {
+  ColDef,
+  GridReadyEvent,
+  GridApi,
+  ModuleRegistry,
+  AllCommunityModule,
+  themeAlpine,
+  colorSchemeVariable,
+  type Theme,
+  ICellRendererParams
+} from 'ag-grid-community';
 import { z } from 'zod';
 import { FileUploadEvent } from '../file-upload/file-upload';
+
+// Register AG Grid modules
+ModuleRegistry.registerModules([AllCommunityModule]);
 
 /**
  * Downloads a file from the provided URL.
@@ -64,7 +78,19 @@ export class FilesGridComponent implements OnInit, OnChanges {
   public isLoading: boolean = false;
   public editFile: MJFileEntity | undefined;
 
-  constructor(private sharedService: SharedService) {}
+  // AG Grid configuration
+  public GridTheme: Theme = themeAlpine.withPart(colorSchemeVariable);
+  public ColumnDefs: ColDef[] = [];
+  public DefaultColDef: ColDef = {
+    sortable: true,
+    resizable: true,
+    filter: false,
+  };
+  private gridApi: GridApi | null = null;
+
+  constructor(private sharedService: SharedService) {
+    this.ColumnDefs = this.buildColumnDefs();
+  }
 
   @Input() CategoryID: string | undefined = undefined;
 
@@ -76,6 +102,10 @@ export class FilesGridComponent implements OnInit, OnChanges {
     if (changes['CategoryID']) {
       this.Refresh();
     }
+  }
+
+  public OnGridReady(event: GridReadyEvent): void {
+    this.gridApi = event.api;
   }
 
   /**
@@ -106,6 +136,10 @@ export class FilesGridComponent implements OnInit, OnChanges {
       if (success) {
         this.sharedService.CreateSimpleNotification(`Successfully saved file ${this.editFile.ID} ${this.editFile.Name}`, 'success');
         this.editFile = undefined;
+        // Refresh the grid to show the updated data
+        if (this.gridApi) {
+          this.gridApi.setGridOption('rowData', this.files);
+        }
       } else {
         this.sharedService.CreateSimpleNotification(`Unable to save file ${this.editFile.ID} ${this.editFile.Name}`, 'error');
       }
@@ -149,7 +183,6 @@ export class FilesGridComponent implements OnInit, OnChanges {
   public canBeDeleted(file: MJFileEntity): boolean {
     const status = file.Status;
     const deletable = status === 'Uploaded' || Date.now() - +file.__mj_CreatedAt > 10 * 60 * 60;
-    // console.log({ status, deletable, ID: file.ID, CreatedAt: file.CreatedAt });
     return deletable;
   }
 
@@ -187,6 +220,7 @@ export class FilesGridComponent implements OnInit, OnChanges {
     }
 
     this.files.push(e.file);
+    this.files = [...this.files]; // trigger AG Grid row data change
     this.isLoading = false;
   }
 
@@ -209,5 +243,56 @@ export class FilesGridComponent implements OnInit, OnChanges {
       throw new Error('Error loading files: ' + result.ErrorMessage);
     }
     this.isLoading = false;
+  }
+
+  /**
+   * Builds AG Grid column definitions from the entity fields.
+   */
+  private buildColumnDefs(): ColDef[] {
+    return [
+      { field: 'ID', headerName: 'ID' },
+      { field: 'Category', headerName: 'Category' },
+      { field: 'Name', headerName: 'Name' },
+      { field: 'Description', headerName: 'Description' },
+      { field: 'Status', headerName: 'Status' },
+      {
+        headerName: 'Actions',
+        sortable: false,
+        resizable: false,
+        filter: false,
+        cellRenderer: (params: ICellRendererParams) => {
+          const container = document.createElement('div');
+          container.className = 'action-buttons';
+
+          const downloadBtn = this.createActionButton('fa-download', params.data?.Status !== 'Uploaded');
+          downloadBtn.addEventListener('click', () => this.downloadFile(params.data));
+
+          const deleteBtn = this.createActionButton('fa-trash-can', !this.canBeDeleted(params.data));
+          deleteBtn.addEventListener('click', () => this.deleteFile(params.data));
+
+          const editBtn = this.createActionButton('fa-pen-to-square', params.data?.Status !== 'Uploaded');
+          editBtn.addEventListener('click', () => { this.editFile = params.data; });
+
+          container.appendChild(downloadBtn);
+          container.appendChild(deleteBtn);
+          container.appendChild(editBtn);
+
+          return container;
+        }
+      }
+    ];
+  }
+
+  /**
+   * Creates a small action button element for the AG Grid cell renderer.
+   */
+  private createActionButton(iconClass: string, disabled: boolean): HTMLButtonElement {
+    const btn = document.createElement('button');
+    btn.className = 'mj-btn mj-btn-flat mj-btn-sm grid-action-btn';
+    btn.disabled = disabled;
+    const icon = document.createElement('span');
+    icon.className = `fa-solid ${iconClass}`;
+    btn.appendChild(icon);
+    return btn;
   }
 }

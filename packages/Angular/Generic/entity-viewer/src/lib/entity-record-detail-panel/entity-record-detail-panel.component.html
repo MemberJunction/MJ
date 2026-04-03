@@ -148,6 +148,74 @@
         </div>
       }
     </div>
+
+    <!-- Organic Key Matches Section -->
+    @if (organicKeyMatches.length > 0 || isLoadingOrganicKeys) {
+    <div class="section">
+      <div class="section-header" (click)="toggleSection('organicKeys')">
+        <i class="fa-solid fa-link section-icon"></i>
+        <span class="section-title">Organic Key Matches</span>
+        <i class="fa-solid expand-icon" [class.fa-chevron-down]="organicKeysSectionExpanded" [class.fa-chevron-right]="!organicKeysSectionExpanded"></i>
+      </div>
+
+      @if (organicKeysSectionExpanded) {
+        <div class="section-content">
+          @if (isLoadingOrganicKeys) {
+            <div class="relationships-loading">
+              <mj-loading text="Loading organic key matches..." size="small"></mj-loading>
+            </div>
+          } @else if (organicKeyMatchesWithRecords.length === 0) {
+            <div class="empty-section">No organic key matches</div>
+          } @else {
+            @for (match of organicKeyMatchesWithRecords; track match.relatedEntityName) {
+              <div class="related-entity-group" [class.expanded]="match.isExpanded">
+                <div
+                  class="related-entity-header"
+                  [class.clickable]="match.count > 0"
+                  (click)="toggleOrganicKeyExpansion(match, $event)">
+                  <i class="fa-solid expand-chevron"
+                     [class.fa-chevron-down]="match.isExpanded"
+                     [class.fa-chevron-right]="!match.isExpanded"></i>
+                  <i [class]="getOrganicKeyEntityIcon(match)"></i>
+                  <span class="related-entity-name">{{ match.relatedEntityName }}</span>
+                  <span class="related-entity-count">{{ match.count }}</span>
+                </div>
+
+                @if (match.isExpanded) {
+                  <div class="related-records-list">
+                    @if (match.isLoadingRecords) {
+                      <div class="records-loading">
+                        <mj-loading text="Loading..." size="small"></mj-loading>
+                      </div>
+                    } @else {
+                      @for (rec of match.records; track $index) {
+                        <div class="related-record-item" (click)="onOrganicKeyRecordClick(match, rec, $event)">
+                          <div class="record-info">
+                            <span class="record-name">{{ getOrganicKeyRecordDisplayName(match, rec) }}</span>
+                            @if (getOrganicKeyRecordSubtitle(match, rec); as subtitle) {
+                              <span class="record-subtitle">{{ subtitle }}</span>
+                            }
+                          </div>
+                          <i class="fa-solid fa-external-link-alt record-open-icon"></i>
+                        </div>
+                      }
+
+                      @if (match.count > 10) {
+                        <div class="view-all-link" (click)="onViewAllOrganicKey(match, $event)">
+                          <span>View all {{ match.count }} records</span>
+                          <i class="fa-solid fa-arrow-right"></i>
+                        </div>
+                      }
+                    }
+                  </div>
+                }
+              </div>
+            }
+          }
+        </div>
+      }
+    </div>
+    }
   </div>
 
   <!-- Footer -->

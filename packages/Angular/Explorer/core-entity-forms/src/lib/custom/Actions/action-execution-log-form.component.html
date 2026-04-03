@@ -1,5 +1,5 @@
-<div class="record-form-container action-execution-log-form">
-    <div class="record-form">
+<div class="record-form-container action-execution-log-form" style="height: 100%; display: flex; flex-direction: column;">
+    <div class="record-form" style="display: flex; flex-direction: column; height: 100%; overflow: hidden;">
         <!-- Header -->
         <div class="header">
             <div class="header-content">
@@ -66,10 +66,12 @@
 
         <!-- Content Area -->
         <div class="content-area">
-            <kendo-panelbar [keepItemContent]="true">
+            <div class="accordion-container">
                 <!-- Execution Details -->
-                <kendo-panelbar-item title="Execution Details" [expanded]="true">
-                    <ng-template kendoPanelBarContent>
+                <mj-accordion-panel [Expanded]="true">
+                    <ng-template mjAccordionTitle>
+                      <i class="fas fa-info-circle"></i> Execution Details
+                    </ng-template>
                         <div class="details-grid">
                             <div class="detail-item">
                                 <label>Execution ID</label>
@@ -99,13 +101,14 @@
                                 <span>{{ record.RetentionPeriod ? record.RetentionPeriod + ' days' : 'Indefinite' }}</span>
                             </div>
                         </div>
-                    </ng-template>
-                </kendo-panelbar-item>
+                </mj-accordion-panel>
 
                 <!-- Input Parameters Only -->
                 @if (hasInputParams && formattedInputParams) {
-                    <kendo-panelbar-item title="Input Parameters" [expanded]="expandedSections.inputParams">
-                        <ng-template kendoPanelBarContent>
+                    <mj-accordion-panel [Expanded]="expandedSections.inputParams">
+                        <ng-template mjAccordionTitle>
+                          <i class="fas fa-sign-in-alt"></i> Input Parameters
+                        </ng-template>
                             <div class="json-viewer">
                                 <div class="json-toolbar">
                                     <span class="json-label">JSON (Input Parameters Only)</span>
@@ -122,14 +125,15 @@
                                     style="height: 300px; width: 100%;">
                                 </mj-code-editor>
                             </div>
-                        </ng-template>
-                    </kendo-panelbar-item>
+                    </mj-accordion-panel>
                 }
 
                 <!-- Output Parameters Only -->
                 @if (hasOutputParams && formattedOutputParams) {
-                    <kendo-panelbar-item title="Output Parameters" [expanded]="expandedSections.outputParams">
-                        <ng-template kendoPanelBarContent>
+                    <mj-accordion-panel [Expanded]="expandedSections.outputParams">
+                        <ng-template mjAccordionTitle>
+                          <i class="fas fa-sign-out-alt"></i> Output Parameters
+                        </ng-template>
                             <div class="json-viewer">
                                 <div class="json-toolbar">
                                     <span class="json-label">JSON (Output Parameters Only)</span>
@@ -146,14 +150,15 @@
                                     style="height: 300px; width: 100%;">
                                 </mj-code-editor>
                             </div>
-                        </ng-template>
-                    </kendo-panelbar-item>
+                    </mj-accordion-panel>
                 }
 
                 <!-- Input+Output Parameters -->
                 @if (hasBothParams && formattedBothParams) {
-                    <kendo-panelbar-item title="Input+Output Parameters" [expanded]="expandedSections.bothParams">
-                        <ng-template kendoPanelBarContent>
+                    <mj-accordion-panel [Expanded]="expandedSections.bothParams">
+                        <ng-template mjAccordionTitle>
+                          <i class="fas fa-exchange-alt"></i> Input+Output Parameters
+                        </ng-template>
                             <div class="json-viewer">
                                 <div class="json-toolbar">
                                     <span class="json-label">JSON (Input+Output Parameters)</span>
@@ -170,14 +175,15 @@
                                     style="height: 300px; width: 100%;">
                                 </mj-code-editor>
                             </div>
-                        </ng-template>
-                    </kendo-panelbar-item>
+                    </mj-accordion-panel>
                 }
 
                 <!-- Output Message -->
                 @if (record.Message) {
-                    <kendo-panelbar-item title="Output Message" [expanded]="expandedSections.output">
-                        <ng-template kendoPanelBarContent>
+                    <mj-accordion-panel [Expanded]="expandedSections.output">
+                        <ng-template mjAccordionTitle>
+                          <i class="fas fa-comment-alt"></i> Output Message
+                        </ng-template>
                             <div class="json-viewer">
                                 <div class="json-toolbar">
                                     <span class="json-label">JSON</span>
@@ -194,22 +200,22 @@
                                     style="height: 300px; width: 100%;">
                                 </mj-code-editor>
                             </div>
-                        </ng-template>
-                    </kendo-panelbar-item>
+                    </mj-accordion-panel>
                 }
 
                 <!-- Empty States for missing data -->
                 @if (!record.Params && !record.Message && !hasInputParams && !hasOutputParams && !hasBothParams) {
-                    <kendo-panelbar-item title="Execution Data" [expanded]="true">
-                        <ng-template kendoPanelBarContent>
+                    <mj-accordion-panel [Expanded]="true">
+                        <ng-template mjAccordionTitle>
+                          <i class="fas fa-database"></i> Execution Data
+                        </ng-template>
                             <div class="empty-state">
                                 <i class="fas fa-inbox"></i>
                                 <p>No execution data recorded</p>
                             </div>
-                        </ng-template>
-                    </kendo-panelbar-item>
+                    </mj-accordion-panel>
                 }
-            </kendo-panelbar>
+            </div>
         </div>
     </div>
 </div>

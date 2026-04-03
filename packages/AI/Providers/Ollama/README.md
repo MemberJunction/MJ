@@ -104,6 +104,14 @@ console.log(`Dimensions: ${result.vector.length}`);
 
 The default endpoint is `http://localhost:11434`. Configure via `SetAdditionalSettings` for custom hosts.
 
+## Supported Features
+
+| Feature | Supported | Notes |
+|---------|-----------|-------|
+| stopSequences | Yes | Custom stop sequences |
+| assistantPrefill | Yes | Pre-seed the assistant's response ([guide](../../Prompts/PREFILL_AND_STOP_SEQUENCES.md)) |
+| streaming | Yes | Real-time streaming |
+
 ## Class Registration
 
 - `OllamaLLM` -- Registered via `@RegisterClass(BaseLLM, 'OllamaLLM')`

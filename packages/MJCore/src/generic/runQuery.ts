@@ -1,6 +1,7 @@
 import { MJGlobal } from '@memberjunction/global';
 import { IRunQueryProvider, RunQueryResult } from './interfaces';
 import { UserInfo } from './securityInfo';
+import { QueryExecutionSpec } from './queryExecutionSpec';
 
 /**
  * Parameters for running a query, must provide either QueryID or QueryName. If both are provided QueryName is ignored.
@@ -81,6 +82,15 @@ export type RunQueryParams = {
      * 2. Otherwise the LocalCacheManager's default TTL will be used (typically 5 minutes)
      */
     CacheLocalTTL?: number
+
+    /**
+     * Optional TTL (time-to-live) in minutes for server-side caching of ad-hoc SQL queries.
+     * When set to a value > 0 and the query uses the `SQL` field (ad-hoc mode), results
+     * will be cached using a hash of the SQL string as the cache key.
+     * Subsequent identical SQL executions within the TTL window return cached results.
+     * Has no effect on saved queries (they use QueryInfo.CacheConfig instead).
+     */
+    AdhocCacheTTLMinutes?: number
 }
 
 /**
@@ -130,6 +140,18 @@ export class RunQuery  {
     public async RunQueries(params: RunQueryParams[], contextUser?: UserInfo): Promise<RunQueryResult[]> {
         // Simple proxy to the provider - telemetry is handled by ProviderBase Pre/Post hooks
         return this.ProviderToUse.RunQueries(params, contextUser);
+    }
+
+    /**
+     * Executes a query from a `QueryExecutionSpec` — the lower-layer interface-based entry point.
+     * Runs the full pipeline: composition resolution → Nunjucks template processing → SQL execution.
+     * Supports both saved queries (via QueryExecutionSpec.FromQueryInfo) and transient test queries.
+     * @param spec - The execution spec describing the query, parameters, and inline dependencies
+     * @param contextUser - Optional user context for permissions (mainly used server-side)
+     * @returns Query results including data rows and execution metadata
+     */
+    public async ExecuteFromSpec(spec: QueryExecutionSpec, contextUser?: UserInfo): Promise<RunQueryResult> {
+        return this.ProviderToUse.ExecuteQueryFromSpec(spec, contextUser);
     }
 
     private static _globalProviderKey: string = 'MJ_RunQueryProvider';

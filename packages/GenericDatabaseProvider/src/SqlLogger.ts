@@ -27,6 +27,7 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
   public readonly options: SqlLoggingOptions;
   private _statementCount: number = 0;
   private _emittedStatementCount: number = 0; // Track actually emitted statements
+  private _currentBatchVariableCount: number = 0; // Running count of DECLARE @var declarations in current batch
   private _fileHandle: fs.promises.FileHandle | null = null;
   private _disposed: boolean = false;
   private _compiledPatterns: RegExp[] | undefined;
@@ -210,8 +211,24 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
       }
     }
 
-    // Add batch separator if specified
-    if (this.options.batchSeparator) {
+    // Batch separator logic:
+    // - Threshold mode: emit separator when accumulated variable declarations reach the threshold.
+    //   The separator is prepended BEFORE the current statement (ending the previous batch).
+    // - Legacy mode (no threshold): emit separator after every statement.
+    const threshold = this.options.variableBatchThreshold;
+    if (this.options.batchSeparator && threshold && threshold > 0) {
+      const newVarCount = this._countVariableDeclarations(processedQuery);
+      if (newVarCount > 0) {
+        if (this._currentBatchVariableCount > 0 &&
+            this._currentBatchVariableCount + newVarCount >= threshold) {
+          // End the previous batch before this statement
+          logEntry = `${this.options.batchSeparator}\n\n` + logEntry;
+          this._currentBatchVariableCount = newVarCount;
+        } else {
+          this._currentBatchVariableCount += newVarCount;
+        }
+      }
+    } else if (this.options.batchSeparator) {
       logEntry += `\n${this.options.batchSeparator}\n`;
     }
 
@@ -424,11 +441,33 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
   }
 
   /**
+   * Counts the number of SQL variable declarations in a statement.
+   * Matches `@varName SQLTYPE` patterns that appear in DECLARE blocks (both the leading
+   * `DECLARE @var TYPE` and continuation `@var TYPE` lines in multi-variable DECLAREs).
+   * SET/EXEC parameter references are excluded because they have `=` or `,` after the var name,
+   * not a type keyword.
+   *
+   * Used by the `variableBatchThreshold` logic to decide when to emit a batch separator.
+   */
+  private _countVariableDeclarations(sql: string): number {
+    // Matches @varName followed by a SQL Server type keyword.
+    // This covers both DECLARE @v TYPE and continuation @v TYPE (comma-separated multi-var DECLAREs).
+    // It does NOT match SET @v = ... or EXEC sp @p = @v because those don't have a type keyword.
+    const varDeclRegex = /@\w+\s+(?:UNIQUEIDENTIFIER|N?VARCHAR|N?CHAR|INT|BIGINT|SMALLINT|TINYINT|BIT|FLOAT|REAL|DECIMAL|NUMERIC|DATETIME(?:2|OFFSET)?|DATE(?!TIME)\b|TIME\b|MONEY|SMALLMONEY|VARBINARY|XML|TABLE|N?TEXT|IMAGE|ROWVERSION|TIMESTAMP|GEOGRAPHY|GEOMETRY)\b/gi;
+    const matches = sql.match(varDeclRegex);
+    return matches ? matches.length : 0;
+  }
+
+  /**
    * Escapes ${...} patterns within SQL string literals to prevent Flyway from interpreting them as placeholders.
-   * Converts ${templateVariable} to $' + '{templateVariable} within string literals.
+   * Converts ${templateVariable} to $' + N'{templateVariable} within string literals.
+   *
+   * The N prefix on the continuation string is critical: without it, the second half of the split N'...' literal
+   * is treated as VARCHAR and implicitly promoted to NVARCHAR(4000) during concatenation, truncating any content
+   * beyond 4,000 chars. With N, both halves remain NVARCHAR and the full value is preserved.
    */
   private _escapeFlywaySyntaxInStrings(sql: string): string {
-    return sql.replaceAll(/\$\{/g, "$$'+'{");
+    return sql.replaceAll(/\$\{/g, "$$'+N'{");
   }
 
 }

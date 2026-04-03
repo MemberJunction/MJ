@@ -4,8 +4,13 @@
   flex-direction: column;
 }
 
-kendo-treeview {
+.category-tree {
   width: 250px;
+  max-height: 500px;
+  overflow-y: auto;
+  border: 1px solid var(--mj-border-subtle);
+  border-radius: 4px;
+  background: var(--mj-bg-surface);
 }
 
 .tree-header {
@@ -14,16 +19,112 @@ kendo-treeview {
   justify-content: space-between;
   align-items: center;
   padding-right: 4px;
+  margin-bottom: 4px;
 }
 
-kendo-label {
+.tree-node-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background-color 0.15s;
+  user-select: none;
+}
+
+.tree-node-row:hover {
+  background-color: var(--mj-bg-surface-hover);
+}
+
+.tree-node-row.selected {
+  background-color: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+  color: var(--mj-brand-primary);
+}
+
+.tree-expand-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--mj-text-muted);
+  font-size: 10px;
+}
+
+.tree-expand-placeholder {
+  width: 16px;
+  height: 16px;
+  display: inline-block;
+}
+
+.tree-folder-icon {
+  color: var(--mj-text-muted);
+  font-size: 14px;
+}
+
+.tree-node-label {
+  font-size: 13px;
+  color: var(--mj-text-primary);
+}
+
+/* Context Menu */
+.context-menu {
+  position: fixed;
+  z-index: 10000;
+  background: var(--mj-bg-surface-elevated);
+  border: 1px solid var(--mj-border-default);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px var(--mj-bg-overlay);
+  padding: 4px 0;
+  min-width: 140px;
+}
+
+.context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 16px;
+  border: none;
+  background: none;
+  color: var(--mj-text-primary);
+  font-size: 13px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.context-menu-item:hover:not(:disabled) {
+  background: var(--mj-bg-surface-hover);
+}
+
+.context-menu-item:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.dialog-form-container {
+  padding: 8px 0;
+}
+
+.mj-form-field {
   display: flex;
   flex-direction: row;
   align-items: center;
   column-gap: 12px;
-  margin-bottom: 4px;
+  margin-bottom: 8px;
 }
 
-kendo-label kendo-textbox {
+.mj-form-label {
+  min-width: 80px;
+  color: var(--mj-text-secondary);
+  font-weight: 500;
+}
+
+.mj-form-field .mj-input {
   width: 100%;
 }

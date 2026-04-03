@@ -11,8 +11,7 @@ vi.mock('../../config', () => ({
   },
 }));
 
-import { AuthProviderFactory } from '../AuthProviderFactory';
-import { IAuthProvider } from '../IAuthProvider';
+import { AuthProviderFactory, IAuthProvider } from '@memberjunction/auth-providers';
 import { initializeAuthProviders } from '../initializeProviders';
 
 /**
@@ -22,7 +21,7 @@ describe('Authentication Provider Backward Compatibility', () => {
   let factory: AuthProviderFactory;
   
   beforeEach(() => {
-    factory = AuthProviderFactory.getInstance();
+    factory = AuthProviderFactory.Instance;
     factory.clear();
   });
   

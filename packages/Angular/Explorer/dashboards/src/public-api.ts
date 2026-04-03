@@ -24,8 +24,22 @@ export {
   LiveExecutionWidgetComponent,
   TimeSeriesChartComponent,
   PerformanceHeatmapComponent,
-  AgentRequestsResourceComponent
+  AgentRequestsResourceComponent,
+  AutotaggingPipelineResourceComponent,
+  VectorManagementResourceComponent,
+  DuplicateDetectionResourceComponent
 } from './AI/index';
+
+// Knowledge Hub components
+export {
+  KnowledgeSearchResourceComponent,
+  LoadKnowledgeSearchResource
+} from './KnowledgeHub/components/search/knowledge-search-resource.component';
+export {
+  KnowledgeConfigResourceComponent,
+  LoadKnowledgeConfigResource
+} from './KnowledgeHub/components/config/knowledge-config-resource.component';
+export { SearchResultDetailComponent } from './KnowledgeHub/components/results-detail/search-result-detail.component';
 
 // Export Actions components as resources (BaseResourceComponent-based)
 export {
@@ -120,5 +134,19 @@ export * from './VersionHistory';
 // Integration Dashboard
 export * from './Integration';
 
-// Module
-export * from './module';
+// NOTE: DashboardsModule (backward-compatible wrapper that imports ALL feature modules) is
+// intentionally not re-exported from the barrel to enable ESBuild code splitting.
+// Consumers who need it: import { DashboardsModule } from '@memberjunction/ng-dashboards/module'
+
+// Feature modules for lazy loading
+export * from './core-dashboards.module';
+export * from './ai-dashboards.module';
+export * from './actions-dashboards.module';
+export * from './testing-dashboards.module';
+export * from './scheduling-dashboards.module';
+export * from './communication-dashboards.module';
+export * from './credentials-dashboards.module';
+export * from './data-explorer-dashboards.module';
+export * from './lists-dashboards.module';
+export * from './component-studio-dashboards.module';
+export * from './shared/shared-dashboard-widgets.module';

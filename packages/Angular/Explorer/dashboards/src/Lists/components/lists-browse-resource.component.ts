@@ -245,8 +245,9 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
                       <td class="col-updated" role="gridcell">{{formatDate(item.list.__mj_UpdatedAt)}}</td>
                       <td class="col-actions" role="gridcell">
                         @if (item.isOwner) {
-                          <button
-                            class="action-btn"
+                          <button mjButton
+                            variant="flat"
+                            size="sm"
                             (click)="openListMenu($event, item)"
                             title="More options">
                             <i class="fa-solid fa-ellipsis-v" aria-hidden="true"></i>
@@ -379,7 +380,7 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
                   </div>
                   @if (item.isOwner) {
                     <div class="list-actions">
-                      <button class="action-btn" (click)="openListMenu($event, item)">
+                      <button mjButton variant="flat" size="sm" (click)="openListMenu($event, item)">
                         <i class="fa-solid fa-ellipsis-v" aria-hidden="true"></i>
                       </button>
                     </div>
@@ -545,12 +546,11 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
           [style.left.px]="entityDropdownPosition.left"
           [style.width.px]="entityDropdownPosition.width"
           [class.dropdown-above]="entityDropdownPosition.openAbove">
-          <div class="entity-dropdown-backdrop" (click)="closeEntityDropdown()"></div>
           <div class="entity-dropdown-content" [class.open-above]="entityDropdownPosition.openAbove">
             @for (entity of filteredEntitiesList; track entity) {
               <div
                 class="dropdown-item"
-                (click)="selectEntity(entity)">
+                (mousedown)="selectEntity(entity); $event.preventDefault()">
                 {{entity.Name}}
               </div>
             }
@@ -1569,15 +1569,6 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
       z-index: 10002;
     }
 
-    .entity-dropdown-backdrop {
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      z-index: -1;
-    }
-
     .entity-dropdown-content {
       max-height: 200px;
       overflow-y: auto;
@@ -1752,7 +1743,7 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
   onDocumentClick(event: MouseEvent) {
     if (this.showEntityDropdown) {
       const target = event.target as HTMLElement;
-      if (!target.closest('.custom-select-wrapper')) {
+      if (!target.closest('.custom-select-wrapper') && !target.closest('.entity-dropdown-portal')) {
         this.showEntityDropdown = false;
       }
     }
@@ -2151,6 +2142,12 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
     this.filteredEntitiesList = this.availableEntities.filter(e =>
       e.Name.toLowerCase().includes(lowerTerm)
     );
+    // Ensure dropdown is visible while typing
+    if (!this.showEntityDropdown && term) {
+      this.showEntityDropdown = true;
+    }
+    // Clear selection when user modifies the search text
+    this.selectedEntityId = '';
   }
 
   openEntityDropdown(inputElement: HTMLInputElement) {

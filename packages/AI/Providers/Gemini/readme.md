@@ -1,6 +1,8 @@
+[Back to AI Framework Overview](../../README.md) | [All Providers](../README.md)
+
 # @memberjunction/ai-gemini
 
-MemberJunction AI provider for Google Gemini models. This package provides both LLM and image generation capabilities, supporting Gemini Pro, Flash, and advanced image generation models with native multimodal support, thinking/reasoning, and streaming.
+MemberJunction AI provider for Google Gemini models. Provides both LLM and image generation capabilities, supporting Gemini 2.5, Gemini 3, and Flash model families with native multimodal support, thinking/reasoning, and streaming.
 
 ## Architecture
 
@@ -39,7 +41,7 @@ graph TD
 - **Effort Level Mapping**: Maps MJ effort levels (1-100) to Gemini thinking budgets (0-24576)
 
 ### Image Generation (GeminiImageGenerator)
-- **Text-to-Image**: Generate images using Gemini 3 Pro Image model
+- **Text-to-Image**: Generate images using Gemini image models
 - **Image Editing**: Edit existing images using multimodal context
 - **Image Variations**: Create variations of existing images
 - **Resolution Control**: Support for sizes up to 4K (3840x2160)
@@ -56,17 +58,17 @@ npm install @memberjunction/ai-gemini
 ### Chat Completion
 
 ```typescript
-import { GeminiLLM } from '@memberjunction/ai-gemini';
+import { GeminiLLM } from "@memberjunction/ai-gemini";
 
-const llm = new GeminiLLM('your-google-api-key');
+const llm = new GeminiLLM("your-google-api-key");
 
 const result = await llm.ChatCompletion({
-    model: 'gemini-2.5-flash',
+    model: "gemini-2.5-flash",
     messages: [
-        { role: 'system', content: 'You are a helpful assistant.' },
-        { role: 'user', content: 'Explain quantum computing.' }
+        { role: "system", content: "You are a helpful assistant." },
+        { role: "user", content: "Explain quantum computing." },
     ],
-    temperature: 0.7
+    temperature: 0.7,
 });
 ```
 
@@ -74,30 +76,29 @@ const result = await llm.ChatCompletion({
 
 ```typescript
 const result = await llm.ChatCompletion({
-    model: 'gemini-2.5-pro',
-    messages: [{ role: 'user', content: 'Solve this math problem step by step.' }],
-    effortLevel: '75', // High thinking budget
+    model: "gemini-2.5-pro",
+    messages: [{ role: "user", content: "Solve this math problem step by step." }],
+    effortLevel: "75",
     streaming: true,
     streamingCallbacks: {
-        OnContent: (content) => process.stdout.write(content)
-    }
+        OnContent: (content) => process.stdout.write(content),
+    },
 });
 
-// Access thinking content
-console.log('Thinking:', result.data.choices[0].message.thinking);
+console.log("Thinking:", result.data.choices[0].message.thinking);
 ```
 
 ### Image Generation
 
 ```typescript
-import { GeminiImageGenerator } from '@memberjunction/ai-gemini';
+import { GeminiImageGenerator } from "@memberjunction/ai-gemini";
 
-const generator = new GeminiImageGenerator('your-google-api-key');
+const generator = new GeminiImageGenerator("your-google-api-key");
 
 const result = await generator.GenerateImage({
-    prompt: 'A futuristic city at night',
-    model: 'gemini-3-pro-image-preview',
-    size: '2048x2048'
+    prompt: "A futuristic city at night",
+    model: "gemini-3-pro-image-preview",
+    size: "2048x2048",
 });
 ```
 

@@ -1,0 +1,257 @@
+/* ============================================================
+   Pinned Messages Panel — overlays the right edge of the chat
+   ============================================================ */
+
+:host {
+  display: block;
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 340px;
+  z-index: 50;
+  pointer-events: auto;
+  animation: slideInPanel 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideInPanel {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.pins-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--mj-bg-surface);
+  border-left: 1px solid var(--mj-border-default);
+  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.12);
+}
+
+/* ── Header ── */
+.pins-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--mj-border-default);
+  flex-shrink: 0;
+  background: var(--mj-bg-surface-card);
+}
+
+.pins-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--mj-text-primary);
+}
+
+.pins-title > i.fa-thumbtack {
+  color: var(--mj-status-warning);
+  font-size: 13px;
+}
+
+.pins-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface));
+  border: 1px solid color-mix(in srgb, var(--mj-status-warning) 40%, transparent);
+  color: var(--mj-status-warning-text, var(--mj-status-warning));
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.pins-close-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: var(--mj-text-muted);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.pins-close-btn:hover {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-primary);
+}
+
+/* ── Body / Scrollable list ── */
+.pins-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* ── Empty state ── */
+.pins-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 12px;
+  color: var(--mj-text-muted);
+}
+
+.pins-empty i {
+  font-size: 32px;
+  opacity: 0.4;
+}
+
+.pins-empty p {
+  font-size: 14px;
+  margin: 0;
+}
+
+/* ── Pin Card ── */
+.pin-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--mj-bg-surface-card);
+  border: 1px solid var(--mj-border-default);
+  border-left: 3px solid var(--mj-status-warning);
+  transition: opacity 0.2s, transform 0.2s;
+}
+
+.pin-card.unpinning {
+  opacity: 0;
+  transform: translateX(12px);
+}
+
+.pin-card:hover {
+  border-color: var(--mj-border-strong);
+  border-left-color: var(--mj-status-warning);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+/* Card meta row: avatar+name on left, time on right */
+.pin-card-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.pin-sender {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pin-avatar {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.pin-avatar i {
+  font-size: 10px;
+  color: var(--mj-brand-primary);
+}
+
+.pin-sender-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mj-text-secondary);
+}
+
+.pin-time {
+  font-size: 11px;
+  color: var(--mj-text-muted);
+  white-space: nowrap;
+}
+
+/* Preview text */
+.pin-preview {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--mj-text-primary);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Card action buttons */
+.pin-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.pin-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  border: 1px solid var(--mj-border-default);
+}
+
+.pin-action-btn i {
+  font-size: 11px;
+}
+
+.jump-btn {
+  background: var(--mj-brand-primary);
+  color: var(--mj-text-inverse);
+  border-color: var(--mj-brand-primary);
+}
+
+.jump-btn:hover {
+  background: var(--mj-brand-primary-hover);
+  border-color: var(--mj-brand-primary-hover);
+}
+
+.unpin-btn {
+  background: transparent;
+  color: var(--mj-text-secondary);
+}
+
+.unpin-btn:hover {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-primary);
+  border-color: var(--mj-border-strong);
+}
+
+/* ── Scrollbar styling ── */
+.pins-body::-webkit-scrollbar { width: 4px; }
+.pins-body::-webkit-scrollbar-track { background: transparent; }
+.pins-body::-webkit-scrollbar-thumb {
+  background: var(--mj-border-strong);
+  border-radius: 2px;
+}

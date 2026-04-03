@@ -11,3 +11,7 @@ Action implementations for specific business application domains. Each package p
 | [FormBuilders](./FormBuilders/README.md) | `@memberjunction/actions-bizapps-formbuilders` | Form builder and survey platform integration actions (Typeform, Google Forms, Jotform) |
 | [LMS](./LMS/README.md) | `@memberjunction/actions-bizapps-lms` | Learning management system integration actions (Moodle, Canvas, Blackboard, LearnDash) |
 | [Social](./Social/README.md) | `@memberjunction/actions-bizapps-social` | Social media integration actions (Twitter, LinkedIn, Facebook, Instagram, TikTok, YouTube, HootSuite, Buffer) |
+
+## Migration to Generic Integration Actions
+
+BizApps action packages are progressively migrating to MemberJunction's generic, connector-driven action generation architecture. The new system automatically generates CRUD + Search + List actions from connector metadata, reducing per-integration maintenance. See **[Integration Actions Guide](../../Integration/INTEGRATION_ACTIONS.md)** for details on the new architecture and how connectors produce actions automatically.

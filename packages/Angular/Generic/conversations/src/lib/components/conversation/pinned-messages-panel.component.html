@@ -1,0 +1,48 @@
+<div class="pins-panel">
+  <div class="pins-header">
+    <div class="pins-title">
+      <i class="fas fa-thumbtack"></i>
+      <span>Pinned Messages</span>
+      <span class="pins-count">{{ pinnedMessages.length }}</span>
+    </div>
+    <button class="pins-close-btn" (click)="Close()" title="Close">
+      <i class="fas fa-times"></i>
+    </button>
+  </div>
+
+  <div class="pins-body">
+    @if (pinnedMessages.length === 0) {
+      <div class="pins-empty">
+        <i class="fas fa-thumbtack"></i>
+        <p>No pinned messages</p>
+      </div>
+    }
+
+    @for (message of pinnedMessages; track message.ID) {
+      <div class="pin-card" [class.unpinning]="IsUnpinning(message)">
+        <div class="pin-card-meta">
+          <div class="pin-sender">
+            <div class="pin-avatar">
+              <i class="fas fa-robot"></i>
+            </div>
+            <span class="pin-sender-name">{{ GetSenderName(message) }}</span>
+          </div>
+          <span class="pin-time">{{ GetRelativeTime(message) }}</span>
+        </div>
+
+        <p class="pin-preview">{{ GetPreviewText(message) }}</p>
+
+        <div class="pin-actions">
+          <button class="pin-action-btn jump-btn" (click)="OnJump(message)" title="Jump to message">
+            <i class="fas fa-arrow-up-right-from-square"></i>
+            Jump to message
+          </button>
+          <button class="pin-action-btn unpin-btn" (click)="OnUnpin(message)" title="Unpin this message">
+            <i class="fas fa-thumbtack"></i>
+            Unpin
+          </button>
+        </div>
+      </div>
+    }
+  </div>
+</div>

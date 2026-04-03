@@ -1,5 +1,36 @@
 # Angular Development Guidelines
 
+## 🚨 CRITICAL: Routing Rules 🚨
+
+### Generic Components MUST NOT Import Router
+
+Components in `packages/Angular/Generic/` are reusable across any Angular application (MJ Explorer, custom apps, embedded widgets). They **MUST NOT** import `Router`, `ActivatedRoute`, or any `@angular/router` types directly.
+
+**Why:** Generic components must be framework-context-agnostic. Different apps may use different routing strategies, and importing Router creates a hard dependency on Angular's router module being configured.
+
+**Instead:** Use `@Input()` properties to receive route-derived state from the parent:
+```typescript
+// ❌ BAD — Generic component using Router directly
+import { Router } from '@angular/router';
+export class MyGenericComponent {
+    private router = inject(Router);
+    private checkRoute() { /* router.url */ }
+}
+
+// ✅ GOOD — Generic component receives state via Input
+export class MyGenericComponent {
+    @Input() IsHidden = false;  // Parent sets based on route
+}
+```
+
+### Explorer Components MUST Use NavigationService
+
+Components in `packages/Angular/Explorer/` that need routing **MUST** use `NavigationService` from `@memberjunction/ng-explorer-core` — never `Router` directly. `NavigationService` encapsulates all routing logic for consistency and the ability to change routing strategy without touching individual components.
+
+The only exception is `MJExplorerAppComponent` which subscribes to `Router.events` to drive top-level state like the chat overlay visibility.
+
+---
+
 ## 🚨 NPM Workspace and Peer Dependencies (For Downstream Projects)
 
 ### Shared Singleton Services Pattern
@@ -440,3 +471,72 @@ Look at these for reference:
 - `AIPromptFormComponentExtended` - extends `AIPromptFormComponent`
 - `EntityFormComponentExtended` - extends `EntityFormComponent`
 - `ActionFormComponentExtended` - extends `ActionFormComponent`
+
+---
+
+## ClassFactory Registration Priority
+
+The `@RegisterClass` decorator and `MJGlobal.ClassFactory` are the backbone of MemberJunction's runtime component discovery. Understanding how priority works is essential for custom forms, custom resource components, and entity class overrides.
+
+### How Registrations Are Stored
+
+ClassFactory stores all registrations in an **append-only array** — not a map. When multiple classes register for the same base class + key, **all registrations are kept**. Nothing is replaced or deduplicated.
+
+### Priority Assignment
+
+When `@RegisterClass` is called with the default priority of `0` (which is almost always), priority is **auto-incremented**:
+
+```
+Register(BaseEntity, UserEntity, "Users", priority=0)           → assigned priority 1
+Register(BaseEntity, UserEntityCustom, "Users", priority=0)     → assigned priority 2
+Register(BaseEntity, UserEntityCustomV2, "Users", priority=0)   → assigned priority 3
+```
+
+The logic: find the current max priority for this base class + key pair, then set `priority = max + 1`. This means **the last class to register automatically wins**.
+
+### How GetRegistration Picks a Winner
+
+When code calls `ClassFactory.GetRegistration(baseClass, key)`:
+
+1. Filter all registrations matching `baseClass` + `key` (case-insensitive, whitespace-trimmed)
+2. Find the highest priority number among matches
+3. If multiple registrations share the highest priority, return the **last one registered** (array insertion order)
+
+### Why Import Order Matters
+
+Since decorators execute when their module is imported, and auto-priority increments based on registration order, **the order in which modules are imported determines which class wins**.
+
+This is why the custom form pattern works:
+1. The generated form's module is imported first (it's a dependency of the custom form)
+2. Generated form registers → gets priority N
+3. Custom form registers → gets priority N+1 (auto-incremented)
+4. Custom form wins
+
+And it's why manifests are imported in a specific order in `app.module.ts`:
+1. `@memberjunction/ng-bootstrap-lite` imports first (framework classes)
+2. Local supplemental manifest imports second (user custom classes)
+3. User classes get higher auto-priorities, overriding framework defaults
+
+### Explicit Priority
+
+You can pass an explicit priority to `@RegisterClass`:
+
+```typescript
+@RegisterClass(BaseEntity, 'Users', 999)  // Explicit priority 999
+export class UserEntityOverride extends UserEntity { }
+```
+
+If two registrations share the same explicit priority, a console warning is emitted and the **last registered** wins. Explicit priorities are rarely needed — auto-increment handles the vast majority of cases correctly.
+
+### Implications for Lazy Loading
+
+Before a lazy chunk loads, the ClassFactory has **no registration** for classes in that chunk — `GetRegistration()` returns `null`. After the dynamic `import()` pulls in the feature module, decorators execute, registrations appear, and a retry succeeds. No priority conflicts occur because the eager `ng-bootstrap-lite` manifest intentionally excludes lazy-loaded packages.
+
+### Quick Reference
+
+| Scenario | Winner |
+|----------|--------|
+| Different auto-assigned priorities | Highest number (last registered) |
+| Same explicit priority | Last registered + console warning |
+| No registration found | `CreateInstance` falls back to instantiating the base class directly |
+| Lazy module not yet loaded | `GetRegistration` returns `null` → triggers lazy load → retry succeeds |

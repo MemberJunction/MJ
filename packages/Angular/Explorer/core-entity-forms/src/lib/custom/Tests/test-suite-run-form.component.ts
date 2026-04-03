@@ -344,7 +344,7 @@ export class MJTestSuiteRunFormComponentExtended extends MJTestSuiteRunFormCompo
       return;
     }
 
-    this.testingDialogService.OpenSuiteDialog(this.record.SuiteID, this.viewContainerRef);
+    this.testingDialogService.OpenSuitePanel(this.record.SuiteID);
   }
 
   async refresh() {

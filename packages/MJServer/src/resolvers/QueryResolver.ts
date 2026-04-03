@@ -61,6 +61,12 @@ export class RunQueryResultType {
   @Field()
   TotalRowCount: number;
 
+  @Field(() => Int, { nullable: true })
+  PageNumber?: number;
+
+  @Field(() => Int, { nullable: true })
+  PageSize?: number;
+
   @Field()
   ExecutionTime: number;
 
@@ -233,6 +239,8 @@ export class RunQueryResolver extends ResolverBase {
       ExecutionTime: result.ExecutionTime ?? 0,
       ErrorMessage: result.ErrorMessage || '',
       AppliedParameters: result.AppliedParameters ? JSON.stringify(result.AppliedParameters) : undefined,
+      PageNumber: result.PageNumber,
+      PageSize: result.PageSize,
       CacheHit: (result as any).CacheHit,
       CacheTTLRemaining: (result as any).CacheTTLRemaining
     };
@@ -276,6 +284,8 @@ export class RunQueryResolver extends ResolverBase {
       ExecutionTime: result.ExecutionTime ?? 0,
       ErrorMessage: result.ErrorMessage || '',
       AppliedParameters: result.AppliedParameters ? JSON.stringify(result.AppliedParameters) : undefined,
+      PageNumber: result.PageNumber,
+      PageSize: result.PageSize,
       CacheHit: (result as any).CacheHit,
       CacheTTLRemaining: (result as any).CacheTTLRemaining
     };
@@ -332,6 +342,8 @@ export class RunQueryResolver extends ResolverBase {
       ExecutionTime: result.ExecutionTime ?? 0,
       ErrorMessage: result.ErrorMessage || '',
       AppliedParameters: result.AppliedParameters ? JSON.stringify(result.AppliedParameters) : undefined,
+      PageNumber: result.PageNumber,
+      PageSize: result.PageSize,
       CacheHit: (result as any).CacheHit,
       CacheTTLRemaining: (result as any).CacheTTLRemaining
     };
@@ -374,6 +386,8 @@ export class RunQueryResolver extends ResolverBase {
       ExecutionTime: result.ExecutionTime ?? 0,
       ErrorMessage: result.ErrorMessage || '',
       AppliedParameters: result.AppliedParameters ? JSON.stringify(result.AppliedParameters) : undefined,
+      PageNumber: result.PageNumber,
+      PageSize: result.PageSize,
       CacheHit: (result as any).CacheHit,
       CacheTTLRemaining: (result as any).CacheTTLRemaining
     };
@@ -424,6 +438,8 @@ export class RunQueryResolver extends ResolverBase {
         ExecutionTime: result.ExecutionTime ?? 0,
         ErrorMessage: result.ErrorMessage || '',
         AppliedParameters: result.AppliedParameters ? JSON.stringify(result.AppliedParameters) : undefined,
+        PageNumber: result.PageNumber,
+        PageSize: result.PageSize,
         CacheHit: (result as Record<string, unknown>).CacheHit as boolean | undefined,
         CacheTTLRemaining: (result as Record<string, unknown>).CacheTTLRemaining as number | undefined
       };
@@ -471,6 +487,8 @@ export class RunQueryResolver extends ResolverBase {
         ExecutionTime: result.ExecutionTime ?? 0,
         ErrorMessage: result.ErrorMessage || '',
         AppliedParameters: result.AppliedParameters ? JSON.stringify(result.AppliedParameters) : undefined,
+        PageNumber: result.PageNumber,
+        PageSize: result.PageSize,
         CacheHit: (result as Record<string, unknown>).CacheHit as boolean | undefined,
         CacheTTLRemaining: (result as Record<string, unknown>).CacheTTLRemaining as number | undefined
       };

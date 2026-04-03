@@ -37,6 +37,13 @@ export class GroqLLM extends BaseLLM {
     }
 
     /**
+     * Groq natively supports assistant prefill
+     */
+    public override get SupportsPrefill(): boolean {
+        return true;
+    }
+
+    /**
      * Check if the provider supports thinking models
      * Groq supports thinking models with <think> blocks
      */
@@ -135,12 +142,21 @@ export class GroqLLM extends BaseLLM {
         // Convert to Groq-compatible message format with proper multimodal support
         const messages = this.convertToGroqMessages(params.messages);
 
-        // Groq requires the last message to be a user message
-        if (messages.length > 0 && messages[messages.length - 1].role !== 'user') {
+        // If assistant prefill is specified, append it as the last message
+        // Groq natively supports prefill via a trailing assistant message
+        if (params.assistantPrefill) {
             messages.push({
-                role: 'user',
-                content: 'OK' // Dummy message to satisfy Groq's requirement
+                role: 'assistant',
+                content: params.assistantPrefill
             });
+        } else {
+            // Groq requires the last message to be a user message (when not using prefill)
+            if (messages.length > 0 && messages[messages.length - 1].role !== 'user') {
+                messages.push({
+                    role: 'user',
+                    content: 'OK' // Dummy message to satisfy Groq's requirement
+                });
+            }
         }
 
         const groqParams: ChatCompletionCreateParamsNonStreaming = {
@@ -264,6 +280,14 @@ export class GroqLLM extends BaseLLM {
 
         // Convert to Groq-compatible message format with proper multimodal support
         const messages = this.convertToGroqMessages(params.messages);
+
+        // If assistant prefill is specified, append it as the last message
+        if (params.assistantPrefill) {
+            messages.push({
+                role: 'assistant',
+                content: params.assistantPrefill
+            });
+        }
 
         const groqParams: ChatCompletionCreateParamsStreaming = {
             model: params.model,

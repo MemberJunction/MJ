@@ -130,11 +130,15 @@
           <mj-query-data-grid
             [ColumnConfigs]="GridColumnConfigs"
             [Data]="GridData"
+            [TotalRowCount]="PagerTotalRowCount"
+            [PageNumber]="PagerPageNumber"
+            [PageSize]="PagerPageSize"
             [ShowToolbar]="false"
             [ShowRefresh]="false"
             [PersistState]="false"
             [SelectionMode]="'none'"
             (EntityLinkClick)="OnEntityLinkClick($event)"
+            (PageChange)="OnPageChange($event)"
             Height="100%">
           </mj-query-data-grid>
         } @else if (HasError) {
@@ -146,11 +150,15 @@
           <mj-query-data-grid
             [ColumnConfigs]="GridColumnConfigs"
             [Data]="GridData"
+            [TotalRowCount]="PagerTotalRowCount"
+            [PageNumber]="PagerPageNumber"
+            [PageSize]="PagerPageSize"
             [ShowToolbar]="false"
             [ShowRefresh]="false"
             [PersistState]="false"
             [SelectionMode]="'none'"
             (EntityLinkClick)="OnEntityLinkClick($event)"
+            (PageChange)="OnPageChange($event)"
             Height="100%">
           </mj-query-data-grid>
         }

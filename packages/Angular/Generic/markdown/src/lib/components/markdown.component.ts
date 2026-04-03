@@ -157,9 +157,10 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
   @Input() containerClass: string = '';
 
   /**
-   * Mermaid theme
+   * Mermaid theme.
+   * 'auto' (default) detects light/dark from the document's data-theme attribute.
    */
-  @Input() mermaidTheme: 'default' | 'dark' | 'forest' | 'neutral' | 'base' = DEFAULT_MARKDOWN_CONFIG.mermaidTheme;
+  @Input() mermaidTheme: 'auto' | 'default' | 'dark' | 'forest' | 'neutral' | 'base' = DEFAULT_MARKDOWN_CONFIG.mermaidTheme;
 
   /**
    * Whether to sanitize HTML output
@@ -197,6 +198,7 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
   private renderStartTime: number = 0;
   private hasMermaid: boolean = false;
   private hasCodeBlocks: boolean = false;
+  private themeObserver: MutationObserver | null = null;
 
   constructor(
     private elementRef: ElementRef<HTMLElement>,
@@ -236,10 +238,13 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
     if (this.data) {
       this.postRenderProcessing();
     }
+
+    this.setupThemeObserver();
   }
 
   ngOnDestroy(): void {
-    // Cleanup any event listeners
+    this.themeObserver?.disconnect();
+    this.themeObserver = null;
     this.cleanupEventListeners();
   }
 
@@ -546,6 +551,39 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
         }
       });
     });
+  }
+
+  /**
+   * Watch the document's data-theme attribute for changes.
+   * When the app theme switches (light ↔ dark) and mermaidTheme is 'auto',
+   * re-render so mermaid diagrams pick up the new theme.
+   */
+  private setupThemeObserver(): void {
+    if (typeof MutationObserver === 'undefined') return;
+
+    this.themeObserver = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        if (mutation.type === 'attributes' && mutation.attributeName === 'data-theme') {
+          this.onThemeAttributeChanged();
+          break;
+        }
+      }
+    });
+
+    this.themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-theme']
+    });
+  }
+
+  /**
+   * Called when data-theme changes on the document root.
+   * Triggers a full re-render when mermaid auto-theming is active.
+   */
+  private onThemeAttributeChanged(): void {
+    if (this.mermaidTheme === 'auto' && this.enableMermaid && this.hasMermaid && this.data) {
+      this.render();
+    }
   }
 
   /**

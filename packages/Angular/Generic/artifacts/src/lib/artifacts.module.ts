@@ -21,6 +21,7 @@ import { ComponentArtifactViewerComponent } from './components/plugins/component
 import { DataArtifactViewerComponent } from './components/plugins/data-artifact-viewer.component';
 import { SaveQueryPanelComponent } from './components/plugins/save-query-dialog.component';
 import { DataRequirementsViewerComponent } from './components/plugins/data-requirements-viewer/data-requirements-viewer.component';
+import { ComponentFeedbackPanelComponent } from './components/plugins/component-feedback-panel/component-feedback-panel.component';
 
 // Import artifact type plugin viewer component
 import { ArtifactTypePluginViewerComponent } from './components/artifact-type-plugin-viewer.component';
@@ -67,7 +68,8 @@ import { ArtifactMessageCardComponent } from './components/artifact-message-card
     MJNotificationsModule,
     QueryViewerModule,
     SharedGenericModule,
-    NgTreesModule
+    NgTreesModule,
+    ComponentFeedbackPanelComponent
   ],
   exports: [
     // Export artifact type plugin viewer

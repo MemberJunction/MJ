@@ -4,7 +4,7 @@ dotenv.config({ quiet: true });
 
 import { expressMiddleware } from '@as-integrations/express5';
 import { mergeSchemas } from '@graphql-tools/schema';
-import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport, BaseEntity, BaseEntityEvent } from '@memberjunction/core';
+import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport, BaseEntity, BaseEntityEvent, RunView } from '@memberjunction/core';
 import { MJGlobal, MJEventType, UUIDsEqual } from '@memberjunction/global';
 import { setupSQLServerClient, SQLServerDataProvider, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { extendConnectionPoolWithQuery } from './util.js';
@@ -43,6 +43,16 @@ import { RedisLocalStorageProvider } from '@memberjunction/redis-provider';
 import { GenericDatabaseProvider } from '@memberjunction/generic-database-provider';
 import { PubSubManager } from './generic/PubSubManager.js';
 import { CACHE_INVALIDATION_TOPIC } from './generic/CacheInvalidationResolver.js';
+import { ConnectorFactory, IntegrationEngine, IntegrationSyncOptions } from '@memberjunction/integration-engine';
+import { CronExpressionHelper } from '@memberjunction/scheduling-engine';
+import {
+  MJCompanyIntegrationEntity,
+  MJIntegrationEntity,
+  MJCompanyIntegrationEntityMapEntity,
+  MJCompanyIntegrationFieldMapEntity,
+  MJScheduledJobEntity,
+} from '@memberjunction/core-entities';
+import { ServerExtensionLoader, ServerExtensionConfig } from '@memberjunction/server-extensions-core';
 
 const cacheRefreshInterval = configInfo.databaseSettings.metadataCacheRefreshInterval;
 
@@ -62,17 +72,16 @@ export { MaxLength } from 'class-validator';
 export * from 'type-graphql';
 export { NewUserBase } from './auth/newUsers.js';
 export { configInfo, DEFAULT_SERVER_CONFIG } from './config.js';
+export { ServerExtensionLoader, BaseServerExtension } from '@memberjunction/server-extensions-core';
+export type { ServerExtensionConfig, ExtensionInitResult, ExtensionHealthResult } from '@memberjunction/server-extensions-core';
 export * from './directives/index.js';
 export * from './entitySubclasses/MJEntityPermissionEntityServer.server.js';
 export * from './types.js';
 export {
-    TokenExpiredError,
     getSystemUser,
     getSigningKeys,
     extractUserInfoFromPayload,
     verifyUserRecord,
-    AuthProviderFactory,
-    IAuthProvider,
 } from './auth/index.js';
 export * from './auth/APIKeyScopeAuth.js';
 
@@ -84,6 +93,9 @@ export * from './generic/RunViewResolver.js';
 export * from './resolvers/RunTemplateResolver.js';
 export * from './resolvers/RunAIPromptResolver.js';
 export * from './resolvers/RunAIAgentResolver.js';
+export * from './resolvers/VectorizeEntityResolver.js';
+export * from './resolvers/SearchKnowledgeResolver.js';
+export * from './resolvers/PipelineProgressResolver.js';
 export * from './resolvers/TaskResolver.js';
 export * from './generic/KeyValuePairInput.js';
 export * from './generic/KeyInputOutputTypes.js';
@@ -99,13 +111,14 @@ export * from './resolvers/EntityRecordNameResolver.js';
 export * from './resolvers/MergeRecordsResolver.js';
 export * from './resolvers/ReportResolver.js';
 export * from './resolvers/QueryResolver.js';
+export * from './resolvers/TestQuerySQLResolver.js';
 export * from './resolvers/SqlLoggingConfigResolver.js';
 export * from './resolvers/SyncRolesUsersResolver.js';
 export * from './resolvers/SyncDataResolver.js';
 export * from './resolvers/GetDataResolver.js';
 export * from './resolvers/GetDataContextDataResolver.js';
 export * from './resolvers/TransactionGroupResolver.js';
-export * from './resolvers/CreateQueryResolver.js';
+export * from './resolvers/QuerySystemUserResolver.js';
 export * from './resolvers/TelemetryResolver.js';
 export * from './resolvers/APIKeyResolver.js';
 export * from './resolvers/MCPResolver.js';
@@ -123,35 +136,20 @@ export * from './resolvers/UserResolver.js';
 export * from './resolvers/UserViewResolver.js';
 export * from './resolvers/VersionHistoryResolver.js';
 export * from './resolvers/CurrentUserContextResolver.js';
+export * from './resolvers/RSUResolver.js';
 export { GetReadOnlyDataSource, GetReadWriteDataSource, GetReadWriteProvider, GetReadOnlyProvider } from './util.js';
 
 export * from './generated/generated.js';
-export * from './hooks.js';
 export * from './multiTenancy/index.js';
+export * from './middleware/index.js';
 
-import type { ServerExtensibilityOptions, HookWithOptions } from './hooks.js';
-import { HookRegistry } from '@memberjunction/core';
-import type { HookRegistrationOptions } from '@memberjunction/core';
+import { RegisterDataHook } from '@memberjunction/core';
+import type { RequestHandler, ErrorRequestHandler } from 'express';
 import type { ApolloServerPlugin } from '@apollo/server';
-import { createTenantMiddleware, createTenantPreRunViewHook, createTenantPreSaveHook } from './multiTenancy/index.js';
+import type { GraphQLSchema } from 'graphql';
+import { BaseServerMiddleware } from './middleware/BaseServerMiddleware.js';
 
-/**
- * Register a hook that may be a plain function or a `{ hook, Priority, Namespace }` object.
- * Dynamic packages (e.g., BCSaaS) return hooks in object form to declare registration metadata.
- */
-function registerHookEntry<T>(hookName: string, entry: T | HookWithOptions<T>): void {
-  if (typeof entry === 'function') {
-    HookRegistry.Register(hookName, entry);
-  } else if (entry && typeof entry === 'object' && 'hook' in entry) {
-    const { hook, Priority, Namespace } = entry as HookWithOptions<T>;
-    const options: HookRegistrationOptions = {};
-    if (Priority != null) options.Priority = Priority;
-    if (Namespace != null) options.Namespace = Namespace;
-    HookRegistry.Register(hookName, hook, options);
-  }
-}
-
-export type MJServerOptions = ServerExtensibilityOptions & {
+export type MJServerOptions = {
   onBeforeServe?: () => void | Promise<void>;
   restApiOptions?: Partial<RESTApiOptions>; // Options for REST API configuration
 };
@@ -167,6 +165,13 @@ const localPath = (p: string) => {
 export const createApp = (): Application => express();
 
 export const serve = async (resolverPaths: Array<string>, app: Application = createApp(), options?: MJServerOptions): Promise<void> => {
+  const t0 = performance.now();
+  const lap = (label: string, since: number) => {
+    const ms = performance.now() - since;
+    console.log(`⏱️  [Startup] ${label}: ${ms.toFixed(0)}ms`);
+    return performance.now();
+  };
+
   const localResolverPaths = ['resolvers/**/*Resolver.{js,ts}', 'generic/*Resolver.{js,ts}', 'generated/generated.{js,ts}'].map(localPath);
 
   const combinedResolverPaths = [...resolverPaths, ...localResolverPaths];
@@ -275,6 +280,7 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   } else {
     // ─── SQL Server Path (existing behavior) ───────────────────────
     console.log('Database type: SQL Server');
+    let tPhase = performance.now();
     const pool = new sql.ConnectionPool(createMSSQLConfig());
 
     // Handle connection-level errors from dead/stale connections in the pool.
@@ -285,6 +291,7 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     });
 
     await pool.connect();
+    tPhase = lap('DB Pool Connect', tPhase);
 
     dataSources.push(new DataSourceInfo({dataSource: pool, type: 'Read-Write', host: dbHost, port: dbPort, database: dbDatabase, userName: dbUsername}));
 
@@ -309,9 +316,71 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
 
     const config = new SQLServerProviderConfigData(pool, mj_core_schema, cacheRefreshInterval);
     await setupSQLServerClient(config);
+    tPhase = lap('Metadata + Provider Setup', tPhase);
     const md = new Metadata();
     console.log(`Data Source has been initialized. ${md?.Entities ? md.Entities.length : 0} entities loaded.`);
+
+    // Set up CodeGen-credentialed provider for RSU DDL operations (CREATE TABLE, CREATE SCHEMA, etc.)
+    const codegenUser = process.env.CODEGEN_DB_USERNAME;
+    const codegenPass = process.env.CODEGEN_DB_PASSWORD;
+    if (codegenUser && codegenPass) {
+      try {
+        const codegenPool = new sql.ConnectionPool({
+          ...createMSSQLConfig(),
+          user: codegenUser,
+          password: codegenPass,
+        });
+        codegenPool.on('error', (err) => {
+          console.error('[ConnectionPool] CodeGen pool connection error:', err.message);
+        });
+        await codegenPool.connect();
+
+        const { RuntimeSchemaManager } = await import('@memberjunction/schema-engine');
+        const codegenConfig = new SQLServerProviderConfigData(codegenPool, mj_core_schema, cacheRefreshInterval);
+        const codegenProvider = new SQLServerDataProvider();
+        await codegenProvider.Config(codegenConfig);
+        RuntimeSchemaManager.Instance.SetDDLProvider(codegenProvider);
+        console.log('RSU DDL provider initialized with CodeGen credentials.');
+
+        // Set up in-process CodeGen runner for RSU
+        try {
+          const { RunCodeGenBase } = await import('@memberjunction/codegen-lib');
+          const { SQLServerCodeGenConnection } = await import('@memberjunction/codegen-lib/dist/Database/providers/sqlserver/SQLServerCodeGenConnection.js');
+
+          const codegenConnection = new SQLServerCodeGenConnection(codegenPool);
+          const codegenCurrentUser = UserCache.Instance.Users.find(u => u.Type?.trim().toLowerCase() === 'owner') ?? UserCache.Instance.Users[0];
+
+          const codegenDataSource = {
+            provider: codegenProvider,
+            connection: codegenConnection,
+            currentUser: codegenCurrentUser,
+            connectionInfo: `${configInfo.dbHost}:${configInfo.dbPort}/${configInfo.dbDatabase} (CodeGen)`,
+          };
+
+          const runObject = MJGlobal.Instance.ClassFactory.CreateInstance(RunCodeGenBase) as InstanceType<typeof RunCodeGenBase>;
+
+          const rsuWorkDir = process.env.RSU_WORK_DIR || process.cwd();
+          RuntimeSchemaManager.Instance.SetCodeGenRunner({
+            RunInProcess: (skipDB) => runObject.RunInProcess(codegenDataSource, skipDB, rsuWorkDir),
+          });
+          console.log('RSU in-process CodeGen runner initialized.');
+
+          // Inject CodeGen output paths for targeted git staging
+          const { initializeConfig } = await import('@memberjunction/codegen-lib');
+          const codegenConfig = initializeConfig(rsuWorkDir);
+          const outputPaths = (codegenConfig.output ?? []).map((o: { directory: string }) => o.directory);
+          RuntimeSchemaManager.Instance.SetCodeGenOutputPaths(outputPaths);
+          console.log(`RSU CodeGen output paths: ${outputPaths.length} directories configured.`);
+        } catch (codegenErr) {
+          console.warn(`RSU in-process CodeGen runner setup failed (will fall back to child process): ${(codegenErr as Error).message}`);
+        }
+      } catch (err) {
+        console.warn(`RSU DDL provider setup failed (RSU will fall back to default provider): ${(err as Error).message}`);
+      }
+    }
   }
+
+  let tServe = performance.now();
 
   // Store queryDialects config in GlobalObjectStore so MJQueryEntityServer can
   // read it without a circular dependency on MJServer
@@ -402,6 +471,8 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   /******TEST HARNESS FOR CHANGE DETECTION */
   /******TEST HARNESS FOR CHANGE DETECTION */
 
+  tServe = lap('Telemetry + Cache + APIKey Init', tServe);
+
   const dynamicModules = await Promise.all(
     paths.map((modulePath) => {
       try {
@@ -416,6 +487,91 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   const resolvers = dynamicModules.flatMap((module) =>
     Object.values(module).filter((value) => typeof value === 'function')
   ) as BuildSchemaOptions['resolvers'];
+
+  // ─── Discover all server middleware via ClassFactory ─────────────────────
+  const allRegistrations = MJGlobal.Instance.ClassFactory.GetAllRegistrations(BaseServerMiddleware);
+
+  // Deduplicate by key (same key -> highest priority wins).
+  // This is the replacement mechanism: if BCSaaS registers with the same
+  // key as MJ's built-in tenant filter, ClassFactory's priority system
+  // ensures only the higher-priority one is used.
+  const uniqueKeys = new Set(
+      allRegistrations.map(r => r.Key?.trim().toLowerCase()).filter((k): k is string => k != null)
+  );
+
+  const winnerRegistrations: typeof allRegistrations = [];
+  for (const key of uniqueKeys) {
+      const winner = MJGlobal.Instance.ClassFactory.GetRegistration(BaseServerMiddleware, key);
+      if (winner) winnerRegistrations.push(winner);
+  }
+
+  // Instantiate and filter by Enabled
+  const middlewares: BaseServerMiddleware[] = [];
+  for (const reg of winnerRegistrations) {
+      const MwClass = reg.SubClass as new () => BaseServerMiddleware;
+      const mw = new MwClass();
+      if (mw.Enabled) {
+          middlewares.push(mw);
+      }
+  }
+
+  // Initialize all middleware
+  for (const mw of middlewares) {
+      await mw.Initialize();
+      console.log(`  [Middleware] ${mw.Label}`);
+  }
+
+  // Collect middleware contributions for each pipeline stage
+  const mwPreAuth: RequestHandler[] = [];
+  const mwPostAuth: RequestHandler[] = [];
+  const mwPostRoute: (RequestHandler | ErrorRequestHandler)[] = [];
+  const mwApolloPlugins: ApolloServerPlugin[] = [];
+  const mwSchemaTransformers: ((schema: GraphQLSchema) => GraphQLSchema)[] = [];
+  const mwResolverPaths: string[] = [];
+
+  for (const mw of middlewares) {
+      mwPreAuth.push(...mw.GetPreAuthMiddleware());
+      mwPostAuth.push(...mw.GetPostAuthMiddleware());
+      mwPostRoute.push(...mw.GetPostRouteMiddleware());
+      mwApolloPlugins.push(...mw.GetApolloPlugins());
+      mwSchemaTransformers.push(...mw.GetSchemaTransformers());
+      mwResolverPaths.push(...mw.GetResolverPaths());
+
+      // Express app configuration escape hatch
+      if (mw.ConfigureExpressApp) {
+          await mw.ConfigureExpressApp(app);
+      }
+
+      // Extract hook methods and register in the global hook store
+      // (ProviderBase/BaseEntity will read these via GetDataHooks())
+      RegisterDataHook('PreRunView', mw.PreRunView.bind(mw));
+      RegisterDataHook('PostRunView', mw.PostRunView.bind(mw));
+      RegisterDataHook('PreSave', mw.PreSave.bind(mw));
+  }
+
+  // ─── Resolve middleware-contributed resolver paths and merge into resolvers ───
+  let allResolvers = resolvers;
+  if (mwResolverPaths.length > 0) {
+      const mwGlobs = mwResolverPaths.flatMap((p) => (isWindows ? p.replace(/\\/g, '/') : p));
+      const mwResolverFiles = fg.globSync(mwGlobs);
+      if (mwResolverFiles.length > 0) {
+          const mwModules = await Promise.all(
+              mwResolverFiles.map((modulePath) => {
+                  try {
+                      return import(isWindows ? `file://${modulePath}` : modulePath);
+                  } catch (e) {
+                      console.error(`Error loading middleware resolver at '${modulePath}'`, e);
+                      throw e;
+                  }
+              })
+          );
+          const mwResolvers = mwModules.flatMap((module) =>
+              Object.values(module).filter((value) => typeof value === 'function')
+          );
+          allResolvers = [...resolvers, ...mwResolvers] as BuildSchemaOptions['resolvers'];
+          console.log(`  [Middleware Resolvers] Loaded ${mwResolverFiles.length} resolver file(s) from middleware`);
+      }
+  }
 
   // Create an explicit PubSub instance so we can reference it outside of resolvers
   // graphql-subscriptions v3 renamed asyncIterator→asyncIterableIterator, but
@@ -448,10 +604,12 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     }
   });
 
+  tServe = lap('Resolver + Middleware Discovery', tServe);
+
   let schema = mergeSchemas({
     schemas: [
       buildSchemaSync({
-        resolvers,
+        resolvers: allResolvers,
         validate: false,
         scalarsMap: [{ type: Date, scalar: GraphQLTimestamp }],
         emitSchemaFile: websiteRunFromPackage !== 1,
@@ -463,12 +621,12 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   schema = requireSystemUserDirective.transformer(schema);
   schema = publicDirective.transformer(schema);
 
-  // Apply user-provided schema transformers (after built-in directive transformers)
-  if (options?.SchemaTransformers) {
-    for (const transformer of options.SchemaTransformers) {
-      schema = transformer(schema);
-    }
+  // Apply middleware-contributed schema transformers (after built-in directive transformers)
+  for (const transformer of mwSchemaTransformers) {
+    schema = transformer(schema);
   }
+
+  tServe = lap('Schema Build', tServe);
 
   const httpServer = createServer(app);
 
@@ -502,7 +660,7 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   const apolloServer = buildApolloServer(
     { schema },
     { httpServer, serverCleanup },
-    options?.ApolloPlugins
+    mwApolloPlugins.length > 0 ? mwApolloPlugins : undefined
   );
   await apolloServer.start();
   
@@ -527,16 +685,16 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     level: 6
   }));
 
-  // Apply user-provided Express middleware (after compression, before routes)
-  if (options?.ExpressMiddlewareBefore) {
-    for (const mw of options.ExpressMiddlewareBefore) {
-      app.use(mw);
-    }
-  }
+  // Health check endpoint - registered before auth middleware so cloud
+  // platform probes (Azure App Service, AWS ALB, k8s, etc.) don't
+  // generate noisy auth errors in the logs.
+  app.get('/healthcheck', (_req, res) => {
+    res.status(200).json({ status: 'ok' });
+  });
 
-  // Escape hatch for advanced Express app configuration
-  if (options?.ConfigureExpressApp) {
-    await Promise.resolve(options.ConfigureExpressApp(app));
+  // Apply middleware-contributed pre-auth handlers (after compression, before routes)
+  for (const mw of mwPreAuth) {
+    app.use(mw);
   }
 
   // ─── OAuth callback routes (unauthenticated, registered BEFORE auth) ─────
@@ -565,23 +723,32 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   // client from reading the error code and triggering token refresh.
   app.use(cors<cors.CorsRequest>());
 
+  // ─── Server extensions (before auth — extensions handle their own auth) ─────
+  // Slack uses HMAC signature verification, Teams uses Bot Framework JWT validation.
+  // These must be registered before the unified auth middleware so webhook
+  // requests aren't rejected for lacking an MJ bearer token.
+  const extensionLoader = new ServerExtensionLoader();
+  const extensionConfigs = (configInfo.serverExtensions ?? []) as ServerExtensionConfig[];
+  if (extensionConfigs.length > 0) {
+    await extensionLoader.LoadExtensions(app, extensionConfigs);
+  }
+
+  // Extension health endpoint (always available, returns empty array if no extensions)
+  app.get('/health/extensions', async (_req, res) => {
+    const results = await extensionLoader.HealthCheckAll();
+    const allHealthy = results.length === 0 || results.every(r => r.Healthy);
+    res.status(allHealthy ? 200 : 503).json({ extensions: results });
+  });
+
   // ─── Unified auth middleware (replaces both REST authMiddleware and contextFunction auth) ─────
   app.use(createUnifiedAuthMiddleware(dataSources));
 
-  // ─── Built-in post-auth middleware (multi-tenancy) ─────
-  // Config-driven multi-tenancy middleware runs after auth so it can read req.userPayload.
-  if (configInfo.multiTenancy?.enabled) {
-    const tenantMiddleware = createTenantMiddleware(configInfo.multiTenancy);
-    app.use(tenantMiddleware);
-  }
-
-  // ─── Post-auth middleware from plugins ─────
+  // ─── Post-auth middleware from BaseServerMiddleware plugins ─────
   // Middleware here has access to the authenticated user via req.userPayload.
-  // Use this for tenant context resolution, org membership loading, etc.
-  if (options?.ExpressMiddlewarePostAuth) {
-    for (const mw of options.ExpressMiddlewarePostAuth) {
-      app.use(mw);
-    }
+  // Contributions come from @RegisterClass(BaseServerMiddleware, key) classes
+  // (e.g., MJTenantFilterMiddleware for multi-tenancy, BCSaaSMiddleware for org context).
+  for (const mw of mwPostAuth) {
+    app.use(mw);
   }
 
   // ─── OAuth authenticated routes (auth already handled by unified middleware) ─────
@@ -638,10 +805,8 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   );
 
   // ─── Post-route middleware (error handlers, catch-alls) ─────
-  if (options?.ExpressMiddlewareAfter) {
-    for (const mw of options.ExpressMiddlewareAfter) {
-      app.use(mw);
-    }
+  for (const mw of mwPostRoute) {
+    app.use(mw);
   }
 
   // Initialize and start scheduled jobs service if enabled
@@ -657,57 +822,37 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     }
   }
 
-  // Register provider-level hooks with the global HookRegistry.
-  // Each entry can be a plain function or a { hook, Priority, Namespace } object.
-  if (options?.PreRunViewHooks) {
-    for (const entry of options.PreRunViewHooks) {
-      registerHookEntry('PreRunView', entry);
-    }
-  }
-  if (options?.PostRunViewHooks) {
-    for (const entry of options.PostRunViewHooks) {
-      registerHookEntry('PostRunView', entry);
-    }
-  }
-  if (options?.PreSaveHooks) {
-    for (const entry of options.PreSaveHooks) {
-      registerHookEntry('PreSave', entry);
-    }
-  }
-
-  // Auto-register multi-tenancy hooks when enabled in config
-  // (The tenant Express middleware was already registered above in the post-auth slot)
-  if (configInfo.multiTenancy?.enabled) {
-    console.log('[MultiTenancy] Enabled — registering tenant isolation hooks');
-    const tenantConfig = configInfo.multiTenancy;
-
-    // Register tenant PreRunView hook (injects WHERE clauses)
-    // Priority 50 + namespace allows middle layers to replace with their own implementation
-    HookRegistry.Register('PreRunView', createTenantPreRunViewHook(tenantConfig), {
-      Priority: 50,
-      Namespace: 'mj:tenantFilter',
-    });
-
-    // Register tenant PreSave hook (validates tenant column on writes)
-    HookRegistry.Register('PreSave', createTenantPreSaveHook(tenantConfig), {
-      Priority: 50,
-      Namespace: 'mj:tenantSave',
-    });
-
-    console.log(`[MultiTenancy] Context source: ${tenantConfig.contextSource}, scoping: ${tenantConfig.scopingStrategy}, write protection: ${tenantConfig.writeProtection}`);
-  }
+  // Data hooks are now registered via BaseServerMiddleware classes above
+  // (e.g., MJTenantFilterMiddleware registers PreRunView and PreSave hooks).
+  // No config-bag hook registration needed.
 
   if (options?.onBeforeServe) {
     await Promise.resolve(options.onBeforeServe());
   }
 
+  tServe = lap('Apollo + Express Setup', tServe);
+
   await new Promise<void>((resolve) => httpServer.listen({ port: graphqlPort }, resolve));
+  lap('Total Startup', t0);
   console.log(`📦 Connected to database: ${dbHost}:${dbPort}/${dbDatabase}`);
   console.log(`🚀 Server ready at http://localhost:${graphqlPort}/`);
+
+  // Process pending RSU work from pre-restart (entity maps, field maps, sync)
+  processRSUPendingWork().catch(err => console.warn(`RSU pending work processing failed: ${err}`));
 
   // Set up graceful shutdown handlers
   const gracefulShutdown = async (signal: string) => {
     console.log(`\n${signal} received, shutting down gracefully...`);
+
+    // Stop server extensions
+    if (extensionLoader.ExtensionCount > 0) {
+      try {
+        await extensionLoader.ShutdownAll();
+        console.log('✅ Server extensions shut down');
+      } catch (error) {
+        console.error('❌ Error shutting down server extensions:', error);
+      }
+    }
 
     // Stop scheduled jobs service
     if (scheduledJobsService?.IsRunning) {
@@ -743,6 +888,253 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     // This is critical for server stability when downstream dependencies fail
   });
 };
+
+/**
+ * Process pending RSU work left from a pre-restart Apply All.
+ * Reads pending work files, creates entity maps + field maps, starts sync.
+ */
+async function processRSUPendingWork(): Promise<void> {
+  // Dynamic import — schema-engine is not yet published to npm, only exists as a workspace package
+  const { RuntimeSchemaManager } = await import('@memberjunction/schema-engine');
+  const rsm = RuntimeSchemaManager.Instance;
+  const pendingItems = await rsm.ReadAndClearPendingWork();
+  if (pendingItems.length === 0) return;
+
+  console.log(`[RSU] Processing ${pendingItems.length} pending work item(s) from pre-restart...`);
+
+  // Wait a moment for metadata to be fully loaded
+  await new Promise(resolve => setTimeout(resolve, 3000));
+
+  for (const item of pendingItems) {
+    try {
+      const md = new Metadata();
+
+      // Get system user for server-side operations
+      const systemUser = UserCache.Instance.Users.find(u => u.Type?.trim().toLowerCase() === 'owner') ?? UserCache.Instance.Users[0];
+      if (!systemUser) {
+        console.warn(`[RSU] No system user found, skipping pending work for ${item.CompanyIntegrationID}`);
+        continue;
+      }
+
+      await Metadata.Provider.Refresh();
+
+      // Resolve connector
+      const rv = new RunView();
+      const ciResult = await rv.RunView<MJCompanyIntegrationEntity>({
+        EntityName: 'MJ: Company Integrations',
+        ExtraFilter: `ID='${item.CompanyIntegrationID}'`,
+        ResultType: 'entity_object',
+      }, systemUser);
+      const companyIntegration = ciResult.Results[0];
+      if (!companyIntegration) {
+        console.warn(`[RSU] CompanyIntegration ${item.CompanyIntegrationID} not found`);
+        continue;
+      }
+
+      const integrationName = companyIntegration.Integration;
+      const integrationResult = await rv.RunView<MJIntegrationEntity>({
+        EntityName: 'MJ: Integrations',
+        ExtraFilter: `Name='${integrationName}'`,
+        ResultType: 'entity_object',
+      }, systemUser);
+      const integrationEntity = integrationResult.Results[0];
+      if (!integrationEntity) {
+        console.warn(`[RSU] Integration entity for ${integrationName} not found`);
+        continue;
+      }
+      const connector = ConnectorFactory.Resolve(integrationEntity);
+      if (!connector) {
+        console.warn(`[RSU] Connector for ${integrationName} not found`);
+        continue;
+      }
+
+      // Create entity maps + field maps for each source object
+      const createdEntityMapIDs: string[] = [];
+      const rvPending = new RunView();
+      const sourceObjectFields: Record<string, string[] | null> = item.SourceObjectFields ?? {};
+
+      for (const objName of item.SourceObjectNames) {
+        const tableName = objName.replace(/[^A-Za-z0-9_]/g, '_').toLowerCase();
+        const entity = md.Entities.find(
+          e => e.SchemaName.toLowerCase() === item.SchemaName.toLowerCase() &&
+               e.BaseTable.toLowerCase() === tableName
+        );
+        if (!entity) {
+          console.warn(`[RSU] Entity not found for ${item.SchemaName}.${tableName}`);
+          continue;
+        }
+
+        // Check if entity map already exists for this connector + entity
+        const existingMapResult = await rvPending.RunView<MJCompanyIntegrationEntityMapEntity>({
+          EntityName: 'MJ: Company Integration Entity Maps',
+          ExtraFilter: `CompanyIntegrationID='${item.CompanyIntegrationID}' AND EntityID='${entity.ID}'`,
+          ResultType: 'entity_object',
+        }, systemUser);
+
+        let entityMapID: string;
+        let isNewMap = false;
+
+        if (existingMapResult.Success && existingMapResult.Results.length > 0) {
+          entityMapID = existingMapResult.Results[0].ID;
+          console.log(`[RSU] Entity map already exists for ${objName} → ${entity.Name} (${entityMapID})`);
+        } else {
+          const entityMap = await md.GetEntityObject<MJCompanyIntegrationEntityMapEntity>(
+            'MJ: Company Integration Entity Maps', systemUser
+          );
+          entityMap.NewRecord();
+          entityMap.CompanyIntegrationID = item.CompanyIntegrationID;
+          entityMap.EntityID = entity.ID;
+          entityMap.ExternalObjectName = objName;
+          entityMap.SyncDirection = 'Pull';
+          entityMap.Status = 'Active';
+          entityMap.SyncEnabled = true;
+          const mapSaved = await entityMap.Save();
+          if (!mapSaved) {
+            console.warn(`[RSU] Failed to save entity map for ${objName}`);
+            continue;
+          }
+          entityMapID = entityMap.ID;
+          isNewMap = true;
+        }
+
+        if (isNewMap) createdEntityMapIDs.push(entityMapID);
+
+        // Create field maps — filter by SourceObjectFields (null = all)
+        try {
+          const introspect = connector.IntrospectSchema.bind(connector) as
+            (ci: unknown, u: unknown) => Promise<{ Objects: Array<{ ExternalName: string; Fields: Array<{ Name: string }> }> }>;
+          const schema = await introspect(companyIntegration, systemUser);
+          const sourceObj = schema.Objects.find(o => o.ExternalName.toLowerCase() === objName.toLowerCase());
+
+          const selectedFields = sourceObjectFields[objName]; // null = all, string[] = specific
+          const fieldsToMap = selectedFields
+            ? (sourceObj?.Fields ?? []).filter(f => selectedFields.some(sf => sf.toLowerCase() === f.Name.toLowerCase()))
+            : (sourceObj?.Fields ?? []);
+
+          // Load existing field maps to avoid duplicates
+          const existingFieldMaps = await rvPending.RunView<MJCompanyIntegrationFieldMapEntity>({
+            EntityName: 'MJ: Company Integration Field Maps',
+            ExtraFilter: `EntityMapID='${entityMapID}'`,
+            ResultType: 'simple',
+            Fields: ['SourceFieldName'],
+          }, systemUser);
+          const existingFieldNames = new Set(
+            (existingFieldMaps.Success ? existingFieldMaps.Results : []).map((fm: { SourceFieldName: string }) => fm.SourceFieldName.toLowerCase())
+          );
+
+          let fieldCount = 0;
+          for (const field of fieldsToMap) {
+            if (existingFieldNames.has(field.Name.toLowerCase())) continue;
+            const fieldMap = await md.GetEntityObject<MJCompanyIntegrationFieldMapEntity>(
+              'MJ: Company Integration Field Maps', systemUser
+            );
+            fieldMap.NewRecord();
+            fieldMap.EntityMapID = entityMapID;
+            fieldMap.SourceFieldName = field.Name;
+            fieldMap.DestinationFieldName = field.Name.replace(/[^A-Za-z0-9_]/g, '_');
+            fieldMap.Status = 'Active';
+            if (await fieldMap.Save()) fieldCount++;
+          }
+          console.log(`[RSU] Created entity map for ${objName} → ${entity.Name} with ${fieldCount} field maps${isNewMap ? '' : ' (existing map, new fields only)'}`);
+        } catch (fieldErr) {
+          console.warn(`[RSU] Field map creation failed for ${objName}: ${fieldErr}`);
+        }
+      }
+
+      // Start sync if requested
+      if (item.StartSync !== false) {
+        try {
+          await IntegrationEngine.Instance.Config(false, systemUser);
+          const syncOptions: IntegrationSyncOptions = {};
+          if (item.SyncScope !== 'all' && createdEntityMapIDs.length > 0) syncOptions.EntityMapIDs = createdEntityMapIDs;
+          if (item.FullSync) syncOptions.FullSync = true;
+          const opts = Object.keys(syncOptions).length > 0 ? syncOptions : undefined;
+          IntegrationEngine.Instance.RunSync(item.CompanyIntegrationID, systemUser, 'Manual', undefined, undefined, opts);
+          console.log(`[RSU] Sync started for ${item.CompanyIntegrationID} (EntityMaps: ${createdEntityMapIDs.length}, FullSync: ${!!item.FullSync})`);
+        } catch (syncErr) {
+          console.warn(`[RSU] Sync start failed: ${syncErr}`);
+        }
+      } else {
+        console.log(`[RSU] Sync skipped for ${item.CompanyIntegrationID} (StartSync=false)`);
+      }
+
+      // Create or update schedule if CronExpression provided
+      if (item.CronExpression) {
+        try {
+          const rvSched = new RunView();
+
+          // Find existing schedule by loading all integration sync jobs and matching Configuration JSON exactly
+          const allJobsResult = await rvSched.RunView<MJScheduledJobEntity>({
+            EntityName: 'MJ: Scheduled Jobs',
+            ExtraFilter: `Status IN ('Active', 'Paused')`,
+            ResultType: 'entity_object',
+          }, systemUser);
+
+          let existingJob: MJScheduledJobEntity | null = null;
+          if (allJobsResult.Success) {
+            for (const j of allJobsResult.Results) {
+              try {
+                const config = JSON.parse(j.Configuration || '{}') as Record<string, unknown>;
+                if (config.CompanyIntegrationID === item.CompanyIntegrationID) {
+                  existingJob = j;
+                  break;
+                }
+              } catch { /* skip invalid JSON */ }
+            }
+          }
+
+          let job: MJScheduledJobEntity;
+          let isUpdate = false;
+
+          if (existingJob) {
+            job = existingJob;
+            isUpdate = true;
+          } else {
+            const jobTypeResult = await rvSched.RunView<{ ID: string }>({
+              EntityName: 'MJ: Scheduled Job Types',
+              ExtraFilter: `DriverClass='IntegrationSyncScheduledJobDriver'`,
+              MaxRows: 1,
+              ResultType: 'simple',
+              Fields: ['ID']
+            }, systemUser);
+
+            if (!jobTypeResult.Success || jobTypeResult.Results.length === 0) {
+              console.warn(`[RSU] IntegrationSyncScheduledJobDriver job type not found`);
+              throw new Error('Job type not found');
+            }
+
+            job = await md.GetEntityObject<MJScheduledJobEntity>('MJ: Scheduled Jobs', systemUser);
+            job.NewRecord();
+            job.JobTypeID = jobTypeResult.Results[0].ID;
+            job.OwnerUserID = systemUser.ID;
+            job.Configuration = JSON.stringify({ CompanyIntegrationID: item.CompanyIntegrationID });
+          }
+
+          job.Name = `${integrationName} Scheduled Sync`;
+          job.CronExpression = item.CronExpression;
+          job.Timezone = item.ScheduleTimezone || 'UTC';
+          job.Status = 'Active';
+          job.NextRunAt = CronExpressionHelper.GetNextRunTime(item.CronExpression, item.ScheduleTimezone || 'UTC');
+          if (await job.Save()) {
+            console.log(`[RSU] ${isUpdate ? 'Updated' : 'Created'} schedule "${job.Name}" (${item.CronExpression}, NextRunAt=${job.NextRunAt.toISOString()}) for ${item.CompanyIntegrationID}`);
+            companyIntegration.ScheduleEnabled = true;
+            companyIntegration.ScheduleType = 'Cron';
+            companyIntegration.CronExpression = item.CronExpression;
+            await companyIntegration.Save();
+          } else {
+            console.warn(`[RSU] Failed to save schedule for ${item.CompanyIntegrationID}`);
+          }
+        } catch (schedErr) {
+          console.warn(`[RSU] Schedule creation failed: ${schedErr}`);
+        }
+      }
+    } catch (err) {
+      console.error(`[RSU] Failed to process pending work for ${item.CompanyIntegrationID}: ${err}`);
+    }
+  }
+
+  console.log(`[RSU] Pending work processing complete`);
+}
 
 /**
  * Creates a MSSQL ConnectionPool-compatible wrapper around a pg.Pool.

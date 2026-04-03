@@ -1,9 +1,19 @@
 import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, ChangeDetectorRef, NgZone } from '@angular/core';
-import { EntityInfo, EntityRelationshipInfo, RunView, Metadata, RunViewParams, EntityFieldValueListType, EntityFieldInfo, CompositeKey } from '@memberjunction/core';
+import { EntityInfo, EntityRelationshipInfo, EntityOrganicKeyInfo, EntityOrganicKeyRelatedEntityInfo, RunView, Metadata, RunViewParams, EntityFieldValueListType, EntityFieldInfo, CompositeKey } from '@memberjunction/core';
 import { buildCompositeKey, buildPkString } from '../utils/record.util';
 
 interface RelatedEntityData {
   relationship: EntityRelationshipInfo;
+  relatedEntityName: string;
+  count: number;
+  isExpanded: boolean;
+  records: Record<string, unknown>[];
+  isLoadingRecords: boolean;
+}
+
+interface OrganicKeyMatchData {
+  organicKey: EntityOrganicKeyInfo;
+  relatedEntity: EntityOrganicKeyRelatedEntityInfo;
   relatedEntityName: string;
   count: number;
   isExpanded: boolean;
@@ -96,17 +106,23 @@ export class EntityRecordDetailPanelComponent implements OnChanges {
   public relatedEntities: RelatedEntityData[] = [];
   public isLoadingRelationships = false;
 
+  // Organic key match counts
+  public organicKeyMatches: OrganicKeyMatchData[] = [];
+  public isLoadingOrganicKeys = false;
+
   private metadata = new Metadata();
 
   // Sections expanded state
   public detailsSectionExpanded = true;
   public relationshipsSectionExpanded = true;
+  public organicKeysSectionExpanded = true;
 
   constructor(private cdr: ChangeDetectorRef, private ngZone: NgZone) {}
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['record'] && this.record && this.entity) {
       this.loadRelationshipCounts();
+      this.loadOrganicKeyCounts();
     }
   }
 
@@ -177,6 +193,240 @@ export class EntityRecordDetailPanelComponent implements OnChanges {
         this.cdr.detectChanges();
       });
     }
+  }
+
+  /**
+   * Load counts for organic key matches using batch RunViews call.
+   * Builds query filters using EntityInfo.BuildOrganicKeyViewParams for each related entity.
+   */
+  private async loadOrganicKeyCounts(): Promise<void> {
+    if (!this.entity || !this.record) return;
+
+    const organicKeys = this.entity.OrganicKeys;
+    if (!organicKeys || organicKeys.length === 0) {
+      this.organicKeyMatches = [];
+      return;
+    }
+
+    // Flatten all organic key related entities
+    const allPairs: { organicKey: EntityOrganicKeyInfo; relatedEntity: EntityOrganicKeyRelatedEntityInfo }[] = [];
+    for (const ok of organicKeys) {
+      for (const re of ok.RelatedEntities) {
+        allPairs.push({ organicKey: ok, relatedEntity: re });
+      }
+    }
+
+    if (allPairs.length === 0) {
+      this.organicKeyMatches = [];
+      return;
+    }
+
+    this.isLoadingOrganicKeys = true;
+    this.organicKeyMatches = [];
+
+    // Build a mock BaseEntity-like object for BuildOrganicKeyViewParams
+    // The static method only calls record.Get(fieldName), so we can duck-type it
+    const mockRecord = {
+      Get: (fieldName: string) => this.record ? this.record[fieldName] ?? null : null,
+      EntityInfo: this.entity,
+    };
+
+    // Build batch query params
+    const viewParams: RunViewParams[] = allPairs.map(pair =>  {
+      const params = EntityInfo.BuildOrganicKeyViewParams(
+        mockRecord as never,
+        pair.relatedEntity,
+        pair.organicKey,
+      );
+      params.ResultType = 'count_only';
+      return params;
+    });
+
+    try {
+      const rv = new RunView();
+      const results = await rv.RunViews(viewParams);
+
+      this.organicKeyMatches = allPairs.map((pair, index) => {
+        const result = results[index];
+        return {
+          organicKey: pair.organicKey,
+          relatedEntity: pair.relatedEntity,
+          relatedEntityName: pair.relatedEntity.DisplayName || pair.relatedEntity.RelatedEntity,
+          count: result.Success ? result.TotalRowCount : 0,
+          isExpanded: false,
+          records: [],
+          isLoadingRecords: false,
+        };
+      });
+    } catch (error) {
+      console.warn('Failed to load organic key counts:', error);
+      this.organicKeyMatches = allPairs.map(pair => ({
+        organicKey: pair.organicKey,
+        relatedEntity: pair.relatedEntity,
+        relatedEntityName: pair.relatedEntity.DisplayName || pair.relatedEntity.RelatedEntity,
+        count: 0,
+        isExpanded: false,
+        records: [],
+        isLoadingRecords: false,
+      }));
+    } finally {
+      this.ngZone.run(() => {
+        this.isLoadingOrganicKeys = false;
+        this.cdr.detectChanges();
+      });
+    }
+  }
+
+  /**
+   * Get only organic key matches that have records (count > 0)
+   */
+  get organicKeyMatchesWithRecords(): OrganicKeyMatchData[] {
+    return this.organicKeyMatches.filter(m => m.count > 0);
+  }
+
+  /**
+   * Toggle expansion of an organic key match section and load records if needed
+   */
+  async toggleOrganicKeyExpansion(match: OrganicKeyMatchData, event: Event): Promise<void> {
+    event.stopPropagation();
+    if (match.count === 0) return;
+
+    match.isExpanded = !match.isExpanded;
+
+    if (match.isExpanded && match.records.length === 0 && !match.isLoadingRecords) {
+      await this.loadOrganicKeyRecords(match);
+    }
+  }
+
+  /**
+   * Load actual records for an organic key match
+   */
+  private async loadOrganicKeyRecords(match: OrganicKeyMatchData): Promise<void> {
+    if (!this.record || !this.entity) return;
+
+    match.isLoadingRecords = true;
+    this.cdr.detectChanges();
+
+    const mockRecord = {
+      Get: (fieldName: string) => this.record ? this.record[fieldName] ?? null : null,
+      EntityInfo: this.entity,
+    };
+
+    try {
+      const params = EntityInfo.BuildOrganicKeyViewParams(
+        mockRecord as never,
+        match.relatedEntity,
+        match.organicKey,
+      );
+
+      const rv = new RunView();
+      const relatedEntityInfo = this.metadata.Entities.find(e => e.Name === match.relatedEntity.RelatedEntity);
+      const fields = relatedEntityInfo
+        ? [...relatedEntityInfo.PrimaryKeys.map(pk => pk.Name),
+           ...(relatedEntityInfo.NameField ? [relatedEntityInfo.NameField.Name] : []),
+           ...relatedEntityInfo.Fields.filter(f => f.DefaultInView).map(f => f.Name)]
+        : undefined;
+
+      const result = await rv.RunView<Record<string, unknown>>({
+        ...params,
+        ResultType: 'simple',
+        ...(fields ? { Fields: fields } : {}),
+        MaxRows: 10,
+      });
+
+      if (result.Success) {
+        match.records = result.Results;
+      }
+    } catch (error) {
+      console.warn(`Failed to load organic key records for ${match.relatedEntityName}:`, error);
+    } finally {
+      this.ngZone.run(() => {
+        match.isLoadingRecords = false;
+        this.cdr.detectChanges();
+      });
+    }
+  }
+
+  /**
+   * Handle click on an organic key record
+   */
+  onOrganicKeyRecordClick(match: OrganicKeyMatchData, record: Record<string, unknown>, event: Event): void {
+    event.stopPropagation();
+    this.openRelatedRecord.emit({
+      entityName: match.relatedEntity.RelatedEntity,
+      record,
+    });
+  }
+
+  /**
+   * Navigate to view all organic key matched records
+   */
+  onViewAllOrganicKey(match: OrganicKeyMatchData, event: Event): void {
+    event.stopPropagation();
+    if (!this.record || !this.entity) return;
+
+    const mockRecord = {
+      Get: (fieldName: string) => this.record ? this.record[fieldName] ?? null : null,
+      EntityInfo: this.entity,
+    };
+    const params = EntityInfo.BuildOrganicKeyViewParams(
+      mockRecord as never,
+      match.relatedEntity,
+      match.organicKey,
+    );
+
+    this.navigateToRelated.emit({
+      entityName: match.relatedEntity.RelatedEntity,
+      filter: String(params.ExtraFilter || ''),
+    });
+  }
+
+  /**
+   * Get display name for an organic key record
+   */
+  getOrganicKeyRecordDisplayName(match: OrganicKeyMatchData, record: Record<string, unknown>): string {
+    const entityInfo = this.metadata.Entities.find(e => e.Name === match.relatedEntity.RelatedEntity);
+    if (entityInfo?.NameField) {
+      const name = record[entityInfo.NameField.Name];
+      if (name) return String(name);
+    }
+    if (entityInfo) {
+      return buildPkString(record, entityInfo);
+    }
+    return 'Record';
+  }
+
+  /**
+   * Get subtitle for an organic key record
+   */
+  getOrganicKeyRecordSubtitle(match: OrganicKeyMatchData, record: Record<string, unknown>): string {
+    const entityInfo = this.metadata.Entities.find(e => e.Name === match.relatedEntity.RelatedEntity);
+    if (!entityInfo) return '';
+
+    const subtitleFieldNames = ['Description', 'Status', 'Type', 'Email', 'Date', 'Amount', 'Total'];
+    for (const fieldName of subtitleFieldNames) {
+      const field = entityInfo.Fields.find(f =>
+        f.Name.includes(fieldName) && f.Name !== entityInfo.NameField?.Name
+      );
+      if (field) {
+        const value = record[field.Name];
+        if (value !== null && value !== undefined) {
+          return this.formatFieldValue(value, field.Name);
+        }
+      }
+    }
+    return '';
+  }
+
+  /**
+   * Get icon for an organic key matched entity
+   */
+  getOrganicKeyEntityIcon(match: OrganicKeyMatchData): string {
+    const entityInfo = this.metadata.Entities.find(e => e.Name === match.relatedEntity.RelatedEntity);
+    if (entityInfo?.Icon) {
+      return this.formatEntityIcon(entityInfo.Icon);
+    }
+    return 'fa-solid fa-link';
   }
 
   /**
@@ -534,11 +784,13 @@ export class EntityRecordDetailPanelComponent implements OnChanges {
   /**
    * Toggle section expansion
    */
-  toggleSection(section: 'details' | 'relationships'): void {
+  toggleSection(section: 'details' | 'relationships' | 'organicKeys'): void {
     if (section === 'details') {
       this.detailsSectionExpanded = !this.detailsSectionExpanded;
-    } else {
+    } else if (section === 'relationships') {
       this.relationshipsSectionExpanded = !this.relationshipsSectionExpanded;
+    } else {
+      this.organicKeysSectionExpanded = !this.organicKeysSectionExpanded;
     }
   }
 

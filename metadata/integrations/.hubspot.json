@@ -4493,6 +4493,3044 @@
             "lastModified": "2026-03-08T22:06:18.089Z",
             "checksum": "ac1e8473874095abad8030934d634b270a2f0ef1619508b85c87de5724eb8469"
           }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "assoc_contacts_companies",
+            "DisplayName": "ContactCompany",
+            "Description": "Many-to-many associations between contacts and companies",
+            "Category": "Association",
+            "APIPath": "/crm/v4/associations/contacts/companies",
+            "ResponseDataKey": "results",
+            "DefaultPageSize": 500,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Sequence": 14,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "contact_id",
+                  "DisplayName": "Contact ID",
+                  "Description": "HubSpot Contact hs_object_id",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "BBFC9497-E5D3-4C8B-844E-A4DA3B110284"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:19.479Z",
+                  "checksum": "9cebb96fb9c23b9752ddc1ed9341de5f80e5873f8b78697417d24396ee8a707f"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "company_id",
+                  "DisplayName": "Company ID",
+                  "Description": "HubSpot Company hs_object_id",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "3A948E30-9F01-4F6B-9AD8-E4F04ACF5D28"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:19.497Z",
+                  "checksum": "b9daeef6041c4e0c7d38a26f5dd9ba697680ed3fea9559074c5b94d91754c6a7"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "association_type",
+                  "DisplayName": "Association Type",
+                  "Description": "HubSpot association label (e.g., Primary, Unlabeled)",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "75A47DC0-56AD-4864-AAF8-968AAD9E3237"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:19.513Z",
+                  "checksum": "806c1478efb81188a58fbadeab666cbd08bf4fee07d9196f5f78e943fa438e63"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "7530AC11-622A-4046-AF5D-94AE1934DB2E"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T21:12:16.896Z",
+            "checksum": "2c281e1d3e4045c2785e9ceab22505f1a9e437994a487fbc73124457035913a2"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "assoc_contacts_deals",
+            "DisplayName": "ContactDeal",
+            "Description": "Many-to-many associations between contacts and deals",
+            "Category": "Association",
+            "APIPath": "/crm/v4/associations/contacts/deals",
+            "ResponseDataKey": "results",
+            "DefaultPageSize": 500,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Sequence": 15,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "contact_id",
+                  "DisplayName": "Contact ID",
+                  "Description": "HubSpot Contact hs_object_id",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "C1436B0F-9A2A-4B67-909F-9C41F2D7D7E5"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:19.529Z",
+                  "checksum": "9cebb96fb9c23b9752ddc1ed9341de5f80e5873f8b78697417d24396ee8a707f"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "deal_id",
+                  "DisplayName": "Deal ID",
+                  "Description": "HubSpot Deal hs_object_id",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "4E98961E-CA2E-4B72-891D-B77D861D7DFE"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:19.544Z",
+                  "checksum": "0ba7c255e44944d93f0df2fad76e23c517def5572637d996fbf3fc63d95c969a"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "association_type",
+                  "DisplayName": "Association Type",
+                  "Description": "HubSpot association label (e.g., Primary, Unlabeled)",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "868A74E2-9EE2-4B32-BE06-CFCFE33452D0"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:19.561Z",
+                  "checksum": "806c1478efb81188a58fbadeab666cbd08bf4fee07d9196f5f78e943fa438e63"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "96345E8E-3636-4EB5-9DB0-6DBCE69CF058"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T21:12:16.914Z",
+            "checksum": "721ea06f79cea9e4c1887dcd97e71d5c0a25bcf30f132932c265568253238c1c"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "assoc_contacts_tickets",
+            "DisplayName": "ContactTicket",
+            "Description": "Many-to-many associations between contacts and support tickets",
+            "Category": "Association",
+            "APIPath": "/crm/v4/associations/contacts/tickets",
+            "ResponseDataKey": "results",
+            "DefaultPageSize": 500,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Sequence": 16,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "contact_id",
+                  "DisplayName": "Contact ID",
+                  "Description": "HubSpot Contact hs_object_id",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "7C9878C9-4295-4804-9A3E-98B6B9953486"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:19.576Z",
+                  "checksum": "9cebb96fb9c23b9752ddc1ed9341de5f80e5873f8b78697417d24396ee8a707f"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "ticket_id",
+                  "DisplayName": "Ticket ID",
+                  "Description": "HubSpot Ticket hs_object_id",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "87514BD2-6816-48EC-99AD-EB3B75CC6C6A"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:19.593Z",
+                  "checksum": "4e5150f16321d7a569da84fcca5fce0d1cca8d14274ab34023e779583889ebac"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "association_type",
+                  "DisplayName": "Association Type",
+                  "Description": "HubSpot association label (e.g., Primary, Unlabeled)",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "3D38CF61-3BC6-4199-8F22-A8AA2A9C19FF"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:19.608Z",
+                  "checksum": "806c1478efb81188a58fbadeab666cbd08bf4fee07d9196f5f78e943fa438e63"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "AD0CC801-0DE5-438E-AFD2-E111F4806D01"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T21:12:16.930Z",
+            "checksum": "f5db1eb80615db2c3dde9f33be24d528dc1cb64c09956de7d365d543b3f68731"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "assoc_companies_deals",
+            "DisplayName": "CompanyDeal",
+            "Description": "Many-to-many associations between companies and deals",
+            "Category": "Association",
+            "APIPath": "/crm/v4/associations/companies/deals",
+            "ResponseDataKey": "results",
+            "DefaultPageSize": 500,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Sequence": 17,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "company_id",
+                  "DisplayName": "Company ID",
+                  "Description": "HubSpot Company hs_object_id",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "6366D93F-BFE5-4FC0-9650-1667A527B0A1"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:19.621Z",
+                  "checksum": "388200d3b7082dd0e045cfff7ec4fb710d3f3835ec8c101a79e3ba51cc82a821"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "deal_id",
+                  "DisplayName": "Deal ID",
+                  "Description": "HubSpot Deal hs_object_id",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "79B48B3D-7B03-4097-AFD8-2FC2853A5CCC"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:19.664Z",
+                  "checksum": "0ba7c255e44944d93f0df2fad76e23c517def5572637d996fbf3fc63d95c969a"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "association_type",
+                  "DisplayName": "Association Type",
+                  "Description": "HubSpot association label (e.g., Primary, Unlabeled)",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "35D2770F-83D2-44FB-8454-663B61AE0574"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:19.682Z",
+                  "checksum": "806c1478efb81188a58fbadeab666cbd08bf4fee07d9196f5f78e943fa438e63"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "A2B5E055-4614-4247-B5C3-F053CFECA23F"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T21:12:16.946Z",
+            "checksum": "48c2f5b34e594f37e2c503193fa8c1f4fe517ab0baf29c7028bfa5658d0261f8"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "assoc_companies_tickets",
+            "DisplayName": "CompanyTicket",
+            "Description": "Many-to-many associations between companies and support tickets",
+            "Category": "Association",
+            "APIPath": "/crm/v4/associations/companies/tickets",
+            "ResponseDataKey": "results",
+            "DefaultPageSize": 500,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Sequence": 18,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "company_id",
+                  "DisplayName": "Company ID",
+                  "Description": "HubSpot Company hs_object_id",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "2A6393F5-188F-43BA-90D8-8116F0A3AC2F"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:19.700Z",
+                  "checksum": "388200d3b7082dd0e045cfff7ec4fb710d3f3835ec8c101a79e3ba51cc82a821"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "ticket_id",
+                  "DisplayName": "Ticket ID",
+                  "Description": "HubSpot Ticket hs_object_id",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "86D68369-5465-41B9-81A5-9E2C2B170FF2"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:19.716Z",
+                  "checksum": "4e5150f16321d7a569da84fcca5fce0d1cca8d14274ab34023e779583889ebac"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "association_type",
+                  "DisplayName": "Association Type",
+                  "Description": "HubSpot association label (e.g., Primary, Unlabeled)",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "1DFCE126-460B-40FB-A41F-63A17F4514E8"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:19.732Z",
+                  "checksum": "806c1478efb81188a58fbadeab666cbd08bf4fee07d9196f5f78e943fa438e63"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "6873890A-AD20-4DB8-BC84-0F6D92D5CA1B"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T21:12:16.962Z",
+            "checksum": "a41cebcf8b091ef3171779d33bfc0b0deacbee1c83aac4bf7b60daf96a6d33a9"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "assoc_deals_line_items",
+            "DisplayName": "DealLineItem",
+            "Description": "Many-to-many associations between deals and line items",
+            "Category": "Association",
+            "APIPath": "/crm/v4/associations/deals/line_items",
+            "ResponseDataKey": "results",
+            "DefaultPageSize": 500,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Sequence": 19,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "deal_id",
+                  "DisplayName": "Deal ID",
+                  "Description": "HubSpot Deal hs_object_id",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "C6656043-F987-4C3A-9477-4E0B19A0A81E"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:19.747Z",
+                  "checksum": "942d7d116f0348424c43579c3e336cb8b92d83c5682a50c2ce945318030138fa"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "line_item_id",
+                  "DisplayName": "LineItem ID",
+                  "Description": "HubSpot LineItem hs_object_id",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "3D234620-8983-4A32-88E0-0E4CC24E7D01"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:19.762Z",
+                  "checksum": "164fa8e36707aa73c5d7554f72d69529fb6449a5370c521db291f8ff83a3c0b5"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "association_type",
+                  "DisplayName": "Association Type",
+                  "Description": "HubSpot association label (e.g., Primary, Unlabeled)",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "5B2EC931-EF17-4BF6-9C22-D96F9818C12A"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:19.779Z",
+                  "checksum": "806c1478efb81188a58fbadeab666cbd08bf4fee07d9196f5f78e943fa438e63"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "EA88697D-B5BB-40E3-ACE6-D29841DDC489"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T21:12:16.978Z",
+            "checksum": "81c1a6ad0656f949da981c6e1b45c2cb3a97c4f8107b9e9683300ab9b0eabf78"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "assoc_deals_quotes",
+            "DisplayName": "DealQuote",
+            "Description": "Many-to-many associations between deals and quotes",
+            "Category": "Association",
+            "APIPath": "/crm/v4/associations/deals/quotes",
+            "ResponseDataKey": "results",
+            "DefaultPageSize": 500,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Sequence": 20,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "deal_id",
+                  "DisplayName": "Deal ID",
+                  "Description": "HubSpot Deal hs_object_id",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "DDEECB2B-1766-4598-BB9D-A9427C54A74F"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:19.797Z",
+                  "checksum": "942d7d116f0348424c43579c3e336cb8b92d83c5682a50c2ce945318030138fa"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "quote_id",
+                  "DisplayName": "Quote ID",
+                  "Description": "HubSpot Quote hs_object_id",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "05091CC4-1FC7-493F-8571-A44A4C1702AB"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:19.813Z",
+                  "checksum": "d5ffbe93ee0b0cdc647c0d212fd44716d2aad18f152cd084b4dff717da30f0c0"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "association_type",
+                  "DisplayName": "Association Type",
+                  "Description": "HubSpot association label (e.g., Primary, Unlabeled)",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "01867D9F-1489-4F87-9473-089548D6968D"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:19.853Z",
+                  "checksum": "806c1478efb81188a58fbadeab666cbd08bf4fee07d9196f5f78e943fa438e63"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "8B4B9267-01C7-4764-BF6F-45FB3289C579"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T21:12:16.991Z",
+            "checksum": "494167a9cbeb5a57fb44da100108cd37b9d7a52340175b23169246d39112e828"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "assoc_quotes_contacts",
+            "DisplayName": "QuoteContact",
+            "Description": "Many-to-many associations between quotes and contacts",
+            "Category": "Association",
+            "APIPath": "/crm/v4/associations/quotes/contacts",
+            "ResponseDataKey": "results",
+            "DefaultPageSize": 500,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Sequence": 21,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "quote_id",
+                  "DisplayName": "Quote ID",
+                  "Description": "HubSpot Quote hs_object_id",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "07141503-A469-4CAB-994D-31FE19143E9D"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:19.869Z",
+                  "checksum": "78c44de5aff72233f69a20621d1cd0b070f2adc94f8f66bfbf3d3e375b9c0bb1"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "contact_id",
+                  "DisplayName": "Contact ID",
+                  "Description": "HubSpot Contact hs_object_id",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "BA2D5EAC-6F68-4300-BAFD-53C4B54555E7"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:19.887Z",
+                  "checksum": "ab9954cc1ded14a856b090675952af7ccf08e37d4ae8c01bc560654ec82e89ba"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "association_type",
+                  "DisplayName": "Association Type",
+                  "Description": "HubSpot association label (e.g., Primary, Unlabeled)",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "0651ECAE-2680-4FC7-8CC5-6E2D95D136C0"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:19.903Z",
+                  "checksum": "806c1478efb81188a58fbadeab666cbd08bf4fee07d9196f5f78e943fa438e63"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "7C970D0A-34EB-41C5-8425-0A35EBDFF2A1"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T21:12:17.029Z",
+            "checksum": "63a8d3ae954e1432e83af97ee6aaad80b91ac0a8607a86725a2164eeb42e5a3d"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "assoc_quotes_line_items",
+            "DisplayName": "QuoteLineItem",
+            "Description": "Many-to-many associations between quotes and line items",
+            "Category": "Association",
+            "APIPath": "/crm/v4/associations/quotes/line_items",
+            "ResponseDataKey": "results",
+            "DefaultPageSize": 500,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Sequence": 22,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "quote_id",
+                  "DisplayName": "Quote ID",
+                  "Description": "HubSpot Quote hs_object_id",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "023D88DE-F68A-43C5-A114-FD95C43BBC65"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:19.919Z",
+                  "checksum": "78c44de5aff72233f69a20621d1cd0b070f2adc94f8f66bfbf3d3e375b9c0bb1"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "line_item_id",
+                  "DisplayName": "LineItem ID",
+                  "Description": "HubSpot LineItem hs_object_id",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "92454F3C-2FD2-40C2-B31F-D183A3C14639"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:19.939Z",
+                  "checksum": "164fa8e36707aa73c5d7554f72d69529fb6449a5370c521db291f8ff83a3c0b5"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "association_type",
+                  "DisplayName": "Association Type",
+                  "Description": "HubSpot association label (e.g., Primary, Unlabeled)",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "07627276-C5F2-4270-9643-2D44E35CAD75"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:19.956Z",
+                  "checksum": "806c1478efb81188a58fbadeab666cbd08bf4fee07d9196f5f78e943fa438e63"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "75B4DBD1-ED89-4D50-BC88-F3B1913BBAA2"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T21:12:17.044Z",
+            "checksum": "cff85c1f29d436449c2434aa615c706aefea767aec75316f698a1a113d8701ec"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "assoc_contacts_calls",
+            "DisplayName": "ContactCall",
+            "Description": "Associations between contacts and logged calls",
+            "Category": "Association",
+            "APIPath": "/crm/v4/associations/contacts/calls",
+            "ResponseDataKey": "results",
+            "DefaultPageSize": 500,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Sequence": 23,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "contact_id",
+                  "DisplayName": "Contact ID",
+                  "Description": "HubSpot Contact hs_object_id",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "DD82E87E-6533-42D9-8840-1B4771C9DA72"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:19.981Z",
+                  "checksum": "9cebb96fb9c23b9752ddc1ed9341de5f80e5873f8b78697417d24396ee8a707f"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "call_id",
+                  "DisplayName": "Call ID",
+                  "Description": "HubSpot Call hs_object_id",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "D0B4E1E4-4205-44B0-B3DC-BA72AB29EB31"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:19.998Z",
+                  "checksum": "5a7ef9ebbeae08eb3c0186ebce71b6bbeaa9ad88d375e49c1268912c25d65a7f"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "association_type",
+                  "DisplayName": "Association Type",
+                  "Description": "HubSpot association label (e.g., Primary, Unlabeled)",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "00FF0E44-6B35-43DE-92AD-187331B3EB0D"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:20.011Z",
+                  "checksum": "806c1478efb81188a58fbadeab666cbd08bf4fee07d9196f5f78e943fa438e63"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "26E12966-01D1-4394-90B5-6A5ED657B3B0"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T21:12:17.060Z",
+            "checksum": "c2227b4a85a7bda06ef1e0811e953a6148a59a38e4224ecb465ea0237547bb13"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "assoc_contacts_emails",
+            "DisplayName": "ContactEmail",
+            "Description": "Associations between contacts and logged emails",
+            "Category": "Association",
+            "APIPath": "/crm/v4/associations/contacts/emails",
+            "ResponseDataKey": "results",
+            "DefaultPageSize": 500,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Sequence": 24,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "contact_id",
+                  "DisplayName": "Contact ID",
+                  "Description": "HubSpot Contact hs_object_id",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "498528F0-42A6-4921-A72E-D540DA594484"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:20.047Z",
+                  "checksum": "9cebb96fb9c23b9752ddc1ed9341de5f80e5873f8b78697417d24396ee8a707f"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "email_id",
+                  "DisplayName": "Email ID",
+                  "Description": "HubSpot Email hs_object_id",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "77D95DBC-E812-413D-93C2-455A08A92877"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:20.064Z",
+                  "checksum": "6190f8e00de6c0217300a6fe1eb17a1d0f478fdba5d1eb8a111198bd8202f813"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "association_type",
+                  "DisplayName": "Association Type",
+                  "Description": "HubSpot association label (e.g., Primary, Unlabeled)",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "4B4818E1-EEF0-4101-A5EB-CA1856077A72"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:20.079Z",
+                  "checksum": "806c1478efb81188a58fbadeab666cbd08bf4fee07d9196f5f78e943fa438e63"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "0B530693-1869-472B-AE6B-5B1193270CD7"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T21:12:17.075Z",
+            "checksum": "7cbcf9c522a97ae23307f3708b6d26ca8681abc55a05f3bae2ffdb682a715430"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "assoc_contacts_notes",
+            "DisplayName": "ContactNote",
+            "Description": "Associations between contacts and notes",
+            "Category": "Association",
+            "APIPath": "/crm/v4/associations/contacts/notes",
+            "ResponseDataKey": "results",
+            "DefaultPageSize": 500,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Sequence": 25,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "contact_id",
+                  "DisplayName": "Contact ID",
+                  "Description": "HubSpot Contact hs_object_id",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "EB48D651-EC98-4778-8D66-0CDF3B19D1ED"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:20.096Z",
+                  "checksum": "9cebb96fb9c23b9752ddc1ed9341de5f80e5873f8b78697417d24396ee8a707f"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "note_id",
+                  "DisplayName": "Note ID",
+                  "Description": "HubSpot Note hs_object_id",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "291C5FC3-239A-4B28-8557-00477B049837"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:20.111Z",
+                  "checksum": "5e743ae6da8da478b68732de6d011f5a991e57f08a60fc6c4fb27b4ae4bb7a3a"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "association_type",
+                  "DisplayName": "Association Type",
+                  "Description": "HubSpot association label (e.g., Primary, Unlabeled)",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "287015F7-CC71-4BEF-AC94-988A77821059"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:20.127Z",
+                  "checksum": "806c1478efb81188a58fbadeab666cbd08bf4fee07d9196f5f78e943fa438e63"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "C1B817F0-E189-46C5-97B5-0B113DD1FAAA"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T21:12:17.088Z",
+            "checksum": "617ac4dcc644a2d9a24b1e08f7ecf7af0fa2d5bfe585cc45e28b4f191d1ef958"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "assoc_contacts_tasks",
+            "DisplayName": "ContactTask",
+            "Description": "Associations between contacts and tasks",
+            "Category": "Association",
+            "APIPath": "/crm/v4/associations/contacts/tasks",
+            "ResponseDataKey": "results",
+            "DefaultPageSize": 500,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Sequence": 26,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "contact_id",
+                  "DisplayName": "Contact ID",
+                  "Description": "HubSpot Contact hs_object_id",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "7B1C6D90-88CF-44EF-A9C5-DEECDC1FD2B8"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:20.143Z",
+                  "checksum": "9cebb96fb9c23b9752ddc1ed9341de5f80e5873f8b78697417d24396ee8a707f"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "task_id",
+                  "DisplayName": "Task ID",
+                  "Description": "HubSpot Task hs_object_id",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "C8C1C0E2-E881-469C-B9D1-1810EF459447"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:20.159Z",
+                  "checksum": "ed39a8970cf8f0eb3609ba2cde687489ada4f969014183ba2d2a83135b6704e6"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "association_type",
+                  "DisplayName": "Association Type",
+                  "Description": "HubSpot association label (e.g., Primary, Unlabeled)",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "00B8C28D-2641-475D-BCD4-2C851FA701D7"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:20.176Z",
+                  "checksum": "806c1478efb81188a58fbadeab666cbd08bf4fee07d9196f5f78e943fa438e63"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "145F90B7-B6B8-490C-B56D-E089511D9BD3"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T21:12:17.103Z",
+            "checksum": "0d17d0ca7facb692f561020c3fa261adbdaa84f43e237d42be191ddffb85c47e"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "assoc_contacts_meetings",
+            "DisplayName": "ContactMeeting",
+            "Description": "Associations between contacts and meetings",
+            "Category": "Association",
+            "APIPath": "/crm/v4/associations/contacts/meetings",
+            "ResponseDataKey": "results",
+            "DefaultPageSize": 500,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Sequence": 27,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "contact_id",
+                  "DisplayName": "Contact ID",
+                  "Description": "HubSpot Contact hs_object_id",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "09330343-FCDA-422D-A975-5275E762363D"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:20.189Z",
+                  "checksum": "9cebb96fb9c23b9752ddc1ed9341de5f80e5873f8b78697417d24396ee8a707f"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "meeting_id",
+                  "DisplayName": "Meeting ID",
+                  "Description": "HubSpot Meeting hs_object_id",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "E80015A5-3BB2-4EBD-BF8B-C038EF4512CE"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:20.226Z",
+                  "checksum": "a516a34c297fdaaf8af6ae8c15e11a2adfe35036ca46d4b3770ac8404e562aa6"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "association_type",
+                  "DisplayName": "Association Type",
+                  "Description": "HubSpot association label (e.g., Primary, Unlabeled)",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "1950365D-3C0A-41F4-A80A-5AB8874A8C65"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:20.242Z",
+                  "checksum": "806c1478efb81188a58fbadeab666cbd08bf4fee07d9196f5f78e943fa438e63"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "671AACCA-D71C-466C-A714-093FB55DA120"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T21:12:17.117Z",
+            "checksum": "d80c49c57d9122cfcbbe9ba4d2d4237a9e4f7521c0f8bbe3e80b70cc03e97658"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "assoc_companies_calls",
+            "DisplayName": "CompanyCall",
+            "Description": "Associations between companies and logged calls",
+            "Category": "Association",
+            "APIPath": "/crm/v4/associations/companies/calls",
+            "ResponseDataKey": "results",
+            "DefaultPageSize": 500,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Sequence": 28,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "company_id",
+                  "DisplayName": "Company ID",
+                  "Description": "HubSpot Company hs_object_id",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "39FD62C1-CF9F-4EB6-86C1-10A50A0B24B6"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:20.259Z",
+                  "checksum": "388200d3b7082dd0e045cfff7ec4fb710d3f3835ec8c101a79e3ba51cc82a821"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "call_id",
+                  "DisplayName": "Call ID",
+                  "Description": "HubSpot Call hs_object_id",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "209C254B-3E97-459C-82DC-1318A0B56129"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:20.277Z",
+                  "checksum": "5a7ef9ebbeae08eb3c0186ebce71b6bbeaa9ad88d375e49c1268912c25d65a7f"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "association_type",
+                  "DisplayName": "Association Type",
+                  "Description": "HubSpot association label (e.g., Primary, Unlabeled)",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "35107C68-23A8-4E8C-9219-FD0F3DEC9FBA"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:20.294Z",
+                  "checksum": "806c1478efb81188a58fbadeab666cbd08bf4fee07d9196f5f78e943fa438e63"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "CC669C2E-3AF6-4C97-9A8F-A270773829FC"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T21:12:17.130Z",
+            "checksum": "ff1e46b768f1ca7f43b7064629b60e43800fecb089c17b391a7da8bda0b37bb0"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "assoc_companies_emails",
+            "DisplayName": "CompanyEmail",
+            "Description": "Associations between companies and logged emails",
+            "Category": "Association",
+            "APIPath": "/crm/v4/associations/companies/emails",
+            "ResponseDataKey": "results",
+            "DefaultPageSize": 500,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Sequence": 29,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "company_id",
+                  "DisplayName": "Company ID",
+                  "Description": "HubSpot Company hs_object_id",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "4021A7DB-BB0B-4BAE-B963-8FDC7DA37C00"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:20.309Z",
+                  "checksum": "388200d3b7082dd0e045cfff7ec4fb710d3f3835ec8c101a79e3ba51cc82a821"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "email_id",
+                  "DisplayName": "Email ID",
+                  "Description": "HubSpot Email hs_object_id",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "8E6B3568-C0A4-457B-A3B8-1CADC2FB899B"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:20.324Z",
+                  "checksum": "6190f8e00de6c0217300a6fe1eb17a1d0f478fdba5d1eb8a111198bd8202f813"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "association_type",
+                  "DisplayName": "Association Type",
+                  "Description": "HubSpot association label (e.g., Primary, Unlabeled)",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "DB63952F-2436-4DDD-87CD-98A695AA2FDB"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:20.340Z",
+                  "checksum": "806c1478efb81188a58fbadeab666cbd08bf4fee07d9196f5f78e943fa438e63"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "BD50A69D-0FFF-4A77-B582-2F37FB7FE686"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T21:12:17.144Z",
+            "checksum": "8bef0fec02e89700dc7d375b7d0bddb98a802ceb580874646462b4b8e57bf002"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "assoc_companies_notes",
+            "DisplayName": "CompanyNote",
+            "Description": "Associations between companies and notes",
+            "Category": "Association",
+            "APIPath": "/crm/v4/associations/companies/notes",
+            "ResponseDataKey": "results",
+            "DefaultPageSize": 500,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Sequence": 30,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "company_id",
+                  "DisplayName": "Company ID",
+                  "Description": "HubSpot Company hs_object_id",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "F4715277-BBE8-43DC-8FA2-B1B5F273901F"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:20.355Z",
+                  "checksum": "388200d3b7082dd0e045cfff7ec4fb710d3f3835ec8c101a79e3ba51cc82a821"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "note_id",
+                  "DisplayName": "Note ID",
+                  "Description": "HubSpot Note hs_object_id",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "C6FE05C9-27D5-415A-8D67-A910FCE89050"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:20.369Z",
+                  "checksum": "5e743ae6da8da478b68732de6d011f5a991e57f08a60fc6c4fb27b4ae4bb7a3a"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "association_type",
+                  "DisplayName": "Association Type",
+                  "Description": "HubSpot association label (e.g., Primary, Unlabeled)",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "88ED7ECD-90C3-481B-BCF1-B7616ED46778"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:20.407Z",
+                  "checksum": "806c1478efb81188a58fbadeab666cbd08bf4fee07d9196f5f78e943fa438e63"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "A7408924-8981-4ED5-AEEC-35A007FE856C"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T21:12:17.156Z",
+            "checksum": "260ce1ffe9d3a7b807b96df2bcb6d500988e19d40e44ec7aff60746b9547cbbe"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "assoc_companies_tasks",
+            "DisplayName": "CompanyTask",
+            "Description": "Associations between companies and tasks",
+            "Category": "Association",
+            "APIPath": "/crm/v4/associations/companies/tasks",
+            "ResponseDataKey": "results",
+            "DefaultPageSize": 500,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Sequence": 31,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "company_id",
+                  "DisplayName": "Company ID",
+                  "Description": "HubSpot Company hs_object_id",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "148619DA-9FD7-4F70-8D94-6D037E3D3670"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:20.423Z",
+                  "checksum": "388200d3b7082dd0e045cfff7ec4fb710d3f3835ec8c101a79e3ba51cc82a821"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "task_id",
+                  "DisplayName": "Task ID",
+                  "Description": "HubSpot Task hs_object_id",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "DCDF2720-4FD6-4F4F-BBFE-5099B3DCF03F"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:20.438Z",
+                  "checksum": "ed39a8970cf8f0eb3609ba2cde687489ada4f969014183ba2d2a83135b6704e6"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "association_type",
+                  "DisplayName": "Association Type",
+                  "Description": "HubSpot association label (e.g., Primary, Unlabeled)",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "D89BB8D8-03A7-405C-AE38-F1574DAA4803"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:20.455Z",
+                  "checksum": "806c1478efb81188a58fbadeab666cbd08bf4fee07d9196f5f78e943fa438e63"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "064661F4-193F-476E-86C0-4296C7E29D55"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T21:12:17.192Z",
+            "checksum": "39a916af12ba46ace617a7d3a768df2c6a7f5474ab082bbdf8839616ec5b55c2"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "assoc_companies_meetings",
+            "DisplayName": "CompanyMeeting",
+            "Description": "Associations between companies and meetings",
+            "Category": "Association",
+            "APIPath": "/crm/v4/associations/companies/meetings",
+            "ResponseDataKey": "results",
+            "DefaultPageSize": 500,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Sequence": 32,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "company_id",
+                  "DisplayName": "Company ID",
+                  "Description": "HubSpot Company hs_object_id",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "86F6E7CA-7782-4E93-8D1F-DF991B23E9DB"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:20.470Z",
+                  "checksum": "388200d3b7082dd0e045cfff7ec4fb710d3f3835ec8c101a79e3ba51cc82a821"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "meeting_id",
+                  "DisplayName": "Meeting ID",
+                  "Description": "HubSpot Meeting hs_object_id",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "DE67E522-975B-45CD-B499-0FFC891C9427"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:20.487Z",
+                  "checksum": "a516a34c297fdaaf8af6ae8c15e11a2adfe35036ca46d4b3770ac8404e562aa6"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "association_type",
+                  "DisplayName": "Association Type",
+                  "Description": "HubSpot association label (e.g., Primary, Unlabeled)",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "CB0F8370-4E93-4D46-8244-C31B1B539F56"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:20.503Z",
+                  "checksum": "806c1478efb81188a58fbadeab666cbd08bf4fee07d9196f5f78e943fa438e63"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "9F7213C7-4635-430A-A6F0-FA41C8800D75"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T21:12:17.206Z",
+            "checksum": "1fc00ef98e2a707428dc217deb0146d7d13a7af5d212fe5b9d7d415ddbdfb9d7"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "assoc_deals_calls",
+            "DisplayName": "DealCall",
+            "Description": "Associations between deals and logged calls",
+            "Category": "Association",
+            "APIPath": "/crm/v4/associations/deals/calls",
+            "ResponseDataKey": "results",
+            "DefaultPageSize": 500,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Sequence": 33,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "deal_id",
+                  "DisplayName": "Deal ID",
+                  "Description": "HubSpot Deal hs_object_id",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "2D26E267-A07D-43BD-80B4-2781A7805559"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:20.518Z",
+                  "checksum": "942d7d116f0348424c43579c3e336cb8b92d83c5682a50c2ce945318030138fa"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "call_id",
+                  "DisplayName": "Call ID",
+                  "Description": "HubSpot Call hs_object_id",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "E6D7D891-4C21-4965-B71F-664D2ADD0D8D"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:20.533Z",
+                  "checksum": "5a7ef9ebbeae08eb3c0186ebce71b6bbeaa9ad88d375e49c1268912c25d65a7f"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "association_type",
+                  "DisplayName": "Association Type",
+                  "Description": "HubSpot association label (e.g., Primary, Unlabeled)",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "886EA848-5403-4034-BC69-B6A5802DDBD0"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:20.546Z",
+                  "checksum": "806c1478efb81188a58fbadeab666cbd08bf4fee07d9196f5f78e943fa438e63"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "1B400507-0BFA-4C59-A7A0-1F0FFA83EA1A"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T21:12:17.220Z",
+            "checksum": "256460f696558e48b308a2b2fbbe57d0159dee08283db0e98a92bd0e51644c4f"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "assoc_deals_emails",
+            "DisplayName": "DealEmail",
+            "Description": "Associations between deals and logged emails",
+            "Category": "Association",
+            "APIPath": "/crm/v4/associations/deals/emails",
+            "ResponseDataKey": "results",
+            "DefaultPageSize": 500,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Sequence": 34,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "deal_id",
+                  "DisplayName": "Deal ID",
+                  "Description": "HubSpot Deal hs_object_id",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "FB65C605-45AD-42E7-A839-66D4ED026E36"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:20.587Z",
+                  "checksum": "942d7d116f0348424c43579c3e336cb8b92d83c5682a50c2ce945318030138fa"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "email_id",
+                  "DisplayName": "Email ID",
+                  "Description": "HubSpot Email hs_object_id",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "8CAE6DF5-5319-47BD-9442-B585C5FD5B06"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:20.606Z",
+                  "checksum": "6190f8e00de6c0217300a6fe1eb17a1d0f478fdba5d1eb8a111198bd8202f813"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "association_type",
+                  "DisplayName": "Association Type",
+                  "Description": "HubSpot association label (e.g., Primary, Unlabeled)",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "8922493B-6865-4AAB-9E78-720B8995CE5A"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:20.622Z",
+                  "checksum": "806c1478efb81188a58fbadeab666cbd08bf4fee07d9196f5f78e943fa438e63"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "32984FFD-8DD5-41E9-8EAC-BD02FCAAB391"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T21:12:17.234Z",
+            "checksum": "9b824f914c2960e32476ce70b8c2315f2682883e3e2a23a55a1bb624f44d443b"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "assoc_deals_notes",
+            "DisplayName": "DealNote",
+            "Description": "Associations between deals and notes",
+            "Category": "Association",
+            "APIPath": "/crm/v4/associations/deals/notes",
+            "ResponseDataKey": "results",
+            "DefaultPageSize": 500,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Sequence": 35,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "deal_id",
+                  "DisplayName": "Deal ID",
+                  "Description": "HubSpot Deal hs_object_id",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "127FDFA7-F2F3-4C4C-A3FC-A914C3C38759"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:20.639Z",
+                  "checksum": "942d7d116f0348424c43579c3e336cb8b92d83c5682a50c2ce945318030138fa"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "note_id",
+                  "DisplayName": "Note ID",
+                  "Description": "HubSpot Note hs_object_id",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "1D042F69-F569-4C26-BD33-91F838CCB264"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:20.655Z",
+                  "checksum": "5e743ae6da8da478b68732de6d011f5a991e57f08a60fc6c4fb27b4ae4bb7a3a"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "association_type",
+                  "DisplayName": "Association Type",
+                  "Description": "HubSpot association label (e.g., Primary, Unlabeled)",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "3AD182D4-A3FE-4273-9D09-E57172A7A36B"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:20.672Z",
+                  "checksum": "806c1478efb81188a58fbadeab666cbd08bf4fee07d9196f5f78e943fa438e63"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "9096CF3F-DCE4-43B5-A6C0-B59F8B454353"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T21:12:17.250Z",
+            "checksum": "00c36246cf2ef24a70177596356306102ceac3889ab6f65fed8412d0cc2fa882"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "assoc_deals_tasks",
+            "DisplayName": "DealTask",
+            "Description": "Associations between deals and tasks",
+            "Category": "Association",
+            "APIPath": "/crm/v4/associations/deals/tasks",
+            "ResponseDataKey": "results",
+            "DefaultPageSize": 500,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Sequence": 36,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "deal_id",
+                  "DisplayName": "Deal ID",
+                  "Description": "HubSpot Deal hs_object_id",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "5231DD5C-DC26-4FB6-A13A-210A363F50AF"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:20.688Z",
+                  "checksum": "942d7d116f0348424c43579c3e336cb8b92d83c5682a50c2ce945318030138fa"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "task_id",
+                  "DisplayName": "Task ID",
+                  "Description": "HubSpot Task hs_object_id",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "E364EF30-7F93-4E32-A097-D6A533BFDE5E"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:20.704Z",
+                  "checksum": "ed39a8970cf8f0eb3609ba2cde687489ada4f969014183ba2d2a83135b6704e6"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "association_type",
+                  "DisplayName": "Association Type",
+                  "Description": "HubSpot association label (e.g., Primary, Unlabeled)",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "B3BEC627-597A-4831-AB0B-16253B5CC419"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:20.718Z",
+                  "checksum": "806c1478efb81188a58fbadeab666cbd08bf4fee07d9196f5f78e943fa438e63"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "E9ECE671-2A92-49E3-B023-CC84D435FD76"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T21:12:17.265Z",
+            "checksum": "1f357a2e04b9537235a85db4fdfbdddbadf5d36ede4166057c8b82e76ffe22d0"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "assoc_deals_meetings",
+            "DisplayName": "DealMeeting",
+            "Description": "Associations between deals and meetings",
+            "Category": "Association",
+            "APIPath": "/crm/v4/associations/deals/meetings",
+            "ResponseDataKey": "results",
+            "DefaultPageSize": 500,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Sequence": 37,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "deal_id",
+                  "DisplayName": "Deal ID",
+                  "Description": "HubSpot Deal hs_object_id",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "D679A483-5356-4AB4-9DEF-546AA2DD7AE0"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:20.734Z",
+                  "checksum": "942d7d116f0348424c43579c3e336cb8b92d83c5682a50c2ce945318030138fa"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "meeting_id",
+                  "DisplayName": "Meeting ID",
+                  "Description": "HubSpot Meeting hs_object_id",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "D4C5F8AB-B5F7-4257-B367-FC58E2F8C3CC"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:20.772Z",
+                  "checksum": "a516a34c297fdaaf8af6ae8c15e11a2adfe35036ca46d4b3770ac8404e562aa6"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "association_type",
+                  "DisplayName": "Association Type",
+                  "Description": "HubSpot association label (e.g., Primary, Unlabeled)",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "D6C494B2-70B5-47F2-806D-87AE10ED00A4"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:20.787Z",
+                  "checksum": "806c1478efb81188a58fbadeab666cbd08bf4fee07d9196f5f78e943fa438e63"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "3683C6A1-8162-4F0C-B316-8643185BADC1"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T21:12:17.278Z",
+            "checksum": "adcd55e60a11a234edae5da3c7cfe50aad3807dc11055102705cae3b1b16e13d"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "assoc_tickets_calls",
+            "DisplayName": "TicketCall",
+            "Description": "Associations between tickets and logged calls",
+            "Category": "Association",
+            "APIPath": "/crm/v4/associations/tickets/calls",
+            "ResponseDataKey": "results",
+            "DefaultPageSize": 500,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Sequence": 38,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "ticket_id",
+                  "DisplayName": "Ticket ID",
+                  "Description": "HubSpot Ticket hs_object_id",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "5C013181-8CF7-4005-9198-90B5AB79D12E"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:20.802Z",
+                  "checksum": "8eda3b8d2dd673b25a31749b594d6109dd13d3c166a3760f002e2c64a83abc52"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "call_id",
+                  "DisplayName": "Call ID",
+                  "Description": "HubSpot Call hs_object_id",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "7128AB39-6759-49B2-AB8E-28644E3A4FAA"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:20.819Z",
+                  "checksum": "5a7ef9ebbeae08eb3c0186ebce71b6bbeaa9ad88d375e49c1268912c25d65a7f"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "association_type",
+                  "DisplayName": "Association Type",
+                  "Description": "HubSpot association label (e.g., Primary, Unlabeled)",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "CE5FED32-BDFD-4A0A-A15A-184211C79D60"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:20.836Z",
+                  "checksum": "806c1478efb81188a58fbadeab666cbd08bf4fee07d9196f5f78e943fa438e63"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "42B9F4AB-3DAF-40D1-9F43-E493FAC0CE96"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T21:12:17.291Z",
+            "checksum": "33f4c7deafa62c6a07f98b0ae632344a1ba4deec6d9e1c80d5cd796e5b193aff"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "assoc_tickets_emails",
+            "DisplayName": "TicketEmail",
+            "Description": "Associations between tickets and logged emails",
+            "Category": "Association",
+            "APIPath": "/crm/v4/associations/tickets/emails",
+            "ResponseDataKey": "results",
+            "DefaultPageSize": 500,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Sequence": 39,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "ticket_id",
+                  "DisplayName": "Ticket ID",
+                  "Description": "HubSpot Ticket hs_object_id",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "EA12F8FD-5E0D-422D-A937-11C717388FA4"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:20.853Z",
+                  "checksum": "8eda3b8d2dd673b25a31749b594d6109dd13d3c166a3760f002e2c64a83abc52"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "email_id",
+                  "DisplayName": "Email ID",
+                  "Description": "HubSpot Email hs_object_id",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "79FBB108-9D0F-4549-BFCA-30F256E13154"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:20.868Z",
+                  "checksum": "6190f8e00de6c0217300a6fe1eb17a1d0f478fdba5d1eb8a111198bd8202f813"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "association_type",
+                  "DisplayName": "Association Type",
+                  "Description": "HubSpot association label (e.g., Primary, Unlabeled)",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "E15B0EDF-D981-411D-9692-BDF066947654"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:20.883Z",
+                  "checksum": "806c1478efb81188a58fbadeab666cbd08bf4fee07d9196f5f78e943fa438e63"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "F97D3FB0-BB70-4A4E-9CF1-BC4D0A7558D1"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T21:12:17.306Z",
+            "checksum": "bc37ea7c7e883328e85ba13f490089e759205e751a5f2c3209b8a35d09140e90"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "assoc_tickets_notes",
+            "DisplayName": "TicketNote",
+            "Description": "Associations between tickets and notes",
+            "Category": "Association",
+            "APIPath": "/crm/v4/associations/tickets/notes",
+            "ResponseDataKey": "results",
+            "DefaultPageSize": 500,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Sequence": 40,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "ticket_id",
+                  "DisplayName": "Ticket ID",
+                  "Description": "HubSpot Ticket hs_object_id",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "1A8E31B5-253D-49C6-896A-C919E677CE2D"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:20.899Z",
+                  "checksum": "8eda3b8d2dd673b25a31749b594d6109dd13d3c166a3760f002e2c64a83abc52"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "note_id",
+                  "DisplayName": "Note ID",
+                  "Description": "HubSpot Note hs_object_id",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "8631ECA9-4173-43C3-B5A3-6996E2DF9BEE"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:20.913Z",
+                  "checksum": "5e743ae6da8da478b68732de6d011f5a991e57f08a60fc6c4fb27b4ae4bb7a3a"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "association_type",
+                  "DisplayName": "Association Type",
+                  "Description": "HubSpot association label (e.g., Primary, Unlabeled)",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "BE650F04-7F22-42B5-A2C9-937D6EC9A154"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:20.952Z",
+                  "checksum": "806c1478efb81188a58fbadeab666cbd08bf4fee07d9196f5f78e943fa438e63"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "04D133C4-124D-40EC-8C79-B8B3137C13A6"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T21:12:17.317Z",
+            "checksum": "7880fbec092825731569b232d7550ae14b7a7a7e5d1f684fbb20758c632548f4"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "assoc_tickets_tasks",
+            "DisplayName": "TicketTask",
+            "Description": "Associations between tickets and tasks",
+            "Category": "Association",
+            "APIPath": "/crm/v4/associations/tickets/tasks",
+            "ResponseDataKey": "results",
+            "DefaultPageSize": 500,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Sequence": 41,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "ticket_id",
+                  "DisplayName": "Ticket ID",
+                  "Description": "HubSpot Ticket hs_object_id",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "DE34FA48-6A96-4794-A279-8552010BF0B6"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:20.968Z",
+                  "checksum": "8eda3b8d2dd673b25a31749b594d6109dd13d3c166a3760f002e2c64a83abc52"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "task_id",
+                  "DisplayName": "Task ID",
+                  "Description": "HubSpot Task hs_object_id",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "5E1804EF-FEAA-429D-923E-BE960E32307E"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:20.985Z",
+                  "checksum": "ed39a8970cf8f0eb3609ba2cde687489ada4f969014183ba2d2a83135b6704e6"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "association_type",
+                  "DisplayName": "Association Type",
+                  "Description": "HubSpot association label (e.g., Primary, Unlabeled)",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "D05F4CE3-9CB8-4934-89EE-C8A0F6289700"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:21.001Z",
+                  "checksum": "806c1478efb81188a58fbadeab666cbd08bf4fee07d9196f5f78e943fa438e63"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "DC97972E-AF45-492D-B868-A6ADF6896EEC"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T21:12:17.339Z",
+            "checksum": "771226bcd56ff458d2e4608b70280afd684292dfab26a31f1d28446f3eff50a3"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "assoc_tickets_meetings",
+            "DisplayName": "TicketMeeting",
+            "Description": "Associations between tickets and meetings",
+            "Category": "Association",
+            "APIPath": "/crm/v4/associations/tickets/meetings",
+            "ResponseDataKey": "results",
+            "DefaultPageSize": 500,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Sequence": 42,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "ticket_id",
+                  "DisplayName": "Ticket ID",
+                  "Description": "HubSpot Ticket hs_object_id",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "9FDE8332-5631-4F19-8B53-2A83F55AF7E6"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:21.016Z",
+                  "checksum": "8eda3b8d2dd673b25a31749b594d6109dd13d3c166a3760f002e2c64a83abc52"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "meeting_id",
+                  "DisplayName": "Meeting ID",
+                  "Description": "HubSpot Meeting hs_object_id",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "12DA0AA2-AE5F-42FB-870C-7AB8B55D70CA"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:21.033Z",
+                  "checksum": "a516a34c297fdaaf8af6ae8c15e11a2adfe35036ca46d4b3770ac8404e562aa6"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "association_type",
+                  "DisplayName": "Association Type",
+                  "Description": "HubSpot association label (e.g., Primary, Unlabeled)",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "0A468BB4-0E1A-4EC8-9CC6-FC98F2EE01C4"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:21.048Z",
+                  "checksum": "806c1478efb81188a58fbadeab666cbd08bf4fee07d9196f5f78e943fa438e63"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "C91E0F63-6BB3-459F-B1F1-0E383C0F16E2"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T21:12:17.354Z",
+            "checksum": "11fedf4d36af54a841f7d4448937679aeb47f203bfef89195473c0db398879d6"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "assoc_contacts_feedback_submissions",
+            "DisplayName": "ContactFeedbackSubmission",
+            "Description": "Associations between contacts and feedback submissions",
+            "Category": "Association",
+            "APIPath": "/crm/v4/associations/contacts/feedback_submissions",
+            "ResponseDataKey": "results",
+            "DefaultPageSize": 500,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Sequence": 43,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "contact_id",
+                  "DisplayName": "Contact ID",
+                  "Description": "HubSpot Contact hs_object_id",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "427DE4C2-B2FA-4F4D-965A-46092BC76812"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:21.064Z",
+                  "checksum": "9cebb96fb9c23b9752ddc1ed9341de5f80e5873f8b78697417d24396ee8a707f"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "feedback_submission_id",
+                  "DisplayName": "FeedbackSubmission ID",
+                  "Description": "HubSpot FeedbackSubmission hs_object_id",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "029D2098-D68F-45EF-A3AB-D6258BD17CA8"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:21.080Z",
+                  "checksum": "7fd4f419127e3becae3e69ee423444cb041b7bf4ea4224351ada7951f9afe008"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "association_type",
+                  "DisplayName": "Association Type",
+                  "Description": "HubSpot association label (e.g., Primary, Unlabeled)",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "DA09AA16-C60F-4514-ACF0-84E6AC7D9D91"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:21.094Z",
+                  "checksum": "806c1478efb81188a58fbadeab666cbd08bf4fee07d9196f5f78e943fa438e63"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "03477B44-0A98-49DD-8851-9E71D5EC128F"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T21:12:17.369Z",
+            "checksum": "26b6b2450ef0f61754cc4d51380467c9a7fd3b811dd23bb8aba4118c9aa0f60a"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "assoc_tickets_feedback_submissions",
+            "DisplayName": "TicketFeedbackSubmission",
+            "Description": "Associations between tickets and feedback submissions",
+            "Category": "Association",
+            "APIPath": "/crm/v4/associations/tickets/feedback_submissions",
+            "ResponseDataKey": "results",
+            "DefaultPageSize": 500,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Sequence": 44,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "ticket_id",
+                  "DisplayName": "Ticket ID",
+                  "Description": "HubSpot Ticket hs_object_id",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "AB391E8A-66C6-44FD-BC32-ABDF5C92C600"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:21.123Z",
+                  "checksum": "8eda3b8d2dd673b25a31749b594d6109dd13d3c166a3760f002e2c64a83abc52"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "feedback_submission_id",
+                  "DisplayName": "FeedbackSubmission ID",
+                  "Description": "HubSpot FeedbackSubmission hs_object_id",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "E81ACC29-6C92-458E-879B-A0291A7FBD44"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:21.144Z",
+                  "checksum": "7fd4f419127e3becae3e69ee423444cb041b7bf4ea4224351ada7951f9afe008"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "association_type",
+                  "DisplayName": "Association Type",
+                  "Description": "HubSpot association label (e.g., Primary, Unlabeled)",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "78946800-DCE5-4918-A04E-9D398780A49F"
+                },
+                "sync": {
+                  "lastModified": "2026-03-17T21:12:21.159Z",
+                  "checksum": "806c1478efb81188a58fbadeab666cbd08bf4fee07d9196f5f78e943fa438e63"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "3AC6E940-C9CA-4665-B7F5-BD75816047FF"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T21:12:17.380Z",
+            "checksum": "56e66af362c8167459387e1f613a9f6fe70ad834ca5839d6fb4483d9aee91ac5"
+          }
         }
       ]
     },

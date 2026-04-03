@@ -1,5 +1,3 @@
-import { MJGlobal } from ".";
-import { IMJComponent, MJEventType } from "./interface";
 import { v4 } from 'uuid';
 import _ from 'lodash';
 
@@ -1116,22 +1114,6 @@ export function replaceAllSpaces(s: string): string {
     return s;
 }
  
-/**
- * This utility function sends a message to all components that are listening requesting a window resize. This is a cross-platform method of requesting a resize and is loosely coupled from
- * the actual implementation on a specific device/browser/etc.
- * @param delay 
- * @param component 
- */
-export function InvokeManualResize(delay: number = 50, component: IMJComponent | null = null) {
-    setTimeout(() => {
-      MJGlobal.Instance.RaiseEvent({
-        event: MJEventType.ManualResizeRequest,
-        eventCode: '',
-        args: null,
-        component: component!
-      })
-    }, delay ); // give the tabstrip time to render
-}
 
 /**
  * Generates a version 4 UUID (Universally Unique Identifier) using the uuid library.

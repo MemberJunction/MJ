@@ -1,5 +1,31 @@
 # @memberjunction/installer
 
+## 5.22.0
+
+## 5.21.0
+
+## 5.20.0
+
+## 5.19.0
+
+## 5.18.0
+
+## 5.17.0
+
+## 5.16.0
+
+## 5.15.0
+
+## 5.14.0
+
+## 5.13.0
+
+## 5.12.0
+
+### Patch Changes
+
+- 714e42d: Add diagnostic report generation to `mj doctor` command. `--report` generates a basic diagnostic report (`mj-diagnostic-report.md`) with environment info, install state, and check results. `--report_extended` adds sanitized configuration file snapshots and service startup log capture (`mj-diagnostic-report-extended.md`). Passwords and secrets are automatically redacted. Also fixes process cleanup after service log capture and corrects key file detection for distribution installs.
+
 ## 5.11.0
 
 ## 5.10.1

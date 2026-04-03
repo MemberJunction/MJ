@@ -19,6 +19,7 @@ import {
     IMetadataProvider,
 } from '../generic/interfaces';
 import { RunQueryParams, RunQueryResult } from '../generic/runQuery';
+import { QueryExecutionSpec } from '../generic/queryExecutionSpec';
 import { CompositeKey } from '../generic/compositeKey';
 import { UserInfo, RecordDependency } from '../generic/securityInfo';
 import { EntityDependency, RecordMergeRequest, RecordMergeResult, EntityMergeOptions } from '../generic/entityInfo';
@@ -57,6 +58,9 @@ class TestProvider extends ProviderBase {
         return { Success: true, Results: [], Fields: [] };
     }
     protected async InternalRunQueries(): Promise<RunQueryResult[]> { return []; }
+    protected async InternalExecuteQueryFromSpec(_spec: QueryExecutionSpec, _contextUser?: UserInfo): Promise<RunQueryResult> {
+        throw new Error('ExecuteQueryFromSpec is not supported by this provider.');
+    }
     protected async GetCurrentUser(): Promise<UserInfo> { return new UserInfo(null as unknown as IMetadataProvider, {}); }
     public async GetRecordDependencies(): Promise<RecordDependency[]> { return []; }
     public async GetRecordDuplicates(): Promise<PotentialDuplicateResponse> {

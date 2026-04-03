@@ -1,5 +1,5 @@
 import { Injectable, ViewContainerRef } from '@angular/core';
-import { WindowService, WindowRef, WindowCloseResult } from '@progress/kendo-angular-dialog';
+import { MJDialogService, MJDialogRef } from '@memberjunction/ng-ui-components';
 import { SettingsComponent } from '@memberjunction/ng-explorer-settings';
 
 /**
@@ -10,55 +10,49 @@ import { SettingsComponent } from '@memberjunction/ng-explorer-settings';
   providedIn: 'root'
 })
 export class SettingsDialogService {
-  private windowRef: WindowRef | null = null;
+  private dialogRef: MJDialogRef | null = null;
 
-  constructor(private windowService: WindowService) {}
+  constructor(private dialogService: MJDialogService) {}
 
   /**
-   * Opens the Settings component in a full-screen Kendo Window
-   * @param containerRef ViewContainerRef to anchor the window (usually from the shell component)
+   * Opens the Settings component in a full-screen MJ Dialog
+   * @param containerRef ViewContainerRef to anchor the dialog (usually from the shell component)
    */
   open(containerRef: ViewContainerRef): void {
     // Don't open multiple windows
-    if (this.windowRef) {
+    if (this.dialogRef) {
       return;
     }
 
-    this.windowRef = this.windowService.open({
+    this.dialogRef = this.dialogService.open({
       content: SettingsComponent,
       title: 'Settings',
       width: window.innerWidth,
       height: window.innerHeight,
-      top: 0,
-      left: 0,
       minWidth: 400,
-      minHeight: 300,
-      resizable: false,
-      draggable: false,
-      cssClass: 'settings-fullscreen-window',
       appendTo: containerRef
     });
 
-    // Handle window close
-    this.windowRef.result.subscribe((result) => {
-      this.windowRef = null;
+    // Handle dialog close
+    this.dialogRef.Result.subscribe(() => {
+      this.dialogRef = null;
     });
   }
 
   /**
-   * Closes the settings window if open
+   * Closes the settings dialog if open
    */
   close(): void {
-    if (this.windowRef) {
-      this.windowRef.close();
-      this.windowRef = null;
+    if (this.dialogRef) {
+      this.dialogRef.Close();
+      this.dialogRef = null;
     }
   }
 
   /**
-   * Check if the settings window is currently open
+   * Check if the settings dialog is currently open
    */
   get isOpen(): boolean {
-    return this.windowRef !== null;
+    return this.dialogRef !== null;
   }
 }

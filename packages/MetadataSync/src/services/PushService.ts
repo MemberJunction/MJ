@@ -189,6 +189,8 @@ export class PushService {
             description: 'MetadataSync push operation',
             statementTypes: "mutations",
             prettyPrint: true,
+            // batchSeparator is intentionally omitted — CreateSqlLogger injects the platform-appropriate
+            // separator automatically (GO for SQL Server, nothing for PostgreSQL) via PlatformBatchSeparator.
             filterPatterns: this.syncConfig?.sqlLogging?.filterPatterns,
             filterType: this.syncConfig?.sqlLogging?.filterType,
             verboseOutput: this.syncConfig?.sqlLogging?.verboseOutput || false,

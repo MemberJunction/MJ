@@ -7,6 +7,9 @@
       "TemplateText": "@file:templates/codegen/form-layout-generation.template.md",
       "Status": "Active",
       "ResponseFormat": "JSON",
+      "AssistantPrefill": "```json",
+      "StopSequences": "\n```",
+      "PrefillFallbackMode": "SystemInstruction",
       "SelectionStrategy": "Specific",
       "PowerPreference": "Balanced",
       "ParallelizationMode": "None",
@@ -102,8 +105,8 @@
       "ID": "910D617C-56CE-4698-A938-E2E982BB91FD"
     },
     "sync": {
-      "lastModified": "2026-02-13T20:48:55.457Z",
-      "checksum": "41fa51fcc497dcdd724bdd74a6d31330613ba8e3ab62ad6e71c293d9376deabb"
+      "lastModified": "2026-03-26T22:04:38.407Z",
+      "checksum": "c1d5de07882e62c5284086327fde92ae8c8a2be1b35d361425c61cfd7b5b28f1"
     }
   }
 ]

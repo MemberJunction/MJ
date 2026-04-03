@@ -1,6 +1,6 @@
 import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, GetAIAPIKey, ErrorAnalyzer, AIErrorInfo } from '@memberjunction/ai';
 import { ValidationAttempt, AIPromptRunResult, AIModelSelectionInfo } from '@memberjunction/ai-core-plus';
-import { LogErrorEx, LogStatus, LogStatusEx, IsVerboseLoggingEnabled, Metadata, UserInfo } from '@memberjunction/core';
+import { LogErrorEx, LogStatus, LogStatusEx, IsVerboseLoggingEnabled, Metadata, UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { CleanJSON, MJGlobal, JSONValidator, ValidationResult, ValidationErrorInfo, ValidationErrorType, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { MJAIPromptModelEntity, MJAIModelVendorEntity, MJAIConfigurationEntity, MJAIVendorEntity, MJTemplateEntityExtended, MJAICredentialBindingEntity, MJCredentialEntity } from '@memberjunction/core-entities';
 import { MJAIModelEntityExtended, MJAIPromptEntityExtended, MJAIPromptRunEntityExtended } from "@memberjunction/ai-core-plus";
@@ -92,7 +92,7 @@ interface ModelVendorCandidate {
   effortLevel?: number;
   isPreferredVendor: boolean;
   priority: number; // Higher is better
-  source: 'explicit' | 'prompt-model' | 'model-type' | 'power-rank';
+  source: 'explicit' | 'prompt-model' | 'model-type' | 'power-rank' | 'power-match-fallback';
 }
 
 
@@ -1561,6 +1561,8 @@ export class AIPromptRunner {
         selectionReason = `Selected based on model type filtering`;
       } else if (selected.source === 'power-rank') {
         selectionReason = `Selected by power rank (${selected.model.PowerRank || 0})`;
+      } else if (selected.source === 'power-match-fallback') {
+        selectionReason = `Fallback: selected ${selected.model.Name} (PowerRank ${selected.model.PowerRank || 0}) as closest match to configured models' power level`;
       }
 
       if (selected.isPreferredVendor) {
@@ -1703,7 +1705,22 @@ export class AIPromptRunner {
     // Build candidates maintaining order
     const candidates = this.buildCandidatesFromPromptModels(sortedPromptModels);
 
-    // Strategy='Specific' requires explicit configuration
+    // If RequireSpecificModels is true (or no candidates at all), enforce strict behavior
+    if (candidates.length === 0 && prompt.RequireSpecificModels) {
+      const configInfo = configurationId ? ` with configuration "${configurationId}"` : '';
+      throw new Error(
+        `SelectionStrategy is 'Specific' but no valid AIPromptModel candidates found for prompt "${prompt.Name}"${configInfo}. ` +
+        `Please configure AIPromptModel records for this prompt.`
+      );
+    }
+
+    // When RequireSpecificModels is false, append power-matched fallback candidates
+    // so that if none of the specific models have valid credentials, the system
+    // gracefully falls back to other available models at a similar power level.
+    if (!prompt.RequireSpecificModels) {
+      this.appendPowerMatchedFallbackCandidates(candidates, prompt, sortedPromptModels, verbose);
+    }
+
     if (candidates.length === 0) {
       const configInfo = configurationId ? ` with configuration "${configurationId}"` : '';
       throw new Error(
@@ -1717,6 +1734,101 @@ export class AIPromptRunner {
     }
 
     return candidates;
+  }
+
+  /**
+   * Appends fallback candidates from the global model pool, sorted by proximity to the
+   * average power rank of the originally configured models. This ensures that when
+   * specific models lack credentials, the fallback uses models of similar capability
+   * rather than defaulting to the most or least powerful available model.
+   *
+   * Fallback candidates are given lower priority than any specific candidate so
+   * configured models are always preferred when their credentials are available.
+   */
+  private appendPowerMatchedFallbackCandidates(
+    candidates: ModelVendorCandidate[],
+    prompt: MJAIPromptEntityExtended,
+    configuredPromptModels: MJAIPromptModelEntity[],
+    verbose?: boolean
+  ): void {
+    // Compute target power rank from the configured models
+    const targetPowerRank = this.computeTargetPowerRank(configuredPromptModels);
+
+    // Get all active models matching the prompt's model type, excluding already-present models
+    const existingModelIds = new Set(candidates.map(c => c.model.ID));
+    const fallbackPool = AIEngine.Instance.Models.filter(
+      m => m.IsActive &&
+           !existingModelIds.has(m.ID) &&
+           (!prompt.AIModelTypeID || UUIDsEqual(m.AIModelTypeID, prompt.AIModelTypeID))
+    );
+
+    if (fallbackPool.length === 0) return;
+
+    // Sort by proximity to the target power rank
+    const sorted = this.sortByPowerProximity(fallbackPool, targetPowerRank);
+
+    // Assign priorities below the lowest specific candidate
+    const lowestSpecificPriority = candidates.length > 0
+      ? Math.min(...candidates.map(c => c.priority))
+      : 1000;
+    const fallbackBasePriority = lowestSpecificPriority - 100;
+
+    sorted.forEach((model, index) => {
+      const modelCandidates = this.createCandidatesForModel(
+        model,
+        fallbackBasePriority - index * 10,
+        'power-match-fallback'
+      );
+      candidates.push(...modelCandidates);
+    });
+
+    if (verbose && sorted.length > 0) {
+      LogStatus(
+        `Appended ${sorted.length} power-matched fallback models (target PowerRank: ${targetPowerRank}) ` +
+        `for prompt "${prompt.Name}" since RequireSpecificModels is false`
+      );
+    }
+  }
+
+  /**
+   * Computes the target power rank from configured AIPromptModel records.
+   * Uses the weighted average (by priority) of the configured models' power ranks,
+   * so higher-priority models have more influence on the target.
+   * Falls back to simple average if priorities are all zero.
+   */
+  private computeTargetPowerRank(promptModels: MJAIPromptModelEntity[]): number {
+    if (promptModels.length === 0) return 0;
+
+    const modelsWithPower = promptModels
+      .map(pm => {
+        const model = AIEngine.Instance.Models.find(m => UUIDsEqual(m.ID, pm.ModelID));
+        return { powerRank: model?.PowerRank ?? 0, priority: pm.Priority || 1 };
+      });
+
+    const totalWeight = modelsWithPower.reduce((sum, m) => sum + m.priority, 0);
+    if (totalWeight === 0) {
+      // All priorities are 0, use simple average
+      return Math.round(modelsWithPower.reduce((sum, m) => sum + m.powerRank, 0) / modelsWithPower.length);
+    }
+
+    const weightedSum = modelsWithPower.reduce((sum, m) => sum + m.powerRank * m.priority, 0);
+    return Math.round(weightedSum / totalWeight);
+  }
+
+  /**
+   * Sorts models by proximity to a target power rank (closest first).
+   * When two models are equidistant, the higher-powered one is preferred.
+   */
+  private sortByPowerProximity(
+    models: MJAIModelEntityExtended[],
+    targetPowerRank: number
+  ): MJAIModelEntityExtended[] {
+    return [...models].sort((a, b) => {
+      const distA = Math.abs((a.PowerRank ?? 0) - targetPowerRank);
+      const distB = Math.abs((b.PowerRank ?? 0) - targetPowerRank);
+      if (distA !== distB) return distA - distB; // Closer to target first
+      return (b.PowerRank ?? 0) - (a.PowerRank ?? 0); // Tie-break: higher power first
+    });
   }
 
   /**
@@ -1821,19 +1933,22 @@ export class AIPromptRunner {
   ): ModelVendorCandidate[] {
     const candidates: ModelVendorCandidate[] = [];
 
-    for (const pm of promptModels) {
+    for (let i = 0; i < promptModels.length; i++) {
+      const pm = promptModels[i];
+      // Compute priority as inverse of array position so highest-priority (first) gets the largest number
+      const computedPriority = promptModels.length - i;
       const model = AIEngine.Instance.Models.find(m => UUIDsEqual(m.ID, pm.ModelID));
       if (!model || !model.IsActive) continue;
 
       if (pm.VendorID) {
         // Specific vendor specified - create single candidate
-        const candidate = this.createCandidateForSpecificVendor(model, pm);
+        const candidate = this.createCandidateForSpecificVendor(model, pm, computedPriority);
         if (candidate) {
           candidates.push(candidate);
         }
       } else {
         // No vendor specified - create candidates for all vendors
-        const vendorCandidates = this.createCandidatesForAllVendors(model);
+        const vendorCandidates = this.createCandidatesForAllVendors(model, computedPriority);
         candidates.push(...vendorCandidates);
       }
     }
@@ -1846,7 +1961,8 @@ export class AIPromptRunner {
    */
   private createCandidateForSpecificVendor(
     model: MJAIModelEntityExtended,
-    promptModel: MJAIPromptModelEntity
+    promptModel: MJAIPromptModelEntity,
+    computedPriority: number = 0
   ): ModelVendorCandidate | null {
     const modelVendor = AIEngine.Instance.ModelVendors.find(
       mv => UUIDsEqual(mv.ModelID, promptModel.ModelID) &&
@@ -1866,7 +1982,7 @@ export class AIPromptRunner {
       supportsEffortLevel: modelVendor.SupportsEffortLevel ?? model.SupportsEffortLevel ?? false,
       effortLevel: promptModel.EffortLevel ?? undefined, // Model-specific effort level override
       isPreferredVendor: false,
-      priority: 0,  // Order is determined by promptModels sort
+      priority: computedPriority,
       source: 'prompt-model'
     };
   }
@@ -1875,7 +1991,8 @@ export class AIPromptRunner {
    * Helper: Create candidates for all vendors of a model, sorted by vendor priority.
    */
   private createCandidatesForAllVendors(
-    model: MJAIModelEntityExtended
+    model: MJAIModelEntityExtended,
+    computedPriority: number = 0
   ): ModelVendorCandidate[] {
     const vendors = AIEngine.Instance.ModelVendors
       .filter(mv =>
@@ -1896,7 +2013,7 @@ export class AIPromptRunner {
         apiName: vendor.APIName || model.APIName,
         supportsEffortLevel: vendor.SupportsEffortLevel ?? model.SupportsEffortLevel ?? false,
         isPreferredVendor: false,
-        priority: 0,  // Order is determined by promptModels sort
+        priority: computedPriority,
         source: 'prompt-model'
       });
     }
@@ -1909,7 +2026,7 @@ export class AIPromptRunner {
         apiName: model.APIName,
         supportsEffortLevel: model.SupportsEffortLevel ?? false,
         isPreferredVendor: false,
-        priority: 0,
+        priority: computedPriority,
         source: 'prompt-model'
       });
     }
@@ -2407,12 +2524,18 @@ export class AIPromptRunner {
     vendorId?: string,
     modelSelectionInfo?: any
   ): Promise<MJAIPromptRunEntityExtended> {
-    const promptRun = await this._metadata.GetEntityObject<MJAIPromptRunEntityExtended>('MJ: AI Prompt Runs', params.contextUser);
+    const provider: IMetadataProvider = params.provider || Metadata.Provider;
+    const promptRun = await provider.GetEntityObject<MJAIPromptRunEntityExtended>('MJ: AI Prompt Runs', params.contextUser);
     try {
       promptRun.NewRecord();
 
       promptRun.PromptID = prompt.ID;
       promptRun.ModelID = model.ID;
+
+      // Set ChildPromptID if this is a hierarchical execution with child prompts
+      if (params.childPrompts && params.childPrompts.length > 0) {
+        promptRun.ChildPromptID = params.childPrompts[0].childPrompt.prompt.ID;
+      }
       
       // Set initial status and tracking fields
       promptRun.Status = 'Running';
@@ -2527,6 +2650,7 @@ export class AIPromptRunner {
       if (prompt.PresencePenalty != null) promptRun.PresencePenalty = prompt.PresencePenalty;
       if (prompt.Seed != null) promptRun.Seed = prompt.Seed;
       if (prompt.StopSequences) promptRun.StopSequences = prompt.StopSequences;
+      if (prompt.AssistantPrefill) promptRun.AssistantPrefill = prompt.AssistantPrefill;
       if (prompt.IncludeLogProbs != null) promptRun.LogProbs = prompt.IncludeLogProbs;
       if (prompt.TopLogProbs != null) promptRun.TopLogProbs = prompt.TopLogProbs;
       
@@ -2568,9 +2692,16 @@ export class AIPromptRunner {
       if (params.data || params.templateData || systemPromptText) {
         const messages: ChatMessage[] = [];
         if (systemPromptText) {
-          messages.push({ 
+          // Build the system prompt content, including prefill fallback if applicable
+          let systemContent = systemPromptText;
+          if (prompt.AssistantPrefill && prompt.PrefillFallbackMode === 'SystemInstruction') {
+            const fallbackTemplate = this.resolvePrefillFallbackText(model, vendorId);
+            const fallbackInstruction = fallbackTemplate.replace(/\{\{prefill\}\}/g, prompt.AssistantPrefill);
+            systemContent += '\n\n' + fallbackInstruction;
+          }
+          messages.push({
             role: 'system',
-            content: systemPromptText
+            content: systemContent
           });
           messages.push(...params.conversationMessages || []);
         }
@@ -3093,7 +3224,7 @@ export class AIPromptRunner {
       if (prompt.Seed != null) chatParams.seed = prompt.Seed;
       if (prompt.StopSequences) {
         // Parse comma-delimited stop sequences
-        chatParams.stopSequences = prompt.StopSequences.split(',').map((s: string) => s.trim()).filter((s: string) => s.length > 0);
+        chatParams.stopSequences = prompt.StopSequences.split(',').map((s: string) => s.replace(AIPromptRunner.STOP_SEQUENCE_TRIM_REGEX, '')).filter((s: string) => s.length > 0);
       }
       if (prompt.IncludeLogProbs != null) chatParams.includeLogProbs = prompt.IncludeLogProbs;
       if (prompt.TopLogProbs != null) chatParams.topLogProbs = prompt.TopLogProbs;
@@ -3172,6 +3303,9 @@ export class AIPromptRunner {
       // Build message array with rendered prompt and conversation messages
       chatParams.messages = this.buildMessageArray(renderedPrompt, conversationMessages, templateMessageRole);
 
+      // Apply assistant prefill (native or fallback) based on prompt config and provider support
+      this.applyAssistantPrefill(chatParams, prompt, model, vendorId, llm);
+
       // Execute the model with cancellation support
       if (cancellationToken) {
         // If cancellation token is provided, wrap the execution to handle cancellation
@@ -3244,6 +3378,148 @@ export class AIPromptRunner {
     }
 
     return messages;
+  }
+
+  /**
+   * Default fallback instruction text used when no PrefillFallbackText is configured
+   * at any level of the AIModelType → AIModel → AIModelVendor cascade.
+   */
+  private static readonly DEFAULT_PREFILL_FALLBACK = '# **CRITICAL**\nYour response must start with exactly: {{prefill}}\nDo not add quotes, markdown formatting, or any other characters before it.';
+
+  /**
+   * Regex used to trim only horizontal whitespace (spaces and tabs) from the start and end
+   * of each stop sequence token after comma-splitting.
+   *
+   * We intentionally do NOT use String.trim() here because stop sequences can legitimately
+   * begin or end with newline characters. For example, the sequence "\n```" is designed to
+   * match only a closing code fence (preceded by a newline), distinguishing it from an
+   * opening "```json" fence that does not start with a newline. Using trim() would strip
+   * that leading "\n", turning "\n```" into "```" and causing the stop to fire on the
+   * opening fence instead — producing an empty response for non-native prefill providers.
+   */
+  private static readonly STOP_SEQUENCE_TRIM_REGEX = /^[ \t]+|[ \t]+$/g;
+
+  /**
+   * Resolves whether the current model/vendor supports native assistant prefill.
+   *
+   * Resolution order:
+   *   1. Start with llm.SupportsPrefill (code-level default from BaseLLM subclass)
+   *   2. AIModel.SupportsPrefill overrides if non-null
+   *   3. AIModelVendor.SupportsPrefill overrides if non-null
+   *
+   * AIModelType.SupportsPrefill is NOT used because it is NOT NULL DEFAULT 0,
+   * so there is no way to distinguish "explicitly disabled" from "never configured."
+   * The code-level default (llm.SupportsPrefill) serves as the type-level default instead.
+   *
+   * - `null` at AIModel/AIModelVendor means "inherit" (defer to code default)
+   * - `true` means "force enable" (overrides code default)
+   * - `false` means "force disable" (overrides code default, even if the driver says yes)
+   */
+  private resolveSupportsPrefill(
+    model: MJAIModelEntityExtended,
+    vendorId: string | null,
+    llm: BaseLLM
+  ): boolean {
+    // Start with the code-level default from the BaseLLM subclass
+    let supportsPrefill = llm.SupportsPrefill;
+
+    // Model-level override (null = inherit from code default)
+    if (model.SupportsPrefill != null) {
+      supportsPrefill = model.SupportsPrefill;
+    }
+
+    // Vendor-level override (null = inherit)
+    if (vendorId) {
+      const modelVendor = AIEngine.Instance.ModelVendors.find(
+        mv => UUIDsEqual(mv.ModelID, model.ID) && UUIDsEqual(mv.VendorID, vendorId) && mv.Status === 'Active'
+      );
+      if (modelVendor?.SupportsPrefill != null) {
+        supportsPrefill = modelVendor.SupportsPrefill;
+      }
+    }
+
+    return supportsPrefill;
+  }
+
+  /**
+   * Resolves the prefill fallback instruction text using the cascade:
+   * AIModelType → AIModel → AIModelVendor (most specific non-null wins).
+   * Falls back to DEFAULT_PREFILL_FALLBACK if none are configured.
+   */
+  private resolvePrefillFallbackText(
+    model: MJAIModelEntityExtended,
+    vendorId: string | null
+  ): string {
+    // Start with model type default
+    const modelType = AIEngine.Instance.ModelTypes.find(
+      mt => UUIDsEqual(mt.ID, model.AIModelTypeID)
+    );
+    let fallbackText: string | null = modelType?.PrefillFallbackText ?? null;
+
+    // Model-level override
+    if (model.PrefillFallbackText != null) {
+      fallbackText = model.PrefillFallbackText;
+    }
+
+    // Vendor-level override
+    if (vendorId) {
+      const modelVendor = AIEngine.Instance.ModelVendors.find(
+        mv => UUIDsEqual(mv.ModelID, model.ID) && UUIDsEqual(mv.VendorID, vendorId) && mv.Status === 'Active'
+      );
+      if (modelVendor?.PrefillFallbackText != null) {
+        fallbackText = modelVendor.PrefillFallbackText;
+      }
+    }
+
+    return fallbackText ?? AIPromptRunner.DEFAULT_PREFILL_FALLBACK;
+  }
+
+  /**
+   * Applies assistant prefill to ChatParams based on prompt configuration and provider support.
+   * Handles the full prefill resolution logic including fallback to system instructions.
+   */
+  private applyAssistantPrefill(
+    chatParams: ChatParams,
+    prompt: MJAIPromptEntityExtended,
+    model: MJAIModelEntityExtended,
+    vendorId: string | null,
+    llm: BaseLLM
+  ): void {
+    const prefillText = prompt.AssistantPrefill;
+    if (!prefillText) {
+      return; // No prefill configured on this prompt
+    }
+
+    const supportsPrefill = this.resolveSupportsPrefill(model, vendorId, llm);
+
+    if (supportsPrefill) {
+      // Provider supports native prefill — use it directly
+      chatParams.assistantPrefill = prefillText;
+      return;
+    }
+
+    // Provider does NOT support native prefill — check fallback mode
+    const fallbackMode = prompt.PrefillFallbackMode;
+
+    if (fallbackMode === 'SystemInstruction') {
+      // Inject a system instruction telling the model to start with the prefill text.
+      // Append to the existing system message rather than adding a new one,
+      // since some providers only support a single system message entry.
+      const fallbackTemplate = this.resolvePrefillFallbackText(model, vendorId);
+      const fallbackInstruction = fallbackTemplate.replace(/\{\{prefill\}\}/g, prefillText);
+
+      const existingSystemMsg = chatParams.messages.find(m => m.role === ChatMessageRole.system);
+      if (existingSystemMsg && typeof existingSystemMsg.content === 'string') {
+        existingSystemMsg.content += '\n\n' + fallbackInstruction;
+      } else {
+        // No existing system message — add one
+        chatParams.messages.unshift({
+          role: ChatMessageRole.system,
+          content: fallbackInstruction
+        });
+      }
+    }
+    // 'Ignore' and 'None' — silently skip, no action needed
   }
 
   /**

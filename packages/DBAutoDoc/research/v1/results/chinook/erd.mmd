@@ -1,0 +1,128 @@
+%% Entity Relationship Diagram
+%% Database: Chinook
+%% Server: sql-claude
+%% Generated: 2026-03-22T13:08:28.154Z
+%% Total Schemas: 1
+%% Total Tables: 11
+%% Total Columns: 64
+
+erDiagram
+
+    %% Schema: dbo
+
+    Album {
+        int AlbumId "PK,NOT_NULL" %% The unique primary identifier for each album record.
+        nvarchar Title "NOT_NULL" %% The name of the album as it appears in the media library.
+        int ArtistId "FK,NOT_NULL" %% A reference to the artist or band responsible for the album.
+    }
+
+    Artist {
+        int ArtistId "PK,NOT_NULL" %% The unique primary identifier for each artist or musical gro
+        nvarchar Name %% The display name of the artist, band, or ensemble.
+    }
+
+    Customer {
+        int CustomerId "PK,NOT_NULL" %% Unique identifier for each customer record.
+        nvarchar FirstName "NOT_NULL" %% The given name of the customer.
+        nvarchar LastName "NOT_NULL" %% The surname or family name of the customer.
+        nvarchar Company %% The business or organization the customer is affiliated with
+        nvarchar Address %% The street address for billing or shipping.
+        nvarchar City %% The city where the customer is located.
+        nvarchar State %% The state, province, or region of the customer's address.
+        nvarchar Country %% The country of residence for the customer.
+        nvarchar PostalCode %% The alphanumeric code used for mail sorting and delivery.
+        nvarchar Phone %% The primary telephone contact number for the customer.
+        nvarchar Fax %% The facsimile number for the customer.
+        nvarchar Email "NOT_NULL" %% The primary electronic mail address used for communication a
+        int SupportRepId "FK" %% Reference to the internal employee assigned to manage this c
+    }
+
+    Employee {
+        int EmployeeId "PK,NOT_NULL" %% A unique internal identifier assigned to each employee.
+        nvarchar LastName "NOT_NULL" %% The legal surname of the employee.
+        nvarchar FirstName "NOT_NULL" %% The legal given name of the employee.
+        nvarchar Title %% The official job title or role of the employee within the co
+        int ReportsTo "FK" %% The EmployeeId of the individual's direct supervisor or mana
+        datetime BirthDate %% The employee's date of birth, used for HR records and age ve
+        datetime HireDate %% The date the employee officially joined the organization.
+        nvarchar Address %% The street address of the employee's residence.
+        nvarchar City %% The city where the employee resides (e.g., Calgary, Edmonton
+        nvarchar State %% The province or state of residence.
+        nvarchar Country %% The country of residence.
+        nvarchar PostalCode %% The alphanumeric postal code for the employee's address.
+        nvarchar Phone %% The primary telephone contact number for the employee.
+        nvarchar Fax %% The facsimile number for the employee.
+        nvarchar Email %% The corporate email address for the employee, typically foll
+    }
+
+    Genre {
+        int GenreId "PK,NOT_NULL" %% The unique primary identifier for each genre record.
+        nvarchar Name %% The descriptive name of the music or media genre.
+    }
+
+    Invoice {
+        int InvoiceId "PK,NOT_NULL" %% The unique identifier for each invoice record.
+        int CustomerId "FK,NOT_NULL" %% A reference to the customer who placed the order.
+        datetime InvoiceDate "NOT_NULL" %% The date and time when the invoice was generated.
+        nvarchar BillingAddress %% The street address where the invoice was sent or associated 
+        nvarchar BillingCity %% The city associated with the billing address.
+        nvarchar BillingState %% The state or province associated with the billing address.
+        nvarchar BillingCountry %% The country associated with the billing address.
+        nvarchar BillingPostalCode %% The postal or zip code for the billing address.
+        numeric Total "NOT_NULL" %% The total monetary amount of the invoice, including all line
+    }
+
+    InvoiceLine {
+        int InvoiceLineId "PK,NOT_NULL" %% A unique surrogate primary key for each individual line item
+        int InvoiceId "FK,NOT_NULL" %% A foreign key linking the line item to its parent transactio
+        int TrackId "FK,NOT_NULL" %% A foreign key identifying the specific digital media item (s
+        numeric UnitPrice "NOT_NULL" %% The cost per unit of the track at the time of the transactio
+        int Quantity "NOT_NULL" %% The number of units of the specific track purchased in this 
+    }
+
+    MediaType {
+        int MediaTypeId "PK,NOT_NULL" %% The unique primary identifier for a specific media format.
+        nvarchar Name %% The descriptive name of the media format, indicating the cod
+    }
+
+    Playlist {
+        int PlaylistId "PK,NOT_NULL" %% The unique primary identifier for each playlist.
+        nvarchar Name %% The descriptive name of the playlist used for display and ca
+    }
+
+    PlaylistTrack {
+        int PlaylistId "PK,FK,NOT_NULL" %% The unique identifier for a playlist; part of the composite 
+        int TrackId "PK,FK,NOT_NULL" %% The unique identifier for a specific media track; part of th
+    }
+
+    Track {
+        int TrackId "PK,NOT_NULL" %% Unique identifier for each media track.
+        nvarchar Name "NOT_NULL" %% The title of the song, video, or media track.
+        int AlbumId "FK" %% Reference to the album that contains this track.
+        int MediaTypeId "FK,NOT_NULL" %% Identifier for the digital format of the track (e.g., MPEG, 
+        int GenreId "FK" %% Identifier for the musical or content category (e.g., Rock, 
+        nvarchar Composer %% The individual or group credited with writing the track.
+        int Milliseconds "NOT_NULL" %% The total playback duration of the track in milliseconds.
+        int Bytes %% The storage size of the digital file in bytes.
+        numeric UnitPrice "NOT_NULL" %% The cost to purchase the individual track.
+    }
+
+
+    %% Relationships
+
+    Artist ||--o{ Album : "has"
+    Employee ||--o{ Customer : "has"
+    Employee ||--o{ Employee : "has"
+    Customer ||--o{ Invoice : "has"
+    Invoice ||--o{ InvoiceLine : "has"
+    Track ||--o{ InvoiceLine : "has"
+    PlaylistTrack ||--o{ InvoiceLine : "has"
+    Playlist ||--o{ PlaylistTrack : "has"
+    Track ||--o{ PlaylistTrack : "has"
+    Album ||--o{ Track : "has"
+    MediaType ||--o{ Track : "has"
+    Genre ||--o{ Track : "has"
+
+    %% Relationship Notation:
+    %% Parent ||--o{ Child : "describes"
+    %% One Parent can have zero or more Children

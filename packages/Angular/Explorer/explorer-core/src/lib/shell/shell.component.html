@@ -1,4 +1,4 @@
-<div class="shell-container" [class.hidden]="loading" [class.tabs-visible]="tabBarVisible" kendoDialogContainer>
+<div class="shell-container" [class.hidden]="loading" [class.tabs-visible]="tabBarVisible">
   <!-- Header -->
   <header class="shell-header">
     <!-- MJ Logo -->
@@ -157,19 +157,18 @@
   }
   <div class="search-popup" [class.open]="isSearchOpen">
     <div class="search-popup-content" (click)="$event.stopPropagation()">
-      <kendo-dropdownlist
-        [data]="searchableEntities"
-        textField="Name"
-        valueField="ID"
+      <mj-dropdown
+        [Data]="searchableEntities"
+        TextField="Name"
+        ValueField="ID"
         class="search-entity-dropdown"
         [(ngModel)]="selectedEntity">
-      </kendo-dropdownlist>
+      </mj-dropdown>
       <input
         type="text"
         #searchInput
         placeholder="Search..."
-        kendoTextBox
-        class="search-input"
+        class="mj-input search-input"
         (keydown.enter)="onSearch($event)"
         />
       <button class="search-submit-btn" (click)="onSearch($event)" title="Search">
@@ -261,3 +260,13 @@
 
 <!-- Command Palette -->
 <mj-command-palette (AppSelected)="onAppSwitch($event)"></mj-command-palette>
+
+<!-- Pin Progress Overlay -->
+@if (PinProgressVisible) {
+  <div class="pin-progress-backdrop">
+    <div class="pin-progress-modal">
+      <mj-loading [showText]="false" size="small"></mj-loading>
+      <span class="pin-progress-text">{{ PinProgressText }}</span>
+    </div>
+  </div>
+}

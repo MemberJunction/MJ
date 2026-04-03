@@ -38,6 +38,7 @@ import { ActionEngineServer } from "@memberjunction/actions";
 import { AIPromptRunner } from "@memberjunction/ai-prompts";
 import { AIPromptParams } from "@memberjunction/ai-core-plus";
 import { MJActionParamEntity } from "@memberjunction/core-entities";
+import { AuthProviderFactory } from "@memberjunction/auth-providers";
 // OAuth authentication imports
 import {
     MCPSessionContext as OAuthMCPSessionContext,
@@ -909,9 +910,8 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
             // Get provider names for logging
             if (providersConfigured) {
                 try {
-                    const { AuthProviderFactory } = await import('@memberjunction/server');
-                    const factory = AuthProviderFactory.getInstance();
-                    configuredProviderNames = factory.getAllProviders().map((p: { name: string }) => p.name);
+                    const factory = AuthProviderFactory.Instance;
+                    configuredProviderNames = factory.getAllProviders().map((p) => p.name);
                 } catch {
                     // Ignore errors getting provider names - just for logging
                 }
@@ -962,8 +962,7 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
         if (isOAuthEnabled() && oauthProxyEnabled) {
             try {
                 // Get the upstream provider configuration
-                const { AuthProviderFactory } = await import('@memberjunction/server');
-                const factory = AuthProviderFactory.getInstance();
+                const factory = AuthProviderFactory.Instance;
                 const providers = factory.getAllProviders();
 
                 if (providers.length === 0) {
@@ -1104,9 +1103,7 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
         if (isOAuthEnabled()) {
             app.get('/.well-known/oauth-protected-resource', async (_req: Request, res: Response) => {
                 try {
-                    // Dynamically import AuthProviderFactory to get configured providers
-                    const { AuthProviderFactory } = await import('@memberjunction/server');
-                    const factory = AuthProviderFactory.getInstance();
+                    const factory = AuthProviderFactory.Instance;
                     const providers = factory.getAllProviders();
 
                     // Extract issuer URLs from configured auth providers
@@ -3008,7 +3005,12 @@ function getEntityParamObject(
             return true;
         }
     }).forEach((f) => {
-        addSingleParamToObject(paramObject, f, f.IsPrimaryKey ? false : nonPKeysOptional);
+        // Primary keys are always required. For non-PK fields, mark as optional if:
+        // 1. The caller requested all non-PKs optional (e.g. Update tools), OR
+        // 2. The field allows NULL in the database, OR
+        // 3. The field has a default value defined
+        const isOptional = f.IsPrimaryKey ? false : (nonPKeysOptional || f.AllowsNull || !!f.DefaultValue);
+        addSingleParamToObject(paramObject, f, isOptional);
     });
 
     return paramObject;
@@ -3031,7 +3033,7 @@ function addSingleParamToObject(
     let newParam: z.ZodTypeAny;
     switch (field.TSType) {
         case 'Date':
-            newParam = z.date();
+            newParam = z.coerce.date();
             break;
         case 'boolean':
             newParam = z.boolean();
@@ -3056,6 +3058,11 @@ function addSingleParamToObject(
                 }
             }
             break;
+    }
+
+    // If the field allows NULL in the database, wrap with .nullable()
+    if (field.AllowsNull) {
+        newParam = newParam.nullable();
     }
 
     if (optional) {

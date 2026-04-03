@@ -1,0 +1,417 @@
+@if (IsLoading) {
+    <div class="config-loading">
+        <mj-loading text="Loading configuration..." size="medium"></mj-loading>
+    </div>
+} @else {
+    <div class="config-layout">
+        <!-- Left Navigation -->
+        <nav class="config-nav">
+            <div class="config-nav-header">
+                <i class="fa-solid fa-cogs"></i>
+                <span>Configuration</span>
+            </div>
+            @for (section of Sections; track section.ID) {
+                <button
+                    class="config-nav-item"
+                    [class.config-nav-item-active]="ActiveSection === section.ID"
+                    (click)="SelectSection(section.ID)"
+                >
+                    <i [class]="section.Icon"></i>
+                    <span>{{ section.Label }}</span>
+                </button>
+            }
+        </nav>
+
+        <!-- Content Area -->
+        <div class="config-content">
+            <!-- Pipeline Settings -->
+            @if (ActiveSection === 'pipeline') {
+                <div class="config-section">
+                    <h2 class="config-section-title">Pipeline Settings</h2>
+                    <p class="config-section-desc">Configure how the Knowledge Pipeline processes incoming content.</p>
+
+                    <div class="config-group">
+                        <label class="config-toggle-row">
+                            <div class="config-toggle-info">
+                                <span class="config-label">Auto-tag on Ingest</span>
+                                <span class="config-hint">Automatically run autotagging when new content is ingested</span>
+                            </div>
+                            <input type="checkbox" [(ngModel)]="PipelineSettings.AutotagOnIngest" (change)="OnSettingChanged()" class="config-checkbox" />
+                        </label>
+
+                        <label class="config-toggle-row">
+                            <div class="config-toggle-info">
+                                <span class="config-label">Vectorize on Ingest</span>
+                                <span class="config-hint">Automatically create embeddings for new content</span>
+                            </div>
+                            <input type="checkbox" [(ngModel)]="PipelineSettings.VectorizeOnIngest" (change)="OnSettingChanged()" class="config-checkbox" />
+                        </label>
+
+                        <div class="config-field-row">
+                            <div class="config-field-info">
+                                <span class="config-label">Default Batch Size</span>
+                                <span class="config-hint">Number of items processed per batch</span>
+                            </div>
+                            <input type="number" [(ngModel)]="PipelineSettings.DefaultBatchSize" (input)="OnSettingChanged()" class="config-input config-input-number" min="10" max="1000" />
+                        </div>
+
+                        <div class="config-field-row">
+                            <div class="config-field-info">
+                                <span class="config-label">Max Concurrent Jobs</span>
+                                <span class="config-hint">Maximum number of pipeline jobs running at once</span>
+                            </div>
+                            <input type="number" [(ngModel)]="PipelineSettings.MaxConcurrentJobs" (input)="OnSettingChanged()" class="config-input config-input-number" min="1" max="10" />
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <!-- Vector Database Settings -->
+            @if (ActiveSection === 'vectordb') {
+                <div class="config-section">
+                    <h2 class="config-section-title">Vector Database</h2>
+                    <p class="config-section-desc">Manage the shared vector index and database connection.</p>
+
+                    <!-- Setup Progress -->
+                    <div class="setup-progress">
+                        <div class="setup-progress-header">
+                            <span class="setup-progress-label">Setup Progress</span>
+                            <span class="setup-progress-count">{{ SetupStepsCompleted }} of 3 complete</span>
+                        </div>
+                        <div class="setup-progress-bar">
+                            <div class="setup-progress-fill" [style.width.%]="(SetupStepsCompleted / 3) * 100"></div>
+                        </div>
+                    </div>
+
+                    <!-- Step 1: Providers -->
+                    <div class="setup-step" [class.setup-step-complete]="HasVectorDBProvider" [class.setup-step-pending]="!HasVectorDBProvider">
+                        <div class="setup-step-header">
+                            <div class="setup-step-indicator">
+                                @if (HasVectorDBProvider) {
+                                    <i class="fa-solid fa-circle-check"></i>
+                                } @else {
+                                    <span class="setup-step-number">1</span>
+                                }
+                            </div>
+                            <div class="setup-step-info">
+                                <span class="setup-step-title">Vector Database Providers</span>
+                                @if (HasVectorDBProvider) {
+                                    <span class="setup-step-status">{{ VectorDBProviders.length }} provider(s) registered</span>
+                                } @else {
+                                    <span class="setup-step-status">No providers registered. Add a vector database provider (e.g., Pinecone, Weaviate) via the admin console.</span>
+                                }
+                            </div>
+                        </div>
+                        @if (HasVectorDBProvider) {
+                            <div class="setup-step-detail">
+                                @for (provider of VectorDBProviders; track provider.ID) {
+                                    <div class="provider-card">
+                                        <div class="provider-icon">
+                                            <i class="fa-solid fa-database"></i>
+                                        </div>
+                                        <div class="provider-info">
+                                            <span class="provider-name">{{ provider.Name }}</span>
+                                            <span class="provider-class">{{ provider.ClassKey }}</span>
+                                        </div>
+                                        <span class="config-status-badge config-status-active">
+                                            <i class="fa-solid fa-circle-check"></i> Active
+                                        </span>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+
+                    <!-- Step 2: Embedding Model -->
+                    <div class="setup-step" [class.setup-step-complete]="HasEmbeddingModel" [class.setup-step-pending]="!HasEmbeddingModel">
+                        <div class="setup-step-header">
+                            <div class="setup-step-indicator">
+                                @if (HasEmbeddingModel) {
+                                    <i class="fa-solid fa-circle-check"></i>
+                                } @else {
+                                    <span class="setup-step-number">2</span>
+                                }
+                            </div>
+                            <div class="setup-step-info">
+                                <span class="setup-step-title">Embedding Models</span>
+                                @if (HasEmbeddingModel) {
+                                    <span class="setup-step-status">{{ EmbeddingModels.length }} model(s) available</span>
+                                } @else {
+                                    <span class="setup-step-status">No embedding models found. Configure at least one in the AI app > Models tab.</span>
+                                }
+                            </div>
+                        </div>
+                        @if (HasEmbeddingModel) {
+                            <div class="setup-step-detail">
+                                <div class="config-tag-list">
+                                    @for (model of EmbeddingModels; track model.ID) {
+                                        <span class="config-tag">{{ model.Name }}</span>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+
+                    <!-- Step 3: Vector Indexes -->
+                    <div class="setup-step" [class.setup-step-complete]="HasVectorIndex" [class.setup-step-pending]="!HasVectorIndex">
+                        <div class="setup-step-header">
+                            <div class="setup-step-indicator">
+                                @if (HasVectorIndex) {
+                                    <i class="fa-solid fa-circle-check"></i>
+                                } @else {
+                                    <span class="setup-step-number">3</span>
+                                }
+                            </div>
+                            <div class="setup-step-info">
+                                <span class="setup-step-title">Vector Indexes</span>
+                                @if (HasVectorIndex) {
+                                    <span class="setup-step-status">{{ VectorIndexes.length }} index(es) configured</span>
+                                } @else if (HasVectorDBProvider && HasEmbeddingModel) {
+                                    <span class="setup-step-status">No indexes yet — create one below.</span>
+                                } @else {
+                                    <span class="setup-step-status">Complete steps 1 and 2 first.</span>
+                                }
+                            </div>
+                            @if (HasVectorDBProvider && HasEmbeddingModel && !ShowCreateIndexForm) {
+                                <button class="setup-step-action" (click)="OpenCreateIndexForm()">
+                                    <i class="fa-solid fa-plus"></i> Create Index
+                                </button>
+                            }
+                        </div>
+
+                        <!-- Existing Indexes -->
+                        @if (HasVectorIndex) {
+                            <div class="setup-step-detail">
+                                @for (idx of VectorIndexes; track idx.ID) {
+                                    <div class="index-card">
+                                        <div class="index-icon">
+                                            <i class="fa-solid fa-cubes"></i>
+                                        </div>
+                                        <div class="index-info">
+                                            <span class="index-name">{{ idx.Name }}</span>
+                                            <span class="index-meta">
+                                                <i class="fa-solid fa-database"></i> {{ idx.VectorDatabase }}
+                                                &nbsp;·&nbsp;
+                                                <i class="fa-solid fa-microchip"></i> {{ idx.EmbeddingModel }}
+                                            </span>
+                                        </div>
+                                        <div class="index-actions">
+                                            <span class="config-status-badge config-status-active">
+                                                <i class="fa-solid fa-circle-check"></i> Active
+                                            </span>
+                                            <button class="index-delete-btn" (click)="DeleteIndex(idx.ID)" title="Delete index">
+                                                <i class="fa-solid fa-trash-can"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+
+                        <!-- Create Index Form -->
+                        @if (ShowCreateIndexForm) {
+                            <div class="create-index-form">
+                                <h4 class="create-index-title">
+                                    <i class="fa-solid fa-plus-circle"></i> Create New Vector Index
+                                </h4>
+                                <div class="create-index-fields">
+                                    <div class="create-index-field">
+                                        <label class="create-index-label">Index Name</label>
+                                        <input type="text"
+                                               class="config-input"
+                                               [(ngModel)]="NewIndexName"
+                                               placeholder="e.g., mj-knowledge-index" />
+                                    </div>
+                                    <div class="create-index-field">
+                                        <label class="create-index-label">Vector Database</label>
+                                        <select class="config-select" [(ngModel)]="NewIndexVectorDBID">
+                                            @for (db of VectorDBProviders; track db.ID) {
+                                                <option [value]="db.ID">{{ db.Name }}</option>
+                                            }
+                                        </select>
+                                    </div>
+                                    <div class="create-index-field">
+                                        <label class="create-index-label">Embedding Model</label>
+                                        <select class="config-select" [(ngModel)]="NewIndexEmbeddingModelID">
+                                            @for (model of EmbeddingModels; track model.ID) {
+                                                <option [value]="model.ID">{{ model.Name }}</option>
+                                            }
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="create-index-actions">
+                                    <button class="create-index-submit" (click)="CreateIndex()" [disabled]="IsCreatingIndex">
+                                        @if (IsCreatingIndex) {
+                                            <i class="fa-solid fa-spinner fa-spin"></i> Creating...
+                                        } @else {
+                                            <i class="fa-solid fa-plus"></i> Create Index
+                                        }
+                                    </button>
+                                    <button class="create-index-cancel" (click)="CancelCreateIndex()" [disabled]="IsCreatingIndex">
+                                        Cancel
+                                    </button>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+
+            <!-- Full-Text Indexes -->
+            @if (ActiveSection === 'fulltext') {
+                <div class="config-section">
+                    <h2 class="config-section-title">Full-Text Search Entities</h2>
+                    <p class="config-section-desc">Configure which entities are included in full-text search. Entities with text fields (Name, Description, etc.) are automatically discovered.</p>
+
+                    @if (IsLoadingFTSEntities) {
+                        <mj-loading text="Discovering searchable entities..." size="medium"></mj-loading>
+                    } @else if (FTSEntities.length === 0) {
+                        <div class="config-empty-state">
+                            <i class="fa-solid fa-text-width config-empty-icon"></i>
+                            <h3 class="config-empty-title">No Searchable Entities Found</h3>
+                            <p class="config-empty-text">No entities with text fields were discovered. Ensure your database schema includes entities with varchar/nvarchar columns.</p>
+                        </div>
+                    } @else {
+                        <div class="fts-entity-controls">
+                            <div class="fts-summary">
+                                <span class="fts-summary-count">{{ EnabledFTSCount }} of {{ FTSEntities.length }} entities enabled for search</span>
+                                <input type="text" class="config-input fts-filter-input" placeholder="Filter entities..." [(ngModel)]="FTSFilterText" />
+                            </div>
+                        </div>
+
+                        <div class="fts-entity-list">
+                            @for (entity of FilteredFTSEntities; track entity.EntityName) {
+                                <div class="fts-entity-card" [class.fts-entity-enabled]="entity.Enabled">
+                                    <div class="fts-entity-toggle">
+                                        <input type="checkbox" [(ngModel)]="entity.Enabled" (change)="OnFTSEntityToggled(entity)" class="config-checkbox" />
+                                    </div>
+                                    <div class="fts-entity-info">
+                                        <span class="fts-entity-name">{{ entity.EntityName }}</span>
+                                        <div class="fts-entity-fields">
+                                            @for (field of entity.IndexedFields; track field) {
+                                                <span class="fts-field-tag">{{ field }}</span>
+                                            }
+                                        </div>
+                                    </div>
+                                    <div class="fts-entity-meta">
+                                        <span class="fts-entity-title-field" title="Title field">
+                                            <i class="fa-solid fa-heading"></i> {{ entity.TitleField }}
+                                        </span>
+                                        @if (entity.SnippetField !== entity.TitleField) {
+                                            <span class="fts-entity-snippet-field" title="Snippet field">
+                                                <i class="fa-solid fa-align-left"></i> {{ entity.SnippetField }}
+                                            </span>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+
+            <!-- Embedding Models -->
+            @if (ActiveSection === 'embedding') {
+                <div class="config-section">
+                    <h2 class="config-section-title">Embedding Models</h2>
+                    <p class="config-section-desc">AI models used for generating vector embeddings from text.</p>
+
+                    @if (HasEmbeddingModel) {
+                        <div class="config-group">
+                            <div class="config-field-row">
+                                <div class="config-field-info">
+                                    <span class="config-label">Active Model</span>
+                                    <span class="config-hint">Currently selected embedding model</span>
+                                </div>
+                                <span class="config-value-display">{{ EmbeddingModelName }}</span>
+                            </div>
+                            <div class="config-field-row">
+                                <div class="config-field-info">
+                                    <span class="config-label">Available Models</span>
+                                    <span class="config-hint">{{ EmbeddingModels.length }} embedding model(s) configured</span>
+                                </div>
+                                <div class="config-tag-list">
+                                    @for (model of EmbeddingModels; track model.ID) {
+                                        <span class="config-tag">{{ model.Name }}</span>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                        <p class="config-section-note">
+                            <i class="fa-solid fa-info-circle"></i>
+                            Manage embedding models in the AI Dashboard > Models tab.
+                        </p>
+                    } @else {
+                        <div class="config-empty-state">
+                            <i class="fa-solid fa-microchip config-empty-icon"></i>
+                            <h3 class="config-empty-title">No Embedding Models Found</h3>
+                            <p class="config-empty-text">
+                                Embedding models are required to convert text into vectors for semantic search and duplicate detection.
+                                Configure at least one embedding model (e.g., text-embedding-3-small) in the AI Dashboard > Models tab.
+                            </p>
+                        </div>
+                    }
+                </div>
+            }
+
+            <!-- Thresholds -->
+            @if (ActiveSection === 'thresholds') {
+                <div class="config-section">
+                    <h2 class="config-section-title">Scoring Thresholds</h2>
+                    <p class="config-section-desc">Set the scoring thresholds used by search, duplicate detection, and autotagging.</p>
+
+                    <div class="config-group">
+                        <div class="config-field-row">
+                            <div class="config-field-info">
+                                <span class="config-label">Duplicate Absolute Match</span>
+                                <span class="config-hint">Score above which duplicates are auto-confirmed ({{ FormatThreshold(ThresholdSettings.DuplicateAbsolute) }})</span>
+                            </div>
+                            <input type="range" [(ngModel)]="ThresholdSettings.DuplicateAbsolute" (input)="OnSettingChanged()" class="config-slider" min="0.5" max="1" step="0.01" />
+                        </div>
+
+                        <div class="config-field-row">
+                            <div class="config-field-info">
+                                <span class="config-label">Duplicate Potential Match</span>
+                                <span class="config-hint">Score above which duplicates are flagged for review ({{ FormatThreshold(ThresholdSettings.DuplicatePotential) }})</span>
+                            </div>
+                            <input type="range" [(ngModel)]="ThresholdSettings.DuplicatePotential" (input)="OnSettingChanged()" class="config-slider" min="0.3" max="1" step="0.01" />
+                        </div>
+
+                        <div class="config-field-row">
+                            <div class="config-field-info">
+                                <span class="config-label">Search Relevance</span>
+                                <span class="config-hint">Minimum score for search results ({{ FormatThreshold(ThresholdSettings.SearchRelevance) }})</span>
+                            </div>
+                            <input type="range" [(ngModel)]="ThresholdSettings.SearchRelevance" (input)="OnSettingChanged()" class="config-slider" min="0" max="1" step="0.01" />
+                        </div>
+
+                        <div class="config-field-row">
+                            <div class="config-field-info">
+                                <span class="config-label">Autotag Confidence</span>
+                                <span class="config-hint">Minimum confidence for accepting auto-generated tags ({{ FormatThreshold(ThresholdSettings.AutotagConfidence) }})</span>
+                            </div>
+                            <input type="range" [(ngModel)]="ThresholdSettings.AutotagConfidence" (input)="OnSettingChanged()" class="config-slider" min="0.3" max="1" step="0.01" />
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <!-- Save Bar -->
+            @if (HasUnsavedChanges) {
+                <div class="config-save-bar">
+                    <span class="config-save-text">You have unsaved changes</span>
+                    <button class="config-save-btn" (click)="SaveConfiguration()" [disabled]="IsSaving">
+                        @if (IsSaving) {
+                            <i class="fa-solid fa-spinner fa-spin"></i> Saving...
+                        } @else {
+                            <i class="fa-solid fa-save"></i> Save Changes
+                        }
+                    </button>
+                    <button class="config-reset-btn" (click)="ResetConfiguration()" [disabled]="IsSaving">
+                        Reset
+                    </button>
+                </div>
+            }
+        </div>
+    </div>
+}

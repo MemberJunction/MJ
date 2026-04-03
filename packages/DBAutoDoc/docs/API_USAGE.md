@@ -76,7 +76,7 @@ const result = await api.analyze({
   },
   ai: {
     provider: 'openai',
-    model: 'gpt-4-turbo',
+    model: 'gemini-3-flash-preview',
     apiKey: process.env.OPENAI_API_KEY,
     temperature: 0.1,
     maxTokens: 4000

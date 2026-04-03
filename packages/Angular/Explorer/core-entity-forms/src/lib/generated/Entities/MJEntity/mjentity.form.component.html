@@ -1587,31 +1587,6 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Version Labels Section -->
-    <mj-collapsible-panel
-        SectionKey="mJVersionLabels"
-        SectionName="Version Labels"
-        Icon="fa fa-tag"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJVersionLabels')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Version Labels','EntityID')"
-                [NewRecordValues]="NewRecordValues('MJ: Version Labels')"
-                [AllowLoad]="IsSectionExpanded('mJVersionLabels')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJVersionLabels', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
     <!-- Version Label Items Section -->
     <mj-collapsible-panel
         SectionKey="mJVersionLabelItems"
@@ -1631,6 +1606,31 @@
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJVersionLabelItems', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Version Labels Section -->
+    <mj-collapsible-panel
+        SectionKey="mJVersionLabels"
+        SectionName="Version Labels"
+        Icon="fa fa-tag"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJVersionLabels')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Version Labels','EntityID')"
+                [NewRecordValues]="NewRecordValues('MJ: Version Labels')"
+                [AllowLoad]="IsSectionExpanded('mJVersionLabels')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJVersionLabels', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -1681,6 +1681,56 @@
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJEntityRelationshipsRelatedEntityID', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Entity Organic Key Related Entities Section -->
+    <mj-collapsible-panel
+        SectionKey="mJEntityOrganicKeyRelatedEntities"
+        SectionName="Entity Organic Key Related Entities"
+        Icon="fa fa-project-diagram"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJEntityOrganicKeyRelatedEntities')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Entity Organic Key Related Entities','RelatedEntityID')"
+                [NewRecordValues]="NewRecordValues('MJ: Entity Organic Key Related Entities')"
+                [AllowLoad]="IsSectionExpanded('mJEntityOrganicKeyRelatedEntities')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJEntityOrganicKeyRelatedEntities', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Entity Organic Keys Section -->
+    <mj-collapsible-panel
+        SectionKey="mJEntityOrganicKeys"
+        SectionName="Entity Organic Keys"
+        Icon="fa fa-fingerprint"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJEntityOrganicKeys')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Entity Organic Keys','EntityID')"
+                [NewRecordValues]="NewRecordValues('MJ: Entity Organic Keys')"
+                [AllowLoad]="IsSectionExpanded('mJEntityOrganicKeys')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJEntityOrganicKeys', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

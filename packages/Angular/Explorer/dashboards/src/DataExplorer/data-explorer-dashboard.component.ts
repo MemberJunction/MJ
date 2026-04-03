@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef, Input, OnChanges, SimpleChanges, HostListener, ElementRef, ViewChild, NgZone } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, Input, Output, EventEmitter, OnChanges, SimpleChanges, HostListener, ElementRef, ViewChild, NgZone } from '@angular/core';
 import { Router, NavigationEnd } from '@angular/router';
 import { trigger, transition, style, animate } from '@angular/animations';
 import { Subject } from 'rxjs';
@@ -112,6 +112,11 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * Use this alongside contextName for a fully customized header (e.g., "fa-solid fa-users" for CRM).
    */
   @Input() contextIcon: string | null = null;
+
+  /**
+   * Emitted when the display title should change (entity selected, record opened, etc.)
+   */
+  @Output() DisplayNameChanged = new EventEmitter<string>();
 
   // State
   public state: DataExplorerState;
@@ -614,10 +619,11 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
         this.state = state;
 
-        // When entity changes, clear user search text
+        // When entity changes, clear user search text and update title
         if (entityChanged) {
           this.liveFilterText = '';
           this.debouncedFilterText = '';
+          this.emitDisplayName();
         }
 
         this.onStateChanged();
@@ -2591,6 +2597,17 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   }
 
   /**
+   * Emit the current display name based on selected entity/record.
+   */
+  private emitDisplayName(): void {
+    if (this.state.selectedEntityName) {
+      this.DisplayNameChanged.emit(this.state.selectedEntityName);
+    } else {
+      this.DisplayNameChanged.emit('Data');
+    }
+  }
+
+  /**
    * Update the URL query string to reflect current navigation state.
    * This enables deep linking - users can bookmark or share URLs to specific views.
    * Called immediately on state changes (not debounced).
@@ -2779,24 +2796,29 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     }
 
     const applications = this.metadata.Applications;
-    const entityIdToApp = new Map<string, ApplicationInfo>();
+    const entityIdToApps = new Map<string, ApplicationInfo[]>();
     const groupMap = new Map<string, AppEntityGroup>();
 
-    // Build entity -> first application mapping
+    // Build entity -> applications mapping (an entity can belong to multiple apps)
     for (const app of applications) {
       for (const appEntity of app.ApplicationEntities) {
-        if (!entityIdToApp.has(appEntity.EntityID)) {
-          entityIdToApp.set(appEntity.EntityID, app);
+        const apps = entityIdToApps.get(appEntity.EntityID);
+        if (apps) {
+          apps.push(app);
+        } else {
+          entityIdToApps.set(appEntity.EntityID, [app]);
         }
       }
     }
 
-    // Assign each visible entity to its group
+    // Assign each visible entity to all of its application groups
     const ungroupedEntities: EntityInfo[] = [];
     for (const entity of this.entities) {
-      const app = entityIdToApp.get(entity.ID);
-      if (app) {
-        this.addEntityToGroup(groupMap, app, entity);
+      const apps = entityIdToApps.get(entity.ID);
+      if (apps) {
+        for (const app of apps) {
+          this.addEntityToGroup(groupMap, app, entity);
+        }
       } else {
         ungroupedEntities.push(entity);
       }

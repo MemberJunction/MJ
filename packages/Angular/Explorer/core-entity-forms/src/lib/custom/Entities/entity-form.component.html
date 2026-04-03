@@ -744,6 +744,124 @@
           </section>
         }
         <!-- ============================================================ -->
+        <!-- ORGANIC KEYS SECTION -->
+        <!-- ============================================================ -->
+        @if (activeSection === 'organicKeys') {
+          <section class="section organic-keys-section">
+            <div class="section-content">
+              @if (organicKeysOutgoing.length === 0 && organicKeysIncoming.length === 0) {
+                <div class="empty-state-card">
+                  <i class="fa-solid fa-fingerprint empty-state-icon"></i>
+                  <h3>No Organic Keys</h3>
+                  <p>This entity has no organic key relationships configured. Organic keys enable cross-system matching by shared business data like email addresses, phone numbers, or domain names — without requiring foreign key constraints.</p>
+                </div>
+              } @else {
+                <!-- Outgoing: Keys defined on THIS entity -->
+                @if (organicKeysOutgoing.length > 0) {
+                  <div class="relationship-group">
+                    <h3 class="relationship-group-title">
+                      <i class="fa-solid fa-arrow-right-from-bracket"></i>
+                      Outgoing (Matches from this entity)
+                      <span class="group-count">{{ organicKeysOutgoing.length }}</span>
+                    </h3>
+                    <div class="organic-key-cards">
+                      @for (okGroup of organicKeysOutgoing; track okGroup.OrganicKey.ID) {
+                        <div class="organic-key-card">
+                          <div class="organic-key-card-header">
+                            <div class="organic-key-name">
+                              <i class="fa-solid fa-fingerprint organic-key-icon"></i>
+                              {{ okGroup.OrganicKey.Name }}
+                            </div>
+                            <div class="organic-key-badges">
+                              <span class="organic-key-badge strategy">{{ okGroup.OrganicKey.NormalizationStrategy }}</span>
+                              <span class="organic-key-badge fields">{{ okGroup.OrganicKey.MatchFieldNames }}</span>
+                            </div>
+                          </div>
+                          @if (okGroup.OrganicKey.Description) {
+                            <p class="organic-key-description">{{ okGroup.OrganicKey.Description }}</p>
+                          }
+                          <div class="organic-key-targets">
+                            @for (target of okGroup.RelatedEntities; track target.Info.ID) {
+                              <div class="organic-key-target clickable" (click)="NavigateToEntityByID(target.Info.RelatedEntityID)">
+                                <div class="rel-icon outgoing">
+                                  <i class="fa-solid fa-arrow-right"></i>
+                                </div>
+                                <div class="target-main">
+                                  <div class="target-header">
+                                    <i [class]="target.EntityIcon" class="target-entity-icon"></i>
+                                    <span class="target-entity-name">{{ target.Info.DisplayName || target.EntityName }}</span>
+                                    <i class="fa-solid fa-external-link-alt target-nav-icon"></i>
+                                  </div>
+                                  <div class="target-match-detail">
+                                    @if (target.Info.IsDirectMatch) {
+                                      <span class="match-type-badge direct">Direct</span>
+                                      <span class="match-fields">{{ okGroup.OrganicKey.MatchFieldNames }} → {{ target.Info.RelatedEntityFieldNames }}</span>
+                                    } @else {
+                                      <span class="match-type-badge transitive">Transitive</span>
+                                      <span class="match-fields" [title]="target.Info.TransitiveObjectName || ''">via {{ target.Info.TransitiveObjectName }}</span>
+                                    }
+                                  </div>
+                                </div>
+                              </div>
+                            }
+                          </div>
+                        </div>
+                      }
+                    </div>
+                  </div>
+                }
+
+                <!-- Incoming: Keys on OTHER entities targeting THIS entity -->
+                @if (organicKeysIncoming.length > 0) {
+                  <div class="relationship-group">
+                    <h3 class="relationship-group-title">
+                      <i class="fa-solid fa-arrow-right-to-bracket"></i>
+                      Incoming (Other entities matching to this one)
+                      <span class="group-count">{{ organicKeysIncoming.length }}</span>
+                    </h3>
+                    <div class="organic-key-cards">
+                      @for (incoming of organicKeysIncoming; track incoming.OrganicKey.ID + incoming.SourceEntityName) {
+                        <div class="organic-key-card incoming clickable" (click)="NavigateToEntityByID(incoming.SourceEntityID)">
+                          <div class="organic-key-card-header">
+                            <div class="organic-key-name">
+                              <div class="rel-icon incoming">
+                                <i class="fa-solid fa-arrow-left"></i>
+                              </div>
+                              <i [class]="incoming.SourceEntityIcon" class="target-entity-icon"></i>
+                              {{ incoming.SourceEntityName }}
+                              <i class="fa-solid fa-external-link-alt target-nav-icon"></i>
+                            </div>
+                            <div class="organic-key-badges">
+                              <span class="match-type-badge" [class.direct]="incoming.MatchType === 'Direct'" [class.transitive]="incoming.MatchType === 'Transitive'">{{ incoming.MatchType }}</span>
+                            </div>
+                          </div>
+                          <div class="organic-key-detail-row">
+                            <span class="detail-label">Key:</span>
+                            <span class="detail-value">{{ incoming.OrganicKey.Name }}</span>
+                            <span class="organic-key-badge fields">{{ incoming.OrganicKey.MatchFieldNames }}</span>
+                            <span class="organic-key-badge strategy">{{ incoming.OrganicKey.NormalizationStrategy }}</span>
+                          </div>
+                          @if (incoming.RelatedEntityConfig.IsDirectMatch) {
+                            <div class="organic-key-detail-row">
+                              <span class="detail-label">Matched via:</span>
+                              <span class="detail-value">{{ incoming.RelatedEntityConfig.RelatedEntityFieldNames }}</span>
+                            </div>
+                          } @else {
+                            <div class="organic-key-detail-row">
+                              <span class="detail-label">Bridge:</span>
+                              <span class="detail-value">{{ incoming.RelatedEntityConfig.TransitiveObjectName }}</span>
+                            </div>
+                          }
+                        </div>
+                      }
+                    </div>
+                  </div>
+                }
+              }
+            </div>
+          </section>
+        }
+        <!-- ============================================================ -->
         <!-- PERMISSIONS SECTION -->
         <!-- ============================================================ -->
         @if (activeSection === 'permissions') {

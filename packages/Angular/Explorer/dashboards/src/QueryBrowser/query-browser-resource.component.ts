@@ -62,7 +62,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
     /** Status filter toggles — which statuses to show in the tree */
     public StatusFilters: Record<string, boolean> = {
         'Approved': true,
-        'Pending': true,
+        'Pending': false,
         'Rejected': false,
         'Expired': false
     };
@@ -451,6 +451,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         }
         this.selectedQuery = query;
         this.updateUrl();
+        this.NotifyDisplayNameChanged(query.Name || 'Query');
         this.cdr.markForCheck();
     }
 
@@ -753,6 +754,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
 
     public refresh(): void {
         this.selectedQuery = null;
+        this.NotifyDisplayNameChanged('Queries');
         this.loadData(true);
     }
 
@@ -821,11 +823,13 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
                 if (!UUIDsEqual(this.selectedQuery?.ID, query.ID)) {
                     this.selectedQuery = query;
                     this.expandCategoryForQuery(query);
+                    this.NotifyDisplayNameChanged(query.Name || 'Query');
                 }
             }
         } else {
             // No queryId means clear selection
             this.selectedQuery = null;
+            this.NotifyDisplayNameChanged('Queries');
         }
         this.skipUrlUpdate = false;
 

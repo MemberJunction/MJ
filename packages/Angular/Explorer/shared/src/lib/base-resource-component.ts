@@ -48,6 +48,14 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent {
         this._resourceRecordSavedEvent = value;
     }
 
+    private _displayNameChangedEvent: ((newName: string) => void) | null = null;
+    public get DisplayNameChangedEvent(): ((newName: string) => void) | null {
+        return this._displayNameChangedEvent;
+    }
+    public set DisplayNameChangedEvent(value: ((newName: string) => void) | null) {
+        this._displayNameChangedEvent = value;
+    }
+
     protected NotifyLoadComplete() {
         this._loadComplete = true;
         if (this._loadCompleteEvent) {
@@ -63,6 +71,16 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent {
     }
  
     
+
+    /**
+     * Call this to notify the tab system that the resource's display name has changed.
+     * The tab container will update the tab title and browser title accordingly.
+     */
+    protected NotifyDisplayNameChanged(newName: string): void {
+        if (this._displayNameChangedEvent) {
+            this._displayNameChangedEvent(newName);
+        }
+    }
 
     protected ResourceRecordSaved(resourceRecordEntity: BaseEntity) {
         this.Data.ResourceRecordID = resourceRecordEntity.PrimaryKey.ToString();

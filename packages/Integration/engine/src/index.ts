@@ -23,6 +23,7 @@ export type {
     SyncErrorCode,
     ErrorSeverity,
     SyncProgress,
+    SyncProgressSnapshot,
     OnProgressCallback,
     SyncNotificationEvent,
     SyncNotificationSeverity,
@@ -42,6 +43,8 @@ export type {
     CRUDResult,
     SearchContext,
     SearchResult,
+    ListContext,
+    ListResult,
 } from './types.js';
 
 // Error classification helpers
@@ -103,6 +106,15 @@ export { WatermarkService } from './WatermarkService.js';
 // Retry
 export { WithRetry, DEFAULT_RETRY_CONFIG } from './RetryRunner.js';
 export type { RetryConfig } from './RetryRunner.js';
+
+// Action Metadata Generator
+export { ActionMetadataGenerator } from './ActionMetadataGenerator.js';
+export type {
+    IntegrationObjectInfo,
+    IntegrationFieldInfo,
+    ActionGeneratorConfig,
+    GeneratedActionMetadata,
+} from './ActionMetadataGenerator.js';
 
 // Integration Engine (server-side, wraps IntegrationEngineBase via composition)
 // NOTE: For IntegrationEngineBase (client-safe metadata), import from @memberjunction/integration-engine-base

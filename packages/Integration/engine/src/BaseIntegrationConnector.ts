@@ -1,6 +1,10 @@
 import type { UserInfo } from '@memberjunction/core';
 import type { MJCompanyIntegrationEntity } from '@memberjunction/core-entities';
 import type {
+    IntegrationObjectInfo,
+    ActionGeneratorConfig,
+} from './ActionMetadataGenerator.js';
+import type {
     ExternalRecord,
     DefaultFieldMapping,
     SourceSchemaInfo,
@@ -11,6 +15,8 @@ import type {
     CRUDResult,
     SearchContext,
     SearchResult,
+    ListContext,
+    ListResult,
 } from './types.js';
 
 /** Result of testing a connection to an external system */
@@ -25,6 +31,8 @@ export interface ConnectionTestResult {
 
 /** Schema description of an object/table in an external system */
 export interface ExternalObjectSchema {
+    /** IntegrationObject ID from the MJ database */
+    ID?: string;
     /** API name of the object (e.g., "Contact", "Account") */
     Name: string;
     /** Human-readable label */
@@ -75,6 +83,8 @@ export interface FetchContext {
     CurrentPage?: number;
     /** Current offset for offset-based pagination. Passed by engine on subsequent calls. */
     CurrentOffset?: number;
+    /** Current cursor for cursor-based pagination. Passed by engine on subsequent calls. */
+    CurrentCursor?: string;
 }
 
 /** Result of a FetchChanges call, containing a batch of records */
@@ -89,6 +99,8 @@ export interface FetchBatchResult {
     NextPage?: number;
     /** Next offset to pass back via FetchContext.CurrentOffset on the next call (offset-based pagination) */
     NextOffset?: number;
+    /** Next cursor to pass back via FetchContext.CurrentCursor on the next call (cursor-based pagination) */
+    NextCursor?: string;
 }
 
 /** Configurable timeout values for connector operations */
@@ -196,6 +208,9 @@ export abstract class BaseIntegrationConnector {
     /** Whether this connector supports searching/querying records with filters. */
     public get SupportsSearch(): boolean { return false; }
 
+    /** Whether this connector supports paginated listing of records. */
+    public get SupportsListing(): boolean { return false; }
+
     // ─── Standard CRUD Operations ────────────────────────────────────
     // Default implementations throw if not supported. Subclasses override
     // both the capability getter AND the method to enable the operation.
@@ -242,6 +257,15 @@ export abstract class BaseIntegrationConnector {
      */
     public async SearchRecords(_ctx: SearchContext): Promise<SearchResult> {
         throw new Error(`SearchRecords is not supported by ${this.constructor.name}`);
+    }
+
+    /**
+     * Lists records with cursor-based pagination.
+     * Override in subclasses that support paginated listing.
+     * Check `SupportsListing` before calling.
+     */
+    public async ListRecords(_ctx: ListContext): Promise<ListResult> {
+        throw new Error(`ListRecords is not supported by ${this.constructor.name}`);
     }
 
     // ─── Core Abstract Methods ───────────────────────────────────────
@@ -309,6 +333,58 @@ export abstract class BaseIntegrationConnector {
     public GetDefaultConfiguration(): DefaultIntegrationConfig | null {
         return null;
     }
+
+    // ─── Action Metadata Generation ─────────────────────────────────
+
+    /**
+     * Returns the integration objects and their fields that this connector
+     * supports, for use by the ActionMetadataGenerator. This is static
+     * metadata that does NOT require a live connection — it describes the
+     * connector's known object model.
+     *
+     * Override in subclasses to provide connector-specific objects/fields.
+     * Returns an empty array by default (no action generation available).
+     */
+    public GetIntegrationObjects(): IntegrationObjectInfo[] {
+        return [];
+    }
+
+    /**
+     * Returns the ActionGeneratorConfig for this connector, combining the
+     * integration name, category, icon, and objects into a ready-to-use
+     * configuration for ActionMetadataGenerator.Generate().
+     *
+     * Override in subclasses to customize the config (e.g., icon, category).
+     * Returns null by default if GetIntegrationObjects() returns empty.
+     */
+    public GetActionGeneratorConfig(): ActionGeneratorConfig | null {
+        const allObjects = this.GetIntegrationObjects();
+        // Only include objects that opt-in to action generation (default: true)
+        const objects = allObjects.filter(o => o.IncludeInActionGeneration !== false);
+        if (objects.length === 0) return null;
+
+        return {
+            IntegrationName: this.IntegrationName,
+            CategoryName: this.IntegrationName,
+            IconClass: 'fa-solid fa-plug',
+            Objects: objects,
+            IncludeSearch: this.SupportsSearch,
+            IncludeList: this.SupportsListing,
+        };
+    }
+
+    /**
+     * The canonical integration name (e.g., "HubSpot", "Rasa.io").
+     * Used by GetActionGeneratorConfig() and IntegrationActionExecutor
+     * to match connectors to action Config.IntegrationName.
+     *
+     * Override in subclasses. Defaults to the class name.
+     */
+    public get IntegrationName(): string {
+        return this.constructor.name;
+    }
+
+    // ─── Schema Introspection ────────────────────────────────────────
 
     /**
      * Introspects the source system's schema — returns metadata about available

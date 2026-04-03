@@ -32,8 +32,14 @@ describe('ExportEngine', () => {
             expect(exporter).toBeInstanceOf(JSONExporter);
         });
 
-        it('should create ExcelExporter for excel format', () => {
-            const exporter = ExportEngine.createExporter('excel');
+        it('should throw for excel format (requires async)', () => {
+            expect(() => {
+                ExportEngine.createExporter('excel');
+            }).toThrow('Excel export requires async initialization');
+        });
+
+        it('should create ExcelExporter for excel format via CreateExporterAsync', async () => {
+            const exporter = await ExportEngine.CreateExporterAsync('excel');
             expect(exporter).toBeInstanceOf(ExcelExporter);
         });
 

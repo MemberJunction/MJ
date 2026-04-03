@@ -82,21 +82,25 @@ export interface CachedRunViewData {
     maxUpdatedAt: string;
     /** Cached aggregate results, if aggregates were requested */
     aggregateResults?: AggregateResult[];
+    /** Total row count from the database — may differ from results.length for paginated queries */
+    totalRowCount?: number;
 }
 
 /**
  * Return type for GetRunViewResult and ApplyDifferentialUpdate.
- * Includes rowCount which is derived from results.length.
+ * Includes rowCount (derived from results.length) and totalRowCount (from the database).
  */
 export interface CachedRunViewResult {
     /** The cached result rows */
     results: unknown[];
     /** The maximum __mj_UpdatedAt timestamp from the results */
     maxUpdatedAt: string;
-    /** Row count - always derived from results.length */
+    /** Row count - derived from results.length */
     rowCount: number;
     /** Cached aggregate results, if aggregates were requested */
     aggregateResults?: AggregateResult[];
+    /** Total row count from the database — may differ from rowCount for paginated queries */
+    totalRowCount?: number;
 }
 
 /**
@@ -552,7 +556,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
 
         // Look up entity metadata for PK field names
         const md = new Metadata();
-        const entityInfo = md.Entities.find(e => e.Name === entityName);
+        const entityInfo = md.EntityByName(entityName);
         if (!entityInfo) {
             LogStatusVerbose(`LocalCacheManager: remote-invalidate — entity "${entityName}" not found in metadata, invalidating caches`);
             for (const fp of [...fingerprints]) {
@@ -1051,14 +1055,18 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         params: RunViewParams,
         results: unknown[],
         maxUpdatedAt: string,
-        aggregateResults?: AggregateResult[]
+        aggregateResults?: AggregateResult[],
+        totalRowCount?: number
     ): Promise<void> {
         if (!this._storageProvider || !this._config.enabled) return;
 
-        // Persist results, maxUpdatedAt, and aggregateResults (rowCount is derived from results.length on read)
+        // Persist results, maxUpdatedAt, aggregateResults, and totalRowCount
         const data: CachedRunViewData = { results, maxUpdatedAt };
         if (aggregateResults && aggregateResults.length > 0) {
             data.aggregateResults = aggregateResults;
+        }
+        if (totalRowCount !== undefined) {
+            data.totalRowCount = totalRowCount;
         }
         const value = JSON.stringify(data);
         const sizeBytes = this.estimateSize(value);
@@ -1117,11 +1125,11 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
                 this._stats.hits++;
                 const parsed = JSON.parse(value) as CachedRunViewData;
                 const results = parsed.results || [];
-                // Always derive rowCount from results.length - never trust persisted rowCount
                 const result: CachedRunViewResult = {
                     results,
                     maxUpdatedAt: parsed.maxUpdatedAt,
-                    rowCount: results.length
+                    rowCount: results.length,
+                    totalRowCount: parsed.totalRowCount
                 };
                 // Include aggregate results if they were cached
                 if (parsed.aggregateResults) {
@@ -1225,6 +1233,10 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             // Convert map back to array
             const mergedResults = Array.from(resultMap.values());
 
+            // For differential updates, the merged result count IS the new total
+            // (differential applies to full-dataset caches, not paginated ones)
+            const mergedTotalRowCount = mergedResults.length;
+
             // Store the updated cache with optional aggregate results
             // Note: If aggregateResults not provided, cached aggregates are cleared (they'd be stale)
             await this.SetRunViewResult(
@@ -1232,14 +1244,16 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
                 params,
                 mergedResults,
                 newMaxUpdatedAt,
-                aggregateResults
+                aggregateResults,
+                mergedTotalRowCount
             );
 
             // Return with rowCount derived from merged results and aggregates if provided
             const result: CachedRunViewResult = {
                 results: mergedResults,
                 maxUpdatedAt: newMaxUpdatedAt,
-                rowCount: mergedResults.length
+                rowCount: mergedResults.length,
+                totalRowCount: mergedTotalRowCount
             };
             if (aggregateResults) {
                 result.aggregateResults = aggregateResults;

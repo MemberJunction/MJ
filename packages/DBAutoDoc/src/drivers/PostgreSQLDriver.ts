@@ -353,6 +353,8 @@ export class PostgreSQLDriver extends BaseAutoDocDriver {
     // Get cardinality and null statistics
     const cardinalityStats = await this.getCardinalityStats(schemaName, tableName, columnName);
     Object.assign(stats, cardinalityStats);
+    // Fix: cardinalityStats returns totalCount, but AutoDocColumnStatistics expects totalRows
+    stats.totalRows = cardinalityStats.totalCount;
 
     // Get value distribution for low-cardinality columns
     if (stats.distinctCount <= cardinalityThreshold && stats.distinctCount > 0) {

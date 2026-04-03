@@ -76,6 +76,17 @@
     </ag-grid-angular>
   </div>
 
+  <!-- Pagination (only shown when server-side paging is active) -->
+  @if (TotalRowCount > 0) {
+    <mj-pagination
+      [TotalRowCount]="TotalRowCount"
+      [PageNumber]="PageNumber"
+      [PageSize]="PageSize"
+      [IsLoading]="IsLoading"
+      (PageChange)="PageChange.emit($event)">
+    </mj-pagination>
+  }
+
   <!-- Empty state -->
   @if (!IsLoading && RowCount === 0) {
     <div class="empty-state" @fadeIn>

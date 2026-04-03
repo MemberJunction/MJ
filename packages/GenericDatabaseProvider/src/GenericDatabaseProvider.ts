@@ -56,14 +56,19 @@ import {
     LogStatus,
     LogStatusEx,
     StripStopWords,
-    QueryCache,
+    QueryCacheManager,
+    DatabasePlatform,
+    QueryExecutionSpec,
 } from '@memberjunction/core';
 
 import { MJGlobal, SQLExpressionValidator, UUIDsEqual } from '@memberjunction/global';
+import { QueryPagingEngine } from './queryPagingEngine.js';
 import { QueryParameterProcessor } from '@memberjunction/query-processor';
 import { v4 as uuidv4 } from 'uuid';
 import { SqlLoggingSessionImpl } from './SqlLogger.js';
 import { SqlLoggingOptions, SqlLoggingSession } from './types.js';
+import { SQLDialect } from '@memberjunction/sql-dialect';
+import { QueryCompositionEngine } from './queryCompositionEngine.js';
 
 import {
     MJEntityAIActionEntity,
@@ -100,6 +105,7 @@ export interface ExecuteSQLBatchOptions {
  * to inherit these shared behaviors.
  */
 export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
+    private _compositionEngine = new QueryCompositionEngine();
 
     /**************************************************************************/
     // Local Storage Provider — Server-Side Cache Backend
@@ -212,8 +218,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         const session = new SqlLoggingSessionImpl(sessionId, filePath,
             {
                 defaultSchemaName: mjCoreSchema,
-                ...options // if defaultSchemaName is not provided, it will use the MJCoreSchemaName, otherwise
-                // the caller's defaultSchemaName will be used
+                // Inject the platform's batch separator as the default so callers don't need to
+                // hardcode 'GO'. Callers can still override by passing batchSeparator explicitly.
+                batchSeparator: this.PlatformBatchSeparator || undefined,
+                ...options
             });
 
         // Initialize the session (create file, write header)
@@ -607,6 +615,86 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         }));
     }
 
+    /**************************************************************************/
+    // PreProcessFieldsForSave — Field-Level Encryption Before Save
+    /**************************************************************************/
+
+    /**
+     * Encrypts field values before saving to the database.
+     *
+     * This method handles field-level encryption for any entity with encrypted fields.
+     * It is called by platform-specific providers (SQL Server, PostgreSQL) before
+     * building their SQL parameters, ensuring encryption is handled generically.
+     *
+     * For each field marked with `Encrypt=true`:
+     * - If `EncryptionKeyID` is null → throws an error (misconfiguration)
+     * - If value is null/undefined → skips (nothing to encrypt)
+     * - If value is already encrypted → skips (prevents double-encryption)
+     * - Otherwise → encrypts the value using the configured key
+     *
+     * @param entity The entity being saved
+     * @param fieldValues Map of field info to current values — values are mutated in-place
+     * @param contextUser User context for encryption operations
+     * @throws Error if a field is marked for encryption but has no EncryptionKeyID configured
+     * @throws Error if encryption fails (to prevent storing unencrypted sensitive data)
+     */
+    protected async EncryptFieldValuesForSave(
+        entity: BaseEntity,
+        fieldValues: Map<EntityFieldInfo, unknown>,
+        contextUser?: UserInfo
+    ): Promise<void> {
+        // Lazy-load encryption engine only when needed
+        let encryptionEngine: EncryptionEngine | null = null;
+
+        for (const [field, value] of fieldValues) {
+            if (!field.Encrypt) continue;
+
+            // SECURITY: If field is marked for encryption but has no key, refuse to save.
+            // This prevents silent storage of cleartext data in fields intended to be encrypted.
+            if (!field.EncryptionKeyID) {
+                throw new Error(
+                    `Field "${field.Name}" on entity "${entity.EntityInfo.Name}" is marked for encryption ` +
+                    `(Encrypt=true) but has no EncryptionKeyID configured. ` +
+                    `Cannot save — refusing to store sensitive data without encryption. ` +
+                    `Configure an encryption key for this field in the EntityField metadata.`
+                );
+            }
+
+            if (value === null || value === undefined) continue;
+
+            // Lazy-load encryption engine on first encrypted field
+            if (!encryptionEngine) {
+                encryptionEngine = EncryptionEngine.Instance;
+                await encryptionEngine.Config(false, contextUser);
+            }
+
+            // Only encrypt if the value is not already encrypted
+            // This handles cases where values may already be encrypted (e.g., re-save scenarios)
+            const keyMarker = encryptionEngine.GetKeyByID(field.EncryptionKeyID)?.Marker;
+            if (!encryptionEngine.IsEncrypted(value, keyMarker)) {
+                try {
+                    const stringValue = typeof value === 'string' ? value : JSON.stringify(value);
+                    const encryptedValue = await encryptionEngine.Encrypt(stringValue, field.EncryptionKeyID, contextUser);
+                    fieldValues.set(field, encryptedValue);
+                } catch (encryptError) {
+                    // SECURITY: Never store unencrypted data in an encrypted field.
+                    // Log the detailed error server-side for operators, but throw a
+                    // generic message to prevent leaking infrastructure details
+                    // (env var names, config paths, vault URLs) to API consumers.
+                    const detail = encryptError instanceof Error ? encryptError.message : String(encryptError);
+                    LogError(
+                        `Encryption failed for field "${field.Name}" on entity "${entity.EntityInfo.Name}": ${detail}`
+                    );
+                    throw new Error(
+                        `Failed to encrypt field "${field.Name}" on entity "${entity.EntityInfo.Name}". ` +
+                        'The save operation has been aborted to prevent storing unencrypted sensitive data. ' +
+                        'Check server logs for details.'
+                    );
+                }
+            }
+        }
+    }
+
     /**
      * Virtual hook for platform-specific datetime field adjustments.
      * Default implementation is a no-op (returns rows unchanged).
@@ -673,6 +761,26 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     /**************************************************************************/
     // InternalRunView — Shared View Execution Engine
     /**************************************************************************/
+
+    /**
+     * Returns the SQLDialect instance for this provider's platform.
+     * Subclasses override to return the appropriate dialect (e.g. SQLServerDialect, PostgreSQLDialect).
+     * Used by `PlatformBatchSeparator` to retrieve the correct batch separator token via
+     * `@memberjunction/sql-dialect` rather than hardcoding platform strings.
+     */
+    protected getDialect(): SQLDialect | null {
+        return null;
+    }
+
+    /**
+     * Returns the batch separator token for the underlying database platform by delegating to
+     * the SQLDialect instance returned by `getDialect()`.
+     * SQL Server → `'GO'`, PostgreSQL → `''` (no separator needed).
+     * Auto-injected as the default `batchSeparator` in `CreateSqlLogger`.
+     */
+    protected get PlatformBatchSeparator(): string {
+        return this.getDialect()?.BatchSeparator() ?? '';
+    }
 
     /**
      * Builds a platform-specific pagination clause.
@@ -1237,7 +1345,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
             // Phase 1: Check server's LocalCacheManager first (zero DB hits)
             const currentResults: RunViewWithCacheCheckResult<T>[] = [];
-            const serverCacheStaleItems: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo; serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number } }> = [];
+            const serverCacheStaleItems: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo; serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number; totalRowCount?: number } }> = [];
             const serverCacheMissItems: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo }> = [];
 
             for (const { index, item, entityInfo } of itemsNeedingValidation) {
@@ -1303,7 +1411,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             }
 
             // Phase 3: For items without cacheStatus (client has nothing), check server cache before hitting DB
-            const noCacheStatusServedFromCache: Array<{ index: number; serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number } }> = [];
+            const noCacheStatusServedFromCache: Array<{ index: number; serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number; totalRowCount?: number } }> = [];
             const noCacheStatusNeedsDB: Array<{ index: number; item: RunViewWithCacheCheckParams }> = [];
 
             for (const entry of itemsWithoutCacheCheck) {
@@ -1450,7 +1558,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             return { viewIndex, status: 'error', errorMessage: result.ErrorMessage || 'Unknown error executing view' };
         }
         const maxUpdatedAt = this.extractMaxUpdatedAt(result.Results);
-        return { viewIndex, status: 'stale', results: result.Results, maxUpdatedAt, rowCount: result.Results.length };
+        return { viewIndex, status: 'stale', results: result.Results, maxUpdatedAt, rowCount: result.TotalRowCount };
     }
 
     /**
@@ -1467,7 +1575,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         if (result.status !== 'error' && result.results && LocalCacheManager.Instance.IsInitialized) {
             const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params, this.InstanceConnectionString);
             const maxUpdatedAt = result.maxUpdatedAt || new Date().toISOString();
-            await LocalCacheManager.Instance.SetRunViewResult(fingerprint, params, result.results, maxUpdatedAt);
+            await LocalCacheManager.Instance.SetRunViewResult(fingerprint, params, result.results, maxUpdatedAt, undefined, result.rowCount);
         }
         return result;
     }
@@ -1481,7 +1589,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         item: RunViewWithCacheCheckParams,
         index: number,
         entityLabel: string,
-    ): Promise<{ status: 'current'; result: RunViewWithCacheCheckResult<never> } | { status: 'stale'; serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number } } | null> {
+    ): Promise<{ status: 'current'; result: RunViewWithCacheCheckResult<never> } | { status: 'stale'; serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number; totalRowCount?: number } } | null> {
         if (!LocalCacheManager.Instance.IsInitialized) return null;
 
         const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(item.params, this.InstanceConnectionString);
@@ -1504,14 +1612,14 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      */
     private async serveFromServerCache<T = unknown>(
         viewIndex: number,
-        serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number },
+        serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number; totalRowCount?: number },
     ): Promise<RunViewWithCacheCheckResult<T>> {
         return {
             viewIndex,
             status: 'stale',
             results: serverCached.results as T[],
             maxUpdatedAt: serverCached.maxUpdatedAt,
-            rowCount: serverCached.rowCount,
+            rowCount: serverCached.totalRowCount ?? serverCached.rowCount,
         };
     }
 
@@ -1915,11 +2023,15 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     // InternalRunQuery — Shared Pipeline Implementation
     /**************************************************************************/
 
-    /**
-     * Query cache instance for caching query results with TTL.
-     * Shared across all platform providers.
-     */
-    private _queryCache = new QueryCache();
+    private _queryCacheInitialized: boolean = false;
+
+    private get QueryCacheMgr(): QueryCacheManager {
+        if (!this._queryCacheInitialized) {
+            QueryCacheManager.Instance.Init(this.InstanceConnectionString);
+            this._queryCacheInitialized = true;
+        }
+        return QueryCacheManager.Instance;
+    }
 
     /**
      * Full query execution pipeline: resolve → validate → compose → template → cache check →
@@ -1939,23 +2051,88 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             // Process parameters (composition + Nunjucks templates)
             const { finalSQL, appliedParameters } = this.processQueryParameters(query, params.Parameters, contextUser);
 
-            // Check cache if enabled
-            const cachedResult = this.checkQueryCache(query, params, appliedParameters);
-            if (cachedResult) {
-                return cachedResult;
+            // Execute query — use SQL-level paging when requested, else fetch all rows
+            const useSQLPaging = QueryPagingEngine.ShouldPage(params.StartRow, params.MaxRows);
+            const cacheConfig = query.CacheConfig;
+            let paginatedResult: Record<string, unknown>[];
+            let totalRowCount: number;
+            let executionTime: number;
+            let fullResult: Record<string, unknown>[] | undefined;
+
+            if (useSQLPaging) {
+                // Check paged cache before executing SQL
+                const pagedCacheHit = await this.checkPagedQueryCache(query, params, appliedParameters);
+                if (pagedCacheHit) {
+                    return pagedCacheHit;
+                }
+
+                const paging = QueryPagingEngine.WrapWithPaging(
+                    finalSQL,
+                    params.StartRow!,
+                    params.MaxRows!,
+                    this.PlatformKey as DatabasePlatform,
+                );
+
+                // Check count cache — skip COUNT SQL if we have a cached total
+                const cachedCount = cacheConfig?.enabled
+                    ? await this.QueryCacheMgr.GetTotalRowCount(query, params.Parameters || {})
+                    : null;
+
+                const start = Date.now();
+                if (cachedCount != null) {
+                    // Only execute data query — count is cached
+                    const dataResult = await this.ExecuteSQL<Record<string, unknown>>(paging.DataSQL, undefined, undefined, contextUser);
+                    executionTime = Date.now() - start;
+                    if (!dataResult) throw new Error('Error executing paged query SQL');
+                    paginatedResult = dataResult;
+                    totalRowCount = cachedCount;
+                } else {
+                    // Execute data + count queries in parallel
+                    const [dataResult, countResult] = await Promise.all([
+                        this.ExecuteSQL<Record<string, unknown>>(paging.DataSQL, undefined, undefined, contextUser),
+                        this.ExecuteSQL<Record<string, unknown>>(paging.CountSQL, undefined, undefined, contextUser),
+                    ]);
+                    executionTime = Date.now() - start;
+                    if (!dataResult) throw new Error('Error executing paged query SQL');
+
+                    paginatedResult = dataResult;
+                    totalRowCount = countResult?.[0]?.TotalRowCount != null
+                        ? Number(countResult[0].TotalRowCount)
+                        : paginatedResult.length;
+
+                    // Cache the count for subsequent page requests (fire-and-forget)
+                    if (cacheConfig?.enabled) {
+                        void this.QueryCacheMgr.SetTotalRowCount(query, params.Parameters || {}, totalRowCount);
+                    }
+                }
+
+                // Cache the paged results (fire-and-forget)
+                if (cacheConfig?.enabled) {
+                    void this.QueryCacheMgr.SetPaged(query, params.Parameters || {}, params.StartRow!, params.MaxRows!, paginatedResult);
+                    void this.QueryCacheMgr.InvalidateWithDependents(query);
+                }
+            } else {
+                // Check full-result cache before executing
+                const cachedResult = await this.checkQueryCache(query, params, appliedParameters);
+                if (cachedResult) {
+                    return cachedResult;
+                }
+
+                // No paging requested — execute full query, apply in-memory pagination as fallback
+                const timing = await this.executeQueryWithTiming(finalSQL, contextUser);
+                executionTime = timing.executionTime;
+                fullResult = timing.result;
+
+                const paginated = this.applyQueryPagination(fullResult, params);
+                paginatedResult = paginated.paginatedResult;
+                totalRowCount = paginated.totalRowCount;
+
+                // Cache full (unpaginated) results if enabled (fire-and-forget)
+                void this.cacheQueryResults(query, params.Parameters || {}, fullResult);
             }
-
-            // Execute query and measure performance
-            const { result, executionTime } = await this.executeQueryWithTiming(finalSQL, contextUser);
-
-            // Apply pagination
-            const { paginatedResult, totalRowCount } = this.applyQueryPagination(result, params);
 
             // Handle audit logging (fire-and-forget)
             this.auditQueryExecution(query, params, finalSQL, paginatedResult.length, totalRowCount, executionTime, contextUser);
-
-            // Cache results if enabled
-            this.cacheQueryResults(query, params.Parameters || {}, result);
 
             return {
                 Success: true,
@@ -1964,6 +2141,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 Results: paginatedResult,
                 RowCount: paginatedResult.length,
                 TotalRowCount: totalRowCount,
+                PageNumber: useSQLPaging ? Math.floor(params.StartRow! / params.MaxRows!) + 1 : undefined,
+                PageSize: useSQLPaging ? params.MaxRows! : undefined,
                 ExecutionTime: executionTime,
                 ErrorMessage: '',
                 AppliedParameters: appliedParameters,
@@ -2013,7 +2192,35 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 };
             }
 
+            // Check ad-hoc cache if opt-in TTL is provided
+            const adhocTTL = params.AdhocCacheTTLMinutes;
+            if (adhocTTL != null && adhocTTL > 0) {
+                const cached = await this.QueryCacheMgr.GetAdhoc(params.SQL!, adhocTTL);
+                if (cached) {
+                    const { paginatedResult, totalRowCount } = this.applyQueryPagination(
+                        cached.results as Record<string, unknown>[], params,
+                    );
+                    return {
+                        Success: true,
+                        QueryID: '',
+                        QueryName: 'Ad-Hoc Query',
+                        Results: paginatedResult,
+                        RowCount: paginatedResult.length,
+                        TotalRowCount: totalRowCount,
+                        ExecutionTime: 0,
+                        ErrorMessage: '',
+                        CacheHit: true,
+                    };
+                }
+            }
+
             const { result, executionTime } = await this.executeQueryWithTiming(params.SQL!, contextUser);
+
+            // Store in ad-hoc cache if opt-in (fire-and-forget)
+            if (adhocTTL != null && adhocTTL > 0) {
+                void this.QueryCacheMgr.SetAdhoc(params.SQL!, adhocTTL, result);
+            }
+
             const { paginatedResult, totalRowCount } = this.applyQueryPagination(result, params);
 
             return {
@@ -2080,11 +2287,23 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         let appliedParameters: Record<string, string> = {};
 
         // Step 1: Resolve {{query:"..."}} composition tokens BEFORE Nunjucks processing
-        finalSQL = this.ResolveQueryComposition(finalSQL, contextUser, parameters);
+        const compositionResult = this._compositionEngine.HasCompositionTokens(finalSQL) && contextUser
+            ? this._compositionEngine.ResolveComposition(finalSQL, this.PlatformKey, contextUser, parameters)
+            : { ResolvedSQL: finalSQL, CTEs: [], DependencyGraph: new Map<string, string[]>(), HasCompositions: false, AnyDependencyUsesTemplates: false };
+        finalSQL = compositionResult.ResolvedSQL;
 
-        // Step 2: Process Nunjucks template parameters
-        if (query.UsesTemplate) {
-            const processingResult = QueryParameterProcessor.processQueryTemplate(query, parameters, finalSQL);
+        // Step 2: Process Nunjucks template parameters.
+        // UsesTemplate is transitive: if ANY dependency uses templates, we must run Nunjucks
+        // even if the outer query itself has UsesTemplate = false.
+        const needsTemplateProcessing = query.UsesTemplate || compositionResult.AnyDependencyUsesTemplates;
+
+        if (needsTemplateProcessing) {
+            const processingResult = QueryParameterProcessor.processQueryTemplate(
+                query,
+                parameters,
+                finalSQL,
+                compositionResult.AnyDependencyUsesTemplates
+            );
 
             if (!processingResult.success) {
                 throw new Error(processingResult.error);
@@ -2100,27 +2319,156 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     }
 
     /**
+     * Lower-layer execution: resolves composition, processes templates, executes SQL.
+     * This is the single execution pathway used by both saved queries (via RunQuery upper layer)
+     * and transient test queries (via TestQuerySQL resolver).
+     *
+     * Processing order:
+     * 1. Resolve {{query:"..."}} composition tokens → CTEs (inline deps checked first, then Metadata)
+     * 2. Process {{ param }} Nunjucks templates (if UsesTemplate or any dependency uses templates)
+     * 3. Apply MaxRows safety limit (wrap with TOP/LIMIT if specified)
+     * 4. Execute the fully resolved SQL
+     * 5. Return results with execution metadata
+     */
+    protected override async InternalExecuteQueryFromSpec(
+        spec: QueryExecutionSpec,
+        contextUser?: UserInfo,
+    ): Promise<RunQueryResult> {
+        try {
+            const { finalSQL, appliedParameters } = this.resolveSpecParameters(spec, contextUser);
+
+            // Execute
+            const { result, executionTime } = await this.executeQueryWithTiming(finalSQL, contextUser);
+
+            return {
+                Success: true,
+                QueryID: '',
+                QueryName: '',
+                Results: result ?? [],
+                RowCount: result?.length ?? 0,
+                TotalRowCount: result?.length ?? 0,
+                ExecutionTime: executionTime,
+                ErrorMessage: '',
+                AppliedParameters: appliedParameters,
+            };
+        } catch (e) {
+            LogError(e);
+            const errorMessage = e instanceof Error ? e.message : String(e);
+            return {
+                Success: false,
+                QueryID: '',
+                QueryName: '',
+                Results: [],
+                RowCount: 0,
+                TotalRowCount: 0,
+                ExecutionTime: 0,
+                ErrorMessage: errorMessage,
+            };
+        }
+    }
+
+    /**
+     * Resolves composition tokens and Nunjucks templates for a QueryExecutionSpec.
+     * Shared logic used by both `InternalExecuteQueryFromSpec` and can be reused
+     * if `processQueryParameters` is refactored in the future.
+     */
+    private resolveSpecParameters(
+        spec: QueryExecutionSpec,
+        contextUser?: UserInfo,
+    ): { finalSQL: string; appliedParameters: Record<string, string> } {
+        let finalSQL = spec.SQL;
+        let appliedParameters: Record<string, string> = {};
+
+        // Step 1: Resolve {{query:"..."}} composition tokens (with inline deps support)
+        const compositionResult = this._compositionEngine.HasCompositionTokens(finalSQL) && contextUser
+            ? this._compositionEngine.ResolveComposition(finalSQL, this.PlatformKey, contextUser, spec.Parameters, spec.Dependencies)
+            : { ResolvedSQL: finalSQL, CTEs: [], DependencyGraph: new Map<string, string[]>(), HasCompositions: false, AnyDependencyUsesTemplates: false };
+        finalSQL = compositionResult.ResolvedSQL;
+
+        // Step 2: Process Nunjucks templates
+        const needsTemplateProcessing = spec.UsesTemplate || compositionResult.AnyDependencyUsesTemplates;
+        if (needsTemplateProcessing) {
+            const templateInput = {
+                SQL: spec.SQL,
+                UsesTemplate: spec.UsesTemplate ?? false,
+                Parameters: spec.ParameterDefinitions ?? [],
+            };
+            // Skip unknown-parameter validation when a dependency uses templates (existing behavior)
+            // OR when no formal ParameterDefinitions were provided (transient specs from TestQuerySQL
+            // don't have definitions — parameters should pass through to Nunjucks without validation).
+            const skipUnknownParamCheck = compositionResult.AnyDependencyUsesTemplates || !spec.ParameterDefinitions;
+            const processingResult = QueryParameterProcessor.processQueryTemplate(
+                templateInput,
+                spec.Parameters,
+                finalSQL,
+                skipUnknownParamCheck
+            );
+            if (!processingResult.success) {
+                throw new Error(processingResult.error);
+            }
+            finalSQL = processingResult.processedSQL;
+            appliedParameters = (processingResult.appliedParameters || {}) as Record<string, string>;
+        } else if (spec.Parameters && Object.keys(spec.Parameters).length > 0) {
+            LogStatus('Warning: Parameters provided but query does not use templates. Parameters will be ignored.');
+        }
+
+        // Step 3: Apply MaxRows safety limit
+        if (spec.MaxRows != null && spec.MaxRows > 0) {
+            finalSQL = this.wrapWithMaxRows(finalSQL, spec.MaxRows);
+        }
+
+        return { finalSQL, appliedParameters };
+    }
+
+    /**
+     * Wraps SQL with a row limit for safety when testing transient queries.
+     * Uses platform-aware syntax: TOP N for SQL Server, LIMIT N for PostgreSQL.
+     */
+    private wrapWithMaxRows(sql: string, maxRows: number): string {
+        const platform = this.PlatformKey as DatabasePlatform;
+        const trimmed = sql.trim();
+
+        // Don't wrap if already has a TOP or LIMIT clause
+        if (/\bTOP\s+\d/i.test(trimmed) || /\bLIMIT\s+\d/i.test(trimmed)) {
+            return sql;
+        }
+
+        if (platform === 'postgresql') {
+            // Append LIMIT N — handle trailing semicolons
+            const withoutSemicolon = trimmed.replace(/;\s*$/, '');
+            return `${withoutSemicolon}\nLIMIT ${maxRows}`;
+        }
+
+        // SQL Server: inject TOP N after SELECT (handling SELECT DISTINCT)
+        return trimmed.replace(
+            /^(SELECT\s+(?:DISTINCT\s+)?)/i,
+            `$1TOP ${maxRows} `
+        );
+    }
+
+    /**
      * Checks the query cache for existing results and returns them if valid.
      */
-    protected checkQueryCache(
+    protected async checkQueryCache(
         query: QueryInfo,
         params: RunQueryParams,
         appliedParameters: Record<string, string>,
-    ): RunQueryResult | null {
+    ): Promise<RunQueryResult | null> {
         const cacheConfig = query.CacheConfig;
         if (!cacheConfig?.enabled) {
             return null;
         }
 
-        const cachedEntry = this._queryCache.get(query.ID, params.Parameters || {}, cacheConfig);
-        if (!cachedEntry) {
+        const cached = await this.QueryCacheMgr.Get(query, params.Parameters || {});
+        if (!cached) {
             return null;
         }
 
         LogStatus(`Cache hit for query ${query.Name} (${query.ID})`);
 
-        const { paginatedResult, totalRowCount } = this.applyQueryPagination(cachedEntry.results, params);
-        const remainingTTL = (cachedEntry.timestamp + (cachedEntry.ttlMinutes * 60 * 1000)) - Date.now();
+        const { paginatedResult, totalRowCount } = this.applyQueryPagination(
+            cached.results as Record<string, unknown>[], params,
+        );
 
         return {
             Success: true,
@@ -2133,7 +2481,47 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             ErrorMessage: '',
             AppliedParameters: appliedParameters,
             CacheHit: true,
-            CacheTTLRemaining: remainingTTL,
+            CacheTTLRemaining: cached.ttlRemainingMs,
+        } as RunQueryResult & { CacheHit: boolean; CacheTTLRemaining: number };
+    }
+
+    /**
+     * Checks the paged cache for a specific page of query results.
+     * Returns a full RunQueryResult on hit, null on miss.
+     */
+    protected async checkPagedQueryCache(
+        query: QueryInfo,
+        params: RunQueryParams,
+        appliedParameters: Record<string, string>,
+    ): Promise<RunQueryResult | null> {
+        const cacheConfig = query.CacheConfig;
+        if (!cacheConfig?.enabled) return null;
+
+        const cached = await this.QueryCacheMgr.GetPaged(
+            query, params.Parameters || {}, params.StartRow!, params.MaxRows!,
+        );
+        if (!cached) return null;
+
+        // Also try to get the cached count
+        const cachedCount = await this.QueryCacheMgr.GetTotalRowCount(query, params.Parameters || {});
+        const totalRowCount = cachedCount ?? cached.results.length;
+
+        LogStatus(`Paged cache hit for query ${query.Name} (${query.ID}) page ${params.StartRow}+${params.MaxRows}`);
+
+        return {
+            Success: true,
+            QueryID: query.ID,
+            QueryName: query.Name,
+            Results: cached.results as Record<string, unknown>[],
+            RowCount: cached.results.length,
+            TotalRowCount: totalRowCount,
+            PageNumber: Math.floor(params.StartRow! / params.MaxRows!) + 1,
+            PageSize: params.MaxRows!,
+            ExecutionTime: 0,
+            ErrorMessage: '',
+            AppliedParameters: appliedParameters,
+            CacheHit: true,
+            CacheTTLRemaining: cached.ttlRemainingMs,
         } as RunQueryResult & { CacheHit: boolean; CacheTTLRemaining: number };
     }
 
@@ -2225,13 +2613,14 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * Caches query results if caching is enabled for the query.
      * Caches the full result set (before pagination).
      */
-    protected cacheQueryResults(query: QueryInfo, parameters: Record<string, string>, results: Record<string, unknown>[]): void {
+    protected async cacheQueryResults(query: QueryInfo, parameters: Record<string, string>, results: Record<string, unknown>[]): Promise<void> {
         const cacheConfig = query.CacheConfig;
         if (!cacheConfig?.enabled) {
             return;
         }
 
-        this._queryCache.set(query.ID, parameters, results, cacheConfig);
+        await this.QueryCacheMgr.Set(query, parameters, results);
+        await this.QueryCacheMgr.InvalidateWithDependents(query);
         LogStatus(`Cached results for query ${query.Name} (${query.ID})`);
     }
 

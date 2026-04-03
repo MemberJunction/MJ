@@ -1,3 +1,21 @@
+/* Enable flex layout for full-height scrolling */
+:host {
+    display: block;
+    height: 100%;
+}
+
+.record-form-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.record-form {
+    min-height: 0 !important;
+}
+
 /* Hero Header Section */
 .action-hero-header {
     background: var(--mj-brand-primary);
@@ -176,7 +194,7 @@
     flex-wrap: wrap;
 }
 
-.hero-actions kendo-button {
+.hero-actions button {
     backdrop-filter: blur(10px);
 }
 

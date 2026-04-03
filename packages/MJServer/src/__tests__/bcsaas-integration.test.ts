@@ -2,7 +2,7 @@
  * BCSaaS Integration Tests — Phase 4, 5, 6
  *
  * Tests the BCSaaS middle-layer plugin architecture against a RUNNING MJAPI instance
- * that has BCSaaS loaded via DynamicPackageLoader and a database with BCSaaS entities.
+ * that has BCSaaS loaded via @RegisterClass(BaseServerMiddleware) and a database with BCSaaS entities.
  *
  * Test data setup (mj_test database):
  *   - Organizations: Acme Corp (11111111-...), Beta Inc (22222222-...), Acme West Division (33333333-...)

@@ -52,7 +52,13 @@
             "SourceType": "RunView",
             "EntityName": "MJ: Entities",
             "OrderBy": "Name ASC",
-            "FieldsToRetrieve": "[\"Name\", \"Description\", \"SchemaName\", \"BaseTable\", \"BaseView\"]",
+            "FieldsToRetrieve": [
+              "Name",
+              "Description",
+              "SchemaName",
+              "BaseTable",
+              "BaseView"
+            ],
             "ResultType": "simple",
             "DestinationType": "Data",
             "DestinationPath": null,
@@ -65,19 +71,29 @@
             "ID": "E1E14230-0061-4CDC-B04B-8AD79881AD92"
           },
           "sync": {
-            "lastModified": "2026-02-19T02:31:20.494Z",
-            "checksum": "2e4ca340b49e365ea51bbf154dc2743aa323a2784cbbaa9a5dffea29007f3852"
+            "lastModified": "2026-03-14T01:24:29.578Z",
+            "checksum": "0d6b26d48d8cfbc401bc3477ea4c56b9fb4149a83343f290876228e799edcc05"
           }
         },
         {
           "fields": {
             "AgentID": "@parent:ID",
             "Name": "ALL_QUERIES",
-            "Description": "Complete list of existing queries for reference and composition",
+            "Description": "Complete list of existing queries for reference and composition. Includes Reusable flag and SQL for composition planning.",
             "SourceType": "RunView",
             "EntityName": "MJ: Queries",
+            "ExtraFilter": "Status = 'Approved' OR Status = 'Pending'",
             "OrderBy": "Name ASC",
-            "FieldsToRetrieve": "[\"ID\", \"Name\", \"Description\", \"CategoryID\", \"Status\"]",
+            "FieldsToRetrieve": [
+              "ID",
+              "Name",
+              "Description",
+              "CategoryID",
+              "Category",
+              "Status",
+              "Reusable",
+              "SQL"
+            ],
             "ResultType": "simple",
             "DestinationType": "Data",
             "DestinationPath": null,
@@ -90,8 +106,8 @@
             "ID": "87D8E91D-A10C-43A8-91D2-694819E422C3"
           },
           "sync": {
-            "lastModified": "2026-02-19T02:31:20.515Z",
-            "checksum": "4c9476d9b4fb3172cac3fed3d515fbe787ae64a6b9b3a68b9805149847df1d03"
+            "lastModified": "2026-03-14T01:24:29.592Z",
+            "checksum": "5d762c63087d613fa7095dc99f19836eefaff7976115e16eb80aab80707d1de2"
           }
         },
         {
@@ -102,7 +118,12 @@
             "SourceType": "RunView",
             "EntityName": "MJ: Query Categories",
             "OrderBy": "Name ASC",
-            "FieldsToRetrieve": "[\"ID\", \"Name\", \"Description\", \"ParentID\"]",
+            "FieldsToRetrieve": [
+              "ID",
+              "Name",
+              "Description",
+              "ParentID"
+            ],
             "ResultType": "simple",
             "DestinationType": "Data",
             "DestinationPath": null,
@@ -115,8 +136,8 @@
             "ID": "457C449C-A983-4E92-BCD6-30D3F516EFDE"
           },
           "sync": {
-            "lastModified": "2026-02-19T02:31:20.533Z",
-            "checksum": "d4e217eb977f0ce0b4b27ae425f23a986fb807bdf8bc9890659f98436e19d25e"
+            "lastModified": "2026-03-14T01:24:29.603Z",
+            "checksum": "72a9e7d6292e0b19d38e5562cdfaf87e2c3cc7917f5404552646d90cd9201783"
           }
         }
       ],
@@ -147,6 +168,20 @@
           "sync": {
             "lastModified": "2026-02-19T02:31:20.651Z",
             "checksum": "ba214e4880b2c5272046116869798e9c65b9d2e3c16d9576af8d264ebfe09095"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Search Query Catalog",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "B46A48E6-D3CD-4752-8A31-63111123DA3E"
+          },
+          "sync": {
+            "lastModified": "2026-03-14T01:24:29.545Z",
+            "checksum": "03ec54a55a9a6428d24077811896d312d4f4ef434887e67ba35fbded0073cd8d"
           }
         }
       ],
@@ -229,7 +264,13 @@
                   "SourceType": "RunView",
                   "EntityName": "MJ: Entities",
                   "OrderBy": "Name ASC",
-                  "FieldsToRetrieve": "[\"Name\", \"Description\", \"SchemaName\", \"BaseTable\", \"BaseView\"]",
+                  "FieldsToRetrieve": [
+                    "Name",
+                    "Description",
+                    "SchemaName",
+                    "BaseTable",
+                    "BaseView"
+                  ],
                   "ResultType": "simple",
                   "DestinationType": "Data",
                   "DestinationPath": null,
@@ -242,8 +283,38 @@
                   "ID": "78B008BC-9361-4331-B08F-1386A8E00B51"
                 },
                 "sync": {
-                  "lastModified": "2026-02-19T02:31:20.836Z",
-                  "checksum": "2e4ca340b49e365ea51bbf154dc2743aa323a2784cbbaa9a5dffea29007f3852"
+                  "lastModified": "2026-03-14T01:24:29.758Z",
+                  "checksum": "0d6b26d48d8cfbc401bc3477ea4c56b9fb4149a83343f290876228e799edcc05"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "Name": "REUSABLE_QUERIES",
+                  "Description": "Lightweight catalog of reusable queries available for composition. Names and descriptions only — use Search Query Catalog action for full details including SQL.",
+                  "SourceType": "RunView",
+                  "EntityName": "MJ: Queries",
+                  "ExtraFilter": "Reusable = 1 AND Status = 'Approved'",
+                  "OrderBy": "Name ASC",
+                  "FieldsToRetrieve": [
+                    "Name",
+                    "Description",
+                    "Category"
+                  ],
+                  "ResultType": "simple",
+                  "DestinationType": "Data",
+                  "DestinationPath": null,
+                  "ExecutionOrder": 2,
+                  "Status": "Active",
+                  "CachePolicy": "PerAgent",
+                  "CacheTimeoutSeconds": 3600
+                },
+                "primaryKey": {
+                  "ID": "51E37233-0205-4AA8-A03E-954FEBEF6D85"
+                },
+                "sync": {
+                  "lastModified": "2026-03-15T03:45:25.631Z",
+                  "checksum": "62ed71c5f0ab3de9298b7b780d21ac5c3ef197a79a0c3befba0e8c8dcae4583e"
                 }
               }
             ],
@@ -265,15 +336,43 @@
               {
                 "fields": {
                   "AgentID": "@parent:ID",
-                  "ActionID": "@lookup:MJ: Actions.Name=Execute Research Query",
+                  "ActionID": "@lookup:MJ: Actions.Name=Run Ad-hoc Query",
                   "Status": "Active"
                 },
                 "primaryKey": {
                   "ID": "9A611437-1CC2-4B91-B375-722F2BD1B1CD"
                 },
                 "sync": {
-                  "lastModified": "2026-02-19T02:31:20.904Z",
-                  "checksum": "3a9ed68c620a32ff70c017ae8b88472a30d1336bf7c27e3244dc11e382c1f6e1"
+                  "lastModified": "2026-03-14T01:24:29.788Z",
+                  "checksum": "15c488e2b587f29fff4949a94d39b316e9ced0ab9b95f2ccb2a7aab442dae8cd"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:MJ: Actions.Name=Run Stored Query",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "D0B4388C-2290-4D35-BCC6-C31E085B33A4"
+                },
+                "sync": {
+                  "lastModified": "2026-03-14T01:24:29.782Z",
+                  "checksum": "5b7279356b3c9a8c7855f7a210c5820061c71e4447866c4cf2f2b38003cb0c54"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:MJ: Actions.Name=Search Query Catalog",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "8B62A449-C682-4DA4-BC53-F21C3A9ED71E"
+                },
+                "sync": {
+                  "lastModified": "2026-03-14T01:24:29.735Z",
+                  "checksum": "03ec54a55a9a6428d24077811896d312d4f4ef434887e67ba35fbded0073cd8d"
                 }
               }
             ]

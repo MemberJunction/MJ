@@ -465,7 +465,7 @@ export class MJTestRunFormComponentExtended extends MJTestRunFormComponent imple
       return;
     }
 
-    this.testingDialogService.OpenTestDialog(this.record.TestID, this.viewContainerRef);
+    this.testingDialogService.OpenTestPanel(this.record.TestID);
   }
 
   async refresh() {

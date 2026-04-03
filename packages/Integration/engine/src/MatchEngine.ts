@@ -104,6 +104,11 @@ export class MatchEngine {
     /**
      * Attempts to find an existing MJ record by key field matching, then falls back
      * to the CompanyIntegrationRecordMap.
+     *
+     * For composite-PK entities (no auto-generated ID), key-field matching is always
+     * attempted (even when no key fields are configured) so that PK fields themselves
+     * serve as the unique match criteria. This handles entities like InsightTopics
+     * where (person_id, topic) together form the natural key.
      */
     private async FindExistingRecord(
         record: MappedRecord,
@@ -111,7 +116,11 @@ export class MatchEngine {
         keyFields: ICompanyIntegrationFieldMap[],
         contextUser: UserInfo
     ): Promise<string | null> {
-        if (keyFields.length > 0) {
+        const md = new Metadata();
+        const entityInfo = md.Entities.find(e => e.Name === record.MJEntityName);
+        const isCompositePK = (entityInfo?.PrimaryKeys?.length ?? 0) > 1;
+
+        if (keyFields.length > 0 || isCompositePK) {
             const idByKeys = await this.FindByKeyFields(record, keyFields, contextUser);
             if (idByKeys) return idByKeys;
         }
@@ -126,32 +135,61 @@ export class MatchEngine {
 
     /**
      * Searches for an existing MJ record using key field values.
-     * Returns the value of the entity's primary key field (natural PK from source system).
+     *
+     * For composite-PK entities, all PK fields are added to the WHERE filter to
+     * guarantee a unique match, and the returned ID is a '|'-delimited composite
+     * of all PK field values (matching the ExternalID format used by connectors).
+     *
+     * For single-PK entities, behaviour is unchanged: filter by configured key fields,
+     * return the single PK value as a plain string.
      */
     private async FindByKeyFields(
         record: MappedRecord,
         keyFields: ICompanyIntegrationFieldMap[],
         contextUser: UserInfo
     ): Promise<string | null> {
-        const filterClauses = this.BuildKeyFieldFilter(record, keyFields);
-        if (filterClauses.length === 0) return null;
-
-        // Look up the entity's PK field name from metadata
         const md = new Metadata();
         const entityInfo = md.Entities.find(e => e.Name === record.MJEntityName);
-        const pkFieldName = entityInfo?.FirstPrimaryKey?.Name ?? 'ID';
+        const pkFields = entityInfo?.PrimaryKeys ?? (entityInfo?.FirstPrimaryKey ? [entityInfo.FirstPrimaryKey] : []);
+
+        if (pkFields.length === 0) return null;
+
+        // Start with the configured key-field filter clauses
+        const filterClauses = this.BuildKeyFieldFilter(record, keyFields);
+
+        // For composite-PK entities, augment the filter with all PK field values
+        // taken directly from the mapped record. This ensures uniqueness even when
+        // no key fields are configured and prevents matching the wrong row when
+        // the configured key fields alone are not unique (e.g. person_id matches
+        // all topics for a given person).
+        if (pkFields.length > 1) {
+            for (const pkField of pkFields) {
+                const value = record.MappedFields[pkField.Name];
+                if (value == null) continue;
+                const escaped = String(value).replace(/'/g, "''");
+                const clause = `[${pkField.Name}] = '${escaped}'`;
+                if (!filterClauses.includes(clause)) {
+                    filterClauses.push(clause);
+                }
+            }
+        }
+
+        if (filterClauses.length === 0) return null;
 
         const rv = new RunView();
         const result = await rv.RunView<Record<string, string>>({
             EntityName: record.MJEntityName,
             ExtraFilter: filterClauses.join(' AND '),
-            Fields: [pkFieldName],
+            Fields: pkFields.map(f => f.Name),
             MaxRows: 1,
             ResultType: 'simple',
         }, contextUser);
 
         if (!result.Success || result.Results.length === 0) return null;
-        return result.Results[0][pkFieldName];
+
+        // Return all PK values joined with '|' — matches the ExternalID format
+        // written by BaseRESTIntegrationConnector.ToExternalRecord for composite PKs.
+        return pkFields.map(f => result.Results[0][f.Name] ?? '').join('|');
     }
 
     /**

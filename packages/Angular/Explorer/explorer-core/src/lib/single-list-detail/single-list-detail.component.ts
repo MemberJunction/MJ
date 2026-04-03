@@ -1,4 +1,4 @@
-import { Component, Input, OnInit, ViewChild, ChangeDetectorRef } from '@angular/core';
+import { Component, Input, OnInit, ViewChild, ChangeDetectorRef, HostListener, ElementRef } from '@angular/core';
 import { BaseEntity, CompositeKey, LogError, LogErrorEx, LogStatus, Metadata, RunView, RunViewResult } from '@memberjunction/core';
 import { MJListDetailEntity, MJListDetailEntityExtended, MJListEntity, MJUserViewEntityExtended } from '@memberjunction/core-entities';
 import { SharedService } from '@memberjunction/ng-shared';
@@ -6,7 +6,7 @@ import { ListDetailGridComponent, ListGridRowClickedEvent } from '@memberjunctio
 import { GridToolbarConfig } from '@memberjunction/ng-entity-viewer';
 import { Subject, debounceTime } from 'rxjs';
 import { NewItemOption } from '../../generic/Item.types';
-import { UUIDsEqual } from '@memberjunction/global';
+import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 
 /**
  * Represents a record that can be added to a list
@@ -75,6 +75,9 @@ export class SingleListDetailComponent implements OnInit {
   public addFromViewTotal: number = 0;
   public fetchingRecordsToSave: boolean = false;
 
+  // Dropdown button toggle state
+  public showAddDropdown: boolean = false;
+
   // Dropdown menu options
   public addOptions: NewItemOption[] = [
     {
@@ -91,9 +94,20 @@ export class SingleListDetailComponent implements OnInit {
     }
   ];
 
+  @HostListener('document:click', ['$event'])
+  onDocumentClick(event: MouseEvent): void {
+    if (this.showAddDropdown) {
+      const target = event.target as HTMLElement;
+      if (!this.elementRef.nativeElement.querySelector('.add-dropdown-wrapper')?.contains(target)) {
+        this.showAddDropdown = false;
+      }
+    }
+  }
+
   constructor(
     private sharedService: SharedService,
-    private cdr: ChangeDetectorRef
+    private cdr: ChangeDetectorRef,
+    private elementRef: ElementRef
   ) {
     // Debounce search input
     this.searchSubject
@@ -163,6 +177,22 @@ export class SingleListDetailComponent implements OnInit {
   // Toolbar Actions
   // ==========================================
 
+  // ==========================================
+  // Progress Percentage Getters
+  // ==========================================
+
+  get removeProgressPercent(): number {
+    return this.removeTotal > 0 ? Math.round((this.removeProgress / this.removeTotal) * 100) : 0;
+  }
+
+  get addProgressPercent(): number {
+    return this.addTotal > 0 ? Math.round((this.addProgress / this.addTotal) * 100) : 0;
+  }
+
+  get addFromViewProgressPercent(): number {
+    return this.addFromViewTotal > 0 ? Math.round((this.addFromViewProgress / this.addFromViewTotal) * 100) : 0;
+  }
+
   onRefreshClick(): void {
     this.refreshGrid();
   }
@@ -174,7 +204,12 @@ export class SingleListDetailComponent implements OnInit {
     }
   }
 
+  toggleAddDropdown(): void {
+    this.showAddDropdown = !this.showAddDropdown;
+  }
+
   onDropdownItemClick(item: NewItemOption): void {
+    this.showAddDropdown = false;
     if (item.Action) {
       item.Action();
     }
@@ -309,8 +344,13 @@ export class SingleListDetailComponent implements OnInit {
     }, md.CurrentUser);
 
     if (result.Success) {
-      this.existingListDetailIds = new Set(result.Results.map(r => r.RecordID));
+      this.existingListDetailIds = new Set(result.Results.map(r => NormalizeUUID(r.RecordID)));
     }
+  }
+
+  onAddRecordsSearchInputEvent(event: Event): void {
+    const value = (event.target as HTMLInputElement).value;
+    this.onAddRecordsSearchChange(value);
   }
 
   onAddRecordsSearchChange(value: string): void {
@@ -355,7 +395,7 @@ export class SingleListDetailComponent implements OnInit {
         return {
           ID: recordId,
           Name: nameField ? String(record[nameField.Name]) : recordId,
-          isInList: this.existingListDetailIds.has(recordId),
+          isInList: this.existingListDetailIds.has(NormalizeUUID(recordId)),
           isSelected: false
         };
       });
@@ -478,6 +518,7 @@ export class SingleListDetailComponent implements OnInit {
     }
 
     this.showAddFromViewLoader = false;
+    this.cdr.detectChanges();
   }
 
   toggleViewSelection(view: MJUserViewEntityExtended): void {
@@ -498,6 +539,7 @@ export class SingleListDetailComponent implements OnInit {
 
     this.showAddFromViewLoader = true;
     this.fetchingRecordsToSave = true;
+    this.cdr.detectChanges();
 
     const rv = new RunView();
     const md = new Metadata();
@@ -507,14 +549,14 @@ export class SingleListDetailComponent implements OnInit {
 
     for (const userView of this.userViewsToAdd) {
       const runViewResult = await rv.RunView({
-        EntityName: "MJ: User Views",
+        ViewID: userView.ID,
         ViewEntity: userView,
         Fields: ["ID"]
       }, md.CurrentUser);
 
       if (runViewResult.Success) {
-        const records = runViewResult.Results as Array<{ ID: string }>;
-        records.forEach(r => recordIdSet.add(r.ID));
+        const records = runViewResult.Results as Array<Record<string, string>>;
+        records.forEach(r => recordIdSet.add(NormalizeUUID(r.ID)));
       }
     }
 
@@ -525,11 +567,13 @@ export class SingleListDetailComponent implements OnInit {
     this.addFromViewTotal = recordsToAdd.length;
     this.addFromViewProgress = 0;
     this.fetchingRecordsToSave = false;
+    this.cdr.detectChanges();
     const progressPerRecord = 0.8 / Math.max(recordsToAdd.length, 1); // 80% for individual saves
 
     if (recordsToAdd.length === 0) {
       this.sharedService.CreateSimpleNotification("All records already in list", 'info', 2500);
       this.showAddFromViewLoader = false;
+      this.cdr.detectChanges();
       return;
     }
 
