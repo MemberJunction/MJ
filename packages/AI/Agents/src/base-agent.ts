@@ -2039,6 +2039,9 @@ export class BaseAgent {
             case 'While':
                 // While loops are valid - no additional validation needed
                 return nextStep;
+            case 'ClientTools' as typeof nextStep.step:
+                // Client tools are valid - execution handled by executeClientToolsStep
+                return nextStep;
             default:
                 // if we get here, the next step is not recognized, we can return a retry step
                 this.logError(`Invalid next step '${nextStep.step}' for agent '${params.agent.Name}'`, {
@@ -3692,8 +3695,9 @@ The context is now within limits. Please retry your request with the recovered c
                 runtimePromptParamOverrides
             );
 
-            // Build client tool details for the prompt
-            const clientToolDetails = this.buildClientToolPromptSection(extraData);
+            // Build client tool details for the prompt — reads from agent type params
+            // (which may define per-agent client tools) and session-level tools
+            const clientToolDetails = this.buildClientToolPromptSection(extraData, agentTypePromptParams);
 
             const contextData: AgentContextData = {
                 agentName: agent.Name,
@@ -4271,22 +4275,43 @@ The context is now within limits. Please retry your request with the recovered c
 
     /**
      * Build the client tool prompt section for system prompt injection.
-     * Uses enriched tools from ClientToolRequestManager if a session is active,
-     * otherwise falls back to tools provided in extraData.
+     *
+     * Tool sources (checked in order, all merged):
+     * 1. Session-level enriched tools from ClientToolRequestManager (set by client SDK)
+     * 2. Agent type params `clientTools` (from AgentTypePromptParams metadata)
+     * 3. Tools provided directly in extraData.clientTools (runtime override)
      */
-    private buildClientToolPromptSection(extraData?: Record<string, unknown>): string {
-        // Check for session-level enriched tools first
+    private buildClientToolPromptSection(extraData?: Record<string, unknown>, agentTypeParams?: Record<string, unknown>): string {
+        const toolMap = new Map<string, ClientToolMetadata>();
+
+        // 1. Session-level enriched tools (client SDK decorated tools)
         const sessionID = extraData?.sessionID as string | undefined;
-        let tools: ClientToolMetadata[] = [];
-
         if (sessionID) {
-            tools = ClientToolRequestManager.Instance.GetSessionTools(sessionID);
+            for (const tool of ClientToolRequestManager.Instance.GetSessionTools(sessionID)) {
+                toolMap.set(tool.Name, tool);
+            }
         }
 
-        // Fall back to tools provided directly in extraData
-        if (tools.length === 0 && extraData?.clientTools) {
-            tools = extraData.clientTools as ClientToolMetadata[];
+        // 2. Agent type params (per-agent metadata config)
+        const paramTools = agentTypeParams?.clientTools as ClientToolMetadata[] | undefined;
+        if (paramTools) {
+            for (const tool of paramTools) {
+                if (!toolMap.has(tool.Name)) {
+                    toolMap.set(tool.Name, tool);
+                }
+            }
         }
+
+        // 3. Runtime extraData override
+        if (extraData?.clientTools) {
+            for (const tool of extraData.clientTools as ClientToolMetadata[]) {
+                if (!toolMap.has(tool.Name)) {
+                    toolMap.set(tool.Name, tool);
+                }
+            }
+        }
+
+        const tools = Array.from(toolMap.values());
 
         if (tools.length === 0) {
             return ''; // No client tools available
@@ -7263,6 +7288,21 @@ The context is now within limits. Please retry your request with the recovered c
                 messageType: 'action-result' // Reuse action-result type until DB adds client-tool-result
             }
         } as AgentChatMessage);
+
+        // If the LLM already declared taskComplete=true alongside the client tools,
+        // honor that intent now that tools have executed — no need for another LLM call.
+        if (previousDecision.terminate) {
+            return {
+                step: 'Success',
+                terminate: true,
+                message: previousDecision.message || 'Client tools executed successfully.',
+                payloadChangeRequest: previousDecision.payloadChangeRequest,
+                scratchpad: previousDecision.scratchpad,
+                responseForm: previousDecision.responseForm,
+                actionableCommands: previousDecision.actionableCommands,
+                automaticCommands: previousDecision.automaticCommands
+            };
+        }
 
         return await this.executePromptStep(params, config, previousDecision, stepCount);
     }

@@ -11,6 +11,31 @@
       "ArtifactCreationMode": "System Only",
       "ExposeAsAction": true,
       "IconClass": "fa-brands fa-superpowers",
+      "AgentTypePromptParams": {
+        "clientTools": [
+          {
+            "Name": "NavigateToApp",
+            "Description": "Navigate the user to a specific application and optionally a specific nav item within it. Use this when the user asks to go to a specific area of the system (e.g., 'take me to the Data Explorer' or 'show me my queries').",
+            "InputSchema": {
+              "type": "object",
+              "properties": {
+                "AppName": {
+                  "type": "string",
+                  "description": "The application name to navigate to (e.g., 'Data Explorer', 'Chat', 'Knowledge Hub')"
+                },
+                "NavItemName": {
+                  "type": "string",
+                  "description": "Optional: the specific nav item/tab within the app (e.g., 'Queries', 'Conversations', 'Collections')"
+                }
+              },
+              "required": [
+                "AppName"
+              ]
+            },
+            "Category": "navigation"
+          }
+        ]
+      },
       "InjectNotes": true,
       "MaxNotesToInject": 10,
       "NoteInjectionStrategy": "Relevant",
@@ -418,8 +443,8 @@
       "ID": "3AB78346-897F-4238-AA6A-F10A131CC691"
     },
     "sync": {
-      "lastModified": "2026-03-13T19:10:50.549Z",
-      "checksum": "a66219bfe659e82b1d183ae242d5375e0eb184b807f39076631920266344786a"
+      "lastModified": "2026-04-03T02:09:10.316Z",
+      "checksum": "37189cb8ce1ded06519b168dcf078f0f1474f2b04b6f260ae7bca56ba14a6bb2"
     }
   }
 ]

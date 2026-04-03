@@ -22,6 +22,7 @@ import { NavigationService } from '@memberjunction/ng-shared';
 import { AgentClientService } from '@memberjunction/ng-agent-client';
 import { ClientToolResultEvent } from '@memberjunction/ai-agent-client';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { ConversationBridgeService } from '@memberjunction/ng-conversations';
 
 @Component({
   standalone: false,
@@ -59,6 +60,7 @@ export class MJExplorerAppComponent implements OnInit, OnDestroy {
     private validationService: SystemValidationService,
     private agentClient: AgentClientService,
     private navigationService: NavigationService,
+    private bridge: ConversationBridgeService,
     private cdr: ChangeDetectorRef,
   ) {
     this.registerClientTools();
@@ -293,16 +295,37 @@ export class MJExplorerAppComponent implements OnInit, OnDestroy {
 
     this.agentClient.RegisterTool({
       Name: 'NavigateToApp',
-      Description: 'Switch to a different application in MJ Explorer',
+      Description: 'Navigate to a specific application and optionally a nav item within it',
       ParameterSchema: {
         type: 'object',
-        properties: { AppName: { type: 'string' } },
+        properties: {
+          AppName: { type: 'string', description: 'Application name' },
+          NavItemName: { type: 'string', description: 'Optional nav item/tab within the app' }
+        },
         required: ['AppName']
       },
       Handler: async (params) => {
         const appName = String(params['AppName']);
-        this.router.navigate(['/app', appName]);
-        return { Success: true, Data: { Navigated: true, AppName: appName } };
+        const navItemName = params['NavItemName'] ? String(params['NavItemName']) : undefined;
+
+        // If currently in full chat workspace, hand conversation to overlay for continuity
+        if (this.isChatRoute) {
+          const activeConvoId = this.bridge.ActiveConversationID$.value;
+          if (activeConvoId) {
+            this.bridge.SwitchToOverlay(activeConvoId);
+          }
+        }
+
+        // Resolve app ID and navigate
+        const md = new Metadata();
+        const app = md.Applications.find(a => a.Name.toLowerCase() === appName.toLowerCase());
+        if (navItemName) {
+          await this.navigationService.OpenNavItemByName(navItemName, undefined, app?.ID);
+        } else if (app) {
+          await this.navigationService.OpenNavItemByName(app.Name, undefined, app.ID);
+        }
+
+        return { Success: true, Data: { Navigated: true, AppName: appName, NavItemName: navItemName } };
       }
     });
   }

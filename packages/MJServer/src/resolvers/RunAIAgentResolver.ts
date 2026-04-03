@@ -406,6 +406,7 @@ export class RunAIAgentResolver extends ResolverBase {
                 conversationMessages: parsedMessages,
                 payload: payload ? SafeJSONParse(payload) : undefined,
                 contextUser: currentUser,
+                sessionID: sessionId,
                 onProgress: this.createProgressCallback(pubSub, sessionId, userPayload, agentRunRef),
                 onStreaming: this.createStreamingCallback(pubSub, sessionId, userPayload, agentRunRef),
                 lastRunId: lastRunId,

@@ -123,8 +123,13 @@ export class LoopAgentType extends BaseAgentType {
                 });
             }
 
-            // Check if task is complete
-            if (response.taskComplete) {
+            // Check if task is complete — but if client tools are declared, execute them first.
+            // Client tools are yield/await: the LLM can't know the result until they execute.
+            // After tools run, executeClientToolsStep calls executePromptStep which re-enters
+            // the LLM loop. If taskComplete was true, the LLM will naturally complete on the
+            // next iteration after seeing tool results.
+            const hasClientTools = response.nextStep?.clientTools && response.nextStep.clientTools.length > 0;
+            if (response.taskComplete && !hasClientTools) {
                 LogStatusEx({
                     message: '✅ Loop Agent: Task completed successfully. Message: ' + response.message,
                     verboseOnly: true
@@ -316,7 +321,7 @@ export class LoopAgentType extends BaseAgentType {
 
         // Validate nextStep structure if present
         if (response.nextStep) {
-            const validStepTypes = ['actions', 'sub-agent', 'chat', 'retry', 'foreach', 'while'];
+            const validStepTypes = ['actions', 'sub-agent', 'chat', 'retry', 'foreach', 'while', 'clienttools'];
             let lcaseType = response.nextStep.type?.toLowerCase().trim();
             // allow the AI to mess up the case, but we need to validate it
 
@@ -327,6 +332,9 @@ export class LoopAgentType extends BaseAgentType {
             } else if (!lcaseType && response.nextStep.actions && response.nextStep.actions.length > 0) {
                 response.nextStep.type = 'Actions'; // update the data structure to have the correct type
                 lcaseType = 'actions';
+            } else if (!lcaseType && response.nextStep.clientTools && response.nextStep.clientTools.length > 0) {
+                response.nextStep.type = 'ClientTools';
+                lcaseType = 'clienttools';
             } else if (!lcaseType && response.nextStep.forEach) {
                 response.nextStep.type = 'ForEach'; // update the data structure to have the correct type
                 lcaseType = 'foreach';

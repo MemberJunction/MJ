@@ -423,7 +423,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             }
         }
 
-        Object.assign(conversation, updates);
+        conversation.SetMany(updates, true);
 
         this._selfMutating = true;
         try {
@@ -962,7 +962,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         detail.Role = role;
         detail.Message = message;
         if (additionalFields) {
-            Object.assign(detail, additionalFields);
+            detail.SetMany(additionalFields, true);
         }
 
         this._selfMutating = true;
@@ -1136,7 +1136,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         if (action === 'save') {
             const existing = this.GetConversation(id);
             if (existing) {
-                Object.assign(existing, data);
+                existing.SetMany(data, true);
                 this._conversations$.next([...this._conversations$.value]);
             }
         } else if (action === 'delete') {
@@ -1171,7 +1171,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
                 if (entity) {
                     cached.Details[existingIdx] = entity;
                 } else {
-                    Object.assign(cached.Details[existingIdx], data);
+                    cached.Details[existingIdx].SetMany(data, true);
                 }
             } else if (entity) {
                 // New detail from local event — append the entity
@@ -1209,7 +1209,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
                         // Remote event — update existing agent run in place, or skip if not cached
                         const existing = cached.AgentRunsByDetailId.get(detailId);
                         if (existing) {
-                            Object.assign(existing, data);
+                            existing.SetMany(data, true);
                         }
                     }
                 } else if (action === 'delete') {
