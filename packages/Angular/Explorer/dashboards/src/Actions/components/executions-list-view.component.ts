@@ -18,17 +18,17 @@ import { Component, Output, EventEmitter } from '@angular/core';
       align-items: center;
       justify-content: center;
       height: 100%;
-      background: var(--kendo-color-app-surface);
+      background: var(--mj-bg-surface);
       
       .placeholder-content {
         text-align: center;
-        color: var(--kendo-color-subtle);
+        color: var(--mj-text-muted);
         
         i {
           font-size: 3rem;
           margin-bottom: 1rem;
           opacity: 0.5;
-          color: var(--kendo-color-primary);
+          color: var(--mj-brand-primary);
         }
         
         h3 {

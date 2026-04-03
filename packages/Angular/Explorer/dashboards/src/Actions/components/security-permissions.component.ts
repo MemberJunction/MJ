@@ -27,7 +27,7 @@ import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-sha
 
       .placeholder-content {
         text-align: center;
-        color: var(--kendo-color-subtle);
+        color: var(--mj-text-muted);
 
         i {
           font-size: 3rem;

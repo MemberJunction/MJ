@@ -4,9 +4,8 @@
     <!-- Action Buttons -->
     <div class="action-buttons" role="toolbar" aria-label="Entity permissions actions">
       <div class="mj-view-toggle">
-        <button
-          class="mj-btn mj-btn-ghost"
-          [class.mj-btn-primary]="viewMode === 'list'"
+        <button mjButton
+          [variant]="viewMode === 'list' ? 'primary' : 'flat'"
           (click)="setViewMode('list')"
           (keydown.enter)="setViewMode('list')"
           (keydown.space)="setViewMode('list'); $event.preventDefault()"
@@ -18,9 +17,8 @@
         >
           <i class="fa-solid fa-list" aria-hidden="true"></i>
         </button>
-        <button
-          class="mj-btn mj-btn-ghost"
-          [class.mj-btn-primary]="viewMode === 'grid'"
+        <button mjButton
+          [variant]="viewMode === 'grid' ? 'primary' : 'flat'"
           (click)="setViewMode('grid')"
           (keydown.enter)="setViewMode('grid')"
           (keydown.space)="setViewMode('grid'); $event.preventDefault()"
@@ -34,7 +32,7 @@
         </button>
       </div>
       <button
-        class="mj-btn mj-btn-secondary mj-btn-icon-mobile"
+        mjButton variant="secondary" class="mj-btn-icon-mobile"
         (click)="refreshData()"
         [disabled]="isLoading"
         aria-label="Refresh entity permissions data"
@@ -121,36 +119,32 @@
         <div class="mj-filter-group">
           <label class="mj-filter-label" id="access-level-label">Access Level</label>
           <div class="mj-filter-buttons" role="group" aria-labelledby="access-level-label">
-            <button
-              class="mj-btn mj-btn-ghost"
-              [class.mj-btn-primary]="filters$.value.accessLevel === 'all'"
+            <button mjButton
+              [variant]="filters$.value.accessLevel === 'all' ? 'primary' : 'flat'"
               (click)="onAccessLevelChange('all')"
               [attr.aria-pressed]="filters$.value.accessLevel === 'all'"
               aria-label="Show all access levels"
             >
               All
             </button>
-            <button
-              class="mj-btn mj-btn-ghost"
-              [class.mj-btn-primary]="filters$.value.accessLevel === 'public'"
+            <button mjButton
+              [variant]="filters$.value.accessLevel === 'public' ? 'primary' : 'flat'"
               (click)="onAccessLevelChange('public')"
               [attr.aria-pressed]="filters$.value.accessLevel === 'public'"
               aria-label="Show only public entities"
             >
               Public
             </button>
-            <button
-              class="mj-btn mj-btn-ghost"
-              [class.mj-btn-primary]="filters$.value.accessLevel === 'restricted'"
+            <button mjButton
+              [variant]="filters$.value.accessLevel === 'restricted' ? 'primary' : 'flat'"
               (click)="onAccessLevelChange('restricted')"
               [attr.aria-pressed]="filters$.value.accessLevel === 'restricted'"
               aria-label="Show only restricted entities"
             >
               Restricted
             </button>
-            <button
-              class="mj-btn mj-btn-ghost"
-              [class.mj-btn-primary]="filters$.value.accessLevel === 'custom'"
+            <button mjButton
+              [variant]="filters$.value.accessLevel === 'custom' ? 'primary' : 'flat'"
               (click)="onAccessLevelChange('custom')"
               [attr.aria-pressed]="filters$.value.accessLevel === 'custom'"
               aria-label="Show only custom access entities"
@@ -195,7 +189,7 @@
           <i class="fa-solid fa-exclamation-triangle error-icon" aria-hidden="true"></i>
           <p class="error-message">{{ error }}</p>
           <button
-            class="mj-btn mj-btn-primary"
+            mjButton variant="primary"
             (click)="loadInitialData()"
             aria-label="Retry loading entity permissions"
           >
@@ -254,7 +248,7 @@
                     </span>
                     <div class="entity-actions" (click)="$event.stopPropagation()">
                       <button
-                        class="mj-btn mj-btn-ghost mj-btn-sm"
+                        mjButton variant="flat" size="sm"
                         (click)="editEntityPermissions(ea)"
                         title="Edit Permissions"
                         [attr.aria-label]="'Edit permissions for ' + ea.entity.Name"
@@ -286,7 +280,7 @@
                       </span>
                       <div class="mobile-action-buttons">
                         <button
-                          class="mj-btn mj-btn-ghost mj-btn-sm"
+                          mjButton variant="flat" size="sm"
                           (click)="editEntityPermissions(ea)"
                           title="Edit Permissions"
                           [attr.aria-label]="'Edit permissions for ' + ea.entity.Name"
@@ -374,7 +368,7 @@
                 <div class="grid-card-header">
                   <i class="fa-solid fa-table" aria-hidden="true"></i>
                   <button
-                    class="mj-btn mj-btn-ghost mj-btn-sm"
+                    mjButton variant="flat" size="sm"
                     (click)="editEntityPermissions(ea)"
                     [attr.aria-label]="'Edit permissions for ' + ea.entity.Name"
                     title="Edit Permissions"
@@ -417,7 +411,7 @@
             <h3 class="empty-text">No Permissions Found</h3>
             <p class="empty-subtext">Try adjusting your filters or refresh the data.</p>
             <button
-              class="mj-btn mj-btn-primary"
+              mjButton variant="primary"
               (click)="refreshData()"
               aria-label="Refresh permissions data"
             >
@@ -562,13 +556,13 @@
 
         <div class="filter-modal-footer">
           <button
-            class="mj-btn mj-btn-primary"
+            mjButton variant="primary"
             (click)="showMobileFilters = false"
           >
             Apply Filters
           </button>
           <button
-            class="mj-btn mj-btn-secondary"
+            mjButton
             (click)="showMobileFilters = false"
           >
             Cancel

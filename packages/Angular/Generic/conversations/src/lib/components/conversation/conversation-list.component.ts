@@ -13,7 +13,7 @@ import { UUIDsEqual } from '@memberjunction/global';
   standalone: false,
   selector: 'mj-conversation-list',
   template: `
-    <div class="conversation-list" kendoDialogContainer>
+    <div class="conversation-list">
       <div class="list-header">
         <div class="header-top">
           <input

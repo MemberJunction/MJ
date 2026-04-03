@@ -10,11 +10,7 @@ export interface SaveVersionResult {
   selector: 'mj-save-version-dialog',
   template: `
     @if (Visible) {
-      <kendo-dialog
-        [title]="'Save Version'"
-        [width]="420"
-        (close)="OnCancel()">
-
+      <mj-dialog [Visible]="true" Title="Save Version" [Width]="420" (Close)="OnCancel()">
         <div class="dialog-body">
           <div class="version-context">
             @if (CurrentVersion > 0) {
@@ -27,11 +23,10 @@ export interface SaveVersionResult {
           <div class="form-field">
             <label class="field-label" for="versionComment">Comment</label>
             <input
-              kendoTextBox
+              class="mj-input comment-input"
               id="versionComment"
               [(ngModel)]="Comment"
-              placeholder="Describe what changed..."
-              class="comment-input" />
+              placeholder="Describe what changed..." />
           </div>
 
           @if (CurrentVersion > 0) {
@@ -54,15 +49,15 @@ export interface SaveVersionResult {
           }
         </div>
 
-        <kendo-dialog-actions>
-          <button kendoButton [themeColor]="'primary'" (click)="OnSave()">
+        <mj-dialog-actions>
+          <button mjButton variant="primary" (click)="OnSave()">
             <i class="fa-solid fa-save"></i> Save
           </button>
-          <button kendoButton [themeColor]="'base'" (click)="OnCancel()">
+          <button mjButton (click)="OnCancel()">
             Cancel
           </button>
-        </kendo-dialog-actions>
-      </kendo-dialog>
+        </mj-dialog-actions>
+      </mj-dialog>
     }
   `,
   styles: [`

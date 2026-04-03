@@ -14,10 +14,10 @@ import { ComponentSpec } from '@memberjunction/interactive-component-types';
         </span>
         @if (IsEditing) {
           <div class="action-buttons">
-            <button kendoButton [themeColor]="'primary'" (click)="ApplyChanges()">
+            <button mjButton variant="primary" (click)="ApplyChanges()">
               <i class="fa-solid fa-check"></i> Apply Changes
             </button>
-            <button kendoButton [themeColor]="'base'" (click)="CancelChanges()">
+            <button mjButton (click)="CancelChanges()">
               <i class="fa-solid fa-times"></i> Cancel
             </button>
           </div>

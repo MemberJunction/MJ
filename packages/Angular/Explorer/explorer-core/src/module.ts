@@ -7,23 +7,12 @@ import { RouterModule, RouteReuseStrategy } from '@angular/router';
 import { SystemValidationService } from './lib/services/system-validation.service';
 import { StartupValidationService } from './lib/services/startup-validation.service';
 
-// Kendo UI Angular imports
-import { ButtonsModule } from '@progress/kendo-angular-buttons'; 
-import { DialogsModule } from '@progress/kendo-angular-dialog';
-import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
-import { ExcelExportModule } from '@progress/kendo-angular-excel-export';
-import { ExcelModule, GridModule, PDFModule } from '@progress/kendo-angular-grid';
-import { IndicatorsModule } from '@progress/kendo-angular-indicators';
-import { InputsModule } from '@progress/kendo-angular-inputs';
-import { LabelModule } from '@progress/kendo-angular-label';
-import { LayoutModule, TabStripModule, CardModule, AvatarModule } from '@progress/kendo-angular-layout';
-import { ListViewModule } from '@progress/kendo-angular-listview';
-import { TreeViewModule } from '@progress/kendo-angular-treeview';
-import { ProgressBarModule } from "@progress/kendo-angular-progressbar";
-import { DateInputsModule } from '@progress/kendo-angular-dateinputs';
+import { ExportServiceModule } from '@memberjunction/ng-export-service';
+import { MJProgressBarComponent } from '@memberjunction/ng-ui-components';
 import { DragDropModule } from '@angular/cdk/drag-drop';
 
 // MJ
+import { MJButtonDirective, MJDialogComponent, MJDialogTitlebarComponent, MJDialogActionsComponent, MJDropdownComponent, MJWindowComponent, MJWindowTitlebarComponent } from '@memberjunction/ng-ui-components';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { FileStorageModule } from '@memberjunction/ng-file-storage';
 import { QueryViewerModule } from '@memberjunction/ng-query-viewer';
@@ -106,24 +95,11 @@ import { OAuthCallbackComponent } from './lib/oauth/oauth-callback.component';
     FormsModule,
     ReactiveFormsModule,
     RouterModule,
-    GridModule,
-    DialogsModule,
-    ExcelExportModule,
-    IndicatorsModule,
-    ButtonsModule,
-    TabStripModule,
-    ExcelModule,
-    PDFModule,
-    InputsModule,
-    LabelModule,
+    ExportServiceModule,
     RecordChangesModule,
     ContainerDirectivesModule,
     BaseFormsModule,
-    ListViewModule,
-    TreeViewModule,
     QueryViewerModule,
-    LayoutModule,
-    DropDownsModule,
     MemberJunctionSharedModule,
     ConversationsModule,
     CoreDashboardsModule,
@@ -134,16 +110,20 @@ import { OAuthCallbackComponent } from './lib/oauth/oauth-callback.component';
     RecordSelectorModule,
     ResourcePermissionsModule,
     GenericDialogModule,
-    ProgressBarModule,
-    DateInputsModule,
+    MJProgressBarComponent,
     DragDropModule,
-    CardModule,
-    AvatarModule,
     AITestHarnessModule, // [3.0] TO DO TO-DO Need to verify this works correctly!
     ArtifactsModule,
     SharedGenericModule,
     EntityViewerModule,
-    ListDetailGridModule
+    ListDetailGridModule,
+    MJButtonDirective,
+    MJDialogComponent,
+    MJDialogTitlebarComponent,
+    MJDialogActionsComponent,
+    MJDropdownComponent,
+    MJWindowComponent,
+    MJWindowTitlebarComponent
   ],
   exports: [
     FormToolbarComponent,

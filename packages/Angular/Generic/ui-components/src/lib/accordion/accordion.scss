@@ -1,0 +1,45 @@
+/**
+ * MJ Accordion Panel Styles
+ */
+
+.mj-accordion-panel {
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-sm);
+  margin-bottom: 4px;
+  overflow: hidden;
+}
+
+.mj-accordion-header {
+  display: flex; align-items: center; justify-content: space-between;
+  width: 100%; padding: 12px 16px;
+  background: var(--mj-bg-surface-sunken); border: none; cursor: pointer;
+  font-family: var(--mj-font-family); font-size: var(--mj-text-sm);
+  font-weight: var(--mj-font-semibold); color: var(--mj-text-primary);
+  text-align: left; transition: background var(--mj-transition-fast);
+  &:hover { background: var(--mj-bg-surface-hover); }
+  &:focus-visible { outline: none; box-shadow: var(--mj-focus-ring); }
+}
+
+.mj-accordion-icon {
+  font-size: 0.75rem; color: var(--mj-text-muted);
+  transition: transform var(--mj-transition-base);
+  .mj-accordion-panel--expanded & { transform: rotate(180deg); }
+}
+
+.mj-accordion-body {
+  padding: 16px;
+  border-top: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface);
+}
+
+.mj-accordion-title { flex: 1; }
+
+.mj-accordion-panel--disabled .mj-accordion-header {
+  opacity: 0.5;
+  cursor: not-allowed;
+  &:hover { background: var(--mj-bg-surface-sunken); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mj-accordion-icon { transition: none; }
+}

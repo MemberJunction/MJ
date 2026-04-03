@@ -82,16 +82,6 @@
   flex-shrink: 0;
 }
 
-.action-badges kendo-chip:has(i) {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.action-badges kendo-chip i {
-  font-size: 10px;
-}
-
 .action-description {
   margin: 0 0 12px 0;
   font-size: 13px;

@@ -39,23 +39,21 @@
       <div class="step-panel">
         <div class="form-section">
           <label class="form-label required">Key Label</label>
-          <input kendoTextBox [(ngModel)]="Label"
-            placeholder="e.g., ElevenLabs Integration, CI/CD Pipeline"
-            class="form-input" />
+          <input class="mj-input form-input" [(ngModel)]="Label"
+            placeholder="e.g., ElevenLabs Integration, CI/CD Pipeline" />
           <div class="form-hint">A memorable name to identify this key's purpose</div>
         </div>
         <div class="form-section">
           <label class="form-label">Description</label>
-          <textarea kendoTextArea [(ngModel)]="Description"
+          <textarea class="mj-textarea form-textarea" [(ngModel)]="Description"
             placeholder="Optional notes about how this key will be used..."
-            [rows]="3"
-          class="form-textarea"></textarea>
+            [rows]="3"></textarea>
         </div>
         <div class="form-section">
           <label class="form-label">Expiration</label>
           <div class="expiration-options">
             <label class="checkbox-label">
-              <input type="checkbox" kendoCheckBox
+              <input type="checkbox" class="mj-checkbox"
                 [(ngModel)]="NeverExpires"
                 (change)="onNeverExpiresChange()" />
               <span>Never expires</span>
@@ -74,11 +72,11 @@
             }
             @if (!NeverExpires && SelectedPreset?.days === -1) {
               <div class="custom-date">
-                <kendo-datepicker [(ngModel)]="ExpiresAt"
-                  [min]="getMinDate()"
-                  format="MMM d, yyyy"
-                  placeholder="Select expiration date">
-                </kendo-datepicker>
+                <mj-datepicker [(ngModel)]="ExpiresAt"
+                  [Min]="getMinDate()"
+                  Format="MMM d, yyyy"
+                  Placeholder="Select expiration date">
+                </mj-datepicker>
               </div>
             }
             @if (!NeverExpires && ExpiresAt) {
@@ -127,7 +125,7 @@
                   </div>
                   <div class="category-right">
                     <label class="select-all-label" (click)="$event.stopPropagation()">
-                      <input type="checkbox" kendoCheckBox
+                      <input type="checkbox" class="mj-checkbox"
                         [checked]="category.allSelected"
                         (change)="toggleCategoryAll(category)" />
                       <span>All</span>
@@ -141,7 +139,7 @@
                     @for (item of category.scopes; track item) {
                       <div class="scope-item">
                         <label class="scope-label">
-                          <input type="checkbox" kendoCheckBox
+                          <input type="checkbox" class="mj-checkbox"
                             [(ngModel)]="item.selected"
                             (change)="updateCategoryState(category)" />
                           <div class="scope-info">
@@ -234,15 +232,15 @@
   <!-- Footer -->
   <div class="slideout-footer">
     @if (Step === 'configure') {
-      <button kendoButton [themeColor]="'primary'" (click)="goToScopes()">
+      <button mjButton variant="primary" (click)="goToScopes()">
         Next: Permissions
         <i class="fa-solid fa-arrow-right"></i>
       </button>
-      <button kendoButton (click)="close()">Cancel</button>
+      <button mjButton (click)="close()">Cancel</button>
     }
 
     @if (Step === 'scopes') {
-      <button kendoButton [themeColor]="'primary'"
+      <button mjButton variant="primary"
         [disabled]="IsCreating"
         (click)="createKey()">
         @if (IsCreating) {
@@ -255,14 +253,14 @@
           </span>
         }
       </button>
-      <button kendoButton (click)="goBack()">
+      <button mjButton (click)="goBack()">
         <i class="fa-solid fa-arrow-left"></i>
         Back
       </button>
     }
 
     @if (Step === 'success') {
-      <button kendoButton [themeColor]="'primary'" (click)="close()">
+      <button mjButton variant="primary" (click)="close()">
         <i class="fa-solid fa-check"></i>
         Done
       </button>

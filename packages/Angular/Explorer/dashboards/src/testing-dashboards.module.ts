@@ -1,12 +1,6 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
-import { ButtonsModule } from '@progress/kendo-angular-buttons';
-import { GridModule } from '@progress/kendo-angular-grid';
-import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
-import { InputsModule } from '@progress/kendo-angular-inputs';
-import { DialogsModule, WindowModule } from '@progress/kendo-angular-dialog';
-import { TabStripModule } from '@progress/kendo-angular-layout';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { TestingModule } from '@memberjunction/ng-testing';
 import { VersionsModule } from '@memberjunction/ng-versions';
@@ -57,13 +51,6 @@ import { TestingInstrumentationService } from './Testing/services/testing-instru
     CommonModule,
     FormsModule,
     ReactiveFormsModule,
-    ButtonsModule,
-    GridModule,
-    DropDownsModule,
-    InputsModule,
-    DialogsModule,
-    WindowModule,
-    TabStripModule,
     ContainerDirectivesModule,
     TestingModule,
     VersionsModule,
