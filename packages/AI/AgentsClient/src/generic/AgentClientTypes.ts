@@ -133,35 +133,176 @@ export interface AgentError {
     IsRecoverable: boolean;
 }
 
+// ============================================================================
+// Client Tool Metadata & Decoration Types
+// ============================================================================
+
 /**
- * Options for connecting a transport.
+ * Metadata definition for a client tool (mirrors server-side ClientToolMetadata).
+ * Used for runtime enrichment and registration.
  */
-export interface TransportOptions {
-    /** Authentication token */
-    AuthToken?: string;
-    /** Additional headers to send with the connection */
-    Headers?: Record<string, string>;
-    /** Reconnection configuration */
-    Reconnect?: {
-        /** Whether to auto-reconnect on disconnect */
-        Enabled: boolean;
-        /** Maximum number of reconnection attempts */
-        MaxAttempts: number;
-        /** Delay between reconnection attempts in ms */
-        DelayMs: number;
-    };
+export interface ClientToolMetadata {
+    /** Unique identifier for this tool */
+    Name: string;
+    /** Human-readable description — what the LLM reads to decide when to use it */
+    Description: string;
+    /** JSON Schema describing input parameters */
+    InputSchema: Record<string, unknown>;
+    /** JSON Schema describing what the tool returns (optional) */
+    OutputSchema?: Record<string, unknown>;
+    /** Category for grouping in prompts (e.g., 'navigation', 'display', 'data') */
+    Category?: string;
+    /** Default timeout in ms for this tool */
+    DefaultTimeoutMs?: number;
 }
 
 /**
- * Attachment sent with a user message.
+ * Context provided to decorators — includes app state, user info, etc.
  */
-export interface Attachment {
-    /** Display name of the attachment */
-    Name: string;
-    /** MIME type */
-    ContentType: string;
-    /** Base64-encoded content or URL */
-    Content: string;
-    /** Whether Content is a URL or base64 data */
-    IsURL: boolean;
+export interface ClientToolDecoratorContext {
+    /** Current user's accessible entities */
+    AvailableEntities: string[];
+    /** Current application name */
+    CurrentAppName: string;
+    /** Current active tab/dashboard */
+    CurrentTabName?: string;
+    /** Any additional context the app provides */
+    CustomContext: Record<string, unknown>;
+}
+
+/**
+ * A decorator function that enriches a tool definition with runtime context.
+ * Called by the SDK when the agent session initializes or when tools are refreshed.
+ */
+export type ClientToolDecorator = (
+    baseTool: ClientToolMetadata,
+    context: ClientToolDecoratorContext
+) => ClientToolMetadata;
+
+// ============================================================================
+// Session Event Types (emitted via RxJS observables)
+// ============================================================================
+
+/**
+ * Event emitted when a client tool request is received from the server.
+ * Raised BEFORE execution — subscribers can observe what tools are being invoked.
+ */
+export interface ClientToolRequestEvent {
+    /** The raw request from the server */
+    Request: ClientToolRequest;
+    /** The agent run that triggered this request */
+    AgentRunID: string;
+}
+
+/**
+ * Event emitted after a client tool has been executed.
+ * Raised AFTER execution — subscribers can observe results.
+ */
+export interface ClientToolResultEvent {
+    /** The original request */
+    Request: ClientToolRequest;
+    /** The execution result */
+    Result: ClientToolResult;
+}
+
+/**
+ * Error event emitted by the session.
+ */
+export interface SessionError {
+    /** Human-readable error message */
+    Message: string;
+    /** Optional request ID if the error is related to a specific tool request */
+    RequestID?: string;
+}
+
+// ============================================================================
+// Agent Execution Parameter Types
+// ============================================================================
+
+/**
+ * Parameters for running an agent via the SDK.
+ * This is a simplified interface wrapping the GraphQL mutation parameters.
+ * The SDK handles serialization and session ID injection internally.
+ */
+export interface RunAgentParams {
+    /** The ID of the agent to run */
+    AgentId: string;
+    /** User message(s) to send to the agent */
+    Messages: Array<{ role: string; content: string }>;
+    /** Optional conversation ID (for resuming a conversation) */
+    ConversationId?: string;
+    /** Optional data context passed to the agent */
+    Data?: Record<string, unknown>;
+    /** Optional payload passed to the agent */
+    Payload?: Record<string, unknown> | string;
+    /** Optional ID of the last agent run for continuity */
+    LastRunId?: string;
+    /** Whether to auto-populate payload from last run */
+    AutoPopulateLastRunPayload?: boolean;
+    /** Configuration ID to use */
+    ConfigurationId?: string;
+    /** Optional conversation detail ID (triggers artifact/notification creation) */
+    ConversationDetailId?: string;
+    /** Whether to create artifacts from the agent's payload */
+    CreateArtifacts?: boolean;
+    /** Whether to create a user notification on completion */
+    CreateNotification?: boolean;
+    /** Source artifact ID for versioning */
+    SourceArtifactId?: string;
+    /** Source artifact version ID for versioning */
+    SourceArtifactVersionId?: string;
+    /** Optional callback for progress updates */
+    OnProgress?: (progress: AgentProgress) => void;
+}
+
+/**
+ * Parameters for running an agent from an existing conversation detail.
+ * This is the optimized path that loads conversation history server-side.
+ */
+export interface RunAgentFromConversationDetailParams {
+    /** The ID of the conversation detail (user's message) */
+    ConversationDetailId: string;
+    /** The ID of the agent to run */
+    AgentId: string;
+    /** Maximum number of history messages to include */
+    MaxHistoryMessages?: number;
+    /** Optional data context passed to the agent */
+    Data?: Record<string, unknown>;
+    /** Optional payload passed to the agent */
+    Payload?: Record<string, unknown> | string;
+    /** Optional ID of the last agent run for continuity */
+    LastRunId?: string;
+    /** Whether to auto-populate payload from last run */
+    AutoPopulateLastRunPayload?: boolean;
+    /** Configuration ID to use */
+    ConfigurationId?: string;
+    /** Whether to create artifacts from the agent's payload */
+    CreateArtifacts?: boolean;
+    /** Whether to create a user notification on completion */
+    CreateNotification?: boolean;
+    /** Source artifact ID for versioning */
+    SourceArtifactId?: string;
+    /** Source artifact version ID for versioning */
+    SourceArtifactVersionId?: string;
+    /** Optional callback for progress updates */
+    OnProgress?: (progress: {
+        CurrentStep: string;
+        Percentage?: number;
+        Message: string;
+        Metadata?: Record<string, unknown>;
+    }) => void;
+}
+
+/**
+ * Result from running an agent.
+ */
+export interface RunAgentResult {
+    /** Whether the agent execution was successful */
+    Success: boolean;
+    /** Error message if execution failed */
+    ErrorMessage?: string;
+    /** Execution time in milliseconds */
+    ExecutionTimeMs?: number;
+    /** The raw result payload from the agent */
+    Result?: unknown;
 }

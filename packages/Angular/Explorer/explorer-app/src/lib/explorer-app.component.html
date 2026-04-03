@@ -16,7 +16,14 @@
   </div>
   <!-- Floating chat overlay — persistent across navigation, hidden during load and in Conversations -->
   @if (IsChatOverlayReady) {
-    <mj-chat-overlay [IsHidden]="isChatRoute"></mj-chat-overlay>
+    <mj-chat-agents-overlay
+      [IsVisible]="!isChatRoute"
+      [AppContext]="$any(AppContextSnapshot)"
+      [EmptyStateGreeting]="'Ask me anything — I can navigate apps, search data, run queries, or help with tasks.'"
+      (ToolExecuted)="OnOverlayToolExecuted($event)"
+      (OpenEntityRecord)="OnOverlayOpenRecord($event)"
+      (OpenFullChatWorkspace)="OnOverlayOpenFullChatWorkspace($event)"
+    ></mj-chat-agents-overlay>
   }
   <!-- Hidden router-outlet required for Angular's router to activate routes and update the browser URL.
        The shell manages all visible content rendering through its tab system, not through routing.

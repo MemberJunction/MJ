@@ -74,6 +74,7 @@
     "@memberjunction/communication-sendgrid": "5.22.0",
     "@memberjunction/communication-types": "5.22.0",
     "@memberjunction/computer-use-engine": "5.22.0",
+    "@memberjunction/actions-content-autotag": "5.22.0",
     "@memberjunction/content-autotagging": "5.22.0",
     "@memberjunction/core": "5.22.0",
     "@memberjunction/core-actions": "5.22.0",

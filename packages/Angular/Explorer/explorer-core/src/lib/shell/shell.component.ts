@@ -521,10 +521,12 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       await this.appManager.SetActiveApp(tabAppId);
     }
 
-    // Update browser title with app and tab context
+    // Update browser title with app and tab context.
+    // Prefer navItemName from configuration (always correct) over activeTab.title
+    // (which can be stale when switching between apps in single-resource mode).
     const app = this.appManager.GetAppById(tabAppId);
     const appName = app?.Name || null;
-    const tabTitle = activeTab.title || null;
+    const tabTitle = (activeTab.configuration?.['navItemName'] as string) || activeTab.title || null;
     this.titleService.setContext(appName, tabTitle);
   }
 
