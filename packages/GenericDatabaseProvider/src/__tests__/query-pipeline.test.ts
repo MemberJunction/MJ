@@ -715,11 +715,9 @@ ORDER BY bridge.LastName, bridge.FirstName`,
 
             expect(result.Success).toBe(true);
 
-            // Verify the SQL sent to ExecuteSQL does NOT have nested WITH
+            // Verify the data SQL has paging appended directly (no __paged CTE wrapping)
             const dataSql = provider.executeSQLCalls[0]?.sql ?? '';
-            expect(dataSql).not.toMatch(/WITH\s+\[__paged\]\s+AS\s*\(\s*\nWITH/i);
-            // The CTE and __paged should be siblings in a single WITH clause
-            expect(dataSql).toContain('[__paged] AS');
+            expect(dataSql).not.toContain('__paged');
             expect(dataSql).toContain('OFFSET 0 ROWS FETCH NEXT 100 ROWS ONLY');
         });
 
