@@ -1,0 +1,230 @@
+/* ============================================================
+   Chat Overlay — Floating Bubble + Expanding Panel
+   All colors use MJ design tokens (--mj-* CSS variables).
+   ============================================================ */
+
+/* --- Floating Bubble (collapsed state) --- */
+
+.chat-overlay-bubble {
+    position: fixed;
+    bottom: 1.5rem;
+    right: 1.5rem;
+    width: 3.5rem;
+    height: 3.5rem;
+    border-radius: 50%;
+    background: var(--mj-brand-primary);
+    color: var(--mj-text-inverse);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+    z-index: 999;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    animation: overlayBubbleIn 0.3s ease;
+}
+
+.chat-overlay-bubble:hover {
+    transform: scale(1.08);
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.3);
+}
+
+@keyframes overlayBubbleIn {
+    from {
+        transform: scale(0);
+        opacity: 0;
+    }
+    to {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+.chat-overlay-bubble-icon {
+    font-size: 1.3rem;
+}
+
+.chat-overlay-badge {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    min-width: 1.2rem;
+    height: 1.2rem;
+    border-radius: 9999px;
+    background: var(--mj-status-error);
+    color: var(--mj-text-inverse);
+    font-size: 0.65rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 0.25rem;
+    border: 2px solid var(--mj-bg-page);
+}
+
+/* --- Expanded Panel --- */
+
+.chat-overlay-panel {
+    position: fixed;
+    bottom: 1.5rem;
+    right: 1.5rem;
+    border-radius: 12px;
+    background: var(--mj-bg-surface);
+    border: 2px solid color-mix(in srgb, var(--mj-brand-primary) 50%, var(--mj-border-strong));
+    box-shadow:
+        0 8px 32px rgba(0, 0, 0, 0.3),
+        0 2px 8px rgba(0, 0, 0, 0.15);
+    z-index: 999;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    animation: overlayPanelIn 0.25s ease;
+    max-height: calc(100vh - 3rem);
+    max-width: calc(100vw - 3rem);
+}
+
+.chat-overlay-panel.maximized {
+    bottom: 1rem;
+    right: 1rem;
+    width: calc(100vw - 2rem) !important;
+    height: calc(100vh - 2rem) !important;
+    max-height: none;
+    max-width: none;
+    border-radius: 12px;
+}
+
+@keyframes overlayPanelIn {
+    from {
+        opacity: 0;
+        transform: scale(0.9) translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+/* --- Resize Handles --- */
+
+.resize-handle {
+    position: absolute;
+    z-index: 2;
+}
+
+.resize-left {
+    left: -3px;
+    top: 20px;
+    bottom: 20px;
+    width: 6px;
+    cursor: ew-resize;
+}
+
+.resize-top {
+    top: -3px;
+    left: 20px;
+    right: 20px;
+    height: 6px;
+    cursor: ns-resize;
+}
+
+.resize-top-left {
+    top: -4px;
+    left: -4px;
+    width: 16px;
+    height: 16px;
+    cursor: nwse-resize;
+}
+
+.resize-handle:hover {
+    background: color-mix(in srgb, var(--mj-brand-primary) 30%, transparent);
+    border-radius: 3px;
+}
+
+/* --- Panel Header --- */
+
+.chat-overlay-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.6rem 0.75rem;
+    border-bottom: 1px solid var(--mj-border-default);
+    background: var(--mj-bg-surface-card);
+    flex-shrink: 0;
+}
+
+.chat-overlay-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--mj-text-primary);
+}
+
+.chat-overlay-title i {
+    color: var(--mj-brand-primary);
+}
+
+.chat-overlay-header-actions {
+    display: flex;
+    gap: 0.25rem;
+}
+
+.chat-overlay-header-btn {
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 6px;
+    border: none;
+    background: transparent;
+    color: var(--mj-text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    transition: all 0.15s ease;
+}
+
+.chat-overlay-header-btn:hover {
+    background: var(--mj-bg-surface-hover);
+    color: var(--mj-text-primary);
+}
+
+/* --- Panel Body --- */
+
+.chat-overlay-body {
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.chat-overlay-body mj-conversation-chat-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+/* --- Mobile Responsive --- */
+
+@media (max-width: 480px) {
+    .chat-overlay-panel {
+        bottom: 0;
+        right: 0;
+        width: 100% !important;
+        height: 100vh !important;
+        max-height: 100vh;
+        border-radius: 0;
+    }
+
+    .chat-overlay-bubble {
+        bottom: 1rem;
+        right: 1rem;
+    }
+
+    .resize-handle {
+        display: none;
+    }
+}

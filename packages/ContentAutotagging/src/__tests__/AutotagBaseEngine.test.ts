@@ -1,6 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock all external dependencies, preserving BaseEngine and related classes
+// Shared mock function so tests can reconfigure RunView behavior
+const mockRunViewFn = vi.fn().mockResolvedValue({
+  Success: true,
+  Results: [],
+});
+
+const mockRunViewsFn = vi.fn().mockResolvedValue([
+  { Success: true, Results: [], TotalCount: 0, RowCount: 0, Elapsed: 0, ErrorMessage: '' },
+  { Success: true, Results: [], TotalCount: 0, RowCount: 0, Elapsed: 0, ErrorMessage: '' },
+]);
+
 vi.mock('@memberjunction/core', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@memberjunction/core')>();
   class MockMetadata {
@@ -26,10 +37,8 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
     });
   }
   class MockRunView {
-    RunView = vi.fn().mockResolvedValue({
-      Success: true,
-      Results: [],
-    });
+    RunView = mockRunViewFn;
+    RunViews = mockRunViewsFn;
   }
   return {
     ...actual,
@@ -73,9 +82,84 @@ vi.mock('@memberjunction/global', async (importOriginal) => {
 });
 
 vi.mock('@memberjunction/ai', () => ({
-  BaseLLM: vi.fn(),
+  BaseEmbeddings: class MockBaseEmbeddings {},
   GetAIAPIKey: vi.fn().mockReturnValue('mock-api-key'),
 }));
+
+vi.mock('@memberjunction/ai-prompts', () => ({
+  AIPromptRunner: vi.fn().mockImplementation(() => ({
+    ExecutePrompt: vi.fn().mockResolvedValue({
+      success: true,
+      result: {
+        title: 'Test Title',
+        description: 'Test Description',
+        keywords: ['tag1', 'tag2'],
+        isValidContent: true,
+      },
+    }),
+  })),
+}));
+
+vi.mock('@memberjunction/ai-core-plus', () => ({
+  AIPromptParams: vi.fn().mockImplementation(() => ({})),
+}));
+
+vi.mock('@memberjunction/ai-vectordb', () => ({
+  VectorDBBase: class MockVectorDBBase {},
+  VectorRecord: vi.fn(),
+  BaseResponse: vi.fn(),
+}));
+
+vi.mock('@memberjunction/ai-vectors', () => ({
+  TextChunker: {
+    ChunkText: vi.fn().mockImplementation((params: { Text: string; MaxChunkTokens: number }) => {
+      // Simulate sentence-based chunking: split by '. ' and group into chunks
+      const sentences = params.Text.split('. ').filter(s => s.length > 0);
+      if (sentences.length <= 1) return [{ Text: params.Text }];
+      const charsPerChunk = params.MaxChunkTokens * 4; // rough char estimate
+      const chunks: { Text: string }[] = [];
+      let current = '';
+      for (const sentence of sentences) {
+        const candidate = current ? `${current}. ${sentence}` : sentence;
+        if (candidate.length > charsPerChunk && current) {
+          chunks.push({ Text: current });
+          current = sentence;
+        } else {
+          current = candidate;
+        }
+      }
+      if (current) chunks.push({ Text: current });
+      return chunks;
+    }),
+  },
+  ChunkTextParams: vi.fn(),
+}));
+
+const mockModels = [
+  {
+    ID: 'model-1',
+    DriverClass: 'OpenAILLM',
+    InputTokenLimit: 8000,
+    APIName: 'gpt-4',
+    Name: 'GPT-4',
+  },
+  {
+    ID: 'embed-model-1',
+    DriverClass: 'OpenAIEmbedding',
+    InputTokenLimit: 8192,
+    APIName: 'text-embedding-3-small',
+    Name: 'text-embedding-3-small',
+  },
+];
+
+const mockPrompts = [
+  {
+    ID: 'prompt-autotag',
+    Name: 'Content Autotagging',
+    Status: 'Active',
+    TemplateID: 'template-1',
+  },
+];
 
 vi.mock('@memberjunction/aiengine', () => ({
   AIEngine: class MockAIEngine {
@@ -84,25 +168,17 @@ vi.mock('@memberjunction/aiengine', () => ({
     }
     static get Instance() {
       return {
-        Models: [
-          {
-            ID: 'model-1',
-            DriverClass: 'OpenAILLM',
-            InputTokenLimit: 8000,
-            APIName: 'gpt-4',
-          },
-        ],
+        Config: vi.fn().mockResolvedValue(undefined),
+        Models: mockModels,
+        Prompts: mockPrompts,
       };
     }
+    Config = vi.fn().mockResolvedValue(undefined);
     get Models() {
-      return [
-        {
-          ID: 'model-1',
-          DriverClass: 'OpenAILLM',
-          InputTokenLimit: 8000,
-          APIName: 'gpt-4',
-        },
-      ];
+      return mockModels;
+    }
+    get Prompts() {
+      return mockPrompts;
     }
   },
 }));
@@ -466,6 +542,150 @@ describe('AutotagBaseEngine', () => {
       const inputDate = new Date(0);
       const result = await engine.convertLastRunDateToTimezone(inputDate);
       expect(result).toBeInstanceOf(Date);
+    });
+  });
+
+  describe('VectorizeContentItems', () => {
+    const mockUser = { ID: 'user-1' } as never;
+
+    // Helper to create mock content items
+    function createMockItem(id: string, text: string, name?: string, description?: string, url?: string): Record<string, unknown> {
+      return {
+        ID: id,
+        Text: text,
+        Name: name ?? `Item ${id}`,
+        Description: description ?? `Description for ${id}`,
+        URL: url ?? `https://example.com/${id}`,
+        ContentSourceID: 'source-1',
+        ContentSourceTypeID: 'type-1',
+        ContentFileTypeID: 'file-type-1',
+        ContentTypeID: 'content-type-1',
+      };
+    }
+
+    /**
+     * Setup the RunView/RunViews mocks to return vector infrastructure data and the
+     * ClassFactory mock to return embedding + vectorDB instances.
+     * Returns references to the mock functions for assertion.
+     *
+     * New flow:
+     * 1. RunViews is called to load content sources + types (returns empty by default — global fallback)
+     * 2. RunView calls resolve vector infrastructure (default index, vector DB, tags)
+     */
+    async function setupVectorMocks(tagResults?: Record<string, unknown>[]) {
+      // RunViews returns empty content sources + types (triggers global fallback path)
+      mockRunViewsFn.mockResolvedValue([
+        { Success: true, Results: [], TotalCount: 0, RowCount: 0, Elapsed: 0, ErrorMessage: '' },
+        { Success: true, Results: [], TotalCount: 0, RowCount: 0, Elapsed: 0, ErrorMessage: '' },
+      ]);
+
+      // RunView calls come in varying order — dispatch by EntityName
+      mockRunViewFn.mockImplementation(async (params: Record<string, unknown>) => {
+        const entityName = params['EntityName'] as string;
+        if (entityName === 'MJ: Vector Indexes') {
+          return {
+            Success: true,
+            Results: [{
+              ID: 'idx-1', Name: 'test-index',
+              VectorDatabaseID: 'vdb-1', EmbeddingModelID: 'embed-model-1'
+            }],
+            TotalCount: 1, RowCount: 1, Elapsed: 0, ErrorMessage: '',
+          } as never;
+        }
+        if (entityName === 'MJ: Vector Databases') {
+          return {
+            Success: true,
+            Results: [{ ID: 'vdb-1', Name: 'Pinecone', ClassKey: 'PineconeDB' }],
+            TotalCount: 1, RowCount: 1, Elapsed: 0, ErrorMessage: '',
+          } as never;
+        }
+        // Content Item Tags or any other entity
+        return {
+          Success: true,
+          Results: tagResults ?? [],
+          TotalCount: tagResults?.length ?? 0,
+          RowCount: tagResults?.length ?? 0,
+          Elapsed: 0,
+          ErrorMessage: '',
+        } as never;
+      });
+
+      const { MJGlobal } = await import('@memberjunction/global');
+      const mockEmbedTexts = vi.fn().mockResolvedValue({
+        vectors: [[0.1, 0.2, 0.3]],
+      });
+      const mockCreateRecords = vi.fn().mockResolvedValue({
+        success: true, message: 'OK',
+      });
+      vi.mocked(MJGlobal.Instance.ClassFactory.CreateInstance).mockImplementation((_base, driverClass) => {
+        if (typeof driverClass === 'string' && driverClass.includes('Embed')) {
+          return { EmbedTexts: mockEmbedTexts } as never;
+        }
+        return { CreateRecords: mockCreateRecords } as never;
+      });
+
+      return { mockEmbedTexts, mockCreateRecords };
+    }
+
+    it('should return zero vectorized and correct skipped count for empty items array', async () => {
+      const result = await engine.VectorizeContentItems([] as never[], mockUser);
+      expect(result).toEqual({ vectorized: 0, skipped: 0 });
+    });
+
+    it('should skip items with empty text and return correct counts', async () => {
+      const items = [
+        createMockItem('1', ''),
+        createMockItem('2', '   '),
+        createMockItem('3', ''),
+      ] as never[];
+
+      const result = await engine.VectorizeContentItems(items, mockUser);
+      expect(result.vectorized).toBe(0);
+      expect(result.skipped).toBe(3);
+    });
+
+    it('should call crypto.createHash with sha1 for vector ID generation', async () => {
+      const cryptoModule = await import('crypto');
+      await setupVectorMocks();
+
+      const items = [createMockItem('item-abc', 'Hello world content')] as never[];
+      await engine.VectorizeContentItems(items, mockUser);
+
+      // Verify sha1 was called for vector ID
+      expect(cryptoModule.default.createHash).toHaveBeenCalledWith('sha1');
+    });
+
+    it('should build metadata with tags when available', async () => {
+      const { mockCreateRecords } = await setupVectorMocks([
+        { ItemID: 'item-1', Tag: 'ai' },
+        { ItemID: 'item-1', Tag: 'podcast' },
+      ]);
+
+      const items = [createMockItem('item-1', 'Content about AI')] as never[];
+      await engine.VectorizeContentItems(items, mockUser);
+
+      expect(mockCreateRecords).toHaveBeenCalled();
+      const records = mockCreateRecords.mock.calls[0][0];
+      expect(records).toHaveLength(1);
+      // Verify metadata includes entity and record ID
+      expect(records[0].metadata.RecordID).toBe('item-1');
+      expect(records[0].metadata.Entity).toBe('MJ: Content Items');
+    });
+
+    it('should call progress callback with correct counts', async () => {
+      const { mockEmbedTexts } = await setupVectorMocks();
+      // Override to return 2 vectors for 2 items
+      mockEmbedTexts.mockResolvedValue({ vectors: [[0.1], [0.2]] });
+
+      const progressFn = vi.fn();
+      const items = [
+        createMockItem('1', 'Text one'),
+        createMockItem('2', 'Text two'),
+      ] as never[];
+
+      await engine.VectorizeContentItems(items, mockUser, progressFn);
+
+      expect(progressFn).toHaveBeenCalledWith(2, 2);
     });
   });
 });

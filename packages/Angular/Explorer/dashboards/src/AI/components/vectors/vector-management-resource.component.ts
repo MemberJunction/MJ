@@ -11,17 +11,18 @@ import { Component, ChangeDetectorRef, OnDestroy, AfterViewInit, Input, inject }
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { EntityInfo, Metadata, RunView } from '@memberjunction/core';
-import { ResourceData } from '@memberjunction/core-entities';
-import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import {
+    ResourceData,
     MJEntityDocumentEntity,
     MJVectorDatabaseEntity,
     MJVectorIndexEntity,
     MJEntityRecordDocumentEntity,
     MJAIModelEntity,
     MJTemplateEntity,
-    MJTemplateContentEntity
+    MJTemplateContentEntity,
+    KnowledgeHubMetadataEngine
 } from '@memberjunction/core-entities';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { KPICardData } from '../widgets/kpi-card.component';
 import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
@@ -679,24 +680,19 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
     // ================================================================
 
     private async fetchAllData(): Promise<void> {
+        // Use KnowledgeHubMetadataEngine for cached global reference data
+        const engine = KnowledgeHubMetadataEngine.Instance;
+        await engine.Config(false);
+
+        this.entityDocuments = engine.EntityDocuments;
+        this.vectorDatabases = engine.VectorDatabases;
+        this.vectorIndexes = engine.VectorIndexes;
+
+        // Entity Record Documents and AI Models are not cached in the engine —
+        // record documents are high-volume instance data, and AI models are loaded
+        // from a different domain. Fetch them via RunView.
         const rv = new RunView();
-        const [docsResult, vdbResult, viResult, erdResult, modelsResult] = await rv.RunViews([
-            {
-                EntityName: 'MJ: Entity Documents',
-                ExtraFilter: '',
-                OrderBy: 'Name',
-                ResultType: 'entity_object'
-            },
-            {
-                EntityName: 'MJ: Vector Databases',
-                ExtraFilter: '',
-                ResultType: 'entity_object'
-            },
-            {
-                EntityName: 'MJ: Vector Indexes',
-                ExtraFilter: '',
-                ResultType: 'entity_object'
-            },
+        const [erdResult, modelsResult] = await rv.RunViews([
             {
                 EntityName: 'MJ: Entity Record Documents',
                 ExtraFilter: '',
@@ -710,15 +706,6 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
             }
         ]);
 
-        if (docsResult.Success) {
-            this.entityDocuments = docsResult.Results as MJEntityDocumentEntity[];
-        }
-        if (vdbResult.Success) {
-            this.vectorDatabases = vdbResult.Results as MJVectorDatabaseEntity[];
-        }
-        if (viResult.Success) {
-            this.vectorIndexes = viResult.Results as MJVectorIndexEntity[];
-        }
         if (erdResult.Success) {
             this.recordDocuments = erdResult.Results as MJEntityRecordDocumentEntity[];
         }

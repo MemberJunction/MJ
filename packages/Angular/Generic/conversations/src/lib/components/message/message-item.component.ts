@@ -11,7 +11,7 @@ import {
   SimpleChanges,
   DoCheck
 } from '@angular/core';
-import { MJConversationDetailEntity, MJConversationEntity, MJArtifactEntity, MJArtifactVersionEntity, MJTaskEntity } from '@memberjunction/core-entities';
+import { MJConversationDetailEntity, MJConversationEntity, MJArtifactEntity, MJArtifactVersionEntity, MJTaskEntity, RatingJSON } from '@memberjunction/core-entities';
 import { UserInfo, RunView, CompositeKey, KeyValuePair } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
@@ -20,7 +20,6 @@ import { FormResponseUtils } from '@memberjunction/ng-forms';
 import { MentionParserService } from '../../services/mention-parser.service';
 import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
 import { SuggestedResponse } from '../../models/conversation-state.model';
-import { RatingJSON } from '../../models/conversation-complete-query.model';
 import { UICommandHandlerService } from '../../services/ui-command-handler.service';
 import { UUIDsEqual } from '@memberjunction/global';
 
@@ -188,9 +187,9 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    * Updates every second for temporary messages that use _elapsedTimeFormatted
    */
   private startElapsedTimeUpdater(): void {
-    // Only start timer for temporary messages (no ID yet)
-    // Agent runs with IDs use the parent's timer + agentRunDuration getter
-    if (this.isInProgressAIMessage) {
+    // Start timer for temporary messages (in-progress, no ID) OR active agent runs
+    // Both need periodic updates to _elapsedTimeFormatted / _agentRunDurationFormatted
+    if (this.isInProgressAIMessage || this.isAgentRunActive) {
       // Initial update
       this.updateTimers();
       this.cdRef.markForCheck();
@@ -978,37 +977,25 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       return null;
     }
 
-    const createdAt = new Date(this.agentRun.__mj_CreatedAt);
-    let endTime: Date;
-
-    // If agent run is still active, use current time for live updates
+    // For active runs, return the interval-updated field to avoid
+    // ExpressionChangedAfterItHasBeenCheckedError (new Date() changes between CD cycles)
     if (this.isAgentRunActive) {
-      endTime = new Date(); // Uses current UTC time
-    } else {
-      // For completed runs, use the final updated timestamp
-      if (!this.agentRun.__mj_UpdatedAt) {
-        return null;
-      }
-      endTime = new Date(this.agentRun.__mj_UpdatedAt);
+      return this._agentRunDurationFormatted;
     }
 
+    // For completed runs, calculate static duration from timestamps
+    if (!this.agentRun.__mj_UpdatedAt) {
+      return null;
+    }
+    const createdAt = new Date(this.agentRun.__mj_CreatedAt);
+    const endTime = new Date(this.agentRun.__mj_UpdatedAt);
     const diffMs = endTime.getTime() - createdAt.getTime();
 
     if (diffMs <= 0) {
       return null;
     }
 
-    const seconds = diffMs / 1000;
-
-    if (seconds < 1) {
-      return `${Math.round(diffMs)}ms`;
-    } else if (seconds < 60) {
-      return `${seconds.toFixed(1)}s`;
-    } else {
-      const mins = Math.floor(seconds / 60);
-      const secs = Math.floor(seconds % 60);
-      return `${mins}m ${secs}s`;
-    }
+    return this.formatDurationFromMs(diffMs);
   }
 
   /**

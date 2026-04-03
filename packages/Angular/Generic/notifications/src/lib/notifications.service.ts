@@ -24,6 +24,14 @@ export class MJNotificationService {
   private static _notifications$ = new BehaviorSubject<MJUserNotificationEntity[]>([]);
   private static _unreadCount$ = new BehaviorSubject<number>(0);
 
+  /**
+   * Optional callback that consuming apps can set to suppress toast notifications
+   * for specific events (e.g., when the user is actively viewing the conversation
+   * that triggered the notification). Return true to suppress the toast.
+   * The notification DB record is still created and the badge count still updates.
+   */
+  public ShouldSuppressToast?: (statusObj: Record<string, unknown>) => boolean;
+
   constructor() {
     const g = GetGlobalObjectStore()!;
     if (g[MJNotificationService._globalStoreKey]) {
@@ -90,7 +98,13 @@ export class MJNotificationService {
               const action = statusObj.action?.trim().toLowerCase()
                           || statusObj.details?.action?.trim().toLowerCase();
               if (action === 'create') {
-                this.CreateSimpleNotification(statusObj.title || 'New Notification Available', "success", 3000);
+                // Check if the consuming app wants to suppress this toast
+                // (e.g., user is actively viewing the conversation that triggered it)
+                const suppress = this.ShouldSuppressToast?.(statusObj) ?? false;
+                if (!suppress) {
+                  this.CreateSimpleNotification(statusObj.title || 'New Notification Available', "success", 3000);
+                }
+                // Always refresh the notification list (badge count, unread state)
                 MJNotificationService.RefreshUserNotifications();
               }
             }

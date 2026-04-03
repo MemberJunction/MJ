@@ -274,14 +274,16 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
 
       const md = new Metadata();
 
-      // Load artifact
-      this.artifact = await md.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', this.currentUser);
-      const loaded = await this.artifact.Load(this.artifactId);
+      // Load artifact — assign to local first to avoid mid-cycle icon flicker
+      // (getArtifactIcon returns 'fa-file' when this.artifact is null, then the real icon after load)
+      const artifactEntity = await md.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', this.currentUser);
+      const loaded = await artifactEntity.Load(this.artifactId);
 
       if (!loaded) {
         this.error = 'Failed to load artifact';
         return;
       }
+      this.artifact = artifactEntity;
 
       // Load artifact type to check for DriverClass
       await this.loadArtifactType();
@@ -334,6 +336,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
       this.error = 'Error loading artifact: ' + (err as Error).message;
     } finally {
       this.isLoading = false;
+      this.updateArtifactIcon();
       this.cdr.detectChanges();
     }
   }
@@ -1122,8 +1125,13 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
    * Get the icon for this artifact using the centralized icon service.
    * Fallback priority: Plugin icon > Metadata icon > Hardcoded mapping > Generic icon
    */
-  public getArtifactIcon(): string {
-    if (!this.artifact) return 'fa-file';
-    return this.artifactIconService.getArtifactIcon(this.artifact);
+  /** Cached icon class — set once after artifact loads to avoid mid-cycle flicker */
+  public artifactIcon: string = 'fa-file';
+
+  /** Update the cached icon from the loaded artifact */
+  private updateArtifactIcon(): void {
+    this.artifactIcon = this.artifact
+      ? this.artifactIconService.getArtifactIcon(this.artifact)
+      : 'fa-file';
   }
 }
