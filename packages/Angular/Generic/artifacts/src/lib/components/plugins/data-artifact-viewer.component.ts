@@ -1,6 +1,6 @@
 import { Component, OnInit, ChangeDetectorRef, Output, EventEmitter } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
-import { DataSnapshot, DataTable, DataComputation, NormalizeToTables, Metadata, RunQuery, CompositeKey, KeyValuePair } from '@memberjunction/core';
+import { DataSnapshot, DataTable, DataComputation, MJColumnDescriptor, NormalizeToTables, Metadata, RunQuery, CompositeKey, KeyValuePair } from '@memberjunction/core';
 import { QueryEngine, ArtifactMetadataEngine } from '@memberjunction/core-entities';
 import { QueryGridColumnConfig, QueryEntityLinkClickEvent, resolveTargetEntity } from '@memberjunction/ng-query-viewer';
 import { PageChangeEvent } from '@memberjunction/ng-pagination';
@@ -9,79 +9,32 @@ import { SaveQueryResult } from './save-query-dialog.component';
 import { createDataSnapshot, buildMultiTableSql } from '../../snapshot-helpers';
 
 /**
- * JSON schema for Data artifact content.
- * The agent produces this structure when emitting query/view results.
+ * Data artifact content shape as parsed from JSON.
+ *
+ * Core tabular data fields (source, columns, rows, tables, metadata, etc.)
+ * are handled by NormalizeToTables() from @memberjunction/core.
+ * This interface adds viewer-specific fields for query sync and display.
+ *
+ * Columns may use either `displayName` (new) or `headerName` (legacy).
+ * BuildColumnConfigsForTable handles both.
  */
 interface DataArtifactSpec {
-  /** Data source type */
-  source: 'query' | 'view';
-
-  /** Display title for the data */
+  source?: 'query' | 'view';
   title?: string;
-
-  /** For query source: the query ID to render via mj-query-viewer */
   queryId?: string;
-
-  /** For query source: parameter values to pass */
   parameters?: Record<string, string | number | boolean>;
-
-  /** For view source: the entity name */
   entityName?: string;
-
-  /** For view source: extra WHERE filter */
   extraFilter?: string;
-
-  /** Column definitions for inline data display */
-  columns?: DataArtifactColumn[];
-
-  /** Inline row data (when results are embedded directly) */
+  columns?: Array<MJColumnDescriptor & { headerName?: string }>;
   rows?: Record<string, unknown>[];
-
-  /** Optional markdown plan/approach description (mermaid diagrams, explanations) */
+  tables?: DataTable[];
   plan?: string;
-
-  /** Optional interpretation of the data */
   interpretation?: string;
-
-  /** Cross-table computations */
   computations?: DataComputation[];
-
-  /** Query metadata */
-  metadata?: {
-    sql?: string;
-    rowCount?: number;
-    executionTimeMs?: number;
-  };
-
-  /** ID of saved query (set after user saves from artifact) */
+  metadata?: { sql?: string; rowCount?: number; executionTimeMs?: number };
   savedQueryId?: string;
-
-  /** Name of saved query (for display) */
   savedQueryName?: string;
-
-  /** Version number this query was saved/updated from */
   savedAtVersionNumber?: number;
-}
-
-interface DataArtifactColumn {
-  field: string;
-  headerName?: string;
-  width?: number;
-
-  /** MJ entity name this column originates from (e.g., "Members") */
-  sourceEntity?: string;
-
-  /** Field name in that entity (e.g., "ID", "FirstName") */
-  sourceFieldName?: string;
-
-  /** True for calculated expressions (CASE, ROUND, CONCAT, etc.) */
-  isComputed?: boolean;
-
-  /** True for aggregate functions (SUM, COUNT, AVG, etc.) */
-  isSummary?: boolean;
-
-  /** SQL data type: int, nvarchar, uniqueidentifier, datetime, decimal, bit, money, etc. */
-  sqlBaseType?: string;
 }
 
 /**
@@ -438,9 +391,13 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
         align = 'center';
       }
 
+      // Support both displayName (new) and headerName (legacy) for backward compat
+      const colAny = col as unknown as Record<string, unknown>;
+      const title = col.displayName || (colAny['headerName'] as string) || col.field;
+
       return {
         field: col.field,
-        title: col.displayName || col.field,
+        title,
         visible: true,
         sortable: true,
         resizable: true,
