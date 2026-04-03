@@ -2,7 +2,7 @@ import { LogError, LogStatusEx } from "@memberjunction/core";
 import { GraphQLDataProvider } from "./graphQLDataProvider";
 import { gql } from "graphql-request";
 import { ExecuteAgentParams, ExecuteAgentResult } from "@memberjunction/ai-core-plus";
-import { SafeJSONParse } from "@memberjunction/global";
+import { SafeJSONParse, CleanAndParseJSON } from "@memberjunction/global";
 import { FireAndForgetHelper } from "./fireAndForgetHelper";
 
 /**
@@ -214,7 +214,7 @@ export class GraphQLAIClient {
 
         try {
             if (promptResult.parsedResult) {
-                parsedResult = JSON.parse(promptResult.parsedResult);
+                parsedResult = CleanAndParseJSON(promptResult.parsedResult);
             }
         } catch (e) {
             // Keep as string if parsing fails
@@ -908,6 +908,41 @@ export class GraphQLAIClient {
     }
 
     /**
+     * Trigger the autotagging pipeline (fire-and-forget).
+     * Returns a PipelineRunID that can be used to subscribe to PipelineProgress.
+     */
+    public async RunAutotagPipeline(): Promise<AutotagPipelineResult> {
+        try {
+            const mutation = gql`
+                mutation RunAutotagPipeline {
+                    RunAutotagPipeline {
+                        Success
+                        Status
+                        ErrorMessage
+                        PipelineRunID
+                    }
+                }
+            `;
+
+            const result = await this._dataProvider.ExecuteGQL(mutation, {});
+
+            if (!result?.RunAutotagPipeline) {
+                throw new Error('Invalid response from server');
+            }
+
+            return result.RunAutotagPipeline as AutotagPipelineResult;
+        } catch (error: unknown) {
+            const e = error as Error;
+            LogError('GraphQLAIClient.RunAutotagPipeline failed', undefined, e);
+            return {
+                Success: false,
+                Status: 'Error',
+                ErrorMessage: e.message || 'Unknown error'
+            };
+        }
+    }
+
+    /**
      * Trigger vectorization for an entity document.
      * Calls the server-side EntityVectorSyncer to embed and upsert entity records.
      */
@@ -957,6 +992,77 @@ export class GraphQLAIClient {
             };
         }
     }
+
+    /**
+     * Fetch vectors with metadata from Pinecone for a given entity document.
+     * Returns the vector IDs, embedding values, and metadata stored in the vector index.
+     *
+     * @param params The parameters for fetching entity vectors
+     * @returns A Promise that resolves to a FetchEntityVectorsResult
+     */
+    public async FetchEntityVectors(params: FetchEntityVectorsParams): Promise<FetchEntityVectorsResult> {
+        try {
+            const query = gql`
+                query FetchEntityVectors(
+                    $entityDocumentID: String!,
+                    $maxRecords: Int,
+                    $filter: String
+                ) {
+                    FetchEntityVectors(
+                        entityDocumentID: $entityDocumentID,
+                        maxRecords: $maxRecords,
+                        filter: $filter
+                    ) {
+                        Success
+                        TotalCount
+                        ElapsedMs
+                        ErrorMessage
+                        Results {
+                            ID
+                            Values
+                            Metadata
+                        }
+                    }
+                }
+            `;
+
+            const variables: Record<string, unknown> = {
+                entityDocumentID: params.entityDocumentID,
+            };
+            if (params.maxRecords !== undefined) {
+                variables['maxRecords'] = params.maxRecords;
+            }
+            if (params.filter !== undefined) {
+                variables['filter'] = params.filter;
+            }
+
+            const result = await this._dataProvider.ExecuteGQL(query, variables);
+
+            if (!result?.FetchEntityVectors) {
+                throw new Error('Invalid response from server');
+            }
+
+            return result.FetchEntityVectors as FetchEntityVectorsResult;
+        } catch (error: unknown) {
+            const e = error as Error;
+            LogError('GraphQLAIClient.FetchEntityVectors failed', undefined, e);
+            return {
+                Success: false,
+                Results: [],
+                TotalCount: 0,
+                ElapsedMs: 0,
+                ErrorMessage: e.message || 'Unknown error',
+            };
+        }
+    }
+}
+
+/** Result from RunAutotagPipeline */
+export interface AutotagPipelineResult {
+    Success: boolean;
+    Status?: string;
+    ErrorMessage?: string;
+    PipelineRunID?: string;
 }
 
 /** Parameters for VectorizeEntity */
@@ -973,6 +1079,35 @@ export interface VectorizeEntityResult {
     ErrorMessage?: string;
     PipelineRunID?: string;
     RecordsProcessed?: number;
+}
+
+/** Parameters for FetchEntityVectors */
+export interface FetchEntityVectorsParams {
+    /** The ID of the EntityDocument whose vectors to fetch */
+    entityDocumentID: string;
+    /** Maximum number of vectors to return (default 1000) */
+    maxRecords?: number;
+    /** Optional additional filter string */
+    filter?: string;
+}
+
+/** A single vector record with its embedding and metadata */
+export interface EntityVectorItemResult {
+    /** The vector ID in the index */
+    ID: string;
+    /** The embedding vector values */
+    Values: number[];
+    /** JSON-serialized metadata stored with the vector */
+    Metadata: string;
+}
+
+/** Result from FetchEntityVectors */
+export interface FetchEntityVectorsResult {
+    Success: boolean;
+    Results: EntityVectorItemResult[];
+    TotalCount: number;
+    ElapsedMs: number;
+    ErrorMessage?: string;
 }
 
 /**

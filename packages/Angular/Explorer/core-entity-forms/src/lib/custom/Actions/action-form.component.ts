@@ -194,12 +194,13 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
 
     private async loadCategory() {
         if (!this.record.CategoryID) return;
-        
+
         try {
             const md = new Metadata();
-            this.category = await md.GetEntityObject<MJActionCategoryEntity>('MJ: Action Categories');
-            if (this.category) {
-                await this.category.Load(this.record.CategoryID);
+            const entity = await md.GetEntityObject<MJActionCategoryEntity>('MJ: Action Categories');
+            const loaded = await entity.Load(this.record.CategoryID);
+            if (loaded) {
+                this.category = entity;
             }
         } catch (error) {
             // Error loading category

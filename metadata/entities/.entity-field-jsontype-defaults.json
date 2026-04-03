@@ -1,0 +1,35 @@
+[
+  {
+    "_comments": [
+      "Sets JSONType metadata on DefaultNavItems (Applications entity) to enable",
+      "CodeGen to emit a typed Object-suffixed accessor with MJApplicationEntity_IDefaultNavItem."
+    ],
+    "fields": {
+      "Name": "MJ: Applications"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "IDefaultNavItem",
+            "JSONTypeIsArray": true,
+            "JSONTypeDefinition": "export interface IDefaultNavItem {\n    /** Display label for the navigation item */\n    Label: string;\n    /** Font Awesome icon class (e.g., \"fa-solid fa-database\") */\n    Icon: string;\n    /** Type of resource: \"Dashboards\", \"Custom\", etc. */\n    ResourceType: string;\n    /** For Dashboard resources, the ID of the dashboard record */\n    RecordID?: string | null;\n    /** For Custom resources, the registered driver class name */\n    DriverClass?: string | null;\n    /** Whether this is the default tab when the app opens */\n    isDefault?: boolean;\n}"
+          },
+          "_comments": [
+            "DefaultNavItems field — JSON array of nav items for each application"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Applications&Name=DefaultNavItems"
+          },
+          "sync": {
+            "lastModified": "2026-04-03T15:18:57.963Z",
+            "checksum": "d88c75a3966b7eb65517b337866b7051a002d40fd5ae1d7ebc62408cd7460743"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Applications"
+    }
+  }
+]
