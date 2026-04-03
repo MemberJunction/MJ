@@ -9897,17 +9897,17 @@ export const MJContentSourceSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
     ContentTypeID: z.string().describe(`
         * * Field Name: ContentTypeID
-        * * Display Name: Content Type ID
+        * * Display Name: Content Type
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Content Types (vwContentTypes.ID)`),
     ContentSourceTypeID: z.string().describe(`
         * * Field Name: ContentSourceTypeID
-        * * Display Name: Content Source Type ID
+        * * Display Name: Content Source Type
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Content Source Types (vwContentSourceTypes.ID)`),
     ContentFileTypeID: z.string().describe(`
         * * Field Name: ContentFileTypeID
-        * * Display Name: Content File Type ID
+        * * Display Name: Content File Type
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Content File Types (vwContentFileTypes.ID)`),
     URL: z.string().describe(`
@@ -9925,6 +9925,18 @@ export const MJContentSourceSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    EmbeddingModelID: z.string().nullable().describe(`
+        * * Field Name: EmbeddingModelID
+        * * Display Name: Embedding Model
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
+        * * Description: Per-source override for the AI embedding model. When NULL, falls back to the ContentType default.`),
+    VectorIndexID: z.string().nullable().describe(`
+        * * Field Name: VectorIndexID
+        * * Display Name: Vector Index
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Vector Indexes (vwVectorIndexes.ID)
+        * * Description: Per-source override for the vector index. When NULL, falls back to the ContentType default.`),
     ContentType: z.string().describe(`
         * * Field Name: ContentType
         * * Display Name: Content Type
@@ -9936,6 +9948,14 @@ export const MJContentSourceSchema = z.object({
     ContentFileType: z.string().describe(`
         * * Field Name: ContentFileType
         * * Display Name: Content File Type
+        * * SQL Data Type: nvarchar(255)`),
+    EmbeddingModel: z.string().nullable().describe(`
+        * * Field Name: EmbeddingModel
+        * * Display Name: Embedding Model
+        * * SQL Data Type: nvarchar(50)`),
+    VectorIndex: z.string().nullable().describe(`
+        * * Field Name: VectorIndex
+        * * Display Name: Vector Index
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -10001,17 +10021,17 @@ export const MJContentTypeSchema = z.object({
         * * SQL Data Type: nvarchar(MAX)`),
     AIModelID: z.string().describe(`
         * * Field Name: AIModelID
-        * * Display Name: AIModel ID
+        * * Display Name: AI Model
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)`),
     MinTags: z.number().describe(`
         * * Field Name: MinTags
-        * * Display Name: Min Tags
+        * * Display Name: Minimum Tags
         * * SQL Data Type: int
         * * Description: Minimum number of tags that must be applied to content of this type.`),
     MaxTags: z.number().describe(`
         * * Field Name: MaxTags
-        * * Display Name: Max Tags
+        * * Display Name: Maximum Tags
         * * SQL Data Type: int
         * * Description: Maximum number of tags allowed on content of this type.`),
     __mj_CreatedAt: z.date().describe(`
@@ -10024,10 +10044,30 @@ export const MJContentTypeSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    EmbeddingModelID: z.string().nullable().describe(`
+        * * Field Name: EmbeddingModelID
+        * * Display Name: Embedding Model
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
+        * * Description: Default AI embedding model for vectorizing content items of this type. Sources can override per-source. If NULL, uses the first available embedding model.`),
+    VectorIndexID: z.string().nullable().describe(`
+        * * Field Name: VectorIndexID
+        * * Display Name: Vector Index
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Vector Indexes (vwVectorIndexes.ID)
+        * * Description: Default vector index for storing embeddings of this content type. Sources can override per-source. If NULL, uses the first available vector index.`),
     AIModel: z.string().describe(`
         * * Field Name: AIModel
-        * * Display Name: AIModel
+        * * Display Name: AI Model Name
         * * SQL Data Type: nvarchar(50)`),
+    EmbeddingModel: z.string().nullable().describe(`
+        * * Field Name: EmbeddingModel
+        * * Display Name: Embedding Model Name
+        * * SQL Data Type: nvarchar(50)`),
+    VectorIndex: z.string().nullable().describe(`
+        * * Field Name: VectorIndex
+        * * Display Name: Vector Index Name
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type MJContentTypeEntityType = z.infer<typeof MJContentTypeSchema>;
@@ -49776,7 +49816,7 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
 
     /**
     * * Field Name: ContentTypeID
-    * * Display Name: Content Type ID
+    * * Display Name: Content Type
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Content Types (vwContentTypes.ID)
     */
@@ -49789,7 +49829,7 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
 
     /**
     * * Field Name: ContentSourceTypeID
-    * * Display Name: Content Source Type ID
+    * * Display Name: Content Source Type
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Content Source Types (vwContentSourceTypes.ID)
     */
@@ -49802,7 +49842,7 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
 
     /**
     * * Field Name: ContentFileTypeID
-    * * Display Name: Content File Type ID
+    * * Display Name: Content File Type
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Content File Types (vwContentFileTypes.ID)
     */
@@ -49847,6 +49887,34 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
     }
 
     /**
+    * * Field Name: EmbeddingModelID
+    * * Display Name: Embedding Model
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
+    * * Description: Per-source override for the AI embedding model. When NULL, falls back to the ContentType default.
+    */
+    get EmbeddingModelID(): string | null {
+        return this.Get('EmbeddingModelID');
+    }
+    set EmbeddingModelID(value: string | null) {
+        this.Set('EmbeddingModelID', value);
+    }
+
+    /**
+    * * Field Name: VectorIndexID
+    * * Display Name: Vector Index
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Vector Indexes (vwVectorIndexes.ID)
+    * * Description: Per-source override for the vector index. When NULL, falls back to the ContentType default.
+    */
+    get VectorIndexID(): string | null {
+        return this.Get('VectorIndexID');
+    }
+    set VectorIndexID(value: string | null) {
+        this.Set('VectorIndexID', value);
+    }
+
+    /**
     * * Field Name: ContentType
     * * Display Name: Content Type
     * * SQL Data Type: nvarchar(255)
@@ -49871,6 +49939,24 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
     */
     get ContentFileType(): string {
         return this.Get('ContentFileType');
+    }
+
+    /**
+    * * Field Name: EmbeddingModel
+    * * Display Name: Embedding Model
+    * * SQL Data Type: nvarchar(50)
+    */
+    get EmbeddingModel(): string | null {
+        return this.Get('EmbeddingModel');
+    }
+
+    /**
+    * * Field Name: VectorIndex
+    * * Display Name: Vector Index
+    * * SQL Data Type: nvarchar(255)
+    */
+    get VectorIndex(): string | null {
+        return this.Get('VectorIndex');
     }
 }
 
@@ -50059,7 +50145,7 @@ export class MJContentTypeEntity extends BaseEntity<MJContentTypeEntityType> {
 
     /**
     * * Field Name: AIModelID
-    * * Display Name: AIModel ID
+    * * Display Name: AI Model
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
     */
@@ -50072,7 +50158,7 @@ export class MJContentTypeEntity extends BaseEntity<MJContentTypeEntityType> {
 
     /**
     * * Field Name: MinTags
-    * * Display Name: Min Tags
+    * * Display Name: Minimum Tags
     * * SQL Data Type: int
     * * Description: Minimum number of tags that must be applied to content of this type.
     */
@@ -50085,7 +50171,7 @@ export class MJContentTypeEntity extends BaseEntity<MJContentTypeEntityType> {
 
     /**
     * * Field Name: MaxTags
-    * * Display Name: Max Tags
+    * * Display Name: Maximum Tags
     * * SQL Data Type: int
     * * Description: Maximum number of tags allowed on content of this type.
     */
@@ -50117,12 +50203,58 @@ export class MJContentTypeEntity extends BaseEntity<MJContentTypeEntityType> {
     }
 
     /**
+    * * Field Name: EmbeddingModelID
+    * * Display Name: Embedding Model
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
+    * * Description: Default AI embedding model for vectorizing content items of this type. Sources can override per-source. If NULL, uses the first available embedding model.
+    */
+    get EmbeddingModelID(): string | null {
+        return this.Get('EmbeddingModelID');
+    }
+    set EmbeddingModelID(value: string | null) {
+        this.Set('EmbeddingModelID', value);
+    }
+
+    /**
+    * * Field Name: VectorIndexID
+    * * Display Name: Vector Index
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Vector Indexes (vwVectorIndexes.ID)
+    * * Description: Default vector index for storing embeddings of this content type. Sources can override per-source. If NULL, uses the first available vector index.
+    */
+    get VectorIndexID(): string | null {
+        return this.Get('VectorIndexID');
+    }
+    set VectorIndexID(value: string | null) {
+        this.Set('VectorIndexID', value);
+    }
+
+    /**
     * * Field Name: AIModel
-    * * Display Name: AIModel
+    * * Display Name: AI Model Name
     * * SQL Data Type: nvarchar(50)
     */
     get AIModel(): string {
         return this.Get('AIModel');
+    }
+
+    /**
+    * * Field Name: EmbeddingModel
+    * * Display Name: Embedding Model Name
+    * * SQL Data Type: nvarchar(50)
+    */
+    get EmbeddingModel(): string | null {
+        return this.Get('EmbeddingModel');
+    }
+
+    /**
+    * * Field Name: VectorIndex
+    * * Display Name: Vector Index Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get VectorIndex(): string | null {
+        return this.Get('VectorIndex');
     }
 }
 

@@ -12898,8 +12898,14 @@ export class MJAIModel_ {
     @Field(() => [MJAIModelCost_])
     MJAIModelCosts_ModelIDArray: MJAIModelCost_[]; // Link to MJAIModelCosts
     
+    @Field(() => [MJContentType_])
+    MJContentTypes_EmbeddingModelIDArray: MJContentType_[]; // Link to MJContentTypes
+    
     @Field(() => [MJAIPromptModel_])
     MJAIPromptModels_ModelIDArray: MJAIPromptModel_[]; // Link to MJAIPromptModels
+    
+    @Field(() => [MJContentSource_])
+    MJContentSources_EmbeddingModelIDArray: MJContentSource_[]; // Link to MJContentSources
     
     @Field(() => [MJAIPromptRun_])
     MJAIPromptRuns_OriginalModelIDArray: MJAIPromptRun_[]; // Link to MJAIPromptRuns
@@ -13271,6 +13277,16 @@ export class MJAIModelResolver extends ResolverBase {
         return result;
     }
         
+    @FieldResolver(() => [MJContentType_])
+    async MJContentTypes_EmbeddingModelIDArray(@Root() mjaimodel_: MJAIModel_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Content Types', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwContentTypes')} WHERE ${provider.QuoteIdentifier('EmbeddingModelID')}='${mjaimodel_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Content Types', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Content Types', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
     @FieldResolver(() => [MJAIPromptModel_])
     async MJAIPromptModels_ModelIDArray(@Root() mjaimodel_: MJAIModel_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Prompt Models', userPayload);
@@ -13278,6 +13294,16 @@ export class MJAIModelResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIPromptModels')} WHERE ${provider.QuoteIdentifier('ModelID')}='${mjaimodel_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Prompt Models', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Prompt Models', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJContentSource_])
+    async MJContentSources_EmbeddingModelIDArray(@Root() mjaimodel_: MJAIModel_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Content Sources', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwContentSources')} WHERE ${provider.QuoteIdentifier('EmbeddingModelID')}='${mjaimodel_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Content Sources', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Content Sources', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -27859,6 +27885,14 @@ export class MJContentSource_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `Per-source override for the AI embedding model. When NULL, falls back to the ContentType default.`}) 
+    @MaxLength(36)
+    EmbeddingModelID?: string;
+        
+    @Field({nullable: true, description: `Per-source override for the vector index. When NULL, falls back to the ContentType default.`}) 
+    @MaxLength(36)
+    VectorIndexID?: string;
+        
     @Field() 
     @MaxLength(255)
     ContentType: string;
@@ -27870,6 +27904,14 @@ export class MJContentSource_ {
     @Field() 
     @MaxLength(255)
     ContentFileType: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(50)
+    EmbeddingModel?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    VectorIndex?: string;
         
     @Field(() => [MJContentItem_])
     MJContentItems_ContentSourceIDArray: MJContentItem_[]; // Link to MJContentItems
@@ -27904,6 +27946,12 @@ export class CreateMJContentSourceInput {
 
     @Field({ nullable: true })
     URL?: string;
+
+    @Field({ nullable: true })
+    EmbeddingModelID: string | null;
+
+    @Field({ nullable: true })
+    VectorIndexID: string | null;
 }
     
 
@@ -27929,6 +27977,12 @@ export class UpdateMJContentSourceInput {
 
     @Field({ nullable: true })
     URL?: string;
+
+    @Field({ nullable: true })
+    EmbeddingModelID?: string | null;
+
+    @Field({ nullable: true })
+    VectorIndexID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -28245,9 +28299,25 @@ export class MJContentType_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `Default AI embedding model for vectorizing content items of this type. Sources can override per-source. If NULL, uses the first available embedding model.`}) 
+    @MaxLength(36)
+    EmbeddingModelID?: string;
+        
+    @Field({nullable: true, description: `Default vector index for storing embeddings of this content type. Sources can override per-source. If NULL, uses the first available vector index.`}) 
+    @MaxLength(36)
+    VectorIndexID?: string;
+        
     @Field() 
     @MaxLength(50)
     AIModel: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(50)
+    EmbeddingModel?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    VectorIndex?: string;
         
     @Field(() => [MJContentSource_])
     MJContentSources_ContentTypeIDArray: MJContentSource_[]; // Link to MJContentSources
@@ -28279,6 +28349,12 @@ export class CreateMJContentTypeInput {
 
     @Field(() => Int, { nullable: true })
     MaxTags?: number;
+
+    @Field({ nullable: true })
+    EmbeddingModelID: string | null;
+
+    @Field({ nullable: true })
+    VectorIndexID: string | null;
 }
     
 
@@ -28304,6 +28380,12 @@ export class UpdateMJContentTypeInput {
 
     @Field(() => Int, { nullable: true })
     MaxTags?: number;
+
+    @Field({ nullable: true })
+    EmbeddingModelID?: string | null;
+
+    @Field({ nullable: true })
+    VectorIndexID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -68604,6 +68686,12 @@ export class MJVectorIndex_ {
     @Field(() => [MJEntityDocument_])
     MJEntityDocuments_VectorIndexIDArray: MJEntityDocument_[]; // Link to MJEntityDocuments
     
+    @Field(() => [MJContentType_])
+    MJContentTypes_VectorIndexIDArray: MJContentType_[]; // Link to MJContentTypes
+    
+    @Field(() => [MJContentSource_])
+    MJContentSources_VectorIndexIDArray: MJContentSource_[]; // Link to MJContentSources
+    
 }
 
 //****************************************************************************
@@ -68750,6 +68838,26 @@ export class MJVectorIndexResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwEntityDocuments')} WHERE ${provider.QuoteIdentifier('VectorIndexID')}='${mjvectorindex_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Entity Documents', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Entity Documents', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJContentType_])
+    async MJContentTypes_VectorIndexIDArray(@Root() mjvectorindex_: MJVectorIndex_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Content Types', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwContentTypes')} WHERE ${provider.QuoteIdentifier('VectorIndexID')}='${mjvectorindex_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Content Types', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Content Types', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJContentSource_])
+    async MJContentSources_VectorIndexIDArray(@Root() mjvectorindex_: MJVectorIndex_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Content Sources', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwContentSources')} WHERE ${provider.QuoteIdentifier('VectorIndexID')}='${mjvectorindex_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Content Sources', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Content Sources', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         

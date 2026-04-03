@@ -8,10 +8,10 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Details Section -->
+    <!-- Connection Details Section -->
     <mj-collapsible-panel
-        SectionKey="details"
-        SectionName="Details"
+        SectionKey="connectionDetails"
+        SectionName="Connection Details"
         Icon="fa fa-align-left"
         [Form]="this"
         [FormContext]="formContext">
@@ -26,7 +26,7 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="ContentTypeID"
+            FieldName="ContentSourceTypeID"
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
@@ -35,7 +35,26 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="ContentSourceTypeID"
+            FieldName="URL"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="URL"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Content Classification Section -->
+    <mj-collapsible-panel
+        SectionKey="contentClassification"
+        SectionName="Content Classification"
+        Icon="fa fa-info-circle"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ContentTypeID"
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
@@ -50,14 +69,44 @@
             [FormContext]="formContext"
             LinkType="Record"
         ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- AI & Indexing Section -->
+    <mj-collapsible-panel
+        SectionKey="aIIndexing"
+        SectionName="AI & Indexing"
+        Icon="fa fa-robot"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="URL"
-            Type="textarea"
+            FieldName="EmbeddingModelID"
+            Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
+            LinkType="Record"
         ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="VectorIndexID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- System Metadata Section -->
+    <mj-collapsible-panel
+        SectionKey="systemMetadata"
+        SectionName="System Metadata"
+        Icon="fa fa-cog"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -74,26 +123,6 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Content Classification Section -->
-    <mj-collapsible-panel
-        SectionKey="contentClassification"
-        SectionName="Content Classification"
-        Icon="fa fa-tags"
-        [Form]="this"
-        [FormContext]="formContext">
-
-    </mj-collapsible-panel>
-
-    <!-- Connection Details Section -->
-    <mj-collapsible-panel
-        SectionKey="connectionDetails"
-        SectionName="Connection Details"
-        Icon="fa fa-plug"
-        [Form]="this"
-        [FormContext]="formContext">
 
     </mj-collapsible-panel>
 
