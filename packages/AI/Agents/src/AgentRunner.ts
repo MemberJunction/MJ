@@ -620,10 +620,15 @@ export class AgentRunner {
                         contextUser
                     );
                     if (await artifact.Load(version.ArtifactID)) {
+                        // ToolLibraryClass comes from the ArtifactType entity via the view join.
+                        // Available after migration V202604030943 + CodeGen regenerates the view.
+                        // Until then, falls back to name-based resolution in ArtifactToolManager.
+                        const toolLibraryClass = artifact.Get('ToolLibraryClass') as string | undefined;
                         inputArtifacts.push({
                             name: version.Name || artifact.Name || 'Untitled',
                             typeName: artifact.Type || 'Text',
-                            content: version.Content || ''
+                            content: version.Content || '',
+                            ...(toolLibraryClass ? { toolLibraryClass } : {})
                         });
                     }
                 }

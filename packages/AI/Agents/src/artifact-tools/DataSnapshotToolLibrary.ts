@@ -4,6 +4,7 @@
  * Parses a DataSnapshot JSON string and exposes tools for inspecting
  * table metadata, slicing rows, searching, and aggregating values.
  */
+import { RegisterClass } from '@memberjunction/global';
 import {
     BaseArtifactToolLibrary,
     type ArtifactToolDefinition,
@@ -45,6 +46,7 @@ const VALID_AGGREGATE_OPS: ReadonlySet<string> = new Set<AggregateOperation>([
 // DataSnapshotToolLibrary
 // ---------------------------------------------------------------------------
 
+@RegisterClass(BaseArtifactToolLibrary, 'DataSnapshotToolLibrary')
 export class DataSnapshotToolLibrary extends BaseArtifactToolLibrary {
 
     // -----------------------------------------------------------------------

@@ -1,3 +1,4 @@
+import { RegisterClass } from '@memberjunction/global';
 import { BaseArtifactToolLibrary, ArtifactToolDefinition, ArtifactToolResult } from './BaseArtifactToolLibrary';
 
 interface SearchMatch {
@@ -9,6 +10,7 @@ interface SearchMatch {
  * Tool library for navigating and querying JSON artifact content.
  * Provides path navigation, key listing, recursive search, and array iteration.
  */
+@RegisterClass(BaseArtifactToolLibrary, 'JSONToolLibrary')
 export class JSONToolLibrary extends BaseArtifactToolLibrary {
     GetToolList(): ArtifactToolDefinition[] {
         return [

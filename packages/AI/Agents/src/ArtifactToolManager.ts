@@ -1,3 +1,4 @@
+import { MJGlobal } from '@memberjunction/global';
 import { BaseArtifactToolLibrary, ArtifactToolResult } from './artifact-tools/BaseArtifactToolLibrary';
 import { DataSnapshotToolLibrary } from './artifact-tools/DataSnapshotToolLibrary';
 import { JSONToolLibrary } from './artifact-tools/JSONToolLibrary';
@@ -10,6 +11,9 @@ export interface InputArtifact {
     name: string;
     typeName: string;
     content: string | Buffer;
+    /** Optional: class name from ArtifactType.ToolLibraryClass metadata.
+     *  When set, used for plugin-based resolution via ClassFactory. */
+    toolLibraryClass?: string;
 }
 
 /**
@@ -71,7 +75,7 @@ export class ArtifactToolManager {
                 name: artifact.name,
                 typeName: artifact.typeName,
                 content: artifact.content,
-                library: this.ResolveLibrary(artifact.typeName),
+                library: this.ResolveLibrary(artifact.typeName, artifact.toolLibraryClass),
             });
         }
     }
@@ -84,7 +88,7 @@ export class ArtifactToolManager {
             name: artifact.name,
             typeName: artifact.typeName,
             content: artifact.content,
-            library: this.ResolveLibrary(artifact.typeName),
+            library: this.ResolveLibrary(artifact.typeName, artifact.toolLibraryClass),
         });
         return alphaId;
     }
@@ -250,8 +254,18 @@ export class ArtifactToolManager {
         return String.fromCharCode(65 + first) + String.fromCharCode(65 + second);
     }
 
-    /** Resolve a tool library for an artifact type name */
-    private ResolveLibrary(typeName: string): BaseArtifactToolLibrary {
+    /** Resolve a tool library for an artifact type.
+     *  Priority: toolLibraryClass from metadata → ClassFactory → name-based fallback */
+    private ResolveLibrary(typeName: string, toolLibraryClass?: string): BaseArtifactToolLibrary {
+        // Try metadata-driven resolution via ClassFactory
+        if (toolLibraryClass) {
+            const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseArtifactToolLibrary>(
+                BaseArtifactToolLibrary, toolLibraryClass
+            );
+            if (instance) return instance;
+        }
+
+        // Fallback: name-based resolution for types without ToolLibraryClass metadata
         const lower = typeName.toLowerCase();
         if (lower.includes('data') || lower.includes('snapshot')) {
             return new DataSnapshotToolLibrary();
@@ -259,7 +273,6 @@ export class ArtifactToolManager {
         if (lower.includes('json')) {
             return new JSONToolLibrary();
         }
-        // Default to text for code, markdown, and other text-based types
         return new TextToolLibrary();
     }
 }

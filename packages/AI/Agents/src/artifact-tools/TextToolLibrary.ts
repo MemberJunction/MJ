@@ -1,3 +1,4 @@
+import { RegisterClass } from '@memberjunction/global';
 import { BaseArtifactToolLibrary, ArtifactToolDefinition, ArtifactToolResult } from './BaseArtifactToolLibrary';
 
 interface LineMatch {
@@ -9,6 +10,7 @@ interface LineMatch {
  * Tool library for searching and slicing plain-text artifact content.
  * Provides regex grep and line-range extraction.
  */
+@RegisterClass(BaseArtifactToolLibrary, 'TextToolLibrary')
 export class TextToolLibrary extends BaseArtifactToolLibrary {
     GetToolList(): ArtifactToolDefinition[] {
         return [
