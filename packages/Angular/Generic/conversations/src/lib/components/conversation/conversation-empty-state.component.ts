@@ -14,6 +14,9 @@ export class ConversationEmptyStateComponent {
   @Input() disabled: boolean = false;
   @Input() showSidebarToggle: boolean = false;
 
+  /** Greeting text shown in the empty state. Set by host app via overlay/chat-area chain. */
+  @Input() greeting: string = 'How can I help you?';
+
   /** When true (overlay context), suggested prompts are hidden to save space */
   private _overlayMode = false;
   @Input()

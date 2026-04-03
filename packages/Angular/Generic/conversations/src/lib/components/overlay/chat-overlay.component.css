@@ -70,8 +70,10 @@
     right: 1.5rem;
     border-radius: 12px;
     background: var(--mj-bg-surface);
-    border: 1px solid var(--mj-border-default);
-    box-shadow: 0 12px 48px rgba(0, 0, 0, 0.25);
+    border: 2px solid color-mix(in srgb, var(--mj-brand-primary) 50%, var(--mj-border-strong));
+    box-shadow:
+        0 8px 32px rgba(0, 0, 0, 0.3),
+        0 2px 8px rgba(0, 0, 0, 0.15);
     z-index: 999;
     display: flex;
     flex-direction: column;

@@ -130,7 +130,8 @@ export class ConversationAgentService {
     message: MJConversationDetailEntity,
     conversationHistory: MJConversationDetailEntity[],
     conversationDetailId: string,
-    onProgress?: AgentExecutionProgressCallback
+    onProgress?: AgentExecutionProgressCallback,
+    appContext?: Record<string, unknown> | null
   ): Promise<ExecuteAgentResult | null> {
     // Don't process if user is tagging someone else (future enhancement)
     // For now, we'll always send to the ambient agent
@@ -181,7 +182,16 @@ export class ConversationAgentService {
             Description: a.Description
           })),
           conversationId: conversationId,
-          latestMessageId: message.ID
+          latestMessageId: message.ID,
+          ...(appContext ? { appContext } : {}),
+          // Include all registered client tools so the LLM sees them in the prompt.
+          // These are ephemeral tools registered by the client app (CopyToClipboard, etc.)
+          // that supplement the metadata-defined tools from the junction table.
+          clientTools: this.agentClientService.GetRegisteredTools().map(t => ({
+            Name: t.Name,
+            Description: t.Description,
+            InputSchema: t.ParameterSchema
+          }))
         },
         CreateArtifacts: true,
         CreateNotification: true,

@@ -18,6 +18,8 @@
   @if (IsChatOverlayReady) {
     <mj-chat-agents-overlay
       [IsVisible]="!isChatRoute"
+      [AppContext]="$any(AppContextSnapshot)"
+      [EmptyStateGreeting]="'Ask me anything — I can navigate apps, search data, run queries, or help with tasks.'"
       (ToolExecuted)="OnOverlayToolExecuted($event)"
       (OpenEntityRecord)="OnOverlayOpenRecord($event)"
       (OpenFullChatWorkspace)="OnOverlayOpenFullChatWorkspace($event)"

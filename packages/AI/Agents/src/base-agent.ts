@@ -3698,6 +3698,9 @@ The context is now within limits. Please retry your request with the recovered c
             // Build client tool details for the prompt
             const clientToolDetails = this.buildClientToolPromptSection(agent, extraData);
 
+            // Build app context section if provided in extraData
+            const appContext = this.buildAppContextSection(extraData);
+
             const contextData: AgentContextData = {
                 agentName: agent.Name,
                 agentDescription: agent.Description,
@@ -3707,6 +3710,7 @@ The context is now within limits. Please retry your request with the recovered c
                 actionCount: activeActions.length,
                 actionDetails: this.formatActionDetails(activeActions),
                 clientToolDetails: clientToolDetails,
+                appContext: appContext,
             };
 
             // Build the final result with __agentTypePromptParams injected
@@ -3720,7 +3724,11 @@ The context is now within limits. Please retry your request with the recovered c
             if (extraData) {
                 // Spread extraData but don't let it override __agentTypePromptParams
                 // (which was already built with runtime overrides included)
-                const { __agentTypePromptParams: _ignored, ...restExtraData } = extraData;
+                // Spread extraData into the result but exclude properties that were already
+                // processed into formatted prompt sections above. Without this exclusion,
+                // the raw objects from extraData would overwrite the formatted markdown strings
+                // in contextData (e.g., appContext object would replace the markdown string).
+                const { __agentTypePromptParams: _ignored, appContext: _ignoredAppContext, ...restExtraData } = extraData;
                 return {
                     ...result,
                     ...restExtraData
@@ -4347,6 +4355,47 @@ The context is now within limits. Please retry your request with the recovered c
                 });
                 lines.push(`  Inputs: ${paramParts.join(', ')}`);
             }
+        }
+
+        return lines.join('\n');
+    }
+
+    /**
+     * Build the app context section for system prompt injection.
+     * Reads the AppContextSnapshot from extraData.appContext and formats
+     * it as a concise markdown section the LLM can reference.
+     */
+    private buildAppContextSection(extraData?: Record<string, unknown>): string {
+        const ctx = extraData?.appContext as Record<string, unknown> | undefined;
+        if (!ctx) return '';
+
+        const app = ctx['App'] as { Name?: string; Description?: string } | undefined;
+        const activeNav = ctx['ActiveNavItem'] as { Name?: string; Description?: string; ResourceType?: string } | undefined;
+        const otherNavs = ctx['OtherNavItems'] as Array<{ Name?: string; Description?: string }> | undefined;
+        const user = ctx['User'] as { Name?: string; Roles?: string[] } | undefined;
+
+        if (!app?.Name) return '';
+
+        const lines: string[] = [];
+        lines.push('### Current Application Context');
+        lines.push(`The user is currently in the **${app.Name}** application${app.Description ? ` — ${app.Description}` : ''}.`);
+
+        if (activeNav?.Name) {
+            lines.push('');
+            lines.push(`**Active view:** ${activeNav.Name}${activeNav.Description ? ` — ${activeNav.Description}` : ''}${activeNav.ResourceType ? ` (${activeNav.ResourceType})` : ''}`);
+        }
+
+        if (otherNavs && otherNavs.length > 0) {
+            lines.push('');
+            lines.push('**Other views available in this app:**');
+            for (const nav of otherNavs) {
+                lines.push(`- ${nav.Name}${nav.Description ? ` — ${nav.Description}` : ''}`);
+            }
+        }
+
+        if (user?.Name) {
+            lines.push('');
+            lines.push(`**User:** ${user.Name}${user.Roles?.length ? ` (Roles: ${user.Roles.join(', ')})` : ''}`);
         }
 
         return lines.join('\n');

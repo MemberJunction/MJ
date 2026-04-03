@@ -23,6 +23,8 @@ import { AgentClientService } from '@memberjunction/ng-agent-client';
 import { ClientToolResultEvent } from '@memberjunction/ai-agent-client';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ConversationBridgeService } from '@memberjunction/ng-conversations';
+import { ApplicationManager, WorkspaceStateManager } from '@memberjunction/ng-base-application';
+import { AppContextSnapshot } from '@memberjunction/ai-core-plus';
 
 @Component({
   standalone: false,
@@ -49,6 +51,9 @@ export class MJExplorerAppComponent implements OnInit, OnDestroy {
   /** Suppresses chat overlay during initial app load — set true after workspace initializes */
   public IsChatOverlayReady = false;
 
+  /** Application context snapshot for AI agent awareness — updated on every app/tab transition */
+  public AppContextSnapshot: AppContextSnapshot | null = null;
+
   private destroy$ = new Subject<void>();
 
   constructor(
@@ -61,6 +66,8 @@ export class MJExplorerAppComponent implements OnInit, OnDestroy {
     private agentClient: AgentClientService,
     private navigationService: NavigationService,
     private bridge: ConversationBridgeService,
+    private appManager: ApplicationManager,
+    private workspaceState: WorkspaceStateManager,
     private cdr: ChangeDetectorRef,
   ) {
     this.registerClientTools();
@@ -87,6 +94,15 @@ export class MJExplorerAppComponent implements OnInit, OnDestroy {
         if (provider.sessionId) {
           this.agentClient.StartSession(provider.sessionId);
         }
+
+        // Suppress toast for agent completions when the user is actively viewing the conversation
+        MJNotificationService.Instance.ShouldSuppressToast = (statusObj: Record<string, unknown>) => {
+          const convoId = statusObj['conversationId'] as string;
+          if (!convoId) return false;
+          const isViewingConvo = this.bridge.ActiveConversationID$.value === convoId
+            && (this.bridge.OverlayActive$.value || this.isChatRoute);
+          return isViewingConvo;
+        };
 
         // Chat overlay can now render — workspace is initialized
         this.IsChatOverlayReady = true;
@@ -216,6 +232,16 @@ export class MJExplorerAppComponent implements OnInit, OnDestroy {
         this.isChatRoute = url.includes('/chat') || url.includes('/conversations');
       });
 
+    // Track active app changes for AI agent context awareness
+    this.appManager.ActiveApp
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(() => this.updateAppContext());
+
+    // Track tab changes for active nav item context
+    this.workspaceState.Configuration
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(() => this.updateAppContext());
+
     // Apply saved or OS-preferred theme for the login page
     this.applyLoginTheme();
 
@@ -266,6 +292,58 @@ export class MJExplorerAppComponent implements OnInit, OnDestroy {
     const md = new Metadata();
     const chatApp = md.Applications.find(a => a.Name === 'Chat');
     this.navigationService.OpenNavItemByName('Conversations', params, chatApp?.ID);
+  }
+
+  /** Build and update the application context snapshot for AI agent awareness */
+  private async updateAppContext(): Promise<void> {
+    const activeApp = this.appManager.GetActiveApp();
+    if (!activeApp) {
+      this.AppContextSnapshot = null;
+      return;
+    }
+
+    const navItems = await activeApp.GetNavItems();
+    const activeTabId = this.workspaceState.GetActiveTabId();
+    const config = this.workspaceState.GetConfiguration();
+    const activeTab = config?.tabs.find(t => t.id === activeTabId);
+    const activeNavItemName = activeTab?.configuration?.['navItemName'] as string | undefined;
+
+    const activeNavItem = activeNavItemName
+      ? navItems.find(n => n.Label === activeNavItemName)
+      : navItems.find(n => n.isDefault) || navItems[0];
+
+    const md = new Metadata();
+    const currentUser = md.CurrentUser;
+
+    this.AppContextSnapshot = {
+      App: {
+        Name: activeApp.Name,
+        Description: activeApp.Description || ''
+      },
+      ActiveNavItem: {
+        Name: activeNavItem?.Label || 'Unknown',
+        Description: activeNavItem?.Description,
+        ResourceType: activeNavItem?.ResourceType
+      },
+      OtherNavItems: navItems
+        .filter(n => n.Label !== activeNavItem?.Label && n.Status !== 'Disabled' && n.Status !== 'Pending')
+        .map(n => ({ Name: n.Label, Description: n.Description })),
+      User: {
+        Name: currentUser?.Name || '',
+        Roles: currentUser?.UserRoles?.map(r => r.Role) || []
+      }
+    };
+    // Keep the bridge in sync with workspace visibility.
+    // When the user is in the Chat app viewing Conversations, the workspace is "active"
+    // for toast suppression. When they switch to any other app/tab, it's not.
+    const isChatWorkspaceVisible = activeNavItemName === 'Conversations'
+      && activeApp.Name === 'Chat';
+    this.bridge.NotifyWorkspaceActive(isChatWorkspaceVisible);
+    if (!isChatWorkspaceVisible) {
+      // Clear the bridge's active conversation so toast suppression doesn't
+      // match on a stale ID from the previous Chat session
+      this.bridge.SetActiveFromWorkspace(null);
+    }
   }
 
   /** Register Explorer-specific client tool handlers with the AgentClientService */
@@ -350,6 +428,92 @@ export class MJExplorerAppComponent implements OnInit, OnDestroy {
         const seconds = Math.min(120, Math.max(1, Number(params['Seconds']) || 5));
         await new Promise(resolve => setTimeout(resolve, seconds * 1000));
         return { Success: true, Data: { SleptSeconds: seconds } };
+      }
+    });
+
+    this.agentClient.RegisterTool({
+      Name: 'CopyToClipboard',
+      Description: 'Copy text to the user\'s clipboard. Use when the user asks to copy something or when generating content the user will want to paste elsewhere (SQL, code, formatted data).',
+      ParameterSchema: {
+        type: 'object',
+        properties: {
+          Text: { type: 'string', description: 'The text to copy to the clipboard' }
+        },
+        required: ['Text']
+      },
+      Handler: async (params) => {
+        const text = String(params['Text'] || '');
+        try {
+          await navigator.clipboard.writeText(text);
+          return { Success: true, Data: { CopiedLength: text.length } };
+        } catch {
+          return { Success: false, ErrorMessage: 'Clipboard access denied by browser' };
+        }
+      }
+    });
+
+    this.agentClient.RegisterTool({
+      Name: 'ShowNotification',
+      Description: 'Show a toast notification to the user. Use for confirmations, status updates, or alerts that don\'t need a chat message response.',
+      ParameterSchema: {
+        type: 'object',
+        properties: {
+          Message: { type: 'string', description: 'The notification message text' },
+          Type: { type: 'string', description: 'Notification type: info, success, warning, or error', enum: ['info', 'success', 'warning', 'error'] },
+          DurationMs: { type: 'number', description: 'How long to show the notification in milliseconds (default 3000)' }
+        },
+        required: ['Message']
+      },
+      Handler: async (params) => {
+        const message = String(params['Message'] || '');
+        const type = (String(params['Type'] || 'info')) as 'info' | 'success' | 'warning' | 'error';
+        const duration = Number(params['DurationMs']) || 3000;
+        MJNotificationService.Instance.CreateSimpleNotification(message, type, duration);
+        return { Success: true, Data: { Shown: true } };
+      }
+    });
+
+    this.agentClient.RegisterTool({
+      Name: 'OpenBrowserTab',
+      Description: 'Open a URL in a new browser tab. Use when the user asks to visit an external website, view documentation, or open any URL outside the current application.',
+      ParameterSchema: {
+        type: 'object',
+        properties: {
+          URL: { type: 'string', description: 'The full URL to open (must start with http:// or https://)' },
+          Label: { type: 'string', description: 'Optional descriptive label for the tab' }
+        },
+        required: ['URL']
+      },
+      Handler: async (params) => {
+        const url = String(params['URL'] || '');
+        if (!url.startsWith('http://') && !url.startsWith('https://')) {
+          return { Success: false, ErrorMessage: 'URL must start with http:// or https://' };
+        }
+        window.open(url, '_blank', 'noopener,noreferrer');
+        return { Success: true, Data: { OpenedURL: url } };
+      }
+    });
+
+    this.agentClient.RegisterTool({
+      Name: 'SetTheme',
+      Description: 'Switch the application between dark mode and light mode. Use when the user asks for dark mode, light mode, or to toggle the theme.',
+      ParameterSchema: {
+        type: 'object',
+        properties: {
+          Mode: { type: 'string', description: 'The theme mode to set', enum: ['dark', 'light', 'toggle'] }
+        },
+        required: ['Mode']
+      },
+      Handler: async (params) => {
+        const mode = String(params['Mode'] || 'toggle').toLowerCase();
+        if (mode === 'toggle') {
+          this.ToggleTheme();
+        } else {
+          this.IsDarkMode = mode === 'dark';
+          localStorage.setItem(MJExplorerAppComponent.THEME_STORAGE_KEY, this.IsDarkMode ? 'dark' : 'light');
+          this.applyThemeToDOM();
+        }
+        return { Success: true, Data: { CurrentMode: this.IsDarkMode ? 'dark' : 'light' } };
       }
     });
   }

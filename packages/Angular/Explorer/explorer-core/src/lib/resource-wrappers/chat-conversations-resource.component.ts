@@ -385,6 +385,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     // Set conversationId synchronously so child components see it immediately
     if (conversationId) {
       this.selectedConversationId = conversationId;
+      this.bridge.SetActiveFromWorkspace(conversationId);
       this.isNewUnsavedConversation = false;
       // Load entity asynchronously
       this.loadConversationEntity(conversationId);
@@ -401,6 +402,10 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   private async selectConversation(conversationId: string): Promise<void> {
     this.selectedConversationId = conversationId;
     this.isNewUnsavedConversation = false;
+
+    // Keep bridge in sync so other consumers (toast suppression, overlay) know
+    // which conversation the workspace is viewing
+    this.bridge.SetActiveFromWorkspace(conversationId);
 
     // Load the conversation entity from data service
     const conversation = this.engine.GetConversation(conversationId);
@@ -781,6 +786,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     this.selectedConversationId = event.conversation.ID;
     this.selectedConversation = event.conversation;
     this.isNewUnsavedConversation = false;
+    this.bridge.SetActiveFromWorkspace(event.conversation.ID);
     this.updateUrl();
     this.updateTabTitle();
   }

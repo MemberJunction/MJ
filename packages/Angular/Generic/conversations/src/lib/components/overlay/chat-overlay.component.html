@@ -76,6 +76,8 @@
                     [showExportButton]="false"
                     [showShareButton]="false"
                     [showArtifactIndicator]="false"
+                    [appContext]="AppContext"
+                    [emptyStateGreeting]="EmptyStateGreeting"
                     (conversationCreated)="OnConversationCreated($event)"
                     (conversationRenamed)="OnConversationRenamed($event)"
                     (pendingMessageConsumed)="OnPendingMessageConsumed()"

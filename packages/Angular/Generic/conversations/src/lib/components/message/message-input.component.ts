@@ -18,6 +18,7 @@ import { Mention, MentionParseResult } from '../../models/conversation-state.mod
 import { PendingAttachment } from '../mention/mention-editor.component';
 import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { ConversationBridgeService } from '../../services/conversation-bridge.service';
 import { Subscription } from 'rxjs';
 import { MessageInputBoxComponent } from './message-input-box.component';
 import { UUIDsEqual, CleanAndParseJSON } from '@memberjunction/global';
@@ -46,6 +47,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
   @Input() systemArtifactsByDetailId?: Map<string, LazyArtifactInfo[]>; // Pre-loaded system artifact data (Visibility='System Only')
   @Input() agentRunsByDetailId?: Map<string, MJAIAgentRunEntityExtended>; // Pre-loaded agent run data for performance
   @Input() emptyStateMode: boolean = false; // When true, emits emptyStateSubmit instead of creating messages directly
+  @Input() appContext: Record<string, unknown> | null = null; // Application context for AI agent awareness
 
   // Initial message to send automatically - using getter/setter for precise control
   private _initialMessage: string | null = null;
@@ -147,7 +149,8 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     private streamingService: ConversationStreamingService,
     private mentionParser: MentionParserService,
     private mentionAutocomplete: MentionAutocompleteService,
-    private attachmentService: ConversationAttachmentService
+    private attachmentService: ConversationAttachmentService,
+    private bridge: ConversationBridgeService
   ) {}
 
   async ngOnInit() {
@@ -933,7 +936,8 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
         userMessage,
         this.conversationHistory,
         conversationManagerMessage.ID,
-        this.createProgressCallback(conversationManagerMessage, 'Sage')
+        this.createProgressCallback(conversationManagerMessage, 'Sage'),
+        this.appContext
       );
 
       // Task will be removed automatically in markMessageComplete()
@@ -2276,12 +2280,17 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
 
       this.activeTasks.remove(task.id);
 
-      // Show completion notification
-      MJNotificationService.Instance?.CreateSimpleNotification(
-        `${task.agentName} completed in ${task.conversationName || 'conversation'}`,
-        'success',
-        3000
-      );
+      // Show toast only if the user isn't currently viewing this conversation.
+      // If they're watching, the inline completion is sufficient.
+      const isConvoVisible = UUIDsEqual(this.bridge.ActiveConversationID$.value, task.conversationId)
+        && (this.bridge.OverlayActive$.value || this.bridge.WorkspaceActive$.value);
+      if (!isConvoVisible) {
+        MJNotificationService.Instance?.CreateSimpleNotification(
+          `${task.agentName} completed in ${task.conversationName || 'conversation'}`,
+          'success',
+          3000
+        );
+      }
     } else {
       console.warn(`⚠️ No task found for completed message ${conversationDetail.ID} - task may have been removed prematurely or not added`);
     }

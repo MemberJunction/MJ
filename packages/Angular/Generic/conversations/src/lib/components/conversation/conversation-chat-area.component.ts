@@ -108,6 +108,12 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   /** Show the artifact count indicator in the conversation header. Default true. */
   @Input() showArtifactIndicator: boolean = true;
 
+  /** Application context snapshot for AI agent awareness. Included in agent execution data. */
+  @Input() appContext: Record<string, unknown> | null = null;
+
+  /** Greeting message shown in the empty state when no conversation is active */
+  @Input() emptyStateGreeting: string = 'How can I help you?';
+
   // Sidebar toggle - when true, shows toggle button in header to expand sidebar
   @Input() showSidebarToggle: boolean = false;
 

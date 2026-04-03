@@ -534,6 +534,10 @@ Client tools run **in the user's browser** and interact with the user and their 
 - **Client Tools** → navigate to record, open dashboard tab, show search results (browser-side, visible to user, slower)
 {% endif %}
 
+{% if appContext %}
+{{ appContext | safe }}
+{% endif %}
+
 {% if __agentTypePromptParams.includePayloadInPrompt != false %}
 ## Current State
 **Payload:** Represents your work state. Request changes via `payloadChangeRequest`

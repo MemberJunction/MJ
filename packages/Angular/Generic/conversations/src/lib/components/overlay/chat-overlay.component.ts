@@ -94,6 +94,12 @@ export class ChatAgentsOverlayComponent implements OnInit, OnDestroy {
     /** Environment ID, passed through to conversation-chat-area. Auto-resolved from default if not provided. */
     @Input() EnvironmentId!: string;
 
+    /** Application context snapshot for AI agent awareness. Updated by the host app on navigation transitions. */
+    @Input() AppContext: Record<string, unknown> | null = null;
+
+    /** Greeting message shown in the empty state when no conversation is active */
+    @Input() EmptyStateGreeting: string = 'How can I help you?';
+
     // --- Outputs ---
 
     /** Emitted when the overlay visibility changes */

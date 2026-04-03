@@ -1208,6 +1208,8 @@ export type AgentContextData = {
     actionDetails: string;
     /** Markdown formatted details of available client tools (name, category, description, input schema) */
     clientToolDetails?: string;
+    /** Markdown formatted snapshot of the user's current application context */
+    appContext?: string;
 }
 
 /**

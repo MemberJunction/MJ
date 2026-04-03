@@ -754,7 +754,8 @@ export class RunAIAgentResolver extends ResolverBase {
                         notificationId: result.inAppNotificationId,
                         action: 'create',
                         title: `${agentName} completed your request`,
-                        message: message
+                        message: message,
+                        conversationId: detail.ConversationID
                     })
                 });
 

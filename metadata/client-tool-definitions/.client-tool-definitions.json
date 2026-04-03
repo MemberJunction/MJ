@@ -79,5 +79,14 @@
       "lastModified": "2026-04-03T15:45:59.297Z",
       "checksum": "eae377de1f921554cdea280e2614940d6c486577e2f50db107b08b7f9f61fd70"
     }
+  },
+  {
+    "fields": {
+      "Name": "OpenBrowserTab",
+      "Description": "Open a URL in a new browser tab. Use when the user asks to visit an external website, view documentation, or open any URL outside the current application.",
+      "Category": "navigation",
+      "InputSchemaJSON": "{\"type\":\"object\",\"properties\":{\"URL\":{\"type\":\"string\",\"description\":\"The full URL to open (must start with http:// or https://)\"},\"Label\":{\"type\":\"string\",\"description\":\"Optional descriptive label for the tab\"}},\"required\":[\"URL\"]}",
+      "DefaultTimeoutMs": 10000
+    }
   }
 ]

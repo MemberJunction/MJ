@@ -458,6 +458,14 @@
             "lastModified": "2026-04-03T15:46:00.461Z",
             "checksum": "e1b61998442df340611bfb6f2748bc5b608a0978e0207d3b036eca2d556e673d"
           }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ClientToolDefinitionID": "@lookup:MJ: AI Client Tool Definitions.Name=OpenBrowserTab",
+            "IsRequired": false,
+            "Priority": 3
+          }
         }
       ]
     },

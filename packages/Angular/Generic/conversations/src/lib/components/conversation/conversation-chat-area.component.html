@@ -80,6 +80,7 @@
           [disabled]="isProcessing"
           [showSidebarToggle]="showSidebarToggle"
           [overlayMode]="overlayMode"
+          [greeting]="emptyStateGreeting"
           (sidebarToggleClicked)="sidebarToggleClicked.emit()"
           (messageSent)="onEmptyStateMessageSent($event)">
         </mj-conversation-empty-state>
@@ -147,6 +148,7 @@
                     [artifactsByDetailId]="inputRef.conversationId === conversationId ? artifactsByDetailId : emptyArtifactsMap"
                     [systemArtifactsByDetailId]="inputRef.conversationId === conversationId ? systemArtifactsByDetailId : emptyArtifactsMap"
                     [agentRunsByDetailId]="inputRef.conversationId === conversationId ? agentRunsByDetailId : emptyAgentRunsMap"
+                    [appContext]="appContext"
                     [inProgressMessageIds]="inputRef.conversationId === conversationId ? inProgressMessageIds : emptyInProgressIds"
                     [disabled]="isProcessing"
                     [enableAttachments]="enableAttachments"
