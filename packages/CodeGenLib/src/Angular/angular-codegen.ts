@@ -290,7 +290,6 @@ import { FormsModule } from '@angular/forms';
 import { BaseFormsModule } from '@memberjunction/ng-base-forms';
 import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
 import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
-import { AngularSplitModule } from 'angular-split';
 
 // Import Generated Components
 ${componentImports.join('\n')}
@@ -402,8 +401,7 @@ imports: [
     FormsModule,
     BaseFormsModule,
     EntityViewerModule,
-    LinkDirectivesModule,
-    AngularSplitModule${additionalModulesToImport.length > 0 ? ',\n    ' + additionalModulesToImport.join(',\n    ') : ''}
+    LinkDirectivesModule${additionalModulesToImport.length > 0 ? ',\n    ' + additionalModulesToImport.join(',\n    ') : ''}
 ],
 exports: [
 ]
@@ -1217,14 +1215,17 @@ ${componentCodeWithIndent}
     (FavoriteToggled)="OnFavoriteToggled()"
     (HistoryRequested)="OnHistoryRequested()"
     (ListManagementRequested)="OnListManagementRequested()">
-    <as-split direction="vertical" (dragEnd)="splitterLayoutChange()">
-        <as-split-area [size]="TopAreaSize">
+    <!-- TODO: Evaluate restoring resizable splitter between top/bottom areas.
+         Previously used kendo-splitter (fixed 300px top), then as-split (percentage-based).
+         as-split caused empty space on forms with few top-area fields (40% of nothing = blank).
+         Using plain divs for now until a better sizing strategy is determined.
+         See: angular-split (as-split) or CSS resize for future options. -->
+    <div class="form-top-area">
 ${this.innerTopAreaHTML(topArea)}
-        </as-split-area>
-        <as-split-area [size]="BottomAreaSize">
+    </div>
+    <div class="form-bottom-area">
 ${this.innerCollapsiblePanelsHTML(additionalSections, relatedEntitySections)}
-        </as-split-area>
-    </as-split>
+    </div>
 </mj-record-form-container>
         `
           return htmlCode;
