@@ -63,7 +63,7 @@ export interface InstallConfig {
   /** TCP port for the MJAPI GraphQL server (default: `4000`). */
   APIPort: number;
 
-  /** TCP port for the MJExplorer Angular dev server (default: `4200`). */
+  /** TCP port for the MJExplorer Angular dev server (default: `4201`). */
   ExplorerPort: number;
 
   // ── Auth provider ─────────────────────────────────────────────────────
@@ -139,7 +139,7 @@ export const InstallConfigDefaults: PartialInstallConfig = {
   DatabasePort: 1433,
   DatabaseTrustCert: false,
   APIPort: 4000,
-  ExplorerPort: 4200,
+  ExplorerPort: 4201,
   AuthProvider: 'none',
 };
 
