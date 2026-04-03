@@ -1,0 +1,90 @@
+[
+  {
+    "fields": {
+      "Name": "Record Changes - 12 Month",
+      "Description": "Archives Record Changes data older than 12 months. Captures ChangesJSON, FullRecordJSON, and ChangesDescription fields before nullifying them to reclaim storage.",
+      "EntityName": "Record Changes",
+      "RetentionDays": 365,
+      "ArchiveMode": "archive",
+      "IsActive": false,
+      "FieldConfiguration": "{\"Fields\":[{\"FieldName\":\"ChangesJSON\",\"IsActive\":true},{\"FieldName\":\"FullRecordJSON\",\"IsActive\":true},{\"FieldName\":\"ChangesDescription\",\"IsActive\":true}],\"ArchiveFullRecord\":true,\"SkipIfAllNullFields\":[\"ChangesJSON\",\"FullRecordJSON\",\"ChangesDescription\"]}"
+    }
+  },
+  {
+    "fields": {
+      "Name": "AI Prompt Runs - 6 Month",
+      "Description": "Archives AI Prompt Runs data older than 6 months. Captures Messages, Result, ErrorMessage, and ValidationAttempts fields.",
+      "EntityName": "MJ: AI Prompt Runs",
+      "RetentionDays": 180,
+      "ArchiveMode": "archive",
+      "IsActive": false,
+      "FieldConfiguration": "{\"Fields\":[{\"FieldName\":\"Messages\",\"IsActive\":true},{\"FieldName\":\"Result\",\"IsActive\":true},{\"FieldName\":\"ErrorMessage\",\"IsActive\":true},{\"FieldName\":\"ValidationAttempts\",\"IsActive\":true}],\"ArchiveFullRecord\":true,\"SkipIfAllNullFields\":[\"Messages\",\"Result\",\"ErrorMessage\",\"ValidationAttempts\"]}"
+    }
+  },
+  {
+    "fields": {
+      "Name": "AI Agent Run Steps - 6 Month",
+      "Description": "Archives AI Agent Run Steps data older than 6 months. Captures InputData, OutputData, PayloadAtStart, PayloadAtEnd, ErrorMessage, and Comments fields.",
+      "EntityName": "MJ: AI Agent Run Steps",
+      "RetentionDays": 180,
+      "ArchiveMode": "archive",
+      "IsActive": false,
+      "FieldConfiguration": "{\"Fields\":[{\"FieldName\":\"InputData\",\"IsActive\":true},{\"FieldName\":\"OutputData\",\"IsActive\":true},{\"FieldName\":\"PayloadAtStart\",\"IsActive\":true},{\"FieldName\":\"PayloadAtEnd\",\"IsActive\":true},{\"FieldName\":\"ErrorMessage\",\"IsActive\":true},{\"FieldName\":\"Comments\",\"IsActive\":true}],\"ArchiveFullRecord\":true,\"SkipIfAllNullFields\":[\"InputData\",\"OutputData\",\"PayloadAtStart\",\"PayloadAtEnd\",\"ErrorMessage\",\"Comments\"]}"
+    }
+  },
+  {
+    "fields": {
+      "Name": "AI Agent Runs - 6 Month",
+      "Description": "Archives AI Agent Runs data older than 6 months. Captures Result, FinalPayload, StartingPayload, Data, Message, ErrorMessage, and AgentState fields.",
+      "EntityName": "MJ: AI Agent Runs",
+      "RetentionDays": 180,
+      "ArchiveMode": "archive",
+      "IsActive": false,
+      "FieldConfiguration": "{\"Fields\":[{\"FieldName\":\"Result\",\"IsActive\":true},{\"FieldName\":\"FinalPayload\",\"IsActive\":true},{\"FieldName\":\"StartingPayload\",\"IsActive\":true},{\"FieldName\":\"Data\",\"IsActive\":true},{\"FieldName\":\"Message\",\"IsActive\":true},{\"FieldName\":\"ErrorMessage\",\"IsActive\":true},{\"FieldName\":\"AgentState\",\"IsActive\":true}],\"ArchiveFullRecord\":true,\"SkipIfAllNullFields\":[\"Result\",\"FinalPayload\",\"StartingPayload\",\"Data\",\"Message\",\"ErrorMessage\",\"AgentState\"]}"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Audit Logs - 18 Month",
+      "Description": "Archives Audit Logs data older than 18 months. Captures Details and Description fields.",
+      "EntityName": "Audit Logs",
+      "RetentionDays": 540,
+      "ArchiveMode": "archive",
+      "IsActive": false,
+      "FieldConfiguration": "{\"Fields\":[{\"FieldName\":\"Details\",\"IsActive\":true},{\"FieldName\":\"Description\",\"IsActive\":true}],\"ArchiveFullRecord\":true,\"SkipIfAllNullFields\":[\"Details\",\"Description\"]}"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Action Execution Logs - 12 Month",
+      "Description": "Archives Action Execution Logs data older than 12 months. Archives the full record to external storage.",
+      "EntityName": "Action Execution Logs",
+      "RetentionDays": 365,
+      "ArchiveMode": "archive",
+      "IsActive": false,
+      "FieldConfiguration": "{\"Fields\":[],\"ArchiveFullRecord\":true}"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Scheduled Job Runs - 12 Month",
+      "Description": "Archives Scheduled Job Runs data older than 12 months. Archives the full record to external storage.",
+      "EntityName": "Scheduled Job Runs",
+      "RetentionDays": 365,
+      "ArchiveMode": "archive",
+      "IsActive": false,
+      "FieldConfiguration": "{\"Fields\":[],\"ArchiveFullRecord\":true}"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Communication Logs - 12 Month",
+      "Description": "Archives Communication Logs data older than 12 months. Archives the full record to external storage.",
+      "EntityName": "Communication Logs",
+      "RetentionDays": 365,
+      "ArchiveMode": "archive",
+      "IsActive": false,
+      "FieldConfiguration": "{\"Fields\":[],\"ArchiveFullRecord\":true}"
+    }
+  }
+]
