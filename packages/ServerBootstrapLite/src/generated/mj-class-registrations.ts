@@ -452,12 +452,13 @@ import {
     XMLParserAction,
 } from '@memberjunction/core-actions';
 
-// @memberjunction/core-entities (300 classes)
+// @memberjunction/core-entities (302 classes)
 import {
     MJAIActionEntity,
     MJAIAgentActionEntity,
     MJAIAgentArtifactTypeEntity,
     MJAIAgentCategoryEntity,
+    MJAIAgentClientToolEntity,
     MJAIAgentConfigurationEntity,
     MJAIAgentDataSourceEntity,
     MJAIAgentEntity,
@@ -479,6 +480,7 @@ import {
     MJAIAgentStepPathEntity,
     MJAIAgentTypeEntity,
     MJAIArchitectureEntity,
+    MJAIClientToolDefinitionEntity,
     MJAIConfigurationEntity,
     MJAIConfigurationParamEntity,
     MJAICredentialBindingEntity,
@@ -1128,6 +1130,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJAIAgentActionEntity,
     MJAIAgentArtifactTypeEntity,
     MJAIAgentCategoryEntity,
+    MJAIAgentClientToolEntity,
     MJAIAgentConfigurationEntity,
     MJAIAgentDataSourceEntity,
     MJAIAgentEntity,
@@ -1149,6 +1152,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJAIAgentStepPathEntity,
     MJAIAgentTypeEntity,
     MJAIArchitectureEntity,
+    MJAIClientToolDefinitionEntity,
     MJAIConfigurationEntity,
     MJAIConfigurationParamEntity,
     MJAICredentialBindingEntity,
@@ -1467,7 +1471,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 626;
+export const CLASS_REGISTRATIONS_COUNT = 628;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
