@@ -282,7 +282,7 @@ export class DuplicateRecordDetector extends VectorBase {
         const sourceMetadataMap = this.buildSourceMetadataMap(records, entityInfo);
 
         // 6c: Create DuplicateRunDetail records for this batch
-        const duplicateRunDetails = await this.CreateRunDetailRecords(batchIDs, duplicateRunID, sourceMetadataMap);
+        const duplicateRunDetails = await this.CreateRunDetailRecords(batchIDs, duplicateRunID, entityInfo, sourceMetadataMap);
 
         // 6c: Generate template texts and embed
         this.reportProgress(options, 'Embedding', totalRecords, processedSoFar, matchesSoFar, startTime);
@@ -842,9 +842,11 @@ export class DuplicateRecordDetector extends VectorBase {
     protected async CreateRunDetailRecords(
         recordIDs: string[],
         duplicateRunID: string,
+        entityInfo: EntityInfo,
         metadataMap?: Map<string, string>
     ): Promise<MJDuplicateRunDetailEntity[]> {
         const results: MJDuplicateRunDetailEntity[] = [];
+        const pkFieldName = entityInfo.FirstPrimaryKey.Name;
 
         for (const batch of chunkArray(recordIDs, SAVE_BATCH_SIZE)) {
             const batchResults = await Promise.all(
@@ -852,7 +854,8 @@ export class DuplicateRecordDetector extends VectorBase {
                     const runDetail = await this.Metadata.GetEntityObject<MJDuplicateRunDetailEntity>('MJ: Duplicate Run Details', this.CurrentUser);
                     runDetail.NewRecord();
                     runDetail.DuplicateRunID = duplicateRunID;
-                    runDetail.RecordID = recordID;
+                    // Store RecordID in standard MJ URL segment format (e.g., "ID|uuid")
+                    runDetail.RecordID = `${pkFieldName}|${recordID}`;
                     runDetail.MatchStatus = 'Pending';
                     runDetail.MergeStatus = 'Pending';
                     runDetail.RecordMetadata = metadataMap?.get(recordID) ?? null;
@@ -901,8 +904,13 @@ export class DuplicateRecordDetector extends VectorBase {
             results.push(qr.Duplicates);
             matchesFound += qr.Duplicates.Duplicates.length;
 
+            const sourceKey = qr.SourceKey;
             const detail = duplicateRunDetails.find(
-                (d) => UUIDsEqual(d.RecordID, sourceId)
+                (d) => {
+                    const detailKey = new CompositeKey();
+                    detailKey.LoadFromConcatenatedString(d.RecordID);
+                    return detailKey.Equals(sourceKey);
+                }
             );
 
             if (detail) {
@@ -940,7 +948,7 @@ export class DuplicateRecordDetector extends VectorBase {
                     );
                     match.NewRecord();
                     match.DuplicateRunDetailID = duplicateRunDetailID;
-                    match.MatchRecordID = dupe.ToString();
+                    match.MatchRecordID = dupe.ToURLSegment();
                     match.MatchProbability = dupe.ProbabilityScore;
                     match.MatchedAt = new Date();
                     match.Action = '';

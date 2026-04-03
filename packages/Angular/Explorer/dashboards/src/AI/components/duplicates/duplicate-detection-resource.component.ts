@@ -10,7 +10,7 @@
 import { Component, ChangeDetectorRef, OnDestroy, AfterViewInit, Input, inject, ViewEncapsulation } from '@angular/core';
 import { Subject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
-import { Metadata, RunView } from '@memberjunction/core';
+import { CompositeKey, Metadata, RecordDependency, RecordMergeRequest, RunView } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import {
     ResourceData,
@@ -21,7 +21,7 @@ import {
     VectorMetadataEngine
 } from '@memberjunction/core-entities';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
-import { BaseResourceComponent } from '@memberjunction/ng-shared';
+import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 
 /**
@@ -64,6 +64,27 @@ interface DuplicateFilter {
     DateTo: string;
 }
 
+/** A row in the comparison grid representing one entity field across all records */
+interface ComparisonFieldRow {
+    FieldName: string;
+    DisplayName: string;
+    Category: string | null;
+    SourceValue: string | undefined;
+    MatchValues: (string | undefined)[];
+    HasDifference: boolean;
+    /** Index of the column whose value is selected for merge (0 = source, 1+ = match index) */
+    SelectedColumnIndex: number;
+}
+
+/** Parsed match info for the comparison panel columns */
+interface ComparisonMatchInfo {
+    Match: MJDuplicateRunDetailMatchEntity;
+    Name: string;
+    Score: number;
+    Metadata: RecordMetadataInfo;
+    DiffCount: number;
+}
+
 /** Lightweight entity document info for the picker dropdown */
 interface EntityDocumentOption {
     ID: string;
@@ -83,14 +104,44 @@ interface EntityDocumentOption {
 })
 export class DuplicateDetectionResourceComponent extends BaseResourceComponent implements AfterViewInit, OnDestroy {
     private cdr = inject(ChangeDetectorRef);
+    private navigationService = inject(NavigationService);
     private destroy$ = new Subject<void>();
     private filterSubject = new Subject<void>();
 
     // Loading state
     public IsLoading = false;
     public IsSaving = false;
-    /** ID of the currently expanded kanban card (null = all collapsed) */
-    public ExpandedGroupId: string | null = null;
+    // ── Comparison Panel State ──
+    /** The group being compared (null = panel closed) */
+    public ComparisonGroup: DuplicateGroup | null = null;
+    /** Whether the comparison panel is loading entity records */
+    public ComparisonLoading = false;
+    /** Whether to show all fields or only differences */
+    public ComparisonShowAllFields = true;
+    /** Precomputed field rows for the comparison grid */
+    public ComparisonFields: ComparisonFieldRow[] = [];
+    /** Parsed match info for comparison columns */
+    public ComparisonMatches: ComparisonMatchInfo[] = [];
+    /** Index of the surviving record column (0 = source, 1+ = match index) */
+    public SurvivorColumnIndex = 0;
+    /** Whether the panel is animating closed */
+    public ComparisonClosing = false;
+    /** Loaded entity records keyed by record ID (populated on panel open via RunView) */
+    private comparisonRecords = new Map<string, Record<string, unknown>>();
+
+    // ── Dependencies State ──
+    /** Dependencies per record, keyed by composite key string */
+    public ComparisonDependencies = new Map<string, RecordDependency[]>();
+    /** Which column indices have expanded dependency details */
+    public DepsExpandedColumns = new Set<number>();
+    /** Tracks which entity groups within deps are expanded (key: "columnIndex::entityName") */
+    private depsEntityGroupExpanded = new Set<string>();
+
+    // ── Merge Confirmation State ──
+    /** Whether the merge confirmation panel is visible */
+    public ShowMergeConfirm = false;
+    /** Whether the merge is currently executing */
+    public IsMerging = false;
 
     // Raw data
     public Runs: MJDuplicateRunEntity[] = [];
@@ -657,30 +708,613 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
         return max;
     }
 
-    /** Toggle the expanded detail view for a kanban card */
-    public ToggleExpand(group: DuplicateGroup): void {
-        this.ExpandedGroupId = this.ExpandedGroupId === group.DetailId ? null : group.DetailId;
+    // ════════════════════════════════════════════
+    // Comparison Panel
+    // ════════════════════════════════════════════
+
+    /** Open the comparison slide-in panel for a group — loads real entity records */
+    public async OpenComparison(group: DuplicateGroup): Promise<void> {
+        this.ComparisonGroup = group;
+        this.ComparisonShowAllFields = true;
+        this.SurvivorColumnIndex = 0;
+        this.ComparisonClosing = false;
+        this.ComparisonLoading = true;
+        this.ComparisonFields = [];
+        this.ComparisonMatches = [];
+        this.comparisonRecords.clear();
+        this.ComparisonDependencies.clear();
+        this.DepsExpandedColumns.clear();
+        this.depsEntityGroupExpanded.clear();
+        this.ShowMergeConfirm = false;
+        this.cdr.detectChanges();
+
+        // Load actual entity records and dependencies in parallel
+        await Promise.all([
+            this.loadComparisonRecords(group),
+            this.loadComparisonDependencies(group)
+        ]);
+        this.buildComparisonData();
+        this.ComparisonLoading = false;
         this.cdr.detectChanges();
     }
 
-    /** Get all match details with parsed metadata for the expanded card view */
-    public GetExpandedMatches(group: DuplicateGroup): Array<{ Name: string; Score: number; Metadata: RecordMetadataInfo }> {
-        return group.Matches.map(m => {
-            const meta = this.parseRecordMetadata(m.RecordMetadata);
-            return {
-                Name: meta.Name || m.MatchRecordID?.substring(0, 16) + '...',
-                Score: m.MatchProbability,
-                Metadata: meta,
-            };
-        });
+    /** Close the comparison panel with slide-out animation */
+    public CloseComparison(): void {
+        this.ShowMergeConfirm = false;
+        this.ComparisonClosing = true;
+        this.cdr.detectChanges();
+        setTimeout(() => {
+            this.ComparisonGroup = null;
+            this.ComparisonClosing = false;
+            this.ComparisonFields = [];
+            this.ComparisonMatches = [];
+            this.ComparisonDependencies.clear();
+            this.DepsExpandedColumns.clear();
+        this.depsEntityGroupExpanded.clear();
+            this.cdr.detectChanges();
+        }, 250);
     }
 
-    /** Convert metadata object to display entries, filtering out internal/already-shown fields */
-    public GetMetadataEntries(metadata: RecordMetadataInfo): Array<{ key: string; value: string }> {
-        const skip = new Set(['Name', 'Entity', 'EntityIcon', 'RecordID', 'TemplateID', '__mj_UpdatedAt']);
-        return Object.entries(metadata)
-            .filter(([k, v]) => !skip.has(k) && v != null && String(v).trim().length > 0)
-            .map(([k, v]) => ({ key: k, value: String(v) }));
+    /** Get visible fields based on the toggle state */
+    public GetVisibleFields(): ComparisonFieldRow[] {
+        return this.ComparisonShowAllFields
+            ? this.ComparisonFields
+            : this.ComparisonFields.filter(f => f.HasDifference);
+    }
+
+    /** Case-insensitive, trimmed comparison of two field values */
+    public AreValuesEqual(a: string | undefined, b: string | undefined): boolean {
+        if (a == null && b == null) return true;
+        if (a == null || b == null) return false;
+        return a.trim().toLowerCase() === b.trim().toLowerCase();
+    }
+
+    /** Set the surviving record column index */
+    public SetSurvivor(columnIndex: number): void {
+        this.SurvivorColumnIndex = columnIndex;
+        // When switching survivor, reset all field selections to the new survivor
+        for (const field of this.ComparisonFields) {
+            field.SelectedColumnIndex = columnIndex;
+        }
+        this.cdr.detectChanges();
+    }
+
+    /** Select all field values from a specific column */
+    public UseAllFieldsFrom(columnIndex: number): void {
+        for (const field of this.ComparisonFields) {
+            // Only select if the column has a value for this field
+            const val = columnIndex === 0 ? field.SourceValue : field.MatchValues[columnIndex - 1];
+            if (val != null) {
+                field.SelectedColumnIndex = columnIndex;
+            }
+        }
+        this.cdr.detectChanges();
+    }
+
+    /** Select a specific field value from a column */
+    public SelectFieldValue(field: ComparisonFieldRow, columnIndex: number): void {
+        field.SelectedColumnIndex = columnIndex;
+        this.cdr.detectChanges();
+    }
+
+    /** Check if all fields are selected from a given column */
+    public AllFieldsSelectedFrom(columnIndex: number): boolean {
+        return this.ComparisonFields.every(f => f.SelectedColumnIndex === columnIndex);
+    }
+
+    /** Count how many fields are cherry-picked from non-survivor columns */
+    public CherryPickedCount(): number {
+        return this.ComparisonFields.filter(f => f.SelectedColumnIndex !== this.SurvivorColumnIndex).length;
+    }
+
+    /** Get the name of the surviving record */
+    public SurvivorName(): string {
+        if (!this.ComparisonGroup) return '';
+        if (this.SurvivorColumnIndex === 0) return this.ComparisonGroup.RecordName;
+        const match = this.ComparisonMatches[this.SurvivorColumnIndex - 1];
+        return match?.Name || 'Unknown';
+    }
+
+    /** Get the primary key display string for the surviving record */
+    public SurvivorKeyDisplay(): string {
+        if (!this.ComparisonGroup) return '';
+        const keyStr = this.getCompositeKeyStringForColumn(this.SurvivorColumnIndex);
+        if (!keyStr) return '';
+        const ck = new CompositeKey();
+        ck.LoadFromConcatenatedString(keyStr);
+        return ck.KeyValuePairs.map(kv => `${kv.FieldName}: ${kv.Value}`).join(', ');
+    }
+
+    // ════════════════════════════════════════════
+    // Dependencies
+    // ════════════════════════════════════════════
+
+    /** Get dependencies for a column (0 = source, 1+ = match index) */
+    public GetDepsForColumn(columnIndex: number): RecordDependency[] {
+        const keyStr = this.getCompositeKeyStringForColumn(columnIndex);
+        return keyStr ? (this.ComparisonDependencies.get(keyStr) ?? []) : [];
+    }
+
+    /** Get deps grouped by related entity for a column */
+    public GetGroupedDeps(columnIndex: number): Array<{ Entity: string; Count: number }> {
+        const deps = this.GetDepsForColumn(columnIndex);
+        const grouped = new Map<string, number>();
+        for (const dep of deps) {
+            const name = dep.RelatedEntityName;
+            grouped.set(name, (grouped.get(name) ?? 0) + 1);
+        }
+        return Array.from(grouped.entries())
+            .map(([Entity, Count]) => ({ Entity, Count }))
+            .sort((a, b) => b.Count - a.Count);
+    }
+
+    /** Cached dependent records loaded on demand, keyed by "columnIndex::entityName" */
+    private depRecordsCache = new Map<string, Array<{ Name: string; PrimaryKey: CompositeKey; EntityName: string }>>();
+    /** Tracks which entity groups are currently loading */
+    private depRecordsLoading = new Set<string>();
+
+    /** Get cached dependent records for an entity group (empty until expanded and loaded) */
+    public GetDepRecords(columnIndex: number, entityName: string): Array<{ Name: string; PrimaryKey: CompositeKey; EntityName: string }> {
+        return this.depRecordsCache.get(`${columnIndex}::${entityName}`) ?? [];
+    }
+
+    /** Check if dep records are loading for an entity group */
+    public IsDepRecordsLoading(columnIndex: number, entityName: string): boolean {
+        return this.depRecordsLoading.has(`${columnIndex}::${entityName}`);
+    }
+
+    /** Navigate to a dependent record */
+    public OpenDepRecord(record: { EntityName: string; PrimaryKey: CompositeKey }): void {
+        if (record.PrimaryKey) {
+            this.navigationService.OpenEntityRecord(record.EntityName, record.PrimaryKey);
+        }
+    }
+
+    /** Toggle expanded state for a specific entity group — lazy-loads records on first expand */
+    public async ToggleDepEntityGroup(columnIndex: number, entityName: string): Promise<void> {
+        const key = `${columnIndex}::${entityName}`;
+        if (this.depsEntityGroupExpanded.has(key)) {
+            this.depsEntityGroupExpanded.delete(key);
+            this.cdr.detectChanges();
+            return;
+        }
+
+        this.depsEntityGroupExpanded.add(key);
+        this.cdr.detectChanges();
+
+        // Lazy-load actual dependent records on first expand
+        if (!this.depRecordsCache.has(key)) {
+            await this.loadDepRecordsForGroup(columnIndex, entityName);
+        }
+    }
+
+    /** Load dependent records for an entity group via RunView */
+    private async loadDepRecordsForGroup(columnIndex: number, relatedEntityName: string): Promise<void> {
+        const key = `${columnIndex}::${relatedEntityName}`;
+        this.depRecordsLoading.add(key);
+        this.cdr.detectChanges();
+
+        try {
+            // Get the FK field name from the dependency info
+            const deps = this.GetDepsForColumn(columnIndex)
+                .filter(d => d.RelatedEntityName === relatedEntityName);
+            if (deps.length === 0) return;
+
+            const dep = deps[0];
+            const fkFieldName = dep.FieldName;
+
+            // Get the parent record's primary key value from the column's composite key string
+            const keyStr = this.getCompositeKeyStringForColumn(columnIndex);
+            if (!keyStr) return;
+            const parentCK = new CompositeKey();
+            parentCK.LoadFromConcatenatedString(keyStr);
+            const parentKeyValue = parentCK.KeyValuePairs[0]?.Value;
+            if (!parentKeyValue) return;
+
+            // Query the related entity for records pointing at this parent via the FK field
+            const rv = new RunView();
+            const md = new Metadata();
+            const relatedEntityInfo = md.Entities.find(e => e.Name === relatedEntityName);
+            const nameField = relatedEntityInfo?.NameField;
+            const pkFieldName = relatedEntityInfo?.FirstPrimaryKey?.Name || 'ID';
+
+            const result = await rv.RunView<Record<string, unknown>>({
+                EntityName: relatedEntityName,
+                ExtraFilter: `${fkFieldName}='${parentKeyValue}'`,
+                Fields: nameField ? [pkFieldName, nameField.Name] : [pkFieldName],
+                MaxRows: 50,
+                ResultType: 'simple',
+            });
+
+            const records: Array<{ Name: string; PrimaryKey: CompositeKey; EntityName: string }> = [];
+            if (result.Success && result.Results) {
+                for (const row of result.Results) {
+                    const pk = new CompositeKey([{ FieldName: pkFieldName, Value: String(row[pkFieldName] || '') }]);
+                    const name = nameField ? String(row[nameField.Name] || '') : String(row[pkFieldName] || '');
+                    records.push({ Name: name || pk.Values(), PrimaryKey: pk, EntityName: relatedEntityName });
+                }
+            }
+            this.depRecordsCache.set(key, records);
+        } catch (error) {
+            console.warn('[DuplicateDetection] Error loading dep records:', error);
+            this.depRecordsCache.set(key, []);
+        } finally {
+            this.depRecordsLoading.delete(key);
+            this.cdr.detectChanges();
+        }
+    }
+
+    /** Check if a specific entity group is expanded */
+    public IsDepEntityGroupExpanded(columnIndex: number, entityName: string): boolean {
+        return this.depsEntityGroupExpanded.has(`${columnIndex}::${entityName}`);
+    }
+
+    /** Get total dependency count for a column */
+    public GetTotalDeps(columnIndex: number): number {
+        return this.GetDepsForColumn(columnIndex).length;
+    }
+
+    /** Toggle expanded state for dependency details in a column */
+    public ToggleDepsExpanded(columnIndex: number): void {
+        if (this.DepsExpandedColumns.has(columnIndex)) {
+            this.DepsExpandedColumns.delete(columnIndex);
+        } else {
+            this.DepsExpandedColumns.add(columnIndex);
+        }
+        this.cdr.detectChanges();
+    }
+
+    /** Check if dependency details are expanded for a column */
+    public IsDepsExpanded(columnIndex: number): boolean {
+        return this.DepsExpandedColumns.has(columnIndex);
+    }
+
+    /** Get the column index with the most dependencies */
+    public GetMaxDepsColumnIndex(): number {
+        let maxDeps = -1;
+        let maxIndex = 0;
+        const totalColumns = 1 + this.ComparisonMatches.length;
+        for (let i = 0; i < totalColumns; i++) {
+            const count = this.GetTotalDeps(i);
+            if (count > maxDeps) {
+                maxDeps = count;
+                maxIndex = i;
+            }
+        }
+        return maxIndex;
+    }
+
+    /** Get the composite key string for a column index */
+    private getCompositeKeyStringForColumn(columnIndex: number): string | null {
+        if (!this.ComparisonGroup) return null;
+        if (columnIndex === 0) return this.ComparisonGroup.RecordId;
+        const match = this.ComparisonMatches[columnIndex - 1];
+        return match?.Match.MatchRecordID ?? null;
+    }
+
+    /** Get the name for a column index */
+    public GetColumnName(columnIndex: number): string {
+        if (!this.ComparisonGroup) return '';
+        if (columnIndex === 0) return this.ComparisonGroup.RecordName;
+        const match = this.ComparisonMatches[columnIndex - 1];
+        return match?.Name ?? 'Unknown';
+    }
+
+    // ════════════════════════════════════════════
+    // Merge Confirmation
+    // ════════════════════════════════════════════
+
+    /** Open the merge confirmation panel */
+    public OpenMergeConfirm(): void {
+        this.ShowMergeConfirm = true;
+        this.cdr.detectChanges();
+    }
+
+    /** Close the merge confirmation panel */
+    public CloseMergeConfirm(): void {
+        this.ShowMergeConfirm = false;
+        this.cdr.detectChanges();
+    }
+
+    /** Get the list of cherry-picked field overrides (fields picked from non-survivor columns) */
+    public GetCherryPickedFields(): Array<{ FieldName: string; DisplayName: string; Value: string; SourceName: string }> {
+        return this.ComparisonFields
+            .filter(f => f.SelectedColumnIndex !== this.SurvivorColumnIndex)
+            .map(f => {
+                const value = f.SelectedColumnIndex === 0
+                    ? f.SourceValue
+                    : f.MatchValues[f.SelectedColumnIndex - 1];
+                return {
+                    FieldName: f.FieldName,
+                    DisplayName: f.DisplayName,
+                    Value: value ?? '(empty)',
+                    SourceName: this.GetColumnName(f.SelectedColumnIndex)
+                };
+            });
+    }
+
+    /** Get non-surviving columns with their dependency counts */
+    public GetNonSurvivorColumns(): Array<{ ColumnIndex: number; Name: string; DepCount: number }> {
+        const result: Array<{ ColumnIndex: number; Name: string; DepCount: number }> = [];
+        const totalColumns = 1 + this.ComparisonMatches.length;
+        for (let i = 0; i < totalColumns; i++) {
+            if (i === this.SurvivorColumnIndex) continue;
+            result.push({
+                ColumnIndex: i,
+                Name: this.GetColumnName(i),
+                DepCount: this.GetTotalDeps(i)
+            });
+        }
+        return result;
+    }
+
+    /** Execute the merge operation */
+    public async ExecuteMerge(): Promise<void> {
+        if (!this.ComparisonGroup || this.IsMerging) return;
+
+        this.IsMerging = true;
+        this.cdr.detectChanges();
+
+        try {
+            const request = new RecordMergeRequest();
+            request.EntityName = this.ComparisonGroup.EntityName;
+
+            // Build surviving record composite key
+            const survivorKeyStr = this.getCompositeKeyStringForColumn(this.SurvivorColumnIndex);
+            if (!survivorKeyStr) return;
+            const survivorKey = new CompositeKey();
+            survivorKey.SimpleLoadFromURLSegment(survivorKeyStr);
+            request.SurvivingRecordCompositeKey = survivorKey;
+
+            // Build records to merge (non-survivors)
+            request.RecordsToMerge = this.buildNonSurvivorKeys();
+
+            // Build field map for cherry-picked fields
+            const cherryPicked = this.GetCherryPickedFields();
+            if (cherryPicked.length > 0) {
+                request.FieldMap = cherryPicked.map(f => ({
+                    FieldName: f.FieldName,
+                    Value: f.Value
+                }));
+            }
+
+            const result = await Metadata.Provider.MergeRecords(request);
+
+            if (result.Success) {
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    `Successfully merged ${request.RecordsToMerge.length + 1} records into one.`,
+                    'success', 5000
+                );
+                // Close both panels and reload
+                this.ShowMergeConfirm = false;
+                this.ComparisonGroup = null;
+                this.ComparisonFields = [];
+                this.ComparisonMatches = [];
+                this.ComparisonDependencies.clear();
+                this.DepsExpandedColumns.clear();
+        this.depsEntityGroupExpanded.clear();
+                await this.LoadData();
+            } else {
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    `Merge failed: ${result.OverallStatus}`,
+                    'error', 5000
+                );
+            }
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            console.error('[DuplicateDetection] Merge error:', msg);
+            MJNotificationService.Instance.CreateSimpleNotification(
+                `Merge error: ${msg}`,
+                'error', 5000
+            );
+        } finally {
+            this.IsMerging = false;
+            this.cdr.detectChanges();
+        }
+    }
+
+    /** Build CompositeKey array for non-surviving records */
+    private buildNonSurvivorKeys(): CompositeKey[] {
+        const keys: CompositeKey[] = [];
+        const totalColumns = 1 + this.ComparisonMatches.length;
+        for (let i = 0; i < totalColumns; i++) {
+            if (i === this.SurvivorColumnIndex) continue;
+            const keyStr = this.getCompositeKeyStringForColumn(i);
+            if (keyStr) {
+                const ck = new CompositeKey();
+                ck.SimpleLoadFromURLSegment(keyStr);
+                keys.push(ck);
+            }
+        }
+        return keys;
+    }
+
+    /** Approve an individual match */
+    public async ApproveIndividualMatch(matchInfo: ComparisonMatchInfo): Promise<void> {
+        this.IsSaving = true;
+        matchInfo.Match.ApprovalStatus = 'Approved';
+        await matchInfo.Match.Save();
+        this.IsSaving = false;
+        this.cdr.detectChanges();
+    }
+
+    /** Reject an individual match */
+    public async RejectIndividualMatch(matchInfo: ComparisonMatchInfo): Promise<void> {
+        this.IsSaving = true;
+        matchInfo.Match.ApprovalStatus = 'Rejected';
+        await matchInfo.Match.Save();
+        this.IsSaving = false;
+        this.cdr.detectChanges();
+    }
+
+    /**
+     * Load the actual entity records for the source + all matches in one RunView call.
+     * Record IDs are stored as composite key strings (e.g., "ID|uuid") — we parse each
+     * into a CompositeKey, generate WHERE clauses, and OR them together for one query.
+     * Results stored in comparisonRecords map keyed by the composite key string.
+     */
+    private async loadComparisonRecords(group: DuplicateGroup): Promise<void> {
+        this.comparisonRecords.clear();
+
+        // Collect all composite key strings (source + matches)
+        const keyStrings: string[] = [group.RecordId];
+        for (const m of group.Matches) {
+            if (m.MatchRecordID) {
+                keyStrings.push(m.MatchRecordID);
+            }
+        }
+
+        // Parse each into a CompositeKey and build WHERE clauses
+        const whereClauses: string[] = [];
+        for (const keyStr of keyStrings) {
+            const ck = new CompositeKey();
+            ck.SimpleLoadFromURLSegment(keyStr);
+            if (ck.KeyValuePairs.length > 0) {
+                whereClauses.push(`(${ck.ToWhereClause()})`);
+            }
+        }
+
+        if (whereClauses.length === 0) return;
+
+        // Single RunView with all records OR'd together
+        const rv = new RunView();
+        const result = await rv.RunView<Record<string, unknown>>({
+            EntityName: group.EntityName,
+            ExtraFilter: whereClauses.join(' OR '),
+            ResultType: 'simple',
+        });
+
+        if (result.Success && result.Results) {
+            // Get entity info to know primary key field name
+            const md = new Metadata();
+            const entityInfo = md.Entities.find(e => e.Name === group.EntityName);
+            const pkFieldName = entityInfo?.FirstPrimaryKey?.Name || 'ID';
+
+            for (const record of result.Results) {
+                const pkValue = String(record[pkFieldName] || '');
+                // Store keyed by both raw PK value and the composite key string format
+                this.comparisonRecords.set(pkValue, record);
+                this.comparisonRecords.set(`${pkFieldName}|${pkValue}`, record);
+            }
+        }
+    }
+
+    /**
+     * Load dependencies for all records (source + matches) in parallel.
+     * Each record's deps are stored in ComparisonDependencies keyed by composite key string.
+     */
+    private async loadComparisonDependencies(group: DuplicateGroup): Promise<void> {
+        const provider = Metadata.Provider;
+        const keyStrings: string[] = [group.RecordId];
+        for (const m of group.Matches) {
+            if (m.MatchRecordID) {
+                keyStrings.push(m.MatchRecordID);
+            }
+        }
+
+        const promises = keyStrings.map(async (keyStr) => {
+            const ck = new CompositeKey();
+            ck.SimpleLoadFromURLSegment(keyStr);
+            if (ck.KeyValuePairs.length === 0) return;
+            try {
+                const deps = await provider.GetRecordDependencies(group.EntityName, ck);
+                this.ComparisonDependencies.set(keyStr, deps);
+            } catch (error) {
+                console.warn(`[DuplicateDetection] Failed to load deps for ${keyStr}:`, error);
+                this.ComparisonDependencies.set(keyStr, []);
+            }
+        });
+
+        await Promise.all(promises);
+    }
+
+    /** Get the field value for a record from the loaded entity records map */
+    private getRecordFieldValue(recordId: string, fieldName: string): string | undefined {
+        // Try the composite key string directly (e.g., "ID|uuid")
+        let record = this.comparisonRecords.get(recordId);
+        if (!record) {
+            // Try extracting just the value from "FieldName|Value" format
+            const parts = recordId.split('|');
+            const id = parts.length >= 2 ? parts[1] : parts[0];
+            record = this.comparisonRecords.get(id);
+        }
+        if (!record) {
+            // Case-insensitive search as a fallback (UUIDs may differ in case)
+            const lower = recordId.toLowerCase();
+            for (const [key, val] of this.comparisonRecords.entries()) {
+                if (key.toLowerCase() === lower || key.toLowerCase().endsWith(lower)) {
+                    record = val;
+                    break;
+                }
+            }
+        }
+        if (!record) return undefined;
+        const val = record[fieldName];
+        return val != null ? String(val) : undefined;
+    }
+
+    /** Build comparison data from loaded entity records */
+    private buildComparisonData(): void {
+        if (!this.ComparisonGroup) return;
+
+        // Build match infos (use loaded record data for names)
+        this.ComparisonMatches = this.ComparisonGroup.Matches
+            .sort((a, b) => b.MatchProbability - a.MatchProbability)
+            .map(m => {
+                const meta = this.parseRecordMetadata(m.RecordMetadata);
+                // Try to get name from loaded entity record, fall back to vector metadata
+                const nameFromRecord = this.getRecordFieldValue(m.MatchRecordID, 'Name');
+                return {
+                    Match: m,
+                    Name: nameFromRecord || meta.Name || m.MatchRecordID?.substring(0, 16) + '...',
+                    Score: m.MatchProbability,
+                    Metadata: meta,
+                    DiffCount: 0,
+                };
+            });
+
+        // Get entity field info for display names and ordering
+        const md = new Metadata();
+        const entityInfo = md.Entities.find(e => e.Name === this.ComparisonGroup!.EntityName);
+        const entityFields = entityInfo?.Fields ?? [];
+
+        const skip = new Set(['ID', '__mj_CreatedAt', '__mj_UpdatedAt']);
+        const rows: ComparisonFieldRow[] = [];
+
+        // Use entity fields in sequence order — values come from loaded entity records
+        const sourceId = this.ComparisonGroup.RecordId;
+        const matchRecordIds = this.ComparisonGroup.Matches
+            .sort((a, b) => b.MatchProbability - a.MatchProbability)
+            .map(m => m.MatchRecordID);
+
+        for (const field of entityFields.sort((a, b) => a.Sequence - b.Sequence)) {
+            if (skip.has(field.Name) || field.IsPrimaryKey) continue;
+
+            const sourceVal = this.getRecordFieldValue(sourceId, field.Name);
+            const matchVals = matchRecordIds.map(rid => this.getRecordFieldValue(rid, field.Name));
+            const hasDiff = matchVals.some(mv => !this.AreValuesEqual(sourceVal, mv));
+            const hasData = sourceVal != null || matchVals.some(v => v != null);
+            if (!hasData) continue;
+
+            rows.push({
+                FieldName: field.Name,
+                DisplayName: field.DisplayName || field.Name,
+                Category: field.Category || null,
+                SourceValue: sourceVal,
+                MatchValues: matchVals,
+                HasDifference: hasDiff,
+                SelectedColumnIndex: 0,
+            });
+        }
+
+        this.ComparisonFields = rows;
+
+        // Compute diff counts per match
+        for (let mi = 0; mi < this.ComparisonMatches.length; mi++) {
+            this.ComparisonMatches[mi].DiffCount = rows.filter(r =>
+                !this.AreValuesEqual(r.SourceValue, r.MatchValues[mi])
+            ).length;
+        }
     }
 
     /** Parse RecordMetadata JSON from a detail or match entity */
