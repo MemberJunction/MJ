@@ -105,8 +105,11 @@
         <div class="filter-group">
             <select class="filter-select"
                     [(ngModel)]="Filters.EntityName"
-                    (ngModelChange)="OnFilterChange()">
-                <option value="">All Entities</option>
+                    (ngModelChange)="OnFilterChange()"
+                    [disabled]="EntityNames.length <= 1">
+                @if (EntityNames.length > 1) {
+                    <option value="">All Entities</option>
+                }
                 @for (name of EntityNames; track name) {
                     <option [value]="name">{{ name }}</option>
                 }
@@ -115,8 +118,9 @@
             <div class="filter-range">
                 <label class="filter-label">Min Score</label>
                 <input type="number"
-                       class="filter-input"
+                       class="filter-input filter-input-score"
                        min="0" max="1" step="0.05"
+                       [placeholder]="DataMinScore"
                        [(ngModel)]="Filters.MinScore"
                        (ngModelChange)="OnFilterChange()">
             </div>
@@ -124,8 +128,9 @@
             <div class="filter-range">
                 <label class="filter-label">Max Score</label>
                 <input type="number"
-                       class="filter-input"
+                       class="filter-input filter-input-score"
                        min="0" max="1" step="0.05"
+                       [placeholder]="DataMaxScore"
                        [(ngModel)]="Filters.MaxScore"
                        (ngModelChange)="OnFilterChange()">
             </div>
@@ -133,7 +138,8 @@
             <div class="filter-range">
                 <label class="filter-label">From</label>
                 <input type="date"
-                       class="filter-input"
+                       class="filter-input filter-input-date"
+                       [min]="DataMinDate" [max]="DataMaxDate"
                        [(ngModel)]="Filters.DateFrom"
                        (ngModelChange)="OnFilterChange()">
             </div>
@@ -141,7 +147,8 @@
             <div class="filter-range">
                 <label class="filter-label">To</label>
                 <input type="date"
-                       class="filter-input"
+                       class="filter-input filter-input-date"
+                       [min]="DataMinDate" [max]="DataMaxDate"
                        [(ngModel)]="Filters.DateTo"
                        (ngModelChange)="OnFilterChange()">
             </div>

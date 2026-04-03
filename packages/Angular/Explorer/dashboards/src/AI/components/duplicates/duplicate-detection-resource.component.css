@@ -368,6 +368,14 @@ app-duplicate-detection-resource {
     width: 100px;
 }
 
+.filter-input-score {
+    width: 80px;
+}
+
+.filter-input-date {
+    width: 140px;
+}
+
 .filter-input:focus {
     border-color: var(--mj-border-focus);
     box-shadow: 0 0 0 2px color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);

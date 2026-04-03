@@ -330,7 +330,7 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
             const [runsResult, detailsResult, matchesResult] = await rv.RunViews([
                 {
                     EntityName: 'MJ: Duplicate Runs',
-                    ExtraFilter: "ProcessingStatus = 'Complete'",
+                    ExtraFilter: "ProcessingStatus IN ('Complete', 'Failed', 'In Progress')",
                     OrderBy: 'StartedAt DESC',
                     ResultType: 'entity_object'
                 },
@@ -360,8 +360,9 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
             // Build entity document options from cached active documents
             this.buildEntityDocumentOptionsFromEngine(engine.GetActiveEntityDocuments());
 
-            this.extractEntityNames();
             this.buildGroups();
+            this.extractEntityNames();
+            this.computeDataRanges();
             this.applyFilters();
         } catch (error) {
             console.error('Error loading duplicate detection data:', error);
@@ -446,14 +447,63 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
         this.filterSubject.next();
     }
 
+    /** Computed range bounds from actual data — used as min/max/placeholder for filter inputs */
+    public DataMinScore = 0;
+    public DataMaxScore = 1;
+    public DataMinDate = '';
+    public DataMaxDate = '';
+
+    /** Compute the actual data ranges from AllGroups */
+    private computeDataRanges(): void {
+        if (this.AllGroups.length === 0) {
+            this.DataMinScore = 0;
+            this.DataMaxScore = 1;
+            this.DataMinDate = '';
+            this.DataMaxDate = '';
+            return;
+        }
+
+        let minScore = 1, maxScore = 0;
+        let minDate: Date | null = null, maxDate: Date | null = null;
+
+        for (const group of this.AllGroups) {
+            if (group.HighestScore < minScore) minScore = group.HighestScore;
+            if (group.HighestScore > maxScore) maxScore = group.HighestScore;
+            const d = new Date(group.MatchedAt);
+            if (!isNaN(d.getTime())) {
+                if (!minDate || d < minDate) minDate = d;
+                if (!maxDate || d > maxDate) maxDate = d;
+            }
+        }
+
+        this.DataMinScore = Math.floor(minScore * 100) / 100;
+        this.DataMaxScore = Math.ceil(maxScore * 100) / 100;
+        this.DataMinDate = minDate ? this.toInputDate(minDate) : '';
+        this.DataMaxDate = maxDate ? this.toInputDate(maxDate) : '';
+
+        // Leave filters empty by default — no filtering until user explicitly sets values
+        this.Filters.MinScore = 0;
+        this.Filters.MaxScore = 1;
+        this.Filters.DateFrom = '';
+        this.Filters.DateTo = '';
+    }
+
+    /** Format a Date to YYYY-MM-DD for input[type=date] using local time */
+    private toInputDate(d: Date): string {
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }
+
     /** Clear all filters */
     public ClearFilters(): void {
         this.Filters = {
-            EntityName: '',
+            EntityName: this.EntityNames.length === 1 ? this.EntityNames[0] : '',
             MinScore: 0,
             MaxScore: 1,
             DateFrom: '',
-            DateTo: ''
+            DateTo: '',
         };
         this.applyFilters();
     }
@@ -481,9 +531,9 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
 
     /** Whether any filters are active */
     public get HasActiveFilters(): boolean {
-        return this.Filters.EntityName !== '' ||
+        return (this.EntityNames.length > 1 && this.Filters.EntityName !== '') ||
             this.Filters.MinScore > 0 ||
-            this.Filters.MaxScore < 1 ||
+            (this.Filters.MaxScore > 0 && this.Filters.MaxScore < 1) ||
             this.Filters.DateFrom !== '' ||
             this.Filters.DateTo !== '';
     }
@@ -629,12 +679,24 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
     /** Extract unique entity names from loaded runs */
     private extractEntityNames(): void {
         const nameSet = new Set<string>();
+        // Extract from runs first
         for (const run of this.Runs) {
             if (run.Entity) {
                 nameSet.add(run.Entity);
             }
         }
+        // Also extract from groups (covers cases where runs failed but details/matches exist)
+        for (const group of this.AllGroups) {
+            if (group.EntityName && group.EntityName !== 'Unknown') {
+                nameSet.add(group.EntityName);
+            }
+        }
         this.EntityNames = Array.from(nameSet).sort();
+
+        // Auto-select if only one entity — no point showing "All Entities" for a single option
+        if (this.EntityNames.length === 1) {
+            this.Filters.EntityName = this.EntityNames[0];
+        }
     }
 
     /**
@@ -1387,17 +1449,19 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
             filtered = filtered.filter(g => g.HighestScore >= this.Filters.MinScore);
         }
 
-        if (this.Filters.MaxScore < 1) {
+        if (this.Filters.MaxScore > 0 && this.Filters.MaxScore < 1) {
             filtered = filtered.filter(g => g.HighestScore <= this.Filters.MaxScore);
         }
 
         if (this.Filters.DateFrom) {
-            const from = new Date(this.Filters.DateFrom);
+            const parts = this.Filters.DateFrom.split('-');
+            const from = new Date(+parts[0], +parts[1] - 1, +parts[2], 0, 0, 0, 0);
             filtered = filtered.filter(g => new Date(g.MatchedAt) >= from);
         }
 
         if (this.Filters.DateTo) {
-            const to = new Date(this.Filters.DateTo);
+            const parts = this.Filters.DateTo.split('-');
+            const to = new Date(+parts[0], +parts[1] - 1, +parts[2], 23, 59, 59, 999);
             filtered = filtered.filter(g => new Date(g.MatchedAt) <= to);
         }
 
