@@ -81,6 +81,13 @@ export class MJExplorerAppComponent implements OnInit, OnDestroy {
       });
 
       if (result.success) {
+        // Start the client tool session so agents can invoke browser-side tools.
+        // Uses the GraphQLDataProvider's sessionId which is the PubSub correlation key.
+        const provider = Metadata.Provider as { sessionId?: string };
+        if (provider.sessionId) {
+          this.agentClient.StartSession(provider.sessionId);
+        }
+
         // Chat overlay can now render — workspace is initialized
         this.IsChatOverlayReady = true;
         this.cdr.detectChanges();
@@ -240,12 +247,9 @@ export class MJExplorerAppComponent implements OnInit, OnDestroy {
   }
 
   /** Handle tool execution events from the chat overlay */
-  public OnOverlayToolExecuted(event: ClientToolResultEvent): void {
-    if (event.Result.Success) {
-      MJNotificationService.Instance.CreateSimpleNotification(
-        `Tool "${event.Request.ToolName}" executed`, 'info', 2000
-      );
-    }
+  public OnOverlayToolExecuted(_event: ClientToolResultEvent): void {
+    // Tool results are self-evident from the UI change (e.g., navigation).
+    // No toast needed — the action itself is the feedback.
   }
 
   /** Handle "open entity record" events from the chat overlay */
@@ -319,10 +323,13 @@ export class MJExplorerAppComponent implements OnInit, OnDestroy {
         // Resolve app ID and navigate
         const md = new Metadata();
         const app = md.Applications.find(a => a.Name.toLowerCase() === appName.toLowerCase());
+        if (!app) {
+          return { Success: false, ErrorMessage: `Application '${appName}' not found` };
+        }
         if (navItemName) {
-          await this.navigationService.OpenNavItemByName(navItemName, undefined, app?.ID);
-        } else if (app) {
-          await this.navigationService.OpenNavItemByName(app.Name, undefined, app.ID);
+          await this.navigationService.OpenNavItemByName(navItemName, undefined, app.ID);
+        } else {
+          await this.navigationService.SwitchToApp(app.ID);
         }
 
         return { Success: true, Data: { Navigated: true, AppName: appName, NavItemName: navItemName } };
