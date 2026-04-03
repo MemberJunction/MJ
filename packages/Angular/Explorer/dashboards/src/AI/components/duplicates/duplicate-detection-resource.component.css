@@ -547,27 +547,58 @@ app-duplicate-detection-resource {
 
 .card-header {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: space-between;
     padding: 10px 12px;
     border-bottom: 1px solid var(--mj-border-subtle);
+    gap: 8px;
+}
+
+.card-header-left {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    min-width: 0;
+    flex: 1;
+}
+
+.card-icon {
+    width: 2rem;
+    height: 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+    color: var(--mj-brand-primary);
+    font-size: 0.85rem;
+    flex-shrink: 0;
+}
+
+.card-title-block {
+    min-width: 0;
+    flex: 1;
+}
+
+.card-record-name {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--mj-text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin-bottom: 2px;
 }
 
 .entity-badge {
     display: inline-flex;
     align-items: center;
-    padding: 2px 8px;
-    border-radius: 4px;
-    font-size: 11px;
-    font-weight: 600;
-    background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
-    color: var(--mj-brand-primary);
-    text-transform: uppercase;
-    letter-spacing: 0.3px;
-    max-width: 160px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--mj-text-muted);
+    letter-spacing: 0.2px;
 }
 
 /* Score indicator colors */
@@ -605,35 +636,169 @@ app-duplicate-detection-resource {
     padding: 10px 12px;
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 8px;
 }
 
-.card-field {
+.match-summaries {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.match-summary-row {
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 13px;
-    color: var(--mj-text-secondary);
-}
-
-.field-icon {
-    width: 14px;
-    text-align: center;
     font-size: 12px;
-    color: var(--mj-text-muted);
-    flex-shrink: 0;
 }
 
-.field-value {
+.match-score {
+    flex-shrink: 0;
+    font-weight: 600;
+    font-size: 11px;
+    color: var(--mj-text-muted);
+    min-width: 30px;
+}
+
+.match-name {
+    color: var(--mj-text-secondary);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-.record-id {
-    font-family: monospace;
+.match-summary-more {
+    font-size: 11px;
+    color: var(--mj-text-muted);
+    font-style: italic;
+    padding-left: 38px;
+}
+
+.card-meta-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 11px;
+    color: var(--mj-text-muted);
+    border-top: 1px solid var(--mj-border-subtle);
+    padding-top: 6px;
+}
+
+.card-meta-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.card-meta-item i {
+    font-size: 10px;
+}
     font-size: 12px;
     max-width: 180px;
+}
+
+/* Expand chevron and header right */
+.card-header-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.expand-chevron {
+    font-size: 10px;
+    color: var(--mj-text-muted);
+    transition: transform 0.2s ease;
+}
+
+/* Expanded card state */
+.card-expanded {
+    border-color: var(--mj-brand-primary);
+    box-shadow: 0 2px 12px color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
+}
+
+/* Expanded detail section */
+.card-expanded-detail {
+    padding: 12px;
+    border-top: 1px solid var(--mj-border-default);
+    background: var(--mj-bg-surface-sunken);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.expanded-section-label {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--mj-text-muted);
+    margin-bottom: 6px;
+}
+
+.expanded-record-card,
+.expanded-match-card {
+    background: var(--mj-bg-surface);
+    border: 1px solid var(--mj-border-subtle);
+    border-radius: 6px;
+    padding: 10px;
+}
+
+.expanded-match-card {
+    margin-bottom: 6px;
+}
+
+.expanded-record-name {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--mj-text-primary);
+    margin-bottom: 8px;
+}
+
+.expanded-record-icon {
+    color: var(--mj-brand-primary);
+    font-size: 0.8rem;
+}
+
+.expanded-match-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+}
+
+.expanded-match-name {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--mj-text-primary);
+}
+
+.score-sm {
+    font-size: 10px;
+    padding: 1px 6px;
+    min-width: 32px;
+}
+
+.expanded-field {
+    display: flex;
+    gap: 8px;
+    font-size: 0.75rem;
+    padding: 3px 0;
+}
+
+.expanded-field-key {
+    color: var(--mj-text-muted);
+    font-weight: 500;
+    min-width: 70px;
+    flex-shrink: 0;
+}
+
+.expanded-field-value {
+    color: var(--mj-text-secondary);
+    word-break: break-word;
 }
 
 .card-actions {

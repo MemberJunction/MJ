@@ -177,27 +177,90 @@
                 </div>
                 <div class="column-body">
                     @for (group of PendingGroups; track group.DetailId) {
-                        <div class="kanban-card">
-                            <div class="card-header">
-                                <span class="entity-badge">{{ group.EntityName }}</span>
-                                <span class="score-indicator" [class]="GetScoreClass(group.HighestScore)">
-                                    {{ (group.HighestScore * 100).toFixed(0) }}%
-                                </span>
+                        <div class="kanban-card" [class.card-expanded]="ExpandedGroupId === group.DetailId">
+                            <div class="card-header" (click)="ToggleExpand(group)">
+                                <div class="card-header-left">
+                                    <div class="card-icon">
+                                        <i [class]="group.EntityIcon"></i>
+                                    </div>
+                                    <div class="card-title-block">
+                                        <div class="card-record-name" [title]="group.RecordName">{{ group.RecordName }}</div>
+                                        <span class="entity-badge">{{ group.EntityName }}</span>
+                                    </div>
+                                </div>
+                                <div class="card-header-right">
+                                    <span class="score-indicator" [class]="GetScoreClass(group.HighestScore)">
+                                        {{ (group.HighestScore * 100).toFixed(0) }}%
+                                    </span>
+                                    <i class="fa-solid expand-chevron"
+                                       [class.fa-chevron-down]="ExpandedGroupId !== group.DetailId"
+                                       [class.fa-chevron-up]="ExpandedGroupId === group.DetailId"></i>
+                                </div>
                             </div>
                             <div class="card-body">
-                                <div class="card-field">
-                                    <i class="fa-solid fa-fingerprint field-icon"></i>
-                                    <span class="field-value record-id" [title]="group.RecordId">{{ group.RecordId }}</span>
-                                </div>
-                                <div class="card-field">
-                                    <i class="fa-solid fa-layer-group field-icon"></i>
-                                    <span class="field-value">{{ group.MatchCount }} match{{ group.MatchCount !== 1 ? 'es' : '' }}</span>
-                                </div>
-                                <div class="card-field">
-                                    <i class="fa-solid fa-calendar field-icon"></i>
-                                    <span class="field-value">{{ FormatDate(group.MatchedAt) }}</span>
+                                @if (group.TopMatchSummaries.length > 0) {
+                                    <div class="match-summaries">
+                                        @for (ms of group.TopMatchSummaries; track ms.Name) {
+                                            <div class="match-summary-row">
+                                                <span class="match-score">{{ (ms.Score * 100).toFixed(0) }}%</span>
+                                                <span class="match-name">{{ ms.Name }}</span>
+                                            </div>
+                                        }
+                                        @if (group.MatchCount > group.TopMatchSummaries.length) {
+                                            <div class="match-summary-more">+{{ group.MatchCount - group.TopMatchSummaries.length }} more</div>
+                                        }
+                                    </div>
+                                }
+                                <div class="card-meta-row">
+                                    <span class="card-meta-item">
+                                        <i class="fa-solid fa-layer-group"></i>
+                                        {{ group.MatchCount }} match{{ group.MatchCount !== 1 ? 'es' : '' }}
+                                    </span>
+                                    <span class="card-meta-item">
+                                        <i class="fa-solid fa-calendar"></i>
+                                        {{ FormatDate(group.MatchedAt) }}
+                                    </span>
                                 </div>
                             </div>
+                            <!-- Expanded detail: full match comparison -->
+                            @if (ExpandedGroupId === group.DetailId) {
+                                <div class="card-expanded-detail">
+                                    <div class="expanded-source">
+                                        <div class="expanded-section-label">Source Record</div>
+                                        <div class="expanded-record-card">
+                                            <div class="expanded-record-name">
+                                                <i [class]="group.EntityIcon" class="expanded-record-icon"></i>
+                                                {{ group.RecordName }}
+                                            </div>
+                                            @for (entry of GetMetadataEntries(group.Metadata); track entry.key) {
+                                                <div class="expanded-field">
+                                                    <span class="expanded-field-key">{{ entry.key }}</span>
+                                                    <span class="expanded-field-value">{{ entry.value }}</span>
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+                                    <div class="expanded-matches">
+                                        <div class="expanded-section-label">Potential Duplicates</div>
+                                        @for (match of GetExpandedMatches(group); track match.Name) {
+                                            <div class="expanded-match-card">
+                                                <div class="expanded-match-header">
+                                                    <span class="expanded-match-name">{{ match.Name }}</span>
+                                                    <span class="score-indicator score-sm" [class]="GetScoreClass(match.Score)">
+                                                        {{ (match.Score * 100).toFixed(0) }}%
+                                                    </span>
+                                                </div>
+                                                @for (entry of GetMetadataEntries(match.Metadata); track entry.key) {
+                                                    <div class="expanded-field">
+                                                        <span class="expanded-field-key">{{ entry.key }}</span>
+                                                        <span class="expanded-field-value">{{ entry.value }}</span>
+                                                    </div>
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            }
                             <div class="card-actions">
                                 <button class="action-btn approve-btn"
                                         [disabled]="IsSaving"
@@ -230,27 +293,90 @@
                 </div>
                 <div class="column-body">
                     @for (group of ApprovedGroups; track group.DetailId) {
-                        <div class="kanban-card">
-                            <div class="card-header">
-                                <span class="entity-badge">{{ group.EntityName }}</span>
-                                <span class="score-indicator" [class]="GetScoreClass(group.HighestScore)">
-                                    {{ (group.HighestScore * 100).toFixed(0) }}%
-                                </span>
+                        <div class="kanban-card" [class.card-expanded]="ExpandedGroupId === group.DetailId">
+                            <div class="card-header" (click)="ToggleExpand(group)">
+                                <div class="card-header-left">
+                                    <div class="card-icon">
+                                        <i [class]="group.EntityIcon"></i>
+                                    </div>
+                                    <div class="card-title-block">
+                                        <div class="card-record-name" [title]="group.RecordName">{{ group.RecordName }}</div>
+                                        <span class="entity-badge">{{ group.EntityName }}</span>
+                                    </div>
+                                </div>
+                                <div class="card-header-right">
+                                    <span class="score-indicator" [class]="GetScoreClass(group.HighestScore)">
+                                        {{ (group.HighestScore * 100).toFixed(0) }}%
+                                    </span>
+                                    <i class="fa-solid expand-chevron"
+                                       [class.fa-chevron-down]="ExpandedGroupId !== group.DetailId"
+                                       [class.fa-chevron-up]="ExpandedGroupId === group.DetailId"></i>
+                                </div>
                             </div>
                             <div class="card-body">
-                                <div class="card-field">
-                                    <i class="fa-solid fa-fingerprint field-icon"></i>
-                                    <span class="field-value record-id" [title]="group.RecordId">{{ group.RecordId }}</span>
-                                </div>
-                                <div class="card-field">
-                                    <i class="fa-solid fa-layer-group field-icon"></i>
-                                    <span class="field-value">{{ group.MatchCount }} match{{ group.MatchCount !== 1 ? 'es' : '' }}</span>
-                                </div>
-                                <div class="card-field">
-                                    <i class="fa-solid fa-calendar field-icon"></i>
-                                    <span class="field-value">{{ FormatDate(group.MatchedAt) }}</span>
+                                @if (group.TopMatchSummaries.length > 0) {
+                                    <div class="match-summaries">
+                                        @for (ms of group.TopMatchSummaries; track ms.Name) {
+                                            <div class="match-summary-row">
+                                                <span class="match-score">{{ (ms.Score * 100).toFixed(0) }}%</span>
+                                                <span class="match-name">{{ ms.Name }}</span>
+                                            </div>
+                                        }
+                                        @if (group.MatchCount > group.TopMatchSummaries.length) {
+                                            <div class="match-summary-more">+{{ group.MatchCount - group.TopMatchSummaries.length }} more</div>
+                                        }
+                                    </div>
+                                }
+                                <div class="card-meta-row">
+                                    <span class="card-meta-item">
+                                        <i class="fa-solid fa-layer-group"></i>
+                                        {{ group.MatchCount }} match{{ group.MatchCount !== 1 ? 'es' : '' }}
+                                    </span>
+                                    <span class="card-meta-item">
+                                        <i class="fa-solid fa-calendar"></i>
+                                        {{ FormatDate(group.MatchedAt) }}
+                                    </span>
                                 </div>
                             </div>
+                            <!-- Expanded detail: full match comparison -->
+                            @if (ExpandedGroupId === group.DetailId) {
+                                <div class="card-expanded-detail">
+                                    <div class="expanded-source">
+                                        <div class="expanded-section-label">Source Record</div>
+                                        <div class="expanded-record-card">
+                                            <div class="expanded-record-name">
+                                                <i [class]="group.EntityIcon" class="expanded-record-icon"></i>
+                                                {{ group.RecordName }}
+                                            </div>
+                                            @for (entry of GetMetadataEntries(group.Metadata); track entry.key) {
+                                                <div class="expanded-field">
+                                                    <span class="expanded-field-key">{{ entry.key }}</span>
+                                                    <span class="expanded-field-value">{{ entry.value }}</span>
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+                                    <div class="expanded-matches">
+                                        <div class="expanded-section-label">Potential Duplicates</div>
+                                        @for (match of GetExpandedMatches(group); track match.Name) {
+                                            <div class="expanded-match-card">
+                                                <div class="expanded-match-header">
+                                                    <span class="expanded-match-name">{{ match.Name }}</span>
+                                                    <span class="score-indicator score-sm" [class]="GetScoreClass(match.Score)">
+                                                        {{ (match.Score * 100).toFixed(0) }}%
+                                                    </span>
+                                                </div>
+                                                @for (entry of GetMetadataEntries(match.Metadata); track entry.key) {
+                                                    <div class="expanded-field">
+                                                        <span class="expanded-field-key">{{ entry.key }}</span>
+                                                        <span class="expanded-field-value">{{ entry.value }}</span>
+                                                    </div>
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            }
                         </div>
                     }
                     @if (ApprovedGroups.length === 0) {
@@ -271,27 +397,90 @@
                 </div>
                 <div class="column-body">
                     @for (group of RejectedGroups; track group.DetailId) {
-                        <div class="kanban-card">
-                            <div class="card-header">
-                                <span class="entity-badge">{{ group.EntityName }}</span>
-                                <span class="score-indicator" [class]="GetScoreClass(group.HighestScore)">
-                                    {{ (group.HighestScore * 100).toFixed(0) }}%
-                                </span>
+                        <div class="kanban-card" [class.card-expanded]="ExpandedGroupId === group.DetailId">
+                            <div class="card-header" (click)="ToggleExpand(group)">
+                                <div class="card-header-left">
+                                    <div class="card-icon">
+                                        <i [class]="group.EntityIcon"></i>
+                                    </div>
+                                    <div class="card-title-block">
+                                        <div class="card-record-name" [title]="group.RecordName">{{ group.RecordName }}</div>
+                                        <span class="entity-badge">{{ group.EntityName }}</span>
+                                    </div>
+                                </div>
+                                <div class="card-header-right">
+                                    <span class="score-indicator" [class]="GetScoreClass(group.HighestScore)">
+                                        {{ (group.HighestScore * 100).toFixed(0) }}%
+                                    </span>
+                                    <i class="fa-solid expand-chevron"
+                                       [class.fa-chevron-down]="ExpandedGroupId !== group.DetailId"
+                                       [class.fa-chevron-up]="ExpandedGroupId === group.DetailId"></i>
+                                </div>
                             </div>
                             <div class="card-body">
-                                <div class="card-field">
-                                    <i class="fa-solid fa-fingerprint field-icon"></i>
-                                    <span class="field-value record-id" [title]="group.RecordId">{{ group.RecordId }}</span>
-                                </div>
-                                <div class="card-field">
-                                    <i class="fa-solid fa-layer-group field-icon"></i>
-                                    <span class="field-value">{{ group.MatchCount }} match{{ group.MatchCount !== 1 ? 'es' : '' }}</span>
-                                </div>
-                                <div class="card-field">
-                                    <i class="fa-solid fa-calendar field-icon"></i>
-                                    <span class="field-value">{{ FormatDate(group.MatchedAt) }}</span>
+                                @if (group.TopMatchSummaries.length > 0) {
+                                    <div class="match-summaries">
+                                        @for (ms of group.TopMatchSummaries; track ms.Name) {
+                                            <div class="match-summary-row">
+                                                <span class="match-score">{{ (ms.Score * 100).toFixed(0) }}%</span>
+                                                <span class="match-name">{{ ms.Name }}</span>
+                                            </div>
+                                        }
+                                        @if (group.MatchCount > group.TopMatchSummaries.length) {
+                                            <div class="match-summary-more">+{{ group.MatchCount - group.TopMatchSummaries.length }} more</div>
+                                        }
+                                    </div>
+                                }
+                                <div class="card-meta-row">
+                                    <span class="card-meta-item">
+                                        <i class="fa-solid fa-layer-group"></i>
+                                        {{ group.MatchCount }} match{{ group.MatchCount !== 1 ? 'es' : '' }}
+                                    </span>
+                                    <span class="card-meta-item">
+                                        <i class="fa-solid fa-calendar"></i>
+                                        {{ FormatDate(group.MatchedAt) }}
+                                    </span>
                                 </div>
                             </div>
+                            <!-- Expanded detail: full match comparison -->
+                            @if (ExpandedGroupId === group.DetailId) {
+                                <div class="card-expanded-detail">
+                                    <div class="expanded-source">
+                                        <div class="expanded-section-label">Source Record</div>
+                                        <div class="expanded-record-card">
+                                            <div class="expanded-record-name">
+                                                <i [class]="group.EntityIcon" class="expanded-record-icon"></i>
+                                                {{ group.RecordName }}
+                                            </div>
+                                            @for (entry of GetMetadataEntries(group.Metadata); track entry.key) {
+                                                <div class="expanded-field">
+                                                    <span class="expanded-field-key">{{ entry.key }}</span>
+                                                    <span class="expanded-field-value">{{ entry.value }}</span>
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+                                    <div class="expanded-matches">
+                                        <div class="expanded-section-label">Potential Duplicates</div>
+                                        @for (match of GetExpandedMatches(group); track match.Name) {
+                                            <div class="expanded-match-card">
+                                                <div class="expanded-match-header">
+                                                    <span class="expanded-match-name">{{ match.Name }}</span>
+                                                    <span class="score-indicator score-sm" [class]="GetScoreClass(match.Score)">
+                                                        {{ (match.Score * 100).toFixed(0) }}%
+                                                    </span>
+                                                </div>
+                                                @for (entry of GetMetadataEntries(match.Metadata); track entry.key) {
+                                                    <div class="expanded-field">
+                                                        <span class="expanded-field-key">{{ entry.key }}</span>
+                                                        <span class="expanded-field-value">{{ entry.value }}</span>
+                                                    </div>
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            }
                         </div>
                     }
                     @if (RejectedGroups.length === 0) {

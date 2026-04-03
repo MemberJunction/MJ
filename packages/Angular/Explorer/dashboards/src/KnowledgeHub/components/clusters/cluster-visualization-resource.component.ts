@@ -165,20 +165,24 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
     }
 
     /** Handle point click — log for now */
-    public OnPointClicked(point: ClusterPoint): void {
-        const entityName = point.Metadata?.['Entity'] as string;
-        const recordID = point.Metadata?.['RecordID'] as string;
-        if (!entityName || !recordID) return;
-
-        // RecordID from Pinecone metadata is in composite key string format (e.g., "ID|26EA1B87-...")
-        const compositeKey = new CompositeKey();
-        compositeKey.SimpleLoadFromURLSegment(recordID);
-        this.navigationService.OpenEntityRecord(entityName, compositeKey);
+    public OnPointClicked(_point: ClusterPoint): void {
+        // Detail panel is handled by the scatter component internally
     }
 
     /** Handle point hover */
     public OnPointHovered(_point: ClusterPoint | null): void {
-        // No-op for now; the scatter component handles tooltip display
+        // Tooltip display handled by scatter component
+    }
+
+    /** Navigate to the entity record when "Open Record" is clicked in the detail panel */
+    public OnOpenRecord(point: ClusterPoint): void {
+        const entityName = point.Metadata?.['Entity'] as string;
+        const recordID = point.Metadata?.['RecordID'] as string;
+        if (!entityName || !recordID) return;
+
+        const compositeKey = new CompositeKey();
+        compositeKey.SimpleLoadFromURLSegment(recordID);
+        this.navigationService.OpenEntityRecord(entityName, compositeKey);
     }
 
     /** Save the current visualization */

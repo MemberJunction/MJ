@@ -103,6 +103,11 @@ export class DuplicateRecordDetector extends VectorBase {
     private embedding: BaseEmbeddings;
     /** The Pinecone/pgvector/Qdrant index name resolved from the entity document's VectorIndex */
     private indexName: string;
+    /**
+     * Tracks already-seen source↔match pairs across the entire run to suppress inverse duplicates.
+     * If A→B is persisted, B→A is skipped. Key format: "smallerID::largerID" for consistent ordering.
+     */
+    private _seenPairs = new Set<string>();
 
     /**
      * Run duplicate detection for records identified by ListID, ViewID, ExtraFilter,
@@ -113,6 +118,7 @@ export class DuplicateRecordDetector extends VectorBase {
      */
     public async GetDuplicateRecords(params: PotentialDuplicateRequest, contextUser?: UserInfo): Promise<PotentialDuplicateResponse> {
         this.CurrentUser = contextUser;
+        this._seenPairs.clear(); // Reset for each new run
         const options = params.Options ?? {};
         const startTime = Date.now();
 
@@ -272,8 +278,11 @@ export class DuplicateRecordDetector extends VectorBase {
             return { Results: [], MatchesFound: 0 };
         }
 
-        // 6b: Create DuplicateRunDetail records for this batch
-        const duplicateRunDetails = await this.CreateRunDetailRecords(batchIDs, duplicateRunID);
+        // 6b: Build source record metadata map for rich UI display
+        const sourceMetadataMap = this.buildSourceMetadataMap(records, entityInfo);
+
+        // 6c: Create DuplicateRunDetail records for this batch
+        const duplicateRunDetails = await this.CreateRunDetailRecords(batchIDs, duplicateRunID, sourceMetadataMap);
 
         // 6c: Generate template texts and embed
         this.reportProgress(options, 'Embedding', totalRecords, processedSoFar, matchesSoFar, startTime);
@@ -770,6 +779,8 @@ export class DuplicateRecordDetector extends VectorBase {
             const duplicate = new PotentialDuplicate();
             duplicate.LoadFromConcatenatedString(match.metadata.RecordID);
             duplicate.ProbabilityScore = match.score;
+            // Capture the full vector metadata for rich UI display
+            duplicate.VectorMetadata = { ...match.metadata } as Record<string, string>;
             result.Duplicates.push(duplicate);
         }
 
@@ -779,6 +790,44 @@ export class DuplicateRecordDetector extends VectorBase {
     /**
      * Filter out self-matches where the candidate is the same record as the source.
      */
+    /**
+     * Build a map of recordID → JSON metadata string from loaded BaseEntity records.
+     * Extracts the entity's name field and a few key display fields for rich UI rendering.
+     */
+    protected buildSourceMetadataMap(records: BaseEntity[], entityInfo: EntityInfo): Map<string, string> {
+        const metadataMap = new Map<string, string>();
+        const nameField = entityInfo.NameField;
+        // Collect a small set of useful display fields
+        const displayFieldNames = ['Name', 'Title', 'Description', 'Status', 'Type']
+            .filter(fn => entityInfo.Fields.find(f => f.Name === fn));
+
+        for (const record of records) {
+            const pk = record.PrimaryKey;
+            const id = pk.KeyValuePairs.length === 1 ? String(pk.KeyValuePairs[0].Value) : pk.Values();
+            const meta: Record<string, string> = {
+                Entity: entityInfo.Name,
+            };
+            if (entityInfo.Icon) {
+                meta['EntityIcon'] = entityInfo.Icon;
+            }
+            if (nameField) {
+                const nameVal = record.Get(nameField.Name);
+                if (nameVal != null) meta['Name'] = String(nameVal);
+            }
+            for (const fn of displayFieldNames) {
+                if (fn !== nameField?.Name) {
+                    const val = record.Get(fn);
+                    if (val != null) {
+                        const str = String(val);
+                        meta[fn] = str.length > 200 ? str.substring(0, 197) + '...' : str;
+                    }
+                }
+            }
+            metadataMap.set(id, JSON.stringify(meta));
+        }
+        return metadataMap;
+    }
+
     protected FilterSelfMatches(duplicates: PotentialDuplicate[], sourceKey: CompositeKey): PotentialDuplicate[] {
         return duplicates.filter((d) => d.ToString() !== sourceKey.ToString());
     }
@@ -790,7 +839,11 @@ export class DuplicateRecordDetector extends VectorBase {
     /**
      * Create DuplicateRunDetail records for a batch of record IDs.
      */
-    protected async CreateRunDetailRecords(recordIDs: string[], duplicateRunID: string): Promise<MJDuplicateRunDetailEntity[]> {
+    protected async CreateRunDetailRecords(
+        recordIDs: string[],
+        duplicateRunID: string,
+        metadataMap?: Map<string, string>
+    ): Promise<MJDuplicateRunDetailEntity[]> {
         const results: MJDuplicateRunDetailEntity[] = [];
 
         for (const batch of chunkArray(recordIDs, SAVE_BATCH_SIZE)) {
@@ -802,6 +855,7 @@ export class DuplicateRecordDetector extends VectorBase {
                     runDetail.RecordID = recordID;
                     runDetail.MatchStatus = 'Pending';
                     runDetail.MergeStatus = 'Pending';
+                    runDetail.RecordMetadata = metadataMap?.get(recordID) ?? null;
                     const success = await this.SaveEntity(runDetail);
                     if (!success) {
                         LogError("Failed to save MJDuplicateRunDetailEntity", undefined, runDetail.LatestResult);
@@ -832,11 +886,23 @@ export class DuplicateRecordDetector extends VectorBase {
         let matchesFound = 0;
 
         for (const qr of queryResults) {
+            // Filter out inverse duplicates: if A→B was already persisted, skip B→A
+            const sourceId = qr.SourceKey.Values();
+            qr.Duplicates.Duplicates = qr.Duplicates.Duplicates.filter(dupe => {
+                const matchId = dupe.Values();
+                const pairKey = sourceId < matchId ? `${sourceId}::${matchId}` : `${matchId}::${sourceId}`;
+                if (this._seenPairs.has(pairKey)) {
+                    return false; // Inverse already recorded
+                }
+                this._seenPairs.add(pairKey);
+                return true;
+            });
+
             results.push(qr.Duplicates);
             matchesFound += qr.Duplicates.Duplicates.length;
 
             const detail = duplicateRunDetails.find(
-                (d) => UUIDsEqual(d.RecordID, qr.SourceKey.Values())
+                (d) => UUIDsEqual(d.RecordID, sourceId)
             );
 
             if (detail) {
@@ -880,6 +946,7 @@ export class DuplicateRecordDetector extends VectorBase {
                     match.Action = '';
                     match.ApprovalStatus = 'Pending';
                     match.MergeStatus = 'Pending';
+                    match.RecordMetadata = dupe.VectorMetadata ? JSON.stringify(dupe.VectorMetadata) : null;
                     const success = await this.SaveEntity(match);
                     return success ? match : null;
                 })

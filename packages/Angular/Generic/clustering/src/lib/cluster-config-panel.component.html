@@ -1,10 +1,11 @@
 <div #panelElement
      class="config-panel"
      [style.top.px]="PanelTop"
-     [style.right.px]="PanelRight">
+     [style.left.px]="PanelLeft">
 
     <!-- Draggable header -->
-    <h3 class="panel-header" (mousedown)="OnHeaderMouseDown($event)">
+    <h3 class="panel-header"
+        (mousedown)="OnHeaderMouseDown($event)">
         <i class="fa-solid fa-sliders"></i>
         Configuration
         <span class="header-actions">

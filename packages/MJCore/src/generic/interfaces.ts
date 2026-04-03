@@ -86,6 +86,8 @@ export type ProviderType = typeof ProviderType[keyof typeof ProviderType];
  */
 export class PotentialDuplicate extends CompositeKey {
     ProbabilityScore: number;
+    /** Full vector metadata snapshot from the vector DB (Name, Description, EntityIcon, etc.) */
+    VectorMetadata?: Record<string, string>;
 }
 
 /**

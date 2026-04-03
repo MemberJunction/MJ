@@ -40,6 +40,7 @@ import {
     OnChanges,
     SimpleChanges,
     ViewChild,
+    ViewEncapsulation,
     inject,
 } from '@angular/core';
 import {
@@ -58,6 +59,7 @@ import {
     selector: 'mj-cluster-scatter',
     templateUrl: './cluster-scatter.component.html',
     styleUrls: ['./cluster-scatter.component.css'],
+    encapsulation: ViewEncapsulation.None,
 })
 export class ClusterScatterComponent implements AfterViewInit, OnDestroy, OnChanges {
     private cdr = inject(ChangeDetectorRef);
@@ -226,6 +228,12 @@ export class ClusterScatterComponent implements AfterViewInit, OnDestroy, OnChan
     @Output() PointClicked = new EventEmitter<ClusterPoint>();
 
     /**
+     * Emitted when the user clicks "Open Record" in the detail panel.
+     * The parent should wire this to `NavigationService.OpenEntityRecord()`.
+     */
+    @Output() OpenRecordRequested = new EventEmitter<ClusterPoint>();
+
+    /**
      * Emitted when the mouse enters or leaves a data point.
      * Emits `null` on mouse-leave.
      */
@@ -332,6 +340,25 @@ export class ClusterScatterComponent implements AfterViewInit, OnDestroy, OnChan
 
     /** Filtered metadata entries for the tooltip (computed on hover). */
     public TooltipEntries: Array<{ Key: string; Value: unknown }> = [];
+
+    // ================================================================
+    // Detail Panel State
+    // ================================================================
+
+    /** The currently selected point shown in the detail panel. */
+    public SelectedPoint: ClusterPoint | null = null;
+
+    /** Whether the detail panel is visible. */
+    public ShowDetailPanel = false;
+
+    /** Metadata entries for the detail panel (computed on selection). */
+    public DetailEntries: Array<{ Key: string; Value: unknown }> = [];
+
+    /** Cluster members for the selected point's cluster. */
+    public ClusterMembers: ClusterPoint[] = [];
+
+    /** Whether the cluster members list is expanded. */
+    public ClusterMembersExpanded = true;
 
     @ViewChild('svgElement', { static: false }) private svgRef!: ElementRef<SVGSVGElement>;
 
@@ -481,7 +508,8 @@ export class ClusterScatterComponent implements AfterViewInit, OnDestroy, OnChan
 
     /**
      * Handle click on a data point: fires `BeforePointClick`, toggles
-     * selection, then fires `PointClicked` and `SelectionChanged`.
+     * selection, opens the detail panel, then fires `PointClicked` and
+     * `SelectionChanged`.
      *
      * @param point  The clicked point.
      */
@@ -501,6 +529,9 @@ export class ClusterScatterComponent implements AfterViewInit, OnDestroy, OnChan
         }
         this.SelectedPointIds = newSelection;
         this.SelectionChanged.emit(newSelection);
+
+        // Open detail panel for the clicked point
+        this.selectPointForDetail(point);
 
         this.PointClicked.emit(point);
         this.cdr.detectChanges();
@@ -775,6 +806,109 @@ export class ClusterScatterComponent implements AfterViewInit, OnDestroy, OnChan
         this.SelectedPointIds = new Set(memberKeys);
         this.SelectionChanged.emit(this.SelectedPointIds);
         this.cdr.detectChanges();
+    }
+
+    // ================================================================
+    // Detail Panel Methods
+    // ================================================================
+
+    /**
+     * Close the detail panel.
+     */
+    public CloseDetailPanel(): void {
+        this.ShowDetailPanel = false;
+        this.SelectedPoint = null;
+        this.DetailEntries = [];
+        this.ClusterMembers = [];
+        this.cdr.detectChanges();
+    }
+
+    /**
+     * Emit the `OpenRecordRequested` event for the currently selected point
+     * (triggered by the "Open Record" button in the detail panel).
+     */
+    public OnOpenRecordClick(): void {
+        if (this.SelectedPoint) {
+            this.OpenRecordRequested.emit(this.SelectedPoint);
+        }
+    }
+
+    /**
+     * Select a point from the cluster members list, updating the detail
+     * panel and highlighting the point on the chart.
+     *
+     * @param point  The cluster member point to select.
+     */
+    public OnClusterMemberClick(point: ClusterPoint): void {
+        this.HighlightedKey = point.VectorKey;
+        this.selectPointForDetail(point);
+        this.cdr.detectChanges();
+    }
+
+    /**
+     * Toggle the cluster members list expansion state.
+     */
+    public ToggleClusterMembers(): void {
+        this.ClusterMembersExpanded = !this.ClusterMembersExpanded;
+    }
+
+    /**
+     * Get the color for a cluster by its ID, used in the detail panel.
+     *
+     * @param clusterId  The cluster ID.
+     * @returns CSS color string.
+     */
+    public GetClusterColor(clusterId: number): string {
+        if (clusterId < 0) return '#64748b';
+        const cluster = this.Clusters.find(c => c.Id === clusterId);
+        if (cluster?.Color) return cluster.Color;
+        const palette = this.getActivePalette();
+        return palette[clusterId % palette.length];
+    }
+
+    /**
+     * Return the metadata keys that should be hidden in the detail panel.
+     */
+    private get internalMetadataKeys(): Set<string> {
+        return new Set([
+            'Name', 'Entity', 'EntityIcon', 'RecordID',
+            'TemplateID', '__mj_UpdatedAt', '__mj_CreatedAt',
+        ]);
+    }
+
+    /**
+     * Select a point and populate the detail panel state.
+     */
+    private selectPointForDetail(point: ClusterPoint): void {
+        this.SelectedPoint = point;
+        this.ShowDetailPanel = true;
+        this.computeDetailEntries(point);
+        this.computeClusterMembers(point);
+    }
+
+    /**
+     * Compute the metadata entries for the detail panel, excluding internal fields.
+     */
+    private computeDetailEntries(point: ClusterPoint): void {
+        const hidden = this.internalMetadataKeys;
+        this.DetailEntries = Object.entries(point.Metadata)
+            .filter(([key]) => !hidden.has(key))
+            .filter(([, value]) => value != null && String(value).trim() !== '')
+            .map(([Key, Value]) => ({ Key, Value }));
+    }
+
+    /**
+     * Compute the list of cluster members for the selected point's cluster.
+     */
+    private computeClusterMembers(point: ClusterPoint): void {
+        this.ClusterMembers = this.Points
+            .filter(p => p.ClusterId === point.ClusterId)
+            .sort((a, b) => a.Label.localeCompare(b.Label));
+    }
+
+    /** @internal TrackBy function for cluster member loops. */
+    public TrackMemberBy(_index: number, point: ClusterPoint): string {
+        return point.VectorKey;
     }
 
     // ================================================================

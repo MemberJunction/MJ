@@ -250,14 +250,14 @@ export class ClusterConfigPanelComponent implements OnInit, OnDestroy {
 
     // Dragging state
     /** Current panel top offset in pixels. */
-    public PanelTop = 20;
-    /** Current panel right offset in pixels. */
-    public PanelRight = 20;
+    public PanelTop = 12;
+    /** Current panel left offset in pixels. */
+    public PanelLeft = 12;
     private isDragging = false;
     private dragStartX = 0;
     private dragStartY = 0;
     private dragStartTop = 0;
-    private dragStartRight = 0;
+    private dragStartLeft = 0;
     private boundOnMouseMove: ((e: MouseEvent) => void) | null = null;
     private boundOnMouseUp: ((e: MouseEvent) => void) | null = null;
 
@@ -414,7 +414,7 @@ export class ClusterConfigPanelComponent implements OnInit, OnDestroy {
         this.dragStartX = event.clientX;
         this.dragStartY = event.clientY;
         this.dragStartTop = this.PanelTop;
-        this.dragStartRight = this.PanelRight;
+        this.dragStartLeft = this.PanelLeft;
     }
 
     /** @internal TrackBy for algorithm options. */
@@ -462,7 +462,7 @@ export class ClusterConfigPanelComponent implements OnInit, OnDestroy {
         const dx = event.clientX - this.dragStartX;
         const dy = event.clientY - this.dragStartY;
         this.PanelTop = Math.max(0, this.dragStartTop + dy);
-        this.PanelRight = Math.max(0, this.dragStartRight - dx);
+        this.PanelLeft = Math.max(0, this.dragStartLeft + dx);
         this.cdr.detectChanges();
     }
 

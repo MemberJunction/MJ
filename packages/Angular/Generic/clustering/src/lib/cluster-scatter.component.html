@@ -158,8 +158,86 @@
                 </div>
             }
             <div class="tt-action">
-                <i class="fa-solid fa-arrow-up-right-from-square"></i> Click to open record
+                <i class="fa-solid fa-arrow-up-right-from-square"></i> Click to view details
             </div>
         </div>
     }
+
+    <!-- Detail Panel (slide-in from right) -->
+    <div class="detail-panel" [class.detail-panel-open]="ShowDetailPanel && SelectedPoint">
+        @if (SelectedPoint) {
+            <!-- Panel Header -->
+            <div class="detail-header">
+                <div class="detail-header-content">
+                    @if (SelectedPoint.Metadata?.['EntityIcon']) {
+                        <div class="detail-icon">
+                            <i [class]="SelectedPoint.Metadata['EntityIcon']"></i>
+                        </div>
+                    }
+                    <div class="detail-header-text">
+                        <div class="detail-name">{{ SelectedPoint.Label }}</div>
+                        @if (SelectedPoint.Metadata?.['Entity']) {
+                            <span class="detail-entity-badge">{{ SelectedPoint.Metadata['Entity'] }}</span>
+                        }
+                    </div>
+                </div>
+                <button class="detail-close" (click)="CloseDetailPanel()" title="Close">
+                    <i class="fa-solid fa-times"></i>
+                </button>
+            </div>
+
+            <!-- Cluster badge -->
+            <div class="detail-cluster">
+                <span class="detail-cluster-dot"
+                      [style.background]="GetClusterColor(SelectedPoint.ClusterId)"></span>
+                {{ GetClusterLabel(SelectedPoint) }}
+            </div>
+
+            <!-- Metadata fields -->
+            @if (DetailEntries.length > 0) {
+                <div class="detail-fields">
+                    @for (entry of DetailEntries; track entry.Key) {
+                        <div class="detail-field">
+                            <div class="detail-field-key">{{ entry.Key }}</div>
+                            <div class="detail-field-value">{{ entry.Value }}</div>
+                        </div>
+                    }
+                </div>
+            }
+
+            <!-- Cluster Members -->
+            <div class="detail-members-section">
+                <button class="detail-members-toggle" (click)="ToggleClusterMembers()">
+                    <i class="fa-solid"
+                       [class.fa-chevron-down]="ClusterMembersExpanded"
+                       [class.fa-chevron-right]="!ClusterMembersExpanded"></i>
+                    <span>Cluster Members</span>
+                    <span class="detail-members-count">{{ ClusterMembers.length }}</span>
+                </button>
+
+                @if (ClusterMembersExpanded) {
+                    <div class="detail-members-list">
+                        @for (member of ClusterMembers; track TrackMemberBy($index, member)) {
+                            <div class="detail-member-row"
+                                 [class.active]="member.VectorKey === SelectedPoint.VectorKey"
+                                 (click)="OnClusterMemberClick(member)">
+                                @if (member.Metadata?.['EntityIcon']) {
+                                    <i [class]="member.Metadata['EntityIcon']" class="member-icon"></i>
+                                }
+                                <span class="member-label">{{ member.Label }}</span>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+
+            <!-- Open Record button -->
+            <div class="detail-footer">
+                <button class="detail-open-btn" (click)="OnOpenRecordClick()">
+                    <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                    Open Record
+                </button>
+            </div>
+        }
+    </div>
 </div>

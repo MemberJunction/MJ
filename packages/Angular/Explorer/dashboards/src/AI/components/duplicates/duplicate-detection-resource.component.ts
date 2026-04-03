@@ -28,16 +28,32 @@ import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
  * Represents a group of duplicate matches for a single source record,
  * aggregated from detail and match entities for display on the Kanban board.
  */
+interface RecordMetadataInfo {
+    Name?: string;
+    Entity?: string;
+    EntityIcon?: string;
+    Description?: string;
+    Status?: string;
+    Type?: string;
+    [key: string]: string | undefined;
+}
+
 interface DuplicateGroup {
     DetailId: string;
     RunId: string;
     RecordId: string;
     EntityName: string;
+    EntityIcon: string;
+    RecordName: string;
     ApprovalStatus: 'Pending' | 'Approved' | 'Rejected';
     MatchCount: number;
     HighestScore: number;
     Matches: MJDuplicateRunDetailMatchEntity[];
     MatchedAt: Date;
+    /** Parsed source record metadata from vector DB */
+    Metadata: RecordMetadataInfo;
+    /** Top matches with parsed metadata for display */
+    TopMatchSummaries: Array<{ Name: string; Score: number }>;
 }
 
 interface DuplicateFilter {
@@ -73,6 +89,8 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
     // Loading state
     public IsLoading = false;
     public IsSaving = false;
+    /** ID of the currently expanded kanban card (null = all collapsed) */
+    public ExpandedGroupId: string | null = null;
 
     // Raw data
     public Runs: MJDuplicateRunEntity[] = [];
@@ -597,21 +615,33 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
             }
 
             const run = runMap.get(detail.DuplicateRunID);
-            const entityName = run?.Entity ?? 'Unknown';
             const highestScore = this.computeHighestScore(detailMatches);
             const dominantStatus = this.computeDominantApprovalStatus(detailMatches);
             const latestMatchDate = this.computeLatestMatchDate(detailMatches);
+
+            // Parse source record metadata (stored as JSON by the detector)
+            const metadata = this.parseRecordMetadata(detail.RecordMetadata);
+            const entityName = metadata.Entity || run?.Entity || 'Unknown';
+            const entityIcon = metadata.EntityIcon || 'fa-solid fa-database';
+            const recordName = metadata.Name || detail.RecordID;
+
+            // Build top match summaries from match metadata
+            const topMatchSummaries = this.buildTopMatchSummaries(detailMatches, 3);
 
             this.AllGroups.push({
                 DetailId: detail.ID,
                 RunId: detail.DuplicateRunID,
                 RecordId: detail.RecordID,
                 EntityName: entityName,
+                EntityIcon: entityIcon,
+                RecordName: recordName,
                 ApprovalStatus: dominantStatus,
                 MatchCount: detailMatches.length,
                 HighestScore: highestScore,
                 Matches: detailMatches,
-                MatchedAt: latestMatchDate
+                MatchedAt: latestMatchDate,
+                Metadata: metadata,
+                TopMatchSummaries: topMatchSummaries,
             });
         }
     }
@@ -625,6 +655,58 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
             }
         }
         return max;
+    }
+
+    /** Toggle the expanded detail view for a kanban card */
+    public ToggleExpand(group: DuplicateGroup): void {
+        this.ExpandedGroupId = this.ExpandedGroupId === group.DetailId ? null : group.DetailId;
+        this.cdr.detectChanges();
+    }
+
+    /** Get all match details with parsed metadata for the expanded card view */
+    public GetExpandedMatches(group: DuplicateGroup): Array<{ Name: string; Score: number; Metadata: RecordMetadataInfo }> {
+        return group.Matches.map(m => {
+            const meta = this.parseRecordMetadata(m.RecordMetadata);
+            return {
+                Name: meta.Name || m.MatchRecordID?.substring(0, 16) + '...',
+                Score: m.MatchProbability,
+                Metadata: meta,
+            };
+        });
+    }
+
+    /** Convert metadata object to display entries, filtering out internal/already-shown fields */
+    public GetMetadataEntries(metadata: RecordMetadataInfo): Array<{ key: string; value: string }> {
+        const skip = new Set(['Name', 'Entity', 'EntityIcon', 'RecordID', 'TemplateID', '__mj_UpdatedAt']);
+        return Object.entries(metadata)
+            .filter(([k, v]) => !skip.has(k) && v != null && String(v).trim().length > 0)
+            .map(([k, v]) => ({ key: k, value: String(v) }));
+    }
+
+    /** Parse RecordMetadata JSON from a detail or match entity */
+    private parseRecordMetadata(json: string | null | undefined): RecordMetadataInfo {
+        if (!json) return {};
+        try {
+            return JSON.parse(json) as RecordMetadataInfo;
+        } catch {
+            return {};
+        }
+    }
+
+    /** Build top N match summaries with parsed names and scores */
+    private buildTopMatchSummaries(
+        matches: MJDuplicateRunDetailMatchEntity[],
+        limit: number
+    ): Array<{ Name: string; Score: number }> {
+        return matches
+            .slice(0, limit)
+            .map(m => {
+                const meta = this.parseRecordMetadata(m.RecordMetadata);
+                return {
+                    Name: meta.Name || m.MatchRecordID?.substring(0, 12) + '...',
+                    Score: m.MatchProbability,
+                };
+            });
     }
 
     /**
