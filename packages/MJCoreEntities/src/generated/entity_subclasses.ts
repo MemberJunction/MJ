@@ -9622,6 +9622,12 @@ export const MJContentItemTagSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Weight: z.number().describe(`
+        * * Field Name: Weight
+        * * Display Name: Weight
+        * * SQL Data Type: numeric(5, 4)
+        * * Default Value: 1.0
+        * * Description: Relevance weight for this tag (0.0-1.0). 1.0 = highly relevant central topic, 0.5 = moderately relevant, 0.1 = tangentially related. Assigned by the LLM during autotagging.`),
     Item: z.string().nullable().describe(`
         * * Field Name: Item
         * * Display Name: Item
@@ -49062,6 +49068,20 @@ export class MJContentItemTagEntity extends BaseEntity<MJContentItemTagEntityTyp
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Weight
+    * * Display Name: Weight
+    * * SQL Data Type: numeric(5, 4)
+    * * Default Value: 1.0
+    * * Description: Relevance weight for this tag (0.0-1.0). 1.0 = highly relevant central topic, 0.5 = moderately relevant, 0.1 = tangentially related. Assigned by the LLM during autotagging.
+    */
+    get Weight(): number {
+        return this.Get('Weight');
+    }
+    set Weight(value: number) {
+        this.Set('Weight', value);
     }
 
     /**

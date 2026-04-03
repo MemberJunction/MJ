@@ -26792,6 +26792,9 @@ export class MJContentItemTag_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field(() => Float, {description: `Relevance weight for this tag (0.0-1.0). 1.0 = highly relevant central topic, 0.5 = moderately relevant, 0.1 = tangentially related. Assigned by the LLM during autotagging.`}) 
+    Weight: number;
+        
     @Field({nullable: true}) 
     @MaxLength(250)
     Item?: string;
@@ -26811,6 +26814,9 @@ export class CreateMJContentItemTagInput {
 
     @Field({ nullable: true })
     Tag?: string;
+
+    @Field(() => Float, { nullable: true })
+    Weight?: number;
 }
     
 
@@ -26827,6 +26833,9 @@ export class UpdateMJContentItemTagInput {
 
     @Field({ nullable: true })
     Tag?: string;
+
+    @Field(() => Float, { nullable: true })
+    Weight?: number;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
