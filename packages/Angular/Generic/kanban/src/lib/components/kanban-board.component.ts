@@ -1,5 +1,6 @@
 import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy, ChangeDetectorRef, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { UUIDsEqual } from '@memberjunction/global';
 import { KanbanCardData, KanbanColumnDef, KanbanCardMovedEvent } from '../models/kanban.models';
 
 /**
@@ -40,7 +41,7 @@ import { KanbanCardData, KanbanColumnDef, KanbanCardMovedEvent } from '../models
                         @for (card of getColumnCards(col.Key); track card.ID) {
                             <div class="mj-kanban-card"
                                  [style.border-left-color]="card.Color || 'transparent'"
-                                 [class.dragging]="dragCardID === card.ID"
+                                 [class.dragging]="isDragging(card.ID)"
                                  [draggable]="!ReadOnly"
                                  (dragstart)="onDragStart($event, card, col.Key)"
                                  (dragend)="onDragEnd()"
@@ -225,6 +226,11 @@ export class MjKanbanBoardComponent {
     dragOverColumn: string | null = null;
 
     private cdr = inject(ChangeDetectorRef);
+
+    /** @internal Returns true if the given card is currently being dragged. */
+    isDragging(cardID: string): boolean {
+        return this.dragCardID != null && UUIDsEqual(this.dragCardID, cardID);
+    }
 
     /** Returns cards belonging to a specific column. */
     getColumnCards(columnKey: string): KanbanCardData[] {

@@ -1,5 +1,6 @@
 import { Component, Input, Output, EventEmitter, ElementRef, ViewChild, AfterViewInit, OnChanges, OnDestroy, SimpleChanges, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { UUIDsEqual } from '@memberjunction/global';
 import { GanttItemData, GanttLinkData, GanttColumnDef, GanttItemClickedEvent, GanttItemChangedEvent } from '../models/gantt.models';
 import type { GanttStatic, Task as DHTask, Link as DHLink } from 'dhtmlx-gantt';
 
@@ -169,7 +170,7 @@ export class MjGanttChartComponent implements AfterViewInit, OnChanges, OnDestro
 
         // Event: click
         g.attachEvent('onTaskClick', (id: string) => {
-            const item = this.Items.find(i => i.ID === id);
+            const item = this.Items.find(i => UUIDsEqual(i.ID, id));
             if (item) {
                 this.ItemClicked.emit({ Item: item });
             }
@@ -180,7 +181,7 @@ export class MjGanttChartComponent implements AfterViewInit, OnChanges, OnDestro
         if (!this.ReadOnly) {
             g.attachEvent('onAfterTaskDrag', (id: string) => {
                 const task = g.getTask(id);
-                const item = this.Items.find(i => i.ID === id);
+                const item = this.Items.find(i => UUIDsEqual(i.ID, id));
                 if (item && task) {
                     this.ItemChanged.emit({
                         Item: item,
