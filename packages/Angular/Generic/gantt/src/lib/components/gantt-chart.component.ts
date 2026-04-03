@@ -41,7 +41,7 @@ const DEFAULT_COLUMNS: GanttColumnDef[] = [
              [style.display]="loading ? 'none' : 'block'"></div>
     `,
     styles: [`
-        :host { display: block; }
+        :host { display: block; font-family: var(--mj-font-family); }
 
         .mj-gantt-container {
             width: 100%;
@@ -52,18 +52,18 @@ const DEFAULT_COLUMNS: GanttColumnDef[] = [
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 60px 20px;
-            color: #94a3b8;
-            font-size: 14px;
+            padding: var(--mj-space-16) var(--mj-space-5);
+            color: var(--mj-text-muted);
+            font-size: var(--mj-text-sm);
         }
 
         /* DHTMLX Gantt style overrides for a cleaner look */
-        :host ::ng-deep .gantt_container { font-family: inherit; font-size: 13px; }
+        :host ::ng-deep .gantt_container { font-family: var(--mj-font-family); font-size: var(--mj-text-sm); }
         :host ::ng-deep .gantt_grid_scale,
-        :host ::ng-deep .gantt_task_scale { background: #f8fafc; border-bottom: 1px solid #e2e8f0; }
-        :host ::ng-deep .gantt_task .gantt_task_content { font-weight: 500; }
-        :host ::ng-deep .gantt_row { border-bottom: 1px solid #f1f5f9; }
-        :host ::ng-deep .gantt_task_line { border-radius: 4px; }
+        :host ::ng-deep .gantt_task_scale { background: var(--mj-bg-surface-sunken); border-bottom: 1px solid var(--mj-border-default); }
+        :host ::ng-deep .gantt_task .gantt_task_content { font-weight: var(--mj-font-medium); }
+        :host ::ng-deep .gantt_row { border-bottom: 1px solid var(--mj-border-subtle); }
+        :host ::ng-deep .gantt_task_line { border-radius: var(--mj-radius-sm); }
     `]
 })
 export class MjGanttChartComponent implements AfterViewInit, OnChanges, OnDestroy {

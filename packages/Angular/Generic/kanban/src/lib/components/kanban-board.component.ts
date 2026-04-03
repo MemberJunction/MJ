@@ -33,7 +33,7 @@ import { KanbanCardData, KanbanColumnDef, KanbanCardMovedEvent } from '../models
                      (dragover)="onDragOver($event, col.Key)"
                      (dragleave)="onDragLeave(col.Key)"
                      (drop)="onDrop($event, col.Key)">
-                    <div class="column-header" [style.border-top-color]="col.Color || '#94a3b8'">
+                    <div class="column-header" [style.border-top-color]="col.Color || 'var(--mj-border-default)'">
                         <span class="column-title">{{ col.Label }}</span>
                         <span class="column-count">{{ getColumnCards(col.Key).length }}</span>
                     </div>
@@ -53,8 +53,8 @@ import { KanbanCardData, KanbanColumnDef, KanbanCardMovedEvent } from '../models
                                 <div class="card-footer">
                                     @if (card.BadgeText) {
                                         <span class="card-badge"
-                                              [style.background]="card.BadgeColor || '#f1f5f9'"
-                                              [style.color]="card.BadgeColor ? '#fff' : '#64748b'">
+                                              [style.background]="card.BadgeColor || 'var(--mj-bg-surface-sunken)'"
+                                              [style.color]="card.BadgeColor ? 'var(--mj-text-inverse)' : 'var(--mj-text-secondary)'">
                                             {{ card.BadgeText }}
                                         </span>
                                     }
@@ -79,71 +79,71 @@ import { KanbanCardData, KanbanColumnDef, KanbanCardMovedEvent } from '../models
         </div>
     `,
     styles: [`
-        :host { display: block; }
+        :host { display: block; font-family: var(--mj-font-family); }
 
         .mj-kanban-board {
             display: flex;
-            gap: 12px;
+            gap: var(--mj-space-3);
             overflow-x: auto;
-            padding: 4px 0 8px 0;
+            padding: var(--mj-space-1) 0 var(--mj-space-2) 0;
             min-height: 300px;
         }
 
         .mj-kanban-column {
             flex: 0 0 260px;
-            background: #f8fafc;
-            border-radius: 10px;
+            background: var(--mj-bg-surface-sunken);
+            border-radius: var(--mj-radius-lg);
             display: flex;
             flex-direction: column;
-            transition: background 0.15s;
+            transition: background var(--mj-transition-fast);
         }
 
         .mj-kanban-column.drag-over {
-            background: #eef2ff;
+            background: var(--mj-brand-primary-light);
         }
 
         .column-header {
-            padding: 10px 14px;
-            font-weight: 600;
-            font-size: 13px;
+            padding: var(--mj-space-2-5) var(--mj-space-3-5);
+            font-weight: var(--mj-font-semibold);
+            font-size: var(--mj-text-sm);
             display: flex;
             justify-content: space-between;
             align-items: center;
-            border-top: 3px solid #94a3b8;
-            border-radius: 10px 10px 0 0;
-            color: #1e293b;
+            border-top: 3px solid var(--mj-border-default);
+            border-radius: var(--mj-radius-lg) var(--mj-radius-lg) 0 0;
+            color: var(--mj-text-primary);
         }
 
         .column-count {
-            background: #e2e8f0;
-            border-radius: 10px;
-            padding: 1px 8px;
-            font-size: 11px;
-            font-weight: 700;
-            color: #64748b;
+            background: var(--mj-bg-surface-hover);
+            border-radius: var(--mj-radius-lg);
+            padding: var(--mj-space-px) var(--mj-space-2);
+            font-size: var(--mj-text-xs);
+            font-weight: var(--mj-font-bold);
+            color: var(--mj-text-secondary);
         }
 
         .column-body {
             flex: 1;
-            padding: 8px;
+            padding: var(--mj-space-2);
             display: flex;
             flex-direction: column;
-            gap: 6px;
+            gap: var(--mj-space-1-5);
             min-height: 80px;
         }
 
         .mj-kanban-card {
-            background: #fff;
-            border: 1px solid #e2e8f0;
+            background: var(--mj-bg-surface);
+            border: 1px solid var(--mj-border-subtle);
             border-left: 3px solid transparent;
-            border-radius: 8px;
-            padding: 10px 12px;
+            border-radius: var(--mj-radius-md);
+            padding: var(--mj-space-2-5) var(--mj-space-3);
             cursor: grab;
-            transition: box-shadow 0.15s, opacity 0.15s;
+            transition: box-shadow var(--mj-transition-fast), opacity var(--mj-transition-fast);
         }
 
         .mj-kanban-card:hover {
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+            box-shadow: var(--mj-shadow-sm);
         }
 
         .mj-kanban-card:active { cursor: grabbing; }
@@ -153,17 +153,17 @@ import { KanbanCardData, KanbanColumnDef, KanbanCardMovedEvent } from '../models
         }
 
         .card-title {
-            font-size: 14px;
-            font-weight: 500;
-            color: #1e293b;
-            line-height: 1.3;
+            font-size: var(--mj-text-sm);
+            font-weight: var(--mj-font-medium);
+            color: var(--mj-text-primary);
+            line-height: var(--mj-leading-snug);
         }
 
         .card-subtitle {
-            font-size: 12px;
-            color: #94a3b8;
-            margin-top: 4px;
-            line-height: 1.3;
+            font-size: var(--mj-text-xs);
+            color: var(--mj-text-muted);
+            margin-top: var(--mj-space-1);
+            line-height: var(--mj-leading-snug);
             display: -webkit-box;
             -webkit-line-clamp: 2;
             -webkit-box-orient: vertical;
@@ -174,29 +174,29 @@ import { KanbanCardData, KanbanColumnDef, KanbanCardMovedEvent } from '../models
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-top: 8px;
-            gap: 8px;
+            margin-top: var(--mj-space-2);
+            gap: var(--mj-space-2);
         }
 
         .card-badge {
-            font-size: 11px;
-            font-weight: 600;
-            padding: 2px 8px;
-            border-radius: 6px;
+            font-size: var(--mj-text-xs);
+            font-weight: var(--mj-font-semibold);
+            padding: var(--mj-space-0-5) var(--mj-space-2);
+            border-radius: var(--mj-radius-sm);
         }
 
         .card-footer-text {
-            font-size: 12px;
-            color: #94a3b8;
+            font-size: var(--mj-text-xs);
+            color: var(--mj-text-muted);
         }
 
         .empty-column {
             text-align: center;
-            color: #cbd5e1;
-            font-size: 13px;
-            padding: 24px 8px;
-            border: 2px dashed #e2e8f0;
-            border-radius: 8px;
+            color: var(--mj-text-disabled);
+            font-size: var(--mj-text-sm);
+            padding: var(--mj-space-6) var(--mj-space-2);
+            border: 2px dashed var(--mj-border-subtle);
+            border-radius: var(--mj-radius-md);
         }
     `]
 })
