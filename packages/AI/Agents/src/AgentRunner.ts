@@ -624,12 +624,19 @@ export class AgentRunner {
                         // Available after migration V202604030943 + CodeGen regenerates the view.
                         // Until then, falls back to name-based resolution in ArtifactToolManager.
                         const toolLibraryClass = artifact.Get('ToolLibraryClass') as string | undefined;
-                        inputArtifacts.push({
-                            name: version.Name || artifact.Name || 'Untitled',
-                            typeName: artifact.Type || 'Text',
-                            content: version.Content || '',
-                            ...(toolLibraryClass ? { toolLibraryClass } : {})
-                        });
+                        // TODO: When file-artifact-io PR (#2129) merges, check ContentMode.
+                        // If ContentMode='File', download content from MJStorage via
+                        // downloadArtifactFileContent() instead of using version.Content
+                        // (which is NULL for file-backed artifacts).
+                        const content = version.Content || '';
+                        if (content || version.Get('ContentMode') !== 'File') {
+                            inputArtifacts.push({
+                                name: version.Name || artifact.Name || 'Untitled',
+                                typeName: artifact.Type || 'Text',
+                                content,
+                                ...(toolLibraryClass ? { toolLibraryClass } : {})
+                            });
+                        }
                     }
                 }
             }

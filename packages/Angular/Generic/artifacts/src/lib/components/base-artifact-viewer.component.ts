@@ -246,7 +246,13 @@ export abstract class BaseArtifactViewerPluginComponent implements IArtifactView
 
   /**
    * Return a point-in-time snapshot of the data this viewer is currently displaying.
-   * Each plugin overrides this to expose its content in a uniform DataSnapshot shape.
+   * Every viewer plugin MUST implement this with type-appropriate content.
+   *
+   * Guidelines for file-based viewers:
+   * - PDF: page count, current page in interpretation, extracted text summary in custom
+   * - Excel: each sheet as a DataTable in tables[], active sheet in activeTab
+   * - Word: section count in interpretation, extracted text in custom
+   * - For all: use getDisplayTitle() for snap.title
    *
    * @returns A DataSnapshot describing the current state, or null if no data is available.
    */
