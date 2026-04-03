@@ -5,7 +5,7 @@ import { MarkdownModule } from '@memberjunction/ng-markdown';
 
 // Import MJ modules
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
-import { MJReactModule } from '@memberjunction/ng-react';
+import { MJReactModule, AngularAdapterService } from '@memberjunction/ng-react';
 import { MJNotificationsModule } from '@memberjunction/ng-notifications';
 import { QueryViewerModule } from '@memberjunction/ng-query-viewer';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
@@ -94,7 +94,7 @@ import { ArtifactMessageCardComponent } from './components/artifact-message-card
   ]
 })
 export class ArtifactsModule {
-  constructor() {
+  constructor(private adapter: AngularAdapterService) {
     // Ensure plugin components are registered on module load by referencing their classes
     // The @RegisterClass decorator on each component handles the actual registration with MJGlobal
     [
@@ -106,5 +106,10 @@ export class ArtifactsModule {
       ComponentArtifactViewerComponent,
       DataArtifactViewerComponent
     ];
+
+    // PERF: Eagerly start downloading React, ReactDOM, and Babel from CDN in the background.
+    // By the time a user opens an interactive component artifact, the scripts will already
+    // be cached. The adapter.preload() is non-blocking and deduplicates with initialize().
+    this.adapter.preload();
   }
 }

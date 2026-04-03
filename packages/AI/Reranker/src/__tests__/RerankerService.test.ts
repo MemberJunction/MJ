@@ -35,7 +35,13 @@ vi.mock('@memberjunction/aiengine', () => ({
     }
 }));
 
-vi.mock('@memberjunction/ai', () => ({ BaseReranker: class {} }));
+vi.mock('@memberjunction/ai', () => ({
+    BaseReranker: class {},
+    GetAIAPIKey: vi.fn().mockImplementation((driverClass: string) => {
+        // Mirror the real GetAIAPIKey logic: read from env var
+        return process.env[`AI_VENDOR_API_KEY__${driverClass}`] || null;
+    })
+}));
 vi.mock('@memberjunction/ai-core-plus', () => ({ MJAIModelEntityExtended: class {} }));
 vi.mock('@memberjunction/core-entities', () => ({
     MJAIAgentNoteEntity: class { ID = ''; Note = ''; Type = ''; Get(_f: string) { return ''; } },

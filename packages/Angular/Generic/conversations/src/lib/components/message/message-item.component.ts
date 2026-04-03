@@ -90,6 +90,14 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   // Track previous status for DoCheck comparison
   private _previousMessageStatus: 'Complete' | 'In-Progress' | 'Error' | undefined = undefined;
 
+  /**
+   * Cached CSS class string for the message container. Updated explicitly in
+   * ngDoCheck to avoid ExpressionChangedAfterItHasBeenCheckedError — a getter
+   * would recompute between Angular's check and verify passes when message.Status
+   * changes mid-cycle (e.g., from a WebSocket update).
+   */
+  private _messageClasses: string = 'message-item';
+
   // Agent run details
   public isAgentDetailsExpanded: boolean = false;
   public detailTasks: MJTaskEntity[] = [];
@@ -147,6 +155,9 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
     // Update previous status for next check
     this._previousMessageStatus = currentStatus;
+
+    // Rebuild cached class string so it's stable during Angular's check/verify cycle
+    this._messageClasses = this.buildMessageClasses();
   }
 
   ngAfterViewInit() {
@@ -704,18 +715,26 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     }
   }
 
+  /**
+   * Returns the cached CSS class string. Updated in ngDoCheck so the value
+   * is stable within a single change detection cycle, preventing
+   * ExpressionChangedAfterItHasBeenCheckedError.
+   */
   public get messageClasses(): string {
+    return this._messageClasses;
+  }
+
+  private buildMessageClasses(): string {
     const classes: string[] = ['message-item'];
     if (this.isAIMessage) {
       classes.push('ai-message');
-      // Show in-progress styling for AI messages that are still processing
       if (this.isInProgressAIMessage) {
         classes.push('in-progress');
       }
     } else if (this.isUserMessage) {
       classes.push('user-message');
     }
-    if (this.message.IsPinned) {
+    if (this.message?.IsPinned) {
       classes.push('pinned');
     }
     if (this.isEditing) {
