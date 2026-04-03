@@ -216,6 +216,7 @@ export class InstallerEngine {
     const verbose = options?.Verbose ?? false;
     const yes = options?.Yes ?? false;
     const fast = options?.Fast ?? false;
+    const overwriteConfig = options?.OverwriteConfig ?? false;
 
     // Attach event logger for diagnostic capture
     this.eventLogger.Clear();
@@ -329,7 +330,7 @@ export class InstallerEngine {
       });
 
       try {
-        const result = await this.executePhase(phaseInfo.Id, plan, config, yes, fast);
+        const result = await this.executePhase(phaseInfo.Id, plan, config, yes, fast, overwriteConfig);
 
         // Collect warnings
         if (result.Warnings) {
@@ -524,7 +525,8 @@ export class InstallerEngine {
     plan: InstallPlan,
     config: PartialInstallConfig,
     yes: boolean,
-    fast: boolean
+    fast: boolean,
+    overwriteConfig: boolean = false
   ): Promise<PhaseExecutionResult> {
     switch (phaseId) {
       case 'preflight':
@@ -532,7 +534,7 @@ export class InstallerEngine {
       case 'scaffold':
         return this.executeScaffold(plan, config, yes);
       case 'configure':
-        return this.executeConfigure(plan, config, yes);
+        return this.executeConfigure(plan, config, yes, overwriteConfig);
       case 'database':
         return this.executeDatabase(plan, yes);
       case 'migrate':
@@ -603,13 +605,15 @@ export class InstallerEngine {
   private async executeConfigure(
     plan: InstallPlan,
     config: PartialInstallConfig,
-    yes: boolean
+    yes: boolean,
+    overwriteConfig: boolean = false
   ): Promise<PhaseExecutionResult> {
     const result = await this.configure.Run({
       Dir: plan.Dir,
       Config: { ...this.resolvedConfig, ...config },
       Yes: yes,
       Emitter: this.emitter,
+      OverwriteConfig: overwriteConfig,
     });
 
     // Store resolved config for subsequent phases
@@ -1128,7 +1132,7 @@ export class InstallerEngine {
     results.push(await this.captureServiceStartup(
       runner, targetDir, 'Explorer', ['run', 'start:explorer'],
       InstallerEngine.EXPLORER_READY_PATTERNS,
-      config.ExplorerPort ?? 4200
+      config.ExplorerPort ?? 4201
     ));
 
     return results;

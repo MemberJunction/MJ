@@ -43,6 +43,11 @@ export interface ConfigureContext {
   Yes: boolean;
   /** Event emitter for progress, prompt, and log events. */
   Emitter: InstallerEventEmitter;
+  /**
+   * When `true`, overwrite existing config files (`.env`, `mj.config.cjs`,
+   * `environment.ts`) with installer-generated values instead of preserving them.
+   */
+  OverwriteConfig?: boolean;
 }
 
 /**
@@ -84,6 +89,7 @@ export class ConfigurePhase {
    */
   async Run(context: ConfigureContext): Promise<ConfigureResult> {
     const { Emitter: emitter } = context;
+    const overwrite = context.OverwriteConfig ?? false;
     const filesWritten: string[] = [];
     const filesPreserved: string[] = [];
 
@@ -96,11 +102,19 @@ export class ConfigurePhase {
 
     const config = await this.resolveConfig(context.Config, context.Yes, emitter);
 
+    if (overwrite) {
+      emitter.Emit('log', {
+        Type: 'log',
+        Level: 'info',
+        Message: 'Overwrite mode enabled — existing config files will be regenerated.',
+      });
+    }
+
     // Step 2: .env files — preserve existing, create if missing, patch encryption key
     const envPath = path.join(context.Dir, '.env');
     const mjapiEnvPath = await this.resolveMjapiEnvPath(context.Dir);
 
-    if (await this.fileSystem.FileExists(envPath)) {
+    if (!overwrite && await this.fileSystem.FileExists(envPath)) {
       const existingRootEnv = await this.fileSystem.ReadText(envPath);
       const patchedRootEnv = this.ensureEnvVar(
         existingRootEnv,
@@ -147,7 +161,7 @@ export class ConfigurePhase {
 
     // Step 3: mj.config.cjs — preserve existing, create if missing, patch encryption + user
     const configCjsPath = path.join(context.Dir, 'mj.config.cjs');
-    if (await this.fileSystem.FileExists(configCjsPath)) {
+    if (!overwrite && await this.fileSystem.FileExists(configCjsPath)) {
       const existingContent = await this.fileSystem.ReadText(configCjsPath);
       let updatedContent = this.ensureEncryptionKeysBlock(existingContent);
 
@@ -174,12 +188,12 @@ export class ConfigurePhase {
     // Step 3.5: Backfill auth values from any existing .env files into the
     // config so that Explorer environment patching has real values to work
     // with. This covers the case where the root .env was freshly written
-    // with empty auth but apps/MJAPI/.env has real credentials from a
-    // previous install or the bootstrap archive.
+    // with empty auth but packages/MJAPI/.env has real credentials from a
+    // previous install.
     await this.backfillAuthFromEnv(context.Dir, config);
 
     // Step 4: Explorer environment files — preserve existing, create if missing
-    const envFilesResult = await this.updateExplorerEnvironments(context.Dir, config, emitter);
+    const envFilesResult = await this.updateExplorerEnvironments(context.Dir, config, emitter, overwrite);
     filesWritten.push(...envFilesResult.Written);
     filesPreserved.push(...envFilesResult.Preserved);
 
@@ -283,7 +297,7 @@ export class ConfigurePhase {
       emitter, 'api-port', 'GraphQL API port:', '4000', yes
     ), 10);
     config.ExplorerPort = config.ExplorerPort ?? parseInt(await this.promptInput(
-      emitter, 'explorer-port', 'Explorer UI port:', '4200', yes
+      emitter, 'explorer-port', 'Explorer UI port:', '4201', yes
     ), 10);
 
     // Auth provider
@@ -569,7 +583,7 @@ ${newUserSection}  output: [],
    * `environment.development.ts`).
    *
    * Searches for `MJExplorer/src/environments/` under several candidate
-   * parent paths (monorepo, distribution, flat). Existing files are preserved;
+   * the monorepo layout (`packages/MJExplorer/`). Existing files are preserved;
    * missing files are generated from the resolved config.
    *
    * @param dir - Repo root directory.
@@ -580,12 +594,11 @@ ${newUserSection}  output: [],
   private async updateExplorerEnvironments(
     dir: string,
     config: InstallConfig,
-    emitter: InstallerEventEmitter
+    emitter: InstallerEventEmitter,
+    overwrite: boolean = false
   ): Promise<{ Written: string[]; Preserved: string[] }> {
     const envDirCandidates = [
       path.join(dir, 'packages', 'MJExplorer', 'src', 'environments'),
-      path.join(dir, 'apps', 'MJExplorer', 'src', 'environments'),
-      path.join(dir, 'MJExplorer', 'src', 'environments'),
     ];
 
     // Find the first existing parent (MJExplorer/src/) to determine
@@ -622,7 +635,7 @@ ${newUserSection}  output: [],
       ? await this.fileSystem.ListFiles(envDir, /environment.*\.ts$/)
       : [];
 
-    if (envFiles.length > 0) {
+    if (!overwrite && envFiles.length > 0) {
       // Existing environment files found — preserve structure but patch
       // empty auth/connection fields with resolved config values.
       let patchedCount = 0;
@@ -678,7 +691,7 @@ ${newUserSection}  output: [],
       : '';
     const auth0Domain = config.AuthProviderValues?.Domain ?? '';
     const apiPort = config.APIPort ?? 4000;
-    const explorerPort = config.ExplorerPort ?? 4200;
+    const explorerPort = config.ExplorerPort ?? 4201;
     const redirectUri = `http://localhost:${explorerPort}`;
 
     return `export const environment = {
@@ -703,12 +716,11 @@ ${newUserSection}  output: [],
    * Reads ALL existing .env files and backfills auth-related values into
    * the config object when they are missing. Merges non-empty values from
    * all candidates, so if the root `.env` has empty auth but
-   * `apps/MJAPI/.env` has real credentials, those credentials are used.
+   * `packages/MJAPI/.env` has real credentials, those credentials are used.
    */
   private async backfillAuthFromEnv(dir: string, config: InstallConfig): Promise<void> {
     const candidates = [
       path.join(dir, '.env'),
-      path.join(dir, 'apps', 'MJAPI', '.env'),
       path.join(dir, 'packages', 'MJAPI', '.env'),
     ];
 
@@ -807,7 +819,7 @@ ${newUserSection}  output: [],
       : '';
     const auth0Domain = config.AuthProviderValues?.Domain ?? '';
     const apiPort = config.APIPort ?? 4000;
-    const explorerPort = config.ExplorerPort ?? 4200;
+    const explorerPort = config.ExplorerPort ?? 4201;
     const authType = this.mapAuthType(config.AuthProvider);
 
     // Map of field name → desired value. Only patch if the current value is empty.
@@ -826,6 +838,7 @@ ${newUserSection}  output: [],
     for (const [field, value] of Object.entries(patches)) {
       if (!value) continue;
       // Match: "FIELD": "" or "FIELD": '' or FIELD: "" or FIELD: ''
+      // Only patches empty values — preserves any dev-customized values.
       const emptyPattern = new RegExp(
         `(["']?${field}["']?\\s*[:=]\\s*)(?:["']{2}|["']\\s*["'])`,
       );
@@ -946,21 +959,10 @@ ${newUserSection}  output: [],
   }
 
   /**
-   * Resolve the path to the MJAPI `.env` file. Checks both `packages/MJAPI/`
-   * (monorepo layout) and `apps/MJAPI/` (distribution layout).
+   * Resolve the path to the MJAPI `.env` file in the monorepo layout.
    */
   private async resolveMjapiEnvPath(dir: string): Promise<string> {
-    const candidates = [
-      path.join(dir, 'packages', 'MJAPI', '.env'),
-      path.join(dir, 'apps', 'MJAPI', '.env'),
-    ];
-    for (const candidate of candidates) {
-      if (await this.fileSystem.DirectoryExists(path.dirname(candidate))) {
-        return candidate;
-      }
-    }
-    // Fallback to packages layout
-    return candidates[0];
+    return path.join(dir, 'packages', 'MJAPI', '.env');
   }
 
   /**
