@@ -103,8 +103,8 @@ describe('MJRunComputerUseParams', () => {
 
     it('should extend RunComputerUseParams (inherits base fields)', () => {
         const params = new MJRunComputerUseParams();
-        // Base class fields should exist
-        expect('Goal' in params || params.Goal === undefined).toBe(true);
+        // Base class fields should exist — Goal is inherited from RunComputerUseParams
+        expect('Goal' in params).toBe(true);
     });
 });
 
@@ -118,6 +118,6 @@ describe('MJDomainAuthBinding', () => {
     it('should extend DomainAuthBinding (inherits base fields)', () => {
         const binding = new MJDomainAuthBinding();
         // Domains is from the base class
-        expect('Domains' in binding || binding.Domains === undefined).toBe(true);
+        expect('Domains' in binding).toBe(true);
     });
 });

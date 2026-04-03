@@ -3,6 +3,8 @@ import { GoalCompletionOracle } from '../test-driver/oracles/GoalCompletionOracl
 import { UrlMatchOracle } from '../test-driver/oracles/UrlMatchOracle.js';
 import { StepCountOracle } from '../test-driver/oracles/StepCountOracle.js';
 import type { ComputerUseActualOutput } from '../test-driver/types.js';
+import type { OracleInput, OracleResult } from '@memberjunction/testing-engine';
+import type { UserInfo } from '@memberjunction/core';
 
 /**
  * Helper to build a minimal OracleInput. The oracles cast actualOutput
@@ -11,12 +13,18 @@ import type { ComputerUseActualOutput } from '../test-driver/types.js';
 function buildInput(overrides: {
     actualOutput?: Partial<ComputerUseActualOutput>;
     expectedOutput?: Record<string, unknown>;
-} = {}) {
+} = {}): OracleInput {
     return {
-        test: {} as never, // oracles don't inspect the test entity
+        test: {} as OracleInput['test'], // oracles don't inspect the test entity
         actualOutput: overrides.actualOutput,
         expectedOutput: overrides.expectedOutput,
+        contextUser: {} as UserInfo, // oracles don't inspect contextUser in these tests
     };
+}
+
+/** Type-safe accessor for oracle-specific details */
+function details(result: OracleResult): Record<string, unknown> {
+    return (result.details ?? {}) as Record<string, unknown>;
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -57,7 +65,7 @@ describe('GoalCompletionOracle', () => {
             expect(result.passed).toBe(false);
             expect(result.score).toBe(0);
             expect(result.message).toContain('failure');
-            expect(result.details?.error).toBe('Browser crashed');
+            expect(details(result).error).toBe('Browser crashed');
         });
     });
 
@@ -180,7 +188,7 @@ describe('GoalCompletionOracle', () => {
             expect(result.passed).toBe(true);
             expect(result.score).toBe(0.9);
             expect(result.message).toContain('Goal completed');
-            expect(result.details?.finalUrl).toBe('https://example.com/success');
+            expect(details(result).finalUrl).toBe('https://example.com/success');
         });
 
         it('should pass when confidence equals the threshold exactly', async () => {
