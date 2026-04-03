@@ -27,7 +27,7 @@ import {
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { UserInfo, Metadata, CompositeKey } from '@memberjunction/core';
-import { MJConversationEntity, MJTaskEntity } from '@memberjunction/core-entities';
+import { MJConversationEntity, MJTaskEntity, MJEnvironmentEntityExtended, UserInfoEngine } from '@memberjunction/core-entities';
 import { AgentClientService } from '@memberjunction/ng-agent-client';
 import { ClientToolResultEvent } from '@memberjunction/ai-agent-client';
 import { ConversationBridgeService, ConversationSwitchEvent } from '../../services/conversation-bridge.service';
@@ -35,12 +35,18 @@ import { NavigationRequest } from '@memberjunction/ng-artifacts';
 import { PendingAttachment } from '../mention/mention-editor.component';
 
 /** Visual state of the overlay panel */
-export type ChatOverlayState = 'collapsed' | 'expanded';
+export type ChatOverlayState = 'collapsed' | 'expanded' | 'maximized';
 
 /** Event payload when the active conversation changes in the overlay */
 export interface OverlayConversationSwitchedEvent {
     PreviousConversationID: string | null;
     NewConversationID: string | null;
+}
+
+/** Persisted overlay size preferences */
+interface OverlaySizePrefs {
+    width: number;
+    height: number;
 }
 
 @Component({
@@ -55,6 +61,15 @@ export class ChatAgentsOverlayComponent implements OnInit, OnDestroy {
     private agentClient = inject(AgentClientService);
     private destroy$ = new Subject<void>();
 
+    // --- Settings persistence ---
+    private static readonly SIZE_SETTING_KEY = 'ChatOverlay.Size';
+    private static readonly DEFAULT_WIDTH = 420;
+    private static readonly DEFAULT_HEIGHT = 600;
+    private static readonly MIN_WIDTH = 320;
+    private static readonly MIN_HEIGHT = 350;
+    private static readonly MAX_WIDTH = 900;
+    private static readonly MAX_HEIGHT = 1000;
+
     // --- Inputs ---
 
     /** Controls external visibility (e.g., parent hides overlay on chat route) */
@@ -64,7 +79,7 @@ export class ChatAgentsOverlayComponent implements OnInit, OnDestroy {
     set IsVisible(value: boolean) {
         const prev = this._IsVisible;
         this._IsVisible = value;
-        if (!value && prev && this.State === 'expanded') {
+        if (!value && prev && this.State !== 'collapsed') {
             this.Collapse();
         }
         this.cdr.detectChanges();
@@ -73,15 +88,15 @@ export class ChatAgentsOverlayComponent implements OnInit, OnDestroy {
         return this._IsVisible;
     }
 
-    /** Current user info, passed through to conversation-chat-area */
+    /** Current user info, passed through to conversation-chat-area. Auto-resolved from Metadata if not provided. */
     @Input() CurrentUser!: UserInfo;
 
-    /** Environment ID, passed through to conversation-chat-area */
+    /** Environment ID, passed through to conversation-chat-area. Auto-resolved from default if not provided. */
     @Input() EnvironmentId!: string;
 
     // --- Outputs ---
 
-    /** Emitted when the overlay visibility changes (collapsed/expanded) */
+    /** Emitted when the overlay visibility changes */
     @Output() VisibilityChanged = new EventEmitter<ChatOverlayState>();
 
     /** Emitted when a tool finishes executing in the agent client */
@@ -90,8 +105,8 @@ export class ChatAgentsOverlayComponent implements OnInit, OnDestroy {
     /** Emitted when the active conversation changes in the overlay */
     @Output() ConversationSwitched = new EventEmitter<OverlayConversationSwitchedEvent>();
 
-    /** Emitted when the user requests opening the full workspace */
-    @Output() OpenFullWorkspace = new EventEmitter<string | null>();
+    /** Emitted when the user requests opening the full chat workspace */
+    @Output() OpenFullChatWorkspace = new EventEmitter<string | null>();
 
     /** Emitted when navigation is requested (entity record, etc.) */
     @Output() NavigationRequested = new EventEmitter<NavigationRequest>();
@@ -107,6 +122,10 @@ export class ChatAgentsOverlayComponent implements OnInit, OnDestroy {
     public State: ChatOverlayState = 'collapsed';
     public UnreadCount = 0;
 
+    /** Panel dimensions (persisted via UserInfoEngine) */
+    public PanelWidth = ChatAgentsOverlayComponent.DEFAULT_WIDTH;
+    public PanelHeight = ChatAgentsOverlayComponent.DEFAULT_HEIGHT;
+
     /** Active conversation ID managed locally */
     private _conversationId: string | null = null;
     public get ConversationId(): string | null {
@@ -119,9 +138,25 @@ export class ChatAgentsOverlayComponent implements OnInit, OnDestroy {
     /** Whether a new unsaved conversation is in progress */
     public IsNewConversation = true;
 
+    /** Pending message to send after conversation creation */
+    public PendingMessage: string | null = null;
+
+    /** Pending attachments to send after conversation creation */
+    public PendingAttachments: PendingAttachment[] | null = null;
+
+    /** Resize drag state */
+    private isResizing = false;
+    private resizeEdge: 'left' | 'top' | 'top-left' | null = null;
+    private resizeStartX = 0;
+    private resizeStartY = 0;
+    private resizeStartWidth = 0;
+    private resizeStartHeight = 0;
+
     // --- Lifecycle ---
 
     ngOnInit(): void {
+        this.resolveDefaults();
+        this.loadSizePreferences();
         this.subscribeToBridgeEvents();
         this.subscribeToToolEvents();
     }
@@ -129,6 +164,7 @@ export class ChatAgentsOverlayComponent implements OnInit, OnDestroy {
     ngOnDestroy(): void {
         this.destroy$.next();
         this.destroy$.complete();
+        this.removeResizeListeners();
     }
 
     // --- Public Methods ---
@@ -159,9 +195,21 @@ export class ChatAgentsOverlayComponent implements OnInit, OnDestroy {
         this.cdr.detectChanges();
     }
 
-    /** Handle the user requesting to open full workspace */
-    public OnOpenFullWorkspace(): void {
-        this.OpenFullWorkspace.emit(this._conversationId);
+    /** Toggle between expanded and maximized states */
+    public ToggleMaximize(): void {
+        if (this.State === 'maximized') {
+            this.State = 'expanded';
+        } else {
+            this.State = 'maximized';
+        }
+        this.bridge.NotifyOverlayActive(true);
+        this.VisibilityChanged.emit(this.State);
+        this.cdr.detectChanges();
+    }
+
+    /** Handle the user requesting to open full chat workspace */
+    public OnOpenFullChatWorkspace(): void {
+        this.OpenFullChatWorkspace.emit(this._conversationId);
         this.bridge.SwitchToWorkspace(this._conversationId);
         this.Collapse();
     }
@@ -172,12 +220,21 @@ export class ChatAgentsOverlayComponent implements OnInit, OnDestroy {
         pendingMessage?: string;
         pendingAttachments?: PendingAttachment[];
     }): void {
+        // Set ALL state atomically before Angular change detection runs
+        this.PendingMessage = event.pendingMessage || null;
+        this.PendingAttachments = event.pendingAttachments || null;
         const prevId = this._conversationId;
         this._conversationId = event.conversation.ID;
         this.Conversation = event.conversation;
         this.IsNewConversation = false;
         this.bridge.SetActiveFromOverlay(event.conversation.ID);
         this.emitConversationSwitched(prevId, event.conversation.ID);
+    }
+
+    /** Handle pending message consumed by chat area */
+    public OnPendingMessageConsumed(): void {
+        this.PendingMessage = null;
+        this.PendingAttachments = null;
     }
 
     /** Handle conversation rename from chat area */
@@ -206,6 +263,10 @@ export class ChatAgentsOverlayComponent implements OnInit, OnDestroy {
         const prevId = this._conversationId;
         this._conversationId = null;
         this.Conversation = null;
+        // Force Angular change detection by toggling off then on
+        // so the setter fires even if already in new-conversation state
+        this.IsNewConversation = false;
+        this.cdr.detectChanges();
         this.IsNewConversation = true;
         this.bridge.SetActiveFromOverlay(null);
         this.emitConversationSwitched(prevId, null);
@@ -220,7 +281,98 @@ export class ChatAgentsOverlayComponent implements OnInit, OnDestroy {
         }
     }
 
+    // --- Resize Methods ---
+
+    /** Start resizing from an edge or corner */
+    public OnResizeStart(event: MouseEvent, edge: 'left' | 'top' | 'top-left'): void {
+        event.preventDefault();
+        event.stopPropagation();
+        this.isResizing = true;
+        this.resizeEdge = edge;
+        this.resizeStartX = event.clientX;
+        this.resizeStartY = event.clientY;
+        this.resizeStartWidth = this.PanelWidth;
+        this.resizeStartHeight = this.PanelHeight;
+
+        document.addEventListener('mousemove', this.onResizeMove);
+        document.addEventListener('mouseup', this.onResizeEnd);
+    }
+
+    private onResizeMove = (event: MouseEvent): void => {
+        if (!this.isResizing || !this.resizeEdge) return;
+
+        const deltaX = this.resizeStartX - event.clientX; // Inverted: dragging left increases width
+        const deltaY = this.resizeStartY - event.clientY; // Inverted: dragging up increases height
+
+        if (this.resizeEdge === 'left' || this.resizeEdge === 'top-left') {
+            this.PanelWidth = this.clampWidth(this.resizeStartWidth + deltaX);
+        }
+        if (this.resizeEdge === 'top' || this.resizeEdge === 'top-left') {
+            this.PanelHeight = this.clampHeight(this.resizeStartHeight + deltaY);
+        }
+        this.cdr.detectChanges();
+    };
+
+    private onResizeEnd = (): void => {
+        if (!this.isResizing) return;
+        this.isResizing = false;
+        this.resizeEdge = null;
+        this.removeResizeListeners();
+        this.saveSizePreferences();
+    };
+
+    private removeResizeListeners(): void {
+        document.removeEventListener('mousemove', this.onResizeMove);
+        document.removeEventListener('mouseup', this.onResizeEnd);
+    }
+
+    private clampWidth(value: number): number {
+        return Math.max(ChatAgentsOverlayComponent.MIN_WIDTH, Math.min(ChatAgentsOverlayComponent.MAX_WIDTH, value));
+    }
+
+    private clampHeight(value: number): number {
+        return Math.max(ChatAgentsOverlayComponent.MIN_HEIGHT, Math.min(ChatAgentsOverlayComponent.MAX_HEIGHT, value));
+    }
+
     // --- Private Methods ---
+
+    /** Auto-resolve CurrentUser and EnvironmentId from Metadata when not provided as inputs */
+    private resolveDefaults(): void {
+        if (!this.CurrentUser) {
+            const md = new Metadata();
+            this.CurrentUser = md.CurrentUser;
+        }
+        if (!this.EnvironmentId) {
+            this.EnvironmentId = MJEnvironmentEntityExtended.DefaultEnvironmentID;
+        }
+    }
+
+    /** Load saved panel size from UserInfoEngine */
+    private loadSizePreferences(): void {
+        try {
+            const engine = UserInfoEngine.Instance;
+            const raw = engine.GetSetting(ChatAgentsOverlayComponent.SIZE_SETTING_KEY);
+            if (raw) {
+                const prefs: OverlaySizePrefs = JSON.parse(raw);
+                this.PanelWidth = this.clampWidth(prefs.width);
+                this.PanelHeight = this.clampHeight(prefs.height);
+            }
+        } catch {
+            // Use defaults on error
+        }
+    }
+
+    /** Persist panel size to UserInfoEngine (debounced) */
+    private saveSizePreferences(): void {
+        const prefs: OverlaySizePrefs = {
+            width: this.PanelWidth,
+            height: this.PanelHeight
+        };
+        UserInfoEngine.Instance.SetSettingDebounced(
+            ChatAgentsOverlayComponent.SIZE_SETTING_KEY,
+            JSON.stringify(prefs)
+        );
+    }
 
     /** Subscribe to bridge events for cross-view coordination */
     private subscribeToBridgeEvents(): void {

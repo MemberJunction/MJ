@@ -251,6 +251,17 @@ export class MJExplorerAppComponent implements OnInit, OnDestroy {
     this.navigationService.OpenEntityRecord(event.entityName, event.compositeKey);
   }
 
+  /** Handle "open full chat workspace" from the chat overlay — navigate to the Conversations tab with the active conversation */
+  public OnOverlayOpenFullChatWorkspace(conversationId: string | null): void {
+    const params: Record<string, unknown> = {};
+    if (conversationId) {
+      params['conversationId'] = conversationId;
+    }
+    const md = new Metadata();
+    const chatApp = md.Applications.find(a => a.Name === 'Chat');
+    this.navigationService.OpenNavItemByName('Conversations', params, chatApp?.ID);
+  }
+
   /** Register Explorer-specific client tool handlers with the AgentClientService */
   private registerClientTools(): void {
     this.agentClient.RegisterTool({

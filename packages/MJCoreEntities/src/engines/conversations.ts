@@ -1,22 +1,114 @@
-import { BaseEngine, BaseEnginePropertyConfig, BaseEntity, BaseEntityEvent, IMetadataProvider, Metadata, RunView, UserInfo } from "@memberjunction/core";
+import { BaseEngine, BaseEnginePropertyConfig, BaseEntity, BaseEntityEvent, IMetadataProvider, Metadata, RunQuery, RunView, TransformSimpleObjectToEntityObject, UserInfo } from "@memberjunction/core";
 import { NormalizeUUID, UUIDsEqual } from "@memberjunction/global";
 import { BehaviorSubject, Observable } from "rxjs";
 import {
     MJConversationEntity,
     MJConversationDetailEntity,
-    MJAIAgentRunEntity
+    MJConversationDetailEntityType,
+    MJAIAgentRunEntity,
+    MJAIAgentRunEntityType,
+    MJConversationDetailRatingEntityType,
+    MJConversationDetailArtifactEntityType
 } from "../generated/entity_subclasses";
 import { ArtifactMetadataEngine } from "./artifacts";
 
+// ========================================================================
+// QUERY RESULT TYPES (from GetConversationComplete stored query)
+// ========================================================================
+
+/**
+ * Agent Run data returned as JSON from GetConversationComplete query.
+ */
+export type AgentRunJSON = MJAIAgentRunEntityType & {
+    Agent: string | null;
+};
+
+/**
+ * Artifact data returned as JSON from GetConversationComplete query.
+ */
+export type ArtifactJSON = MJConversationDetailArtifactEntityType & {
+    ArtifactVersionID: string;
+    VersionNumber: number;
+    VersionName: string | null;
+    VersionDescription: string | null;
+    VersionCreatedAt: Date;
+    ArtifactID: string;
+    ArtifactName: string;
+    ArtifactType: string;
+    ArtifactDescription: string | null;
+    Visibility: string;
+};
+
+/**
+ * Rating data returned as JSON from GetConversationComplete query.
+ */
+export type RatingJSON = MJConversationDetailRatingEntityType & {
+    UserName: string;
+};
+
+/**
+ * Raw query result row from GetConversationComplete (before JSON parsing).
+ */
+export type ConversationDetailComplete = MJConversationDetailEntityType & {
+    AgentRunsJSON: string | null;
+    ArtifactsJSON: string | null;
+    RatingsJSON: string | null;
+    UserImageURL: string | null;
+    UserImageIconClass: string | null;
+};
+
+/**
+ * Parsed conversation detail with typed related data.
+ */
+export interface ConversationDetailParsed extends MJConversationDetailEntityType {
+    agentRuns: AgentRunJSON[];
+    artifacts: ArtifactJSON[];
+    ratings: RatingJSON[];
+}
+
+/**
+ * Helper: parse a raw ConversationDetailComplete row into typed arrays.
+ */
+export function parseConversationDetailComplete(
+    queryResult: ConversationDetailComplete
+): ConversationDetailParsed {
+    return {
+        ...queryResult,
+        agentRuns: queryResult.AgentRunsJSON
+            ? JSON.parse(queryResult.AgentRunsJSON) as AgentRunJSON[]
+            : [],
+        artifacts: queryResult.ArtifactsJSON
+            ? JSON.parse(queryResult.ArtifactsJSON) as ArtifactJSON[]
+            : [],
+        ratings: queryResult.RatingsJSON
+            ? JSON.parse(queryResult.RatingsJSON) as RatingJSON[]
+            : []
+    };
+}
+
+/** User avatar info extracted from the query */
+export interface UserAvatarInfo {
+    ImageURL: string | null;
+    IconClass: string | null;
+}
+
 /**
  * Cached data for a single conversation's details (messages) and peripheral data.
- * Stored by conversation ID in the engine's detail cache.
+ * Populated by the efficient GetConversationComplete query in one round-trip.
  */
 export interface ConversationDetailCache {
     /** The conversation detail (message) entities */
     Details: MJConversationDetailEntity[];
+    /** Raw query result rows (used for peripheral data parsing) */
+    RawData: ConversationDetailComplete[];
     /** Agent runs keyed by conversation detail ID */
     AgentRunsByDetailId: Map<string, MJAIAgentRunEntity>;
+    /** User avatars keyed by UserID */
+    UserAvatars: Map<string, UserAvatarInfo>;
+    /** Ratings keyed by conversation detail ID */
+    RatingsByDetailId: Map<string, RatingJSON[]>;
+    /** Parsed artifacts keyed by conversation detail ID */
+    ArtifactsByDetailId: Map<string, ArtifactJSON[]>;
     /** Timestamp of when this cache entry was populated */
     LoadedAt: Date;
 }
@@ -437,59 +529,145 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      * @param forceRefresh - If true, reloads even if cached
      * @returns Array of conversation detail entities
      */
+    /**
+     * Loads conversation details using the efficient GetConversationComplete query
+     * which returns messages, agent runs, artifacts, ratings, and user avatars in one round-trip.
+     * Results are cached for instant retrieval on subsequent calls.
+     *
+     * @param conversationId - The conversation to load details for
+     * @param contextUser - The current user context
+     * @param forceRefresh - If true, reloads even if cached
+     * @returns The full cache entry with all peripheral data
+     */
     public async LoadConversationDetails(
         conversationId: string,
         contextUser: UserInfo,
         forceRefresh: boolean = false
-    ): Promise<MJConversationDetailEntity[]> {
+    ): Promise<ConversationDetailCache> {
         const key = NormalizeUUID(conversationId);
 
         // Return cached if available and not forcing
         if (!forceRefresh) {
             const cached = this._detailCache.get(key);
             if (cached) {
-                return cached.Details;
+                return cached;
             }
         }
 
-        const rv = new RunView();
-        const result = await rv.RunView<MJConversationDetailEntity>(
-            {
-                EntityName: 'MJ: Conversation Details',
-                ExtraFilter: `ConversationID='${conversationId}'`,
-                OrderBy: '__mj_CreatedAt ASC',
-                ResultType: 'entity_object'
-            },
-            contextUser
-        );
+        // Use GetConversationComplete for one-round-trip loading of all data
+        const rq = new RunQuery();
+        const result = await rq.RunQuery({
+            QueryName: 'GetConversationComplete',
+            CategoryPath: 'MJ/Conversations',
+            Parameters: { ConversationID: conversationId }
+        }, contextUser);
 
-        if (!result.Success) {
+        if (!result.Success || !result.Results) {
             console.error('[ConversationEngine] Failed to load conversation details:', result.ErrorMessage);
-            return [];
+            // Return empty cache entry
+            const empty: ConversationDetailCache = {
+                Details: [],
+                RawData: [],
+                AgentRunsByDetailId: new Map(),
+                UserAvatars: new Map(),
+                RatingsByDetailId: new Map(),
+                ArtifactsByDetailId: new Map(),
+                LoadedAt: new Date()
+            };
+            return empty;
         }
 
-        const details = result.Results || [];
+        const rawData = result.Results as ConversationDetailComplete[];
 
-        // Load agent runs in parallel
-        const agentRuns = await this.loadAgentRunsForConversation(conversationId, contextUser);
-
-        // Build and store the cache entry
-        const cacheEntry: ConversationDetailCache = {
-            Details: details,
-            AgentRunsByDetailId: agentRuns,
-            LoadedAt: new Date()
-        };
+        // Build the cache entry from the rich query result
+        const cacheEntry = await this.buildDetailCacheFromRawData(rawData, contextUser);
         this._detailCache.set(key, cacheEntry);
 
-        return details;
+        return cacheEntry;
     }
 
     /**
-     * Returns cached conversation details without hitting the database.
+     * Builds a full ConversationDetailCache from raw GetConversationComplete query results.
+     * Hydrates entity objects and parses peripheral JSON data in one pass.
+     */
+    private async buildDetailCacheFromRawData(
+        rawData: ConversationDetailComplete[],
+        contextUser: UserInfo
+    ): Promise<ConversationDetailCache> {
+        const md = new Metadata();
+
+        // Hydrate raw rows into MJConversationDetailEntity objects
+        const validRows = rawData.filter(row => !!row.ID);
+        const details = await TransformSimpleObjectToEntityObject<MJConversationDetailEntity>(
+            Metadata.Provider, 'MJ: Conversation Details', validRows, contextUser
+        );
+
+        // Build peripheral data maps from parsed JSON in one pass
+        const agentRuns = new Map<string, MJAIAgentRunEntity>();
+        const userAvatars = new Map<string, UserAvatarInfo>();
+        const ratingsByDetailId = new Map<string, RatingJSON[]>();
+        const artifactsByDetailId = new Map<string, ArtifactJSON[]>();
+
+        for (const row of rawData) {
+            if (!row.ID) continue;
+
+            const parsed = parseConversationDetailComplete(row);
+
+            // Agent runs
+            if (parsed.agentRuns.length > 0) {
+                const agentRunData = parsed.agentRuns[0];
+                const agentRun = await md.GetEntityObject<MJAIAgentRunEntity>('MJ: AI Agent Runs', contextUser);
+                agentRun.LoadFromData({
+                    ID: agentRunData.ID,
+                    AgentID: agentRunData.AgentID,
+                    Agent: agentRunData.Agent,
+                    Status: agentRunData.Status,
+                    __mj_CreatedAt: agentRunData.__mj_CreatedAt,
+                    __mj_UpdatedAt: agentRunData.__mj_UpdatedAt,
+                    TotalPromptTokensUsed: agentRunData.TotalPromptTokensUsed,
+                    TotalCompletionTokensUsed: agentRunData.TotalCompletionTokensUsed,
+                    TotalCost: agentRunData.TotalCost,
+                    ConversationDetailID: agentRunData.ConversationDetailID
+                });
+                agentRuns.set(row.ID, agentRun);
+            }
+
+            // Artifacts
+            if (parsed.artifacts.length > 0) {
+                artifactsByDetailId.set(row.ID, parsed.artifacts);
+            }
+
+            // Ratings
+            if (parsed.ratings.length > 0) {
+                ratingsByDetailId.set(row.ID, parsed.ratings);
+            }
+
+            // User avatars (deduplicate by UserID)
+            if (row.Role?.toLowerCase() === 'user' && row.UserID && !userAvatars.has(row.UserID)) {
+                userAvatars.set(row.UserID, {
+                    ImageURL: row.UserImageURL || null,
+                    IconClass: row.UserImageIconClass || null
+                });
+            }
+        }
+
+        return {
+            Details: details,
+            RawData: rawData,
+            AgentRunsByDetailId: agentRuns,
+            UserAvatars: userAvatars,
+            RatingsByDetailId: ratingsByDetailId,
+            ArtifactsByDetailId: artifactsByDetailId,
+            LoadedAt: new Date()
+        };
+    }
+
+    /**
+     * Returns cached conversation details (messages only) without hitting the database.
      * Returns undefined if no cache entry exists for this conversation.
      *
      * @param conversationId - The conversation ID
-     * @returns Cached details, or undefined if not cached
+     * @returns Cached message entities, or undefined if not cached
      */
     public GetCachedDetails(conversationId: string): MJConversationDetailEntity[] | undefined {
         const key = NormalizeUUID(conversationId);
@@ -497,8 +675,11 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     }
 
     /**
-     * Returns the full cache entry for a conversation, including peripheral data.
-     * Returns undefined if not cached.
+     * Returns the full cache entry for a conversation, including all peripheral data
+     * (agent runs, artifacts, ratings, user avatars). Returns undefined if not cached.
+     *
+     * This is the primary read method for UI components — returns instant cached data
+     * without any database round-trip.
      *
      * @param conversationId - The conversation ID
      * @returns The full cache entry, or undefined
@@ -506,6 +687,14 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     public GetCachedDetailEntry(conversationId: string): ConversationDetailCache | undefined {
         const key = NormalizeUUID(conversationId);
         return this._detailCache.get(key);
+    }
+
+    /**
+     * Returns true if conversation details are cached for the given conversation.
+     */
+    public HasCachedDetails(conversationId: string): boolean {
+        const key = NormalizeUUID(conversationId);
+        return this._detailCache.has(key);
     }
 
     /**
@@ -897,43 +1086,4 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         });
     }
 
-    /**
-     * Loads agent runs for all details in a conversation.
-     * Returns a Map keyed by ConversationDetailID.
-     */
-    private async loadAgentRunsForConversation(
-        conversationId: string,
-        contextUser: UserInfo
-    ): Promise<Map<string, MJAIAgentRunEntity>> {
-        const rv = new RunView();
-        const result = await rv.RunView<MJAIAgentRunEntity>(
-            {
-                EntityName: 'MJ: AI Agent Runs',
-                ExtraFilter: `ConversationDetailID IN (SELECT ID FROM [${this.getSchemaPrefix()}vwConversationDetails] WHERE ConversationID='${conversationId}')`,
-                OrderBy: '__mj_CreatedAt ASC',
-                ResultType: 'entity_object'
-            },
-            contextUser
-        );
-
-        const map = new Map<string, MJAIAgentRunEntity>();
-        if (result.Success && result.Results) {
-            for (const run of result.Results) {
-                // ConversationDetailID is available on the agent run entity
-                const detailId = run.ConversationDetailID;
-                if (detailId) {
-                    map.set(detailId, run);
-                }
-            }
-        }
-        return map;
-    }
-
-    /**
-     * Gets the schema prefix for SQL subqueries.
-     * Returns '__mj.' for standard MJ deployments.
-     */
-    private getSchemaPrefix(): string {
-        return '__mj.';
-    }
 }

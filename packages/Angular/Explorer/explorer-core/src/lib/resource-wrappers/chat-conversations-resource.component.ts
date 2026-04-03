@@ -3,7 +3,7 @@ import { Metadata, CompositeKey } from '@memberjunction/core';
 import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { ResourceData, MJEnvironmentEntityExtended, MJConversationEntity, MJUserSettingEntity, UserInfoEngine, ConversationEngine } from '@memberjunction/core-entities';
-import { ConversationChatAreaComponent, ConversationListComponent, MentionAutocompleteService, ConversationStreamingService, ActiveTasksService, PendingAttachment, UICommandHandlerService } from '@memberjunction/ng-conversations';
+import { ConversationChatAreaComponent, ConversationListComponent, MentionAutocompleteService, ConversationStreamingService, ActiveTasksService, PendingAttachment, UICommandHandlerService, ConversationBridgeService } from '@memberjunction/ng-conversations';
 import { ActionableCommand, OpenResourceCommand } from '@memberjunction/ai-core-plus';
 import { NavigationRequest } from '@memberjunction/ng-artifacts';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
@@ -228,7 +228,8 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     private cdr: ChangeDetectorRef,
     private streamingService: ConversationStreamingService,
     private activeTasksService: ActiveTasksService,
-    private uiCommandHandler: UICommandHandlerService
+    private uiCommandHandler: UICommandHandlerService,
+    private bridge: ConversationBridgeService
   ) {
     super();
   }
@@ -274,6 +275,20 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
       .pipe(takeUntil(this.destroy$))
       .subscribe(command => this.handleActionableCommand(command));
 
+    // Subscribe to bridge switch events so the overlay can hand off a conversation to this workspace
+    this.bridge.SwitchEvent$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(event => {
+        if (event.Target === 'workspace' && event.ConversationID) {
+          void this.selectConversation(event.ConversationID);
+          this.updateTabTitle();
+          this.cdr.detectChanges();
+        }
+      });
+
+    // Notify the bridge that the workspace is active
+    this.bridge.NotifyWorkspaceActive(true);
+
     // Enable URL updates after initialization
     this.skipUrlUpdate = false;
 
@@ -287,6 +302,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   }
 
   ngOnDestroy() {
+    this.bridge.NotifyWorkspaceActive(false);
     this.destroy$.next();
     this.destroy$.complete();
 

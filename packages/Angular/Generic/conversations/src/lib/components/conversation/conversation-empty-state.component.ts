@@ -14,6 +14,19 @@ export class ConversationEmptyStateComponent {
   @Input() disabled: boolean = false;
   @Input() showSidebarToggle: boolean = false;
 
+  /** When true (overlay context), suggested prompts are hidden to save space */
+  private _overlayMode = false;
+  @Input()
+  set overlayMode(value: boolean) {
+      this._overlayMode = value;
+      if (value) {
+          this.suggestedPrompts = [];
+      }
+  }
+  get overlayMode(): boolean {
+      return this._overlayMode;
+  }
+
   @ViewChild(MessageInputComponent) private messageInput?: MessageInputComponent;
 
   @Output() messageSent = new EventEmitter<{text: string; attachments: PendingAttachment[]}>();

@@ -68,9 +68,6 @@
     position: fixed;
     bottom: 1.5rem;
     right: 1.5rem;
-    width: 420px;
-    height: 600px;
-    max-height: calc(100vh - 6rem);
     border-radius: 12px;
     background: var(--mj-bg-surface);
     border: 1px solid var(--mj-border-default);
@@ -80,6 +77,18 @@
     flex-direction: column;
     overflow: hidden;
     animation: overlayPanelIn 0.25s ease;
+    max-height: calc(100vh - 3rem);
+    max-width: calc(100vw - 3rem);
+}
+
+.chat-overlay-panel.maximized {
+    bottom: 1rem;
+    right: 1rem;
+    width: calc(100vw - 2rem) !important;
+    height: calc(100vh - 2rem) !important;
+    max-height: none;
+    max-width: none;
+    border-radius: 12px;
 }
 
 @keyframes overlayPanelIn {
@@ -91,6 +100,42 @@
         opacity: 1;
         transform: scale(1) translateY(0);
     }
+}
+
+/* --- Resize Handles --- */
+
+.resize-handle {
+    position: absolute;
+    z-index: 2;
+}
+
+.resize-left {
+    left: -3px;
+    top: 20px;
+    bottom: 20px;
+    width: 6px;
+    cursor: ew-resize;
+}
+
+.resize-top {
+    top: -3px;
+    left: 20px;
+    right: 20px;
+    height: 6px;
+    cursor: ns-resize;
+}
+
+.resize-top-left {
+    top: -4px;
+    left: -4px;
+    width: 16px;
+    height: 16px;
+    cursor: nwse-resize;
+}
+
+.resize-handle:hover {
+    background: color-mix(in srgb, var(--mj-brand-primary) 30%, transparent);
+    border-radius: 3px;
 }
 
 /* --- Panel Header --- */
@@ -166,8 +211,8 @@
     .chat-overlay-panel {
         bottom: 0;
         right: 0;
-        width: 100%;
-        height: 100vh;
+        width: 100% !important;
+        height: 100vh !important;
         max-height: 100vh;
         border-radius: 0;
     }
@@ -175,5 +220,9 @@
     .chat-overlay-bubble {
         bottom: 1rem;
         right: 1rem;
+    }
+
+    .resize-handle {
+        display: none;
     }
 }

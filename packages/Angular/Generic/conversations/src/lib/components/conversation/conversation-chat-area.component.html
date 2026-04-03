@@ -75,6 +75,7 @@
           [currentUser]="currentUser"
           [disabled]="isProcessing"
           [showSidebarToggle]="showSidebarToggle"
+          [overlayMode]="overlayMode"
           (sidebarToggleClicked)="sidebarToggleClicked.emit()"
           (messageSent)="onEmptyStateMessageSent($event)">
         </mj-conversation-empty-state>

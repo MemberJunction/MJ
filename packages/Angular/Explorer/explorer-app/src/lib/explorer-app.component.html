@@ -20,6 +20,7 @@
       [IsVisible]="!isChatRoute"
       (ToolExecuted)="OnOverlayToolExecuted($event)"
       (OpenEntityRecord)="OnOverlayOpenRecord($event)"
+      (OpenFullChatWorkspace)="OnOverlayOpenFullChatWorkspace($event)"
     ></mj-chat-agents-overlay>
   }
   <!-- Hidden router-outlet required for Angular's router to activate routes and update the browser URL.

@@ -9,9 +9,23 @@
         </div>
     }
 
-    <!-- Expanded Chat Panel -->
-    @if (State === 'expanded') {
-        <div class="chat-overlay-panel">
+    <!-- Expanded / Maximized Chat Panel -->
+    @if (State === 'expanded' || State === 'maximized') {
+        <div class="chat-overlay-panel"
+             [class.maximized]="State === 'maximized'"
+             [style.width.px]="State === 'maximized' ? null : PanelWidth"
+             [style.height.px]="State === 'maximized' ? null : PanelHeight">
+
+            <!-- Resize handles (only in expanded, not maximized) -->
+            @if (State === 'expanded') {
+                <div class="resize-handle resize-left"
+                     (mousedown)="OnResizeStart($event, 'left')"></div>
+                <div class="resize-handle resize-top"
+                     (mousedown)="OnResizeStart($event, 'top')"></div>
+                <div class="resize-handle resize-top-left"
+                     (mousedown)="OnResizeStart($event, 'top-left')"></div>
+            }
+
             <!-- Panel Header -->
             <div class="chat-overlay-header">
                 <div class="chat-overlay-title">
@@ -25,11 +39,19 @@
                         (click)="StartNewConversation()">
                         <i class="fa-solid fa-plus"></i>
                     </button>
+                    @if (ConversationId) {
+                        <button
+                            class="chat-overlay-header-btn"
+                            title="Open in full chat workspace"
+                            (click)="OnOpenFullChatWorkspace()">
+                            <i class="fa-solid fa-up-right-from-square"></i>
+                        </button>
+                    }
                     <button
                         class="chat-overlay-header-btn"
-                        title="Open in full workspace"
-                        (click)="OnOpenFullWorkspace()">
-                        <i class="fa-solid fa-expand"></i>
+                        [title]="State === 'maximized' ? 'Restore size' : 'Maximize'"
+                        (click)="ToggleMaximize()">
+                        <i class="fa-solid" [class.fa-expand]="State !== 'maximized'" [class.fa-compress]="State === 'maximized'"></i>
                     </button>
                     <button
                         class="chat-overlay-header-btn"
@@ -48,8 +70,12 @@
                     [conversationId]="ConversationId"
                     [conversation]="Conversation"
                     [isNewConversation]="IsNewConversation"
+                    [pendingMessage]="PendingMessage"
+                    [pendingAttachments]="PendingAttachments"
+                    [overlayMode]="true"
                     (conversationCreated)="OnConversationCreated($event)"
                     (conversationRenamed)="OnConversationRenamed($event)"
+                    (pendingMessageConsumed)="OnPendingMessageConsumed()"
                     (openEntityRecord)="OnOpenEntityRecord($event)"
                     (navigationRequest)="OnNavigationRequest($event)"
                     (taskClicked)="OnTaskClicked($event)"
