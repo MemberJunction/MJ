@@ -1,4 +1,4 @@
-import { BaseEntity, DuplicateDetectionProgress, LogError, LogStatus, PotentialDuplicateRequest, RunView } from "@memberjunction/core";
+import { BaseEntity, DuplicateDetectionOptions, DuplicateDetectionProgress, LogError, LogStatus, PotentialDuplicateRequest, RunView } from "@memberjunction/core";
 import { RegisterClass, GetGlobalObjectStore } from "@memberjunction/global";
 import { MJDuplicateRunEntity, MJEntityDocumentEntity } from "@memberjunction/core-entities";
 import { DuplicateRecordDetector } from "@memberjunction/ai-vector-dupe";
@@ -54,12 +54,27 @@ export class MJDuplicateRunEntityServer extends MJDuplicateRunEntity {
                 request.EntityDocumentID = edResult.Results[0].ID;
             }
 
-            request.Options = {
+            // Build detection options with threshold normalization.
+            // Entity document defaults are 1.0 (100%) which means nothing ever matches.
+            // Normalize to sensible fallbacks when the stored value is effectively unconfigured.
+            const potentialThreshold = this.normalizeThreshold(
+                edResult.Success && edResult.Results.length > 0 ? edResult.Results[0].PotentialMatchThreshold : 1.0,
+                0.70 // fallback: 70% for potential matches
+            );
+            const absoluteThreshold = this.normalizeThreshold(
+                edResult.Success && edResult.Results.length > 0 ? edResult.Results[0].AbsoluteMatchThreshold : 1.0,
+                0.95 // fallback: 95% for absolute matches
+            );
+
+            const detectionOptions: DuplicateDetectionOptions = {
                 DuplicateRunID: this.ID,
+                PotentialMatchThreshold: potentialThreshold,
+                AbsoluteMatchThreshold: absoluteThreshold,
                 OnProgress: (progress: DuplicateDetectionProgress) => {
                     this.publishProgress(progress, startTime);
                 }
             };
+            request.Options = detectionOptions;
 
             // Publish initial progress
             this.publishPipelineNotification('autotag', 0, 0, 0, startTime, 'Starting duplicate detection...');
@@ -110,6 +125,16 @@ export class MJDuplicateRunEntityServer extends MJDuplicateRunEntity {
      * Uses GetGlobalObjectStore to access PubSubManager without a direct dependency
      * on @memberjunction/server.
      */
+    /**
+     * Normalize a threshold value — treat <= 0 or >= 1.0 as "unconfigured" and use the fallback.
+     */
+    private normalizeThreshold(value: number | null | undefined, fallback: number): number {
+        if (value == null || value <= 0 || value >= 1.0) {
+            return fallback;
+        }
+        return value;
+    }
+
     private publishPipelineNotification(
         stage: string,
         totalItems: number,

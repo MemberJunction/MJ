@@ -3,6 +3,13 @@
    All colors use MJ design tokens (--mj-*) exclusively.
    ============================================================ */
 
+app-duplicate-detection-resource {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+}
+
 .duplicate-detection-container {
     display: flex;
     flex-direction: column;
@@ -530,6 +537,7 @@
     border-radius: 8px;
     overflow: hidden;
     transition: box-shadow 0.15s ease, border-color 0.15s ease;
+    flex-shrink: 0; /* Prevent cards from shrinking — column scrolls instead */
 }
 
 .kanban-card:hover {

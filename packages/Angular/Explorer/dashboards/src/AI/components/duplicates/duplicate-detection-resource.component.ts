@@ -7,7 +7,7 @@
  * GraphQL subscriptions.
  */
 
-import { Component, ChangeDetectorRef, OnDestroy, AfterViewInit, Input, inject } from '@angular/core';
+import { Component, ChangeDetectorRef, OnDestroy, AfterViewInit, Input, inject, ViewEncapsulation } from '@angular/core';
 import { Subject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
 import { Metadata, RunView } from '@memberjunction/core';
@@ -62,7 +62,8 @@ interface EntityDocumentOption {
     standalone: false,
     selector: 'app-duplicate-detection-resource',
     templateUrl: './duplicate-detection-resource.component.html',
-    styleUrls: ['./duplicate-detection-resource.component.css']
+    styleUrls: ['./duplicate-detection-resource.component.css'],
+    encapsulation: ViewEncapsulation.None
 })
 export class DuplicateDetectionResourceComponent extends BaseResourceComponent implements AfterViewInit, OnDestroy {
     private cdr = inject(ChangeDetectorRef);

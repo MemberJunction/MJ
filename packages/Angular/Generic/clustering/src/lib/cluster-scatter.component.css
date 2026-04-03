@@ -172,17 +172,50 @@
     border: 1px solid var(--mj-border-strong);
     border-radius: 10px;
     padding: 14px 16px;
-    width: 220px;
+    width: 280px;
     box-shadow: 0 12px 40px color-mix(in srgb, var(--mj-bg-page) 40%, transparent);
     pointer-events: none;
     z-index: 50;
 }
 
+.tt-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 6px;
+}
+
+.tt-icon {
+    width: 2rem;
+    height: 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+    color: var(--mj-brand-primary);
+    font-size: 0.85rem;
+    flex-shrink: 0;
+}
+
+.tt-header-text {
+    min-width: 0;
+    flex: 1;
+}
+
 .tt-name {
     font-size: 0.85rem;
     font-weight: 600;
-    margin-bottom: 4px;
     color: var(--mj-text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.tt-entity {
+    font-size: 0.7rem;
+    color: var(--mj-text-muted);
+    margin-top: 1px;
 }
 
 .tt-cluster {
@@ -195,6 +228,12 @@
     font-size: 0.72rem;
     color: var(--mj-text-secondary);
     line-height: 1.6;
+}
+
+.tt-field-row {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .tt-action {

@@ -29,6 +29,19 @@
             </select>
         </div>
 
+        <!-- Entity Document selector (only shown when 2+ docs for selected entity) -->
+        @if (EntityDocOptions.length > 1) {
+            <div class="form-group">
+                <label>Document Template</label>
+                <select [ngModel]="Config.EntityDocumentID"
+                        (ngModelChange)="Config.EntityDocumentID = $event; OnFieldChanged()">
+                    @for (doc of EntityDocOptions; track doc.ID) {
+                        <option [value]="doc.ID">{{ doc.Name }}</option>
+                    }
+                </select>
+            </div>
+        }
+
         <!-- Filter -->
         <div class="form-group">
             <label>Filter (optional)</label>

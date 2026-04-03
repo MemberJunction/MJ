@@ -117,6 +117,16 @@ export interface DuplicateDetectionOptions {
     Revectorize?: boolean;
     /** Progress callback invoked at natural milestones during detection */
     OnProgress?: (progress: DuplicateDetectionProgress) => void;
+    /**
+     * Override the entity document's PotentialMatchThreshold for this run.
+     * Value between 0 and 1 (e.g., 0.30 = 30%). If omitted, uses the entity document's value.
+     */
+    PotentialMatchThreshold?: number;
+    /**
+     * Override the entity document's AbsoluteMatchThreshold for this run.
+     * Value between 0 and 1. If omitted, uses the entity document's value.
+     */
+    AbsoluteMatchThreshold?: number;
 }
 
 /**

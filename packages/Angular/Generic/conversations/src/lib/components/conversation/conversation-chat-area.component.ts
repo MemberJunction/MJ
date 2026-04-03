@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, ViewChildren, QueryList, ElementRef, AfterViewChecked } from '@angular/core';
 import { UserInfo, Metadata, CompositeKey, LogStatusEx } from '@memberjunction/core';
-import { MJConversationEntity, MJConversationDetailEntity, MJAIAgentRunEntity, MJArtifactEntity, MJTaskEntity, ConversationEngine, ConversationDetailCache, ConversationDetailComplete, parseConversationDetailComplete, RatingJSON } from '@memberjunction/core-entities';
+import { MJConversationEntity, MJConversationDetailEntity, MJAIAgentRunEntity, MJArtifactEntity, MJTaskEntity, ConversationEngine, ConversationDetailComplete, parseConversationDetailComplete, RatingJSON } from '@memberjunction/core-entities';
 import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended } from "@memberjunction/ai-core-plus";
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { AgentStateService } from '../../services/agent-state.service';
@@ -360,6 +360,18 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
           // delegated-agent messages that were created during the run.
           this.resetComponentState(this.conversationId);
           await this.reloadMessagesForActiveConversation();
+
+          // Clear active tasks for messages that are no longer in-progress
+          // (the streaming path does this in handleMessageCompletion; polling needs it here)
+          for (const message of this.messages) {
+            if (message.Status !== 'In-Progress') {
+              const task = this.activeTasks.getByConversationDetailId(message.ID);
+              if (task) {
+                this.activeTasks.remove(task.id);
+              }
+            }
+          }
+
           this.cdr.detectChanges();
         }
         this.hadActiveAgents = hasActiveAgents;

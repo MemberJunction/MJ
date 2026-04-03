@@ -120,16 +120,32 @@
         <div class="tooltip"
              [style.left.px]="TooltipX"
              [style.top.px]="TooltipY">
-            <div class="tt-name">{{ HoveredPoint.Label }}</div>
+            <div class="tt-header">
+                @if (HoveredPoint.Metadata?.['EntityIcon']) {
+                    <div class="tt-icon">
+                        <i [class]="HoveredPoint.Metadata['EntityIcon']"></i>
+                    </div>
+                }
+                <div class="tt-header-text">
+                    <div class="tt-name">{{ HoveredPoint.Label }}</div>
+                    @if (HoveredPoint.Metadata?.['Entity']) {
+                        <div class="tt-entity">{{ HoveredPoint.Metadata['Entity'] }}</div>
+                    }
+                </div>
+            </div>
             <div class="tt-cluster">
                 <i class="fa-solid fa-circle" style="font-size: 7px; vertical-align: middle"></i>
                 {{ GetClusterLabel(HoveredPoint) }}
             </div>
-            <div class="tt-fields">
-                @for (entry of TooltipEntries; track entry.Key) {
-                    <div>{{ entry.Key }}: {{ entry.Value }}</div>
-                }
-            </div>
+            @if (TooltipEntries.length > 0) {
+                <div class="tt-fields">
+                    @for (entry of TooltipEntries; track entry.Key) {
+                        @if (entry.Key !== 'Entity' && entry.Key !== 'EntityIcon' && entry.Key !== 'RecordID' && entry.Key !== 'Name' && entry.Key !== 'TemplateID' && entry.Key !== '__mj_UpdatedAt') {
+                            <div class="tt-field-row">{{ entry.Value }}</div>
+                        }
+                    }
+                </div>
+            }
             <div class="tt-action">
                 <i class="fa-solid fa-arrow-up-right-from-square"></i> Click to open record
             </div>

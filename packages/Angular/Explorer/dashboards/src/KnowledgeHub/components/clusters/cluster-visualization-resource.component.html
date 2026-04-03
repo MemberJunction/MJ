@@ -68,6 +68,7 @@
                 [Points]="Result?.Points ?? []"
                 [Clusters]="Result?.Clusters ?? []"
                 [IsLoading]="IsRunning"
+                [TooltipFields]="['Entity', 'Name', 'Description']"
                 (PointClicked)="OnPointClicked($event)"
                 (PointHovered)="OnPointHovered($event)">
             </mj-cluster-scatter>
@@ -77,6 +78,7 @@
                 [IsRunning]="IsRunning"
                 [Metrics]="Metrics"
                 [EntityOptions]="EntityOptions"
+                [EntityDocOptions]="EntityDocOptions"
                 (RunClustering)="OnRunClustering($event)"
                 (SaveVisualization)="OnSaveVisualization()">
             </mj-cluster-config-panel>

@@ -180,7 +180,7 @@ export class PineconeDatabase extends VectorDBBase {
 
     public async GetRecords(params: BaseRequestParams): Promise<BaseResponse> {
         try{
-            const index: Index = this.GetIndex().data;
+            const index: Index = this.GetIndex(params).data;
             const fetchResult: FetchResponse = await index.fetch(params.data);
             return this.wrapSuccessResponse(fetchResult);
         }
@@ -257,14 +257,8 @@ export class PineconeDatabase extends VectorDBBase {
             if (params.PaginationToken) {
                 listParams['paginationToken'] = params.PaginationToken;
             }
-            if (params.MetadataFilter) {
-                // Pinecone list doesn't support metadata filter directly,
-                // but prefix-based filtering works if vector IDs encode entity info.
-                // For metadata-based filtering, we use the prefix param if available.
-                const entityPrefix = params.MetadataFilter['Entity'];
-                if (entityPrefix) {
-                    listParams['prefix'] = ''; // Pinecone list returns all, we filter client-side
-                }
+            if (params.Prefix) {
+                listParams['prefix'] = params.Prefix;
             }
 
             const result = await ns.listPaginated(listParams);

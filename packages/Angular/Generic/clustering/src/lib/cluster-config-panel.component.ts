@@ -40,6 +40,7 @@ import {
 import {
     ClusterConfig,
     ClusterConfigPanelEntityOption,
+    ClusterConfigPanelEntityDocOption,
     ClusterMetrics,
     ClusterAlgorithm,
     ClusterDistanceMetric,
@@ -84,7 +85,19 @@ export class ClusterConfigPanelComponent implements OnInit, OnDestroy {
      * typically from MJ Metadata or a subset filtered by
      * `AvailableEntities`.
      */
-    @Input() EntityOptions: ClusterConfigPanelEntityOption[] = [];
+    private _entityOptions: ClusterConfigPanelEntityOption[] = [];
+
+    @Input()
+    set EntityOptions(value: ClusterConfigPanelEntityOption[]) {
+        this._entityOptions = value || [];
+        this.rebuildFilteredEntities();
+    }
+    get EntityOptions(): ClusterConfigPanelEntityOption[] {
+        return this._entityOptions;
+    }
+
+    /** Entity Document options for the selected entity. Only shown when 2+ docs exist. */
+    @Input() EntityDocOptions: ClusterConfigPanelEntityDocOption[] = [];
 
     // ================================================================
     // Customization Inputs

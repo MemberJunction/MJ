@@ -363,6 +363,7 @@ export class ClusterScatterComponent implements AfterViewInit, OnDestroy, OnChan
                 },
                 Config: {
                     EntityName: '',
+                    EntityDocumentID: '',
                     Algorithm: 'kmeans',
                     K: this.Clusters.length,
                     Epsilon: 0,

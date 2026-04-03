@@ -12,13 +12,15 @@
 
 import { Component, ChangeDetectorRef, OnDestroy, AfterViewInit, inject } from '@angular/core';
 import { Subject } from 'rxjs';
-import { Metadata, RunView } from '@memberjunction/core';
+import { CompositeKey, Metadata } from '@memberjunction/core';
 import { ResourceData, UserInfoEngine, MJUserSettingEntity, VectorMetadataEngine } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseResourceComponent } from '@memberjunction/ng-shared';
+import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
+import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
 import {
     ClusterConfig,
     ClusterConfigPanelEntityOption,
+    ClusterConfigPanelEntityDocOption,
     ClusterInputVector,
     ClusterVisualizationResult,
     ClusterMetrics,
@@ -40,6 +42,7 @@ const SAVED_CLUSTERS_KEY = 'KnowledgeHub_SavedClusters';
 export class ClusterVisualizationResourceComponent extends BaseResourceComponent implements AfterViewInit, OnDestroy {
     private cdr = inject(ChangeDetectorRef);
     private clusteringService = inject(ClusteringService);
+    private navigationService = inject(NavigationService);
     private destroy$ = new Subject<void>();
 
     // ================================================================
@@ -68,6 +71,8 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
     public VisualizationTitle = 'New Cluster Analysis';
     /** Entity options for the config panel dropdown */
     public EntityOptions: ClusterConfigPanelEntityOption[] = [];
+    /** Entity document options for the selected entity (shown when 2+) */
+    public EntityDocOptions: ClusterConfigPanelEntityDocOption[] = [];
 
     // Saved visualizations
     public SavedVisualizations: SavedClusterVisualization[] = [];
@@ -80,8 +85,8 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
     // Lifecycle
     // ================================================================
 
-    ngAfterViewInit(): void {
-        this.loadEntityOptions();
+    async ngAfterViewInit(): Promise<void> {
+        await this.loadEntityOptions();
         this.loadSavedVisualizations();
     }
 
@@ -123,6 +128,10 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
     public async OnRunClustering(config: ClusterConfig): Promise<void> {
         this.IsRunning = true;
         this.ActiveConfig = config;
+
+        // Update entity doc options if entity changed
+        this.updateEntityDocOptions(config.EntityName);
+
         this.cdr.detectChanges();
 
         try {
@@ -141,7 +150,14 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
 
     /** Handle point click — log for now */
     public OnPointClicked(point: ClusterPoint): void {
-        console.log('[ClusterVisualization] Point clicked:', point);
+        const entityName = point.Metadata?.['Entity'] as string;
+        const recordID = point.Metadata?.['RecordID'] as string;
+        if (!entityName || !recordID) return;
+
+        // RecordID from Pinecone metadata is in composite key string format (e.g., "ID|26EA1B87-...")
+        const compositeKey = new CompositeKey();
+        compositeKey.SimpleLoadFromURLSegment(recordID);
+        this.navigationService.OpenEntityRecord(entityName, compositeKey);
     }
 
     /** Handle point hover */
@@ -241,10 +257,34 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
             if (this.EntityOptions.length > 0 && !this.ActiveConfig.EntityName) {
                 this.ActiveConfig.EntityName = this.EntityOptions[0].Name;
             }
+
+            // Populate entity doc options for the default entity
+            this.updateEntityDocOptions(this.ActiveConfig.EntityName);
         } catch (error) {
             console.warn('[ClusterVisualization] Error loading entity options:', error);
         }
         this.cdr.detectChanges();
+    }
+
+    /** Update entity document options when the selected entity changes */
+    private updateEntityDocOptions(entityName: string): void {
+        if (!entityName) {
+            this.EntityDocOptions = [];
+            return;
+        }
+
+        const engine = VectorMetadataEngine.Instance;
+        const docs = engine.GetEntityDocumentsForEntity(entityName)
+            .filter(d => d.Status === 'Active');
+
+        this.EntityDocOptions = docs.map(d => ({ ID: d.ID, Name: d.Name }));
+
+        // Auto-select the first doc (or clear if none)
+        if (docs.length > 0 && !this.ActiveConfig.EntityDocumentID) {
+            this.ActiveConfig.EntityDocumentID = docs[0].ID;
+        } else if (docs.length === 0) {
+            this.ActiveConfig.EntityDocumentID = '';
+        }
     }
 
     /**
@@ -253,64 +293,68 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
      * that match the requested entity.
      */
     private async fetchVectorsForEntity(config: ClusterConfig): Promise<ClusterInputVector[]> {
-        const rv = new RunView();
-
-        // Find Entity Documents for the requested entity
-        const edResult = await rv.RunView<{ ID: string; EntityID: string; Name: string }>({
-            EntityName: 'MJ: Entity Documents',
-            ExtraFilter: `Entity = '${config.EntityName.replace(/'/g, "''")}'`,
-            Fields: ['ID', 'EntityID', 'Name'],
-            ResultType: 'simple',
-        });
-
-        if (!edResult.Success || edResult.Results.length === 0) {
-            return [];
-        }
-
-        // Get vector data from Entity Document Runs
-        const entityDocIds = edResult.Results.map(r => `'${r.ID}'`).join(',');
-        let extraFilter = `EntityDocumentID IN (${entityDocIds}) AND Status = 'Complete'`;
-        if (config.Filter && config.Filter.trim()) {
-            extraFilter += ` AND ${config.Filter}`;
-        }
-
-        const runResult = await rv.RunView<Record<string, unknown>>({
-            EntityName: 'MJ: Entity Document Runs',
-            ExtraFilter: extraFilter,
-            Fields: ['ID', 'EntityRecordID', 'VectorJSON', 'EntityDocumentID'],
-            MaxRows: config.MaxRecords,
-            ResultType: 'simple',
-        });
-
-        if (!runResult.Success) {
-            return [];
-        }
-
-        const vectors: ClusterInputVector[] = [];
-        for (const row of runResult.Results) {
-            const vectorJson = row['VectorJSON'] as string;
-            if (!vectorJson) continue;
-
-            let parsed: number[];
-            try {
-                parsed = JSON.parse(vectorJson);
-                if (!Array.isArray(parsed) || parsed.length === 0) continue;
-            } catch {
-                continue;
+        // Use the selected entity document, or fall back to first active one
+        let entityDocID = config.EntityDocumentID;
+        if (!entityDocID) {
+            const engine = VectorMetadataEngine.Instance;
+            const entityDocs = engine.GetEntityDocumentsForEntity(config.EntityName)
+                .filter(d => d.Status === 'Active');
+            if (entityDocs.length === 0) {
+                return [];
             }
+            entityDocID = entityDocs[0].ID;
+        }
+
+        // Fetch vectors + metadata directly from the vector database (Pinecone)
+        const provider = Metadata.Provider as GraphQLDataProvider;
+        const aiClient = new GraphQLAIClient(provider);
+        const result = await aiClient.FetchEntityVectors({
+            entityDocumentID: entityDocID,
+            maxRecords: config.MaxRecords,
+            filter: config.Filter || undefined,
+        });
+
+        if (!result.Success || result.Results.length === 0) {
+            return [];
+        }
+
+        // Convert vector DB results to ClusterInputVector format
+        const vectors: ClusterInputVector[] = [];
+        for (const item of result.Results) {
+            if (!item.Values || item.Values.length === 0) continue;
+
+            const metadata = this.parseVectorMetadata(item.Metadata);
+            const label = this.buildLabel(metadata);
 
             vectors.push({
-                Key: String(row['ID'] || ''),
-                Label: String(row['EntityRecordID'] || 'Unknown'),
-                Vector: parsed,
-                Metadata: {
-                    EntityDocumentID: row['EntityDocumentID'],
-                    EntityRecordID: row['EntityRecordID'],
-                },
+                Key: item.ID,
+                Label: label,
+                Vector: item.Values,
+                Metadata: metadata,
             });
         }
 
         return vectors;
+    }
+
+    /** Parse the JSON metadata string from the vector DB into a record */
+    private parseVectorMetadata(metadataJson: string): Record<string, string> {
+        try {
+            return JSON.parse(metadataJson) as Record<string, string>;
+        } catch {
+            return {};
+        }
+    }
+
+    /** Build a human-readable label from vector metadata (prefers Name field, falls back to RecordID) */
+    private buildLabel(metadata: Record<string, string>): string {
+        // The vector sync process stores display fields directly in metadata.
+        // Prefer Name, then Title, then Description, then fall back to RecordID.
+        return metadata['Name']
+            || metadata['Title']
+            || metadata['Description']?.substring(0, 60)
+            || metadata['RecordID']
+            || 'Unknown';
     }
 
     /** Load saved visualizations from UserInfoEngine settings */

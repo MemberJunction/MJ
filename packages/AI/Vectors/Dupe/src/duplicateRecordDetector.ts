@@ -182,7 +182,7 @@ export class DuplicateRecordDetector extends VectorBase {
 
         // Step 8: Auto-merge high-confidence matches
         this.reportProgress(options, 'Merging', recordIDs.length, recordIDs.length, totalMatchesFound, startTime);
-        await this.ProcessAutoMerges(response, entityDocument);
+        await this.ProcessAutoMerges(response, entityDocument, options);
 
         response.Status = 'Success';
         LogStatus(`Duplicate detection complete: ${recordIDs.length} records checked, ${totalMatchesFound} matches found`);
@@ -707,8 +707,9 @@ export class DuplicateRecordDetector extends VectorBase {
 
             const dupeResult = this.ParseVectorMatches(queryResponse, compositeKey);
             dupeResult.Duplicates = this.FilterSelfMatches(dupeResult.Duplicates, compositeKey);
+            const potentialThreshold = options.PotentialMatchThreshold ?? entityDocument.PotentialMatchThreshold;
             dupeResult.Duplicates = dupeResult.Duplicates.filter(
-                (d) => d.ProbabilityScore >= entityDocument.PotentialMatchThreshold
+                (d) => d.ProbabilityScore >= potentialThreshold
             );
             dupeResult.EntityID = entityDocument.EntityID;
             dupeResult.RecordCompositeKey = compositeKey;
@@ -900,11 +901,13 @@ export class DuplicateRecordDetector extends VectorBase {
      */
     protected async ProcessAutoMerges(
         response: PotentialDuplicateResponse,
-        entityDocument: MJEntityDocumentEntity
+        entityDocument: MJEntityDocumentEntity,
+        options: DuplicateDetectionOptions = {}
     ): Promise<void> {
+        const absoluteThreshold = options.AbsoluteMatchThreshold ?? entityDocument.AbsoluteMatchThreshold;
         for (const dupeResult of response.PotentialDuplicateResult) {
             for (const [index, dupe] of dupeResult.Duplicates.entries()) {
-                if (dupe.ProbabilityScore < entityDocument.AbsoluteMatchThreshold) {
+                if (dupe.ProbabilityScore < absoluteThreshold) {
                     continue;
                 }
 

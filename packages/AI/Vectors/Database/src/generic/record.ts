@@ -150,6 +150,8 @@ export type ListVectorIDsParams = {
     IndexName: string;
     /** Optional metadata filter to narrow results (e.g., { Entity: 'Members' }) */
     MetadataFilter?: Record<string, string>;
+    /** Optional ID prefix filter (Pinecone-specific: only return IDs starting with this prefix) */
+    Prefix?: string;
     /** Maximum number of IDs to return per page (default: 100) */
     Limit?: number;
     /** Pagination token from a previous response */

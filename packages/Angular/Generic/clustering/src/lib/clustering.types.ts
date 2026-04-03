@@ -105,6 +105,14 @@ export interface ClusterConfigPanelEntityOption {
     Name: string;
 }
 
+/** Option for the entity document dropdown in the config panel. */
+export interface ClusterConfigPanelEntityDocOption {
+    /** Entity Document ID */
+    ID: string;
+    /** Display name of the entity document */
+    Name: string;
+}
+
 // ================================================================
 // Input types
 // ================================================================
@@ -183,6 +191,8 @@ export type ClusterDistanceMetric = 'cosine' | 'euclidean' | 'dotproduct';
 export interface ClusterConfig {
     /** Entity name to cluster (must have Entity Documents with vectors). */
     EntityName: string;
+    /** Specific Entity Document ID to use. When blank, the first active doc for the entity is used. */
+    EntityDocumentID: string;
     /** Clustering algorithm to use. */
     Algorithm: ClusterAlgorithm;
     /** Number of clusters for K-Means (ignored for DBSCAN). */
@@ -294,6 +304,7 @@ export const CLUSTER_COLORS: string[] = [
 export function DefaultClusterConfig(): ClusterConfig {
     return {
         EntityName: '',
+        EntityDocumentID: '',
         Algorithm: 'kmeans',
         K: 4,
         Epsilon: 0.3,
