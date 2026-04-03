@@ -290,7 +290,7 @@ import { FormsModule } from '@angular/forms';
 import { BaseFormsModule } from '@memberjunction/ng-base-forms';
 import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
 import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
-import { LayoutModule } from '@progress/kendo-angular-layout';
+import { AngularSplitModule } from 'angular-split';
 
 // Import Generated Components
 ${componentImports.join('\n')}
@@ -400,10 +400,10 @@ export class ${modulePrefix}GeneratedFormsModule { }`;
 imports: [
     CommonModule,
     FormsModule,
-    LayoutModule,
     BaseFormsModule,
     EntityViewerModule,
-    LinkDirectivesModule${additionalModulesToImport.length > 0 ? ',\n    ' + additionalModulesToImport.join(',\n    ') : ''}
+    LinkDirectivesModule,
+    AngularSplitModule${additionalModulesToImport.length > 0 ? ',\n    ' + additionalModulesToImport.join(',\n    ') : ''}
 ],
 exports: [
 ]
@@ -1217,14 +1217,14 @@ ${componentCodeWithIndent}
     (FavoriteToggled)="OnFavoriteToggled()"
     (HistoryRequested)="OnHistoryRequested()"
     (ListManagementRequested)="OnListManagementRequested()">
-    <kendo-splitter orientation="vertical" (layoutChange)="splitterLayoutChange()">
-        <kendo-splitter-pane [collapsible]="true" [size]="TopAreaHeight">
+    <as-split direction="vertical" (dragEnd)="splitterLayoutChange()">
+        <as-split-area [size]="TopAreaSize">
 ${this.innerTopAreaHTML(topArea)}
-        </kendo-splitter-pane>
-        <kendo-splitter-pane>
+        </as-split-area>
+        <as-split-area [size]="BottomAreaSize">
 ${this.innerCollapsiblePanelsHTML(additionalSections, relatedEntitySections)}
-        </kendo-splitter-pane>
-    </kendo-splitter>
+        </as-split-area>
+    </as-split>
 </mj-record-form-container>
         `
           return htmlCode;
