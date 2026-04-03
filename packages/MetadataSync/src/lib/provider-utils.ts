@@ -12,7 +12,7 @@ import { SQLServerDataProvider, SQLServerProviderConfigData, UserCache, setupSQL
 import type { MJConfig } from '../config';
 import * as fs from 'fs';
 import * as path from 'path';
-import { DatabaseProviderBase, UserInfo } from '@memberjunction/core';
+import { DatabaseProviderBase, LocalCacheManager, UserInfo } from '@memberjunction/core';
 import { minimatch } from 'minimatch';
 
 /** Global ConnectionPool instance for connection lifecycle management */
@@ -86,6 +86,15 @@ export async function initializeProvider(config: MJConfig): Promise<SQLServerDat
     
     // Use setupSQLServerClient to properly initialize
     globalProvider = await setupSQLServerClient(providerConfig);
+
+    // Metadata sync creates many cache entries (datasets, lookup queries,
+    // individual record loads). Increase limits beyond browser defaults
+    // to avoid premature LRU eviction during push/pull operations.
+    LocalCacheManager.Instance.UpdateConfig({
+      maxSizeBytes: 150 * 1024 * 1024, // 150MB (default 50MB)
+      maxEntries: 5000,                 // default 1000
+    });
+
     return globalProvider;
   })();
   
