@@ -20,7 +20,7 @@
  * @since 2.131.0
  */
 
-import { ClientToolMetadata } from '@memberjunction/ai-core-plus';
+
 
 /**
  * Granular control over which parts of the response type definition to include.
@@ -274,46 +274,11 @@ export interface LoopAgentTypePromptParams {
      * @default -1
      */
     maxActionsInPrompt?: number;
-
-    // === Client Tools ===
-
-    /**
-     * Client-side tools this agent can invoke in the user's browser.
-     * Each tool is described with a Name, Description, and InputSchema (JSON Schema)
-     * so the LLM knows when and how to use it.
-     *
-     * When provided, the agent's system prompt includes a "Client Tools" section
-     * and the LLM can choose `nextStep.type = "ClientTools"` to invoke them.
-     *
-     * Client tools are executed via PubSub: server publishes request → client executes
-     * handler → client sends result back → agent continues with result in context.
-     *
-     * @example
-     * ```json
-     * "clientTools": [
-     *   {
-     *     "Name": "NavigateToApp",
-     *     "Description": "Navigate the user to a specific application and nav item",
-     *     "InputSchema": {
-     *       "type": "object",
-     *       "properties": {
-     *         "AppName": { "type": "string", "description": "Application name" },
-     *         "NavItemName": { "type": "string", "description": "Nav item label" }
-     *       },
-     *       "required": ["AppName"]
-     *     },
-     *     "Category": "navigation"
-     *   }
-     * ]
-     * ```
-     */
-    clientTools?: ClientToolMetadata[];
 }
 
 /**
  * Default values for LoopAgentTypePromptParams.
- * All section flags default to true (include), limits default to -1 (include all),
- * and clientTools defaults to empty (no client tools).
+ * All section flags default to true (include), limits default to -1 (include all).
  */
 export const DEFAULT_LOOP_AGENT_PROMPT_PARAMS: Required<LoopAgentTypePromptParams> = {
     includeResponseTypeDefinition: { ...DEFAULT_RESPONSE_TYPE_INCLUSION_RULES },
@@ -328,6 +293,5 @@ export const DEFAULT_LOOP_AGENT_PROMPT_PARAMS: Required<LoopAgentTypePromptParam
     includeScratchpadDocs: true,
     scratchpadMaxTasks: 50,
     maxSubAgentsInPrompt: -1,
-    maxActionsInPrompt: -1,
-    clientTools: []
+    maxActionsInPrompt: -1
 };

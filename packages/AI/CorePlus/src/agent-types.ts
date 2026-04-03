@@ -272,32 +272,6 @@ export type AgentClientToolInvocation = {
 };
 
 /**
- * Per-agent configuration for client tools.
- */
-export interface AgentClientToolConfig {
-    /** Master toggle — if false, agent cannot use any client tools */
-    Enabled: boolean;
-    /** Default timeout for client tool requests (ms) */
-    DefaultTimeoutMs: number;
-    /** Available client tools — full metadata definitions */
-    Tools: ClientToolMetadata[];
-}
-
-/**
- * Runtime override for client tool availability, mirrors the ActionChange pattern.
- */
-export interface ClientToolChange {
-    /** Scope of the change */
-    Scope: 'global' | 'root' | 'all-subagents' | 'specific';
-    /** Whether to add or remove tools */
-    Mode: 'add' | 'remove';
-    /** Tool definitions to add, or tool names to remove */
-    Tools: ClientToolMetadata[] | string[];
-    /** Specific agent IDs when Scope is 'specific' */
-    AgentIds?: string[];
-}
-
-/**
  * Response from a client tool execution — returned to the server when
  * the client finishes running the tool.
  */
@@ -485,6 +459,13 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
      * Each invocation maps to a registered ClientToolMetadata by Name.
      */
     clientTools?: AgentClientToolInvocation[];
+    /**
+     * When true, the agent should terminate after executing the current step.
+     * Used by ClientTools: the main loop needs `terminate: false` so it continues
+     * to dispatch the tool execution, but `executeClientToolsStep` checks this
+     * to decide whether to return Success or continue to another prompt.
+     */
+    terminateAfterExecution?: boolean;
 }
 
 /**
@@ -1201,11 +1182,6 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      */
     clientToolTimeoutMs?: number;
 
-    /**
-     * Optional runtime modifications to the agent's available client tools.
-     * Mirrors the actionChanges pattern for dynamic tool availability.
-     */
-    clientToolChanges?: ClientToolChange[];
 }
 
 /**
@@ -1280,7 +1256,7 @@ export type AgentChatMessageMetadata = {
     /** Whether this message has expired */
     isExpired?: boolean;
     /** Type of message (for lifecycle management and logging) */
-    messageType?: 'action-result' | 'loop-result' | 'sub-agent-result' | 'chat' | 'system' | 'user';
+    messageType?: 'action-result' | 'client-tool-result' | 'loop-result' | 'sub-agent-result' | 'chat' | 'system' | 'user';
     /** Name of the sub-agent (only for sub-agent-result messages) */
     subAgentName?: string;
     /** ID of the sub-agent (only for sub-agent-result messages) */

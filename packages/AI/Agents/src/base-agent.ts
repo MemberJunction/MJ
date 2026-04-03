@@ -3155,9 +3155,9 @@ export class BaseAgent {
                     ? currentStepCount - (msg as AgentChatMessage).metadata!.turnAdded
                     : 0,
                 tokens: this.estimateTokens(msg.content),
-                isActionResult: (msg as AgentChatMessage).metadata?.messageType === 'action-result'
+                isToolResult: this.IsToolResultMessage(msg)
             }))
-            .filter(c => c.isActionResult && c.age >= minAge)
+            .filter(c => c.isToolResult && c.age >= minAge)
             .sort((a, b) => b.age - a.age); // Oldest first
 
         // Remove messages until we've saved enough
@@ -3224,10 +3224,10 @@ export class BaseAgent {
                     ? currentStepCount - (msg as AgentChatMessage).metadata!.turnAdded
                     : 0,
                 tokens: this.estimateTokens(msg.content),
-                isActionResult: (msg as AgentChatMessage).metadata?.messageType === 'action-result',
+                isToolResult: this.IsToolResultMessage(msg),
                 alreadyCompacted: (msg as AgentChatMessage).metadata?.wasCompacted === true
             }))
-            .filter(c => c.isActionResult && c.age >= minAge && !c.alreadyCompacted)
+            .filter(c => c.isToolResult && c.age >= minAge && !c.alreadyCompacted)
             .sort((a, b) => b.age - a.age); // Oldest first
 
         for (const candidate of candidates) {
@@ -3305,10 +3305,10 @@ export class BaseAgent {
                 message: msg,
                 index: index,
                 tokens: this.estimateTokens(msg.content),
-                isActionResult: (msg as AgentChatMessage).metadata?.messageType === 'action-result',
+                isToolResult: this.IsToolResultMessage(msg),
                 alreadyCompacted: (msg as AgentChatMessage).metadata?.wasCompacted === true
             }))
-            .filter(c => c.isActionResult && !c.alreadyCompacted && c.tokens > 200)
+            .filter(c => c.isToolResult && !c.alreadyCompacted && c.tokens > 200)
             .sort((a, b) => b.tokens - a.tokens); // Largest first
 
         for (const candidate of candidates) {
@@ -3695,9 +3695,8 @@ The context is now within limits. Please retry your request with the recovered c
                 runtimePromptParamOverrides
             );
 
-            // Build client tool details for the prompt — reads from agent type params
-            // (which may define per-agent client tools) and session-level tools
-            const clientToolDetails = this.buildClientToolPromptSection(extraData, agentTypePromptParams);
+            // Build client tool details for the prompt
+            const clientToolDetails = this.buildClientToolPromptSection(agent, extraData);
 
             const contextData: AgentContextData = {
                 agentName: agent.Name,
@@ -4276,26 +4275,32 @@ The context is now within limits. Please retry your request with the recovered c
     /**
      * Build the client tool prompt section for system prompt injection.
      *
-     * Tool sources (checked in order, all merged):
-     * 1. Session-level enriched tools from ClientToolRequestManager (set by client SDK)
-     * 2. Agent type params `clientTools` (from AgentTypePromptParams metadata)
+     * Tool sources (checked in order, all merged — first registration wins):
+     * 1. Metadata tools from AI Agent Client Tools junction table
+     * 2. Session-level enriched tools from ClientToolRequestManager (set by client SDK)
      * 3. Tools provided directly in extraData.clientTools (runtime override)
      */
-    private buildClientToolPromptSection(extraData?: Record<string, unknown>, agentTypeParams?: Record<string, unknown>): string {
+    private buildClientToolPromptSection(agent: MJAIAgentEntityExtended, extraData?: Record<string, unknown>): string {
         const toolMap = new Map<string, ClientToolMetadata>();
 
-        // 1. Session-level enriched tools (client SDK decorated tools)
+        // 1. Metadata tools from junction table (authoritative source)
+        const engine = AIEngine.Instance;
+        const metadataTools = engine.GetClientToolsForAgent(agent.ID);
+        for (const tool of metadataTools) {
+            toolMap.set(tool.Name, {
+                Name: tool.Name,
+                Description: tool.Description,
+                InputSchema: tool.InputSchemaJSON ? JSON.parse(tool.InputSchemaJSON) : {},
+                OutputSchema: tool.OutputSchemaJSON ? JSON.parse(tool.OutputSchemaJSON) : undefined,
+                Category: tool.Category || undefined,
+                DefaultTimeoutMs: tool.DefaultTimeoutMs || undefined
+            });
+        }
+
+        // 2. Session-level enriched tools (client SDK decorated tools)
         const sessionID = extraData?.sessionID as string | undefined;
         if (sessionID) {
             for (const tool of ClientToolRequestManager.Instance.GetSessionTools(sessionID)) {
-                toolMap.set(tool.Name, tool);
-            }
-        }
-
-        // 2. Agent type params (per-agent metadata config)
-        const paramTools = agentTypeParams?.clientTools as ClientToolMetadata[] | undefined;
-        if (paramTools) {
-            for (const tool of paramTools) {
                 if (!toolMap.has(tool.Name)) {
                     toolMap.set(tool.Name, tool);
                 }
@@ -5680,6 +5685,16 @@ The context is now within limits. Please retry your request with the recovered c
             }
             else if (updatedNextStep.step === 'Success' || updatedNextStep.step === 'Failed') {
                 return { ...updatedNextStep, terminate: true };
+            } else if (updatedNextStep.step === 'ClientTools' as string) {
+                // ClientTools must return terminate: false so the main loop continues
+                // to the next iteration where executeClientToolsStep actually dispatches
+                // and awaits the tool. The LLM's original terminate intent is preserved in
+                // terminateAfterExecution so executeClientToolsStep can honor it post-execution.
+                return {
+                    ...updatedNextStep,
+                    terminate: false,
+                    terminateAfterExecution: updatedNextStep.terminate
+                };
             } else {
                 return { ...updatedNextStep, terminate: false };
             }
@@ -7285,13 +7300,13 @@ The context is now within limits. Please retry your request with the recovered c
             content: resultsMarkdown,
             metadata: {
                 turnAdded: this._promptTurnCount,
-                messageType: 'action-result' // Reuse action-result type until DB adds client-tool-result
+                messageType: 'client-tool-result'
             }
         } as AgentChatMessage);
 
         // If the LLM already declared taskComplete=true alongside the client tools,
         // honor that intent now that tools have executed — no need for another LLM call.
-        if (previousDecision.terminate) {
+        if (previousDecision.terminateAfterExecution) {
             return {
                 step: 'Success',
                 terminate: true,
@@ -9092,6 +9107,15 @@ The context is now within limits. Please retry your request with the recovered c
      * @param modelName - Optional model name for accurate tokenization
      * @protected
      */
+    /**
+     * Returns true if the message is a tool result (action or client tool).
+     * Used by recovery strategies to identify compactable result messages.
+     */
+    protected IsToolResultMessage(msg: ChatMessage): boolean {
+        const messageType = (msg as AgentChatMessage).metadata?.messageType;
+        return messageType === 'action-result' || messageType === 'client-tool-result';
+    }
+
     protected estimateTokens(content: ChatMessage['content'], modelName?: string): number {
         const text = typeof content === 'string'
             ? content

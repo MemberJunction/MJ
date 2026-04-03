@@ -335,6 +335,23 @@ export class MJExplorerAppComponent implements OnInit, OnDestroy {
         return { Success: true, Data: { Navigated: true, AppName: appName, NavItemName: navItemName } };
       }
     });
+
+    this.agentClient.RegisterTool({
+      Name: 'Sleep',
+      Description: 'Wait for a specified number of seconds',
+      ParameterSchema: {
+        type: 'object',
+        properties: {
+          Seconds: { type: 'number', description: 'Number of seconds to wait (1-120)' }
+        },
+        required: ['Seconds']
+      },
+      Handler: async (params) => {
+        const seconds = Math.min(120, Math.max(1, Number(params['Seconds']) || 5));
+        await new Promise(resolve => setTimeout(resolve, seconds * 1000));
+        return { Success: true, Data: { SleptSeconds: seconds } };
+      }
+    });
   }
 
   /**

@@ -34,7 +34,7 @@ Today, client tools are statically defined in `AgentTypePromptParams.clientTools
 
 The **catalog** of well-known, reusable tools and which agents can use them.
 
-**New entity: `Client Tool Definitions`**
+**New entity: `MJ: AI Client Tool Definitions`**
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -47,7 +47,7 @@ The **catalog** of well-known, reusable tools and which agents can use them.
 | DefaultTimeoutMs | int | Per-tool timeout override (nullable, default 30000) |
 | RequiresContextType | nvarchar(100) | Nullable — `entity-form`, `dashboard`, `search`, etc. When set, client only sends this tool to the server when the user is in that context |
 
-**New entity: `AI Agent Client Tools` (junction)**
+**New entity: `MJ: AI Agent Client Tools` (junction)**
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -57,13 +57,15 @@ The **catalog** of well-known, reusable tools and which agents can use them.
 | IsRequired | bit | If true, agent expects this tool to always be available |
 | Priority | int | Sort order / precedence |
 
-**Modified entity: `AI Agents`**
+**Modified entity: `MJ: AI Agents`**
 
 | Field | Type | Description |
 |-------|------|-------------|
 | AllowEphemeralClientTools | bit | Default 1. When true, agent accepts runtime-registered tools that aren't in metadata |
 
 This replaces the `clientTools` array currently in `LoopAgentTypePromptParams`. Any agent type (Loop, Flow, future types) can now declare client tools via the junction table.
+
+**NOTE** we do not need back compat for the changes to LoopAgentTypePromptParams, we will simply remove the client tools prop there as this version was never published, all good! 
 
 #### Layer 2: Runtime (Client Code)
 
@@ -257,8 +259,19 @@ interface FormFieldSnapshot {
 
 1. **Tool versioning** — Do we need to version tool schemas, or is "latest wins" sufficient? For now, latest wins seems fine since tools are tightly coupled to app code.
 
+AN: I Think latest wins is fine
+
 2. **Tool result persistence** — Should tool invocations and results be stored as conversation details (like action results are today)? Probably yes for auditability.
+
+AN: Tool results should definitely be part of the conversation history just like action results and over time they can be compacted but made available if the LLM asks for it - study how we do this with Actions and do same with Client Tool results. We will have other such similar things for example we are wroking (separate from this branch) on a concept called Artifact Tools where agents will know about artifacts/attachments in their agent run and have various tools to interrogate those artifacts like grep/sed/regex/json looping tools/etc. All of these tool results, action results, etc can be compacted down and reexpaned later by request of LLM. We should make this work extensibly so we can use this for Artifact Tools after this PR is merged that will be next.
 
 3. **Cross-agent tool sharing** — If Agent A is running and invokes a sub-agent B, should B inherit A's client tools? Probably yes with an opt-out, similar to how `ClientToolChange` scoping works today.
 
+AN: **NO** I think tools should be specific to an agent. Automatically bleeding over is a security risk IMO
+
+How does ClientToolChange work today?
+
+
 4. **Context snapshot size limits** — For entities with 100+ fields, the form context could get large. May need a configurable field inclusion/exclusion list per entity or a max-fields cap.
+
+AN: I don't like this arbitrary trunctaion concept, very bad, instead we can do what I note above in #2 open question
