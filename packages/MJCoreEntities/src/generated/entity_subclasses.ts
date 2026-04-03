@@ -11631,7 +11631,7 @@ export const MJDuplicateRunDetailMatchSchema = z.object({
         * * Default Value: newsequentialid()`),
     DuplicateRunDetailID: z.string().describe(`
         * * Field Name: DuplicateRunDetailID
-        * * Display Name: Duplicate Run Detail
+        * * Display Name: Duplicate Run Detail ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Duplicate Run Details (vwDuplicateRunDetails.ID)`),
     MatchSource: z.union([z.literal('SP'), z.literal('Vector')]).describe(`
@@ -11646,7 +11646,7 @@ export const MJDuplicateRunDetailMatchSchema = z.object({
         * * Description: Either Vector or SP`),
     MatchRecordID: z.string().describe(`
         * * Field Name: MatchRecordID
-        * * Display Name: Match Record
+        * * Display Name: Match Record ID
         * * SQL Data Type: nvarchar(500)
         * * Description: The ID of the record identified as a potential duplicate match.`),
     MatchProbability: z.number().describe(`
@@ -11680,7 +11680,7 @@ export const MJDuplicateRunDetailMatchSchema = z.object({
         * * Description: Current approval status of the proposed action (Pending, Approved, Rejected).`),
     RecordMergeLogID: z.string().nullable().describe(`
         * * Field Name: RecordMergeLogID
-        * * Display Name: Record Merge Log
+        * * Display Name: Record Merge Log ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Record Merge Logs (vwRecordMergeLogs.ID)`),
     MergeStatus: z.union([z.literal('Complete'), z.literal('Error'), z.literal('Pending')]).describe(`
@@ -11710,6 +11710,11 @@ export const MJDuplicateRunDetailMatchSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    RecordMetadata: z.string().nullable().describe(`
+        * * Field Name: RecordMetadata
+        * * Display Name: Record Metadata
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON metadata snapshot of the matched record from the vector database at detection time. Contains display fields (Name, Description, EntityIcon, etc.) for rich UI rendering without additional lookups.`),
     DuplicateRunDetail: z.string().describe(`
         * * Field Name: DuplicateRunDetail
         * * Display Name: Duplicate Run Detail
@@ -11733,12 +11738,12 @@ export const MJDuplicateRunDetailSchema = z.object({
         * * Default Value: newsequentialid()`),
     DuplicateRunID: z.string().describe(`
         * * Field Name: DuplicateRunID
-        * * Display Name: Duplicate Run ID
+        * * Display Name: Duplicate Run
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Duplicate Runs (vwDuplicateRuns.ID)`),
     RecordID: z.string().describe(`
         * * Field Name: RecordID
-        * * Display Name: Record ID
+        * * Display Name: Source Record
         * * SQL Data Type: nvarchar(500)
         * * Description: The ID of the record being analyzed for duplicates.`),
     MatchStatus: z.union([z.literal('Complete'), z.literal('Error'), z.literal('Pending'), z.literal('Skipped')]).describe(`
@@ -11790,9 +11795,14 @@ export const MJDuplicateRunDetailSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    RecordMetadata: z.string().nullable().describe(`
+        * * Field Name: RecordMetadata
+        * * Display Name: Record Metadata
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON metadata snapshot of the source record from the vector database at detection time. Contains display fields (Name, Description, EntityIcon, etc.) for rich UI rendering without additional lookups.`),
     DuplicateRun: z.string().describe(`
         * * Field Name: DuplicateRun
-        * * Display Name: Duplicate Run
+        * * Display Name: Run Name
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -54334,7 +54344,7 @@ export class MJDuplicateRunDetailMatchEntity extends BaseEntity<MJDuplicateRunDe
 
     /**
     * * Field Name: DuplicateRunDetailID
-    * * Display Name: Duplicate Run Detail
+    * * Display Name: Duplicate Run Detail ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Duplicate Run Details (vwDuplicateRunDetails.ID)
     */
@@ -54365,7 +54375,7 @@ export class MJDuplicateRunDetailMatchEntity extends BaseEntity<MJDuplicateRunDe
 
     /**
     * * Field Name: MatchRecordID
-    * * Display Name: Match Record
+    * * Display Name: Match Record ID
     * * SQL Data Type: nvarchar(500)
     * * Description: The ID of the record identified as a potential duplicate match.
     */
@@ -54439,7 +54449,7 @@ export class MJDuplicateRunDetailMatchEntity extends BaseEntity<MJDuplicateRunDe
 
     /**
     * * Field Name: RecordMergeLogID
-    * * Display Name: Record Merge Log
+    * * Display Name: Record Merge Log ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Record Merge Logs (vwRecordMergeLogs.ID)
     */
@@ -54501,6 +54511,19 @@ export class MJDuplicateRunDetailMatchEntity extends BaseEntity<MJDuplicateRunDe
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: RecordMetadata
+    * * Display Name: Record Metadata
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON metadata snapshot of the matched record from the vector database at detection time. Contains display fields (Name, Description, EntityIcon, etc.) for rich UI rendering without additional lookups.
+    */
+    get RecordMetadata(): string | null {
+        return this.Get('RecordMetadata');
+    }
+    set RecordMetadata(value: string | null) {
+        this.Set('RecordMetadata', value);
     }
 
     /**
@@ -54568,7 +54591,7 @@ export class MJDuplicateRunDetailEntity extends BaseEntity<MJDuplicateRunDetailE
 
     /**
     * * Field Name: DuplicateRunID
-    * * Display Name: Duplicate Run ID
+    * * Display Name: Duplicate Run
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Duplicate Runs (vwDuplicateRuns.ID)
     */
@@ -54581,7 +54604,7 @@ export class MJDuplicateRunDetailEntity extends BaseEntity<MJDuplicateRunDetailE
 
     /**
     * * Field Name: RecordID
-    * * Display Name: Record ID
+    * * Display Name: Source Record
     * * SQL Data Type: nvarchar(500)
     * * Description: The ID of the record being analyzed for duplicates.
     */
@@ -54692,8 +54715,21 @@ export class MJDuplicateRunDetailEntity extends BaseEntity<MJDuplicateRunDetailE
     }
 
     /**
+    * * Field Name: RecordMetadata
+    * * Display Name: Record Metadata
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON metadata snapshot of the source record from the vector database at detection time. Contains display fields (Name, Description, EntityIcon, etc.) for rich UI rendering without additional lookups.
+    */
+    get RecordMetadata(): string | null {
+        return this.Get('RecordMetadata');
+    }
+    set RecordMetadata(value: string | null) {
+        this.Set('RecordMetadata', value);
+    }
+
+    /**
     * * Field Name: DuplicateRun
-    * * Display Name: Duplicate Run
+    * * Display Name: Run Name
     * * SQL Data Type: nvarchar(255)
     */
     get DuplicateRun(): string {

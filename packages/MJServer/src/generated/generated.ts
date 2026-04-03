@@ -33332,6 +33332,9 @@ export class MJDuplicateRunDetailMatch_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `JSON metadata snapshot of the matched record from the vector database at detection time. Contains display fields (Name, Description, EntityIcon, etc.) for rich UI rendering without additional lookups.`}) 
+    RecordMetadata?: string;
+        
     @Field() 
     @MaxLength(500)
     DuplicateRunDetail: string;
@@ -33379,6 +33382,9 @@ export class CreateMJDuplicateRunDetailMatchInput {
 
     @Field({ nullable: true })
     MergedAt?: Date;
+
+    @Field({ nullable: true })
+    RecordMetadata: string | null;
 }
     
 
@@ -33419,6 +33425,9 @@ export class UpdateMJDuplicateRunDetailMatchInput {
 
     @Field({ nullable: true })
     MergedAt?: Date;
+
+    @Field({ nullable: true })
+    RecordMetadata?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -33550,6 +33559,9 @@ export class MJDuplicateRunDetail_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `JSON metadata snapshot of the source record from the vector database at detection time. Contains display fields (Name, Description, EntityIcon, etc.) for rich UI rendering without additional lookups.`}) 
+    RecordMetadata?: string;
+        
     @Field() 
     @MaxLength(255)
     DuplicateRun: string;
@@ -33587,6 +33599,9 @@ export class CreateMJDuplicateRunDetailInput {
 
     @Field({ nullable: true })
     MergeErrorMessage: string | null;
+
+    @Field({ nullable: true })
+    RecordMetadata: string | null;
 }
     
 
@@ -33618,6 +33633,9 @@ export class UpdateMJDuplicateRunDetailInput {
 
     @Field({ nullable: true })
     MergeErrorMessage?: string | null;
+
+    @Field({ nullable: true })
+    RecordMetadata?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
