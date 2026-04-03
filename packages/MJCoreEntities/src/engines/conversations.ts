@@ -671,6 +671,127 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     }
 
     /**
+     * Refreshes conversation details by re-running the GetConversationComplete query
+     * and surgically merging results into the existing cache. Existing objects that
+     * haven't changed keep their references (minimizing Angular re-renders).
+     *
+     * - New messages: appended to Details array
+     * - Existing messages: fields updated in-place on the same object
+     * - Agent runs: updated in-place or added
+     * - Artifacts/ratings: replaced per-detail (cheap — plain data, not entity objects)
+     * - User avatars: merged (new users added)
+     *
+     * If no cache exists yet, falls back to a full load.
+     *
+     * @param conversationId - The conversation to refresh
+     * @param contextUser - The current user context
+     * @returns The updated cache entry
+     */
+    public async RefreshConversationDetails(
+        conversationId: string,
+        contextUser: UserInfo
+    ): Promise<ConversationDetailCache> {
+        const key = NormalizeUUID(conversationId);
+        const existing = this._detailCache.get(key);
+
+        // No cache yet — do a full load
+        if (!existing) {
+            return this.LoadConversationDetails(conversationId, contextUser);
+        }
+
+        // Run the query
+        const rq = new RunQuery();
+        const result = await rq.RunQuery({
+            QueryName: 'GetConversationComplete',
+            CategoryPath: 'MJ/Conversations',
+            Parameters: { ConversationID: conversationId }
+        }, contextUser);
+
+        if (!result.Success || !result.Results) {
+            console.error('[ConversationEngine] Failed to refresh conversation details:', result.ErrorMessage);
+            return existing;
+        }
+
+        const freshRows = result.Results as ConversationDetailComplete[];
+        const md = new Metadata();
+
+        // Build a lookup of existing details by ID for fast comparison
+        const existingDetailsMap = new Map<string, MJConversationDetailEntity>();
+        for (const detail of existing.Details) {
+            existingDetailsMap.set(detail.ID, detail);
+        }
+
+        // Process each row in parallel — sync mutations happen immediately,
+        // async hydrations (new entities) run concurrently
+        await Promise.all(freshRows.map(async (row) => {
+            if (!row.ID) return;
+
+            const existingDetail = existingDetailsMap.get(row.ID);
+            if (existingDetail) {
+                // Update fields in-place on the existing entity object (preserves reference)
+                existingDetail.LoadFromData(row);
+                existingDetailsMap.delete(row.ID);
+            } else {
+                // New message — hydrate and append
+                const newDetail = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', contextUser);
+                newDetail.LoadFromData(row);
+                existing.Details.push(newDetail);
+            }
+
+            const parsed = parseConversationDetailComplete(row);
+
+            // Merge agent runs: update in-place or add
+            if (parsed.agentRuns.length > 0) {
+                const agentRunData = parsed.agentRuns[0];
+                const existingRun = existing.AgentRunsByDetailId.get(row.ID);
+                if (existingRun) {
+                    existingRun.LoadFromData({
+                        ID: agentRunData.ID,
+                        AgentID: agentRunData.AgentID,
+                        Agent: agentRunData.Agent,
+                        Status: agentRunData.Status,
+                        __mj_CreatedAt: agentRunData.__mj_CreatedAt,
+                        __mj_UpdatedAt: agentRunData.__mj_UpdatedAt,
+                        TotalPromptTokensUsed: agentRunData.TotalPromptTokensUsed,
+                        TotalCompletionTokensUsed: agentRunData.TotalCompletionTokensUsed,
+                        TotalCost: agentRunData.TotalCost,
+                        ConversationDetailID: agentRunData.ConversationDetailID
+                    });
+                } else {
+                    const newRun = await md.GetEntityObject<MJAIAgentRunEntity>('MJ: AI Agent Runs', contextUser);
+                    newRun.LoadFromData(agentRunData);
+                    existing.AgentRunsByDetailId.set(row.ID!, newRun);
+                }
+            }
+
+            // Replace artifacts per-detail (plain data, cheap to replace)
+            if (parsed.artifacts.length > 0) {
+                existing.ArtifactsByDetailId.set(row.ID, parsed.artifacts);
+            }
+
+            // Replace ratings per-detail
+            if (parsed.ratings.length > 0) {
+                existing.RatingsByDetailId.set(row.ID, parsed.ratings);
+            }
+
+            // Merge user avatars
+            if (row.Role?.toLowerCase() === 'user' && row.UserID && !existing.UserAvatars.has(row.UserID)) {
+                existing.UserAvatars.set(row.UserID, {
+                    ImageURL: row.UserImageURL || null,
+                    IconClass: row.UserImageIconClass || null
+                });
+            }
+        }));
+
+        // Update raw data and timestamp
+        existing.RawData = freshRows;
+        existing.LoadedAt = new Date();
+        existing.PeripheralDataStale = false;
+
+        return existing;
+    }
+
+    /**
      * Returns cached conversation details (messages only) without hitting the database.
      * Returns undefined if no cache entry exists for this conversation.
      *

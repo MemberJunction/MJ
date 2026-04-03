@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, ViewChildren, QueryList, ElementRef, AfterViewChecked } from '@angular/core';
 import { UserInfo, Metadata, CompositeKey, LogStatusEx } from '@memberjunction/core';
-import { MJConversationEntity, MJConversationDetailEntity, MJAIAgentRunEntity, MJArtifactEntity, MJTaskEntity, ConversationEngine, ConversationDetailComplete, parseConversationDetailComplete, RatingJSON } from '@memberjunction/core-entities';
+import { MJConversationEntity, MJConversationDetailEntity, MJAIAgentRunEntity, MJArtifactEntity, MJTaskEntity, ConversationEngine, ConversationDetailComplete, RatingJSON } from '@memberjunction/core-entities';
 import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended } from "@memberjunction/ai-core-plus";
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { AgentStateService } from '../../services/agent-state.service';
@@ -365,13 +365,21 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
         const conversationAgents = agents.filter(a => UUIDsEqual(a.run.ConversationID, this.conversationId));
         const hasActiveAgents = conversationAgents.length > 0;
         if (this.hadActiveAgents && !hasActiveAgents) {
-          // Agents just completed — reload messages to pick up final response and any
-          // delegated-agent messages that were created during the run.
-          this.resetComponentState(this.conversationId);
-          await this.reloadMessagesForActiveConversation();
+          // Agents just completed — surgical refresh picks up new messages,
+          // updated agent runs, and new artifacts in one query with minimal UI repaint
+          await this.engine.RefreshConversationDetails(this.conversationId, this.currentUser);
+
+          // Re-read messages from the surgically updated engine cache
+          const freshDetails = this.engine.GetCachedDetails(this.conversationId);
+          if (freshDetails) {
+            this.messages = freshDetails;
+          }
+
+          // Reprocess peripheral data (artifacts, ratings) from updated cache
+          this.lastLoadedConversationId = null;
+          await this.loadPeripheralData(this.conversationId);
 
           // Clear active tasks for messages that are no longer in-progress
-          // (the streaming path does this in handleMessageCompletion; polling needs it here)
           for (const message of this.messages) {
             if (message.Status !== 'In-Progress') {
               const task = this.activeTasks.getByConversationDetailId(message.ID);
@@ -1195,69 +1203,14 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
         return;
       }
 
-      // Force-reload from DB to pick up new artifacts, then reprocess peripheral data
-      this.resetComponentState(detail.ConversationID);
-      const cacheEntry = await this.engine.LoadConversationDetails(detail.ConversationID, this.currentUser, true);
+      // Surgical refresh — merges new artifacts into existing cache without replacing objects
+      await this.engine.RefreshConversationDetails(detail.ConversationID, this.currentUser);
 
-      // Process ALL messages to pick up artifacts from delegated sub-agent messages
-      for (const row of cacheEntry.RawData) {
-        this.updateArtifactsForRow(row);
-      }
-
-      // Create new Map reference to trigger Angular change detection
-      this.artifactsByDetailId = new Map(this.artifactsByDetailId);
-      this._combinedArtifactsMap = null; // Clear cache so effectiveArtifactsMap rebuilds
-
-      // Update artifact count
-      this.artifactCount = this.calculateUniqueArtifactCount();
-      this.updateArtifactCountDisplay();
+      // Reprocess peripheral data from the updated engine cache
+      this.lastLoadedConversationId = null;
+      await this.loadPeripheralData(detail.ConversationID);
     } catch (error) {
       console.error('Failed to reload artifacts for message:', error);
-    }
-  }
-
-  /**
-   * Update artifact maps for a single conversation detail row.
-   * Clears existing entries for the row and rebuilds from parsed data.
-   */
-  private updateArtifactsForRow(row: ConversationDetailComplete): void {
-    const rowId = row.ID;
-    if (!rowId) {
-      return;
-    }
-
-    const parsed = parseConversationDetailComplete(row);
-
-    // Clear existing artifacts for this detail and rebuild
-    this.artifactsByDetailId.delete(rowId);
-    this.systemArtifactsByDetailId.delete(rowId);
-
-    if (parsed.artifacts.length === 0) {
-      return;
-    }
-
-    const artifactList: LazyArtifactInfo[] = [];
-    const systemArtifactList: LazyArtifactInfo[] = [];
-
-    for (const artifactData of parsed.artifacts) {
-      const lazyInfo = new LazyArtifactInfo(artifactData, this.currentUser);
-
-      // Separate system-only artifacts from user-visible artifacts
-      if (artifactData.Visibility === 'System Only') {
-        systemArtifactList.push(lazyInfo);
-      } else {
-        artifactList.push(lazyInfo);
-      }
-
-      LogStatusEx({message: `✅ Loaded artifact ${artifactData.ArtifactID} v${artifactData.VersionNumber} for message ${rowId}`, verboseOnly: true});
-    }
-
-    // Add to appropriate maps
-    if (artifactList.length > 0) {
-      this.artifactsByDetailId.set(rowId, artifactList);
-    }
-    if (systemArtifactList.length > 0) {
-      this.systemArtifactsByDetailId.set(rowId, systemArtifactList);
     }
   }
 
