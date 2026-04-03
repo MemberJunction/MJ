@@ -6997,10 +6997,11 @@ export const MJApplicationSchema = z.object({
         * * Display Name: Color
         * * SQL Data Type: nvarchar(20)
         * * Description: Hex color code for visual theming (e.g., #4caf50)`),
-    DefaultNavItems: z.string().nullable().describe(`
+    DefaultNavItems: z.any().nullable().describe(`
         * * Field Name: DefaultNavItems
         * * Display Name: Default Nav Items
         * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: Array<MJApplicationEntity_IDefaultNavItem>
         * * Description: JSON array of default navigation items for this application. Parsed by BaseApplication.GetNavItems()`),
     ClassName: z.string().nullable().describe(`
         * * Field Name: ClassName
@@ -14009,6 +14010,22 @@ export const MJEntityFieldSchema = z.object({
         * * Display Name: Related Entity Join Fields
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON configuration for additional fields to join from the related entity into this entity's base view. Supports modes: extend (add to NameField), override (replace NameField), disable (no joins). Schema: { mode?: string, fields?: [{ field: string, alias?: string }] }`),
+    JSONType: z.string().nullable().describe(`
+        * * Field Name: JSONType
+        * * Display Name: JSON Type
+        * * SQL Data Type: nvarchar(255)
+        * * Description: The name of the TypeScript interface/type for this JSON field. When set, CodeGen emits a strongly-typed Object-suffixed accessor using this type instead of only the default string getter/setter.`),
+    JSONTypeIsArray: z.boolean().describe(`
+        * * Field Name: JSONTypeIsArray
+        * * Display Name: JSON Type Is Array
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: If true, the field holds a JSON array of JSONType items. The Object accessor returns Array<JSONType> | null and the setter accepts Array<JSONType> | null.`),
+    JSONTypeDefinition: z.string().nullable().describe(`
+        * * Field Name: JSONTypeDefinition
+        * * Display Name: JSON Type Definition
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Raw TypeScript code emitted by CodeGen above the entity class definition. Typically contains the interface/type definition referenced by JSONType. Can include imports, multiple types, or any valid TypeScript.`),
     FieldCodeName: z.string().nullable().describe(`
         * * Field Name: FieldCodeName
         * * Display Name: Field Code Name
@@ -42363,6 +42380,21 @@ export class MJApplicationSettingEntity extends BaseEntity<MJApplicationSettingE
 }
 
 
+export interface MJApplicationEntity_IDefaultNavItem {
+    /** Display label for the navigation item */
+    Label: string;
+    /** Font Awesome icon class (e.g., "fa-solid fa-database") */
+    Icon: string;
+    /** Type of resource: "Dashboards", "Custom", etc. */
+    ResourceType: string;
+    /** For Dashboard resources, the ID of the dashboard record */
+    RecordID?: string | null;
+    /** For Custom resources, the registered driver class name */
+    DriverClass?: string | null;
+    /** Whether this is the default tab when the app opens */
+    isDefault?: boolean;
+}
+
 /**
  * MJ: Applications - strongly typed entity sub-class
  * * Schema: __mj
@@ -42507,6 +42539,7 @@ export class MJApplicationEntity extends BaseEntity<MJApplicationEntityType> {
     * * Field Name: DefaultNavItems
     * * Display Name: Default Nav Items
     * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: Array<MJApplicationEntity_IDefaultNavItem>
     * * Description: JSON array of default navigation items for this application. Parsed by BaseApplication.GetNavItems()
     */
     get DefaultNavItems(): string | null {
@@ -42514,6 +42547,27 @@ export class MJApplicationEntity extends BaseEntity<MJApplicationEntityType> {
     }
     set DefaultNavItems(value: string | null) {
         this.Set('DefaultNavItems', value);
+    }
+
+    private _DefaultNavItemsObject_cached: Array<MJApplicationEntity_IDefaultNavItem> | null | undefined = undefined;
+    private _DefaultNavItemsObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for DefaultNavItems — returns parsed JSON as Array<MJApplicationEntity_IDefaultNavItem>.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get DefaultNavItemsObject(): Array<MJApplicationEntity_IDefaultNavItem> | null {
+        const raw = this.Get('DefaultNavItems');
+        if (raw !== this._DefaultNavItemsObject_lastRaw) {
+            this._DefaultNavItemsObject_cached = raw ? JSON.parse(raw) : null;
+            this._DefaultNavItemsObject_lastRaw = raw;
+        }
+        return this._DefaultNavItemsObject_cached!;
+    }
+    set DefaultNavItemsObject(value: Array<MJApplicationEntity_IDefaultNavItem> | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.Set('DefaultNavItems', raw);
+        this._DefaultNavItemsObject_cached = value;
+        this._DefaultNavItemsObject_lastRaw = raw;
     }
 
     /**
@@ -60357,6 +60411,46 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
     }
     set RelatedEntityJoinFields(value: string | null) {
         this.Set('RelatedEntityJoinFields', value);
+    }
+
+    /**
+    * * Field Name: JSONType
+    * * Display Name: JSON Type
+    * * SQL Data Type: nvarchar(255)
+    * * Description: The name of the TypeScript interface/type for this JSON field. When set, CodeGen emits a strongly-typed Object-suffixed accessor using this type instead of only the default string getter/setter.
+    */
+    get JSONType(): string | null {
+        return this.Get('JSONType');
+    }
+    set JSONType(value: string | null) {
+        this.Set('JSONType', value);
+    }
+
+    /**
+    * * Field Name: JSONTypeIsArray
+    * * Display Name: JSON Type Is Array
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: If true, the field holds a JSON array of JSONType items. The Object accessor returns Array<JSONType> | null and the setter accepts Array<JSONType> | null.
+    */
+    get JSONTypeIsArray(): boolean {
+        return this.Get('JSONTypeIsArray');
+    }
+    set JSONTypeIsArray(value: boolean) {
+        this.Set('JSONTypeIsArray', value);
+    }
+
+    /**
+    * * Field Name: JSONTypeDefinition
+    * * Display Name: JSON Type Definition
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Raw TypeScript code emitted by CodeGen above the entity class definition. Typically contains the interface/type definition referenced by JSONType. Can include imports, multiple types, or any valid TypeScript.
+    */
+    get JSONTypeDefinition(): string | null {
+        return this.Get('JSONTypeDefinition');
+    }
+    set JSONTypeDefinition(value: string | null) {
+        this.Set('JSONTypeDefinition', value);
     }
 
     /**
