@@ -132,25 +132,13 @@ export class CodeGenPhase {
   private fileSystem = new FileSystemAdapter();
 
   /**
-   * Detect whether the install directory uses the bootstrap distribution layout
-   * (only `packages/GeneratedEntities` + `packages/GeneratedActions`) vs the
-   * full monorepo layout (which also has `packages/MJCoreEntities`, etc.).
-   *
-   * In distribution mode, the `@memberjunction/*` packages are pre-built in
-   * `node_modules/` from npm and don't need rebuilding or manifest regeneration.
-   */
-  private async isDistributionLayout(dir: string): Promise<boolean> {
-    const monorepoMarker = path.join(dir, 'packages', 'MJCoreEntities');
-    return !(await this.fileSystem.DirectoryExists(monorepoMarker));
-  }
-
   /**
    * Execute the codegen phase: run `mj codegen`, verify artifacts, retry if needed,
    * then run the post-codegen pipeline (manifest regen + known-issue patches).
    *
    * @param context - Codegen input with directory, emitter, and fast-mode flag.
    * @returns Codegen result with success status, artifact verification, and retry flag.
-   * @throws {InstallerError} With code `CODEGEN_TIMEOUT` if codegen exceeds 10 minutes.
+   * @throws {InstallerError} With code `CODEGEN_TIMEOUT` if codegen exceeds 15 minutes.
    * @throws {InstallerError} With code `CODEGEN_FAILED` if codegen fails after rebuild + retry.
    */
   async Run(context: CodeGenContext): Promise<CodeGenResult> {
@@ -262,28 +250,32 @@ export class CodeGenPhase {
    *
    * Tries the local CLI binary first (used by the full monorepo where
    * `@memberjunction/cli` is a workspace dependency). Falls back to
-   * `npx @memberjunction/cli@<version>` for the bootstrap distribution.
+   * the monorepo's local CLI binary at `node_modules/@memberjunction/cli/bin/run.js`.
    *
    * @param dir - Repo root directory.
-   * @param versionTag - Release tag (e.g., `"v5.9.0"`) for version pinning.
+   * @param _versionTag - Unused (retained for interface compatibility).
    * @param cliArgs - Arguments to pass to the CLI (e.g., `['codegen']`).
    * @returns Command and args array suitable for `ProcessRunner.Run()`.
    */
   private async resolveCli(
     dir: string,
-    versionTag: string | undefined,
+    _versionTag: string | undefined,
     cliArgs: string[]
   ): Promise<{ cmd: string; args: string[] }> {
-    const localCli = path.join(dir, 'apps', 'MJAPI', 'node_modules', '@memberjunction', 'cli', 'bin', 'run.js');
-    if (await this.fileSystem.FileExists(localCli)) {
-      return { cmd: 'node', args: [localCli, ...cliArgs] };
+    // Monorepo layout: CLI is hoisted into node_modules after npm install
+    const candidates = [
+      path.join(dir, 'node_modules', '@memberjunction', 'cli', 'bin', 'run.js'),
+      path.join(dir, 'apps', 'MJAPI', 'node_modules', '@memberjunction', 'cli', 'bin', 'run.js'),
+    ];
+
+    for (const localCli of candidates) {
+      if (await this.fileSystem.FileExists(localCli)) {
+        return { cmd: 'node', args: [localCli, ...cliArgs] };
+      }
     }
 
-    const cliPackage = versionTag
-      ? `@memberjunction/cli@${versionTag.replace(/^v/, '')}`
-      : '@memberjunction/cli';
-
-    return { cmd: 'npx', args: [cliPackage, ...cliArgs] };
+    // Last resort: use npx (shouldn't happen in monorepo layout)
+    return { cmd: 'npx', args: ['@memberjunction/cli', ...cliArgs] };
   }
 
   // ---------------------------------------------------------------------------
@@ -300,7 +292,7 @@ export class CodeGenPhase {
    * @param dir - Repo root directory.
    * @param emitter - Event emitter for progress reporting.
    * @returns Structured result with success flag, AFTER-command failure detection, and error summary.
-   * @throws {InstallerError} With code `CODEGEN_TIMEOUT` if the process exceeds 10 minutes.
+   * @throws {InstallerError} With code `CODEGEN_TIMEOUT` if the process exceeds 15 minutes.
    */
   private async runCodeGen(
     dir: string,
@@ -310,7 +302,7 @@ export class CodeGenPhase {
     const { cmd, args } = await this.resolveCli(dir, versionTag, ['codegen']);
     const result = await this.processRunner.Run(cmd, args, {
       Cwd: dir,
-      TimeoutMs: 600_000, // 10 minutes
+      TimeoutMs: 900_000, // 15 minutes
       OnStdout: (line: string) => {
         emitter.Emit('step:progress', {
           Type: 'step:progress',
@@ -574,29 +566,6 @@ export class CodeGenPhase {
    *     installs) and rebuild affected packages.
    */
   private async regenerateManifestsAndRebuild(dir: string, emitter: InstallerEventEmitter, fast: boolean): Promise<void> {
-    const isDistribution = await this.isDistributionLayout(dir);
-
-    // In distribution mode, the @memberjunction/* packages are pre-built from
-    // npm with correct manifests. The apps' prestart hooks regenerate their own
-    // supplemental manifests. Steps 1-3 (which target monorepo source packages
-    // like MJCoreEntities, ServerBootstrap, etc.) are not applicable.
-    if (isDistribution) {
-      emitter.Emit('log', {
-        Type: 'log',
-        Level: 'info',
-        Message: 'Distribution layout detected — skipping post-codegen steps 1-3 (manifests are pre-built in npm packages).',
-      });
-
-      // Only rebuild the local generated packages (GeneratedEntities/GeneratedActions)
-      // since codegen just regenerated their source.
-      await this.forceRebuildLocalGeneratedPackages(dir, emitter);
-
-      // Step 4 patches target monorepo source files that don't exist in the
-      // distribution, so applyKnownIssuePatches will skip them gracefully.
-      await this.applyKnownIssuePatches(dir, emitter);
-      return;
-    }
-
     // In fast mode, quick-check manifests first. If they already look correct
     // (no stale entity names), skip the expensive Steps 1-3 entirely.
     if (fast) {
@@ -809,60 +778,6 @@ export class CodeGenPhase {
       Phase: 'codegen',
       Message: 'Codegen output packages force-rebuilt — .d.ts exports are current.',
     });
-  }
-
-  /**
-   * Force-rebuild only the local generated packages in a distribution layout.
-   * These are `mj_generatedentities` and `mj_generatedactions` — the only
-   * workspace packages whose source is regenerated by codegen.
-   */
-  private async forceRebuildLocalGeneratedPackages(dir: string, emitter: InstallerEventEmitter): Promise<void> {
-    emitter.Emit('step:progress', {
-      Type: 'step:progress',
-      Phase: 'codegen',
-      Message: 'Rebuilding local generated packages...',
-    });
-
-    const filters = [
-      '--filter=mj_generatedentities',
-      '--filter=mj_generatedactions',
-    ];
-
-    const result = await this.processRunner.Run(
-      'npx', ['turbo', 'build', '--force', '--log-order=stream', ...filters],
-      {
-        Cwd: dir,
-        TimeoutMs: 300_000,
-        OnStdout: (line: string) => {
-          emitter.Emit('step:progress', {
-            Type: 'step:progress',
-            Phase: 'codegen',
-            Message: line.trim(),
-          });
-        },
-        OnStderr: (line: string) => {
-          emitter.Emit('log', {
-            Type: 'log',
-            Level: 'verbose',
-            Message: `[codegen:rebuild-generated:stderr] ${line.trim()}`,
-          });
-        },
-      }
-    );
-
-    if (result.ExitCode === 0 && !result.TimedOut) {
-      emitter.Emit('step:progress', {
-        Type: 'step:progress',
-        Phase: 'codegen',
-        Message: 'Local generated packages rebuilt successfully.',
-      });
-    } else {
-      emitter.Emit('log', {
-        Type: 'log',
-        Level: 'verbose',
-        Message: `Rebuild of local generated packages ${result.TimedOut ? 'timed out' : `exited ${result.ExitCode}`}. This is expected on first install.`,
-      });
-    }
   }
 
   /**
@@ -1248,8 +1163,8 @@ export class CodeGenPhase {
     {
       Id: 'resource-permission-engine-null-safety-dist',
       Description:
-        'Distribution-mode variant: patches the compiled .js in node_modules when the monorepo source ' +
-        'path does not exist. Same null-safety fix for _ResourceTypes and _Permissions.',
+        'Compiled .js variant: patches the compiled output in node_modules/dist. ' +
+        'Same null-safety fix for _ResourceTypes and _Permissions.',
       RelativePath: 'node_modules/@memberjunction/core-entities/dist/custom/ResourcePermissions/ResourcePermissionEngine.js',
       PackageRelativeDir: '',
       NeedsPatch: (content: string): boolean =>

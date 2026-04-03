@@ -243,7 +243,7 @@ class ReadinessWatcher {
  * const smokeTest = new SmokeTestPhase();
  * const result = await smokeTest.Run({
  *   Dir: '/path/to/install',
- *   Config: { APIPort: 4000, ExplorerPort: 4200 },
+ *   Config: { APIPort: 4000, ExplorerPort: 4201 },
  *   Emitter: emitter,
  * });
  * if (result.ApiRunning && result.ExplorerRunning) {
@@ -422,7 +422,7 @@ export class SmokeTestPhase {
       // File read or parse failed, fall through
     }
 
-    return config.ExplorerPort ?? 4200;
+    return config.ExplorerPort ?? 4201;
   }
 
   // ---------------------------------------------------------------------------
