@@ -10,13 +10,14 @@
  * Registered as BaseResourceComponent for the Knowledge Hub application.
  */
 
-import { Component, ChangeDetectorRef, OnDestroy, AfterViewInit, inject } from '@angular/core';
+import { Component, ChangeDetectorRef, OnDestroy, AfterViewInit, inject, ViewChild } from '@angular/core';
 import { Subject } from 'rxjs';
 import { CompositeKey, Metadata } from '@memberjunction/core';
 import { ResourceData, UserInfoEngine, MJUserSettingEntity, VectorMetadataEngine } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import {
     ClusterConfig,
     ClusterConfigPanelEntityOption,
@@ -25,10 +26,11 @@ import {
     ClusterVisualizationResult,
     ClusterMetrics,
     ClusterPoint,
+    ClusterLabel,
     SavedClusterVisualization,
     DefaultClusterConfig,
 } from '@memberjunction/ng-clustering';
-import { ClusteringService } from '@memberjunction/ng-clustering';
+import { ClusteringService, ClusterScatterComponent } from '@memberjunction/ng-clustering';
 
 const SAVED_CLUSTERS_KEY = 'KnowledgeHub_SavedClusters';
 
@@ -40,10 +42,15 @@ const SAVED_CLUSTERS_KEY = 'KnowledgeHub_SavedClusters';
     styleUrls: ['./cluster-visualization-resource.component.css'],
 })
 export class ClusterVisualizationResourceComponent extends BaseResourceComponent implements AfterViewInit, OnDestroy {
+    @ViewChild('scatterPlot') scatterPlot?: ClusterScatterComponent;
+
     private cdr = inject(ChangeDetectorRef);
     private clusteringService = inject(ClusteringService);
     private navigationService = inject(NavigationService);
     private destroy$ = new Subject<void>();
+
+    /** LLM-generated cluster labels for the current result */
+    public ClusterLabels: ClusterLabel[] = [];
 
     // ================================================================
     // Resource overrides
@@ -128,6 +135,7 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
     public async OnRunClustering(config: ClusterConfig): Promise<void> {
         this.IsRunning = true;
         this.ActiveConfig = config;
+        this.ClusterLabels = [];
 
         // Update entity doc options if entity changed
         this.updateEntityDocOptions(config.EntityName);
@@ -135,10 +143,18 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
         this.cdr.detectChanges();
 
         try {
-            // Fetch vectors from the database, then pass to the generic service
+            // Fetch vectors from the vector database
             const vectors = await this.fetchVectorsForEntity(config);
+
+            // Run clustering (client-side UMAP + K-Means/DBSCAN)
             this.Result = await this.clusteringService.RunClustering(vectors, config);
             this.VisualizationTitle = `${config.EntityName} — ${config.Algorithm === 'kmeans' ? 'K-Means' : 'DBSCAN'}`;
+
+            // Fire LLM cluster naming in the background (non-blocking).
+            // Clusters render immediately; labels appear when LLM responds.
+            this.requestClusterLabelsFromLLM().catch(err =>
+                console.warn('[ClusterVisualization] Background naming failed:', err)
+            );
         } catch (error) {
             console.error('[ClusterVisualization] Pipeline error:', error);
             this.Result = null;
@@ -177,6 +193,9 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
             Algorithm: this.ActiveConfig.Algorithm,
             Params: { ...this.ActiveConfig },
             CreatedAt: new Date().toISOString(),
+            Result: this.stripVectorsFromResult(this.Result),
+            Viewport: this.scatterPlot?.GetViewportTransform(),
+            ClusterLabels: this.ClusterLabels.length > 0 ? [...this.ClusterLabels] : undefined,
         };
 
         this.SavedVisualizations = [saved, ...this.SavedVisualizations];
@@ -185,19 +204,38 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
         this.cdr.detectChanges();
     }
 
-    /** Select a saved visualization and re-run it */
+    /** Select a saved visualization — restore from cache if available, otherwise re-run */
     public async OnSelectSaved(saved: SavedClusterVisualization): Promise<void> {
         this.ActiveSavedId = saved.Id;
         this.VisualizationTitle = saved.Name;
 
-        // Reconstruct config from saved params
+        // Reconstruct config
         const config: ClusterConfig = {
             ...DefaultClusterConfig(),
             ...saved.Params,
             EntityName: saved.EntityName,
             Algorithm: saved.Algorithm,
         };
+        this.ActiveConfig = config;
 
+        // If we have cached results, restore instantly without re-running
+        if (saved.Result) {
+            this.Result = saved.Result;
+            this.ClusterLabels = saved.ClusterLabels ?? [];
+            this.applyLabelsToResult();
+            this.cdr.detectChanges();
+
+            // Restore viewport after a tick (scatter needs to render first)
+            if (saved.Viewport) {
+                setTimeout(() => {
+                    this.scatterPlot?.SetViewportTransform(saved.Viewport!);
+                    this.cdr.detectChanges();
+                }, 50);
+            }
+            return;
+        }
+
+        // No cached results — re-run from scratch
         await this.OnRunClustering(config);
     }
 
@@ -216,6 +254,7 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
     public OnNewAnalysis(): void {
         this.ActiveSavedId = null;
         this.Result = null;
+        this.ClusterLabels = [];
         this.VisualizationTitle = 'New Cluster Analysis';
         this.ActiveConfig = DefaultClusterConfig();
         this.cdr.detectChanges();
@@ -355,6 +394,103 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
             || metadata['Description']?.substring(0, 60)
             || metadata['RecordID']
             || 'Unknown';
+    }
+
+    // ================================================================
+    // LLM Cluster Naming
+    // ================================================================
+
+    /**
+     * After clustering completes, send sample records per cluster to an LLM for naming.
+     * Updates ClusterLabels and refreshes the view.
+     */
+    private async requestClusterLabelsFromLLM(): Promise<void> {
+        if (!this.Result || this.Result.Clusters.length === 0) return;
+
+        try {
+            const clusterData = this.buildClusterDataForPrompt(this.Result);
+            if (!clusterData) return;
+
+            // Look up the "Cluster Naming" prompt from AIEngineBase cached metadata
+            const promptEntity = AIEngineBase.Instance.Prompts.find(p => p.Name === 'Cluster Naming');
+            if (!promptEntity) {
+                console.warn('[ClusterVisualization] "Cluster Naming" prompt not found — run metadata sync');
+                return;
+            }
+
+            const provider = Metadata.Provider as GraphQLDataProvider;
+            const aiClient = new GraphQLAIClient(provider);
+            const result = await aiClient.RunAIPrompt({
+                promptId: promptEntity.ID,
+                data: { clusterData },
+            });
+
+            if (result.success && result.parsedResult) {
+                const labels = result.parsedResult as Array<{ clusterId: number; label: string }>;
+                this.ClusterLabels = labels.map(l => ({
+                    ClusterId: l.clusterId,
+                    Label: l.label,
+                    IsUserEdited: false,
+                }));
+                this.applyLabelsToResult();
+                this.cdr.detectChanges();
+            }
+        } catch (error) {
+            console.warn('[ClusterVisualization] LLM cluster naming failed:', error);
+        }
+    }
+
+    /** Build a text block describing sample records per cluster for the LLM prompt */
+    private buildClusterDataForPrompt(result: ClusterVisualizationResult): string | null {
+        if (!result.Clusters || result.Clusters.length === 0) return null;
+
+        const lines: string[] = [];
+        for (const cluster of result.Clusters) {
+            // Get points in this cluster, take up to 5 samples
+            const clusterPoints = result.Points.filter(p => p.ClusterId === cluster.Id);
+            const samples = clusterPoints.slice(0, 5);
+            if (samples.length === 0) continue;
+
+            lines.push(`### Cluster ${cluster.Id} (${clusterPoints.length} records)`);
+            for (const point of samples) {
+                const meta = point.Metadata || {};
+                // Include the most informative metadata fields
+                const fields = ['Name', 'Title', 'Description', 'Entity', 'Status', 'Type']
+                    .filter(f => meta[f])
+                    .map(f => `${f}: ${meta[f]}`)
+                    .join(', ');
+                lines.push(`- ${fields || point.Label}`);
+            }
+            lines.push('');
+        }
+
+        return lines.join('\n');
+    }
+
+    /** Apply cluster labels to the result's Clusters array (sets the Label property) */
+    private applyLabelsToResult(): void {
+        if (!this.Result || this.ClusterLabels.length === 0) return;
+
+        for (const label of this.ClusterLabels) {
+            const cluster = this.Result.Clusters.find(c => c.Id === label.ClusterId);
+            if (cluster) {
+                cluster.Label = label.Label;
+            }
+        }
+    }
+
+    /**
+     * Strip full vector arrays from the result before saving (they're large and not needed for display).
+     * Keeps points with 2D coordinates and metadata but removes the original high-dimensional vectors.
+     */
+    private stripVectorsFromResult(result: ClusterVisualizationResult): ClusterVisualizationResult {
+        return {
+            ...result,
+            Points: result.Points.map(p => ({
+                ...p,
+                Vector: [], // Strip the high-dimensional vector — only 2D coords (X, Y) matter for display
+            })),
+        };
     }
 
     /** Load saved visualizations from UserInfoEngine settings */

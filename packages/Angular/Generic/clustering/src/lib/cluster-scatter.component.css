@@ -164,6 +164,18 @@
     padding-left: 16px;
 }
 
+/* Cluster labels on chart */
+.cluster-label {
+    font-size: 14px;
+    font-weight: 600;
+    opacity: 0.85;
+    pointer-events: none;
+    text-shadow:
+        0 0 6px var(--mj-bg-page),
+        0 0 12px var(--mj-bg-page),
+        1px 1px 2px var(--mj-bg-page);
+}
+
 /* Tooltip */
 .tooltip {
     position: fixed;

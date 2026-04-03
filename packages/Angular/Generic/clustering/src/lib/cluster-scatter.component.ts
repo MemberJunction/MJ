@@ -48,6 +48,7 @@ import {
     ClusterVisualizationResult,
     CancelableEvent,
     ViewportRect,
+    ViewportTransform,
     ClusterSelectedEvent,
     CLUSTER_COLORS,
 } from './clustering.types';
@@ -295,6 +296,22 @@ export class ClusterScatterComponent implements AfterViewInit, OnDestroy, OnChan
 
     /** SVG viewBox parameters: [minX, minY, width, height]. */
     public ViewBox = [0, 0, 1000, 700];
+
+    /** Get the current viewport transform for saving/restoring. */
+    public GetViewportTransform(): ViewportTransform {
+        return {
+            TranslateX: this.ViewBox[0],
+            TranslateY: this.ViewBox[1],
+            Scale: this.defaultWidth / this.ViewBox[2],
+        };
+    }
+
+    /** Restore a previously saved viewport transform. */
+    public SetViewportTransform(vt: ViewportTransform): void {
+        const width = this.defaultWidth / vt.Scale;
+        const height = this.defaultHeight / vt.Scale;
+        this.ViewBox = [vt.TranslateX, vt.TranslateY, width, height];
+    }
 
     /** Currently hovered point (null when idle). */
     public HoveredPoint: ClusterPoint | null = null;
@@ -588,6 +605,12 @@ export class ClusterScatterComponent implements AfterViewInit, OnDestroy, OnChan
         if (point.ClusterId < 0) return 'Outlier';
         const cluster = this.Clusters.find(c => c.Id === point.ClusterId);
         return cluster?.Label ?? `Cluster ${point.ClusterId + 1}`;
+    }
+
+    /** Get the label for a cluster by ID (used for SVG text labels on the chart). */
+    public GetClusterLabelById(clusterId: number): string {
+        const cluster = this.Clusters.find(c => c.Id === clusterId);
+        return cluster?.Label ?? '';
     }
 
     /** @internal TrackBy function for point loops. */

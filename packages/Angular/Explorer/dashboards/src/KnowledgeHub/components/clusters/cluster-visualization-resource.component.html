@@ -65,6 +65,7 @@
         <!-- Scatter plot area -->
         <div class="scatter-area">
             <mj-cluster-scatter
+                #scatterPlot
                 [Points]="Result?.Points ?? []"
                 [Clusters]="Result?.Clusters ?? []"
                 [IsLoading]="IsRunning"

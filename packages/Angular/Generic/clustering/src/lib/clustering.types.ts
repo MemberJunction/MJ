@@ -261,6 +261,29 @@ export interface SavedClusterVisualization {
     Params: Partial<ClusterConfig>;
     /** ISO 8601 timestamp of when this was saved. */
     CreatedAt: string;
+    /** Cached clustering result (points, clusters, metrics) — avoids re-computation on restore. */
+    Result?: ClusterVisualizationResult;
+    /** Viewport transform at save time (pan + zoom state). */
+    Viewport?: ViewportTransform;
+    /** LLM-generated (or user-edited) labels for each cluster. */
+    ClusterLabels?: ClusterLabel[];
+}
+
+/** Viewport pan/zoom state for restoring scatter plot position. */
+export interface ViewportTransform {
+    TranslateX: number;
+    TranslateY: number;
+    Scale: number;
+}
+
+/** A human-readable label for a cluster. */
+export interface ClusterLabel {
+    /** The cluster ID this label applies to. */
+    ClusterId: number;
+    /** Short descriptive label (2-5 words). */
+    Label: string;
+    /** Whether the user has manually edited this label. */
+    IsUserEdited: boolean;
 }
 
 // ================================================================

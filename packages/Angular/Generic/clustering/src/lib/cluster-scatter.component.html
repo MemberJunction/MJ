@@ -57,6 +57,17 @@
                         [attr.fill]="'url(#cluster-glow-' + centroid.ClusterId + ')'"/>
             }
 
+            <!-- Cluster labels (positioned above centroids) -->
+            @for (centroid of ClusterCentroids; track TrackCentroidBy($index, centroid)) {
+                @if (GetClusterLabelById(centroid.ClusterId); as label) {
+                    <text class="cluster-label"
+                          [attr.x]="centroid.Cx"
+                          [attr.y]="centroid.Cy - centroid.R - 8"
+                          text-anchor="middle"
+                          [attr.fill]="centroid.Color">{{ label }}</text>
+                }
+            }
+
             <!-- Data points -->
             @for (point of Points; track TrackPointBy($index, point)) {
                 <circle class="data-point"
