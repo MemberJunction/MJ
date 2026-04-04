@@ -92,9 +92,9 @@ describe('SalesforceConnector (unit)', () => {
     });
 
     describe('GetIntegrationObjects', () => {
-        it('should return 9 SF standard objects', () => {
+        it('should return 28 SF standard objects', () => {
             const objects = connector.GetIntegrationObjects();
-            expect(objects.length).toBe(9);
+            expect(objects.length).toBe(28);
 
             const names = objects.map(o => o.Name);
             expect(names).toContain('Account');

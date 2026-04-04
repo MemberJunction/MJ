@@ -26,7 +26,7 @@
             "SupportsPagination": true,
             "PaginationType": "Cursor",
             "SupportsIncrementalSync": true,
-            "SupportsWrite": false,
+            "SupportsWrite": true,
             "Sequence": 1,
             "Status": "Active"
           },
@@ -598,7 +598,7 @@
             "SupportsPagination": true,
             "PaginationType": "Cursor",
             "SupportsIncrementalSync": true,
-            "SupportsWrite": false,
+            "SupportsWrite": true,
             "Sequence": 2,
             "Status": "Active"
           },
@@ -1083,7 +1083,7 @@
             "SupportsPagination": true,
             "PaginationType": "Cursor",
             "SupportsIncrementalSync": true,
-            "SupportsWrite": false,
+            "SupportsWrite": true,
             "Sequence": 3,
             "Status": "Active"
           },
@@ -1455,7 +1455,7 @@
             "SupportsPagination": true,
             "PaginationType": "Cursor",
             "SupportsIncrementalSync": true,
-            "SupportsWrite": false,
+            "SupportsWrite": true,
             "Sequence": 4,
             "Status": "Active"
           },
@@ -1743,8 +1743,8 @@
             "DefaultPageSize": 100,
             "SupportsPagination": true,
             "PaginationType": "Cursor",
-            "SupportsIncrementalSync": false,
-            "SupportsWrite": false,
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
             "Sequence": 5,
             "Status": "Active"
           },
@@ -1987,7 +1987,7 @@
             "SupportsPagination": true,
             "PaginationType": "Cursor",
             "SupportsIncrementalSync": true,
-            "SupportsWrite": false,
+            "SupportsWrite": true,
             "Sequence": 6,
             "Status": "Active"
           },
@@ -2337,7 +2337,7 @@
             "SupportsPagination": true,
             "PaginationType": "Cursor",
             "SupportsIncrementalSync": true,
-            "SupportsWrite": false,
+            "SupportsWrite": true,
             "Sequence": 7,
             "Status": "Active"
           },
@@ -2714,7 +2714,7 @@
             "SupportsPagination": true,
             "PaginationType": "Cursor",
             "SupportsIncrementalSync": true,
-            "SupportsWrite": false,
+            "SupportsWrite": true,
             "Sequence": 8,
             "Status": "Active"
           },
@@ -3046,7 +3046,7 @@
             "SupportsPagination": true,
             "PaginationType": "Cursor",
             "SupportsIncrementalSync": true,
-            "SupportsWrite": false,
+            "SupportsWrite": true,
             "Sequence": 9,
             "Status": "Active"
           },
@@ -3378,7 +3378,7 @@
             "SupportsPagination": true,
             "PaginationType": "Cursor",
             "SupportsIncrementalSync": true,
-            "SupportsWrite": false,
+            "SupportsWrite": true,
             "Sequence": 10,
             "Status": "Active"
           },
@@ -3600,7 +3600,7 @@
             "SupportsPagination": true,
             "PaginationType": "Cursor",
             "SupportsIncrementalSync": true,
-            "SupportsWrite": false,
+            "SupportsWrite": true,
             "Sequence": 11,
             "Status": "Active"
           },
@@ -3888,7 +3888,7 @@
             "SupportsPagination": true,
             "PaginationType": "Cursor",
             "SupportsIncrementalSync": true,
-            "SupportsWrite": false,
+            "SupportsWrite": true,
             "Sequence": 12,
             "Status": "Active"
           },
@@ -4217,8 +4217,8 @@
             "DefaultPageSize": 100,
             "SupportsPagination": true,
             "PaginationType": "Cursor",
-            "SupportsIncrementalSync": false,
-            "SupportsWrite": false,
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
             "Sequence": 13,
             "Status": "Active"
           },

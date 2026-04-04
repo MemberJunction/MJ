@@ -14,6 +14,8 @@ import {
     type DefaultFieldMapping,
     type DefaultIntegrationConfig,
     type IntegrationObjectInfo,
+    type ExternalObjectSchema,
+    type ExternalFieldSchema,
 } from '@memberjunction/integration-engine';
 import type { MJIntegrationObjectEntity } from '@memberjunction/core-entities';
 
@@ -162,6 +164,39 @@ export class RasaConnector extends BaseRESTIntegrationConnector {
         config.IncludeSearch = true;
         config.IncludeList = true;
         return config;
+    }
+
+    // ─── Schema Discovery (from static TS definitions) ───────────────
+
+    public override async DiscoverObjects(
+        _companyIntegration: MJCompanyIntegrationEntity,
+        _contextUser: UserInfo
+    ): Promise<ExternalObjectSchema[]> {
+        return RASA_ACTION_OBJECTS.map(obj => ({
+            Name: obj.Name,
+            Label: obj.DisplayName,
+            Description: obj.Description,
+            SupportsIncrementalSync: true,
+            SupportsWrite: obj.SupportsWrite ?? false,
+        }));
+    }
+
+    public override async DiscoverFields(
+        _companyIntegration: MJCompanyIntegrationEntity,
+        objectName: string,
+        _contextUser: UserInfo
+    ): Promise<ExternalFieldSchema[]> {
+        const obj = RASA_ACTION_OBJECTS.find(o => o.Name.toLowerCase() === objectName.toLowerCase());
+        if (!obj) return [];
+        return obj.Fields.map(f => ({
+            Name: f.Name,
+            Label: f.DisplayName,
+            Description: f.Description,
+            DataType: f.Type,
+            IsRequired: f.IsRequired,
+            IsUniqueKey: f.IsPrimaryKey,
+            IsReadOnly: f.IsReadOnly,
+        }));
     }
 
     /** Running count of records fetched for the current object in this sync run */

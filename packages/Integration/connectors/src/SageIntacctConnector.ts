@@ -246,6 +246,348 @@ const SAGE_INTACCT_OBJECTS: IntegrationObjectInfo[] = [
             { Name: 'WHENMODIFIED', DisplayName: 'When Modified', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Last modified timestamp' },
         ],
     },
+    {
+        Name: 'LOCATION', DisplayName: 'Location',
+        Description: 'A location in Sage Intacct', SupportsWrite: true,
+        Fields: [
+            { Name: 'LOCATIONID', DisplayName: 'Location ID', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: true, Description: 'Location ID' },
+            { Name: 'NAME', DisplayName: 'Name', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Name' },
+            { Name: 'PARENTID', DisplayName: 'Parent ID', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Parent ID' },
+            { Name: 'STATUS', DisplayName: 'Status', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Status' },
+            { Name: 'WHENCREATED', DisplayName: 'Date Created', Type: 'date', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Date Created' },
+            { Name: 'WHENMODIFIED', DisplayName: 'When Modified', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'When Modified' },
+        ],
+    },
+    {
+        Name: 'CONTACT', DisplayName: 'Contact',
+        Description: 'A contact record in Sage Intacct', SupportsWrite: true,
+        Fields: [
+            { Name: 'RECORDNO', DisplayName: 'Record Number', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Record Number' },
+            { Name: 'CONTACTNAME', DisplayName: 'Contact Name', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Contact Name' },
+            { Name: 'FIRSTNAME', DisplayName: 'First Name', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'First Name' },
+            { Name: 'LASTNAME', DisplayName: 'Last Name', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Last Name' },
+            { Name: 'EMAIL1', DisplayName: 'Email', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Email' },
+            { Name: 'PHONE1', DisplayName: 'Phone', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Phone' },
+            { Name: 'MAILADDRESS.ADDRESS1', DisplayName: 'Address Line 1', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Address Line 1' },
+            { Name: 'MAILADDRESS.CITY', DisplayName: 'City', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'City' },
+            { Name: 'MAILADDRESS.STATE', DisplayName: 'State', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'State' },
+            { Name: 'MAILADDRESS.ZIP', DisplayName: 'Zip Code', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Zip Code' },
+            { Name: 'MAILADDRESS.COUNTRY', DisplayName: 'Country', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Country' },
+            { Name: 'STATUS', DisplayName: 'Status', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Status' },
+            { Name: 'WHENMODIFIED', DisplayName: 'When Modified', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'When Modified' },
+        ],
+    },
+    {
+        Name: 'TERRITORY', DisplayName: 'Territory',
+        Description: 'A sales territory in Sage Intacct', SupportsWrite: true,
+        Fields: [
+            { Name: 'TERRITORYID', DisplayName: 'Territory ID', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: true, Description: 'Territory ID' },
+            { Name: 'NAME', DisplayName: 'Name', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Name' },
+            { Name: 'PARENTID', DisplayName: 'Parent ID', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Parent ID' },
+            { Name: 'STATUS', DisplayName: 'Status', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Status' },
+            { Name: 'WHENMODIFIED', DisplayName: 'When Modified', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'When Modified' },
+        ],
+    },
+    {
+        Name: 'USERINFO', DisplayName: 'User',
+        Description: 'A user account in Sage Intacct (read-only)', SupportsWrite: false,
+        Fields: [
+            { Name: 'LOGINID', DisplayName: 'Login ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Login ID' },
+            { Name: 'DESCRIPTION', DisplayName: 'Description', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Description' },
+            { Name: 'USERTYPE', DisplayName: 'User Type', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'User Type' },
+            { Name: 'STATUS', DisplayName: 'Status', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Status' },
+            { Name: 'WHENMODIFIED', DisplayName: 'When Modified', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'When Modified' },
+        ],
+    },
+    {
+        Name: 'APPAYMENT', DisplayName: 'AP Payment',
+        Description: 'An Accounts Payable payment in Sage Intacct', SupportsWrite: true,
+        Fields: [
+            { Name: 'RECORDNO', DisplayName: 'Record Number', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Record Number' },
+            { Name: 'VENDORID', DisplayName: 'Vendor ID', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Vendor ID' },
+            { Name: 'VENDORNAME', DisplayName: 'Vendor Name', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Vendor Name' },
+            { Name: 'PAYMENTDATE', DisplayName: 'Payment Date', Type: 'date', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Payment Date' },
+            { Name: 'PAYMENTAMOUNT', DisplayName: 'Payment Amount', Type: 'number', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Payment Amount' },
+            { Name: 'PAYMENTMETHOD', DisplayName: 'Payment Method', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Payment Method' },
+            { Name: 'STATE', DisplayName: 'State', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'State' },
+            { Name: 'DESCRIPTION', DisplayName: 'Description', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Description' },
+            { Name: 'WHENMODIFIED', DisplayName: 'When Modified', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'When Modified' },
+        ],
+    },
+    {
+        Name: 'APADJUSTMENT', DisplayName: 'AP Adjustment',
+        Description: 'An Accounts Payable adjustment in Sage Intacct', SupportsWrite: true,
+        Fields: [
+            { Name: 'RECORDNO', DisplayName: 'Record Number', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Record Number' },
+            { Name: 'VENDORID', DisplayName: 'Vendor ID', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Vendor ID' },
+            { Name: 'VENDORNAME', DisplayName: 'Vendor Name', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Vendor Name' },
+            { Name: 'WHENCREATED', DisplayName: 'Date Created', Type: 'date', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Date Created' },
+            { Name: 'TOTALAMOUNT', DisplayName: 'Total Amount', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Total Amount' },
+            { Name: 'STATE', DisplayName: 'State', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'State' },
+            { Name: 'DESCRIPTION', DisplayName: 'Description', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Description' },
+            { Name: 'WHENMODIFIED', DisplayName: 'When Modified', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'When Modified' },
+        ],
+    },
+    {
+        Name: 'APTERM', DisplayName: 'AP Term',
+        Description: 'An Accounts Payable payment term in Sage Intacct', SupportsWrite: true,
+        Fields: [
+            { Name: 'NAME', DisplayName: 'Name', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: true, Description: 'Name' },
+            { Name: 'DESCRIPTION', DisplayName: 'Description', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Description' },
+            { Name: 'STATUS', DisplayName: 'Status', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Status' },
+            { Name: 'WHENMODIFIED', DisplayName: 'When Modified', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'When Modified' },
+        ],
+    },
+    {
+        Name: 'ARPAYMENT', DisplayName: 'AR Payment',
+        Description: 'An Accounts Receivable payment in Sage Intacct', SupportsWrite: true,
+        Fields: [
+            { Name: 'RECORDNO', DisplayName: 'Record Number', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Record Number' },
+            { Name: 'CUSTOMERID', DisplayName: 'Customer ID', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Customer ID' },
+            { Name: 'CUSTOMERNAME', DisplayName: 'Customer Name', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Customer Name' },
+            { Name: 'PAYMENTDATE', DisplayName: 'Payment Date', Type: 'date', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Payment Date' },
+            { Name: 'PAYMENTAMOUNT', DisplayName: 'Payment Amount', Type: 'number', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Payment Amount' },
+            { Name: 'PAYMENTMETHOD', DisplayName: 'Payment Method', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Payment Method' },
+            { Name: 'STATE', DisplayName: 'State', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'State' },
+            { Name: 'DESCRIPTION', DisplayName: 'Description', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Description' },
+            { Name: 'WHENMODIFIED', DisplayName: 'When Modified', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'When Modified' },
+        ],
+    },
+    {
+        Name: 'ARADJUSTMENT', DisplayName: 'AR Adjustment',
+        Description: 'An Accounts Receivable adjustment in Sage Intacct', SupportsWrite: true,
+        Fields: [
+            { Name: 'RECORDNO', DisplayName: 'Record Number', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Record Number' },
+            { Name: 'CUSTOMERID', DisplayName: 'Customer ID', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Customer ID' },
+            { Name: 'CUSTOMERNAME', DisplayName: 'Customer Name', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Customer Name' },
+            { Name: 'WHENCREATED', DisplayName: 'Date Created', Type: 'date', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Date Created' },
+            { Name: 'TOTALAMOUNT', DisplayName: 'Total Amount', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Total Amount' },
+            { Name: 'STATE', DisplayName: 'State', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'State' },
+            { Name: 'DESCRIPTION', DisplayName: 'Description', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Description' },
+            { Name: 'WHENMODIFIED', DisplayName: 'When Modified', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'When Modified' },
+        ],
+    },
+    {
+        Name: 'ARTERM', DisplayName: 'AR Term',
+        Description: 'An Accounts Receivable payment term in Sage Intacct', SupportsWrite: true,
+        Fields: [
+            { Name: 'NAME', DisplayName: 'Name', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: true, Description: 'Name' },
+            { Name: 'DESCRIPTION', DisplayName: 'Description', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Description' },
+            { Name: 'STATUS', DisplayName: 'Status', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Status' },
+            { Name: 'WHENMODIFIED', DisplayName: 'When Modified', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'When Modified' },
+        ],
+    },
+    {
+        Name: 'RECURRINGINVOICE', DisplayName: 'Recurring Invoice',
+        Description: 'A recurring AR invoice in Sage Intacct', SupportsWrite: true,
+        Fields: [
+            { Name: 'RECORDNO', DisplayName: 'Record Number', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Record Number' },
+            { Name: 'CUSTOMERID', DisplayName: 'Customer ID', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Customer ID' },
+            { Name: 'CUSTOMERNAME', DisplayName: 'Customer Name', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Customer Name' },
+            { Name: 'TOTALAMOUNT', DisplayName: 'Total Amount', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Total Amount' },
+            { Name: 'STATUS', DisplayName: 'Status', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Status' },
+            { Name: 'DESCRIPTION', DisplayName: 'Description', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Description' },
+            { Name: 'WHENMODIFIED', DisplayName: 'When Modified', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'When Modified' },
+        ],
+    },
+    {
+        Name: 'ITEM', DisplayName: 'Item',
+        Description: 'An inventory item in Sage Intacct', SupportsWrite: true,
+        Fields: [
+            { Name: 'ITEMID', DisplayName: 'Item ID', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: true, Description: 'Item ID' },
+            { Name: 'NAME', DisplayName: 'Name', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Name' },
+            { Name: 'ITEMTYPE', DisplayName: 'Item Type', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Item Type' },
+            { Name: 'STATUS', DisplayName: 'Status', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Status' },
+            { Name: 'PRODUCTLINEID', DisplayName: 'Product Line', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Product Line' },
+            { Name: 'EXTENDED_DESCRIPTION', DisplayName: 'Description', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Description' },
+            { Name: 'WHENMODIFIED', DisplayName: 'When Modified', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'When Modified' },
+        ],
+    },
+    {
+        Name: 'WAREHOUSE', DisplayName: 'Warehouse',
+        Description: 'A warehouse in Sage Intacct', SupportsWrite: true,
+        Fields: [
+            { Name: 'WAREHOUSEID', DisplayName: 'Warehouse ID', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: true, Description: 'Warehouse ID' },
+            { Name: 'NAME', DisplayName: 'Name', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Name' },
+            { Name: 'LOCATIONID', DisplayName: 'Location ID', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Location ID' },
+            { Name: 'STATUS', DisplayName: 'Status', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Status' },
+            { Name: 'WHENMODIFIED', DisplayName: 'When Modified', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'When Modified' },
+        ],
+    },
+    {
+        Name: 'PODOCUMENT', DisplayName: 'Purchase Order',
+        Description: 'A purchase order in Sage Intacct', SupportsWrite: true,
+        Fields: [
+            { Name: 'DOCID', DisplayName: 'Document ID', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: true, Description: 'Document ID' },
+            { Name: 'VENDORID', DisplayName: 'Vendor ID', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Vendor ID' },
+            { Name: 'VENDORNAME', DisplayName: 'Vendor Name', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Vendor Name' },
+            { Name: 'WHENCREATED', DisplayName: 'Date Created', Type: 'date', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Date Created' },
+            { Name: 'WHENDUE', DisplayName: 'Due Date', Type: 'date', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Due Date' },
+            { Name: 'TOTALAMOUNT', DisplayName: 'Total Amount', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Total Amount' },
+            { Name: 'STATE', DisplayName: 'State', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'State' },
+            { Name: 'DESCRIPTION', DisplayName: 'Description', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Description' },
+            { Name: 'WHENMODIFIED', DisplayName: 'When Modified', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'When Modified' },
+        ],
+    },
+    {
+        Name: 'SODOCUMENT', DisplayName: 'Sales Order',
+        Description: 'A sales order in Sage Intacct', SupportsWrite: true,
+        Fields: [
+            { Name: 'DOCID', DisplayName: 'Document ID', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: true, Description: 'Document ID' },
+            { Name: 'CUSTOMERID', DisplayName: 'Customer ID', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Customer ID' },
+            { Name: 'CUSTOMERNAME', DisplayName: 'Customer Name', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Customer Name' },
+            { Name: 'WHENCREATED', DisplayName: 'Date Created', Type: 'date', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Date Created' },
+            { Name: 'WHENDUE', DisplayName: 'Due Date', Type: 'date', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Due Date' },
+            { Name: 'TOTALAMOUNT', DisplayName: 'Total Amount', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Total Amount' },
+            { Name: 'STATE', DisplayName: 'State', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'State' },
+            { Name: 'DESCRIPTION', DisplayName: 'Description', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Description' },
+            { Name: 'WHENMODIFIED', DisplayName: 'When Modified', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'When Modified' },
+        ],
+    },
+    {
+        Name: 'GLBATCH', DisplayName: 'GL Batch',
+        Description: 'A General Ledger journal entry batch in Sage Intacct', SupportsWrite: true,
+        Fields: [
+            { Name: 'RECORDNO', DisplayName: 'Record Number', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Record Number' },
+            { Name: 'JOURNAL', DisplayName: 'Journal', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Journal' },
+            { Name: 'BATCH_DATE', DisplayName: 'Batch Date', Type: 'date', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Batch Date' },
+            { Name: 'BATCH_TITLE', DisplayName: 'Batch Title', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Batch Title' },
+            { Name: 'STATE', DisplayName: 'State', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'State' },
+            { Name: 'DESCRIPTION', DisplayName: 'Description', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Description' },
+            { Name: 'WHENMODIFIED', DisplayName: 'When Modified', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'When Modified' },
+        ],
+    },
+    {
+        Name: 'GLENTRY', DisplayName: 'GL Entry',
+        Description: 'A General Ledger line entry in Sage Intacct', SupportsWrite: true,
+        Fields: [
+            { Name: 'RECORDNO', DisplayName: 'Record Number', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Record Number' },
+            { Name: 'BATCHNO', DisplayName: 'Batch Number', Type: 'number', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Batch Number' },
+            { Name: 'ACCOUNTNO', DisplayName: 'Account Number', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Account Number' },
+            { Name: 'DEBIT', DisplayName: 'Debit Amount', Type: 'number', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Debit Amount' },
+            { Name: 'CREDIT', DisplayName: 'Credit Amount', Type: 'number', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Credit Amount' },
+            { Name: 'DEPARTMENTID', DisplayName: 'Department ID', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Department ID' },
+            { Name: 'LOCATIONID', DisplayName: 'Location ID', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Location ID' },
+            { Name: 'DESCRIPTION', DisplayName: 'Description', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Description' },
+            { Name: 'WHENMODIFIED', DisplayName: 'When Modified', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'When Modified' },
+        ],
+    },
+    {
+        Name: 'TASK', DisplayName: 'Task',
+        Description: 'A project task in Sage Intacct', SupportsWrite: true,
+        Fields: [
+            { Name: 'TASKID', DisplayName: 'Task ID', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: true, Description: 'Task ID' },
+            { Name: 'NAME', DisplayName: 'Name', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Name' },
+            { Name: 'PROJECTID', DisplayName: 'Project ID', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Project ID' },
+            { Name: 'PROJECTNAME', DisplayName: 'Project Name', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Project Name' },
+            { Name: 'STATUS', DisplayName: 'Status', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Status' },
+            { Name: 'BEGINDATE', DisplayName: 'Begin Date', Type: 'date', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Begin Date' },
+            { Name: 'ENDDATE', DisplayName: 'End Date', Type: 'date', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'End Date' },
+            { Name: 'WHENMODIFIED', DisplayName: 'When Modified', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'When Modified' },
+        ],
+    },
+    {
+        Name: 'TIMESHEET', DisplayName: 'Timesheet',
+        Description: 'An employee timesheet in Sage Intacct', SupportsWrite: true,
+        Fields: [
+            { Name: 'RECORDNO', DisplayName: 'Record Number', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Record Number' },
+            { Name: 'EMPLOYEEID', DisplayName: 'Employee ID', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Employee ID' },
+            { Name: 'BEGINDATE', DisplayName: 'Begin Date', Type: 'date', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Begin Date' },
+            { Name: 'STATE', DisplayName: 'State', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'State' },
+            { Name: 'DESCRIPTION', DisplayName: 'Description', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Description' },
+            { Name: 'WHENMODIFIED', DisplayName: 'When Modified', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'When Modified' },
+        ],
+    },
+    {
+        Name: 'EEXPENSES', DisplayName: 'Expense Report',
+        Description: 'An employee expense report in Sage Intacct', SupportsWrite: true,
+        Fields: [
+            { Name: 'RECORDNO', DisplayName: 'Record Number', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Record Number' },
+            { Name: 'EMPLOYEEID', DisplayName: 'Employee ID', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Employee ID' },
+            { Name: 'WHENCREATED', DisplayName: 'Date Created', Type: 'date', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Date Created' },
+            { Name: 'TOTALAMOUNT', DisplayName: 'Total Amount', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Total Amount' },
+            { Name: 'STATE', DisplayName: 'State', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'State' },
+            { Name: 'DESCRIPTION', DisplayName: 'Description', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Description' },
+            { Name: 'WHENMODIFIED', DisplayName: 'When Modified', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'When Modified' },
+        ],
+    },
+    {
+        Name: 'CHECKINGACCOUNT', DisplayName: 'Checking Account',
+        Description: 'A checking/bank account in Sage Intacct', SupportsWrite: true,
+        Fields: [
+            { Name: 'BANKACCOUNTID', DisplayName: 'Bank Account ID', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: true, Description: 'Bank Account ID' },
+            { Name: 'BANKNAME', DisplayName: 'Bank Name', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Bank Name' },
+            { Name: 'BANKACCOUNTNO', DisplayName: 'Account Number', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Account Number' },
+            { Name: 'GLACCOUNTNO', DisplayName: 'GL Account', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'GL Account' },
+            { Name: 'STATUS', DisplayName: 'Status', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Status' },
+            { Name: 'WHENMODIFIED', DisplayName: 'When Modified', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'When Modified' },
+        ],
+    },
+    {
+        Name: 'SAVINGSACCOUNT', DisplayName: 'Savings Account',
+        Description: 'A savings account in Sage Intacct', SupportsWrite: true,
+        Fields: [
+            { Name: 'BANKACCOUNTID', DisplayName: 'Bank Account ID', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: true, Description: 'Bank Account ID' },
+            { Name: 'BANKNAME', DisplayName: 'Bank Name', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Bank Name' },
+            { Name: 'BANKACCOUNTNO', DisplayName: 'Account Number', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Account Number' },
+            { Name: 'GLACCOUNTNO', DisplayName: 'GL Account', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'GL Account' },
+            { Name: 'STATUS', DisplayName: 'Status', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Status' },
+            { Name: 'WHENMODIFIED', DisplayName: 'When Modified', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'When Modified' },
+        ],
+    },
+    {
+        Name: 'CCTRANSACTION', DisplayName: 'Credit Card Transaction',
+        Description: 'A credit card transaction in Sage Intacct', SupportsWrite: true,
+        Fields: [
+            { Name: 'RECORDNO', DisplayName: 'Record Number', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Record Number' },
+            { Name: 'CARDID', DisplayName: 'Card ID', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Card ID' },
+            { Name: 'WHENCREATED', DisplayName: 'Date Created', Type: 'date', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Date Created' },
+            { Name: 'TOTALAMOUNT', DisplayName: 'Total Amount', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Total Amount' },
+            { Name: 'STATE', DisplayName: 'State', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'State' },
+            { Name: 'DESCRIPTION', DisplayName: 'Description', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Description' },
+            { Name: 'WHENMODIFIED', DisplayName: 'When Modified', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'When Modified' },
+        ],
+    },
+    {
+        Name: 'CONTRACT', DisplayName: 'Contract',
+        Description: 'A contract in Sage Intacct', SupportsWrite: true,
+        Fields: [
+            { Name: 'CONTRACTID', DisplayName: 'Contract ID', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: true, Description: 'Contract ID' },
+            { Name: 'NAME', DisplayName: 'Name', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Name' },
+            { Name: 'CUSTOMERID', DisplayName: 'Customer ID', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Customer ID' },
+            { Name: 'CUSTOMERNAME', DisplayName: 'Customer Name', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Customer Name' },
+            { Name: 'BEGINDATE', DisplayName: 'Begin Date', Type: 'date', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Begin Date' },
+            { Name: 'ENDDATE', DisplayName: 'End Date', Type: 'date', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'End Date' },
+            { Name: 'STATUS', DisplayName: 'Status', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Status' },
+            { Name: 'TOTALAMOUNT', DisplayName: 'Total Amount', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Total Amount' },
+            { Name: 'DESCRIPTION', DisplayName: 'Description', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Description' },
+            { Name: 'WHENMODIFIED', DisplayName: 'When Modified', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'When Modified' },
+        ],
+    },
+    {
+        Name: 'CONTRACTDETAIL', DisplayName: 'Contract Line',
+        Description: 'A contract line item in Sage Intacct', SupportsWrite: true,
+        Fields: [
+            { Name: 'RECORDNO', DisplayName: 'Record Number', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Record Number' },
+            { Name: 'CONTRACTID', DisplayName: 'Contract ID', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Contract ID' },
+            { Name: 'ITEMID', DisplayName: 'Item ID', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Item ID' },
+            { Name: 'ITEMNAME', DisplayName: 'Item Name', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Item Name' },
+            { Name: 'TOTALAMOUNT', DisplayName: 'Total Amount', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Total Amount' },
+            { Name: 'STATUS', DisplayName: 'Status', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Status' },
+            { Name: 'WHENMODIFIED', DisplayName: 'When Modified', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'When Modified' },
+        ],
+    },
+    {
+        Name: 'SUPDOC', DisplayName: 'Supporting Document',
+        Description: 'A supporting document/attachment in Sage Intacct', SupportsWrite: true,
+        Fields: [
+            { Name: 'SUPDOCID', DisplayName: 'Document ID', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: true, Description: 'Document ID' },
+            { Name: 'SUPDOCNAME', DisplayName: 'Document Name', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Document Name' },
+            { Name: 'SUPDOCFOLDERNAME', DisplayName: 'Folder Name', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Folder Name' },
+            { Name: 'DESCRIPTION', DisplayName: 'Description', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Description' },
+            { Name: 'WHENMODIFIED', DisplayName: 'When Modified', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'When Modified' },
+        ],
+    },
 ];
 
 /** Primary key field name for each known Sage Intacct object */
@@ -259,6 +601,32 @@ const OBJECT_PK_MAP: Record<string, string> = {
     EMPLOYEE: 'EMPLOYEEID',
     DEPARTMENT: 'DEPARTMENTID',
     CLASS: 'CLASSID',
+    LOCATION: 'LOCATIONID',
+    CONTACT: 'RECORDNO',
+    TERRITORY: 'TERRITORYID',
+    USERINFO: 'LOGINID',
+    APPAYMENT: 'RECORDNO',
+    APADJUSTMENT: 'RECORDNO',
+    APTERM: 'NAME',
+    ARPAYMENT: 'RECORDNO',
+    ARADJUSTMENT: 'RECORDNO',
+    ARTERM: 'NAME',
+    RECURRINGINVOICE: 'RECORDNO',
+    ITEM: 'ITEMID',
+    WAREHOUSE: 'WAREHOUSEID',
+    PODOCUMENT: 'DOCID',
+    SODOCUMENT: 'DOCID',
+    GLBATCH: 'RECORDNO',
+    GLENTRY: 'RECORDNO',
+    TASK: 'TASKID',
+    TIMESHEET: 'RECORDNO',
+    EEXPENSES: 'RECORDNO',
+    CHECKINGACCOUNT: 'BANKACCOUNTID',
+    SAVINGSACCOUNT: 'BANKACCOUNTID',
+    CCTRANSACTION: 'RECORDNO',
+    CONTRACT: 'CONTRACTID',
+    CONTRACTDETAIL: 'RECORDNO',
+    SUPDOC: 'SUPDOCID',
 };
 
 /** Objects that use legacy API functions (create_*, update_*, delete_*) instead of the
@@ -448,19 +816,34 @@ export class SageIntacctConnector extends BaseIntegrationConnector {
         objectName: string,
         contextUser: UserInfo
     ): Promise<ExternalFieldSchema[]> {
-        const session = await this.GetSession(companyIntegration, contextUser);
-        const xml = this.BuildInspectRequest(session, objectName);
-        const response = await this.SendXMLRequest(session, xml);
-        const fields = this.ParseInspectFieldsResponse(response);
+        try {
+            const session = await this.GetSession(companyIntegration, contextUser);
+            const xml = this.BuildInspectRequest(session, objectName);
+            const response = await this.SendXMLRequest(session, xml);
+            const fields = this.ParseInspectFieldsResponse(response);
 
-        return fields.map(f => ({
-            Name: f.Name,
-            Label: f.Label || this.FormatLabel(f.Name),
-            DataType: INTACCT_TYPE_MAP[f.DataType.toLowerCase()] ?? 'string',
-            IsRequired: f.IsRequired,
-            IsUniqueKey: f.Name === this.GetPrimaryKeyField(objectName),
-            IsReadOnly: f.IsReadOnly,
-        }));
+            return fields.map(f => ({
+                Name: f.Name,
+                Label: f.Label || this.FormatLabel(f.Name),
+                DataType: INTACCT_TYPE_MAP[f.DataType.toLowerCase()] ?? 'string',
+                IsRequired: f.IsRequired,
+                IsUniqueKey: f.Name === this.GetPrimaryKeyField(objectName),
+                IsReadOnly: f.IsReadOnly,
+            }));
+        } catch {
+            // Fallback to known object fields
+            const obj = SAGE_INTACCT_OBJECTS.find(o => o.Name.toLowerCase() === objectName.toLowerCase());
+            if (!obj) return [];
+            return obj.Fields.map(f => ({
+                Name: f.Name,
+                Label: f.DisplayName,
+                Description: f.Description,
+                DataType: f.Type,
+                IsRequired: f.IsRequired,
+                IsUniqueKey: f.IsPrimaryKey,
+                IsReadOnly: f.IsReadOnly,
+            }));
+        }
     }
 
     // ─── FetchChanges ────────────────────────────────────────────────

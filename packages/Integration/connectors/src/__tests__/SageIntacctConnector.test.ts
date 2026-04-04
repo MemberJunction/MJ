@@ -83,7 +83,7 @@ describe('SageIntacctConnector (unit)', () => {
     describe('GetIntegrationObjects', () => {
         it('should return all known Sage Intacct objects', () => {
             const objects = connector.GetIntegrationObjects();
-            expect(objects.length).toBe(9);
+            expect(objects.length).toBe(35);
 
             const names = objects.map(o => o.Name);
             expect(names).toContain('CUSTOMER');
@@ -121,7 +121,7 @@ describe('SageIntacctConnector (unit)', () => {
             expect(config!.IconClass).toBe('fa-solid fa-file-invoice-dollar');
             expect(config!.IncludeSearch).toBe(true);
             expect(config!.IncludeList).toBe(true);
-            expect(config!.Objects.length).toBe(9);
+            expect(config!.Objects.length).toBe(35);
         });
     });
 

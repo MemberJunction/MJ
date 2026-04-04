@@ -262,6 +262,341 @@ const QUICKBOOKS_OBJECTS: IntegrationObjectInfo[] = [
             { Name: 'MetaData', DisplayName: 'Metadata', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Create/update timestamps' },
         ],
     },
+
+    // ── Expanded Objects (from metadata) ──────────────────────────────
+    {
+        Name: 'Estimate', DisplayName: 'Estimate',
+        Description: 'A quote or proposal in QuickBooks Online', SupportsWrite: true,
+        Fields: [
+            { Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' },
+            { Name: 'DocNumber', DisplayName: 'Estimate Number', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Estimate Number' },
+            { Name: 'CustomerRef', DisplayName: 'Customer Ref', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Customer Ref' },
+            { Name: 'TxnDate', DisplayName: 'Transaction Date', Type: 'datetime', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Transaction Date' },
+            { Name: 'ExpirationDate', DisplayName: 'Expiration Date', Type: 'datetime', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Expiration Date' },
+            { Name: 'TotalAmt', DisplayName: 'Total Amount', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Total Amount' },
+            { Name: 'TxnStatus', DisplayName: 'Status', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Status' },
+            { Name: 'EmailStatus', DisplayName: 'Email Status', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Email Status' },
+            { Name: 'MetaData', DisplayName: 'Metadata', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Metadata' },
+        ],
+    },
+    {
+        Name: 'SalesReceipt', DisplayName: 'Sales Receipt',
+        Description: 'A cash or immediate sale in QuickBooks Online', SupportsWrite: true,
+        Fields: [
+            { Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' },
+            { Name: 'DocNumber', DisplayName: 'Sales Receipt Number', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Sales Receipt Number' },
+            { Name: 'CustomerRef', DisplayName: 'Customer Ref', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Customer Ref' },
+            { Name: 'TxnDate', DisplayName: 'Transaction Date', Type: 'datetime', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Transaction Date' },
+            { Name: 'TotalAmt', DisplayName: 'Total Amount', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Total Amount' },
+            { Name: 'DepositToAccountRef', DisplayName: 'Deposit To Account', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Deposit To Account' },
+            { Name: 'PaymentMethodRef', DisplayName: 'Payment Method', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Payment Method' },
+            { Name: 'Balance', DisplayName: 'Balance', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Balance' },
+            { Name: 'MetaData', DisplayName: 'Metadata', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Metadata' },
+        ],
+    },
+    {
+        Name: 'CreditMemo', DisplayName: 'Credit Memo',
+        Description: 'A customer credit memo in QuickBooks Online', SupportsWrite: true,
+        Fields: [
+            { Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' },
+            { Name: 'DocNumber', DisplayName: 'Credit Memo Number', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Credit Memo Number' },
+            { Name: 'CustomerRef', DisplayName: 'Customer Ref', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Customer Ref' },
+            { Name: 'TxnDate', DisplayName: 'Transaction Date', Type: 'datetime', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Transaction Date' },
+            { Name: 'TotalAmt', DisplayName: 'Total Amount', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Total Amount' },
+            { Name: 'RemainingCredit', DisplayName: 'Remaining Credit', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Remaining Credit' },
+            { Name: 'MetaData', DisplayName: 'Metadata', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Metadata' },
+        ],
+    },
+    {
+        Name: 'RefundReceipt', DisplayName: 'Refund Receipt',
+        Description: 'A customer refund in QuickBooks Online', SupportsWrite: true,
+        Fields: [
+            { Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' },
+            { Name: 'DocNumber', DisplayName: 'Refund Number', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Refund Number' },
+            { Name: 'CustomerRef', DisplayName: 'Customer Ref', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Customer Ref' },
+            { Name: 'TxnDate', DisplayName: 'Transaction Date', Type: 'datetime', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Transaction Date' },
+            { Name: 'TotalAmt', DisplayName: 'Total Amount', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Total Amount' },
+            { Name: 'DepositToAccountRef', DisplayName: 'Deposit To Account', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Deposit To Account' },
+            { Name: 'MetaData', DisplayName: 'Metadata', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Metadata' },
+        ],
+    },
+    {
+        Name: 'JournalEntry', DisplayName: 'Journal Entry',
+        Description: 'A manual general ledger journal entry in QuickBooks Online', SupportsWrite: true,
+        Fields: [
+            { Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' },
+            { Name: 'DocNumber', DisplayName: 'Journal Number', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Journal Number' },
+            { Name: 'TxnDate', DisplayName: 'Transaction Date', Type: 'datetime', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Transaction Date' },
+            { Name: 'TotalAmt', DisplayName: 'Total Amount', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Total Amount' },
+            { Name: 'PrivateNote', DisplayName: 'Memo', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Memo' },
+            { Name: 'Adjustment', DisplayName: 'Is Adjustment', Type: 'boolean', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Is Adjustment' },
+            { Name: 'MetaData', DisplayName: 'Metadata', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Metadata' },
+        ],
+    },
+    {
+        Name: 'Deposit', DisplayName: 'Deposit',
+        Description: 'A bank deposit in QuickBooks Online', SupportsWrite: true,
+        Fields: [
+            { Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' },
+            { Name: 'TxnDate', DisplayName: 'Transaction Date', Type: 'datetime', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Transaction Date' },
+            { Name: 'TotalAmt', DisplayName: 'Total Amount', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Total Amount' },
+            { Name: 'DepositToAccountRef', DisplayName: 'Deposit To Account', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Deposit To Account' },
+            { Name: 'PrivateNote', DisplayName: 'Memo', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Memo' },
+            { Name: 'MetaData', DisplayName: 'Metadata', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Metadata' },
+        ],
+    },
+    {
+        Name: 'Transfer', DisplayName: 'Transfer',
+        Description: 'An inter-account fund transfer in QuickBooks Online', SupportsWrite: true,
+        Fields: [
+            { Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' },
+            { Name: 'TxnDate', DisplayName: 'Transaction Date', Type: 'datetime', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Transaction Date' },
+            { Name: 'Amount', DisplayName: 'Amount', Type: 'number', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Amount' },
+            { Name: 'FromAccountRef', DisplayName: 'From Account', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'From Account' },
+            { Name: 'ToAccountRef', DisplayName: 'To Account', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'To Account' },
+            { Name: 'PrivateNote', DisplayName: 'Memo', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Memo' },
+            { Name: 'MetaData', DisplayName: 'Metadata', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Metadata' },
+        ],
+    },
+    {
+        Name: 'Purchase', DisplayName: 'Purchase',
+        Description: 'An expense, check, or credit card charge in QuickBooks Online', SupportsWrite: true,
+        Fields: [
+            { Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' },
+            { Name: 'DocNumber', DisplayName: 'Reference Number', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Reference Number' },
+            { Name: 'AccountRef', DisplayName: 'Account Ref', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Account Ref' },
+            { Name: 'PaymentType', DisplayName: 'Payment Type', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Payment Type' },
+            { Name: 'EntityRef', DisplayName: 'Payee Ref', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Payee Ref' },
+            { Name: 'TxnDate', DisplayName: 'Transaction Date', Type: 'datetime', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Transaction Date' },
+            { Name: 'TotalAmt', DisplayName: 'Total Amount', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Total Amount' },
+            { Name: 'PrivateNote', DisplayName: 'Memo', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Memo' },
+            { Name: 'MetaData', DisplayName: 'Metadata', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Metadata' },
+        ],
+    },
+    {
+        Name: 'PurchaseOrder', DisplayName: 'Purchase Order',
+        Description: 'A vendor purchase order in QuickBooks Online', SupportsWrite: true,
+        Fields: [
+            { Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' },
+            { Name: 'DocNumber', DisplayName: 'PO Number', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'PO Number' },
+            { Name: 'VendorRef', DisplayName: 'Vendor Ref', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Vendor Ref' },
+            { Name: 'TxnDate', DisplayName: 'Transaction Date', Type: 'datetime', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Transaction Date' },
+            { Name: 'TotalAmt', DisplayName: 'Total Amount', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Total Amount' },
+            { Name: 'POStatus', DisplayName: 'PO Status', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'PO Status' },
+            { Name: 'DueDate', DisplayName: 'Expected Date', Type: 'datetime', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Expected Date' },
+            { Name: 'MetaData', DisplayName: 'Metadata', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Metadata' },
+        ],
+    },
+    {
+        Name: 'VendorCredit', DisplayName: 'Vendor Credit',
+        Description: 'A vendor credit in QuickBooks Online', SupportsWrite: true,
+        Fields: [
+            { Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' },
+            { Name: 'DocNumber', DisplayName: 'Reference Number', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Reference Number' },
+            { Name: 'VendorRef', DisplayName: 'Vendor Ref', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Vendor Ref' },
+            { Name: 'TxnDate', DisplayName: 'Transaction Date', Type: 'datetime', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Transaction Date' },
+            { Name: 'TotalAmt', DisplayName: 'Total Amount', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Total Amount' },
+            { Name: 'Balance', DisplayName: 'Balance', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Balance' },
+            { Name: 'MetaData', DisplayName: 'Metadata', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Metadata' },
+        ],
+    },
+    {
+        Name: 'BillPayment', DisplayName: 'Bill Payment',
+        Description: 'A bill payment to a vendor in QuickBooks Online', SupportsWrite: true,
+        Fields: [
+            { Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' },
+            { Name: 'VendorRef', DisplayName: 'Vendor Ref', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Vendor Ref' },
+            { Name: 'TxnDate', DisplayName: 'Transaction Date', Type: 'datetime', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Transaction Date' },
+            { Name: 'TotalAmt', DisplayName: 'Total Amount', Type: 'number', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Total Amount' },
+            { Name: 'PayType', DisplayName: 'Payment Type', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Payment Type' },
+            { Name: 'MetaData', DisplayName: 'Metadata', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Metadata' },
+        ],
+    },
+    {
+        Name: 'TaxCode', DisplayName: 'Tax Code',
+        Description: 'A tax classification code in QuickBooks Online', SupportsWrite: false,
+        Fields: [
+            { Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' },
+            { Name: 'Name', DisplayName: 'Name', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Name' },
+            { Name: 'Description', DisplayName: 'Description', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Description' },
+            { Name: 'Active', DisplayName: 'Active', Type: 'boolean', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Active' },
+            { Name: 'MetaData', DisplayName: 'Metadata', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Metadata' },
+        ],
+    },
+    {
+        Name: 'TaxRate', DisplayName: 'Tax Rate',
+        Description: 'A tax rate in QuickBooks Online', SupportsWrite: false,
+        Fields: [
+            { Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' },
+            { Name: 'Name', DisplayName: 'Name', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Name' },
+            { Name: 'Description', DisplayName: 'Description', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Description' },
+            { Name: 'RateValue', DisplayName: 'Rate Value', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Rate Value' },
+            { Name: 'Active', DisplayName: 'Active', Type: 'boolean', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Active' },
+            { Name: 'MetaData', DisplayName: 'Metadata', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Metadata' },
+        ],
+    },
+    {
+        Name: 'TaxAgency', DisplayName: 'Tax Agency',
+        Description: 'A tax agency/authority in QuickBooks Online', SupportsWrite: false,
+        Fields: [
+            { Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' },
+            { Name: 'DisplayName', DisplayName: 'Display Name', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Display Name' },
+            { Name: 'MetaData', DisplayName: 'Metadata', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Metadata' },
+        ],
+    },
+    {
+        Name: 'Term', DisplayName: 'Term',
+        Description: 'Payment terms (e.g. Net 30) in QuickBooks Online', SupportsWrite: true,
+        Fields: [
+            { Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' },
+            { Name: 'Name', DisplayName: 'Name', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Name' },
+            { Name: 'DueDays', DisplayName: 'Due Days', Type: 'number', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Due Days' },
+            { Name: 'DiscountPercent', DisplayName: 'Discount Percent', Type: 'number', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Discount Percent' },
+            { Name: 'Active', DisplayName: 'Active', Type: 'boolean', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Active' },
+            { Name: 'MetaData', DisplayName: 'Metadata', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Metadata' },
+        ],
+    },
+    {
+        Name: 'PaymentMethod', DisplayName: 'Payment Method',
+        Description: 'A payment method type in QuickBooks Online', SupportsWrite: true,
+        Fields: [
+            { Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' },
+            { Name: 'Name', DisplayName: 'Name', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Name' },
+            { Name: 'Type', DisplayName: 'Type', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Type' },
+            { Name: 'Active', DisplayName: 'Active', Type: 'boolean', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Active' },
+            { Name: 'MetaData', DisplayName: 'Metadata', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Metadata' },
+        ],
+    },
+    {
+        Name: 'CompanyInfo', DisplayName: 'Company Info',
+        Description: 'Company metadata and settings in QuickBooks Online', SupportsWrite: false,
+        Fields: [
+            { Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' },
+            { Name: 'CompanyName', DisplayName: 'Company Name', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Company Name' },
+            { Name: 'LegalName', DisplayName: 'Legal Name', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Legal Name' },
+            { Name: 'CompanyAddr', DisplayName: 'Company Address', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Company Address' },
+            { Name: 'Country', DisplayName: 'Country', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Country' },
+            { Name: 'Email', DisplayName: 'Email', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Email' },
+            { Name: 'FiscalYearStartMonth', DisplayName: 'Fiscal Year Start', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Fiscal Year Start' },
+            { Name: 'MetaData', DisplayName: 'Metadata', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Metadata' },
+        ],
+    },
+    {
+        Name: 'Preferences', DisplayName: 'Preferences',
+        Description: 'Company preferences and settings in QuickBooks Online', SupportsWrite: false,
+        Fields: [
+            { Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' },
+            { Name: 'AccountingInfoPrefs', DisplayName: 'Accounting Prefs', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Accounting Prefs' },
+            { Name: 'SalesFormsPrefs', DisplayName: 'Sales Forms Prefs', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Sales Forms Prefs' },
+            { Name: 'MetaData', DisplayName: 'Metadata', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Metadata' },
+        ],
+    },
+    {
+        Name: 'ExchangeRate', DisplayName: 'Exchange Rate',
+        Description: 'A currency exchange rate in QuickBooks Online', SupportsWrite: false,
+        Fields: [
+            { Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' },
+            { Name: 'SourceCurrencyCode', DisplayName: 'Source Currency', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Source Currency' },
+            { Name: 'TargetCurrencyCode', DisplayName: 'Target Currency', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Target Currency' },
+            { Name: 'Rate', DisplayName: 'Rate', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Rate' },
+            { Name: 'AsOfDate', DisplayName: 'As Of Date', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'As Of Date' },
+            { Name: 'MetaData', DisplayName: 'Metadata', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Metadata' },
+        ],
+    },
+    {
+        Name: 'CompanyCurrency', DisplayName: 'Company Currency',
+        Description: 'An enabled currency in QuickBooks Online', SupportsWrite: false,
+        Fields: [
+            { Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' },
+            { Name: 'Code', DisplayName: 'Currency Code', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Currency Code' },
+            { Name: 'Name', DisplayName: 'Currency Name', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Currency Name' },
+            { Name: 'Active', DisplayName: 'Active', Type: 'boolean', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Active' },
+            { Name: 'MetaData', DisplayName: 'Metadata', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Metadata' },
+        ],
+    },
+    {
+        Name: 'Budget', DisplayName: 'Budget',
+        Description: 'A financial budget in QuickBooks Online', SupportsWrite: false,
+        Fields: [
+            { Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' },
+            { Name: 'Name', DisplayName: 'Name', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Name' },
+            { Name: 'StartDate', DisplayName: 'Start Date', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Start Date' },
+            { Name: 'EndDate', DisplayName: 'End Date', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'End Date' },
+            { Name: 'BudgetType', DisplayName: 'Budget Type', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Budget Type' },
+            { Name: 'Active', DisplayName: 'Active', Type: 'boolean', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Active' },
+            { Name: 'MetaData', DisplayName: 'Metadata', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Metadata' },
+        ],
+    },
+    {
+        Name: 'Attachable', DisplayName: 'Attachable',
+        Description: 'A file attachment in QuickBooks Online', SupportsWrite: true,
+        Fields: [
+            { Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' },
+            { Name: 'FileName', DisplayName: 'File Name', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'File Name' },
+            { Name: 'FileAccessUri', DisplayName: 'File Access URI', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'File Access URI' },
+            { Name: 'Size', DisplayName: 'File Size', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'File Size' },
+            { Name: 'ContentType', DisplayName: 'Content Type', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Content Type' },
+            { Name: 'Note', DisplayName: 'Note', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Note' },
+            { Name: 'MetaData', DisplayName: 'Metadata', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Metadata' },
+        ],
+    },
+    {
+        Name: 'TimeActivity', DisplayName: 'Time Activity',
+        Description: 'A time tracking entry in QuickBooks Online', SupportsWrite: true,
+        Fields: [
+            { Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' },
+            { Name: 'TxnDate', DisplayName: 'Date', Type: 'datetime', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Date' },
+            { Name: 'NameOf', DisplayName: 'Name Of', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Name Of' },
+            { Name: 'EmployeeRef', DisplayName: 'Employee Ref', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Employee Ref' },
+            { Name: 'VendorRef', DisplayName: 'Vendor Ref', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Vendor Ref' },
+            { Name: 'CustomerRef', DisplayName: 'Customer Ref', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Customer Ref' },
+            { Name: 'ItemRef', DisplayName: 'Item Ref', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Item Ref' },
+            { Name: 'Hours', DisplayName: 'Hours', Type: 'number', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Hours' },
+            { Name: 'Minutes', DisplayName: 'Minutes', Type: 'number', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Minutes' },
+            { Name: 'Description', DisplayName: 'Description', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Description' },
+            { Name: 'Billable', DisplayName: 'Billable', Type: 'boolean', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Billable' },
+            { Name: 'MetaData', DisplayName: 'Metadata', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Metadata' },
+        ],
+    },
+    {
+        Name: 'RecurringTransaction', DisplayName: 'Recurring Transaction',
+        Description: 'A recurring transaction template in QuickBooks Online', SupportsWrite: true,
+        Fields: [
+            { Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'QuickBooks internal ID' },
+            { Name: 'TxnDate', DisplayName: 'Transaction Date', Type: 'datetime', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Transaction date' },
+            { Name: 'TotalAmt', DisplayName: 'Total Amount', Type: 'decimal', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Total amount' },
+            { Name: 'Line', DisplayName: 'Line Items', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Line items array' },
+            { Name: 'RecurringInfo', DisplayName: 'Recurring Info', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Recurring schedule information' },
+        ],
+    },
+    {
+        Name: 'JournalCode', DisplayName: 'Journal Code',
+        Description: 'A journal code for categorizing journal entries in QuickBooks Online', SupportsWrite: true,
+        Fields: [
+            { Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'QuickBooks internal ID' },
+            { Name: 'Name', DisplayName: 'Name', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Journal code name' },
+            { Name: 'Type', DisplayName: 'Type', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Journal code type' },
+            { Name: 'Description', DisplayName: 'Description', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Description' },
+        ],
+    },
+    {
+        Name: 'TaxService', DisplayName: 'Tax Service',
+        Description: 'A tax service/tax code definition in QuickBooks Online', SupportsWrite: true,
+        Fields: [
+            { Name: 'TaxCode', DisplayName: 'Tax Code', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: true, Description: 'Tax code identifier' },
+            { Name: 'TaxCodeId', DisplayName: 'Tax Code ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'QuickBooks tax code ID' },
+        ],
+    },
+    {
+        Name: 'ReimburseCharge', DisplayName: 'Reimburse Charge',
+        Description: 'A reimbursable charge in QuickBooks Online', SupportsWrite: true,
+        Fields: [
+            { Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'QuickBooks internal ID' },
+            { Name: 'Amount', DisplayName: 'Amount', Type: 'decimal', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Charge amount' },
+            { Name: 'CustomerRef', DisplayName: 'Customer Ref', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Customer reference' },
+            { Name: 'TxnDate', DisplayName: 'Transaction Date', Type: 'datetime', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Transaction date' },
+        ],
+    },
 ];
 
 // ─── Connector Implementation ─────────────────────────────────────────
@@ -330,6 +665,40 @@ export class QuickBooksConnector extends BaseIntegrationConnector {
             CategoryDescription: 'QuickBooks Online accounting integration actions',
             ParentCategoryName: 'Business Apps',
         };
+    }
+
+
+    // ─── Schema Discovery (from static TS definitions) ───────────────
+
+    public override async DiscoverObjects(
+        _companyIntegration: MJCompanyIntegrationEntity,
+        _contextUser: UserInfo
+    ): Promise<ExternalObjectSchema[]> {
+        return QUICKBOOKS_OBJECTS.map(obj => ({
+            Name: obj.Name,
+            Label: obj.DisplayName,
+            Description: obj.Description,
+            SupportsIncrementalSync: true,
+            SupportsWrite: obj.SupportsWrite ?? false,
+        }));
+    }
+
+    public override async DiscoverFields(
+        _companyIntegration: MJCompanyIntegrationEntity,
+        objectName: string,
+        _contextUser: UserInfo
+    ): Promise<ExternalFieldSchema[]> {
+        const obj = QUICKBOOKS_OBJECTS.find(o => o.Name.toLowerCase() === objectName.toLowerCase());
+        if (!obj) return [];
+        return obj.Fields.map(f => ({
+            Name: f.Name,
+            Label: f.DisplayName,
+            Description: f.Description,
+            DataType: f.Type,
+            IsRequired: f.IsRequired,
+            IsUniqueKey: f.IsPrimaryKey,
+            IsReadOnly: f.IsReadOnly,
+        }));
     }
 
     // ── Default Configuration ────────────────────────────────────────
@@ -411,40 +780,6 @@ export class QuickBooksConnector extends BaseIntegrationConnector {
         }
     }
 
-    // ─── Discovery ───────────────────────────────────────────────────
-
-    public async DiscoverObjects(
-        _companyIntegration: MJCompanyIntegrationEntity,
-        _contextUser: UserInfo
-    ): Promise<ExternalObjectSchema[]> {
-        // QBO doesn't have a dynamic discovery API — return known objects
-        return QUICKBOOKS_OBJECTS.map(obj => ({
-            Name: obj.Name,
-            Label: obj.DisplayName,
-            Description: obj.Description,
-            SupportsIncrementalSync: true,
-            SupportsWrite: obj.SupportsWrite,
-        }));
-    }
-
-    public async DiscoverFields(
-        _companyIntegration: MJCompanyIntegrationEntity,
-        objectName: string,
-        _contextUser: UserInfo
-    ): Promise<ExternalFieldSchema[]> {
-        const obj = QUICKBOOKS_OBJECTS.find(o => o.Name === objectName);
-        if (!obj) throw new Error(`Unknown QuickBooks object: ${objectName}`);
-
-        return obj.Fields.map(f => ({
-            Name: f.Name,
-            Label: f.DisplayName,
-            Description: f.Description,
-            DataType: f.Type,
-            IsRequired: f.IsRequired,
-            IsUniqueKey: f.IsPrimaryKey,
-            IsReadOnly: f.IsReadOnly,
-        }));
-    }
 
     // ─── FetchChanges ────────────────────────────────────────────────
 

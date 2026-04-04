@@ -82,7 +82,7 @@ describe('QuickBooksConnector (unit)', () => {
     describe('GetIntegrationObjects', () => {
         it('should return all known QuickBooks objects', () => {
             const objects = connector.GetIntegrationObjects();
-            expect(objects.length).toBe(10);
+            expect(objects.length).toBe(33);
 
             const names = objects.map(o => o.Name);
             expect(names).toContain('Customer');
@@ -129,7 +129,7 @@ describe('QuickBooksConnector (unit)', () => {
             expect(config!.IconClass).toBe('fa-solid fa-book');
             expect(config!.IncludeSearch).toBe(true);
             expect(config!.IncludeList).toBe(true);
-            expect(config!.Objects.length).toBe(10);
+            expect(config!.Objects.length).toBe(33);
         });
     });
 
@@ -138,7 +138,7 @@ describe('QuickBooksConnector (unit)', () => {
             const mockCI = {} as Parameters<typeof connector.DiscoverObjects>[0];
             const mockUser = {} as Parameters<typeof connector.DiscoverObjects>[1];
             const objects = await connector.DiscoverObjects(mockCI, mockUser);
-            expect(objects.length).toBe(10);
+            expect(objects.length).toBe(33);
             expect(objects[0].Name).toBe('Customer');
             expect(objects[0].SupportsWrite).toBe(true);
         });
@@ -157,11 +157,11 @@ describe('QuickBooksConnector (unit)', () => {
             expect(idField!.IsReadOnly).toBe(true);
         });
 
-        it('should throw for unknown objects', async () => {
+        it('should return empty array for unknown objects', async () => {
             const mockCI = {} as Parameters<typeof connector.DiscoverFields>[0];
             const mockUser = {} as Parameters<typeof connector.DiscoverFields>[2];
-            await expect(connector.DiscoverFields(mockCI, 'BogusObject', mockUser))
-                .rejects.toThrow('Unknown QuickBooks object');
+            const fields = await connector.DiscoverFields(mockCI, 'BogusObject', mockUser);
+            expect(fields).toEqual([]);
         });
     });
 

@@ -22,6 +22,10 @@ import {
     type CRUDResult,
     type SearchContext,
     type SearchResult,
+    type IntegrationObjectInfo,
+    type ActionGeneratorConfig,
+    type ExternalObjectSchema,
+    type ExternalFieldSchema,
 } from '@memberjunction/integration-engine';
 
 // ─── Types ───────────────────────────────────────────────────────────
@@ -225,6 +229,263 @@ function generateWicketJWT(credentials: WicketCredentials): string {
  *
  * @see https://wicketapi.docs.apiary.io/
  */
+// ─── Wicket Object Definitions ───────────────────────────────────────
+const WICKET_OBJECTS: IntegrationObjectInfo[] = [
+    {
+        Name: 'people', DisplayName: 'People',
+        Description: 'People (members, contacts) with personal, professional, and membership information', SupportsWrite: true,
+        Fields: [
+            { Name: 'uuid', DisplayName: 'UUID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'UUID' },
+            { Name: 'given_name', DisplayName: 'Given Name', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Given Name' },
+            { Name: 'family_name', DisplayName: 'Family Name', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Family Name' },
+            { Name: 'additional_name', DisplayName: 'Additional Name', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Additional Name' },
+            { Name: 'alternate_name', DisplayName: 'Alternate Name', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Alternate Name' },
+            { Name: 'full_name', DisplayName: 'Full Name', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Full Name' },
+            { Name: 'identifying_number', DisplayName: 'Identifying Number', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Identifying Number' },
+            { Name: 'slug', DisplayName: 'Slug', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Slug' },
+            { Name: 'gender', DisplayName: 'Gender', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Gender' },
+            { Name: 'birth_date', DisplayName: 'Birth Date', Type: 'datetime', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Birth Date' },
+            { Name: 'language', DisplayName: 'Language', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Language' },
+            { Name: 'preferred_pronoun', DisplayName: 'Preferred Pronoun', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Preferred Pronoun' },
+            { Name: 'job_title', DisplayName: 'Job Title', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Job Title' },
+            { Name: 'honorific_prefix', DisplayName: 'Honorific Prefix', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Honorific Prefix' },
+            { Name: 'honorific_suffix', DisplayName: 'Honorific Suffix', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Honorific Suffix' },
+            { Name: 'languages_spoken', DisplayName: 'Languages Spoken', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Languages Spoken' },
+            { Name: 'languages_written', DisplayName: 'Languages Written', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Languages Written' },
+            { Name: 'membership_number', DisplayName: 'Membership Number', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Membership Number' },
+            { Name: 'membership_began_on', DisplayName: 'Membership Began On', Type: 'datetime', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Membership Began On' },
+            { Name: 'data_fields', DisplayName: 'Custom Data Fields', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Custom Data Fields' },
+            { Name: 'created_at', DisplayName: 'Created At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Created At' },
+            { Name: 'updated_at', DisplayName: 'Updated At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Updated At' },
+        ],
+    },
+    {
+        Name: 'organizations', DisplayName: 'Organizations',
+        Description: 'Organizations including companies, chapters, and associations', SupportsWrite: true,
+        Fields: [
+            { Name: 'uuid', DisplayName: 'UUID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'UUID' },
+            { Name: 'type', DisplayName: 'Organization Type', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Organization Type' },
+            { Name: 'legal_name', DisplayName: 'Legal Name', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Legal Name' },
+            { Name: 'alternate_name', DisplayName: 'Alternate Name', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Alternate Name' },
+            { Name: 'description', DisplayName: 'Description', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Description' },
+            { Name: 'identifying_number', DisplayName: 'Identifying Number', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Identifying Number' },
+            { Name: 'data_fields', DisplayName: 'Custom Data Fields', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Custom Data Fields' },
+            { Name: 'created_at', DisplayName: 'Created At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Created At' },
+            { Name: 'updated_at', DisplayName: 'Updated At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Updated At' },
+        ],
+    },
+    {
+        Name: 'connections', DisplayName: 'Connections',
+        Description: 'Relationships between people and organizations or person-to-person connections', SupportsWrite: true,
+        Fields: [
+            { Name: 'uuid', DisplayName: 'UUID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'UUID' },
+            { Name: 'type', DisplayName: 'Connection Type', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Connection Type' },
+            { Name: 'person_id', DisplayName: 'Person ID', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Person ID' },
+            { Name: 'organization_id', DisplayName: 'Organization ID', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Organization ID' },
+            { Name: 'created_at', DisplayName: 'Created At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Created At' },
+            { Name: 'updated_at', DisplayName: 'Updated At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Updated At' },
+        ],
+    },
+    {
+        Name: 'groups', DisplayName: 'Groups',
+        Description: 'Groups for organizing people into collections', SupportsWrite: true,
+        Fields: [
+            { Name: 'uuid', DisplayName: 'UUID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'UUID' },
+            { Name: 'name', DisplayName: 'Name', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Name' },
+            { Name: 'slug', DisplayName: 'Slug', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Slug' },
+            { Name: 'description', DisplayName: 'Description', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Description' },
+            { Name: 'created_at', DisplayName: 'Created At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Created At' },
+            { Name: 'updated_at', DisplayName: 'Updated At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Updated At' },
+        ],
+    },
+    {
+        Name: 'group_members', DisplayName: 'Group Members',
+        Description: 'Membership records linking people to groups', SupportsWrite: true,
+        Fields: [
+            { Name: 'uuid', DisplayName: 'UUID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'UUID' },
+            { Name: 'group_id', DisplayName: 'Group ID', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Group ID' },
+            { Name: 'person_id', DisplayName: 'Person ID', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Person ID' },
+            { Name: 'created_at', DisplayName: 'Created At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Created At' },
+            { Name: 'updated_at', DisplayName: 'Updated At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Updated At' },
+        ],
+    },
+    {
+        Name: 'memberships', DisplayName: 'Membership Tiers',
+        Description: 'Membership tier definitions (e.g., Gold, Silver, Basic)', SupportsWrite: true,
+        Fields: [
+            { Name: 'uuid', DisplayName: 'UUID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'UUID' },
+            { Name: 'name', DisplayName: 'Name', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Name' },
+            { Name: 'slug', DisplayName: 'Slug', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Slug' },
+            { Name: 'description', DisplayName: 'Description', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Description' },
+            { Name: 'created_at', DisplayName: 'Created At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Created At' },
+            { Name: 'updated_at', DisplayName: 'Updated At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Updated At' },
+        ],
+    },
+    {
+        Name: 'person_memberships', DisplayName: 'Person Memberships',
+        Description: 'Individual person membership records with start/end dates and tier assignments', SupportsWrite: true,
+        Fields: [
+            { Name: 'uuid', DisplayName: 'UUID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'UUID' },
+            { Name: 'starts_at', DisplayName: 'Starts At', Type: 'datetime', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Starts At' },
+            { Name: 'ends_at', DisplayName: 'Ends At', Type: 'datetime', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Ends At' },
+            { Name: 'person_id', DisplayName: 'Person ID', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Person ID' },
+            { Name: 'membership_id', DisplayName: 'Membership Tier ID', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Membership Tier ID' },
+            { Name: 'organization_membership_id', DisplayName: 'Organization Membership ID', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Organization Membership ID' },
+            { Name: 'created_at', DisplayName: 'Created At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Created At' },
+            { Name: 'updated_at', DisplayName: 'Updated At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Updated At' },
+        ],
+    },
+    {
+        Name: 'organization_memberships', DisplayName: 'Organization Memberships',
+        Description: 'Organizational membership records with start/end dates, tier assignments, and max seat allocations', SupportsWrite: true,
+        Fields: [
+            { Name: 'uuid', DisplayName: 'UUID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'UUID' },
+            { Name: 'starts_at', DisplayName: 'Starts At', Type: 'datetime', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Starts At' },
+            { Name: 'ends_at', DisplayName: 'Ends At', Type: 'datetime', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Ends At' },
+            { Name: 'max_assignments', DisplayName: 'Max Seat Assignments', Type: 'number', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Max Seat Assignments' },
+            { Name: 'organization_id', DisplayName: 'Organization ID', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Organization ID' },
+            { Name: 'membership_id', DisplayName: 'Membership Tier ID', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Membership Tier ID' },
+            { Name: 'created_at', DisplayName: 'Created At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Created At' },
+            { Name: 'updated_at', DisplayName: 'Updated At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Updated At' },
+        ],
+    },
+    {
+        Name: 'touchpoints', DisplayName: 'Touchpoints',
+        Description: 'Immutable interaction audit trail records (no update/delete supported)', SupportsWrite: false,
+        Fields: [
+            { Name: 'uuid', DisplayName: 'UUID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'UUID' },
+            { Name: 'action', DisplayName: 'Action', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: false, Description: 'Action' },
+            { Name: 'person_id', DisplayName: 'Person ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: false, Description: 'Person ID' },
+            { Name: 'data', DisplayName: 'Data Payload', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Data Payload' },
+            { Name: 'created_at', DisplayName: 'Created At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Created At' },
+        ],
+    },
+    {
+        Name: 'people_emails', DisplayName: 'People Emails',
+        Description: 'Email addresses associated with people', SupportsWrite: true,
+        Fields: [
+            { Name: 'uuid', DisplayName: 'UUID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'UUID' },
+            { Name: 'address', DisplayName: 'Email Address', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Email Address' },
+            { Name: 'type', DisplayName: 'Email Type', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Email Type' },
+            { Name: 'primary', DisplayName: 'Is Primary', Type: 'boolean', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Is Primary' },
+            { Name: 'person_id', DisplayName: 'Person ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: false, Description: 'Person ID' },
+            { Name: 'created_at', DisplayName: 'Created At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Created At' },
+            { Name: 'updated_at', DisplayName: 'Updated At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Updated At' },
+        ],
+    },
+    {
+        Name: 'people_phones', DisplayName: 'People Phones',
+        Description: 'Phone numbers associated with people', SupportsWrite: true,
+        Fields: [
+            { Name: 'uuid', DisplayName: 'UUID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'UUID' },
+            { Name: 'number', DisplayName: 'Phone Number', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Phone Number' },
+            { Name: 'type', DisplayName: 'Phone Type', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Phone Type' },
+            { Name: 'extension', DisplayName: 'Extension', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Extension' },
+            { Name: 'primary', DisplayName: 'Is Primary', Type: 'boolean', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Is Primary' },
+            { Name: 'person_id', DisplayName: 'Person ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: false, Description: 'Person ID' },
+            { Name: 'created_at', DisplayName: 'Created At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Created At' },
+            { Name: 'updated_at', DisplayName: 'Updated At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Updated At' },
+        ],
+    },
+    {
+        Name: 'people_addresses', DisplayName: 'People Addresses',
+        Description: 'Physical addresses associated with people', SupportsWrite: true,
+        Fields: [
+            { Name: 'uuid', DisplayName: 'UUID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'UUID' },
+            { Name: 'address1', DisplayName: 'Address Line 1', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Address Line 1' },
+            { Name: 'address2', DisplayName: 'Address Line 2', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Address Line 2' },
+            { Name: 'city', DisplayName: 'City', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'City' },
+            { Name: 'state_province', DisplayName: 'State/Province', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'State/Province' },
+            { Name: 'zip_code', DisplayName: 'ZIP/Postal Code', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'ZIP/Postal Code' },
+            { Name: 'country_code', DisplayName: 'Country Code', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Country Code' },
+            { Name: 'type', DisplayName: 'Address Type', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Address Type' },
+            { Name: 'primary', DisplayName: 'Is Primary', Type: 'boolean', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Is Primary' },
+            { Name: 'person_id', DisplayName: 'Person ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: false, Description: 'Person ID' },
+            { Name: 'created_at', DisplayName: 'Created At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Created At' },
+            { Name: 'updated_at', DisplayName: 'Updated At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Updated At' },
+        ],
+    },
+    {
+        Name: 'org_emails', DisplayName: 'Organization Emails',
+        Description: 'Email addresses associated with organizations', SupportsWrite: true,
+        Fields: [
+            { Name: 'uuid', DisplayName: 'UUID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'UUID' },
+            { Name: 'address', DisplayName: 'Email Address', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Email Address' },
+            { Name: 'type', DisplayName: 'Email Type', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Email Type' },
+            { Name: 'primary', DisplayName: 'Is Primary', Type: 'boolean', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Is Primary' },
+            { Name: 'organization_id', DisplayName: 'Organization ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: false, Description: 'Organization ID' },
+            { Name: 'created_at', DisplayName: 'Created At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Created At' },
+            { Name: 'updated_at', DisplayName: 'Updated At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Updated At' },
+        ],
+    },
+    {
+        Name: 'org_phones', DisplayName: 'Organization Phones',
+        Description: 'Phone numbers associated with organizations', SupportsWrite: true,
+        Fields: [
+            { Name: 'uuid', DisplayName: 'UUID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'UUID' },
+            { Name: 'number', DisplayName: 'Phone Number', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Phone Number' },
+            { Name: 'type', DisplayName: 'Phone Type', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Phone Type' },
+            { Name: 'extension', DisplayName: 'Extension', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Extension' },
+            { Name: 'primary', DisplayName: 'Is Primary', Type: 'boolean', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Is Primary' },
+            { Name: 'organization_id', DisplayName: 'Organization ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: false, Description: 'Organization ID' },
+            { Name: 'created_at', DisplayName: 'Created At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Created At' },
+            { Name: 'updated_at', DisplayName: 'Updated At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Updated At' },
+        ],
+    },
+    {
+        Name: 'org_addresses', DisplayName: 'Organization Addresses',
+        Description: 'Physical addresses associated with organizations', SupportsWrite: true,
+        Fields: [
+            { Name: 'uuid', DisplayName: 'UUID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'UUID' },
+            { Name: 'address1', DisplayName: 'Address Line 1', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Address Line 1' },
+            { Name: 'address2', DisplayName: 'Address Line 2', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Address Line 2' },
+            { Name: 'city', DisplayName: 'City', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'City' },
+            { Name: 'state_province', DisplayName: 'State/Province', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'State/Province' },
+            { Name: 'zip_code', DisplayName: 'ZIP/Postal Code', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'ZIP/Postal Code' },
+            { Name: 'country_code', DisplayName: 'Country Code', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Country Code' },
+            { Name: 'type', DisplayName: 'Address Type', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Address Type' },
+            { Name: 'primary', DisplayName: 'Is Primary', Type: 'boolean', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Is Primary' },
+            { Name: 'organization_id', DisplayName: 'Organization ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: false, Description: 'Organization ID' },
+            { Name: 'created_at', DisplayName: 'Created At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Created At' },
+            { Name: 'updated_at', DisplayName: 'Updated At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Updated At' },
+        ],
+    },
+    {
+        Name: 'roles', DisplayName: 'Roles',
+        Description: 'System and organization-scoped roles for access control', SupportsWrite: true,
+        Fields: [
+            { Name: 'uuid', DisplayName: 'UUID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'UUID' },
+            { Name: 'name', DisplayName: 'Name', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Name' },
+            { Name: 'slug', DisplayName: 'Slug', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Slug' },
+            { Name: 'description', DisplayName: 'Description', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Description' },
+            { Name: 'created_at', DisplayName: 'Created At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Created At' },
+            { Name: 'updated_at', DisplayName: 'Updated At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Updated At' },
+        ],
+    },
+    {
+        Name: 'user_identities', DisplayName: 'User Identities',
+        Description: 'SSO and identity provider records linked to people (OAuth, SAML, OpenID)', SupportsWrite: true,
+        Fields: [
+            { Name: 'uuid', DisplayName: 'UUID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'UUID' },
+            { Name: 'provider', DisplayName: 'Identity Provider', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Identity Provider' },
+            { Name: 'uid', DisplayName: 'External User ID', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'External User ID' },
+            { Name: 'person_id', DisplayName: 'Person ID', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Person ID' },
+            { Name: 'created_at', DisplayName: 'Created At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Created At' },
+            { Name: 'updated_at', DisplayName: 'Updated At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Updated At' },
+        ],
+    },
+    {
+        Name: 'resource_tags', DisplayName: 'Resource Tags',
+        Description: 'Tags for categorizing and organizing resources', SupportsWrite: false,
+        Fields: [
+            { Name: 'uuid', DisplayName: 'UUID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'UUID' },
+            { Name: 'name', DisplayName: 'Name', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: false, Description: 'Name' },
+            { Name: 'slug', DisplayName: 'Slug', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Slug' },
+            { Name: 'resource_type', DisplayName: 'Resource Type', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Resource Type' },
+        ],
+    },
+];
+
 @RegisterClass(BaseIntegrationConnector, 'WicketConnector')
 export class WicketConnector extends BaseRESTIntegrationConnector {
 
@@ -243,6 +504,50 @@ export class WicketConnector extends BaseRESTIntegrationConnector {
     public override get SupportsUpdate(): boolean { return true; }
     public override get SupportsDelete(): boolean { return true; }
     public override get SupportsSearch(): boolean { return true; }
+
+    public override get IntegrationName(): string { return 'Wicket'; }
+
+    public override GetIntegrationObjects(): IntegrationObjectInfo[] {
+        return WICKET_OBJECTS;
+    }
+
+    public override GetActionGeneratorConfig(): ActionGeneratorConfig | null {
+        const config = super.GetActionGeneratorConfig();
+        if (!config) return null;
+        config.IconClass = 'fa-solid fa-ticket';
+        return config;
+    }
+
+    public override async DiscoverObjects(
+        _companyIntegration: MJCompanyIntegrationEntity,
+        _contextUser: UserInfo
+    ): Promise<ExternalObjectSchema[]> {
+        return WICKET_OBJECTS.map(obj => ({
+            Name: obj.Name,
+            Label: obj.DisplayName,
+            Description: obj.Description,
+            SupportsIncrementalSync: true,
+            SupportsWrite: obj.SupportsWrite ?? false,
+        }));
+    }
+
+    public override async DiscoverFields(
+        _companyIntegration: MJCompanyIntegrationEntity,
+        objectName: string,
+        _contextUser: UserInfo
+    ): Promise<ExternalFieldSchema[]> {
+        const obj = WICKET_OBJECTS.find(o => o.Name.toLowerCase() === objectName.toLowerCase());
+        if (!obj) return [];
+        return obj.Fields.map(f => ({
+            Name: f.Name,
+            Label: f.DisplayName,
+            Description: f.Description,
+            DataType: f.Type,
+            IsRequired: f.IsRequired,
+            IsUniqueKey: f.IsPrimaryKey,
+            IsReadOnly: f.IsReadOnly,
+        }));
+    }
 
     // ─── BaseRESTIntegrationConnector abstract implementations ───────
 

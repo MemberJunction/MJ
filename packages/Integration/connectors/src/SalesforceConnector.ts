@@ -265,6 +265,246 @@ const SALESFORCE_OBJECTS: IntegrationObjectInfo[] = [
             { Name: 'Id', DisplayName: 'User ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Salesforce user ID' },
         ],
     },
+
+    // ── Commerce Objects ─────────────────────────────────────────────────
+    {
+        Name: 'OpportunityLineItem', DisplayName: 'Opportunity Line Item',
+        Description: 'A line item on a Salesforce opportunity', SupportsWrite: true,
+        Fields: [
+            { Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Record ID' },
+            { Name: 'OpportunityId', DisplayName: 'Opportunity ID', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Parent opportunity ID' },
+            { Name: 'PricebookEntryId', DisplayName: 'Pricebook Entry ID', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Pricebook entry reference' },
+            { Name: 'Name', DisplayName: 'Name', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Line item name' },
+            { Name: 'Quantity', DisplayName: 'Quantity', Type: 'number', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Quantity' },
+            { Name: 'UnitPrice', DisplayName: 'Unit Price', Type: 'number', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Unit price' },
+            { Name: 'TotalPrice', DisplayName: 'Total Price', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Total price' },
+            { Name: 'Description', DisplayName: 'Description', Type: 'text', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Description' },
+        ],
+    },
+    {
+        Name: 'Product2', DisplayName: 'Product',
+        Description: 'A product in the Salesforce product catalog', SupportsWrite: true,
+        Fields: [
+            { Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Record ID' },
+            { Name: 'Name', DisplayName: 'Name', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Product name' },
+            { Name: 'ProductCode', DisplayName: 'Product Code', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Product code/SKU' },
+            { Name: 'Description', DisplayName: 'Description', Type: 'text', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Product description' },
+            { Name: 'IsActive', DisplayName: 'Active', Type: 'boolean', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Whether the product is active' },
+            { Name: 'Family', DisplayName: 'Product Family', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Product family/category' },
+        ],
+    },
+    {
+        Name: 'Pricebook2', DisplayName: 'Price Book',
+        Description: 'A Salesforce price book', SupportsWrite: true,
+        Fields: [
+            { Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Record ID' },
+            { Name: 'Name', DisplayName: 'Name', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Price book name' },
+            { Name: 'Description', DisplayName: 'Description', Type: 'text', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Description' },
+            { Name: 'IsActive', DisplayName: 'Active', Type: 'boolean', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Whether active' },
+            { Name: 'IsStandard', DisplayName: 'Standard', Type: 'boolean', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Whether this is the standard price book' },
+        ],
+    },
+    {
+        Name: 'PricebookEntry', DisplayName: 'Price Book Entry',
+        Description: 'A product entry in a Salesforce price book', SupportsWrite: true,
+        Fields: [
+            { Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Record ID' },
+            { Name: 'Pricebook2Id', DisplayName: 'Price Book ID', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Parent price book' },
+            { Name: 'Product2Id', DisplayName: 'Product ID', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Product reference' },
+            { Name: 'UnitPrice', DisplayName: 'Unit Price', Type: 'number', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'List price' },
+            { Name: 'IsActive', DisplayName: 'Active', Type: 'boolean', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Whether active' },
+        ],
+    },
+    {
+        Name: 'Quote', DisplayName: 'Quote',
+        Description: 'A sales quote in Salesforce', SupportsWrite: true,
+        Fields: [
+            { Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Record ID' },
+            { Name: 'Name', DisplayName: 'Name', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Quote name' },
+            { Name: 'OpportunityId', DisplayName: 'Opportunity ID', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Parent opportunity' },
+            { Name: 'Status', DisplayName: 'Status', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Quote status' },
+            { Name: 'ExpirationDate', DisplayName: 'Expiration Date', Type: 'datetime', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Expiration date' },
+            { Name: 'TotalPrice', DisplayName: 'Total Price', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Total price' },
+            { Name: 'Description', DisplayName: 'Description', Type: 'text', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Description' },
+        ],
+    },
+    {
+        Name: 'QuoteLineItem', DisplayName: 'Quote Line Item',
+        Description: 'A line item on a Salesforce quote', SupportsWrite: true,
+        Fields: [
+            { Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Record ID' },
+            { Name: 'QuoteId', DisplayName: 'Quote ID', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Parent quote' },
+            { Name: 'PricebookEntryId', DisplayName: 'Pricebook Entry ID', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Pricebook entry' },
+            { Name: 'Quantity', DisplayName: 'Quantity', Type: 'number', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Quantity' },
+            { Name: 'UnitPrice', DisplayName: 'Unit Price', Type: 'number', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Unit price' },
+            { Name: 'TotalPrice', DisplayName: 'Total Price', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Total price' },
+        ],
+    },
+    {
+        Name: 'Order', DisplayName: 'Order',
+        Description: 'A Salesforce order', SupportsWrite: true,
+        Fields: [
+            { Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Record ID' },
+            { Name: 'AccountId', DisplayName: 'Account ID', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Account reference' },
+            { Name: 'OpportunityId', DisplayName: 'Opportunity ID', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Opportunity reference' },
+            { Name: 'Status', DisplayName: 'Status', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Order status' },
+            { Name: 'EffectiveDate', DisplayName: 'Effective Date', Type: 'datetime', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Effective date' },
+            { Name: 'TotalAmount', DisplayName: 'Total Amount', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Total amount' },
+            { Name: 'OrderNumber', DisplayName: 'Order Number', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Order number' },
+        ],
+    },
+    {
+        Name: 'OrderItem', DisplayName: 'Order Item',
+        Description: 'A line item on a Salesforce order', SupportsWrite: true,
+        Fields: [
+            { Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Record ID' },
+            { Name: 'OrderId', DisplayName: 'Order ID', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Parent order' },
+            { Name: 'PricebookEntryId', DisplayName: 'Pricebook Entry ID', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Pricebook entry' },
+            { Name: 'Quantity', DisplayName: 'Quantity', Type: 'number', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Quantity' },
+            { Name: 'UnitPrice', DisplayName: 'Unit Price', Type: 'number', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Unit price' },
+            { Name: 'TotalPrice', DisplayName: 'Total Price', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Total price' },
+        ],
+    },
+
+    // ── Service & Support Objects ─────────────────────────────────────────
+    {
+        Name: 'Contract', DisplayName: 'Contract',
+        Description: 'A Salesforce service contract', SupportsWrite: true,
+        Fields: [
+            { Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Record ID' },
+            { Name: 'AccountId', DisplayName: 'Account ID', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Account reference' },
+            { Name: 'Status', DisplayName: 'Status', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Contract status' },
+            { Name: 'StartDate', DisplayName: 'Start Date', Type: 'datetime', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Start date' },
+            { Name: 'EndDate', DisplayName: 'End Date', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'End date' },
+            { Name: 'ContractTerm', DisplayName: 'Contract Term', Type: 'number', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Term in months' },
+            { Name: 'ContractNumber', DisplayName: 'Contract Number', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Contract number' },
+        ],
+    },
+    {
+        Name: 'Asset', DisplayName: 'Asset',
+        Description: 'A customer asset in Salesforce', SupportsWrite: true,
+        Fields: [
+            { Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Record ID' },
+            { Name: 'Name', DisplayName: 'Name', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Asset name' },
+            { Name: 'AccountId', DisplayName: 'Account ID', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Account reference' },
+            { Name: 'ContactId', DisplayName: 'Contact ID', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Contact reference' },
+            { Name: 'Product2Id', DisplayName: 'Product ID', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Product reference' },
+            { Name: 'SerialNumber', DisplayName: 'Serial Number', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Serial number' },
+            { Name: 'Status', DisplayName: 'Status', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Asset status' },
+            { Name: 'InstallDate', DisplayName: 'Install Date', Type: 'datetime', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Install date' },
+        ],
+    },
+    {
+        Name: 'Entitlement', DisplayName: 'Entitlement',
+        Description: 'A support entitlement in Salesforce', SupportsWrite: true,
+        Fields: [
+            { Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Record ID' },
+            { Name: 'Name', DisplayName: 'Name', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Entitlement name' },
+            { Name: 'AccountId', DisplayName: 'Account ID', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Account reference' },
+            { Name: 'AssetId', DisplayName: 'Asset ID', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Asset reference' },
+            { Name: 'Type', DisplayName: 'Type', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Entitlement type' },
+            { Name: 'StartDate', DisplayName: 'Start Date', Type: 'datetime', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Start date' },
+            { Name: 'EndDate', DisplayName: 'End Date', Type: 'datetime', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'End date' },
+            { Name: 'Status', DisplayName: 'Status', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Status' },
+        ],
+    },
+    {
+        Name: 'ServiceContract', DisplayName: 'Service Contract',
+        Description: 'A service contract in Salesforce', SupportsWrite: true,
+        Fields: [
+            { Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Record ID' },
+            { Name: 'Name', DisplayName: 'Name', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Contract name' },
+            { Name: 'AccountId', DisplayName: 'Account ID', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Account reference' },
+            { Name: 'StartDate', DisplayName: 'Start Date', Type: 'datetime', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Start date' },
+            { Name: 'EndDate', DisplayName: 'End Date', Type: 'datetime', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'End date' },
+            { Name: 'Status', DisplayName: 'Status', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Status' },
+            { Name: 'Term', DisplayName: 'Term', Type: 'number', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Term in months' },
+        ],
+    },
+
+    // ── Relationship & Content Objects ────────────────────────────────────
+    {
+        Name: 'CampaignMember', DisplayName: 'Campaign Member',
+        Description: 'A contact or lead associated with a campaign', SupportsWrite: true,
+        Fields: [
+            { Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Record ID' },
+            { Name: 'CampaignId', DisplayName: 'Campaign ID', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Campaign reference' },
+            { Name: 'ContactId', DisplayName: 'Contact ID', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Contact reference' },
+            { Name: 'LeadId', DisplayName: 'Lead ID', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Lead reference' },
+            { Name: 'Status', DisplayName: 'Status', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Member status' },
+        ],
+    },
+    {
+        Name: 'Note', DisplayName: 'Note',
+        Description: 'A note attached to a Salesforce record', SupportsWrite: true,
+        Fields: [
+            { Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Record ID' },
+            { Name: 'Title', DisplayName: 'Title', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Note title' },
+            { Name: 'Body', DisplayName: 'Body', Type: 'text', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Note body' },
+            { Name: 'ParentId', DisplayName: 'Parent ID', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Parent record ID' },
+            { Name: 'IsPrivate', DisplayName: 'Private', Type: 'boolean', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Whether the note is private' },
+        ],
+    },
+    {
+        Name: 'ContentDocument', DisplayName: 'Content Document',
+        Description: 'A file/document in Salesforce CRM Content', SupportsWrite: false,
+        IncludeInActionGeneration: false,
+        Fields: [
+            { Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Record ID' },
+            { Name: 'Title', DisplayName: 'Title', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Document title' },
+            { Name: 'FileType', DisplayName: 'File Type', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'File type extension' },
+            { Name: 'ContentSize', DisplayName: 'Content Size', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'File size in bytes' },
+            { Name: 'CreatedDate', DisplayName: 'Created Date', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'When created' },
+            { Name: 'LastModifiedDate', DisplayName: 'Last Modified Date', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'When last modified' },
+        ],
+    },
+    {
+        Name: 'ContentVersion', DisplayName: 'Content Version',
+        Description: 'A version of a file in Salesforce CRM Content', SupportsWrite: true,
+        Fields: [
+            { Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Record ID' },
+            { Name: 'ContentDocumentId', DisplayName: 'Content Document ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Parent document' },
+            { Name: 'Title', DisplayName: 'Title', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Version title' },
+            { Name: 'PathOnClient', DisplayName: 'File Name', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Original file name' },
+        ],
+    },
+
+    // ── Admin/Reference Objects (read-only) ──────────────────────────────
+    {
+        Name: 'UserRole', DisplayName: 'User Role',
+        Description: 'A role in the Salesforce role hierarchy', SupportsWrite: false,
+        IncludeInActionGeneration: false,
+        Fields: [
+            { Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Record ID' },
+            { Name: 'Name', DisplayName: 'Name', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Role name' },
+            { Name: 'ParentRoleId', DisplayName: 'Parent Role ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Parent role in hierarchy' },
+            { Name: 'DeveloperName', DisplayName: 'Developer Name', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'API name' },
+        ],
+    },
+    {
+        Name: 'Profile', DisplayName: 'Profile',
+        Description: 'A Salesforce user profile', SupportsWrite: false,
+        IncludeInActionGeneration: false,
+        Fields: [
+            { Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Record ID' },
+            { Name: 'Name', DisplayName: 'Name', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Profile name' },
+            { Name: 'UserType', DisplayName: 'User Type', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'User license type' },
+            { Name: 'Description', DisplayName: 'Description', Type: 'text', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Profile description' },
+        ],
+    },
+    {
+        Name: 'RecordType', DisplayName: 'Record Type',
+        Description: 'A record type definition in Salesforce', SupportsWrite: false,
+        IncludeInActionGeneration: false,
+        Fields: [
+            { Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Record ID' },
+            { Name: 'Name', DisplayName: 'Name', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Record type name' },
+            { Name: 'SobjectType', DisplayName: 'Object Type', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Object this type belongs to' },
+            { Name: 'DeveloperName', DisplayName: 'Developer Name', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'API name' },
+            { Name: 'IsActive', DisplayName: 'Active', Type: 'boolean', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Whether active' },
+            { Name: 'Description', DisplayName: 'Description', Type: 'text', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Description' },
+        ],
+    },
 ];
 
 // ─── SalesforceConnector ──────────────────────────────────────────────

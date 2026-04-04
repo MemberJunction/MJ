@@ -2884,6 +2884,10 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             const user = this.getAuthenticatedUser(ctx);
             const validatedPlatform = this.validatePlatform(platform);
 
+            // Force-refresh integration metadata cache so IntrospectSchema
+            // picks up any IntegrationObject/Field changes made via mj sync push
+            await IntegrationEngine.Instance.Config(true, user);
+
             // Phase 1: Build schema for each connector in parallel
             const buildResults = await Promise.allSettled(
                 input.Connectors.map(async (connInput) => {

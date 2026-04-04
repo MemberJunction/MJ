@@ -25,6 +25,10 @@ import {
     type ListResult,
     type IntegrationObjectInfo,
     type ActionGeneratorConfig,
+    type ExternalObjectSchema,
+    type ExternalFieldSchema,
+    type SourceSchemaInfo,
+    type SourceFieldInfo,
 } from '@memberjunction/integration-engine';
 
 // ─── Types ────────────────────────────────────────────────────────────
@@ -68,6 +72,7 @@ interface HubSpotPropertyDef {
     hasUniqueValue: boolean;
     calculated: boolean;
     externalOptions: boolean;
+    hidden?: boolean;
     modificationMetadata?: {
         readOnlyValue: boolean;
     };
@@ -430,6 +435,338 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
         config.IconClass = 'fa-brands fa-hubspot';
         config.CreateCategory = false; // HubSpot category already exists in metadata/action-categories
         return config;
+    }
+
+    // ─── Live API Discovery ─────────────────────────────────────────────
+
+    /** Known standard HubSpot CRM object type IDs → API names. */
+    /**
+     * All standard CRM object type IDs → names.
+     * Fields discovered live via /crm/v3/properties/{objectType}.
+     * All support: GET, POST, PATCH, DELETE, search (incremental via hs_lastmodifieddate).
+     */
+    private static readonly STANDARD_OBJECTS: Record<string, string> = {
+        '0-1': 'contacts', '0-2': 'companies', '0-3': 'deals', '0-5': 'tickets',
+        '0-7': 'products', '0-8': 'line_items', '0-14': 'quotes', '0-11': 'calls',
+        '0-18': 'communications', '0-19': 'emails', '0-20': 'meetings', '0-46': 'notes',
+        '0-27': 'tasks', '0-116': 'postal_mail', '0-17': 'feedback_submissions',
+        '0-48': 'goals', '0-52': 'fees', '0-53': 'taxes', '0-54': 'discounts',
+        '0-69': 'leads', '0-101': 'commerce_payments', '0-111': 'invoices',
+        '0-112': 'orders', '0-115': 'subscriptions', '0-142': 'marketing_events',
+        '0-162': 'appointments', '0-410': 'courses', '0-420': 'listings',
+        '0-421': 'services', '0-136': 'carts',
+        '0-150': 'transcriptions', '0-155': 'contracts', '0-72': 'deal_splits',
+    };
+
+    /**
+     * Non-CRM API endpoints that don't follow the /crm/v3/objects pattern.
+     * Fields cannot be discovered via /crm/v3/properties — discovered dynamically
+     * by fetching one record and inferring fields from the response.
+     */
+    private static readonly NON_CRM_OBJECTS: Array<{
+        name: string; label: string; description: string;
+        apiPath: string; write: boolean; incremental: boolean;
+        pkField: string; incrementalParam?: string;
+    }> = [
+        // CRM Support
+        { name: 'owners', label: 'Owners', description: 'HubSpot users who own records', apiPath: '/crm/v3/owners', write: false, incremental: true, pkField: 'id', incrementalParam: 'after' },
+        { name: 'pipelines', label: 'Pipelines', description: 'Deal and ticket pipeline definitions', apiPath: '/crm/v3/pipelines/deals', write: true, incremental: false, pkField: 'id' },
+        { name: 'lists', label: 'Lists', description: 'Contact and company lists', apiPath: '/crm/v3/lists', write: true, incremental: true, pkField: 'listId' },
+
+        // Marketing
+        { name: 'marketing_emails', label: 'Marketing Emails', description: 'Marketing email campaigns', apiPath: '/marketing/v3/emails', write: true, incremental: true, pkField: 'id' },
+        { name: 'campaigns', label: 'Campaigns', description: 'Marketing campaign tracking', apiPath: '/marketing/v3/campaigns', write: false, incremental: true, pkField: 'id' },
+        { name: 'forms', label: 'Forms', description: 'HubSpot forms for lead capture', apiPath: '/marketing/v3/forms', write: true, incremental: true, pkField: 'id' },
+
+        // CMS
+        { name: 'site_pages', label: 'Site Pages', description: 'CMS website pages', apiPath: '/cms/v3/pages/site-pages', write: true, incremental: true, pkField: 'id' },
+        { name: 'landing_pages', label: 'Landing Pages', description: 'CMS landing pages', apiPath: '/cms/v3/pages/landing-pages', write: true, incremental: true, pkField: 'id' },
+        { name: 'blog_posts', label: 'Blog Posts', description: 'CMS blog posts', apiPath: '/cms/v3/blogs/posts', write: true, incremental: true, pkField: 'id' },
+        { name: 'blog_authors', label: 'Blog Authors', description: 'CMS blog author profiles', apiPath: '/cms/v3/blogs/authors', write: true, incremental: true, pkField: 'id' },
+        { name: 'blog_tags', label: 'Blog Tags', description: 'CMS blog tag taxonomy', apiPath: '/cms/v3/blogs/tags', write: true, incremental: true, pkField: 'id' },
+        { name: 'domains', label: 'Domains', description: 'Connected domains', apiPath: '/cms/v3/domains', write: false, incremental: false, pkField: 'id' },
+        { name: 'url_redirects', label: 'URL Redirects', description: 'URL redirect rules', apiPath: '/cms/v3/url-redirects', write: true, incremental: false, pkField: 'id' },
+        { name: 'hubdb_tables', label: 'HubDB Tables', description: 'HubDB structured data tables', apiPath: '/cms/v3/hubdb/tables', write: true, incremental: true, pkField: 'id' },
+
+        // Automation
+        { name: 'workflows', label: 'Workflows', description: 'Automation workflows', apiPath: '/automation/v4/actions', write: true, incremental: false, pkField: 'id' },
+
+        // Events
+        { name: 'behavioral_events', label: 'Behavioral Events', description: 'Custom behavioral event completions', apiPath: '/events/v3/events', write: true, incremental: true, pkField: 'id' },
+        { name: 'event_definitions', label: 'Event Definitions', description: 'Custom event type definitions', apiPath: '/events/v3/event-definitions', write: true, incremental: false, pkField: 'name' },
+
+        // Files
+        { name: 'files', label: 'Files', description: 'File manager files and documents', apiPath: '/files/v3/files', write: true, incremental: true, pkField: 'id' },
+
+        // Account
+        { name: 'audit_logs', label: 'Audit Logs', description: 'Account activity audit trail', apiPath: '/account-info/v3/audit-logs/activity', write: false, incremental: true, pkField: 'id' },
+        { name: 'users', label: 'Users', description: 'HubSpot portal users', apiPath: '/settings/v3/users', write: true, incremental: false, pkField: 'id' },
+
+        // Communication Preferences
+        { name: 'subscription_definitions', label: 'Subscription Definitions', description: 'Email subscription types', apiPath: '/communication-preferences/v4/definitions', write: true, incremental: false, pkField: 'id' },
+    ];
+
+    /**
+     * Discovers all HubSpot objects (standard + custom) via the live API.
+     * Standard objects come from the known type ID map; custom objects from /crm/v3/schemas.
+     */
+    public override async DiscoverObjects(
+        companyIntegration: MJCompanyIntegrationEntity,
+        contextUser: UserInfo
+    ): Promise<ExternalObjectSchema[]> {
+        const auth = await this.Authenticate(companyIntegration, contextUser);
+        const headers = this.BuildHeaders(auth);
+        const results: ExternalObjectSchema[] = [];
+
+        // Add all known standard objects
+        for (const [typeId, name] of Object.entries(HubSpotConnector.STANDARD_OBJECTS)) {
+            results.push({
+                Name: name,
+                Label: name.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+                Description: `HubSpot ${name} (${typeId})`,
+                SupportsIncrementalSync: true,
+                SupportsWrite: true,
+            });
+        }
+
+        // Discover custom CRM objects via /crm/v3/schemas
+        try {
+            const schemasUrl = `${HUBSPOT_API_BASE}/crm/v3/schemas`;
+            const schemasResp = await this.MakeHTTPRequest(auth, schemasUrl, 'GET', headers);
+            if (schemasResp.Status === 200) {
+                const body = schemasResp.Body as { results?: Array<{ objectTypeId: string; name: string; labels?: { singular?: string } }> };
+                for (const s of body.results ?? []) {
+                    const name = s.name ?? s.labels?.singular ?? s.objectTypeId;
+                    if (!results.some(r => r.Name === name)) {
+                        results.push({
+                            Name: name,
+                            Label: s.labels?.singular ?? name,
+                            Description: `HubSpot custom object: ${name}`,
+                            SupportsIncrementalSync: true,
+                            SupportsWrite: true,
+                        });
+                    }
+                }
+            }
+        } catch (err) {
+            console.warn(`[HubSpot] Custom object discovery failed (non-fatal): ${err instanceof Error ? err.message : err}`);
+        }
+
+        // Add non-CRM objects (Marketing, CMS, Automation, etc.)
+        for (const obj of HubSpotConnector.NON_CRM_OBJECTS) {
+            if (!results.some(r => r.Name === obj.name)) {
+                results.push({
+                    Name: obj.name,
+                    Label: obj.label,
+                    Description: obj.description,
+                    SupportsIncrementalSync: obj.incremental,
+                    SupportsWrite: obj.write,
+                });
+            }
+        }
+
+        return results;
+    }
+
+    /**
+     * Helper to check if an object name is a CRM object (has /crm/v3/properties endpoint).
+     */
+    private IsCRMObject(objectName: string): boolean {
+        const crmNames = new Set(Object.values(HubSpotConnector.STANDARD_OBJECTS));
+        // Custom objects also use CRM properties API
+        return crmNames.has(objectName) || objectName.startsWith('p_') || objectName.startsWith('2-');
+    }
+
+    /**
+     * Finds the non-CRM object config by name.
+     */
+    private GetNonCRMObject(objectName: string): typeof HubSpotConnector.NON_CRM_OBJECTS[number] | undefined {
+        return HubSpotConnector.NON_CRM_OBJECTS.find(o => o.name === objectName);
+    }
+
+    /**
+     * Discovers all fields on a HubSpot object via the Properties API.
+     * Returns field types, constraints, PKs, and read-only flags from live metadata.
+     */
+    public override async DiscoverFields(
+        companyIntegration: MJCompanyIntegrationEntity,
+        objectName: string,
+        contextUser: UserInfo
+    ): Promise<ExternalFieldSchema[]> {
+        const auth = await this.Authenticate(companyIntegration, contextUser);
+        const headers = this.BuildHeaders(auth);
+
+        // Non-CRM objects don't have /crm/v3/properties — discover fields dynamically
+        if (!this.IsCRMObject(objectName)) {
+            return this.DiscoverNonCRMFields(auth, headers, objectName);
+        }
+
+        // CRM objects: live field discovery via Properties API
+        const url = `${HUBSPOT_API_BASE}/crm/v3/properties/${objectName}`;
+        const response = await this.MakeHTTPRequest(auth, url, 'GET', headers);
+
+        if (response.Status !== 200) return [];
+
+        const body = response.Body as { results?: HubSpotPropertyDef[] };
+        const props = body.results ?? [];
+
+        const fields: ExternalFieldSchema[] = props
+            .filter(p => !p.hidden)
+            .map(p => ({
+                Name: p.name,
+                Label: p.label || p.name,
+                Description: p.description || undefined,
+                DataType: this.MapHubSpotType(p.type, p.fieldType),
+                IsRequired: false,
+                IsUniqueKey: p.hasUniqueValue,
+                IsReadOnly: p.modificationMetadata?.readOnlyValue === true || p.calculated,
+            }));
+
+        // Ensure hs_object_id is present as PK
+        if (!fields.some(f => f.Name === 'hs_object_id')) {
+            fields.push({
+                Name: 'hs_object_id',
+                Label: 'Object ID',
+                Description: 'HubSpot internal object ID',
+                DataType: 'string',
+                IsRequired: true,
+                IsUniqueKey: true,
+                IsReadOnly: true,
+            });
+        }
+
+        return fields;
+    }
+
+    /**
+     * Discovers fields for non-CRM objects by fetching the first page of results
+     * and inferring field names/types from the response.
+     */
+    private async DiscoverNonCRMFields(
+        auth: RESTAuthContext,
+        headers: Record<string, string>,
+        objectName: string
+    ): Promise<ExternalFieldSchema[]> {
+        const objConfig = this.GetNonCRMObject(objectName);
+        if (!objConfig) return [];
+
+        const url = `${HUBSPOT_API_BASE}${objConfig.apiPath}?limit=1`;
+        const response = await this.MakeHTTPRequest(auth, url, 'GET', headers);
+        if (response.Status !== 200) return [];
+
+        const body = response.Body as Record<string, unknown>;
+
+        // HubSpot non-CRM APIs return { results: [...] } or { objects: [...] } or direct array
+        let sampleRecord: Record<string, unknown> | null = null;
+        const results = body['results'] as Array<Record<string, unknown>> | undefined;
+        const objects = body['objects'] as Array<Record<string, unknown>> | undefined;
+
+        if (results?.length) {
+            sampleRecord = results[0];
+        } else if (objects?.length) {
+            sampleRecord = objects[0];
+        } else if (Array.isArray(body) && body.length) {
+            sampleRecord = body[0] as Record<string, unknown>;
+        }
+
+        if (!sampleRecord) return [];
+
+        const fields: ExternalFieldSchema[] = [];
+        for (const [key, value] of Object.entries(sampleRecord)) {
+            // Skip nested objects/arrays — only flat fields
+            if (value !== null && typeof value === 'object' && !Array.isArray(value)) continue;
+            if (Array.isArray(value)) continue;
+
+            fields.push({
+                Name: key,
+                Label: key.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/_/g, ' '),
+                Description: undefined,
+                DataType: this.InferFieldType(value),
+                IsRequired: key === objConfig.pkField,
+                IsUniqueKey: key === objConfig.pkField,
+                IsReadOnly: key === 'id' || key === objConfig.pkField,
+            });
+        }
+
+        // Ensure PK field is present
+        if (!fields.some(f => f.Name === objConfig.pkField)) {
+            fields.unshift({
+                Name: objConfig.pkField,
+                Label: objConfig.pkField,
+                Description: `Primary key for ${objectName}`,
+                DataType: 'string',
+                IsRequired: true,
+                IsUniqueKey: true,
+                IsReadOnly: true,
+            });
+        }
+
+        return fields;
+    }
+
+    /**
+     * Infer a MJ-compatible type string from a JavaScript value.
+     */
+    private InferFieldType(value: unknown): string {
+        if (value === null || value === undefined) return 'string';
+        if (typeof value === 'boolean') return 'bool';
+        if (typeof value === 'number') return Number.isInteger(value) ? 'number' : 'number';
+        if (typeof value === 'string') {
+            if (/^\d{4}-\d{2}-\d{2}/.test(value)) return 'datetime';
+            return 'string';
+        }
+        return 'string';
+    }
+
+    /**
+     * Full schema introspection — discovers all objects and their fields from the live API.
+     */
+    public override async IntrospectSchema(
+        companyIntegration: MJCompanyIntegrationEntity,
+        contextUser: UserInfo
+    ): Promise<SourceSchemaInfo> {
+        const objects = await this.DiscoverObjects(companyIntegration, contextUser);
+        const result: SourceSchemaInfo = { Objects: [] };
+
+        for (const obj of objects) {
+            try {
+                const fields = await this.DiscoverFields(companyIntegration, obj.Name, contextUser);
+
+                // Determine PK field: CRM objects use hs_object_id, non-CRM use IsUniqueKey
+                const nonCrmConfig = this.GetNonCRMObject(obj.Name);
+                const pkFieldName = nonCrmConfig ? nonCrmConfig.pkField : 'hs_object_id';
+
+                const sourceFields: SourceFieldInfo[] = fields.map(f => ({
+                    Name: f.Name,
+                    Label: f.Label,
+                    Description: f.Description,
+                    SourceType: f.DataType,
+                    IsRequired: f.IsRequired,
+                    IsPrimaryKey: f.IsUniqueKey || f.Name === pkFieldName,
+                    IsForeignKey: false,
+                    ForeignKeyTarget: null,
+                    MaxLength: null,
+                    Precision: null,
+                    Scale: null,
+                    DefaultValue: null,
+                }));
+
+                const pkFields = sourceFields.filter(f => f.IsPrimaryKey);
+                result.Objects.push({
+                    ExternalName: obj.Name,
+                    ExternalLabel: obj.Label ?? obj.Name,
+                    Description: obj.Description,
+                    Fields: sourceFields,
+                    PrimaryKeyFields: pkFields.map(f => f.Name),
+                    Relationships: [],
+                });
+            } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                console.warn(`[HubSpot] Skipping "${obj.Name}" during introspection: ${msg}`);
+            }
+        }
+
+        return result;
     }
 
     // ─── CRUD Operations ─────────────────────────────────────────────────
@@ -1031,42 +1368,218 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
     // ─── Association fetch (v4 API) ───────────────────────────────────
 
     /**
-     * Overrides FetchChanges to intercept association objects (Category === 'Association')
-     * and route them through the v4 per-object associations endpoint instead of the
-     * non-existent flat list endpoint stored in APIPath.
+     * Overrides FetchChanges to support three fetch strategies:
+     *
+     * 1. **Association objects** → v4 per-object associations endpoint
+     * 2. **Incremental sync** (watermark set) → HubSpot search API with server-side
+     *    `hs_lastmodifieddate >= watermark` filter
+     * 3. **Full load** (no watermark / first sync) → standard list API via base class
      */
     public override async FetchChanges(ctx: FetchContext): Promise<FetchBatchResult> {
         const obj = this.GetCachedObject(ctx.CompanyIntegration.IntegrationID, ctx.ObjectName);
         if (obj.Category === 'Association') {
             return this.FetchAssociationChanges(ctx, obj);
         }
-        const result = await super.FetchChanges(ctx);
 
-        // Contacts use 'lastmodifieddate', all other objects use 'hs_lastmodifieddate'.
-        const dateField = ctx.ObjectName.toLowerCase() === 'contacts'
-            ? 'lastmodifieddate' : 'hs_lastmodifieddate';
-
-        // Compute new watermark from ALL fetched records BEFORE filtering.
-        // We need the latest date across the full dataset so the watermark advances correctly.
-        const allRecords = result.Records;
-        if (!result.HasMore) {
-            const latest = this.FindLatestDate(allRecords, dateField);
-            if (latest) result.NewWatermarkValue = latest;
+        // Non-CRM objects (Marketing, CMS, etc.) don't support the CRM search API.
+        // Use the base class list endpoint (reads APIPath from IntegrationObject) with
+        // client-side watermark filtering.
+        const nonCrm = this.GetNonCRMObject(ctx.ObjectName);
+        if (nonCrm) {
+            return this.FetchNonCRMChanges(ctx, nonCrm);
         }
 
-        // Client-side watermark filtering — HubSpot's list API has no server-side date filter.
-        // We fetch all records but only return ones modified after the watermark.
-        if (ctx.WatermarkValue && allRecords.length > 0) {
-            const watermarkDate = new Date(ctx.WatermarkValue);
-            result.Records = allRecords.filter(r => {
-                const val = r.Fields[dateField];
-                if (val == null) return true;
-                const d = new Date(String(val));
-                return isNaN(d.getTime()) || d > watermarkDate;
+        // CRM objects: use search-based incremental sync when a watermark exists
+        if (ctx.WatermarkValue) {
+            return this.FetchChangesViaSearch(ctx);
+        }
+
+        // First sync (no watermark): use list API for full load
+        const result = await super.FetchChanges(ctx);
+        const dateField = this.GetWatermarkField(ctx.ObjectName);
+        if (!result.HasMore) {
+            const latest = this.FindLatestDate(result.Records, dateField);
+            if (latest) result.NewWatermarkValue = latest;
+        }
+        return result;
+    }
+
+    /**
+     * Fetches records from non-CRM HubSpot APIs (Marketing, CMS, Files, etc.).
+     * These endpoints use standard REST list pagination, not the CRM search API.
+     * Watermark filtering is client-side based on date fields in the response.
+     */
+    private async FetchNonCRMChanges(
+        ctx: FetchContext,
+        objConfig: typeof HubSpotConnector.NON_CRM_OBJECTS[number]
+    ): Promise<FetchBatchResult> {
+        const companyIntegration = ctx.CompanyIntegration as MJCompanyIntegrationEntity;
+        const contextUser = ctx.ContextUser as UserInfo;
+        const auth = await this.Authenticate(companyIntegration, contextUser);
+        const headers = this.BuildHeaders(auth);
+
+        // Build URL with pagination
+        const limit = ctx.BatchSize || 100;
+        let url = `${HUBSPOT_API_BASE}${objConfig.apiPath}?limit=${limit}`;
+        if (ctx.CurrentCursor) {
+            url += `&after=${ctx.CurrentCursor}`;
+        }
+        // Some non-CRM endpoints support updatedAfter for server-side incremental
+        if (ctx.WatermarkValue && objConfig.incrementalParam === 'after') {
+            url += `&updatedAfter=${ctx.WatermarkValue}`;
+        }
+
+        const response = await this.MakeHTTPRequest(auth, url, 'GET', headers);
+        if (response.Status !== 200) {
+            console.warn(`[HubSpot] Non-CRM fetch failed for ${ctx.ObjectName}: HTTP ${response.Status}`);
+            return { Records: [], HasMore: false };
+        }
+
+        const body = response.Body as Record<string, unknown>;
+        const results = (body['results'] ?? body['objects'] ?? []) as Array<Record<string, unknown>>;
+
+        // Build ExternalRecords
+        const records: ExternalRecord[] = results.map(raw => {
+            const id = String(raw[objConfig.pkField] ?? raw['id'] ?? '');
+            // Flatten properties if they exist (some endpoints nest under 'properties')
+            const properties = raw['properties'] as Record<string, unknown> | undefined;
+            const fields = properties ? { ...raw, ...properties } : raw;
+            return {
+                ExternalID: id,
+                ObjectType: ctx.ObjectName,
+                Fields: fields as Record<string, unknown>,
+            };
+        });
+
+        // Client-side watermark filtering (if API doesn't support server-side)
+        let filteredRecords = records;
+        if (ctx.WatermarkValue && objConfig.incrementalParam !== 'after') {
+            const watermarkMs = new Date(ctx.WatermarkValue).getTime();
+            filteredRecords = records.filter(r => {
+                // Check common date fields
+                for (const key of ['updatedAt', 'updated', 'createdAt', 'hs_lastmodifieddate']) {
+                    const val = r.Fields[key];
+                    if (val && typeof val === 'string') {
+                        const recMs = new Date(val).getTime();
+                        if (!isNaN(recMs) && recMs > watermarkMs) return true;
+                    }
+                }
+                return false;
             });
         }
 
-        return result;
+        // Pagination cursor
+        const paging = body['paging'] as { next?: { after?: string } } | undefined;
+        const nextCursor = paging?.next?.after;
+
+        // Set watermark from latest record
+        let newWatermark: string | undefined;
+        if (!nextCursor && filteredRecords.length > 0) {
+            newWatermark = this.FindLatestDateInFields(filteredRecords);
+        }
+
+        return {
+            Records: filteredRecords,
+            HasMore: !!nextCursor,
+            NextCursor: nextCursor,
+            NewWatermarkValue: newWatermark,
+        };
+    }
+
+    /**
+     * Find the latest date value across common date fields in a set of records.
+     */
+    private FindLatestDateInFields(records: ExternalRecord[]): string | undefined {
+        let latest = 0;
+        let latestStr: string | undefined;
+        const dateKeys = ['updatedAt', 'updated', 'createdAt', 'hs_lastmodifieddate', 'created', 'publishDate'];
+        for (const r of records) {
+            for (const key of dateKeys) {
+                const val = r.Fields[key];
+                if (val && typeof val === 'string') {
+                    const ms = new Date(val).getTime();
+                    if (!isNaN(ms) && ms > latest) {
+                        latest = ms;
+                        latestStr = val;
+                    }
+                }
+            }
+        }
+        return latestStr;
+    }
+
+    /**
+     * Fetches changed records using the HubSpot search API with server-side date filtering.
+     * Much more efficient than fetching ALL records and filtering client-side.
+     */
+    private async FetchChangesViaSearch(ctx: FetchContext): Promise<FetchBatchResult> {
+        const companyIntegration = ctx.CompanyIntegration as MJCompanyIntegrationEntity;
+        const contextUser = ctx.ContextUser as UserInfo;
+        const auth = await this.Authenticate(companyIntegration, contextUser);
+        const headers = this.BuildHeaders(auth);
+
+        const dateField = this.GetWatermarkField(ctx.ObjectName);
+        const watermarkMs = new Date(ctx.WatermarkValue!).getTime();
+        const properties = this.GetObjectFieldNames(ctx.ObjectName);
+        const pageSize = ctx.BatchSize ?? 100;
+
+        const searchBody: Record<string, unknown> = {
+            filterGroups: [{
+                filters: [{
+                    propertyName: dateField,
+                    operator: 'GTE',
+                    value: String(watermarkMs),
+                }],
+            }],
+            sorts: [{ propertyName: dateField, direction: 'ASCENDING' }],
+            properties,
+            limit: pageSize,
+        };
+
+        if (ctx.CurrentCursor) {
+            searchBody['after'] = ctx.CurrentCursor;
+        }
+
+        const url = `${HUBSPOT_API_BASE}/crm/v3/objects/${ctx.ObjectName}/search`;
+        const response = await this.MakeHTTPRequest(auth, url, 'POST', headers, searchBody);
+        this.ValidateCRUDResponse(response, 'FetchChangesViaSearch', ctx.ObjectName);
+
+        const body = response.Body as {
+            results?: unknown[];
+            paging?: { next?: { after?: string } };
+        };
+
+        const rawResults = body.results ?? [];
+        const records: ExternalRecord[] = rawResults.map(r => {
+            const raw = r as Record<string, unknown>;
+            const flat = this.FlattenHubSpotRecord(raw);
+            return {
+                ExternalID: String(flat['hs_object_id'] ?? raw['id'] ?? ''),
+                ObjectType: ctx.ObjectName,
+                Fields: flat,
+            };
+        });
+
+        const nextCursor = body.paging?.next?.after;
+        const hasMore = nextCursor != null;
+
+        let newWatermark: string | undefined;
+        if (!hasMore) {
+            const latest = this.FindLatestDate(records, dateField);
+            if (latest) newWatermark = latest;
+        }
+
+        return {
+            Records: records,
+            HasMore: hasMore,
+            NextCursor: nextCursor,
+            NewWatermarkValue: newWatermark,
+        };
+    }
+
+    /** Returns the watermark date field name for a given object type. */
+    private GetWatermarkField(objectName: string): string {
+        return objectName.toLowerCase() === 'contacts' ? 'lastmodifieddate' : 'hs_lastmodifieddate';
     }
 
     /** Finds the latest date value across records for a given field name. */
