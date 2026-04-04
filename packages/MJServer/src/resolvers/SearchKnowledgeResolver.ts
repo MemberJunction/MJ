@@ -492,11 +492,38 @@ export class SearchKnowledgeResolver extends ResolverBase {
         });
     }
 
-    /** Extract the best display title from vector metadata */
+    /**
+     * Extract the best display title from vector metadata using entity field metadata.
+     * Combines all IsNameField fields in Sequence order (e.g., FirstName + LastName → "Sarah Chen").
+     * Falls back to heuristic field name matching when entity metadata isn't available.
+     */
     private extractDisplayTitle(meta: Record<string, unknown>, fallbackEntity: string): string {
-        // Check common name fields stored in metadata
-        const nameFields = ['Name', 'Title', 'Subject', 'Label', 'DisplayName'];
-        for (const field of nameFields) {
+        // 1. Use entity metadata to find IsNameField fields and combine them
+        const entityName = meta['Entity'] as string | undefined;
+        if (entityName) {
+            const md = new Metadata();
+            const entityInfo = md.Entities.find(e => e.Name === entityName);
+            if (entityInfo) {
+                const nameFields = entityInfo.Fields
+                    .filter(f => f.IsNameField)
+                    .sort((a, b) => (a.Sequence ?? 9999) - (b.Sequence ?? 9999));
+                if (nameFields.length > 0) {
+                    const parts = nameFields
+                        .map(f => meta[f.Name])
+                        .filter(v => v != null && String(v).trim() !== '')
+                        .map(v => String(v));
+                    if (parts.length > 0) return parts.join(' ');
+                }
+                // Single NameField fallback
+                if (entityInfo.NameField && meta[entityInfo.NameField.Name]) {
+                    return String(meta[entityInfo.NameField.Name]);
+                }
+            }
+        }
+
+        // 2. Heuristic fallbacks for common field names
+        const heuristicFields = ['Name', 'Title', 'Subject', 'Label', 'DisplayName'];
+        for (const field of heuristicFields) {
             if (meta[field] && typeof meta[field] === 'string') {
                 return meta[field] as string;
             }

@@ -50,8 +50,12 @@ export interface CardDisplayField {
  * Auto-generated card template based on entity metadata
  */
 export interface CardTemplate {
-  /** Primary title field name */
-  titleField: string;
+  /**
+   * One or more field names that together form the card title.
+   * Multiple IsNameField fields are combined with spaces
+   * (e.g., ["FirstName", "LastName"] → "Elizabeth Rodriguez").
+   */
+  titleFields: string[];
   /** Secondary subtitle field name */
   subtitleField: string | null;
   /** Description/notes field name */
@@ -465,7 +469,7 @@ export const DEFAULT_VIEWER_CONFIG: Required<EntityViewerConfig> = {
   filterDebounceMs: 250,
   gridColumns: [],
   cardTemplate: {
-    titleField: '',
+    titleFields: [],
     subtitleField: null,
     descriptionField: null,
     displayFields: [],

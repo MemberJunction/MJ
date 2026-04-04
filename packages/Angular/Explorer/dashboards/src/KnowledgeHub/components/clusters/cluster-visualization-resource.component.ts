@@ -404,10 +404,36 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
         }
     }
 
-    /** Build a human-readable label from vector metadata (prefers Name field, falls back to RecordID) */
+    /**
+     * Build a human-readable label from vector metadata using entity field metadata.
+     * Combines all IsNameField fields in Sequence order (e.g., "Sarah Chen" from FirstName + LastName).
+     * Falls back to heuristic field detection when entity metadata isn't available.
+     */
     private buildLabel(metadata: Record<string, string>): string {
-        // The vector sync process stores display fields directly in metadata.
-        // Prefer Name, then Title, then Description, then fall back to RecordID.
+        const entityName = metadata['Entity'];
+        if (entityName) {
+            try {
+                const md = new Metadata();
+                const entityInfo = md.Entities.find(e => e.Name === entityName);
+                if (entityInfo) {
+                    // Combine all IsNameField fields in Sequence order
+                    const nameFields = entityInfo.Fields
+                        .filter(f => f.IsNameField)
+                        .sort((a, b) => (a.Sequence ?? 9999) - (b.Sequence ?? 9999));
+                    if (nameFields.length > 0) {
+                        const parts = nameFields
+                            .map(f => metadata[f.Name])
+                            .filter(v => v != null && v.trim() !== '');
+                        if (parts.length > 0) return parts.join(' ');
+                    }
+                    // Single NameField fallback
+                    if (entityInfo.NameField && metadata[entityInfo.NameField.Name]) {
+                        return metadata[entityInfo.NameField.Name];
+                    }
+                }
+            } catch { /* metadata not available, fall through */ }
+        }
+        // Heuristic fallbacks
         return metadata['Name']
             || metadata['Title']
             || metadata['Description']?.substring(0, 60)
