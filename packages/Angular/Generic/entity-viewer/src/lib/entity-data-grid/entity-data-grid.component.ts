@@ -1778,8 +1778,8 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
     // Only apply grid state from view entity if not already set via props
     // (gridState input takes precedence)
     if (!this._gridState && this._viewEntity.GridState) {
-      try {
-        const gridState = JSON.parse(this._viewEntity.GridState) as ViewGridState;
+      const gridState = this._viewEntity.GridStateObject;
+      if (gridState) {
         if (gridState.columnSettings?.length) {
           this._gridState = {
             columnSettings: gridState.columnSettings,
@@ -1791,8 +1791,6 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
         if (gridState.aggregates && !this._aggregatesConfig) {
           this._aggregatesConfig = gridState.aggregates;
         }
-      } catch (e) {
-        console.warn('Failed to parse view GridState:', e);
       }
     }
 
@@ -3654,24 +3652,19 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       this.isSavingState = true;
       this.pendingStateToSave = state;
 
-      // Build the grid state JSON matching ViewGridState format
-      const gridStateJson: ViewGridState = {
-        columnSettings: state.columnSettings,
-        sortSettings: state.sortSettings,
-        aggregates: state.aggregates
-      };
-
-      // Update the view entity's GridState
-      this._viewEntity.GridState = JSON.stringify(gridStateJson);
+      // Mutate the existing GridState object and write back via typed setter
+      const gridState = this._viewEntity.GridStateObject ?? {};
+      gridState.columnSettings = state.columnSettings;
+      gridState.sortSettings = state.sortSettings;
+      gridState.aggregates = state.aggregates;
+      this._viewEntity.GridStateObject = gridState;
 
       // Update SortState separately if changed
       if (state.sortSettings?.length) {
-        this._viewEntity.SortState = JSON.stringify(
-          state.sortSettings.map(s => ({
+        this._viewEntity.SortStateObject = state.sortSettings.map(s => ({
             field: s.field,
-            dir: s.dir
-          }))
-        );
+            direction: s.dir
+          }));
       }
 
       // Save the view entity

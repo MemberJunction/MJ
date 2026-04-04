@@ -164,7 +164,7 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
      * @param state The ViewDisplayState object to serialize and store
      */
     public setDisplayState(state: ViewDisplayState): void {
-        this.DisplayState = JSON.stringify(state);
+        this.DisplayStateObject = state;
     }
 
     /**
@@ -474,7 +474,7 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
                 orderIndex: newGridState.columnSettings.length
             });
         });
-        this.GridState = JSON.stringify(newGridState); // default columns for a view are the ones with DefaultInView turned on
+        this.GridStateObject = newGridState; // default columns for a view are the ones with DefaultInView turned on
     }
 
     override NewRecord(): boolean {
@@ -495,8 +495,8 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
             this.IsDefault = false;
             this.WhereClause = '';
             this.Description = '';
-            this.FilterState = JSON.stringify({"logic" : "and", "filters" : [] }); // blank default for filter
-            this.GridState = JSON.stringify({}); // blank object initially
+            this.FilterStateObject = { logic: 'and', filters: [] }; // blank default for filter
+            this.GridStateObject = {}; // blank object initially
             this.CustomFilterState = false;
             this.CustomWhereClause = false;
             //this.SmartFilterEnabled = false;

@@ -84048,6 +84048,8 @@ export interface MJUserViewEntity_ITimelineState {
     segmentsCollapsible?: boolean;
     /** Whether segments start expanded */
     segmentsDefaultExpanded?: boolean;
+    /** Timeline orientation */
+    orientation?: 'vertical' | 'horizontal';
 }
 
 /**
@@ -84071,6 +84073,8 @@ export interface MJUserViewEntity_IDisplayCardState {
 export interface MJUserViewEntity_IGridDisplayState {
     /** Row height preference */
     rowHeight?: 'compact' | 'normal' | 'comfortable';
+    /** Enable text wrapping in grid cells — long text wraps and rows auto-size */
+    wrapText?: boolean;
 }
 
 /**
