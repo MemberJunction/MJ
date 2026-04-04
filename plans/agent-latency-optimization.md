@@ -681,3 +681,54 @@ Alternatively, this could be inferred from the agent type — single-step Loop a
 | Time to first visible token | ~1,815ms | ~1,100ms | ~500ms |
 | Overhead beyond inference | ~1,415ms | ~700ms | ~300ms |
 | Audio-ready (< 500ms TTFT) | No | No | Yes |
+
+---
+
+## Appendix: Key Architecture Reference for Implementors
+
+### File Map (Critical Path)
+
+| Layer | File | Key Methods |
+|-------|------|-------------|
+| **Client: Message Input** | `packages/Angular/Generic/conversations/src/lib/components/message/message-input.component.ts` | `sendMessageWithText()` (line 439), `routeMessage()` (line 575), `handleAgentContinuity()` (line 656), `processMessageThroughAgent()` (line 894) |
+| **Client: Agent Service** | `packages/Angular/Generic/conversations/src/lib/services/conversation-agent.service.ts` | `processMessage()` (line 128), `checkAgentContinuityIntent()` (line 645), `invokeSubAgent()` (line 541) |
+| **Client: Streaming** | `packages/Angular/Generic/conversations/src/lib/services/conversation-streaming.service.ts` | `registerMessageCallback()`, `CompletionEvent` handling |
+| **Client: Chat Area** | `packages/Angular/Generic/conversations/src/lib/components/conversation/conversation-chat-area.component.ts` | `onMessageSent()` (line 779), `handleMessageCompletion()` (line 1042) |
+| **Client: GraphQL Client** | `packages/GraphQLDataProvider/src/graphQLAIClient.ts` | `RunAIAgentFromConversationDetail()` (line 494), `buildConversationDetailMutation()` (line 524) |
+| **Client: Fire-and-Forget** | `packages/GraphQLDataProvider/src/fireAndForgetHelper.ts` | `Execute()` (line 117) — subscribes to PubSub, sends mutation, waits for completion event |
+| **Client: Agent Session** | `packages/AI/AgentsClient/src/generic/AgentClientSession.ts` | `RunAgentFromConversationDetail()` — wraps GraphQLAIClient |
+| **Server: Resolver** | `packages/MJServer/src/resolvers/RunAIAgentResolver.ts` | `RunAIAgentFromConversationDetail()` (line 888), `executeAIAgent()` (line 346), `loadConversationHistoryWithAttachments()` (line 1214), `createCompletionNotification()` (line 700) |
+| **Server: AgentRunner** | `packages/AI/Agents/src/AgentRunner.ts` | `RunAgent()` (line 62), `RunAgentInConversation()` (line 138) |
+| **Server: BaseAgent** | `packages/AI/Agents/src/base-agent.ts` | `Execute()` (line 1021), `initializeEngines()` (line 1346), `initializeAgentRun()` (line 4761), `finalizeAgentRun()` (line 8598), `executePromptStep()` |
+| **Server: Prompt Runner** | `packages/AI/Prompts/src/AIPromptRunner.ts` | `ExecutePrompt()`, `executeModel()` (line 3206) — **streaming gap**: `StreamingEnabled` set to `false` at line 2544, callbacks not passed to `ChatParams` |
+| **Server: LLM Base** | `packages/AI/Core/src/generic/baseLLM.ts` | `ChatCompletion()` (line 57) — streaming IS supported via `handleStreamingChatCompletion()` (line 177), providers implement `createStreamingRequest()` + `processStreamingChunk()` |
+
+### Key Findings for Streaming Implementation (Phase 4)
+
+The streaming infrastructure exists at the LLM provider level but is disconnected at the prompt runner level:
+
+1. **Providers support streaming**: `BaseLLM.ChatCompletion()` checks `params.streaming && params.streamingCallbacks && this.SupportsStreaming` and routes to `handleStreamingChatCompletion()`. OpenAI, Anthropic, and most other providers return `SupportsStreaming = true`.
+
+2. **Gap in AIPromptRunner**: `executeModel()` at line 3206 creates a `BaseLLM` instance and calls `llm.ChatCompletion(chatParams)`, but never sets `chatParams.streaming = true` or attaches `chatParams.streamingCallbacks`. The `promptRun.StreamingEnabled` is hardcoded to `false` at line 2544.
+
+3. **Agent layer passes streaming through**: `BaseAgent` already has `params.onStreaming` which it threads through to the prompt runner as `promptParams.onStreaming`. The runner just ignores it.
+
+4. **PubSub streaming works**: The resolver's `createStreamingCallback()` (line 306) publishes chunks via PubSub, and the client's streaming service receives them. This path works for progress updates today — it just needs actual LLM token content.
+
+### Client Completion Behavior (Important for Two-Phase Design)
+
+The client's `handleMessageCompletion()` (conversation-chat-area.component.ts line 1042) **always reloads everything from DB**:
+- `message.Load(message.ID)` — reloads ConversationDetail
+- `agentRun.Load(agentRun.ID)` — reloads AIAgentRun  
+- `reloadArtifactsForMessage()` — reloads artifacts
+- The completion event's `success`, `errorMessage`, and `agentRunId` fields are NOT used — they're ignored (parameter prefixed with `_`)
+
+This means: (a) DB writes must complete before the `complete` event, and (b) the new `content-complete` event can safely carry the response text without any DB dependency.
+
+### Placeholder Message Creation (Cannot Be Parallelized with Agent Call)
+
+All four code paths that create the "In-Progress" placeholder (`processMessageThroughAgent` line 907, `handleSingleTaskExecution` line 1388, `handleSubAgentInvocation` line 1492, `invokeAgentDirectly` line 1818) follow the pattern:
+```
+await placeholder.Save()  →  emit to UI  →  call agent(placeholder.ID)
+```
+The `Save()` must complete first because the agent call needs the placeholder's DB-generated ID as `conversationDetailId`. This is a hard dependency — the placeholder cannot be created in parallel with the agent call.
