@@ -38,7 +38,9 @@ Return ONLY valid JSON without any formatting or code blocks, strictly following
 - The `tag` field should be a concise, descriptive keyword or short phrase.
 - The `parentTag` field is optional. If you believe a tag should be nested under an existing tag in the taxonomy (provided below), set `parentTag` to the exact name of that parent tag. Set to `null` if the tag stands on its own or no suitable parent exists.
 
+{% if additionalAttributePrompts %}
 {{ additionalAttributePrompts }}
+{% endif %}
 
 {% if existingTaxonomy %}
 ## Existing Tag Taxonomy
