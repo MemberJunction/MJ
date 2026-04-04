@@ -118,7 +118,7 @@ import type {
     ViewDisplayState,
     ViewDisplayMode,
     ViewTimelineState,
-} from '../custom/UserViewEntity';
+} from '../custom/MJUserViewEntityExtended';
 
 // ============================================================================
 // Helper: create a MJUserViewEntityExtended with optional initial property values

@@ -1,16 +1,15 @@
 import { EntityInfo, CompositeKey } from '@memberjunction/core';
 import {
-  ViewColumnPinned as CoreViewColumnPinned,
-  ViewGridSortSetting as CoreViewGridSortSetting,
-  ViewGridColumnSetting as CoreViewGridColumnSetting,
-  ViewGridState as CoreViewGridState,
+  ViewGridState,
+  MJUserViewEntity_IGridSortSetting,
+  MJUserViewEntity_IGridColumnSetting,
 } from '@memberjunction/core-entities';
 
-// Re-export core types for direct usage
-export type ViewColumnPinned = CoreViewColumnPinned;
-export type ViewGridSortSetting = CoreViewGridSortSetting;
-export type ViewGridColumnSetting = CoreViewGridColumnSetting;
-export type ViewGridState = CoreViewGridState;
+// Re-export core types for backward compatibility
+export type ViewColumnPinned = 'left' | 'right' | null;
+export type ViewGridSortSetting = MJUserViewEntity_IGridSortSetting;
+export type ViewGridColumnSetting = MJUserViewEntity_IGridColumnSetting;
+export { ViewGridState };
 
 /**
  * View modes supported by the EntityViewer component

@@ -8,7 +8,7 @@ import { RecentAccessService } from '@memberjunction/ng-shared-generic';
 import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { Metadata, EntityInfo, RunView, EntityFieldTSType, ApplicationInfo } from '@memberjunction/core';
 // CompositeKey is used via buildCompositeKey from ng-entity-viewer
-import { MJApplicationEntityEntity, ResourceData, UserInfoEngine, ViewGridAggregatesConfig } from '@memberjunction/core-entities';
+import { MJApplicationEntityEntity, ResourceData, UserInfoEngine, MJUserViewEntity_IGridAggregatesConfig as ViewGridAggregatesConfig } from '@memberjunction/core-entities';
 import {
   RecordSelectedEvent,
   RecordOpenedEvent,

@@ -17,7 +17,17 @@ import { RunView, RunViewParams, Metadata, EntityInfo, EntityFieldInfo, Aggregat
 import { UUIDsEqual } from '@memberjunction/global';
 import { PageChangeEvent } from '@memberjunction/ng-pagination';
 import { buildPkString, computeFieldsList } from '../utils/record.util';
-import { MJUserViewEntityExtended, ViewInfo, ViewGridState, UserViewEngine, UserInfoEngine, ColumnFormat, ColumnTextStyle, ViewGridAggregatesConfig, ViewGridAggregate } from '@memberjunction/core-entities';
+import {
+  MJUserViewEntityExtended,
+  ViewInfo,
+  ViewGridState,
+  UserViewEngine,
+  UserInfoEngine,
+  MJUserViewEntity_IColumnFormat as ColumnFormat,
+  MJUserViewEntity_IColumnTextStyle as ColumnTextStyle,
+  MJUserViewEntity_IGridAggregatesConfig as ViewGridAggregatesConfig,
+  MJUserViewEntity_IGridAggregate as ViewGridAggregate
+} from '@memberjunction/core-entities';
 import {
   ColDef,
   GridReadyEvent,
