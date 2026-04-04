@@ -1,9 +1,6 @@
 /**
  * Content-type-level defaults for the autotagging and vectorization pipeline.
  *
- * Stored as a JSON blob in the `Configuration` column of the `Content Types` entity.
- * CodeGen emits a strongly-typed `ConfigurationObject` accessor on `ContentTypeEntity`.
- *
  * Content Types classify the kind of content being processed (e.g. "Document", "Email",
  * "Web Page"). Settings defined here act as defaults for every content source that
  * produces this type of content. Individual sources can override these defaults via

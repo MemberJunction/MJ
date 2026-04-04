@@ -1,10 +1,6 @@
 /**
  * Per-source configuration for the Content Autotagging pipeline.
  *
- * Stored as a JSON blob in the `Configuration` column of the `Content Sources` entity.
- * CodeGen emits a strongly-typed `ConfigurationObject` accessor on `ContentSourceEntity`
- * so callers can read and write these settings without manual JSON parsing.
- *
  * Settings here control how a single content source interacts with the tag taxonomy
  * and the vectorization engine. Every property is optional and falls back to a sensible
  * default, so an empty `{}` configuration is valid.

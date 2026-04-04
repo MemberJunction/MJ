@@ -1,9 +1,6 @@
 /**
  * Type-level configuration shared by all content sources of the same source type.
  *
- * Stored as a JSON blob in the `Configuration` column of the `Content Source Types` entity.
- * CodeGen emits a strongly-typed `ConfigurationObject` accessor on `ContentSourceTypeEntity`.
- *
  * Content Source Types represent the plugin mechanism for bringing content into the
  * autotagging pipeline (e.g. "Entity", "File", "Web"). Each type registers a `DriverClass`
  * that the ClassFactory resolves at runtime. This interface is the extension point for
