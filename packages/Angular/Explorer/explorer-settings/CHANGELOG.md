@@ -1,5 +1,35 @@
 # Change Log - @memberjunction/ng-explorer-settings
 
+## 5.23.0
+
+### Patch Changes
+
+- Updated dependencies [247df16]
+- Updated dependencies [37dc301]
+- Updated dependencies [9250070]
+- Updated dependencies [513b20c]
+- Updated dependencies [44bc22b]
+- Updated dependencies [58af481]
+- Updated dependencies [fb0c69f]
+- Updated dependencies [1d1e02e]
+  - @memberjunction/core@5.23.0
+  - @memberjunction/global@5.23.0
+  - @memberjunction/ng-base-application@5.23.0
+  - @memberjunction/ng-base-forms@5.23.0
+  - @memberjunction/graphql-dataprovider@5.23.0
+  - @memberjunction/core-entities@5.23.0
+  - @memberjunction/ng-ui-components@5.23.0
+  - @memberjunction/ng-entity-form-dialog@5.23.0
+  - @memberjunction/ng-entity-permissions@5.23.0
+  - @memberjunction/ng-shared@5.23.0
+  - @memberjunction/ng-simple-record-list@5.23.0
+  - @memberjunction/ng-code-editor@5.23.0
+  - @memberjunction/ng-join-grid@5.23.0
+  - @memberjunction/ng-notifications@5.23.0
+  - @memberjunction/ng-shared-generic@5.23.0
+  - @memberjunction/ng-user-avatar@5.23.0
+  - @memberjunction/ng-tabstrip@5.23.0
+
 ## 5.22.0
 
 ### Patch Changes
