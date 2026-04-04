@@ -72,7 +72,8 @@
                 [TooltipFields]="['Entity', 'Name', 'Description']"
                 (PointClicked)="OnPointClicked($event)"
                 (PointHovered)="OnPointHovered($event)"
-                (OpenRecordRequested)="OnOpenRecord($event)">
+                (OpenRecordRequested)="OnOpenRecord($event)"
+                (LabelEdited)="OnLabelEdited($event)">
             </mj-cluster-scatter>
 
             <!-- Floating config panel -->

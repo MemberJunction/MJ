@@ -51,6 +51,8 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   public EditMode: boolean = false;
   public FavoriteInitDone: boolean = false;
   public isHistoryDialogOpen: boolean = false;
+  public IsTagsPanelOpen: boolean = false;
+  public TagCount: number = 0;
   public showDeleteDialog: boolean = false;
   public showCreateDialog: boolean = false;
 
@@ -228,6 +230,10 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
 
   public handleHistoryDialog(): void {
     this.isHistoryDialogOpen = !this.isHistoryDialogOpen;
+  }
+
+  public HandleTagsPanel(): void {
+    this.IsTagsPanelOpen = !this.IsTagsPanelOpen;
   }
 
   // #endregion

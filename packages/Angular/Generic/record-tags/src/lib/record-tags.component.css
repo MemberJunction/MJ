@@ -1,0 +1,115 @@
+.mj-record-tags-container {
+    padding: 16px;
+}
+
+.mj-record-tags-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+
+.mj-record-tags-count {
+    color: var(--mj-text-secondary);
+    font-size: 0.85rem;
+}
+
+.mj-record-tags-view-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 1px solid var(--mj-border-default);
+    border-radius: 6px;
+    background: var(--mj-bg-surface);
+    color: var(--mj-text-secondary);
+    cursor: pointer;
+    transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.mj-record-tags-view-toggle:hover {
+    color: var(--mj-brand-primary);
+    border-color: var(--mj-brand-primary);
+    background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface));
+}
+
+.mj-record-tags-cloud {
+    min-height: 200px;
+}
+
+.mj-record-tags-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.mj-record-tag-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 20px;
+    background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+    color: var(--mj-text-primary);
+    border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 25%, var(--mj-border-default));
+    transition: opacity 0.2s ease, background 0.2s ease;
+    cursor: default;
+    line-height: 1.4;
+}
+
+.mj-record-tag-pill:hover {
+    background: color-mix(in srgb, var(--mj-brand-primary) 20%, var(--mj-bg-surface));
+}
+
+.mj-record-tag-weight {
+    font-size: 0.75em;
+    color: var(--mj-text-muted);
+    padding: 1px 4px;
+    border-radius: 8px;
+    background: var(--mj-bg-surface-sunken);
+}
+
+.mj-record-tag-remove {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--mj-text-muted);
+    cursor: pointer;
+    border-radius: 50%;
+    font-size: 0.7em;
+    transition: color 0.15s ease, background 0.15s ease;
+}
+
+.mj-record-tag-remove:hover {
+    color: var(--mj-status-error);
+    background: color-mix(in srgb, var(--mj-status-error) 10%, transparent);
+}
+
+.mj-record-tags-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 24px;
+    text-align: center;
+    color: var(--mj-text-secondary);
+}
+
+.mj-record-tags-empty-icon {
+    font-size: 2.5rem;
+    color: var(--mj-text-muted);
+    margin-bottom: 16px;
+}
+
+.mj-record-tags-hint {
+    font-size: 0.85rem;
+    color: var(--mj-text-muted);
+    margin-top: 8px;
+}

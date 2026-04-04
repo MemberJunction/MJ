@@ -18,6 +18,7 @@ import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-sha
 import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import { WordCloudItem } from '@memberjunction/ng-word-cloud';
 
 // ── Tab type ──
 
@@ -227,6 +228,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     // ── Tag Library tab ──
     public TagRows: TagRow[] = [];
     public TagCloud: TagCloudItem[] = [];
+    public TagCloudWordItems: WordCloudItem[] = [];
     public TagsBySource: TagBySource[] = [];
     public TagSearchQuery = '';
     public FilteredTagRows: TagRow[] = [];
@@ -631,6 +633,13 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             Tag: s.tag,
             AvgWeight: s.weight,
             SizeClass: s.score >= maxScore * 0.7 ? 'large' : s.score >= maxScore * 0.3 ? '' : 'small'
+        }));
+
+        // Build WordCloudItem[] for the mj-word-cloud component
+        this.TagCloudWordItems = scored.map(s => ({
+            Text: s.tag,
+            Weight: maxScore > 0 ? s.score / maxScore : 0,
+            Metadata: { Count: s.count, AvgWeight: s.weight }
         }));
     }
 

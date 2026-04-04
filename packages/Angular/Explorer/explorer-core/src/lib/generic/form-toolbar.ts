@@ -25,9 +25,15 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
         @if (this.form.EntityInfo?.TrackRecordChanges) {
           <button mjButton (click)="this.form.handleHistoryDialog()">History</button>
         }
+        <button mjButton (click)="this.form.HandleTagsPanel()">
+          <i class="fa-solid fa-tags"></i> Tags @if (this.form.TagCount > 0) { ({{ this.form.TagCount }}) }
+        </button>
         <hr />
         @if (this.form.isHistoryDialogOpen) {
           <mj-record-changes [record]="this.form.record" (dialogClosed)="this.form.handleHistoryDialog()"></mj-record-changes>
+        }
+        @if (this.form.IsTagsPanelOpen) {
+          <mj-record-tags [Record]="this.form.record" (PanelClosed)="this.form.HandleTagsPanel()"></mj-record-tags>
         }
         `
 })

@@ -48,6 +48,7 @@ import {
   LoadClusterVisualizationResource
 } from './KnowledgeHub/components/clusters/cluster-visualization-resource.component';
 import { ClusteringModule } from '@memberjunction/ng-clustering';
+import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
 
 /**
  * AIDashboardsModule — AI feature area: models, prompts, agents,
@@ -91,7 +92,8 @@ import { ClusteringModule } from '@memberjunction/ng-clustering';
     SharedDashboardWidgetsModule,
     SharedPipesModule,
     SearchModule,
-    ClusteringModule
+    ClusteringModule,
+    MJWordCloudComponent
   ],
   providers: [
     AIInstrumentationService

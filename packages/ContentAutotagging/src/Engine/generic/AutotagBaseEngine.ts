@@ -194,6 +194,14 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     }
 
     /**
+     * Optional taxonomy JSON string to inject into the autotagging prompt.
+     * Set by the caller (e.g., AutotagEntity) before calling ExtractTextAndProcessWithLLM.
+     * When set, the prompt template receives an `existingTaxonomy` variable containing
+     * the JSON tree of existing tags so the LLM can prefer existing tags.
+     */
+    public TaxonomyContext: string | null = null;
+
+    /**
      * Builds template data for the autotagging prompt from processing params and chunk context.
      */
     private buildPromptData(
@@ -212,6 +220,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             minTags: params.minTags,
             maxTags: params.maxTags,
             additionalAttributePrompts,
+            existingTaxonomy: this.TaxonomyContext ?? undefined,
             contentText: chunk,
             previousResults: hasPreviousResults ? JSON.stringify(previousResults) : undefined,
         };
@@ -378,8 +387,19 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     }
 
     /**
+     * Optional callback invoked after each ContentItemTag is saved, enabling the
+     * tag taxonomy bridge (ContentItemTag → Tag + TaggedItem). Set by providers
+     * like AutotagEntity that want to link free-text tags to formal taxonomy entries.
+     *
+     * Parameters: (contentItemTag: MJContentItemTagEntity, parentTag: string | null, contextUser: UserInfo)
+     */
+    public OnContentItemTagSaved: ((tag: MJContentItemTagEntity, parentTag: string | null, contextUser: UserInfo) => Promise<void>) | null = null;
+
+    /**
      * Saves keyword tags from LLM results as Content Item Tags.
      * Uses batched saves for better performance.
+     * After each tag is saved, invokes the OnContentItemTagSaved callback (if set)
+     * for taxonomy bridge processing.
      */
     public async saveContentItemTags(contentItemID: string, LLMResults: JsonObject, contextUser: UserInfo): Promise<void> {
         const md = new Metadata();
@@ -389,14 +409,16 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         // Normalize keywords — support both formats:
         //   Old: ["keyword1", "keyword2"]
         //   New: [{ tag: "keyword1", weight: 0.95 }, { tag: "keyword2", weight: 0.7 }]
-        const normalizedTags: Array<{ tag: string; weight: number }> = keywords.map((kw: unknown) => {
+        //   New with parentTag: [{ tag: "keyword1", weight: 0.95, parentTag: "parent" }]
+        const normalizedTags: Array<{ tag: string; weight: number; parentTag: string | null }> = keywords.map((kw: unknown) => {
             if (typeof kw === 'string') {
-                return { tag: kw, weight: 1.0 };
+                return { tag: kw, weight: 1.0, parentTag: null };
             }
-            const obj = kw as { tag?: string; keyword?: string; weight?: number };
+            const obj = kw as { tag?: string; keyword?: string; weight?: number; parentTag?: string };
             return {
                 tag: obj.tag || obj.keyword || String(kw),
                 weight: typeof obj.weight === 'number' ? Math.max(0, Math.min(1, obj.weight)) : 0.5,
+                parentTag: obj.parentTag ?? null,
             };
         });
 
@@ -409,7 +431,17 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
                 contentItemTag.ItemID = contentItemID;
                 contentItemTag.Tag = item.tag;
                 contentItemTag.Set('Weight', item.weight);
-                await contentItemTag.Save();
+                const saved = await contentItemTag.Save();
+
+                // Invoke taxonomy bridge callback if set
+                if (saved && this.OnContentItemTagSaved) {
+                    try {
+                        await this.OnContentItemTagSaved(contentItemTag, item.parentTag, contextUser);
+                    } catch (bridgeError) {
+                        const msg = bridgeError instanceof Error ? bridgeError.message : String(bridgeError);
+                        LogError(`Tag taxonomy bridge failed for tag "${item.tag}": ${msg}`);
+                    }
+                }
             }));
         }
     }
@@ -451,8 +483,21 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
 
     /**
      * Retrieves all content sources for a given content source type.
+     * Throws if no sources are found.
      */
     public async getAllContentSources(contextUser: UserInfo, contentSourceTypeID: string): Promise<MJContentSourceEntity[]> {
+        const sources = await this.GetAllContentSourcesSafe(contextUser, contentSourceTypeID);
+        if (sources.length === 0) {
+            throw new Error(`No content sources found for content source type with ID '${contentSourceTypeID}'`);
+        }
+        return sources;
+    }
+
+    /**
+     * Retrieves all content sources for a given content source type.
+     * Returns an empty array (instead of throwing) when no sources are configured.
+     */
+    public async GetAllContentSourcesSafe(contextUser: UserInfo, contentSourceTypeID: string): Promise<MJContentSourceEntity[]> {
         const rv = new RunView();
         const result = await rv.RunView<MJContentSourceEntity>({
             EntityName: 'MJ: Content Sources',
@@ -460,11 +505,10 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             ExtraFilter: `ContentSourceTypeID='${contentSourceTypeID}'`
         }, contextUser);
 
-        if (result.Success && result.Results.length) {
+        if (result.Success) {
             return result.Results;
         }
-
-        throw new Error(`No content sources found for content source type with ID '${contentSourceTypeID}'`);
+        return [];
     }
 
     public SetSubclassContentSourceType(subclass: string): string {

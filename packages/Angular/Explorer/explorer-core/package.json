@@ -61,6 +61,7 @@
     "@memberjunction/ng-notifications": "5.23.0",
     "@memberjunction/ng-query-viewer": "5.23.0",
     "@memberjunction/ng-record-changes": "5.23.0",
+    "@memberjunction/ng-record-tags": "5.23.0",
     "@memberjunction/ng-record-selector": "5.23.0",
     "@memberjunction/ng-resource-permissions": "5.23.0",
     "@memberjunction/ng-shared": "5.23.0",

@@ -298,6 +298,56 @@ export class ClusterScatterComponent implements AfterViewInit, OnDestroy, OnChan
      */
     @Output() ViewportChanged = new EventEmitter<ViewportRect>();
 
+    /**
+     * Fires when the user edits a cluster label inline.
+     * Payload: `{ ClusterId, OldLabel, NewLabel }`.
+     */
+    @Output() LabelEdited = new EventEmitter<{ ClusterId: number; OldLabel: string; NewLabel: string }>();
+
+    // ================================================================
+    // Label Editing State
+    // ================================================================
+
+    /** The cluster ID currently being edited, or null if none. */
+    public EditingClusterId: number | null = null;
+    /** The draft label text during editing. */
+    public EditingLabelDraft = '';
+
+    /** Start inline editing for a cluster label. */
+    public StartLabelEdit(cluster: ClusterInfo, event: MouseEvent): void {
+        event.stopPropagation();
+        this.EditingClusterId = cluster.Id;
+        this.EditingLabelDraft = cluster.Label;
+        this.cdr.detectChanges();
+    }
+
+    /** Commit the edited label. */
+    public CommitLabelEdit(cluster: ClusterInfo): void {
+        const oldLabel = cluster.Label;
+        const newLabel = this.EditingLabelDraft.trim();
+        if (newLabel.length > 0 && newLabel !== oldLabel) {
+            cluster.Label = newLabel;
+            this.LabelEdited.emit({ ClusterId: cluster.Id, OldLabel: oldLabel, NewLabel: newLabel });
+        }
+        this.EditingClusterId = null;
+        this.cdr.detectChanges();
+    }
+
+    /** Cancel editing. */
+    public CancelLabelEdit(): void {
+        this.EditingClusterId = null;
+        this.cdr.detectChanges();
+    }
+
+    /** Handle keydown in the edit input. */
+    public OnLabelEditKeydown(event: KeyboardEvent, cluster: ClusterInfo): void {
+        if (event.key === 'Enter') {
+            this.CommitLabelEdit(cluster);
+        } else if (event.key === 'Escape') {
+            this.CancelLabelEdit();
+        }
+    }
+
     // ================================================================
     // Internal State
     // ================================================================

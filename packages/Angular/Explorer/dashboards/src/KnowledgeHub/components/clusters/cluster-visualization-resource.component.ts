@@ -29,10 +29,12 @@ import {
     ClusterLabel,
     SavedClusterVisualization,
     DefaultClusterConfig,
+    ViewportTransform,
 } from '@memberjunction/ng-clustering';
 import { ClusteringService, ClusterScatterComponent } from '@memberjunction/ng-clustering';
 
 const SAVED_CLUSTERS_KEY = 'KnowledgeHub_SavedClusters';
+const LAST_SESSION_KEY = 'KnowledgeHub_LastClusterSession';
 
 @RegisterClass(BaseResourceComponent, 'ClusterVisualizationResource')
 @Component({
@@ -95,6 +97,7 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
     async ngAfterViewInit(): Promise<void> {
         await this.loadEntityOptions();
         this.loadSavedVisualizations();
+        this.restoreLastSession();
     }
 
     ngOnDestroy(): void {
@@ -155,6 +158,8 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
             this.requestClusterLabelsFromLLM().catch(err =>
                 console.warn('[ClusterVisualization] Background naming failed:', err)
             );
+            // Auto-save session state so it can be restored after navigation
+            this.saveLastSession();
         } catch (error) {
             console.error('[ClusterVisualization] Pipeline error:', error);
             this.Result = null;
@@ -471,6 +476,25 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
         return lines.join('\n');
     }
 
+    /**
+     * Handle inline label edits from the scatter component legend.
+     * Updates the ClusterLabels cache and marks the label as user-edited.
+     */
+    public OnLabelEdited(event: { ClusterId: number; OldLabel: string; NewLabel: string }): void {
+        const existing = this.ClusterLabels.find(l => l.ClusterId === event.ClusterId);
+        if (existing) {
+            existing.Label = event.NewLabel;
+            existing.IsUserEdited = true;
+        } else {
+            this.ClusterLabels.push({
+                ClusterId: event.ClusterId,
+                Label: event.NewLabel,
+                IsUserEdited: true,
+            });
+        }
+        this.cdr.detectChanges();
+    }
+
     /** Apply cluster labels to the result's Clusters array (sets the Label property) */
     private applyLabelsToResult(): void {
         if (!this.Result || this.ClusterLabels.length === 0) return;
@@ -511,6 +535,60 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
             this.SavedVisualizations = [];
         }
         this.cdr.detectChanges();
+    }
+
+    /**
+     * Auto-save the current session to localStorage so it can be restored
+     * when the user navigates away and comes back.
+     */
+    private saveLastSession(): void {
+        if (!this.Result) return;
+        try {
+            const session = {
+                Result: this.stripVectorsFromResult(this.Result),
+                ClusterLabels: this.ClusterLabels,
+                Config: this.ActiveConfig,
+                Title: this.VisualizationTitle,
+                Viewport: this.scatterPlot?.GetViewportTransform() ?? null,
+            };
+            localStorage.setItem(LAST_SESSION_KEY, JSON.stringify(session));
+        } catch {
+            // localStorage quota exceeded or not available — non-critical
+        }
+    }
+
+    /**
+     * Restore the last session from localStorage if no saved visualization is active.
+     * This handles the "navigate away and come back" case.
+     */
+    private restoreLastSession(): void {
+        if (this.Result || this.ActiveSavedId) return; // Already showing something
+        try {
+            const raw = localStorage.getItem(LAST_SESSION_KEY);
+            if (!raw) return;
+            const session = JSON.parse(raw) as {
+                Result: ClusterVisualizationResult;
+                ClusterLabels: ClusterLabel[];
+                Config: ClusterConfig;
+                Title: string;
+                Viewport: ViewportTransform | null;
+            };
+            this.Result = session.Result;
+            this.ClusterLabels = session.ClusterLabels ?? [];
+            this.ActiveConfig = session.Config;
+            this.VisualizationTitle = session.Title ?? 'Restored Session';
+            this.applyLabelsToResult();
+            this.cdr.detectChanges();
+
+            // Restore viewport after a tick to let the scatter component render
+            if (session.Viewport) {
+                setTimeout(() => {
+                    this.scatterPlot?.SetViewportTransform(session.Viewport!);
+                }, 50);
+            }
+        } catch {
+            localStorage.removeItem(LAST_SESSION_KEY);
+        }
     }
 
     /** Persist saved visualizations to UserInfoEngine settings */

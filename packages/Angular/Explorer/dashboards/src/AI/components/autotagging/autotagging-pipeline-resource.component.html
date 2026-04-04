@@ -76,7 +76,33 @@
 
                     <div class="at-pipeline-layout">
                         <div class="at-pipeline-center">
-                            <!-- Pipeline stages visualization hidden for now — can re-enable with animation later -->
+                            <!-- Pipeline stages visualization -->
+                            @if (PipelineStages.length > 0) {
+                                <div class="at-pipeline-stages">
+                                    @for (stage of PipelineStages; track stage.Name; let last = $last) {
+                                        <div class="at-pipeline-stage"
+                                             [class.stage-idle]="stage.Status === 'idle'"
+                                             [class.stage-active]="stage.Status === 'active'"
+                                             [class.stage-complete]="stage.Status === 'complete'">
+                                            <div class="at-pipeline-stage-icon">
+                                                @if (stage.Status === 'active') {
+                                                    <i class="fa-solid fa-spinner fa-spin"></i>
+                                                } @else if (stage.Status === 'complete') {
+                                                    <i class="fa-solid fa-check"></i>
+                                                } @else {
+                                                    <i [class]="stage.Icon"></i>
+                                                }
+                                            </div>
+                                            <div class="at-pipeline-stage-name">{{ stage.Name }}</div>
+                                        </div>
+                                        @if (!last) {
+                                            <div class="at-stage-connector"
+                                                 [class.connector-complete]="stage.Status === 'complete'">
+                                            </div>
+                                        }
+                                    }
+                                </div>
+                            }
 
                             <!-- Progress bar (visible during run) -->
                             @if (IsRunning) {
@@ -348,13 +374,20 @@
                         <div class="at-tag-lib-sidebar">
                             <div class="at-card at-tag-cloud-card">
                                 <div class="at-card-title" style="margin-bottom: 12px;"><i class="fa-solid fa-cloud"></i> Tag Cloud</div>
-                                <div class="at-tag-cloud">
-                                    @for (tag of TagCloud; track tag.Tag) {
-                                        <span class="at-tag-pill" [class]="tag.SizeClass"
-                                              [style.opacity]="0.4 + tag.AvgWeight * 0.6"
-                                              [title]="'Weight: ' + tag.AvgWeight.toFixed(2)">{{ tag.Tag }}</span>
-                                    }
-                                </div>
+                                @if (TagCloudWordItems.length > 0) {
+                                    <mj-word-cloud
+                                        [Items]="TagCloudWordItems"
+                                        [MaxFontSize]="40"
+                                        [MinFontSize]="12"
+                                        [MaxItems]="20"
+                                        Layout="spiral"
+                                        ColorMode="weight-gradient"
+                                        [Interactive]="true"
+                                        [Animate]="true">
+                                    </mj-word-cloud>
+                                } @else {
+                                    <div class="at-tag-cloud-empty">No tags yet</div>
+                                }
                             </div>
                             <div class="at-card" style="padding: 16px; margin-top: 12px;">
                                 <div class="at-card-title" style="margin-bottom: 10px;"><i class="fa-solid fa-chart-pie"></i> By Source</div>

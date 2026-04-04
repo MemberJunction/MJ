@@ -1,9 +1,9 @@
 [
   {
     "fields": {
-      "Name": "Azure Blob Storage",
-      "Description": "Cloud storage integration for Azure Blob Storage containers",
-      "DriverClass": "AutotagAzureBlob"
+      "Name": "Cloud Storage",
+      "Description": "Cloud storage integration via MJ Storage providers (Azure Blob, S3, GCS, SharePoint, etc.)",
+      "DriverClass": "AutotagCloudStorage"
     },
     "primaryKey": {
       "ID": "B8B8C0BE-3E5F-EF11-991A-00224822CE23"

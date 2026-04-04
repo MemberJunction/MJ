@@ -25,15 +25,30 @@ Return ONLY valid JSON without any formatting or code blocks, strictly following
     "title": "(title here)",
     "description": "(description here)",
     "keywords": [
-        { "tag": "keyword1", "weight": 0.95 },
-        { "tag": "keyword2", "weight": 0.7 },
-        { "tag": "keyword3", "weight": 0.4 }
+        { "tag": "keyword1", "weight": 0.95, "parentTag": null },
+        { "tag": "keyword2", "weight": 0.7, "parentTag": "existing parent tag name or null" },
+        { "tag": "keyword3", "weight": 0.4, "parentTag": null }
     ],
     "isValidContent": true
 }
 ```
 
+### Tag Guidelines
+
+- The `tag` field should be a concise, descriptive keyword or short phrase.
+- The `parentTag` field is optional. If you believe a tag should be nested under an existing tag in the taxonomy (provided below), set `parentTag` to the exact name of that parent tag. Set to `null` if the tag stands on its own or no suitable parent exists.
+
 {{ additionalAttributePrompts }}
+
+{% if existingTaxonomy %}
+## Existing Tag Taxonomy
+
+Below is the current tag taxonomy. When possible, **prefer using existing tags** from this taxonomy rather than creating new ones. If an existing tag captures the concept well, use its exact name. Only create new tags when no existing tag adequately represents the concept.
+
+If you create a new tag that logically belongs under an existing tag, set its `parentTag` to that existing tag's name.
+
+{{ existingTaxonomy }}
+{% endif %}
 
 {% if previousResults %}
 You are also provided with the results so far as additional context. Please use them to formulate the best results given the provided text:

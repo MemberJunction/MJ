@@ -1,6 +1,6 @@
 import { BaseAction } from "@memberjunction/actions";
-import { RegisterClass } from "@memberjunction/global";
-import { AutotagLocalFileSystem, AutotagRSSFeed, AutotagWebsite, AutotagBaseEngine, AutotagProgressCallback } from '@memberjunction/content-autotagging';
+import { MJGlobal, RegisterClass } from "@memberjunction/global";
+import { AutotagBase, AutotagBaseEngine, AutotagProgressCallback } from '@memberjunction/content-autotagging';
 import { ActionParam, ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { LogError, LogStatus, RunView } from "@memberjunction/core";
 import { MJContentItemEntity } from "@memberjunction/core-entities";
@@ -9,6 +9,9 @@ import { MJContentItemEntity } from "@memberjunction/core-entities";
  * Params:
  *  * Autotag: Bit, if set to 1, will autotag content from all source types.
  *  * Vectorize: Bit, if set to 1, will embed tagged content items directly into the vector index.
+ *
+ * Uses plugin architecture: iterates all ContentSourceType records and resolves
+ * providers dynamically via ClassFactory using the DriverClass field.
  */
 @RegisterClass(BaseAction, "__AutotagAndVectorizeContent")
 export class AutotagAndVectorizeContentAction extends BaseAction {
@@ -31,10 +34,10 @@ export class AutotagAndVectorizeContentAction extends BaseAction {
             // Run autotagging and vectorization in parallel when both are enabled
             const promises: Promise<void>[] = [];
             if (autotagParam.Value === 1) {
-                promises.push(this.runAutotagProviders(params, onProgress));
+                promises.push(this.RunAutotagProviders(params, onProgress));
             }
             if (vectorizeParam.Value === 1) {
-                promises.push(this.runDirectVectorization(params));
+                promises.push(this.RunDirectVectorization(params));
             }
             await Promise.all(promises);
 
@@ -48,26 +51,44 @@ export class AutotagAndVectorizeContentAction extends BaseAction {
         }
     }
 
-    /** Run each autotag source type, catching per-provider errors */
-    private async runAutotagProviders(params: RunActionParams, onProgress?: AutotagProgressCallback): Promise<void> {
-        const providers = [
-            { name: 'LocalFileSystem', instance: new AutotagLocalFileSystem() },
-            { name: 'RSSFeed', instance: new AutotagRSSFeed() },
-            { name: 'Website', instance: new AutotagWebsite() },
-        ];
+    /**
+     * Dynamically resolves and runs all autotag providers using ClassFactory.
+     * Iterates all ContentSourceType records that have a DriverClass set,
+     * instantiates the provider via ClassFactory, and runs autotagging for
+     * any sources configured for that type.
+     */
+    private async RunAutotagProviders(params: RunActionParams, onProgress?: AutotagProgressCallback): Promise<void> {
+        const engine = AutotagBaseEngine.Instance;
+        const sourceTypes = engine.ContentSourceTypes;
 
-        for (const provider of providers) {
+        for (const sourceType of sourceTypes) {
+            if (!sourceType.DriverClass) {
+                LogStatus(`Content source type "${sourceType.Name}" has no DriverClass, skipping`);
+                continue;
+            }
+
+            // Check if any sources are configured for this type before instantiating
+            const sources = await engine.GetAllContentSourcesSafe(params.ContextUser, sourceType.ID);
+            if (sources.length === 0) {
+                LogStatus(`Content source type "${sourceType.Name}": no sources configured, skipping`);
+                continue;
+            }
+
+            const provider = MJGlobal.Instance.ClassFactory.CreateInstance<AutotagBase>(
+                AutotagBase,
+                sourceType.DriverClass
+            );
+            if (!provider) {
+                LogError(`No provider registered for DriverClass "${sourceType.DriverClass}" (source type: ${sourceType.Name}). Ensure the provider class has @RegisterClass(AutotagBase, '${sourceType.DriverClass}').`);
+                continue;
+            }
+
             try {
-                await provider.instance.Autotag(params.ContextUser, onProgress);
-                LogStatus(`Autotag provider ${provider.name} completed successfully`);
+                await provider.Autotag(params.ContextUser, onProgress);
+                LogStatus(`Autotag provider "${sourceType.Name}" (${sourceType.DriverClass}) completed successfully`);
             } catch (providerError) {
-                // "No content sources found" is expected when a source type has no configured sources — log as info, not error
                 const msg = providerError instanceof Error ? providerError.message : String(providerError);
-                if (msg.includes('No content sources found')) {
-                    LogStatus(`Autotag provider ${provider.name}: no sources configured, skipping`);
-                } else {
-                    LogError(`Autotag provider ${provider.name} failed: ${msg}`);
-                }
+                LogError(`Autotag provider "${sourceType.Name}" (${sourceType.DriverClass}) failed: ${msg}`);
             }
         }
 
@@ -75,7 +96,7 @@ export class AutotagAndVectorizeContentAction extends BaseAction {
     }
 
     /** Embed all content items directly into the vector index */
-    private async runDirectVectorization(params: RunActionParams): Promise<void> {
+    private async RunDirectVectorization(params: RunActionParams): Promise<void> {
         const rv = new RunView();
         const result = await rv.RunView<MJContentItemEntity>({
             EntityName: 'MJ: Content Items',

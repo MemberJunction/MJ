@@ -119,7 +119,21 @@
             @for (cluster of Clusters; track TrackClusterBy($index, cluster)) {
                 <div class="legend-item" (click)="OnClusterLegendClick(cluster)">
                     <div class="legend-dot" [style.background]="cluster.Color"></div>
-                    <span class="legend-label">{{ cluster.Label }}</span>
+                    @if (EditingClusterId === cluster.Id) {
+                        <input class="legend-label-input"
+                               [(ngModel)]="EditingLabelDraft"
+                               (keydown)="OnLabelEditKeydown($event, cluster)"
+                               (blur)="CommitLabelEdit(cluster)"
+                               (click)="$event.stopPropagation()"
+                               autofocus />
+                    } @else {
+                        <span class="legend-label">{{ cluster.Label }}</span>
+                        <button class="legend-edit-btn"
+                                title="Edit label"
+                                (click)="StartLabelEdit(cluster, $event)">
+                            <i class="fa-solid fa-pencil"></i>
+                        </button>
+                    }
                     <span class="legend-count">{{ cluster.MemberCount }}</span>
                 </div>
             }

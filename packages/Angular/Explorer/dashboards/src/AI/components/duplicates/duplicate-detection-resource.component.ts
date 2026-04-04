@@ -10,7 +10,7 @@
 import { Component, ChangeDetectorRef, OnDestroy, AfterViewInit, Input, inject, ViewEncapsulation } from '@angular/core';
 import { Subject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
-import { CompositeKey, Metadata, RecordDependency, RecordMergeRequest, RunView } from '@memberjunction/core';
+import { CompositeKey, LogStatus, Metadata, RecordDependency, RecordMergeRequest, RunView } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import {
     ResourceData,
@@ -364,12 +364,34 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
             this.extractEntityNames();
             this.computeDataRanges();
             this.applyFilters();
+
+            // Reconnect to any in-progress detection run
+            this.reconnectToActiveRun();
         } catch (error) {
             console.error('Error loading duplicate detection data:', error);
         } finally {
             this.IsLoading = false;
             this.cdr.detectChanges();
         }
+    }
+
+    /**
+     * Check if there's an in-progress detection run and reconnect to its
+     * progress subscription. This handles the case where the user navigated
+     * away and came back while a run was active.
+     */
+    private reconnectToActiveRun(): void {
+        if (this.IsDetecting) return; // Already tracking a run
+
+        const activeRun = this.Runs.find(r => r.ProcessingStatus === 'In Progress');
+        if (!activeRun) return;
+
+        LogStatus(`[DuplicateDetection] Reconnecting to in-progress run ${activeRun.ID}`);
+        this.IsDetecting = true;
+        this.DetectionProgress = 0;
+        this.DetectionStage = 'Reconnecting...';
+        this.cdr.detectChanges();
+        this.subscribeToPipelineProgress(activeRun.ID);
     }
 
     /**

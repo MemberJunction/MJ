@@ -414,6 +414,17 @@
     font-size: 0.6rem;
 }
 
+.at-stage-connector {
+    width: 32px;
+    height: 2px;
+    background: var(--mj-border-default);
+    transition: background 0.4s ease;
+}
+
+.at-stage-connector.connector-complete {
+    background: var(--mj-status-success);
+}
+
 /* Progress section */
 
 .at-progress-section {

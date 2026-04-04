@@ -1,0 +1,61 @@
+<mj-slide-panel
+    [Mode]="'slide'"
+    [Title]="'Tags'"
+    [Visible]="true"
+    [Resizable]="true"
+    [MinWidthPx]="350"
+    [MaxWidthRatio]="0.5"
+    (Closed)="OnClose()">
+
+    @if (IsLoading) {
+        <mj-loading text="Loading tags..."></mj-loading>
+    } @else if (TaggedItems.length === 0) {
+        <div class="mj-record-tags-empty">
+            <i class="fa-solid fa-tags mj-record-tags-empty-icon"></i>
+            <p>No tags have been applied to this record yet.</p>
+            <p class="mj-record-tags-hint">Tags are automatically applied when content is processed through the Knowledge Hub autotagging pipeline.</p>
+        </div>
+    } @else {
+        <div class="mj-record-tags-container">
+            <div class="mj-record-tags-header">
+                <div class="mj-record-tags-count">{{ TaggedItems.length }} tag{{ TaggedItems.length === 1 ? '' : 's' }}</div>
+                <button class="mj-record-tags-view-toggle"
+                        (click)="ToggleViewMode()"
+                        [title]="ViewMode === 'list' ? 'Switch to word cloud view' : 'Switch to list view'">
+                    <i class="fa-solid" [class.fa-cloud]="ViewMode === 'list'" [class.fa-list]="ViewMode === 'cloud'"></i>
+                </button>
+            </div>
+
+            @if (ViewMode === 'list') {
+                <div class="mj-record-tags-list">
+                    @for (item of TaggedItems; track item.ID) {
+                        <span class="mj-record-tag-pill"
+                              [style.opacity]="GetTagOpacity(item.Weight)"
+                              [style.font-size]="GetTagFontSize(item.Weight)">
+                            {{ item.Tag }}
+                            @if (item.Weight < 1.0) {
+                                <span class="mj-record-tag-weight">{{ (item.Weight * 100).toFixed(0) }}%</span>
+                            }
+                            <button class="mj-record-tag-remove" (click)="RemoveTag(item)" title="Remove tag">
+                                <i class="fa-solid fa-times"></i>
+                            </button>
+                        </span>
+                    }
+                </div>
+            } @else {
+                <div class="mj-record-tags-cloud">
+                    <mj-word-cloud
+                        [Items]="CloudItems"
+                        [MaxFontSize]="32"
+                        [MinFontSize]="14"
+                        Layout="rectangular"
+                        ColorMode="weight-gradient"
+                        [Interactive]="true"
+                        (ItemClick)="OnCloudItemClick($event)">
+                    </mj-word-cloud>
+                </div>
+            }
+        </div>
+    }
+
+</mj-slide-panel>

@@ -1,0 +1,620 @@
+import { BaseSingleton, MJGlobal, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
+import { UserInfo, LogError, LogStatus } from '@memberjunction/core';
+import { MJTagEntity, MJTaggedItemEntity } from '@memberjunction/core-entities';
+import { TagEngineBase, TagTreeNode } from '@memberjunction/tag-engine-base';
+import { SimpleVectorService, VectorEntry } from '@memberjunction/ai-vectors-memory';
+import { BaseEmbeddings, EmbedTextParams, EmbedTextResult, GetAIAPIKey } from '@memberjunction/ai';
+import { AIEngine } from '@memberjunction/aiengine';
+
+/**
+ * Metadata stored alongside each tag embedding in the vector service.
+ */
+export interface TagEmbeddingMetadata {
+    /** The tag's internal name */
+    Name: string;
+    /** The parent tag ID, or null for root-level tags */
+    ParentID: string | null;
+}
+
+/**
+ * Describes an embedding model discovered from the AIEngine.
+ */
+interface EmbeddingModelInfo {
+    /** The driver class name (e.g., "OpenAIEmbeddings") */
+    DriverClass: string;
+    /** The API-facing model name (e.g., "text-embedding-3-small") */
+    APIName: string;
+}
+
+/**
+ * Server-only Tag Engine that wraps TagEngineBase via composition and adds
+ * semantic embedding support for tag resolution.
+ *
+ * Uses SimpleVectorService to embed all tags for sub-millisecond local similarity matching.
+ * This enables the ResolveTag() method which maps free-text tag strings to formal Tag records.
+ *
+ * @description ONLY USE ON SERVER-SIDE. For client-side tag operations, use TagEngineBase directly.
+ */
+export class TagEngine extends BaseSingleton<TagEngine> {
+    // Constructor must be public to satisfy BaseSingleton.getInstance() constraint
+    public constructor() {
+        super();
+    }
+
+    public static get Instance(): TagEngine {
+        return TagEngine.getInstance<TagEngine>();
+    }
+
+    private _tagVectorService: SimpleVectorService<TagEmbeddingMetadata> | null = null;
+    private _loaded = false;
+    private _loading = false;
+    private _loadingPromise: Promise<void> | null = null;
+    private _contextUser: UserInfo | undefined;
+
+    /** Access to the underlying TagEngineBase instance */
+    protected get Base(): TagEngineBase {
+        return TagEngineBase.Instance;
+    }
+
+    // ========================================================================
+    // Delegated Properties from TagEngineBase
+    // ========================================================================
+
+    /** All loaded Tag entities */
+    public get Tags(): MJTagEntity[] {
+        return this.Base.Tags;
+    }
+
+    /** All loaded TaggedItem entities */
+    public get TaggedItems(): MJTaggedItemEntity[] {
+        return this.Base.TaggedItems;
+    }
+
+    /** The vector service containing tag embeddings, or null if not yet loaded or no embedding model available */
+    public get TagVectorService(): SimpleVectorService<TagEmbeddingMetadata> | null {
+        return this._tagVectorService;
+    }
+
+    /** Returns true if both the base engine and server capabilities are loaded */
+    public get Loaded(): boolean {
+        return this._loaded;
+    }
+
+    // ========================================================================
+    // Delegated Methods from TagEngineBase
+    // ========================================================================
+
+    /** Find a tag by its ID using case-insensitive UUID comparison */
+    public GetTagByID(id: string): MJTagEntity | undefined {
+        return this.Base.GetTagByID(id);
+    }
+
+    /** Find a tag by its Name using case-insensitive string comparison */
+    public GetTagByName(name: string): MJTagEntity | undefined {
+        return this.Base.GetTagByName(name);
+    }
+
+    /** Get direct children of a given parent tag */
+    public GetChildTags(parentID: string): MJTagEntity[] {
+        return this.Base.GetChildTags(parentID);
+    }
+
+    /** Get all descendants of a given root tag, recursively */
+    public GetSubtree(rootID: string): MJTagEntity[] {
+        return this.Base.GetSubtree(rootID);
+    }
+
+    /** Get all tagged items associated with a specific entity record */
+    public GetTaggedItemsForRecord(entityID: string, recordID: string): MJTaggedItemEntity[] {
+        return this.Base.GetTaggedItemsForRecord(entityID, recordID);
+    }
+
+    /** Build a hierarchical tree of TagTreeNode objects for LLM prompt injection */
+    public GetTaxonomyTree(rootID?: string): TagTreeNode[] {
+        return this.Base.GetTaxonomyTree(rootID);
+    }
+
+    /** Create a new Tag entity, save it, and add to local cache */
+    public async CreateTag(
+        name: string,
+        displayName: string,
+        parentID: string | null,
+        description: string | null,
+        contextUser: UserInfo
+    ): Promise<MJTagEntity> {
+        return this.Base.CreateTag(name, displayName, parentID, description, contextUser);
+    }
+
+    /** Create or update a TaggedItem linking a tag to an entity record */
+    public async CreateTaggedItem(
+        tagID: string,
+        entityID: string,
+        recordID: string,
+        weight: number,
+        contextUser: UserInfo
+    ): Promise<MJTaggedItemEntity> {
+        return this.Base.CreateTaggedItem(tagID, entityID, recordID, weight, contextUser);
+    }
+
+    // ========================================================================
+    // Config / Loading
+    // ========================================================================
+
+    /**
+     * Initialize the TagEngine by loading the base engine and building tag embeddings.
+     * Safe to call multiple times; subsequent calls are no-ops unless forceRefresh is true.
+     *
+     * @param forceRefresh - If true, reload all data and rebuild embeddings
+     * @param contextUser - Required for server-side operations
+     */
+    public async Config(forceRefresh?: boolean, contextUser?: UserInfo): Promise<void> {
+        if (this._loaded && !forceRefresh) return;
+        if (this._loading && this._loadingPromise) return this._loadingPromise;
+
+        this._loading = true;
+        this._loadingPromise = this.innerLoad(forceRefresh, contextUser);
+        try {
+            await this._loadingPromise;
+        } finally {
+            this._loading = false;
+            this._loadingPromise = null;
+        }
+    }
+
+    /**
+     * Internal loading implementation: loads the base engine then builds tag embeddings.
+     */
+    private async innerLoad(forceRefresh?: boolean, contextUser?: UserInfo): Promise<void> {
+        this._contextUser = contextUser;
+        await TagEngineBase.Instance.Config(forceRefresh ?? false, contextUser);
+        await this.refreshTagEmbeddings(contextUser);
+        this._loaded = true;
+    }
+
+    /**
+     * Build or rebuild the tag vector service by embedding each tag's name and description.
+     * Gracefully degrades if no embedding model is available.
+     */
+    private async refreshTagEmbeddings(contextUser?: UserInfo): Promise<void> {
+        const tags = this.Tags;
+        if (tags.length === 0) {
+            LogStatus('TagEngine: No tags to embed. Skipping embedding generation.');
+            return;
+        }
+
+        const modelInfo = this.getSmallestEmbeddingModel();
+        if (!modelInfo) {
+            LogStatus('TagEngine: No embedding model available. Semantic tag matching will be disabled; exact-name matching still works.');
+            return;
+        }
+
+        const entries = await this.generateTagEmbeddings(tags, modelInfo);
+        if (entries.length === 0) {
+            LogStatus('TagEngine: Failed to generate any tag embeddings.');
+            return;
+        }
+
+        this._tagVectorService = new SimpleVectorService<TagEmbeddingMetadata>();
+        this._tagVectorService.LoadVectors(entries);
+        LogStatus(`TagEngine: Loaded ${entries.length} tag embeddings into vector service.`);
+    }
+
+    /**
+     * Generate embeddings for a list of tags using the specified model.
+     */
+    private async generateTagEmbeddings(
+        tags: MJTagEntity[],
+        modelInfo: EmbeddingModelInfo
+    ): Promise<VectorEntry<TagEmbeddingMetadata>[]> {
+        const entries: VectorEntry<TagEmbeddingMetadata>[] = [];
+        const apiKey = GetAIAPIKey(modelInfo.DriverClass);
+
+        const embeddingInstance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseEmbeddings>(
+            BaseEmbeddings,
+            modelInfo.DriverClass,
+            apiKey
+        );
+        if (!embeddingInstance) {
+            LogError(`TagEngine: Failed to create embedding instance for driver class "${modelInfo.DriverClass}".`);
+            return entries;
+        }
+
+        for (const tag of tags) {
+            const entry = await this.embedSingleTag(tag, embeddingInstance, modelInfo.APIName);
+            if (entry) {
+                entries.push(entry);
+            }
+        }
+
+        return entries;
+    }
+
+    /**
+     * Embed a single tag and return a VectorEntry, or null on failure.
+     */
+    private async embedSingleTag(
+        tag: MJTagEntity,
+        embeddingInstance: BaseEmbeddings,
+        apiName: string
+    ): Promise<VectorEntry<TagEmbeddingMetadata> | null> {
+        try {
+            const embeddingText = this.buildTagEmbeddingText(tag);
+            const params: EmbedTextParams = {
+                text: embeddingText,
+                model: apiName
+            };
+            const result = await embeddingInstance.EmbedText(params);
+
+            if (!result || result.vector.length === 0) {
+                LogError(`TagEngine: Failed to generate embedding for tag "${tag.Name}".`);
+                return null;
+            }
+
+            return {
+                key: NormalizeUUID(tag.ID),
+                vector: result.vector,
+                metadata: {
+                    Name: tag.Name,
+                    ParentID: tag.ParentID
+                }
+            };
+        } catch (error) {
+            LogError(`TagEngine: Error embedding tag "${tag.Name}": ${error instanceof Error ? error.message : String(error)}`);
+            return null;
+        }
+    }
+
+    /**
+     * Build the text string to embed for a given tag.
+     * Combines name and description for richer semantic representation.
+     */
+    private buildTagEmbeddingText(tag: MJTagEntity): string {
+        if (tag.Description && tag.Description.trim().length > 0) {
+            return `${tag.Name}: ${tag.Description}`;
+        }
+        return tag.Name;
+    }
+
+    // ========================================================================
+    // Semantic Tag Resolution
+    // ========================================================================
+
+    /**
+     * Resolve a free-text tag to a formal Tag record using exact match and semantic search.
+     *
+     * Resolution strategy:
+     * 1. Exact name match (fast path, no embedding needed)
+     * 2. Semantic similarity search using vector embeddings
+     * 3. Auto-creation based on mode if no match found
+     *
+     * @param tagText - The free-text tag string to resolve
+     * @param weight - The weight to assign if creating a new tag (0.0 to 1.0)
+     * @param mode - Resolution mode:
+     *   - 'constrained': Only match existing tags, return null if no match
+     *   - 'auto-grow': Create a new tag under rootID if no match found
+     *   - 'free-flow': Create a new root-level tag if no match found
+     * @param rootID - If set, constrain semantic search to this subtree. Also used as parent for auto-grow.
+     * @param threshold - Minimum similarity score (0-1) for a match to be accepted
+     * @param contextUser - The user context for the operation
+     * @returns The matched or newly created MJTagEntity, or null if no match in constrained mode
+     */
+    public async ResolveTag(
+        tagText: string,
+        weight: number,
+        mode: 'constrained' | 'auto-grow' | 'free-flow',
+        rootID: string | null,
+        threshold: number,
+        contextUser: UserInfo
+    ): Promise<MJTagEntity | null> {
+        // 1. Fast path: exact name match
+        const exactMatch = this.GetTagByName(tagText);
+        if (exactMatch) {
+            return this.filterBySubtree(exactMatch, rootID);
+        }
+
+        // 2. Semantic search if vector service is available
+        const semanticMatch = await this.findSemanticMatch(tagText, rootID, threshold);
+        if (semanticMatch) {
+            return semanticMatch;
+        }
+
+        // 3. No match found - behavior depends on mode
+        return this.handleNoMatch(tagText, mode, rootID, contextUser);
+    }
+
+    /**
+     * Check if an exact match falls within the required subtree.
+     * Returns the tag if it's in the subtree (or no subtree constraint), null otherwise.
+     */
+    private filterBySubtree(tag: MJTagEntity, rootID: string | null): MJTagEntity | null {
+        if (!rootID) {
+            return tag;
+        }
+        // The tag itself could be the root
+        if (UUIDsEqual(tag.ID, rootID)) {
+            return tag;
+        }
+        if (this.isInSubtree(tag.ID, rootID)) {
+            return tag;
+        }
+        return null;
+    }
+
+    /**
+     * Attempt to find a semantically matching tag using the vector service.
+     */
+    private async findSemanticMatch(
+        tagText: string,
+        rootID: string | null,
+        threshold: number
+    ): Promise<MJTagEntity | null> {
+        if (!this._tagVectorService) {
+            return null;
+        }
+
+        const modelInfo = this.getSmallestEmbeddingModel();
+        if (!modelInfo) {
+            return null;
+        }
+
+        const queryVector = await this.embedQueryText(tagText, modelInfo);
+        if (!queryVector) {
+            return null;
+        }
+
+        // Build optional subtree filter
+        const subtreeFilter = rootID ? this.buildSubtreeFilter(rootID) : undefined;
+
+        const results = this._tagVectorService.FindNearest(
+            queryVector,
+            1,
+            threshold,
+            'cosine',
+            subtreeFilter
+        );
+
+        if (results.length === 0) {
+            return null;
+        }
+
+        return this.GetTagByID(results[0].key) ?? null;
+    }
+
+    /**
+     * Build a metadata filter function that constrains results to a subtree.
+     */
+    private buildSubtreeFilter(rootID: string): (metadata: TagEmbeddingMetadata) => boolean {
+        // Pre-compute the set of all tag IDs in the subtree for O(1) lookup
+        const subtreeIDs = new Set<string>();
+        subtreeIDs.add(NormalizeUUID(rootID));
+        const descendants = this.Base.GetSubtree(rootID);
+        for (const d of descendants) {
+            subtreeIDs.add(NormalizeUUID(d.ID));
+        }
+
+        return (_metadata: TagEmbeddingMetadata) => {
+            // The key in the vector service is NormalizeUUID(tag.ID),
+            // but metadata filter gets the metadata, not the key.
+            // We need to check if this tag is in the subtree.
+            // Since we stored Name in metadata, look up the tag by name
+            // and check if it's in the subtree set.
+            const tag = this.GetTagByName(_metadata.Name);
+            if (!tag) return false;
+            return subtreeIDs.has(NormalizeUUID(tag.ID));
+        };
+    }
+
+    /**
+     * Embed a query text string for similarity search.
+     */
+    private async embedQueryText(
+        text: string,
+        modelInfo: EmbeddingModelInfo
+    ): Promise<number[] | null> {
+        try {
+            const apiKey = GetAIAPIKey(modelInfo.DriverClass);
+            const embeddingInstance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseEmbeddings>(
+                BaseEmbeddings,
+                modelInfo.DriverClass,
+                apiKey
+            );
+            if (!embeddingInstance) {
+                LogError(`TagEngine: Failed to create embedding instance for query.`);
+                return null;
+            }
+
+            const params: EmbedTextParams = {
+                text,
+                model: modelInfo.APIName
+            };
+            const result = await embeddingInstance.EmbedText(params);
+            if (!result || result.vector.length === 0) {
+                return null;
+            }
+            return result.vector;
+        } catch (error) {
+            LogError(`TagEngine: Error embedding query text: ${error instanceof Error ? error.message : String(error)}`);
+            return null;
+        }
+    }
+
+    /**
+     * Handle the case where no match was found, creating a new tag based on mode.
+     */
+    private async handleNoMatch(
+        tagText: string,
+        mode: 'constrained' | 'auto-grow' | 'free-flow',
+        rootID: string | null,
+        contextUser: UserInfo
+    ): Promise<MJTagEntity | null> {
+        switch (mode) {
+            case 'constrained':
+                return null;
+
+            case 'auto-grow':
+                return this.createAndEmbedTag(tagText, rootID, contextUser);
+
+            case 'free-flow':
+                return this.createAndEmbedTag(tagText, null, contextUser);
+
+            default:
+                return null;
+        }
+    }
+
+    /**
+     * Create a new tag, save it, and add its embedding to the vector service.
+     */
+    private async createAndEmbedTag(
+        tagText: string,
+        parentID: string | null,
+        contextUser: UserInfo
+    ): Promise<MJTagEntity> {
+        const newTag = await this.Base.CreateTag(tagText, tagText, parentID, null, contextUser);
+
+        // If we have an active vector service, embed the new tag and add it
+        await this.addTagToVectorService(newTag);
+
+        return newTag;
+    }
+
+    /**
+     * Embed a single tag and add it to the existing vector service.
+     * No-op if no vector service or embedding model is available.
+     */
+    private async addTagToVectorService(tag: MJTagEntity): Promise<void> {
+        if (!this._tagVectorService) {
+            return;
+        }
+
+        const modelInfo = this.getSmallestEmbeddingModel();
+        if (!modelInfo) {
+            return;
+        }
+
+        const apiKey = GetAIAPIKey(modelInfo.DriverClass);
+        const embeddingInstance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseEmbeddings>(
+            BaseEmbeddings,
+            modelInfo.DriverClass,
+            apiKey
+        );
+        if (!embeddingInstance) {
+            return;
+        }
+
+        const entry = await this.embedSingleTag(tag, embeddingInstance, modelInfo.APIName);
+        if (entry) {
+            this._tagVectorService.AddVector(entry.key, entry.vector, entry.metadata);
+        }
+    }
+
+    // ========================================================================
+    // Embedding Model Discovery
+    // ========================================================================
+
+    /**
+     * Find the smallest available embedding model from the AIEngine.
+     * Prefers the model with the smallest InputTokenLimit (cheapest/fastest).
+     * @returns Model info with DriverClass and APIName, or null if none found
+     */
+    private getSmallestEmbeddingModel(): EmbeddingModelInfo | null {
+        const aiEngine = AIEngine.Instance;
+        if (!aiEngine.Loaded) {
+            return null;
+        }
+
+        // Filter to embedding models only
+        const embeddingModels = aiEngine.Models.filter(m => {
+            const modelType = typeof m.AIModelType === 'string' ? m.AIModelType.trim().toLowerCase() : '';
+            return modelType === 'embeddings';
+        });
+
+        if (embeddingModels.length === 0) {
+            return null;
+        }
+
+        // Sort by InputTokenLimit ascending (smallest first) to pick cheapest
+        const sorted = [...embeddingModels].sort((a, b) => {
+            const aTokens = a.InputTokenLimit ?? Number.MAX_SAFE_INTEGER;
+            const bTokens = b.InputTokenLimit ?? Number.MAX_SAFE_INTEGER;
+            return aTokens - bTokens;
+        });
+
+        const chosen = sorted[0];
+
+        // Find the model vendor to get DriverClass
+        const modelVendor = this.findModelVendor(chosen.ID);
+        if (!modelVendor) {
+            // Fall back to model's own DriverClass if available
+            if (chosen.DriverClass) {
+                return {
+                    DriverClass: chosen.DriverClass,
+                    APIName: chosen.APIName ?? chosen.Name
+                };
+            }
+            LogError(`TagEngine: No model vendor found for embedding model "${chosen.Name}" and model has no DriverClass.`);
+            return null;
+        }
+
+        return {
+            DriverClass: modelVendor.DriverClass,
+            APIName: modelVendor.APIName ?? chosen.APIName ?? chosen.Name
+        };
+    }
+
+    /**
+     * Find the highest-priority active ModelVendor for a given model ID.
+     */
+    private findModelVendor(modelID: string): { DriverClass: string; APIName: string | null } | null {
+        const aiEngine = AIEngine.Instance;
+        const vendors = aiEngine.ModelVendors
+            .filter(mv => UUIDsEqual(mv.ModelID, modelID) && mv.Status === 'Active' && mv.DriverClass != null)
+            .sort((a, b) => (b.Priority ?? 0) - (a.Priority ?? 0));
+
+        if (vendors.length === 0) {
+            return null;
+        }
+
+        const best = vendors[0];
+        return {
+            DriverClass: best.DriverClass!,
+            APIName: best.APIName
+        };
+    }
+
+    // ========================================================================
+    // Subtree Utilities
+    // ========================================================================
+
+    /**
+     * Walk up the parent chain from a given tagID to determine if rootID is an ancestor.
+     * @param tagID - The tag to check
+     * @param rootID - The potential ancestor
+     * @returns true if rootID is found in the ancestor chain of tagID
+     */
+    private isInSubtree(tagID: string, rootID: string): boolean {
+        const visited = new Set<string>();
+        let currentID: string | null = tagID;
+
+        while (currentID) {
+            const normalizedCurrent = NormalizeUUID(currentID);
+            if (visited.has(normalizedCurrent)) {
+                // Circular reference detected, bail out
+                return false;
+            }
+            visited.add(normalizedCurrent);
+
+            if (UUIDsEqual(currentID, rootID)) {
+                return true;
+            }
+
+            const tag = this.GetTagByID(currentID);
+            if (!tag) {
+                return false;
+            }
+            currentID = tag.ParentID;
+        }
+
+        return false;
+    }
+}

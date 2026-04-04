@@ -18,6 +18,7 @@ import { FileStorageModule } from '@memberjunction/ng-file-storage';
 import { QueryViewerModule } from '@memberjunction/ng-query-viewer';
 import { BaseFormsModule } from '@memberjunction/ng-base-forms';
 import { RecordChangesModule } from '@memberjunction/ng-record-changes';
+import { RecordTagsModule } from '@memberjunction/ng-record-tags';
 import { EntityFormDialogModule } from '@memberjunction/ng-entity-form-dialog';
 import { RecordSelectorModule } from '@memberjunction/ng-record-selector';
 import { ResourcePermissionsModule } from '@memberjunction/ng-resource-permissions';
@@ -97,6 +98,7 @@ import { OAuthCallbackComponent } from './lib/oauth/oauth-callback.component';
     RouterModule,
     ExportServiceModule,
     RecordChangesModule,
+    RecordTagsModule,
     ContainerDirectivesModule,
     BaseFormsModule,
     QueryViewerModule,
