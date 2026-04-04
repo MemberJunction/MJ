@@ -6997,11 +6997,10 @@ export const MJApplicationSchema = z.object({
         * * Display Name: Color
         * * SQL Data Type: nvarchar(20)
         * * Description: Hex color code for visual theming (e.g., #4caf50)`),
-    DefaultNavItems: z.any().nullable().describe(`
+    DefaultNavItems: z.string().nullable().describe(`
         * * Field Name: DefaultNavItems
         * * Display Name: Default Nav Items
         * * SQL Data Type: nvarchar(MAX)
-        * * JSON Type: Array<MJApplicationEntity_IDefaultNavItem>
         * * Description: JSON array of default navigation items for this application. Parsed by BaseApplication.GetNavItems()`),
     ClassName: z.string().nullable().describe(`
         * * Field Name: ClassName
@@ -9605,12 +9604,12 @@ export const MJContentItemTagSchema = z.object({
         * * Default Value: newsequentialid()`),
     ItemID: z.string().describe(`
         * * Field Name: ItemID
-        * * Display Name: Item ID
+        * * Display Name: Item
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Content Items (vwContentItems.ID)`),
     Tag: z.string().describe(`
         * * Field Name: Tag
-        * * Display Name: Tag
+        * * Display Name: Tag Text
         * * SQL Data Type: nvarchar(200)
         * * Description: The tag text applied to the content item for categorization and search.`),
     __mj_CreatedAt: z.date().describe(`
@@ -9629,10 +9628,20 @@ export const MJContentItemTagSchema = z.object({
         * * SQL Data Type: numeric(5, 4)
         * * Default Value: 1.0
         * * Description: Relevance weight for this tag (0.0-1.0). 1.0 = highly relevant central topic, 0.5 = moderately relevant, 0.1 = tangentially related. Assigned by the LLM during autotagging.`),
+    TagID: z.string().nullable().describe(`
+        * * Field Name: TagID
+        * * Display Name: Tag Reference
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Tags (vwTags.ID)
+        * * Description: Optional link to the formal MJ Tag taxonomy. When set, this free-text tag has been matched (via semantic similarity or exact match) to a curated Tag record. NULL means the tag is unmatched free text only.`),
     Item: z.string().nullable().describe(`
         * * Field Name: Item
-        * * Display Name: Item
+        * * Display Name: Item Name
         * * SQL Data Type: nvarchar(250)`),
+    Tag_Virtual: z.string().nullable().describe(`
+        * * Field Name: Tag_Virtual
+        * * Display Name: Tag (Virtual)
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type MJContentItemTagEntityType = z.infer<typeof MJContentItemTagSchema>;
@@ -9648,7 +9657,7 @@ export const MJContentItemSchema = z.object({
         * * Default Value: newsequentialid()`),
     ContentSourceID: z.string().describe(`
         * * Field Name: ContentSourceID
-        * * Display Name: Content Source ID
+        * * Display Name: Content Source
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Content Sources (vwContentSources.ID)`),
     Name: z.string().nullable().describe(`
@@ -9661,17 +9670,17 @@ export const MJContentItemSchema = z.object({
         * * SQL Data Type: nvarchar(MAX)`),
     ContentTypeID: z.string().describe(`
         * * Field Name: ContentTypeID
-        * * Display Name: Content Type ID
+        * * Display Name: Content Type
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Content Types (vwContentTypes.ID)`),
     ContentSourceTypeID: z.string().describe(`
         * * Field Name: ContentSourceTypeID
-        * * Display Name: Content Source Type ID
+        * * Display Name: Content Source Type
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Content Source Types (vwContentSourceTypes.ID)`),
     ContentFileTypeID: z.string().describe(`
         * * Field Name: ContentFileTypeID
-        * * Display Name: Content File Type ID
+        * * Display Name: Content File Type
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Content File Types (vwContentFileTypes.ID)`),
     Checksum: z.string().nullable().describe(`
@@ -9686,7 +9695,7 @@ export const MJContentItemSchema = z.object({
         * * Description: The source location URL where this content was retrieved from.`),
     Text: z.string().nullable().describe(`
         * * Field Name: Text
-        * * Display Name: Text
+        * * Display Name: Extracted Text
         * * SQL Data Type: nvarchar(MAX)
         * * Description: The extracted text content from the source document or file.`),
     __mj_CreatedAt: z.date().describe(`
@@ -9699,22 +9708,32 @@ export const MJContentItemSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    EntityRecordDocumentID: z.string().nullable().describe(`
+        * * Field Name: EntityRecordDocumentID
+        * * Display Name: Entity Record Document
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entity Record Documents (vwEntityRecordDocuments.ID)
+        * * Description: For entity-sourced content items, links to the Entity Record Document snapshot that was rendered for this item. Provides traceability back to the source entity record via ERD.EntityID + ERD.RecordID. NULL for non-entity sources.`),
     ContentSource: z.string().nullable().describe(`
         * * Field Name: ContentSource
-        * * Display Name: Content Source
+        * * Display Name: Content Source Name
         * * SQL Data Type: nvarchar(255)`),
     ContentType: z.string().describe(`
         * * Field Name: ContentType
-        * * Display Name: Content Type
+        * * Display Name: Content Type Name
         * * SQL Data Type: nvarchar(255)`),
     ContentSourceType: z.string().describe(`
         * * Field Name: ContentSourceType
-        * * Display Name: Content Source Type
+        * * Display Name: Content Source Type Name
         * * SQL Data Type: nvarchar(255)`),
     ContentFileType: z.string().describe(`
         * * Field Name: ContentFileType
-        * * Display Name: Content File Type
+        * * Display Name: Content File Type Name
         * * SQL Data Type: nvarchar(255)`),
+    EntityRecordDocument: z.string().nullable().describe(`
+        * * Field Name: EntityRecordDocument
+        * * Display Name: Entity Record Document Name
+        * * SQL Data Type: nvarchar(450)`),
 });
 
 export type MJContentItemEntityType = z.infer<typeof MJContentItemSchema>;
@@ -9885,6 +9904,16 @@ export const MJContentSourceTypeSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    DriverClass: z.string().nullable().describe(`
+        * * Field Name: DriverClass
+        * * Display Name: Driver Class
+        * * SQL Data Type: nvarchar(255)
+        * * Description: The registered class name used by ClassFactory to instantiate the provider for this source type (e.g., AutotagLocalFileSystem, AutotagEntity). Must match a @RegisterClass key on a class extending AutotagBase.`),
+    Configuration: z.string().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON configuration blob for type-level settings. Conforms to the IContentSourceTypeConfiguration interface. Reserved for future type-wide settings shared by all sources of this type.`),
 });
 
 export type MJContentSourceTypeEntityType = z.infer<typeof MJContentSourceTypeSchema>;
@@ -9909,12 +9938,12 @@ export const MJContentSourceSchema = z.object({
         * * Related Entity/Foreign Key: MJ: Content Types (vwContentTypes.ID)`),
     ContentSourceTypeID: z.string().describe(`
         * * Field Name: ContentSourceTypeID
-        * * Display Name: Content Source Type
+        * * Display Name: Source Type
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Content Source Types (vwContentSourceTypes.ID)`),
     ContentFileTypeID: z.string().describe(`
         * * Field Name: ContentFileTypeID
-        * * Display Name: Content File Type
+        * * Display Name: File Type
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Content File Types (vwContentFileTypes.ID)`),
     URL: z.string().describe(`
@@ -9944,26 +9973,51 @@ export const MJContentSourceSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Vector Indexes (vwVectorIndexes.ID)
         * * Description: Per-source override for the vector index. When NULL, falls back to the ContentType default.`),
+    Configuration: z.string().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration JSON
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON configuration blob for source-instance settings. Conforms to the IContentSourceConfiguration interface. Includes tag taxonomy mode (constrained/auto-grow/free-flow), tag root ID, match threshold, LLM taxonomy sharing, and vectorization toggle.`),
+    EntityID: z.string().nullable().describe(`
+        * * Field Name: EntityID
+        * * Display Name: Source Entity
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+        * * Description: For Entity-type content sources, the MJ Entity to pull records from. NULL for non-entity sources (files, RSS, websites, etc.).`),
+    EntityDocumentID: z.string().nullable().describe(`
+        * * Field Name: EntityDocumentID
+        * * Display Name: Document Template
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entity Documents (vwEntityDocuments.ID)
+        * * Description: For Entity-type content sources, the Entity Document template used to render entity records into text for autotagging. The template defines which fields to include, how to format them, and related record inclusion. NULL for non-entity sources.`),
     ContentType: z.string().describe(`
         * * Field Name: ContentType
-        * * Display Name: Content Type
+        * * Display Name: Content Type Name
         * * SQL Data Type: nvarchar(255)`),
     ContentSourceType: z.string().describe(`
         * * Field Name: ContentSourceType
-        * * Display Name: Content Source Type
+        * * Display Name: Source Type Name
         * * SQL Data Type: nvarchar(255)`),
     ContentFileType: z.string().describe(`
         * * Field Name: ContentFileType
-        * * Display Name: Content File Type
+        * * Display Name: File Type Name
         * * SQL Data Type: nvarchar(255)`),
     EmbeddingModel: z.string().nullable().describe(`
         * * Field Name: EmbeddingModel
-        * * Display Name: Embedding Model
+        * * Display Name: Embedding Model Name
         * * SQL Data Type: nvarchar(50)`),
     VectorIndex: z.string().nullable().describe(`
         * * Field Name: VectorIndex
-        * * Display Name: Vector Index
+        * * Display Name: Vector Index Name
         * * SQL Data Type: nvarchar(255)`),
+    Entity: z.string().nullable().describe(`
+        * * Field Name: Entity
+        * * Display Name: Source Entity Name
+        * * SQL Data Type: nvarchar(255)`),
+    EntityDocument: z.string().nullable().describe(`
+        * * Field Name: EntityDocument
+        * * Display Name: Document Template Name
+        * * SQL Data Type: nvarchar(250)`),
 });
 
 export type MJContentSourceEntityType = z.infer<typeof MJContentSourceSchema>;
@@ -10063,6 +10117,11 @@ export const MJContentTypeSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Vector Indexes (vwVectorIndexes.ID)
         * * Description: Default vector index for storing embeddings of this content type. Sources can override per-source. If NULL, uses the first available vector index.`),
+    Configuration: z.string().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON configuration blob for content-type-level settings. Conforms to the IContentTypeConfiguration interface. Reserved for future type-wide settings such as default tag taxonomy rules and processing options.`),
     AIModel: z.string().describe(`
         * * Field Name: AIModel
         * * Display Name: AI Model Name
@@ -14010,22 +14069,6 @@ export const MJEntityFieldSchema = z.object({
         * * Display Name: Related Entity Join Fields
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON configuration for additional fields to join from the related entity into this entity's base view. Supports modes: extend (add to NameField), override (replace NameField), disable (no joins). Schema: { mode?: string, fields?: [{ field: string, alias?: string }] }`),
-    JSONType: z.string().nullable().describe(`
-        * * Field Name: JSONType
-        * * Display Name: JSON Type
-        * * SQL Data Type: nvarchar(255)
-        * * Description: The name of the TypeScript interface/type for this JSON field. When set, CodeGen emits a strongly-typed Object-suffixed accessor using this type instead of only the default string getter/setter.`),
-    JSONTypeIsArray: z.boolean().describe(`
-        * * Field Name: JSONTypeIsArray
-        * * Display Name: JSON Type Is Array
-        * * SQL Data Type: bit
-        * * Default Value: 0
-        * * Description: If true, the field holds a JSON array of JSONType items. The Object accessor returns Array<JSONType> | null and the setter accepts Array<JSONType> | null.`),
-    JSONTypeDefinition: z.string().nullable().describe(`
-        * * Field Name: JSONTypeDefinition
-        * * Display Name: JSON Type Definition
-        * * SQL Data Type: nvarchar(MAX)
-        * * Description: Raw TypeScript code emitted by CodeGen above the entity class definition. Typically contains the interface/type definition referenced by JSONType. Can include imports, multiple types, or any valid TypeScript.`),
     FieldCodeName: z.string().nullable().describe(`
         * * Field Name: FieldCodeName
         * * Display Name: Field Code Name
@@ -20490,12 +20533,12 @@ export const MJTaggedItemSchema = z.object({
         * * Default Value: newsequentialid()`),
     TagID: z.string().describe(`
         * * Field Name: TagID
-        * * Display Name: Tag ID
+        * * Display Name: Tag
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Tags (vwTags.ID)`),
     EntityID: z.string().describe(`
         * * Field Name: EntityID
-        * * Display Name: Entity ID
+        * * Display Name: Entity
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)`),
     RecordID: z.string().describe(`
@@ -20513,13 +20556,19 @@ export const MJTaggedItemSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Weight: z.number().describe(`
+        * * Field Name: Weight
+        * * Display Name: Weight
+        * * SQL Data Type: numeric(5, 4)
+        * * Default Value: 1.0
+        * * Description: Relevance weight of this tag association (0.0 to 1.0). 1.0 indicates the tag is highly relevant or was manually applied. Lower values indicate decreasing relevance as determined by LLM autotagging. Default 1.0 for manually applied tags.`),
     Tag: z.string().describe(`
         * * Field Name: Tag
-        * * Display Name: Tag
+        * * Display Name: Tag Name
         * * SQL Data Type: nvarchar(255)`),
     Entity: z.string().describe(`
         * * Field Name: Entity
-        * * Display Name: Entity
+        * * Display Name: Entity Name
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -42380,21 +42429,6 @@ export class MJApplicationSettingEntity extends BaseEntity<MJApplicationSettingE
 }
 
 
-export interface MJApplicationEntity_IDefaultNavItem {
-    /** Display label for the navigation item */
-    Label: string;
-    /** Font Awesome icon class (e.g., "fa-solid fa-database") */
-    Icon: string;
-    /** Type of resource: "Dashboards", "Custom", etc. */
-    ResourceType: string;
-    /** For Dashboard resources, the ID of the dashboard record */
-    RecordID?: string | null;
-    /** For Custom resources, the registered driver class name */
-    DriverClass?: string | null;
-    /** Whether this is the default tab when the app opens */
-    isDefault?: boolean;
-}
-
 /**
  * MJ: Applications - strongly typed entity sub-class
  * * Schema: __mj
@@ -42539,7 +42573,6 @@ export class MJApplicationEntity extends BaseEntity<MJApplicationEntityType> {
     * * Field Name: DefaultNavItems
     * * Display Name: Default Nav Items
     * * SQL Data Type: nvarchar(MAX)
-    * * JSON Type: Array<MJApplicationEntity_IDefaultNavItem>
     * * Description: JSON array of default navigation items for this application. Parsed by BaseApplication.GetNavItems()
     */
     get DefaultNavItems(): string | null {
@@ -42547,27 +42580,6 @@ export class MJApplicationEntity extends BaseEntity<MJApplicationEntityType> {
     }
     set DefaultNavItems(value: string | null) {
         this.Set('DefaultNavItems', value);
-    }
-
-    private _DefaultNavItemsObject_cached: Array<MJApplicationEntity_IDefaultNavItem> | null | undefined = undefined;
-    private _DefaultNavItemsObject_lastRaw: string | null = null;
-    /**
-    * Typed accessor for DefaultNavItems — returns parsed JSON as Array<MJApplicationEntity_IDefaultNavItem>.
-    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
-    */
-    get DefaultNavItemsObject(): Array<MJApplicationEntity_IDefaultNavItem> | null {
-        const raw = this.Get('DefaultNavItems');
-        if (raw !== this._DefaultNavItemsObject_lastRaw) {
-            this._DefaultNavItemsObject_cached = raw ? JSON.parse(raw) : null;
-            this._DefaultNavItemsObject_lastRaw = raw;
-        }
-        return this._DefaultNavItemsObject_cached!;
-    }
-    set DefaultNavItemsObject(value: Array<MJApplicationEntity_IDefaultNavItem> | null) {
-        const raw = value ? JSON.stringify(value) : null;
-        this.Set('DefaultNavItems', raw);
-        this._DefaultNavItemsObject_cached = value;
-        this._DefaultNavItemsObject_lastRaw = raw;
     }
 
     /**
@@ -49080,7 +49092,7 @@ export class MJContentItemTagEntity extends BaseEntity<MJContentItemTagEntityTyp
 
     /**
     * * Field Name: ItemID
-    * * Display Name: Item ID
+    * * Display Name: Item
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Content Items (vwContentItems.ID)
     */
@@ -49093,7 +49105,7 @@ export class MJContentItemTagEntity extends BaseEntity<MJContentItemTagEntityTyp
 
     /**
     * * Field Name: Tag
-    * * Display Name: Tag
+    * * Display Name: Tag Text
     * * SQL Data Type: nvarchar(200)
     * * Description: The tag text applied to the content item for categorization and search.
     */
@@ -49139,12 +49151,35 @@ export class MJContentItemTagEntity extends BaseEntity<MJContentItemTagEntityTyp
     }
 
     /**
+    * * Field Name: TagID
+    * * Display Name: Tag Reference
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Tags (vwTags.ID)
+    * * Description: Optional link to the formal MJ Tag taxonomy. When set, this free-text tag has been matched (via semantic similarity or exact match) to a curated Tag record. NULL means the tag is unmatched free text only.
+    */
+    get TagID(): string | null {
+        return this.Get('TagID');
+    }
+    set TagID(value: string | null) {
+        this.Set('TagID', value);
+    }
+
+    /**
     * * Field Name: Item
-    * * Display Name: Item
+    * * Display Name: Item Name
     * * SQL Data Type: nvarchar(250)
     */
     get Item(): string | null {
         return this.Get('Item');
+    }
+
+    /**
+    * * Field Name: Tag_Virtual
+    * * Display Name: Tag (Virtual)
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Tag_Virtual(): string | null {
+        return this.Get('Tag_Virtual');
     }
 }
 
@@ -49194,7 +49229,7 @@ export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
 
     /**
     * * Field Name: ContentSourceID
-    * * Display Name: Content Source ID
+    * * Display Name: Content Source
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Content Sources (vwContentSources.ID)
     */
@@ -49231,7 +49266,7 @@ export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
 
     /**
     * * Field Name: ContentTypeID
-    * * Display Name: Content Type ID
+    * * Display Name: Content Type
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Content Types (vwContentTypes.ID)
     */
@@ -49244,7 +49279,7 @@ export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
 
     /**
     * * Field Name: ContentSourceTypeID
-    * * Display Name: Content Source Type ID
+    * * Display Name: Content Source Type
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Content Source Types (vwContentSourceTypes.ID)
     */
@@ -49257,7 +49292,7 @@ export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
 
     /**
     * * Field Name: ContentFileTypeID
-    * * Display Name: Content File Type ID
+    * * Display Name: Content File Type
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Content File Types (vwContentFileTypes.ID)
     */
@@ -49296,7 +49331,7 @@ export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
 
     /**
     * * Field Name: Text
-    * * Display Name: Text
+    * * Display Name: Extracted Text
     * * SQL Data Type: nvarchar(MAX)
     * * Description: The extracted text content from the source document or file.
     */
@@ -49328,8 +49363,22 @@ export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
     }
 
     /**
+    * * Field Name: EntityRecordDocumentID
+    * * Display Name: Entity Record Document
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entity Record Documents (vwEntityRecordDocuments.ID)
+    * * Description: For entity-sourced content items, links to the Entity Record Document snapshot that was rendered for this item. Provides traceability back to the source entity record via ERD.EntityID + ERD.RecordID. NULL for non-entity sources.
+    */
+    get EntityRecordDocumentID(): string | null {
+        return this.Get('EntityRecordDocumentID');
+    }
+    set EntityRecordDocumentID(value: string | null) {
+        this.Set('EntityRecordDocumentID', value);
+    }
+
+    /**
     * * Field Name: ContentSource
-    * * Display Name: Content Source
+    * * Display Name: Content Source Name
     * * SQL Data Type: nvarchar(255)
     */
     get ContentSource(): string | null {
@@ -49338,7 +49387,7 @@ export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
 
     /**
     * * Field Name: ContentType
-    * * Display Name: Content Type
+    * * Display Name: Content Type Name
     * * SQL Data Type: nvarchar(255)
     */
     get ContentType(): string {
@@ -49347,7 +49396,7 @@ export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
 
     /**
     * * Field Name: ContentSourceType
-    * * Display Name: Content Source Type
+    * * Display Name: Content Source Type Name
     * * SQL Data Type: nvarchar(255)
     */
     get ContentSourceType(): string {
@@ -49356,11 +49405,20 @@ export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
 
     /**
     * * Field Name: ContentFileType
-    * * Display Name: Content File Type
+    * * Display Name: Content File Type Name
     * * SQL Data Type: nvarchar(255)
     */
     get ContentFileType(): string {
         return this.Get('ContentFileType');
+    }
+
+    /**
+    * * Field Name: EntityRecordDocument
+    * * Display Name: Entity Record Document Name
+    * * SQL Data Type: nvarchar(450)
+    */
+    get EntityRecordDocument(): string | null {
+        return this.Get('EntityRecordDocument');
     }
 }
 
@@ -49830,6 +49888,32 @@ export class MJContentSourceTypeEntity extends BaseEntity<MJContentSourceTypeEnt
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
+
+    /**
+    * * Field Name: DriverClass
+    * * Display Name: Driver Class
+    * * SQL Data Type: nvarchar(255)
+    * * Description: The registered class name used by ClassFactory to instantiate the provider for this source type (e.g., AutotagLocalFileSystem, AutotagEntity). Must match a @RegisterClass key on a class extending AutotagBase.
+    */
+    get DriverClass(): string | null {
+        return this.Get('DriverClass');
+    }
+    set DriverClass(value: string | null) {
+        this.Set('DriverClass', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON configuration blob for type-level settings. Conforms to the IContentSourceTypeConfiguration interface. Reserved for future type-wide settings shared by all sources of this type.
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
 }
 
 
@@ -49903,7 +49987,7 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
 
     /**
     * * Field Name: ContentSourceTypeID
-    * * Display Name: Content Source Type
+    * * Display Name: Source Type
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Content Source Types (vwContentSourceTypes.ID)
     */
@@ -49916,7 +50000,7 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
 
     /**
     * * Field Name: ContentFileTypeID
-    * * Display Name: Content File Type
+    * * Display Name: File Type
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Content File Types (vwContentFileTypes.ID)
     */
@@ -49989,8 +50073,49 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
     }
 
     /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration JSON
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON configuration blob for source-instance settings. Conforms to the IContentSourceConfiguration interface. Includes tag taxonomy mode (constrained/auto-grow/free-flow), tag root ID, match threshold, LLM taxonomy sharing, and vectorization toggle.
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    /**
+    * * Field Name: EntityID
+    * * Display Name: Source Entity
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * Description: For Entity-type content sources, the MJ Entity to pull records from. NULL for non-entity sources (files, RSS, websites, etc.).
+    */
+    get EntityID(): string | null {
+        return this.Get('EntityID');
+    }
+    set EntityID(value: string | null) {
+        this.Set('EntityID', value);
+    }
+
+    /**
+    * * Field Name: EntityDocumentID
+    * * Display Name: Document Template
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entity Documents (vwEntityDocuments.ID)
+    * * Description: For Entity-type content sources, the Entity Document template used to render entity records into text for autotagging. The template defines which fields to include, how to format them, and related record inclusion. NULL for non-entity sources.
+    */
+    get EntityDocumentID(): string | null {
+        return this.Get('EntityDocumentID');
+    }
+    set EntityDocumentID(value: string | null) {
+        this.Set('EntityDocumentID', value);
+    }
+
+    /**
     * * Field Name: ContentType
-    * * Display Name: Content Type
+    * * Display Name: Content Type Name
     * * SQL Data Type: nvarchar(255)
     */
     get ContentType(): string {
@@ -49999,7 +50124,7 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
 
     /**
     * * Field Name: ContentSourceType
-    * * Display Name: Content Source Type
+    * * Display Name: Source Type Name
     * * SQL Data Type: nvarchar(255)
     */
     get ContentSourceType(): string {
@@ -50008,7 +50133,7 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
 
     /**
     * * Field Name: ContentFileType
-    * * Display Name: Content File Type
+    * * Display Name: File Type Name
     * * SQL Data Type: nvarchar(255)
     */
     get ContentFileType(): string {
@@ -50017,7 +50142,7 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
 
     /**
     * * Field Name: EmbeddingModel
-    * * Display Name: Embedding Model
+    * * Display Name: Embedding Model Name
     * * SQL Data Type: nvarchar(50)
     */
     get EmbeddingModel(): string | null {
@@ -50026,11 +50151,29 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
 
     /**
     * * Field Name: VectorIndex
-    * * Display Name: Vector Index
+    * * Display Name: Vector Index Name
     * * SQL Data Type: nvarchar(255)
     */
     get VectorIndex(): string | null {
         return this.Get('VectorIndex');
+    }
+
+    /**
+    * * Field Name: Entity
+    * * Display Name: Source Entity Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Entity(): string | null {
+        return this.Get('Entity');
+    }
+
+    /**
+    * * Field Name: EntityDocument
+    * * Display Name: Document Template Name
+    * * SQL Data Type: nvarchar(250)
+    */
+    get EntityDocument(): string | null {
+        return this.Get('EntityDocument');
     }
 }
 
@@ -50302,6 +50445,19 @@ export class MJContentTypeEntity extends BaseEntity<MJContentTypeEntityType> {
     }
     set VectorIndexID(value: string | null) {
         this.Set('VectorIndexID', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON configuration blob for content-type-level settings. Conforms to the IContentTypeConfiguration interface. Reserved for future type-wide settings such as default tag taxonomy rules and processing options.
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
     }
 
     /**
@@ -60411,46 +60567,6 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
     }
     set RelatedEntityJoinFields(value: string | null) {
         this.Set('RelatedEntityJoinFields', value);
-    }
-
-    /**
-    * * Field Name: JSONType
-    * * Display Name: JSON Type
-    * * SQL Data Type: nvarchar(255)
-    * * Description: The name of the TypeScript interface/type for this JSON field. When set, CodeGen emits a strongly-typed Object-suffixed accessor using this type instead of only the default string getter/setter.
-    */
-    get JSONType(): string | null {
-        return this.Get('JSONType');
-    }
-    set JSONType(value: string | null) {
-        this.Set('JSONType', value);
-    }
-
-    /**
-    * * Field Name: JSONTypeIsArray
-    * * Display Name: JSON Type Is Array
-    * * SQL Data Type: bit
-    * * Default Value: 0
-    * * Description: If true, the field holds a JSON array of JSONType items. The Object accessor returns Array<JSONType> | null and the setter accepts Array<JSONType> | null.
-    */
-    get JSONTypeIsArray(): boolean {
-        return this.Get('JSONTypeIsArray');
-    }
-    set JSONTypeIsArray(value: boolean) {
-        this.Set('JSONTypeIsArray', value);
-    }
-
-    /**
-    * * Field Name: JSONTypeDefinition
-    * * Display Name: JSON Type Definition
-    * * SQL Data Type: nvarchar(MAX)
-    * * Description: Raw TypeScript code emitted by CodeGen above the entity class definition. Typically contains the interface/type definition referenced by JSONType. Can include imports, multiple types, or any valid TypeScript.
-    */
-    get JSONTypeDefinition(): string | null {
-        return this.Get('JSONTypeDefinition');
-    }
-    set JSONTypeDefinition(value: string | null) {
-        this.Set('JSONTypeDefinition', value);
     }
 
     /**
@@ -77325,7 +77441,7 @@ export class MJTaggedItemEntity extends BaseEntity<MJTaggedItemEntityType> {
 
     /**
     * * Field Name: TagID
-    * * Display Name: Tag ID
+    * * Display Name: Tag
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Tags (vwTags.ID)
     */
@@ -77338,7 +77454,7 @@ export class MJTaggedItemEntity extends BaseEntity<MJTaggedItemEntityType> {
 
     /**
     * * Field Name: EntityID
-    * * Display Name: Entity ID
+    * * Display Name: Entity
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
     */
@@ -77383,8 +77499,22 @@ export class MJTaggedItemEntity extends BaseEntity<MJTaggedItemEntityType> {
     }
 
     /**
+    * * Field Name: Weight
+    * * Display Name: Weight
+    * * SQL Data Type: numeric(5, 4)
+    * * Default Value: 1.0
+    * * Description: Relevance weight of this tag association (0.0 to 1.0). 1.0 indicates the tag is highly relevant or was manually applied. Lower values indicate decreasing relevance as determined by LLM autotagging. Default 1.0 for manually applied tags.
+    */
+    get Weight(): number {
+        return this.Get('Weight');
+    }
+    set Weight(value: number) {
+        this.Set('Weight', value);
+    }
+
+    /**
     * * Field Name: Tag
-    * * Display Name: Tag
+    * * Display Name: Tag Name
     * * SQL Data Type: nvarchar(255)
     */
     get Tag(): string {
@@ -77393,7 +77523,7 @@ export class MJTaggedItemEntity extends BaseEntity<MJTaggedItemEntityType> {
 
     /**
     * * Field Name: Entity
-    * * Display Name: Entity
+    * * Display Name: Entity Name
     * * SQL Data Type: nvarchar(255)
     */
     get Entity(): string {

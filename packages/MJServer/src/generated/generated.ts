@@ -26795,9 +26795,17 @@ export class MJContentItemTag_ {
     @Field(() => Float, {description: `Relevance weight for this tag (0.0-1.0). 1.0 = highly relevant central topic, 0.5 = moderately relevant, 0.1 = tangentially related. Assigned by the LLM during autotagging.`}) 
     Weight: number;
         
+    @Field({nullable: true, description: `Optional link to the formal MJ Tag taxonomy. When set, this free-text tag has been matched (via semantic similarity or exact match) to a curated Tag record. NULL means the tag is unmatched free text only.`}) 
+    @MaxLength(36)
+    TagID?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(250)
     Item?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    Tag_Virtual?: string;
         
 }
 
@@ -26817,6 +26825,9 @@ export class CreateMJContentItemTagInput {
 
     @Field(() => Float, { nullable: true })
     Weight?: number;
+
+    @Field({ nullable: true })
+    TagID: string | null;
 }
     
 
@@ -26836,6 +26847,9 @@ export class UpdateMJContentItemTagInput {
 
     @Field(() => Float, { nullable: true })
     Weight?: number;
+
+    @Field({ nullable: true })
+    TagID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -26976,6 +26990,10 @@ export class MJContentItem_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `For entity-sourced content items, links to the Entity Record Document snapshot that was rendered for this item. Provides traceability back to the source entity record via ERD.EntityID + ERD.RecordID. NULL for non-entity sources.`}) 
+    @MaxLength(36)
+    EntityRecordDocumentID?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     ContentSource?: string;
@@ -26991,6 +27009,10 @@ export class MJContentItem_ {
     @Field() 
     @MaxLength(255)
     ContentFileType: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(450)
+    EntityRecordDocument?: string;
         
     @Field(() => [MJContentItemAttribute_])
     MJContentItemAttributes_ContentItemIDArray: MJContentItemAttribute_[]; // Link to MJContentItemAttributes
@@ -27034,6 +27056,9 @@ export class CreateMJContentItemInput {
 
     @Field({ nullable: true })
     Text: string | null;
+
+    @Field({ nullable: true })
+    EntityRecordDocumentID: string | null;
 }
     
 
@@ -27071,6 +27096,9 @@ export class UpdateMJContentItemInput {
 
     @Field({ nullable: true })
     Text?: string | null;
+
+    @Field({ nullable: true })
+    EntityRecordDocumentID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -27711,6 +27739,13 @@ export class MJContentSourceType_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `The registered class name used by ClassFactory to instantiate the provider for this source type (e.g., AutotagLocalFileSystem, AutotagEntity). Must match a @RegisterClass key on a class extending AutotagBase.`}) 
+    @MaxLength(255)
+    DriverClass?: string;
+        
+    @Field({nullable: true, description: `JSON configuration blob for type-level settings. Conforms to the IContentSourceTypeConfiguration interface. Reserved for future type-wide settings shared by all sources of this type.`}) 
+    Configuration?: string;
+        
     @Field(() => [MJContentSource_])
     MJContentSources_ContentSourceTypeIDArray: MJContentSource_[]; // Link to MJContentSources
     
@@ -27732,6 +27767,12 @@ export class CreateMJContentSourceTypeInput {
 
     @Field({ nullable: true })
     Description: string | null;
+
+    @Field({ nullable: true })
+    DriverClass: string | null;
+
+    @Field({ nullable: true })
+    Configuration: string | null;
 }
     
 
@@ -27748,6 +27789,12 @@ export class UpdateMJContentSourceTypeInput {
 
     @Field({ nullable: true })
     Description?: string | null;
+
+    @Field({ nullable: true })
+    DriverClass?: string | null;
+
+    @Field({ nullable: true })
+    Configuration?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -27902,6 +27949,17 @@ export class MJContentSource_ {
     @MaxLength(36)
     VectorIndexID?: string;
         
+    @Field({nullable: true, description: `JSON configuration blob for source-instance settings. Conforms to the IContentSourceConfiguration interface. Includes tag taxonomy mode (constrained/auto-grow/free-flow), tag root ID, match threshold, LLM taxonomy sharing, and vectorization toggle.`}) 
+    Configuration?: string;
+        
+    @Field({nullable: true, description: `For Entity-type content sources, the MJ Entity to pull records from. NULL for non-entity sources (files, RSS, websites, etc.).`}) 
+    @MaxLength(36)
+    EntityID?: string;
+        
+    @Field({nullable: true, description: `For Entity-type content sources, the Entity Document template used to render entity records into text for autotagging. The template defines which fields to include, how to format them, and related record inclusion. NULL for non-entity sources.`}) 
+    @MaxLength(36)
+    EntityDocumentID?: string;
+        
     @Field() 
     @MaxLength(255)
     ContentType: string;
@@ -27921,6 +27979,14 @@ export class MJContentSource_ {
     @Field({nullable: true}) 
     @MaxLength(255)
     VectorIndex?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    Entity?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(250)
+    EntityDocument?: string;
         
     @Field(() => [MJContentItem_])
     MJContentItems_ContentSourceIDArray: MJContentItem_[]; // Link to MJContentItems
@@ -27961,6 +28027,15 @@ export class CreateMJContentSourceInput {
 
     @Field({ nullable: true })
     VectorIndexID: string | null;
+
+    @Field({ nullable: true })
+    Configuration: string | null;
+
+    @Field({ nullable: true })
+    EntityID: string | null;
+
+    @Field({ nullable: true })
+    EntityDocumentID: string | null;
 }
     
 
@@ -27992,6 +28067,15 @@ export class UpdateMJContentSourceInput {
 
     @Field({ nullable: true })
     VectorIndexID?: string | null;
+
+    @Field({ nullable: true })
+    Configuration?: string | null;
+
+    @Field({ nullable: true })
+    EntityID?: string | null;
+
+    @Field({ nullable: true })
+    EntityDocumentID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -28316,6 +28400,9 @@ export class MJContentType_ {
     @MaxLength(36)
     VectorIndexID?: string;
         
+    @Field({nullable: true, description: `JSON configuration blob for content-type-level settings. Conforms to the IContentTypeConfiguration interface. Reserved for future type-wide settings such as default tag taxonomy rules and processing options.`}) 
+    Configuration?: string;
+        
     @Field() 
     @MaxLength(50)
     AIModel: string;
@@ -28364,6 +28451,9 @@ export class CreateMJContentTypeInput {
 
     @Field({ nullable: true })
     VectorIndexID: string | null;
+
+    @Field({ nullable: true })
+    Configuration: string | null;
 }
     
 
@@ -28395,6 +28485,9 @@ export class UpdateMJContentTypeInput {
 
     @Field({ nullable: true })
     VectorIndexID?: string | null;
+
+    @Field({ nullable: true })
+    Configuration?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -36291,6 +36384,9 @@ export class MJEntity_ {
     @Field(() => [MJEntityField_])
     MJEntityFields_RelatedEntityIDArray: MJEntityField_[]; // Link to MJEntityFields
     
+    @Field(() => [MJContentSource_])
+    MJContentSources_EntityIDArray: MJContentSource_[]; // Link to MJContentSources
+    
     @Field(() => [MJResourceType_])
     MJResourceTypes_CategoryEntityIDArray: MJResourceType_[]; // Link to MJResourceTypes
     
@@ -37206,6 +37302,16 @@ export class MJEntityResolverBase extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwEntityFields')} WHERE ${provider.QuoteIdentifier('RelatedEntityID')}='${mjentity_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Entity Fields', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Entity Fields', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJContentSource_])
+    async MJContentSources_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Content Sources', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwContentSources')} WHERE ${provider.QuoteIdentifier('EntityID')}='${mjentity_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Content Sources', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Content Sources', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -39331,6 +39437,9 @@ export class MJEntityDocument_ {
     @Field(() => [MJEntityRecordDocument_])
     MJEntityRecordDocuments_EntityDocumentIDArray: MJEntityRecordDocument_[]; // Link to MJEntityRecordDocuments
     
+    @Field(() => [MJContentSource_])
+    MJContentSources_EntityDocumentIDArray: MJContentSource_[]; // Link to MJContentSources
+    
 }
 
 //****************************************************************************
@@ -39505,6 +39614,16 @@ export class MJEntityDocumentResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwEntityRecordDocuments')} WHERE ${provider.QuoteIdentifier('EntityDocumentID')}='${mjentitydocument_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Entity Record Documents', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Entity Record Documents', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJContentSource_])
+    async MJContentSources_EntityDocumentIDArray(@Root() mjentitydocument_: MJEntityDocument_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Content Sources', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwContentSources')} WHERE ${provider.QuoteIdentifier('EntityDocumentID')}='${mjentitydocument_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Content Sources', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Content Sources', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -39926,16 +40045,6 @@ export class MJEntityField_ {
     @Field({nullable: true, description: `JSON configuration for additional fields to join from the related entity into this entity's base view. Supports modes: extend (add to NameField), override (replace NameField), disable (no joins). Schema: { mode?: string, fields?: [{ field: string, alias?: string }] }`}) 
     RelatedEntityJoinFields?: string;
         
-    @Field({nullable: true, description: `The name of the TypeScript interface/type for this JSON field. When set, CodeGen emits a strongly-typed Object-suffixed accessor using this type instead of only the default string getter/setter.`}) 
-    @MaxLength(255)
-    JSONType?: string;
-        
-    @Field(() => Boolean, {description: `If true, the field holds a JSON array of JSONType items. The Object accessor returns Array<JSONType> | null and the setter accepts Array<JSONType> | null.`}) 
-    JSONTypeIsArray: boolean;
-        
-    @Field({nullable: true, description: `Raw TypeScript code emitted by CodeGen above the entity class definition. Typically contains the interface/type definition referenced by JSONType. Can include imports, multiple types, or any valid TypeScript.`}) 
-    JSONTypeDefinition?: string;
-        
     @Field({nullable: true}) 
     FieldCodeName?: string;
         
@@ -40121,15 +40230,6 @@ export class CreateMJEntityFieldInput {
 
     @Field({ nullable: true })
     RelatedEntityJoinFields: string | null;
-
-    @Field({ nullable: true })
-    JSONType: string | null;
-
-    @Field(() => Boolean, { nullable: true })
-    JSONTypeIsArray?: boolean;
-
-    @Field({ nullable: true })
-    JSONTypeDefinition: string | null;
 }
     
 
@@ -40266,15 +40366,6 @@ export class UpdateMJEntityFieldInput {
 
     @Field({ nullable: true })
     RelatedEntityJoinFields?: string | null;
-
-    @Field({ nullable: true })
-    JSONType?: string | null;
-
-    @Field(() => Boolean, { nullable: true })
-    JSONTypeIsArray?: boolean;
-
-    @Field({ nullable: true })
-    JSONTypeDefinition?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -41180,6 +41271,9 @@ export class MJEntityRecordDocument_ {
     @MaxLength(255)
     VectorIndex: string;
         
+    @Field(() => [MJContentItem_])
+    MJContentItems_EntityRecordDocumentIDArray: MJContentItem_[]; // Link to MJContentItems
+    
 }
 
 //****************************************************************************
@@ -41309,6 +41403,16 @@ export class MJEntityRecordDocumentResolver extends ResolverBase {
         return result;
     }
     
+    @FieldResolver(() => [MJContentItem_])
+    async MJContentItems_EntityRecordDocumentIDArray(@Root() mjentityrecorddocument_: MJEntityRecordDocument_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Content Items', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwContentItems')} WHERE ${provider.QuoteIdentifier('EntityRecordDocumentID')}='${mjentityrecorddocument_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Content Items', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Content Items', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
     @Mutation(() => MJEntityRecordDocument_)
     async CreateMJEntityRecordDocument(
         @Arg('input', () => CreateMJEntityRecordDocumentInput) input: CreateMJEntityRecordDocumentInput,
@@ -59753,6 +59857,9 @@ export class MJTaggedItem_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field(() => Float, {description: `Relevance weight of this tag association (0.0 to 1.0). 1.0 indicates the tag is highly relevant or was manually applied. Lower values indicate decreasing relevance as determined by LLM autotagging. Default 1.0 for manually applied tags.`}) 
+    Weight: number;
+        
     @Field() 
     @MaxLength(255)
     Tag: string;
@@ -59779,6 +59886,9 @@ export class CreateMJTaggedItemInput {
 
     @Field({ nullable: true })
     RecordID?: string;
+
+    @Field(() => Float, { nullable: true })
+    Weight?: number;
 }
     
 
@@ -59798,6 +59908,9 @@ export class UpdateMJTaggedItemInput {
 
     @Field({ nullable: true })
     RecordID?: string;
+
+    @Field(() => Float, { nullable: true })
+    Weight?: number;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -59933,6 +60046,9 @@ export class MJTag_ {
     @Field(() => [MJTaggedItem_])
     MJTaggedItems_TagIDArray: MJTaggedItem_[]; // Link to MJTaggedItems
     
+    @Field(() => [MJContentItemTag_])
+    MJContentItemTags_TagIDArray: MJContentItemTag_[]; // Link to MJContentItemTags
+    
 }
 
 //****************************************************************************
@@ -60055,6 +60171,16 @@ export class MJTagResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwTaggedItems')} WHERE ${provider.QuoteIdentifier('TagID')}='${mjtag_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Tagged Items', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Tagged Items', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJContentItemTag_])
+    async MJContentItemTags_TagIDArray(@Root() mjtag_: MJTag_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Content Item Tags', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwContentItemTags')} WHERE ${provider.QuoteIdentifier('TagID')}='${mjtag_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Content Item Tags', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Content Item Tags', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         

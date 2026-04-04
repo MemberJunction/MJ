@@ -8,11 +8,11 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Details Section -->
+    <!-- Source Type Configuration Section -->
     <mj-collapsible-panel
-        SectionKey="details"
-        SectionName="Details"
-        Icon="fa fa-align-left"
+        SectionKey="sourceTypeConfiguration"
+        SectionName="Source Type Configuration"
+        Icon="fa fa-sliders-h"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -31,6 +31,32 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="DriverClass"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Configuration"
+            Type="code"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- System Metadata Section -->
+    <mj-collapsible-panel
+        SectionKey="systemMetadata"
+        SectionName="System Metadata"
+        Icon="fa fa-database"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"

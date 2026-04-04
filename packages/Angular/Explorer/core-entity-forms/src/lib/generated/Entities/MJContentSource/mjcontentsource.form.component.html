@@ -76,7 +76,7 @@
     <mj-collapsible-panel
         SectionKey="aIIndexing"
         SectionName="AI & Indexing"
-        Icon="fa fa-robot"
+        Icon="fa fa-info-circle"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -92,6 +92,42 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="VectorIndexID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Source Configuration Section -->
+    <mj-collapsible-panel
+        SectionKey="sourceConfiguration"
+        SectionName="Source Configuration"
+        Icon="fa fa-sliders-h"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Configuration"
+            Type="code"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="EntityID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="EntityDocumentID"
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"

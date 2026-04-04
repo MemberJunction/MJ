@@ -22,7 +22,8 @@ export class MJEntityDocumentFormComponent extends BaseFormComponent {
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJEntityDocumentRuns', sectionName: 'Entity Document Runs', isExpanded: false },
             { sectionKey: 'mJEntityDocumentSettings', sectionName: 'Entity Document Settings', isExpanded: false },
-            { sectionKey: 'mJEntityRecordDocuments', sectionName: 'Entity Record Documents', isExpanded: false }
+            { sectionKey: 'mJEntityRecordDocuments', sectionName: 'Entity Record Documents', isExpanded: false },
+            { sectionKey: 'mJContentSources', sectionName: 'Content Sources', isExpanded: false }
         ]);
     }
 }
