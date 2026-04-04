@@ -2171,14 +2171,34 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
         }));
     }
 
+    /**
+     * Discovers fields by fetching one record from the live YM API endpoint and
+     * inferring field names/types from the response. Static metadata from
+     * YM_ACTION_OBJECTS is merged in to preserve PK, FK, description, and
+     * IsRequired/IsReadOnly annotations.
+     *
+     * Falls back to the static array if the live API call fails.
+     */
     public override async DiscoverFields(
-        _companyIntegration: MJCompanyIntegrationEntity,
+        companyIntegration: MJCompanyIntegrationEntity,
         objectName: string,
-        _contextUser: UserInfo
+        contextUser: UserInfo
     ): Promise<ExternalFieldSchema[]> {
-        const obj = YM_ACTION_OBJECTS.find(o => o.Name.toLowerCase() === objectName.toLowerCase());
-        if (!obj) return [];
-        return obj.Fields.map(f => ({
+        const staticObj = YM_ACTION_OBJECTS.find(o => o.Name.toLowerCase() === objectName.toLowerCase());
+
+        try {
+            const liveFields = await this.DiscoverFieldsFromLiveAPI(companyIntegration, objectName, contextUser);
+            if (liveFields.length > 0) {
+                return this.MergeFieldsWithStaticMetadata(liveFields, staticObj);
+            }
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            console.warn(`[YM] Live field discovery failed for "${objectName}", falling back to static: ${msg}`);
+        }
+
+        // Fallback: return static fields
+        if (!staticObj) return [];
+        return staticObj.Fields.map(f => ({
             Name: f.Name,
             Label: f.DisplayName,
             Description: f.Description,
@@ -2190,9 +2210,167 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
     }
 
     /**
-     * Override IntrospectSchema to use the static YM_ACTION_OBJECTS definitions
-     * rather than the base class DB cache. This ensures DDL generation always
-     * has the complete field set from the connector's source of truth.
+     * Fetches one record from the YM API for the given object and infers field schemas.
+     */
+    private async DiscoverFieldsFromLiveAPI(
+        companyIntegration: MJCompanyIntegrationEntity,
+        objectName: string,
+        contextUser?: UserInfo
+    ): Promise<ExternalFieldSchema[]> {
+        const auth = await this.Authenticate(companyIntegration, contextUser) as YMAuthContext;
+        const headers = this.BuildHeaders(auth);
+
+        // Map object names to their YM API endpoints
+        const endpointMap: Record<string, { path: string; dataKey: string | null }> = {
+            members:       { path: 'MemberList', dataKey: 'Members' },
+            membertypes:   { path: 'MemberTypes', dataKey: 'MemberTypes' },
+            memberships:   { path: 'Memberships', dataKey: 'Memberships' },
+            events:        { path: 'Events', dataKey: 'Events' },
+            products:      { path: 'Products', dataKey: null },
+            invoices:      { path: 'Invoices', dataKey: 'Invoices' },
+            donations:     { path: 'Donations', dataKey: 'Donations' },
+            orders:        { path: 'Orders', dataKey: 'Orders' },
+            groups:        { path: 'Groups', dataKey: 'GroupTypeList' },
+            grouptypes:    { path: 'Groups', dataKey: 'GroupTypeList' },
+            engagementscores: { path: 'EngagementScores', dataKey: null },
+        };
+
+        const mapping = endpointMap[objectName.toLowerCase()];
+        if (!mapping) {
+            console.warn(`[YM] No API endpoint mapping for "${objectName}", skipping live discovery`);
+            return [];
+        }
+
+        const url = `${YM_API_BASE}/Ams/${auth.Config.ClientID}/${mapping.path}?PageSize=1`;
+        const response = await this.MakeHTTPRequest(auth, url, 'GET', headers);
+
+        if (response.Status < 200 || response.Status >= 300) return [];
+
+        const body = response.Body as Record<string, unknown>;
+        const sampleRecord = this.ExtractSampleRecord(body, mapping.dataKey);
+        if (!sampleRecord) return [];
+
+        return this.InferFieldsFromRecord(sampleRecord);
+    }
+
+    /**
+     * Extracts a single sample record from the YM API response body.
+     */
+    private ExtractSampleRecord(
+        body: Record<string, unknown>,
+        dataKey: string | null
+    ): Record<string, unknown> | null {
+        if (dataKey != null) {
+            const data = body[dataKey];
+            if (Array.isArray(data) && data.length > 0) {
+                return data[0] as Record<string, unknown>;
+            }
+            return null;
+        }
+
+        // Null dataKey: raw array or single object
+        if (Array.isArray(body) && body.length > 0) {
+            return body[0] as Record<string, unknown>;
+        }
+
+        // Single object response — filter metadata keys and use as sample
+        const filtered: Record<string, unknown> = {};
+        for (const [key, value] of Object.entries(body)) {
+            if (!METADATA_KEYS.has(key)) {
+                filtered[key] = value;
+            }
+        }
+        return Object.keys(filtered).length > 0 ? filtered : null;
+    }
+
+    /**
+     * Infers ExternalFieldSchema[] from a sample record's keys and values.
+     */
+    private InferFieldsFromRecord(record: Record<string, unknown>): ExternalFieldSchema[] {
+        const fields: ExternalFieldSchema[] = [];
+        for (const [key, value] of Object.entries(record)) {
+            // Skip nested objects/arrays — only flat scalar fields
+            if (value !== null && typeof value === 'object' && !Array.isArray(value)) continue;
+            if (Array.isArray(value)) continue;
+
+            fields.push({
+                Name: key,
+                Label: key.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/_/g, ' '),
+                Description: undefined,
+                DataType: this.InferFieldType(value),
+                IsRequired: false,
+                IsUniqueKey: false,
+                IsReadOnly: false,
+            });
+        }
+        return fields;
+    }
+
+    /**
+     * Infer a MJ-compatible type string from a JavaScript value.
+     */
+    private InferFieldType(value: unknown): string {
+        if (value === null || value === undefined) return 'string';
+        if (typeof value === 'boolean') return 'boolean';
+        if (typeof value === 'number') return Number.isInteger(value) ? 'number' : 'decimal';
+        if (typeof value === 'string') {
+            if (/^\d{4}-\d{2}-\d{2}/.test(value)) return 'datetime';
+            return 'string';
+        }
+        return 'string';
+    }
+
+    /**
+     * Merges live-discovered fields with static metadata from YM_ACTION_OBJECTS.
+     * Live fields are the base; static metadata overlays PK, FK, Description,
+     * IsRequired, and IsReadOnly where a matching field name exists.
+     */
+    private MergeFieldsWithStaticMetadata(
+        liveFields: ExternalFieldSchema[],
+        staticObj: IntegrationObjectInfo | undefined
+    ): ExternalFieldSchema[] {
+        if (!staticObj) return liveFields;
+
+        const staticMap = new Map(
+            staticObj.Fields.map(f => [f.Name.toLowerCase(), f])
+        );
+
+        const merged = liveFields.map(lf => {
+            const sf = staticMap.get(lf.Name.toLowerCase());
+            if (sf) {
+                return {
+                    ...lf,
+                    Label: sf.DisplayName || lf.Label,
+                    Description: sf.Description || lf.Description,
+                    IsRequired: sf.IsRequired,
+                    IsUniqueKey: sf.IsPrimaryKey,
+                    IsReadOnly: sf.IsReadOnly,
+                };
+            }
+            return lf;
+        });
+
+        // Add any static fields not found in the live response (e.g., computed fields)
+        for (const sf of staticObj.Fields) {
+            if (!merged.some(f => f.Name.toLowerCase() === sf.Name.toLowerCase())) {
+                merged.push({
+                    Name: sf.Name,
+                    Label: sf.DisplayName,
+                    Description: sf.Description,
+                    DataType: sf.Type,
+                    IsRequired: sf.IsRequired,
+                    IsUniqueKey: sf.IsPrimaryKey,
+                    IsReadOnly: sf.IsReadOnly,
+                });
+            }
+        }
+
+        return merged;
+    }
+
+    /**
+     * Override IntrospectSchema to use live field discovery (with static fallback).
+     * Ensures DDL generation always reflects the actual API response shape.
      */
     public override async IntrospectSchema(
         companyIntegration: MJCompanyIntegrationEntity,

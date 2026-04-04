@@ -668,7 +668,7 @@ export class QuickBooksConnector extends BaseIntegrationConnector {
     }
 
 
-    // ─── Schema Discovery (from static TS definitions) ───────────────
+    // ─── Schema Discovery (live API + static enrichment) ──────────────
 
     public override async DiscoverObjects(
         _companyIntegration: MJCompanyIntegrationEntity,
@@ -683,14 +683,33 @@ export class QuickBooksConnector extends BaseIntegrationConnector {
         }));
     }
 
+    /**
+     * Discovers fields by querying one record from the live QBO API and inferring
+     * field names/types from the response. Static metadata from QUICKBOOKS_OBJECTS
+     * is merged in to preserve PK, FK, description, and constraint annotations.
+     *
+     * Falls back to the static array if the live API call fails.
+     */
     public override async DiscoverFields(
-        _companyIntegration: MJCompanyIntegrationEntity,
+        companyIntegration: MJCompanyIntegrationEntity,
         objectName: string,
-        _contextUser: UserInfo
+        contextUser: UserInfo
     ): Promise<ExternalFieldSchema[]> {
-        const obj = QUICKBOOKS_OBJECTS.find(o => o.Name.toLowerCase() === objectName.toLowerCase());
-        if (!obj) return [];
-        return obj.Fields.map(f => ({
+        const staticObj = QUICKBOOKS_OBJECTS.find(o => o.Name.toLowerCase() === objectName.toLowerCase());
+
+        try {
+            const liveFields = await this.DiscoverFieldsFromLiveAPI(companyIntegration, objectName, contextUser);
+            if (liveFields.length > 0) {
+                return this.MergeFieldsWithStaticMetadata(liveFields, staticObj);
+            }
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            console.warn(`[QBO] Live field discovery failed for "${objectName}", falling back to static: ${msg}`);
+        }
+
+        // Fallback: return static fields
+        if (!staticObj) return [];
+        return staticObj.Fields.map(f => ({
             Name: f.Name,
             Label: f.DisplayName,
             Description: f.Description,
@@ -699,6 +718,114 @@ export class QuickBooksConnector extends BaseIntegrationConnector {
             IsUniqueKey: f.IsPrimaryKey,
             IsReadOnly: f.IsReadOnly,
         }));
+    }
+
+    /**
+     * Fetches one record from QBO via a SELECT query and infers field schemas.
+     */
+    private async DiscoverFieldsFromLiveAPI(
+        companyIntegration: MJCompanyIntegrationEntity,
+        objectName: string,
+        contextUser: UserInfo
+    ): Promise<ExternalFieldSchema[]> {
+        const auth = await this.GetAuth(companyIntegration, contextUser);
+        const query = `SELECT * FROM ${objectName} MAXRESULTS 1`;
+        const body = await this.ExecuteQuery(auth, query);
+
+        const typedBody = body as { QueryResponse?: Record<string, unknown> };
+        const queryResponse = typedBody?.QueryResponse;
+        if (!queryResponse) return [];
+
+        const records = queryResponse[objectName] as Record<string, unknown>[] | undefined;
+        if (!records || records.length === 0) return [];
+
+        const sampleRecord = records[0];
+        return this.InferFieldsFromRecord(sampleRecord);
+    }
+
+    /**
+     * Infers ExternalFieldSchema[] from a sample record's keys and values.
+     * Skips nested objects/arrays — only flat scalar fields are included.
+     */
+    private InferFieldsFromRecord(record: Record<string, unknown>): ExternalFieldSchema[] {
+        const fields: ExternalFieldSchema[] = [];
+        for (const [key, value] of Object.entries(record)) {
+            if (value !== null && typeof value === 'object' && !Array.isArray(value)) continue;
+            if (Array.isArray(value)) continue;
+
+            fields.push({
+                Name: key,
+                Label: key.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/_/g, ' '),
+                Description: undefined,
+                DataType: this.InferFieldType(value),
+                IsRequired: false,
+                IsUniqueKey: false,
+                IsReadOnly: false,
+            });
+        }
+        return fields;
+    }
+
+    /**
+     * Infer a MJ-compatible type string from a JavaScript value.
+     */
+    private InferFieldType(value: unknown): string {
+        if (value === null || value === undefined) return 'string';
+        if (typeof value === 'boolean') return 'boolean';
+        if (typeof value === 'number') return Number.isInteger(value) ? 'number' : 'decimal';
+        if (typeof value === 'string') {
+            if (/^\d{4}-\d{2}-\d{2}/.test(value)) return 'datetime';
+            return 'string';
+        }
+        return 'string';
+    }
+
+    /**
+     * Merges live-discovered fields with static metadata from QUICKBOOKS_OBJECTS.
+     * Live fields are the base; static metadata overlays PK, FK, Description,
+     * IsRequired, and IsReadOnly where a matching field name exists.
+     */
+    private MergeFieldsWithStaticMetadata(
+        liveFields: ExternalFieldSchema[],
+        staticObj: IntegrationObjectInfo | undefined
+    ): ExternalFieldSchema[] {
+        if (!staticObj) return liveFields;
+
+        const staticMap = new Map(
+            staticObj.Fields.map(f => [f.Name.toLowerCase(), f])
+        );
+
+        const merged = liveFields.map(lf => {
+            const sf = staticMap.get(lf.Name.toLowerCase());
+            if (sf) {
+                return {
+                    ...lf,
+                    Label: sf.DisplayName || lf.Label,
+                    Description: sf.Description || lf.Description,
+                    IsRequired: sf.IsRequired,
+                    IsUniqueKey: sf.IsPrimaryKey,
+                    IsReadOnly: sf.IsReadOnly,
+                };
+            }
+            return lf;
+        });
+
+        // Add any static fields not found in the live response
+        for (const sf of staticObj.Fields) {
+            if (!merged.some(f => f.Name.toLowerCase() === sf.Name.toLowerCase())) {
+                merged.push({
+                    Name: sf.Name,
+                    Label: sf.DisplayName,
+                    Description: sf.Description,
+                    DataType: sf.Type,
+                    IsRequired: sf.IsRequired,
+                    IsUniqueKey: sf.IsPrimaryKey,
+                    IsReadOnly: sf.IsReadOnly,
+                });
+            }
+        }
+
+        return merged;
     }
 
     // ── Default Configuration ────────────────────────────────────────
