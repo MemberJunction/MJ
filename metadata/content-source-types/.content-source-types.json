@@ -1,0 +1,72 @@
+[
+  {
+    "fields": {
+      "Name": "Azure Blob Storage",
+      "Description": "Cloud storage integration for Azure Blob Storage containers",
+      "DriverClass": "AutotagAzureBlob"
+    },
+    "primaryKey": {
+      "ID": "B8B8C0BE-3E5F-EF11-991A-00224822CE23"
+    },
+    "sync": {
+      "lastModified": "2026-04-04T00:58:20.499Z",
+      "checksum": "e6f05a2c2fe57bfc37014d159dd459970d3cc6aaedb07d0ed50147680241eaf5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Entity",
+      "Description": "MemberJunction entity records rendered via Entity Document templates",
+      "DriverClass": "AutotagEntity"
+    },
+    "primaryKey": {
+      "ID": "B0909B91-6487-EF11-8473-6045BDF05BB3"
+    },
+    "sync": {
+      "lastModified": "2026-04-04T00:58:20.502Z",
+      "checksum": "dc101ef3b930f94084a03428f41394f6edbc6f2f5fe2ecc323b6a718b166574f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Local File System",
+      "Description": "Local file system directories containing documents for autotagging",
+      "DriverClass": "AutotagLocalFileSystem"
+    },
+    "primaryKey": {
+      "ID": "23037E2A-9760-EF11-991A-00224822CE23"
+    },
+    "sync": {
+      "lastModified": "2026-04-04T00:58:20.504Z",
+      "checksum": "01618c12663f6f009a4ad0ce7dc475fa88f5a8aa0edff60f1d484db7d643abe7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "RSS Feed",
+      "Description": "RSS and Atom feed sources for content ingestion",
+      "DriverClass": "AutotagRSSFeed"
+    },
+    "primaryKey": {
+      "ID": "AC04F730-9760-EF11-991A-00224822CE23"
+    },
+    "sync": {
+      "lastModified": "2026-04-04T00:58:20.506Z",
+      "checksum": "ba882728608ee1d74fba008c3e0aa008e75d4f13b2f5362261a8e4b352682c63"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Website",
+      "Description": "Web crawling source with configurable depth and link following",
+      "DriverClass": "AutotagWebsite"
+    },
+    "primaryKey": {
+      "ID": "24037E2A-9760-EF11-991A-00224822CE23"
+    },
+    "sync": {
+      "lastModified": "2026-04-04T00:58:20.507Z",
+      "checksum": "3dd062e53e162a6660a9484e3e1539cd56fd55c5e150e2797a7ba392daedb24a"
+    }
+  }
+]
