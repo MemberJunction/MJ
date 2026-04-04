@@ -22887,15 +22887,17 @@ export const MJUserViewSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Whether this is the user's default view for the entity.`),
-    GridState: z.string().nullable().describe(`
+    GridState: z.any().nullable().describe(`
         * * Field Name: GridState
         * * Display Name: Grid State
         * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJUserViewEntity_IGridState
         * * Description: JSON storing complete grid configuration including columns, widths, and formatting.`),
-    FilterState: z.string().nullable().describe(`
+    FilterState: z.any().nullable().describe(`
         * * Field Name: FilterState
         * * Display Name: Filter State
         * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJUserViewEntity_IFilterState
         * * Description: JSON storing the view's filter configuration.`),
     CustomFilterState: z.boolean().describe(`
         * * Field Name: CustomFilterState
@@ -22935,10 +22937,11 @@ export const MJUserViewSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Indicates if a custom WHERE clause is used instead of standard filters.`),
-    SortState: z.string().nullable().describe(`
+    SortState: z.any().nullable().describe(`
         * * Field Name: SortState
         * * Display Name: Sort State
         * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: Array<MJUserViewEntity_ISortStateItem>
         * * Description: JSON storing the view's sort configuration.`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
@@ -22955,15 +22958,17 @@ export const MJUserViewSchema = z.object({
         * * Display Name: Thumbnail
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Thumbnail image for the user view that can be displayed in gallery views. Can contain either a URL to an image file or a Base64-encoded image string.`),
-    CardState: z.string().nullable().describe(`
+    CardState: z.any().nullable().describe(`
         * * Field Name: CardState
         * * Display Name: Card State
         * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJUserViewEntity_ICardState
         * * Description: JSON configuration for card display mode in Data Explorer. Stores card layout settings including title field, subtitle, display fields, thumbnails, and layout density. When null, defaults are derived from entity metadata. See CardState interface in packages/Angular/Generic/entity-viewer/src/lib/types.ts for the current schema definition.`),
-    DisplayState: z.string().nullable().describe(`
+    DisplayState: z.any().nullable().describe(`
         * * Field Name: DisplayState
         * * Display Name: Display State
         * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJUserViewEntity_IDisplayState
         * * Description: JSON configuration for display mode settings. Stores default display mode (grid/cards/timeline/chart), available modes for sharing, and mode-specific configurations like timeline date field and segmentation. See ViewDisplayState interface in packages/Angular/Generic/entity-viewer/src/lib/types.ts for schema.`),
     UserName: z.string().describe(`
         * * Field Name: UserName
@@ -42449,6 +42454,20 @@ export class MJApplicationSettingEntity extends BaseEntity<MJApplicationSettingE
 }
 
 
+/**
+ * Describes a single navigation item in an Application's default tab bar.
+ *
+ * Stored as a JSON array in the `DefaultNavItems` column of the `Applications` entity.
+ * CodeGen emits a strongly-typed `DefaultNavItemsObject` accessor on `ApplicationEntity`
+ * that returns `MJApplicationEntity_IDefaultNavItem[]`.
+ *
+ * When a user opens an application for the first time (or has no saved state),
+ * `BaseApplication.GetNavItems()` parses this array to create the initial set of tabs.
+ * Each item maps to either a persisted Dashboard (via `RecordID`) or a custom component
+ * registered with `@RegisterClass(BaseResourceComponent, DriverClass)`.
+ *
+ * Exactly one item should have `isDefault: true` to indicate which tab is focused on load.
+ */
 export interface MJApplicationEntity_IDefaultNavItem {
     /** Display label for the navigation item */
     Label: string;
@@ -49859,6 +49878,18 @@ export class MJContentSourceTypeParamEntity extends BaseEntity<MJContentSourceTy
 }
 
 
+/**
+ * Type-level configuration shared by all content sources of the same source type.
+ *
+ * Content Source Types represent the plugin mechanism for bringing content into the
+ * autotagging pipeline (e.g. "Entity", "File", "Web"). Each type registers a `DriverClass`
+ * that the ClassFactory resolves at runtime. This interface is the extension point for
+ * settings that apply uniformly to every source instance of that type.
+ *
+ * Currently reserved for future use. As the plugin architecture matures, expect properties
+ * such as default credential templates, rate-limit policies, or shared vectorization
+ * settings to be added here.
+ */
 export interface MJContentSourceTypeEntity_IContentSourceTypeConfiguration {
     /** Reserved for future type-wide settings shared by all sources of this type */
 }
@@ -50000,6 +50031,17 @@ export class MJContentSourceTypeEntity extends BaseEntity<MJContentSourceTypeEnt
 }
 
 
+/**
+ * Per-source configuration for the Content Autotagging pipeline.
+ *
+ * Settings here control how a single content source interacts with the tag taxonomy
+ * and the vectorization engine. Every property is optional and falls back to a sensible
+ * default, so an empty `{}` configuration is valid.
+ *
+ * Some properties (e.g. `ShareTaxonomyWithLLM`, `TagTaxonomyMode`) can also be set at
+ * the content-type level via {@link IContentTypeConfiguration}; source-level values
+ * take precedence when present.
+ */
 export interface MJContentSourceEntity_IContentSourceConfiguration {
     /** Tag taxonomy matching mode: constrained (only match within subtree), auto-grow (match or create within subtree), free-flow (match or create anywhere) */
     TagTaxonomyMode?: 'constrained' | 'auto-grow' | 'free-flow';
@@ -50411,6 +50453,14 @@ export class MJContentTypeAttributeEntity extends BaseEntity<MJContentTypeAttrib
 }
 
 
+/**
+ * Content-type-level defaults for the autotagging and vectorization pipeline.
+ *
+ * Content Types classify the kind of content being processed (e.g. "Document", "Email",
+ * "Web Page"). Settings defined here act as defaults for every content source that
+ * produces this type of content. Individual sources can override these defaults via
+ * their own {@link IContentSourceConfiguration}.
+ */
 export interface MJContentTypeEntity_IContentTypeConfiguration {
     /** Whether to share tag taxonomy with LLM by default for all sources of this type. Can be overridden per source. Default true */
     ShareTaxonomyWithLLM?: boolean;
@@ -83597,6 +83647,433 @@ export class MJUserViewRunEntity extends BaseEntity<MJUserViewRunEntityType> {
 
 
 /**
+ * Persisted grid configuration for a User View.
+ *
+ * Stored in the `GridState` column of the `User Views` entity. Contains column layout,
+ * sort settings, filter state, and aggregate configuration. An empty `{}` is valid and
+ * means "use entity-metadata defaults for all columns."
+ *
+ * The runtime class `ViewGridState` in MJUserViewEntityExtended mirrors this shape but
+ * adds constructor logic. This interface represents the raw serialized form.
+ */
+export interface MJUserViewEntity_IGridState {
+    /** Sort settings — array of field/direction pairs applied left-to-right */
+    sortSettings?: MJUserViewEntity_IGridSortSetting[];
+    /** Column settings — visibility, width, order, pinning, formatting */
+    columnSettings?: MJUserViewEntity_IGridColumnSetting[];
+    /** Filter state (composite filter tree with logic operators) */
+    filter?: MJUserViewEntity_IFilterNode;
+    /** Aggregate calculations and display configuration */
+    aggregates?: MJUserViewEntity_IGridAggregatesConfig;
+}
+
+/**
+ * A single sort-field entry within the grid's persisted sort configuration.
+ *
+ * Used inside {@link MJUserViewEntity_IGridState}.sortSettings to define multi-column sorting
+ * applied left-to-right in the entity data grid.
+ */
+export interface MJUserViewEntity_IGridSortSetting {
+    /** Field name to sort by */
+    field: string;
+    /** Sort direction */
+    dir: 'asc' | 'desc';
+}
+
+/**
+ * Persisted configuration for a single column in the entity data grid.
+ *
+ * Used inside {@link MJUserViewEntity_IGridState}.columnSettings. This is the serializable form
+ * of `ViewColumnInfo` — it omits the non-persisted `EntityField` reference and
+ * stores only user-chosen overrides for visibility, width, ordering, pinning,
+ * and formatting.
+ */
+export interface MJUserViewEntity_IGridColumnSetting {
+    /** Entity field ID */
+    ID?: string;
+    /** Field name */
+    Name: string;
+    /** Display name for column header (from entity metadata) */
+    DisplayName?: string;
+    /** User-defined display name override for column header */
+    userDisplayName?: string;
+    /** Whether column is hidden */
+    hidden?: boolean;
+    /** Column width in pixels */
+    width?: number;
+    /** Column order index */
+    orderIndex?: number;
+    /** Column pinning position ('left', 'right', or null for unpinned) */
+    pinned?: 'left' | 'right' | null;
+    /** Flex grow factor (for auto-sizing columns) */
+    flex?: number;
+    /** Minimum column width */
+    minWidth?: number;
+    /** Maximum column width */
+    maxWidth?: number;
+    /** Column formatting configuration */
+    format?: MJUserViewEntity_IColumnFormat;
+}
+
+/**
+ * Column formatting configuration for the entity data grid.
+ *
+ * Controls value display (number/currency/date/boolean formatting), text alignment,
+ * header and cell styling, and conditional formatting rules. Used inside
+ * {@link MJUserViewEntity_IGridColumnSetting}.format.
+ *
+ * Setting `type: 'auto'` tells the grid to infer formatting from entity field metadata.
+ */
+export interface MJUserViewEntity_IColumnFormat {
+    /** Format type — 'auto' uses smart defaults based on field metadata */
+    type?: 'auto' | 'number' | 'currency' | 'percent' | 'date' | 'datetime' | 'boolean' | 'text';
+    /** Decimal places for number/currency/percent types */
+    decimals?: number;
+    /** Currency code (ISO 4217) for currency type, e.g. 'USD', 'EUR' */
+    currencyCode?: string;
+    /** Show thousands separator for number types */
+    thousandsSeparator?: boolean;
+    /** Date format preset or custom pattern */
+    dateFormat?: 'short' | 'medium' | 'long' | string;
+    /** Label to display for true values (boolean type) */
+    trueLabel?: string;
+    /** Label to display for false values (boolean type) */
+    falseLabel?: string;
+    /** How to display boolean values */
+    booleanDisplay?: 'text' | 'checkbox' | 'icon';
+    /** Text alignment */
+    align?: 'left' | 'center' | 'right';
+    /** Header styling (bold, italic, color, etc.) */
+    headerStyle?: MJUserViewEntity_IColumnTextStyle;
+    /** Cell styling (applies to all cells in the column) */
+    cellStyle?: MJUserViewEntity_IColumnTextStyle;
+    /** Conditional formatting rules (applied in order, first match wins) */
+    conditionalRules?: MJUserViewEntity_IColumnConditionalRule[];
+}
+
+/**
+ * Text styling options for grid column headers and cells.
+ *
+ * Used inside {@link MJUserViewEntity_IColumnFormat}.headerStyle, {@link MJUserViewEntity_IColumnFormat}.cellStyle,
+ * and {@link MJUserViewEntity_IColumnConditionalRule}.style to control font weight, style,
+ * decoration, and color.
+ */
+export interface MJUserViewEntity_IColumnTextStyle {
+    /** Bold text */
+    bold?: boolean;
+    /** Italic text */
+    italic?: boolean;
+    /** Underlined text */
+    underline?: boolean;
+    /** Text color (CSS color value) */
+    color?: string;
+    /** Background color (CSS color value) */
+    backgroundColor?: string;
+}
+
+/**
+ * Conditional formatting rule for dynamic cell styling in the entity data grid.
+ *
+ * Used inside {@link MJUserViewEntity_IColumnFormat}.conditionalRules. Rules are evaluated in order;
+ * the first match wins. Each rule compares the cell value against a condition and
+ * applies the associated {@link MJUserViewEntity_IColumnTextStyle} when the condition is met.
+ */
+export interface MJUserViewEntity_IColumnConditionalRule {
+    /** Condition type */
+    condition: 'equals' | 'notEquals' | 'greaterThan' | 'lessThan' | 'greaterThanOrEqual' | 'lessThanOrEqual' | 'between' | 'contains' | 'startsWith' | 'endsWith' | 'isEmpty' | 'isNotEmpty';
+    /** Value to compare against */
+    value?: string | number | boolean;
+    /** Second value for 'between' condition */
+    value2?: number;
+    /** Style to apply when condition is met */
+    style: MJUserViewEntity_IColumnTextStyle;
+}
+
+/**
+ * A single node in a composite filter tree, used inside {@link MJUserViewEntity_IGridState}.filter.
+ *
+ * Each node is either a **leaf condition** (has `field`, `operator`, `value`) or a
+ * **composite group** (has `logic` and nested `filters`). This recursive structure
+ * supports arbitrarily deep AND/OR filter expressions.
+ */
+export interface MJUserViewEntity_IFilterNode {
+    /** Logic operator for composite groups */
+    logic?: 'and' | 'or';
+    /** Nested filter nodes (for composite groups) */
+    filters?: MJUserViewEntity_IFilterNode[];
+    /** Field name (for leaf conditions) */
+    field?: string;
+    /** Comparison operator (for leaf conditions) */
+    operator?: string;
+    /** Comparison value (for leaf conditions) */
+    value?: string | number | boolean | null;
+}
+
+/**
+ * Complete aggregate configuration for a view's grid, stored inside
+ * {@link MJUserViewEntity_IGridState}.aggregates.
+ *
+ * Contains display settings (where/how to show aggregates) and an array of
+ * aggregate expressions — each of which can be an explicit SQL expression or
+ * an AI-generated expression from a natural-language `smartPrompt`.
+ */
+export interface MJUserViewEntity_IGridAggregatesConfig {
+    /** Display settings for aggregate panel/row */
+    display?: MJUserViewEntity_IGridAggregateDisplay;
+    /** Aggregate expressions and their display configuration */
+    expressions?: MJUserViewEntity_IGridAggregate[];
+}
+
+/**
+ * Display settings for the aggregate panel and pinned summary row.
+ *
+ * Used inside {@link MJUserViewEntity_IGridAggregatesConfig}.display to control where and how
+ * aggregate values are rendered — as pinned rows under columns, as summary
+ * cards in a side/bottom panel, or both.
+ */
+export interface MJUserViewEntity_IGridAggregateDisplay {
+    /** Whether to show column-bound aggregates in pinned row */
+    showColumnAggregates?: boolean;
+    /** Where to show column aggregates: pinned top or bottom row */
+    columnPosition?: 'top' | 'bottom';
+    /** Whether to show card aggregates in a panel */
+    showCardAggregates?: boolean;
+    /** Where to show the card panel */
+    cardPosition?: 'right' | 'bottom';
+    /** Card panel width in pixels (for 'right' position) */
+    cardPanelWidth?: number;
+    /** Card layout style */
+    cardLayout?: 'horizontal' | 'vertical' | 'grid';
+    /** Number of columns for 'grid' layout */
+    cardGridColumns?: number;
+    /** Card panel title */
+    cardPanelTitle?: string;
+    /** Whether card panel is collapsible */
+    cardPanelCollapsible?: boolean;
+    /** Whether card panel starts collapsed */
+    cardPanelStartCollapsed?: boolean;
+}
+
+/**
+ * Configuration for a single aggregate expression in the entity data grid.
+ *
+ * Used inside {@link MJUserViewEntity_IGridAggregatesConfig}.expressions. Each aggregate can be
+ * displayed as a pinned-row value under a column or as a summary card in a panel.
+ * Supports both explicit SQL expressions and AI-generated expressions via
+ * `smartPrompt`.
+ */
+export interface MJUserViewEntity_IGridAggregate {
+    /** Unique ID for this aggregate (auto-generated if not provided) */
+    id?: string;
+    /** SQL expression to calculate (e.g. "SUM(OrderTotal)", "COUNT(*)") */
+    expression: string;
+    /** Natural language prompt for AI-generated expression */
+    smartPrompt?: string;
+    /** Display type: 'column' (pinned row) or 'card' (summary panel) */
+    displayType: 'column' | 'card';
+    /** For 'column' displayType: which column to display under */
+    column?: string;
+    /** Human-readable label */
+    label: string;
+    /** Optional description (shown in tooltip) */
+    description?: string;
+    /** Value formatting */
+    format?: MJUserViewEntity_IAggregateValueFormat;
+    /** Icon for card display (Font Awesome class) */
+    icon?: string;
+    /** Conditional styling rules (applied in order, first match wins) */
+    conditionalStyles?: MJUserViewEntity_IAggregateConditionalStyle[];
+    /** Whether this aggregate is enabled (visible) */
+    enabled?: boolean;
+    /** Sort order for display (lower = earlier) */
+    order?: number;
+}
+
+/**
+ * Value formatting options for aggregate results.
+ *
+ * Used inside {@link MJUserViewEntity_IGridAggregate}.format to control how the computed
+ * aggregate value is displayed — decimal precision, currency symbols,
+ * thousands separators, and prefix/suffix decorations.
+ */
+export interface MJUserViewEntity_IAggregateValueFormat {
+    /** Number of decimal places */
+    decimals?: number;
+    /** Currency code (ISO 4217), e.g. 'USD', 'EUR' */
+    currencyCode?: string;
+    /** Show thousands separator */
+    thousandsSeparator?: boolean;
+    /** Prefix to add before value (e.g. '$') */
+    prefix?: string;
+    /** Suffix to add after value (e.g. '%') */
+    suffix?: string;
+    /** Date format for date aggregates */
+    dateFormat?: string;
+}
+
+/**
+ * Conditional styling rule for aggregate values, providing visual indicators
+ * (green/yellow/red) based on the computed result.
+ *
+ * Used inside {@link MJUserViewEntity_IGridAggregate}.conditionalStyles. Rules are evaluated
+ * in order; the first match wins.
+ */
+export interface MJUserViewEntity_IAggregateConditionalStyle {
+    /** Condition operator */
+    operator: 'eq' | 'neq' | 'gt' | 'gte' | 'lt' | 'lte' | 'between';
+    /** Value to compare against */
+    value: number | string;
+    /** Second value for 'between' operator */
+    value2?: number | string;
+    /** Style class to apply */
+    style: 'success' | 'warning' | 'danger' | 'info' | 'muted';
+}
+
+/**
+ * Persisted filter configuration for a User View.
+ *
+ * Stored in the `FilterState` column of the `User Views` entity. Represents a
+ * composite filter tree where each node is either a leaf condition (field + operator
+ * + value) or a group node (logic + nested filters). The default empty state is
+ * `{ "logic": "and", "filters": [] }`.
+ *
+ * The runtime class `ViewFilterInfo` in MJUserViewEntityExtended transforms `logic`
+ * into a `logicOperator` enum. This interface represents the raw serialized form.
+ */
+export interface MJUserViewEntity_IFilterState {
+    /** Logic operator combining child filters */
+    logic: 'and' | 'or';
+    /** Child filter nodes — either leaf conditions or nested groups */
+    filters: MJUserViewEntity_IFilterItem[];
+}
+
+/**
+ * A single node in the {@link MJUserViewEntity_IFilterState} filter tree — either a leaf condition
+ * or a nested composite group.
+ *
+ * Leaf nodes have `field`, `operator`, and `value`. Group nodes have `logic` and
+ * `filters`. This recursive structure supports arbitrarily deep AND/OR expressions.
+ */
+export interface MJUserViewEntity_IFilterItem {
+    /** Field name (leaf conditions) */
+    field?: string;
+    /** Comparison operator (leaf conditions) — e.g. 'eq', 'contains', 'isnull' */
+    operator?: string;
+    /** Value to compare against (leaf conditions) */
+    value?: string | number | boolean | null;
+    /** Logic operator for nested composite groups */
+    logic?: 'and' | 'or';
+    /** Nested filter nodes (composite groups) */
+    filters?: MJUserViewEntity_IFilterItem[];
+}
+
+/**
+ * A single sort-field entry within a User View's sort configuration.
+ *
+ * The `SortState` column of the `User Views` entity stores a JSON **array** of these
+ * objects, representing a multi-column sort applied left-to-right. For example:
+ * ```json
+ * [{ "field": "LastName", "direction": "asc" }, { "field": "FirstName", "direction": "asc" }]
+ * ```
+ *
+ * The runtime class `ViewSortInfo` in MJUserViewEntityExtended maps the `direction`
+ * string to a `ViewSortDirectionInfo` enum. This interface represents the raw
+ * serialized form. The `JSONTypeIsArray` flag is set so CodeGen emits `MJUserViewEntity_ISortStateItem[]`.
+ */
+export interface MJUserViewEntity_ISortStateItem {
+    /** Field name to sort by */
+    field: string;
+    /** Sort direction (lowercase in JSON) */
+    direction: 'asc' | 'desc';
+}
+
+/**
+ * Persisted card-view configuration for a User View.
+ *
+ * Stored in the `CardState` column of the `User Views` entity. Controls the visual
+ * presentation when the view is displayed in card mode. All properties are optional;
+ * omitting them means "use component defaults."
+ *
+ * The card template itself (title field, subtitle, display fields, thumbnail priority)
+ * is auto-derived from entity metadata at runtime — this interface only stores
+ * user-chosen overrides for display preferences.
+ */
+export interface MJUserViewEntity_ICardState {
+    /** Card size preset — controls card dimensions and content density */
+    cardSize?: 'small' | 'medium' | 'large';
+}
+
+/**
+ * Persisted display-mode configuration for a User View.
+ *
+ * Stored in the `DisplayState` column of the `User Views` entity. Controls which
+ * view modes (grid, cards, timeline) are available and which is shown by default,
+ * along with mode-specific settings like timeline grouping and card sizing.
+ *
+ * The runtime helpers `ParsedDisplayState`, `DefaultViewMode`, and `TimelineConfig`
+ * on `MJUserViewEntityExtended` currently parse this field manually; once CodeGen
+ * emits a typed `DisplayStateObject` accessor, those helpers can delegate to it.
+ */
+export interface MJUserViewEntity_IDisplayState {
+    /** The default view mode to show when loading this view */
+    defaultMode: 'grid' | 'cards' | 'timeline';
+    /** Which view modes are enabled/visible for this view */
+    enabledModes?: {
+        grid?: boolean;
+        cards?: boolean;
+        timeline?: boolean;
+    };
+    /** Timeline-specific configuration */
+    timeline?: MJUserViewEntity_ITimelineState;
+    /** Card-specific configuration */
+    cards?: MJUserViewEntity_IDisplayCardState;
+    /** Grid-specific configuration */
+    grid?: MJUserViewEntity_IGridDisplayState;
+}
+
+/**
+ * Timeline-specific configuration for the entity viewer's timeline display mode.
+ *
+ * Used inside {@link MJUserViewEntity_IDisplayState}.timeline. Controls which date field drives the
+ * timeline, how events are grouped into segments, and segment expand/collapse behavior.
+ */
+export interface MJUserViewEntity_ITimelineState {
+    /** The date field name to use for timeline ordering */
+    dateFieldName: string;
+    /** Time segment grouping */
+    segmentGrouping?: 'none' | 'day' | 'week' | 'month' | 'quarter' | 'year';
+    /** Sort order for timeline events */
+    sortOrder?: 'asc' | 'desc';
+    /** Whether segments are collapsible */
+    segmentsCollapsible?: boolean;
+    /** Whether segments start expanded */
+    segmentsDefaultExpanded?: boolean;
+}
+
+/**
+ * Card-specific display configuration within the view display state.
+ *
+ * Used inside {@link MJUserViewEntity_IDisplayState}.cards. Controls card sizing when the view
+ * is in card display mode. The card template itself (title field, subtitle,
+ * display fields) is auto-derived from entity metadata at runtime.
+ */
+export interface MJUserViewEntity_IDisplayCardState {
+    /** Custom card size */
+    cardSize?: 'small' | 'medium' | 'large';
+}
+
+/**
+ * Grid-specific display configuration within the view display state.
+ *
+ * Used inside {@link MJUserViewEntity_IDisplayState}.grid. Controls grid-level display preferences
+ * like row height that are separate from per-column settings in {@link IGridState}.
+ */
+export interface MJUserViewEntity_IGridDisplayState {
+    /** Row height preference */
+    rowHeight?: 'compact' | 'normal' | 'comfortable';
+}
+
+/**
  * MJ: User Views - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: UserView
@@ -83734,6 +84211,7 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
     * * Field Name: GridState
     * * Display Name: Grid State
     * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJUserViewEntity_IGridState
     * * Description: JSON storing complete grid configuration including columns, widths, and formatting.
     */
     get GridState(): string | null {
@@ -83743,10 +84221,32 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
         this.Set('GridState', value);
     }
 
+    private _GridStateObject_cached: MJUserViewEntity_IGridState | null | undefined = undefined;
+    private _GridStateObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for GridState — returns parsed JSON as MJUserViewEntity_IGridState.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get GridStateObject(): MJUserViewEntity_IGridState | null {
+        const raw = this.GridState;
+        if (raw !== this._GridStateObject_lastRaw) {
+            this._GridStateObject_cached = raw ? JSON.parse(raw) : null;
+            this._GridStateObject_lastRaw = raw;
+        }
+        return this._GridStateObject_cached!;
+    }
+    set GridStateObject(value: MJUserViewEntity_IGridState | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.GridState = raw;
+        this._GridStateObject_cached = value;
+        this._GridStateObject_lastRaw = raw;
+    }
+
     /**
     * * Field Name: FilterState
     * * Display Name: Filter State
     * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJUserViewEntity_IFilterState
     * * Description: JSON storing the view's filter configuration.
     */
     get FilterState(): string | null {
@@ -83754,6 +84254,27 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
     }
     set FilterState(value: string | null) {
         this.Set('FilterState', value);
+    }
+
+    private _FilterStateObject_cached: MJUserViewEntity_IFilterState | null | undefined = undefined;
+    private _FilterStateObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for FilterState — returns parsed JSON as MJUserViewEntity_IFilterState.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get FilterStateObject(): MJUserViewEntity_IFilterState | null {
+        const raw = this.FilterState;
+        if (raw !== this._FilterStateObject_lastRaw) {
+            this._FilterStateObject_cached = raw ? JSON.parse(raw) : null;
+            this._FilterStateObject_lastRaw = raw;
+        }
+        return this._FilterStateObject_cached!;
+    }
+    set FilterStateObject(value: MJUserViewEntity_IFilterState | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.FilterState = raw;
+        this._FilterStateObject_cached = value;
+        this._FilterStateObject_lastRaw = raw;
     }
 
     /**
@@ -83854,6 +84375,7 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
     * * Field Name: SortState
     * * Display Name: Sort State
     * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: Array<MJUserViewEntity_ISortStateItem>
     * * Description: JSON storing the view's sort configuration.
     */
     get SortState(): string | null {
@@ -83861,6 +84383,27 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
     }
     set SortState(value: string | null) {
         this.Set('SortState', value);
+    }
+
+    private _SortStateObject_cached: Array<MJUserViewEntity_ISortStateItem> | null | undefined = undefined;
+    private _SortStateObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for SortState — returns parsed JSON as Array<MJUserViewEntity_ISortStateItem>.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get SortStateObject(): Array<MJUserViewEntity_ISortStateItem> | null {
+        const raw = this.SortState;
+        if (raw !== this._SortStateObject_lastRaw) {
+            this._SortStateObject_cached = raw ? JSON.parse(raw) : null;
+            this._SortStateObject_lastRaw = raw;
+        }
+        return this._SortStateObject_cached!;
+    }
+    set SortStateObject(value: Array<MJUserViewEntity_ISortStateItem> | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.SortState = raw;
+        this._SortStateObject_cached = value;
+        this._SortStateObject_lastRaw = raw;
     }
 
     /**
@@ -83900,6 +84443,7 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
     * * Field Name: CardState
     * * Display Name: Card State
     * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJUserViewEntity_ICardState
     * * Description: JSON configuration for card display mode in Data Explorer. Stores card layout settings including title field, subtitle, display fields, thumbnails, and layout density. When null, defaults are derived from entity metadata. See CardState interface in packages/Angular/Generic/entity-viewer/src/lib/types.ts for the current schema definition.
     */
     get CardState(): string | null {
@@ -83909,10 +84453,32 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
         this.Set('CardState', value);
     }
 
+    private _CardStateObject_cached: MJUserViewEntity_ICardState | null | undefined = undefined;
+    private _CardStateObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for CardState — returns parsed JSON as MJUserViewEntity_ICardState.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get CardStateObject(): MJUserViewEntity_ICardState | null {
+        const raw = this.CardState;
+        if (raw !== this._CardStateObject_lastRaw) {
+            this._CardStateObject_cached = raw ? JSON.parse(raw) : null;
+            this._CardStateObject_lastRaw = raw;
+        }
+        return this._CardStateObject_cached!;
+    }
+    set CardStateObject(value: MJUserViewEntity_ICardState | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.CardState = raw;
+        this._CardStateObject_cached = value;
+        this._CardStateObject_lastRaw = raw;
+    }
+
     /**
     * * Field Name: DisplayState
     * * Display Name: Display State
     * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJUserViewEntity_IDisplayState
     * * Description: JSON configuration for display mode settings. Stores default display mode (grid/cards/timeline/chart), available modes for sharing, and mode-specific configurations like timeline date field and segmentation. See ViewDisplayState interface in packages/Angular/Generic/entity-viewer/src/lib/types.ts for schema.
     */
     get DisplayState(): string | null {
@@ -83920,6 +84486,27 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
     }
     set DisplayState(value: string | null) {
         this.Set('DisplayState', value);
+    }
+
+    private _DisplayStateObject_cached: MJUserViewEntity_IDisplayState | null | undefined = undefined;
+    private _DisplayStateObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for DisplayState — returns parsed JSON as MJUserViewEntity_IDisplayState.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get DisplayStateObject(): MJUserViewEntity_IDisplayState | null {
+        const raw = this.DisplayState;
+        if (raw !== this._DisplayStateObject_lastRaw) {
+            this._DisplayStateObject_cached = raw ? JSON.parse(raw) : null;
+            this._DisplayStateObject_lastRaw = raw;
+        }
+        return this._DisplayStateObject_cached!;
+    }
+    set DisplayStateObject(value: MJUserViewEntity_IDisplayState | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.DisplayState = raw;
+        this._DisplayStateObject_cached = value;
+        this._DisplayStateObject_lastRaw = raw;
     }
 
     /**
