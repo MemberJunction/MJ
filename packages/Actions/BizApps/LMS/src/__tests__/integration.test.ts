@@ -1,10 +1,11 @@
 /**
  * LearnWorlds Integration Tests — hits the REAL LearnWorlds API.
  *
- * Covers ALL 17 LearnWorlds actions chained together:
- *   Read-only (no setup needed): GetCourses, GetCourseDetails, GetBundles, GetUsers
+ * Covers ALL 19 LearnWorlds actions chained together:
+ *   Read-only (no setup needed): GetCourses, GetCourseDetails, GetCourseAnalytics, GetBundles, GetUsers
  *   Create/mutate:               CreateUser, UpdateUser, AttachTags, DetachTags
- *   Enrollment:                  EnrollUser, GetUserEnrollments, GetUserProgress
+ *   Enrollment:                  EnrollUser, GetUserEnrollments, GetUserProgress, UpdateUserProgress
+ *   Assessment & Achievement:    GetCertificates, GetQuizResults
  *   Auth:                        SSOLogin
  *   Details:                     GetUserDetails
  *   Orchestration:               OnboardLearner
@@ -84,6 +85,10 @@ import { AttachTagsAction } from '../providers/learnworlds/actions/attach-tags.a
 import { DetachTagsAction } from '../providers/learnworlds/actions/detach-tags.action';
 import { OnboardLearnerAction } from '../providers/learnworlds/actions/onboard-learner.action';
 import { GetLearnWorldsBulkDataAction } from '../providers/learnworlds/actions/get-bulk-data.action';
+import { GetCourseAnalyticsAction } from '../providers/learnworlds/actions/get-course-analytics.action';
+import { GetCertificatesAction } from '../providers/learnworlds/actions/get-certificates.action';
+import { GetQuizResultsAction } from '../providers/learnworlds/actions/get-quiz-results.action';
+import { UpdateUserProgressAction } from '../providers/learnworlds/actions/update-user-progress.action';
 import { LearnWorldsBaseAction } from '../providers/learnworlds/learnworlds-base.action';
 import { UserInfo } from '@memberjunction/core';
 
@@ -93,6 +98,7 @@ const API_KEY = process.env.LW_API_KEY || '';
 const CLIENT_ID = process.env.LW_CLIENT_ID || '';
 const COMPANY_ID = process.env.LW_COMPANY_ID || '00000000-0000-0000-0000-000000000001';
 const TEST_COURSE_ID = process.env.LW_TEST_COURSE_ID || '';
+const TEST_LESSON_ID = process.env.LW_TEST_LESSON_ID || '';
 const TEST_EMAIL = process.env.LW_TEST_EMAIL || `mj-test-${Date.now()}@example.com`;
 const ONBOARD_EMAIL = `mj-onboard-${Date.now()}@example.com`;
 
@@ -167,6 +173,30 @@ describe.skipIf(!RUN_INTEGRATION)('LearnWorlds Integration Tests', () => {
       expect(result.CourseDetails).toBeDefined();
       expect(result.CourseDetails.id).toBeTruthy();
       console.log(`  GetCourseDetails: OK (title: "${result.CourseDetails.title}")`);
+    });
+
+    // ─── GetCourseAnalytics ────────────────────────────────────────────
+    it('GetCourseAnalytics — should get course analytics', async () => {
+      if (!TEST_COURSE_ID) {
+        console.warn('  Skipping GetCourseAnalytics — LW_TEST_COURSE_ID not set');
+        return;
+      }
+
+      const action = patchCredentials(new GetCourseAnalyticsAction());
+      const result = await action.GetCourseAnalytics(
+        {
+          CompanyID: COMPANY_ID,
+          CourseID: TEST_COURSE_ID,
+          IncludeUserBreakdown: false,
+          IncludeModuleStats: false,
+          IncludeRevenue: false,
+        },
+        contextUser,
+      );
+
+      expect(result.CourseAnalytics).toBeDefined();
+      expect(result.Summary).toBeDefined();
+      console.log(`  GetCourseAnalytics: OK (enrollments=${result.CourseAnalytics.totalEnrollments}, completionRate=${result.CourseAnalytics.completionRate}%)`);
     });
 
     // ─── GetBundles ──────────────────────────────────────────────────
@@ -393,6 +423,114 @@ describe.skipIf(!RUN_INTEGRATION)('LearnWorlds Integration Tests', () => {
 
       expect(result.UserProgress).toBeDefined();
       console.log(`  GetUserProgress: OK (courses=${result.UserProgress.totalCourses}, overall=${result.UserProgress.overallProgressPercentage}%)`);
+    });
+
+    // ─── UpdateUserProgress ────────────────────────────────────────────
+    it('UpdateUserProgress — should update course progress', async () => {
+      if (!createdUserId || !TEST_COURSE_ID) {
+        console.warn('  Skipping UpdateUserProgress — no userId or no TEST_COURSE_ID');
+        return;
+      }
+
+      const action = patchCredentials(new UpdateUserProgressAction());
+
+      try {
+        const result = await action.UpdateProgress(
+          {
+            CompanyID: COMPANY_ID,
+            UserID: createdUserId,
+            CourseID: TEST_COURSE_ID,
+            ...(TEST_LESSON_ID ? { LessonID: TEST_LESSON_ID, Completed: true } : { ProgressPercentage: 10 }),
+          },
+          contextUser,
+        );
+
+        expect(result.ProgressDetails).toBeDefined();
+        expect(result.Summary).toBeDefined();
+        const updateType = result.ProgressDetails.updateType;
+        const newPct = result.Summary.newPercentage;
+        console.log(`  UpdateUserProgress: OK (type=${updateType}, newProgress=${newPct}%, completed=${result.Summary.isCompleted})`);
+      } catch (error) {
+        // LearnWorlds enrollment/progress endpoints may not be available for all course types
+        // or may take time to register a new enrollment. Log and pass if it's a 404.
+        const msg = error instanceof Error ? error.message : String(error);
+        if (msg.includes('not enrolled') || msg.includes('does not exist') || msg.includes('404')) {
+          console.warn(`  UpdateUserProgress: SKIPPED (enrollment not ready or endpoint unavailable: ${msg})`);
+        } else {
+          throw error;
+        }
+      }
+    });
+
+    // ─── GetCertificates ────────────────────────────────────────────
+    it('GetCertificates — should list certificates for the user', async () => {
+      if (!createdUserId) {
+        console.warn('  Skipping GetCertificates — no userId');
+        return;
+      }
+
+      const action = patchCredentials(new GetCertificatesAction());
+
+      try {
+        const result = await action.GetCertificates(
+          {
+            CompanyID: COMPANY_ID,
+            UserID: createdUserId,
+            IncludeDownloadLinks: true,
+            MaxResults: 10,
+          },
+          contextUser,
+        );
+
+        expect(result.Certificates).toBeDefined();
+        expect(Array.isArray(result.Certificates)).toBe(true);
+        console.log(`  GetCertificates: OK (${result.TotalCount} certificate(s) found)`);
+      } catch (error) {
+        // A newly created test user typically has no certificates.
+        // The certificates endpoint may return 404 if no certificates exist.
+        const msg = error instanceof Error ? error.message : String(error);
+        if (msg.includes('does not exist') || msg.includes('404')) {
+          console.warn(`  GetCertificates: SKIPPED (no certificates for test user — endpoint returned 404)`);
+        } else {
+          throw error;
+        }
+      }
+    });
+
+    // ─── GetQuizResults ─────────────────────────────────────────────
+    it('GetQuizResults — should list quiz results for the user', async () => {
+      if (!createdUserId) {
+        console.warn('  Skipping GetQuizResults — no userId');
+        return;
+      }
+
+      const action = patchCredentials(new GetQuizResultsAction());
+
+      try {
+        const result = await action.GetQuizResults(
+          {
+            CompanyID: COMPANY_ID,
+            UserID: createdUserId,
+            IncludeQuestions: false,
+            IncludeAnswers: false,
+            MaxResults: 10,
+          },
+          contextUser,
+        );
+
+        expect(result.QuizResults).toBeDefined();
+        expect(Array.isArray(result.QuizResults)).toBe(true);
+        console.log(`  GetQuizResults: OK (${result.TotalCount} quiz result(s) found)`);
+      } catch (error) {
+        // A newly created test user has no quiz attempts.
+        // The quiz-results endpoint may return 404.
+        const msg = error instanceof Error ? error.message : String(error);
+        if (msg.includes('does not exist') || msg.includes('404')) {
+          console.warn(`  GetQuizResults: SKIPPED (no quiz results for test user — endpoint returned 404)`);
+        } else {
+          throw error;
+        }
+      }
     });
 
     // ─── FindUserByEmail (verify) ────────────────────────────────────

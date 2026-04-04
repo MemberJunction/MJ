@@ -44,6 +44,11 @@ export abstract class LearnWorldsBaseAction extends BaseLMSAction {
   private static readonly INTER_BATCH_DELAY_MS = 2000;
 
   /**
+   * Safety limit for pagination to prevent infinite loops if the API misbehaves.
+   */
+  protected static readonly MAX_PAGES = 100;
+
+  /**
    * Sliding-window timestamps shared across all instances so concurrent
    * actions against the same LearnWorlds school stay within the limit.
    */
@@ -232,6 +237,11 @@ export abstract class LearnWorldsBaseAction extends BaseLMSAction {
     const effectiveMax = maxResults ?? (this.getParamValue(this.params, 'MaxResults') as number | undefined);
 
     while (hasMore) {
+      if (page > LearnWorldsBaseAction.MAX_PAGES) {
+        console.warn(`Pagination safety limit reached (${LearnWorldsBaseAction.MAX_PAGES} pages). Returning partial results.`);
+        break;
+      }
+
       const paginatedParams: Record<string, string> = {};
       for (const [key, val] of Object.entries(queryParams)) {
         paginatedParams[key] = String(val);
@@ -607,6 +617,7 @@ export abstract class LearnWorldsBaseAction extends BaseLMSAction {
    * Re-throws errors for network failures, auth errors, rate limiting, etc.
    */
   public async FindUserByEmail(email: string, contextUser: UserInfo): Promise<LearnWorldsUser | null> {
+    this.validateEmail(email, 'Email');
     const qs = new URLSearchParams({ search: email, limit: '50' });
     const response = await this.makeLearnWorldsRequest<LearnWorldsPaginatedResponse<LWApiUser>>(
       `users?${qs}`, 'GET', undefined, contextUser,
