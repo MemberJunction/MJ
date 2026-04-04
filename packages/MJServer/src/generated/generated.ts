@@ -40045,6 +40045,16 @@ export class MJEntityField_ {
     @Field({nullable: true, description: `JSON configuration for additional fields to join from the related entity into this entity's base view. Supports modes: extend (add to NameField), override (replace NameField), disable (no joins). Schema: { mode?: string, fields?: [{ field: string, alias?: string }] }`}) 
     RelatedEntityJoinFields?: string;
         
+    @Field({nullable: true, description: `The name of the TypeScript interface/type for this JSON field. When set, CodeGen emits a strongly-typed Object-suffixed accessor using this type instead of only the default string getter/setter.`}) 
+    @MaxLength(255)
+    JSONType?: string;
+        
+    @Field(() => Boolean, {description: `If true, the field holds a JSON array of JSONType items. The Object accessor returns Array<JSONType> | null and the setter accepts Array<JSONType> | null.`}) 
+    JSONTypeIsArray: boolean;
+        
+    @Field({nullable: true, description: `Raw TypeScript code emitted by CodeGen above the entity class definition. Typically contains the interface/type definition referenced by JSONType. Can include imports, multiple types, or any valid TypeScript.`}) 
+    JSONTypeDefinition?: string;
+        
     @Field({nullable: true}) 
     FieldCodeName?: string;
         
@@ -40230,6 +40240,15 @@ export class CreateMJEntityFieldInput {
 
     @Field({ nullable: true })
     RelatedEntityJoinFields: string | null;
+
+    @Field({ nullable: true })
+    JSONType: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    JSONTypeIsArray?: boolean;
+
+    @Field({ nullable: true })
+    JSONTypeDefinition: string | null;
 }
     
 
@@ -40366,6 +40385,15 @@ export class UpdateMJEntityFieldInput {
 
     @Field({ nullable: true })
     RelatedEntityJoinFields?: string | null;
+
+    @Field({ nullable: true })
+    JSONType?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    JSONTypeIsArray?: boolean;
+
+    @Field({ nullable: true })
+    JSONTypeDefinition?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

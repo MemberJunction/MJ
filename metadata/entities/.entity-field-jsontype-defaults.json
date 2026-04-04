@@ -22,7 +22,7 @@
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Applications&Name=DefaultNavItems"
           },
           "sync": {
-            "lastModified": "2026-04-03T15:18:57.963Z",
+            "lastModified": "2026-04-04T01:10:05.758Z",
             "checksum": "d88c75a3966b7eb65517b337866b7051a002d40fd5ae1d7ebc62408cd7460743"
           }
         }

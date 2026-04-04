@@ -11,7 +11,7 @@
       "ID": "1ABF31AE-ACA5-4D3A-83F1-EE21C2DFBB42"
     },
     "sync": {
-      "lastModified": "2026-04-03T14:26:06.473Z",
+      "lastModified": "2026-04-04T01:09:57.401Z",
       "checksum": "f41f9f279cd57644cac6ec2c45cb16afaad6330a2fcd2cdda47b836a89f67ca6"
     }
   },
@@ -27,7 +27,7 @@
       "ID": "80F34AAF-E0D0-4FCA-93DA-FE06EB4292B4"
     },
     "sync": {
-      "lastModified": "2026-04-03T14:26:06.486Z",
+      "lastModified": "2026-04-04T01:09:57.415Z",
       "checksum": "4d592a6a279e0e3d3e31e2e0338cefdf761851c052167de17189da6828c4f9fc"
     }
   },
@@ -43,7 +43,7 @@
       "ID": "80B7F0A0-FB09-4409-856D-9C19E4A87728"
     },
     "sync": {
-      "lastModified": "2026-04-03T14:26:06.498Z",
+      "lastModified": "2026-04-04T01:09:57.426Z",
       "checksum": "fa75b44641211a2a9ead2acd43895f4193a46a3a5c216d2dbd60e9260a7e4110"
     }
   },
@@ -60,7 +60,7 @@
       "ID": "3052BB8B-0C1D-4087-AC7C-ECFE4C729D37"
     },
     "sync": {
-      "lastModified": "2026-04-03T14:26:06.508Z",
+      "lastModified": "2026-04-04T01:09:57.439Z",
       "checksum": "5d54f280577697484876e98e328e290ec0bd519cb5be4212302f94d66a9b6547"
     }
   },
@@ -76,7 +76,7 @@
       "ID": "B932ED39-2F4F-4421-9AF6-A573AECCA20C"
     },
     "sync": {
-      "lastModified": "2026-04-03T15:45:59.297Z",
+      "lastModified": "2026-04-04T01:09:57.452Z",
       "checksum": "eae377de1f921554cdea280e2614940d6c486577e2f50db107b08b7f9f61fd70"
     }
   },
@@ -87,6 +87,13 @@
       "Category": "navigation",
       "InputSchemaJSON": "{\"type\":\"object\",\"properties\":{\"URL\":{\"type\":\"string\",\"description\":\"The full URL to open (must start with http:// or https://)\"},\"Label\":{\"type\":\"string\",\"description\":\"Optional descriptive label for the tab\"}},\"required\":[\"URL\"]}",
       "DefaultTimeoutMs": 10000
+    },
+    "primaryKey": {
+      "ID": "C5DCD34F-DAE3-43CD-8A70-6879853C422D"
+    },
+    "sync": {
+      "lastModified": "2026-04-04T01:09:57.387Z",
+      "checksum": "6658c922edd2d43c5452fadbb0a5aaf50542ed89dcd438a668191e568af669b3"
     }
   }
 ]

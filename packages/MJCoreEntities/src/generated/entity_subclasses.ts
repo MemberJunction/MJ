@@ -6997,10 +6997,11 @@ export const MJApplicationSchema = z.object({
         * * Display Name: Color
         * * SQL Data Type: nvarchar(20)
         * * Description: Hex color code for visual theming (e.g., #4caf50)`),
-    DefaultNavItems: z.string().nullable().describe(`
+    DefaultNavItems: z.any().nullable().describe(`
         * * Field Name: DefaultNavItems
         * * Display Name: Default Nav Items
         * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: Array<MJApplicationEntity_IDefaultNavItem>
         * * Description: JSON array of default navigation items for this application. Parsed by BaseApplication.GetNavItems()`),
     ClassName: z.string().nullable().describe(`
         * * Field Name: ClassName
@@ -9909,10 +9910,11 @@ export const MJContentSourceTypeSchema = z.object({
         * * Display Name: Driver Class
         * * SQL Data Type: nvarchar(255)
         * * Description: The registered class name used by ClassFactory to instantiate the provider for this source type (e.g., AutotagLocalFileSystem, AutotagEntity). Must match a @RegisterClass key on a class extending AutotagBase.`),
-    Configuration: z.string().nullable().describe(`
+    Configuration: z.any().nullable().describe(`
         * * Field Name: Configuration
         * * Display Name: Configuration
         * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJContentSourceTypeEntity_IContentSourceTypeConfiguration
         * * Description: JSON configuration blob for type-level settings. Conforms to the IContentSourceTypeConfiguration interface. Reserved for future type-wide settings shared by all sources of this type.`),
 });
 
@@ -9973,10 +9975,11 @@ export const MJContentSourceSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Vector Indexes (vwVectorIndexes.ID)
         * * Description: Per-source override for the vector index. When NULL, falls back to the ContentType default.`),
-    Configuration: z.string().nullable().describe(`
+    Configuration: z.any().nullable().describe(`
         * * Field Name: Configuration
         * * Display Name: Configuration JSON
         * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJContentSourceEntity_IContentSourceConfiguration
         * * Description: JSON configuration blob for source-instance settings. Conforms to the IContentSourceConfiguration interface. Includes tag taxonomy mode (constrained/auto-grow/free-flow), tag root ID, match threshold, LLM taxonomy sharing, and vectorization toggle.`),
     EntityID: z.string().nullable().describe(`
         * * Field Name: EntityID
@@ -10117,10 +10120,11 @@ export const MJContentTypeSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Vector Indexes (vwVectorIndexes.ID)
         * * Description: Default vector index for storing embeddings of this content type. Sources can override per-source. If NULL, uses the first available vector index.`),
-    Configuration: z.string().nullable().describe(`
+    Configuration: z.any().nullable().describe(`
         * * Field Name: Configuration
         * * Display Name: Configuration
         * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJContentTypeEntity_IContentTypeConfiguration
         * * Description: JSON configuration blob for content-type-level settings. Conforms to the IContentTypeConfiguration interface. Reserved for future type-wide settings such as default tag taxonomy rules and processing options.`),
     AIModel: z.string().describe(`
         * * Field Name: AIModel
@@ -14069,6 +14073,22 @@ export const MJEntityFieldSchema = z.object({
         * * Display Name: Related Entity Join Fields
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON configuration for additional fields to join from the related entity into this entity's base view. Supports modes: extend (add to NameField), override (replace NameField), disable (no joins). Schema: { mode?: string, fields?: [{ field: string, alias?: string }] }`),
+    JSONType: z.string().nullable().describe(`
+        * * Field Name: JSONType
+        * * Display Name: JSON Type
+        * * SQL Data Type: nvarchar(255)
+        * * Description: The name of the TypeScript interface/type for this JSON field. When set, CodeGen emits a strongly-typed Object-suffixed accessor using this type instead of only the default string getter/setter.`),
+    JSONTypeIsArray: z.boolean().describe(`
+        * * Field Name: JSONTypeIsArray
+        * * Display Name: JSON Type Is Array
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: If true, the field holds a JSON array of JSONType items. The Object accessor returns Array<JSONType> | null and the setter accepts Array<JSONType> | null.`),
+    JSONTypeDefinition: z.string().nullable().describe(`
+        * * Field Name: JSONTypeDefinition
+        * * Display Name: JSON Type Definition
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Raw TypeScript code emitted by CodeGen above the entity class definition. Typically contains the interface/type definition referenced by JSONType. Can include imports, multiple types, or any valid TypeScript.`),
     FieldCodeName: z.string().nullable().describe(`
         * * Field Name: FieldCodeName
         * * Display Name: Field Code Name
@@ -42429,6 +42449,21 @@ export class MJApplicationSettingEntity extends BaseEntity<MJApplicationSettingE
 }
 
 
+export interface MJApplicationEntity_IDefaultNavItem {
+    /** Display label for the navigation item */
+    Label: string;
+    /** Font Awesome icon class (e.g., "fa-solid fa-database") */
+    Icon: string;
+    /** Type of resource: "Dashboards", "Custom", etc. */
+    ResourceType: string;
+    /** For Dashboard resources, the ID of the dashboard record */
+    RecordID?: string | null;
+    /** For Custom resources, the registered driver class name */
+    DriverClass?: string | null;
+    /** Whether this is the default tab when the app opens */
+    isDefault?: boolean;
+}
+
 /**
  * MJ: Applications - strongly typed entity sub-class
  * * Schema: __mj
@@ -42573,6 +42608,7 @@ export class MJApplicationEntity extends BaseEntity<MJApplicationEntityType> {
     * * Field Name: DefaultNavItems
     * * Display Name: Default Nav Items
     * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: Array<MJApplicationEntity_IDefaultNavItem>
     * * Description: JSON array of default navigation items for this application. Parsed by BaseApplication.GetNavItems()
     */
     get DefaultNavItems(): string | null {
@@ -42580,6 +42616,27 @@ export class MJApplicationEntity extends BaseEntity<MJApplicationEntityType> {
     }
     set DefaultNavItems(value: string | null) {
         this.Set('DefaultNavItems', value);
+    }
+
+    private _DefaultNavItemsObject_cached: Array<MJApplicationEntity_IDefaultNavItem> | null | undefined = undefined;
+    private _DefaultNavItemsObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for DefaultNavItems — returns parsed JSON as Array<MJApplicationEntity_IDefaultNavItem>.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get DefaultNavItemsObject(): Array<MJApplicationEntity_IDefaultNavItem> | null {
+        const raw = this.DefaultNavItems;
+        if (raw !== this._DefaultNavItemsObject_lastRaw) {
+            this._DefaultNavItemsObject_cached = raw ? JSON.parse(raw) : null;
+            this._DefaultNavItemsObject_lastRaw = raw;
+        }
+        return this._DefaultNavItemsObject_cached!;
+    }
+    set DefaultNavItemsObject(value: Array<MJApplicationEntity_IDefaultNavItem> | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.DefaultNavItems = raw;
+        this._DefaultNavItemsObject_cached = value;
+        this._DefaultNavItemsObject_lastRaw = raw;
     }
 
     /**
@@ -49802,6 +49859,10 @@ export class MJContentSourceTypeParamEntity extends BaseEntity<MJContentSourceTy
 }
 
 
+export interface MJContentSourceTypeEntity_IContentSourceTypeConfiguration {
+    /** Reserved for future type-wide settings shared by all sources of this type */
+}
+
 /**
  * MJ: Content Source Types - strongly typed entity sub-class
  * * Schema: __mj
@@ -49906,6 +49967,7 @@ export class MJContentSourceTypeEntity extends BaseEntity<MJContentSourceTypeEnt
     * * Field Name: Configuration
     * * Display Name: Configuration
     * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJContentSourceTypeEntity_IContentSourceTypeConfiguration
     * * Description: JSON configuration blob for type-level settings. Conforms to the IContentSourceTypeConfiguration interface. Reserved for future type-wide settings shared by all sources of this type.
     */
     get Configuration(): string | null {
@@ -49914,8 +49976,42 @@ export class MJContentSourceTypeEntity extends BaseEntity<MJContentSourceTypeEnt
     set Configuration(value: string | null) {
         this.Set('Configuration', value);
     }
+
+    private _ConfigurationObject_cached: MJContentSourceTypeEntity_IContentSourceTypeConfiguration | null | undefined = undefined;
+    private _ConfigurationObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for Configuration — returns parsed JSON as MJContentSourceTypeEntity_IContentSourceTypeConfiguration.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get ConfigurationObject(): MJContentSourceTypeEntity_IContentSourceTypeConfiguration | null {
+        const raw = this.Configuration;
+        if (raw !== this._ConfigurationObject_lastRaw) {
+            this._ConfigurationObject_cached = raw ? JSON.parse(raw) : null;
+            this._ConfigurationObject_lastRaw = raw;
+        }
+        return this._ConfigurationObject_cached!;
+    }
+    set ConfigurationObject(value: MJContentSourceTypeEntity_IContentSourceTypeConfiguration | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.Configuration = raw;
+        this._ConfigurationObject_cached = value;
+        this._ConfigurationObject_lastRaw = raw;
+    }
 }
 
+
+export interface MJContentSourceEntity_IContentSourceConfiguration {
+    /** Tag taxonomy matching mode: constrained (only match within subtree), auto-grow (match or create within subtree), free-flow (match or create anywhere) */
+    TagTaxonomyMode?: 'constrained' | 'auto-grow' | 'free-flow';
+    /** Root Tag ID for constrained/auto-grow modes — limits taxonomy operations to this subtree */
+    TagRootID?: string | null;
+    /** Similarity threshold (0.0-1.0) for matching ContentItemTags to formal Tags. Default 0.9 */
+    TagMatchThreshold?: number;
+    /** Whether to share existing tag taxonomy with the LLM during autotagging. Default true */
+    ShareTaxonomyWithLLM?: boolean;
+    /** Enable vectorization for this source. Default true */
+    EnableVectorization?: boolean;
+}
 
 /**
  * MJ: Content Sources - strongly typed entity sub-class
@@ -50076,6 +50172,7 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
     * * Field Name: Configuration
     * * Display Name: Configuration JSON
     * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJContentSourceEntity_IContentSourceConfiguration
     * * Description: JSON configuration blob for source-instance settings. Conforms to the IContentSourceConfiguration interface. Includes tag taxonomy mode (constrained/auto-grow/free-flow), tag root ID, match threshold, LLM taxonomy sharing, and vectorization toggle.
     */
     get Configuration(): string | null {
@@ -50083,6 +50180,27 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
     }
     set Configuration(value: string | null) {
         this.Set('Configuration', value);
+    }
+
+    private _ConfigurationObject_cached: MJContentSourceEntity_IContentSourceConfiguration | null | undefined = undefined;
+    private _ConfigurationObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for Configuration — returns parsed JSON as MJContentSourceEntity_IContentSourceConfiguration.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get ConfigurationObject(): MJContentSourceEntity_IContentSourceConfiguration | null {
+        const raw = this.Configuration;
+        if (raw !== this._ConfigurationObject_lastRaw) {
+            this._ConfigurationObject_cached = raw ? JSON.parse(raw) : null;
+            this._ConfigurationObject_lastRaw = raw;
+        }
+        return this._ConfigurationObject_cached!;
+    }
+    set ConfigurationObject(value: MJContentSourceEntity_IContentSourceConfiguration | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.Configuration = raw;
+        this._ConfigurationObject_cached = value;
+        this._ConfigurationObject_lastRaw = raw;
     }
 
     /**
@@ -50293,6 +50411,13 @@ export class MJContentTypeAttributeEntity extends BaseEntity<MJContentTypeAttrib
 }
 
 
+export interface MJContentTypeEntity_IContentTypeConfiguration {
+    /** Whether to share tag taxonomy with LLM by default for all sources of this type. Can be overridden per source. Default true */
+    ShareTaxonomyWithLLM?: boolean;
+    /** Default tag taxonomy mode for sources of this type. Can be overridden per source */
+    DefaultTagTaxonomyMode?: 'constrained' | 'auto-grow' | 'free-flow';
+}
+
 /**
  * MJ: Content Types - strongly typed entity sub-class
  * * Schema: __mj
@@ -50451,6 +50576,7 @@ export class MJContentTypeEntity extends BaseEntity<MJContentTypeEntityType> {
     * * Field Name: Configuration
     * * Display Name: Configuration
     * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJContentTypeEntity_IContentTypeConfiguration
     * * Description: JSON configuration blob for content-type-level settings. Conforms to the IContentTypeConfiguration interface. Reserved for future type-wide settings such as default tag taxonomy rules and processing options.
     */
     get Configuration(): string | null {
@@ -50458,6 +50584,27 @@ export class MJContentTypeEntity extends BaseEntity<MJContentTypeEntityType> {
     }
     set Configuration(value: string | null) {
         this.Set('Configuration', value);
+    }
+
+    private _ConfigurationObject_cached: MJContentTypeEntity_IContentTypeConfiguration | null | undefined = undefined;
+    private _ConfigurationObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for Configuration — returns parsed JSON as MJContentTypeEntity_IContentTypeConfiguration.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get ConfigurationObject(): MJContentTypeEntity_IContentTypeConfiguration | null {
+        const raw = this.Configuration;
+        if (raw !== this._ConfigurationObject_lastRaw) {
+            this._ConfigurationObject_cached = raw ? JSON.parse(raw) : null;
+            this._ConfigurationObject_lastRaw = raw;
+        }
+        return this._ConfigurationObject_cached!;
+    }
+    set ConfigurationObject(value: MJContentTypeEntity_IContentTypeConfiguration | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.Configuration = raw;
+        this._ConfigurationObject_cached = value;
+        this._ConfigurationObject_lastRaw = raw;
     }
 
     /**
@@ -60567,6 +60714,46 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
     }
     set RelatedEntityJoinFields(value: string | null) {
         this.Set('RelatedEntityJoinFields', value);
+    }
+
+    /**
+    * * Field Name: JSONType
+    * * Display Name: JSON Type
+    * * SQL Data Type: nvarchar(255)
+    * * Description: The name of the TypeScript interface/type for this JSON field. When set, CodeGen emits a strongly-typed Object-suffixed accessor using this type instead of only the default string getter/setter.
+    */
+    get JSONType(): string | null {
+        return this.Get('JSONType');
+    }
+    set JSONType(value: string | null) {
+        this.Set('JSONType', value);
+    }
+
+    /**
+    * * Field Name: JSONTypeIsArray
+    * * Display Name: JSON Type Is Array
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: If true, the field holds a JSON array of JSONType items. The Object accessor returns Array<JSONType> | null and the setter accepts Array<JSONType> | null.
+    */
+    get JSONTypeIsArray(): boolean {
+        return this.Get('JSONTypeIsArray');
+    }
+    set JSONTypeIsArray(value: boolean) {
+        this.Set('JSONTypeIsArray', value);
+    }
+
+    /**
+    * * Field Name: JSONTypeDefinition
+    * * Display Name: JSON Type Definition
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Raw TypeScript code emitted by CodeGen above the entity class definition. Typically contains the interface/type definition referenced by JSONType. Can include imports, multiple types, or any valid TypeScript.
+    */
+    get JSONTypeDefinition(): string | null {
+        return this.Get('JSONTypeDefinition');
+    }
+    set JSONTypeDefinition(value: string | null) {
+        this.Set('JSONTypeDefinition', value);
     }
 
     /**
