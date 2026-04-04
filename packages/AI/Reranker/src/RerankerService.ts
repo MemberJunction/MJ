@@ -12,7 +12,7 @@ import { LogError, LogStatus, Metadata, UserInfo } from '@memberjunction/core';
 import { MJGlobal, UUIDsEqual, BaseSingleton } from '@memberjunction/global';
 import { AIEngine, NoteMatchResult } from '@memberjunction/aiengine';
 import { MJAIAgentNoteEntity, MJAIAgentRunStepEntity } from '@memberjunction/core-entities';
-import { BaseReranker, RerankDocument } from '@memberjunction/ai';
+import { BaseReranker, RerankDocument, GetAIAPIKey } from '@memberjunction/ai';
 import { MJAIModelEntityExtended } from '@memberjunction/ai-core-plus';
 import { RerankerConfiguration, parseRerankerConfiguration } from './config.types';
 
@@ -255,21 +255,13 @@ export class RerankerService extends BaseSingleton<RerankerService> {
     }
 
     /**
-     * Get API key for a reranker driver from environment variables.
-     * Uses naming convention: AI_VENDOR_API_KEY__<DRIVERCLASS>
+     * Get API key for a reranker driver using the standard MJ API key utility.
+     * Delegates to GetAIAPIKey which handles case-insensitive env var lookup.
      */
     private getAPIKeyForDriver(driverClass: string): string | null {
         if (!driverClass) return null;
-
-        // Standard MemberJunction API key naming convention
-        const envVar = `AI_VENDOR_API_KEY__${driverClass}`;
-        const apiKey = process.env[envVar];
-
-        if (apiKey && apiKey.trim().length > 0) {
-            return apiKey;
-        }
-
-        return null;
+        const key = GetAIAPIKey(driverClass);
+        return key || null;
     }
 
     /**

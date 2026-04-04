@@ -1,216 +1,153 @@
 /**
  * @fileoverview Angular adapter for the MJ Agent Client SDK.
  *
- * Provides an injectable service that wraps AgentClientSession with
- * RxJS observables for reactive Angular consumption.
+ * Thin Angular wrapper around AgentClientSession from @memberjunction/ai-agent-client.
+ * Provides Angular dependency injection and lifecycle management.
+ *
+ * This service does NOT contain business logic, GraphQL code, or tool handlers.
+ * All heavy lifting is in the core SDK. The consuming application registers tools
+ * and handles events as appropriate for its context.
  *
  * @module @memberjunction/ng-agent-client
  */
 
-import { Injectable, OnDestroy, inject } from '@angular/core';
-import { Router } from '@angular/router';
-import { BehaviorSubject, Subject } from 'rxjs';
+import { Injectable, OnDestroy } from '@angular/core';
 import {
     AgentClientSession,
-    ClientToolRegistry,
-    WebSocketTransport,
     ClientToolDefinition,
-    AgentMessage,
+    ClientToolMetadata,
+    ClientToolDecorator,
+    ClientToolDecoratorContext,
+    ClientToolRequestEvent,
+    ClientToolResultEvent,
+    SessionError,
     AgentProgress,
-    AgentError,
-    ClientToolRequest,
-    TransportOptions,
+    RunAgentParams,
+    RunAgentFromConversationDetailParams,
+    RunAgentResult,
 } from '@memberjunction/ai-agent-client';
+import { Observable } from 'rxjs';
 
 /**
- * Angular injectable service that wraps the framework-agnostic Agent Client SDK.
+ * Angular injectable wrapper around the framework-agnostic AgentClientSession.
  *
- * Provides RxJS observable bridges for agent messages, progress, and connection state.
- * Pre-registers built-in navigation and component tools.
+ * Provides:
+ * - Angular DI (providedIn: root singleton)
+ * - Automatic cleanup via ngOnDestroy
+ * - Pass-through access to all SDK observables and methods
+ *
+ * Usage:
+ * ```typescript
+ * const agentClient = inject(AgentClientService);
+ * agentClient.RegisterTool({ Name: 'NavigateToRecord', ... });
+ * agentClient.StartSession('session-123');
+ * agentClient.ToolRequested$.subscribe(e => console.log('Tool:', e));
+ * ```
  */
 @Injectable({ providedIn: 'root' })
 export class AgentClientService implements OnDestroy {
-    private session: AgentClientSession | null = null;
-    private toolRegistry = new ClientToolRegistry();
-    private router = inject(Router);
+    private session = new AgentClientSession();
 
-    /** Stream of all agent messages received during the session */
-    public AgentMessages$ = new BehaviorSubject<AgentMessage[]>([]);
+    // --- Observable Pass-Through ---
 
-    /** Whether the client is currently connected to an agent */
-    public IsConnected$ = new BehaviorSubject<boolean>(false);
-
-    /** Stream of agent progress updates */
-    public Progress$ = new Subject<AgentProgress>();
-
-    /** Stream of agent errors */
-    public Errors$ = new Subject<AgentError>();
-
-    /** Stream of client tool requests (for UI visualization) */
-    public ToolRequests$ = new Subject<ClientToolRequest>();
-
-    constructor() {
-        this.registerBuiltInTools();
+    /** Emitted when a tool request is received from the server (before execution) */
+    public get ToolRequested$(): Observable<ClientToolRequestEvent> {
+        return this.session.ToolRequested$;
     }
 
-    /**
-     * Connect to an agent using WebSocket transport.
-     *
-     * @param url - The WebSocket URL of the agent server
-     * @param agentId - The ID of the agent to connect to
-     * @param conversationId - Optional existing conversation to resume
-     * @param options - Optional transport options (auth, reconnection)
-     */
-    public async ConnectToAgent(
-        url: string,
-        agentId: string,
-        conversationId?: string,
-        options?: TransportOptions
-    ): Promise<void> {
-        // Clean up any existing session
-        await this.Disconnect();
-
-        const transport = new WebSocketTransport();
-        await transport.Connect(url, options);
-
-        this.session = new AgentClientSession(transport, this.toolRegistry);
-        this.setupSessionHandlers();
-
-        await this.session.Connect(agentId, conversationId);
-        this.IsConnected$.next(true);
+    /** Emitted after a tool has been executed (with result) */
+    public get ToolExecuted$(): Observable<ClientToolResultEvent> {
+        return this.session.ToolExecuted$;
     }
 
-    /**
-     * Send a user message to the connected agent.
-     */
-    public async SendMessage(content: string): Promise<void> {
-        if (!this.session) {
-            throw new Error('Not connected to an agent. Call ConnectToAgent() first.');
-        }
-        await this.session.SendMessage(content);
+    /** Emitted when agent execution progress updates arrive */
+    public get AgentProgress$(): Observable<AgentProgress> {
+        return this.session.AgentProgress$;
     }
 
-    /**
-     * Disconnect from the current agent session.
-     */
-    public async Disconnect(): Promise<void> {
-        if (this.session) {
-            await this.session.Disconnect();
-            this.session = null;
-            this.IsConnected$.next(false);
-            this.AgentMessages$.next([]);
-        }
+    /** Emitted when session state changes */
+    public get SessionActive$(): Observable<boolean> {
+        return this.session.SessionActive$;
     }
 
-    /**
-     * Register a custom client-side tool.
-     */
+    /** Emitted on errors during tool execution or communication */
+    public get Error$(): Observable<SessionError> {
+        return this.session.Error$;
+    }
+
+    // --- Session State ---
+
+    /** The current session ID, or null if no session is active */
+    public get SessionId(): string | null {
+        return this.session.SessionId;
+    }
+
+    /** Whether a session is currently active */
+    public get IsActive(): boolean {
+        return this.session.IsActive;
+    }
+
+    // --- Tool Registration ---
+
+    /** Register a client-side tool handler */
     public RegisterTool(tool: ClientToolDefinition): void {
-        this.toolRegistry.Register(tool);
+        this.session.RegisterTool(tool);
     }
 
-    /**
-     * Get the current conversation ID.
-     */
-    public get ConversationId(): string | null {
-        return this.session?.ConversationId ?? null;
+    /** Unregister a client-side tool */
+    public UnregisterTool(toolName: string): void {
+        this.session.UnregisterTool(toolName);
     }
 
-    /**
-     * Clean up on service destruction.
-     */
+    /** Get all registered tool definitions */
+    public GetRegisteredTools(): ClientToolDefinition[] {
+        return this.session.GetRegisteredTools();
+    }
+
+    // --- Tool Decoration ---
+
+    /** Register a decorator for runtime enrichment of a metadata-driven tool */
+    public RegisterToolDecorator(toolName: string, decorator: ClientToolDecorator): void {
+        this.session.RegisterToolDecorator(toolName, decorator);
+    }
+
+    /** Set the runtime context for decorators */
+    public SetDecoratorContext(context: ClientToolDecoratorContext): void {
+        this.session.SetDecoratorContext(context);
+    }
+
+    /** Decorate base tools and send enriched definitions to the server */
+    public async DecorateAndSendTools(baseTools: ClientToolMetadata[]): Promise<void> {
+        return this.session.DecorateAndSendTools(baseTools);
+    }
+
+    // --- Session Lifecycle ---
+
+    /** Start listening for client tool requests for a session */
+    public StartSession(sessionId: string): void {
+        this.session.StartSession(sessionId);
+    }
+
+    /** Stop listening and clean up the session */
+    public StopSession(): void {
+        this.session.StopSession();
+    }
+
+    // --- Agent Execution ---
+
+    /** Run an agent with a message */
+    public async RunAgent(params: RunAgentParams): Promise<RunAgentResult> {
+        return this.session.RunAgent(params);
+    }
+
+    /** Run an agent from an existing conversation detail */
+    public async RunAgentFromConversationDetail(params: RunAgentFromConversationDetailParams): Promise<RunAgentResult> {
+        return this.session.RunAgentFromConversationDetail(params);
+    }
+
+    // --- Angular Lifecycle ---
+
     public ngOnDestroy(): void {
-        // Fire-and-forget disconnect on destroy
-        this.Disconnect().catch(() => { /* intentional: best-effort cleanup */ });
-        this.AgentMessages$.complete();
-        this.IsConnected$.complete();
-        this.Progress$.complete();
-        this.Errors$.complete();
-        this.ToolRequests$.complete();
-    }
-
-    /**
-     * Set up event handlers on the session that feed into RxJS observables.
-     */
-    private setupSessionHandlers(): void {
-        if (!this.session) return;
-
-        this.session.OnAgentMessage((msg) => {
-            const current = this.AgentMessages$.value;
-            this.AgentMessages$.next([...current, msg]);
-        });
-
-        this.session.OnProgress((progress) => {
-            this.Progress$.next(progress);
-        });
-
-        this.session.OnError((error) => {
-            this.Errors$.next(error);
-            if (error.Code === 'DISCONNECTED') {
-                this.IsConnected$.next(false);
-            }
-        });
-
-        this.session.OnToolRequest((req) => {
-            this.ToolRequests$.next(req);
-        });
-    }
-
-    /**
-     * Register built-in navigation and component tools.
-     */
-    private registerBuiltInTools(): void {
-        this.toolRegistry.Register({
-            Name: 'navigate_to_record',
-            Description: 'Navigate the browser to a specific entity record in MJ Explorer',
-            ParameterSchema: {
-                type: 'object',
-                properties: {
-                    EntityName: { type: 'string' },
-                    RecordID: { type: 'string' },
-                },
-                required: ['EntityName', 'RecordID'],
-            },
-            Handler: async (params) => {
-                const entityName = String(params['EntityName']);
-                const recordId = String(params['RecordID']);
-                await this.router.navigate(['/resource', 'entity', entityName, recordId]);
-                return { Success: true, Data: { Navigated: true } };
-            },
-        });
-
-        this.toolRegistry.Register({
-            Name: 'navigate_to_app',
-            Description: 'Switch to a different MJ Explorer application',
-            ParameterSchema: {
-                type: 'object',
-                properties: {
-                    AppName: { type: 'string' },
-                },
-                required: ['AppName'],
-            },
-            Handler: async (params) => {
-                const appName = String(params['AppName']);
-                await this.router.navigate(['/app', appName]);
-                return { Success: true, Data: { Navigated: true } };
-            },
-        });
-
-        this.toolRegistry.Register({
-            Name: 'navigate_to_tab',
-            Description: 'Switch to a specific tab within the current application',
-            ParameterSchema: {
-                type: 'object',
-                properties: {
-                    TabName: { type: 'string' },
-                },
-                required: ['TabName'],
-            },
-            Handler: async (params) => {
-                // Tab navigation is handled via the app's internal routing
-                const tabName = String(params['TabName']);
-                return { Success: true, Data: { TabName: tabName, Note: 'Tab switch requested' } };
-            },
-        });
+        this.session.Dispose();
     }
 }

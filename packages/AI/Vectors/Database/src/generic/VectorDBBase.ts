@@ -1,5 +1,5 @@
 import { BaseRequestParams, BaseResponse, CreateIndexParams,
-        EditIndexParams, IndexList, UpdateOptions,
+        EditIndexParams, IndexList, ListVectorIDsParams, ListVectorIDsResult, UpdateOptions,
         VectorRecord } from "./record";
 import { HybridQueryOptions, QueryOptions } from './query.types';
 import { SharedIndexFilterOptions, VectorMetadataFilter } from './MetadataFilter';
@@ -43,6 +43,16 @@ export abstract class VectorDBBase {
      * @param namespace Optional namespace within the index
      */
     abstract DeleteAllRecords(indexName: string, namespace?: string): BaseResponse | Promise<BaseResponse>;
+
+    /**
+     * List vector IDs in an index with optional metadata filtering and pagination.
+     * Used by duplicate detection to discover which records exist in the index
+     * without loading entity data from the database.
+     *
+     * @param params - List parameters including index name, optional metadata filter, and pagination
+     * @returns Page of vector IDs with optional pagination token for next page
+     */
+    abstract ListVectorIDs(params: ListVectorIDsParams): Promise<ListVectorIDsResult>;
 
     /**
      * Whether this provider supports hybrid (vector + keyword) search.

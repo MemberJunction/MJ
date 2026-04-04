@@ -1,17 +1,15 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 
-// Kendo UI Angular imports
-import { DialogsModule } from "@progress/kendo-angular-dialog";
-import { ButtonsModule } from '@progress/kendo-angular-buttons'; 
-import { ListBoxModule } from '@progress/kendo-angular-listbox';
-import { InputsModule } from '@progress/kendo-angular-inputs';
- 
+import { AgGridModule } from 'ag-grid-angular';
+
+// MJ UI Components
+import { MJButtonDirective, MJDialogComponent, MJDialogActionsComponent } from '@memberjunction/ng-ui-components';
+
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { FindRecordComponent } from './lib/find-record.component';
 import { FindRecordDialogComponent } from './lib/dialog.component';
-import { FormsModule } from '@angular/forms';
-import { GridModule } from '@progress/kendo-angular-grid';
 
 @NgModule({
   declarations: [
@@ -20,13 +18,12 @@ import { GridModule } from '@progress/kendo-angular-grid';
   ],
   imports: [
     CommonModule,
-    DialogsModule,
     FormsModule,
-    GridModule,
+    AgGridModule,
     ContainerDirectivesModule,
-    ButtonsModule,
-    ListBoxModule,
-    InputsModule
+    MJButtonDirective,
+    MJDialogComponent,
+    MJDialogActionsComponent
   ],
   exports: [
     FindRecordComponent,

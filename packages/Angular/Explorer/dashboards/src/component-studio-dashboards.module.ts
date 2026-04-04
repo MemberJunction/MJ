@@ -1,11 +1,7 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
-import { ButtonsModule } from '@progress/kendo-angular-buttons';
-import { GridModule } from '@progress/kendo-angular-grid';
-import { InputsModule } from '@progress/kendo-angular-inputs';
-import { DialogsModule, WindowModule } from '@progress/kendo-angular-dialog';
-import { TabStripModule, SplitterModule } from '@progress/kendo-angular-layout';
+import { MJButtonDirective, MJDialogComponent, MJDialogTitlebarComponent, MJDialogActionsComponent } from '@memberjunction/ng-ui-components';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
 import { MJReactModule } from '@memberjunction/ng-react';
@@ -53,18 +49,15 @@ import { SaveVersionDialogComponent } from './ComponentStudio/components/save-ve
     CommonModule,
     FormsModule,
     ReactiveFormsModule,
-    ButtonsModule,
-    GridModule,
-    InputsModule,
-    DialogsModule,
-    WindowModule,
-    TabStripModule,
-    SplitterModule,
     ContainerDirectivesModule,
     CodeEditorModule,
     MJReactModule,
     SharedGenericModule,
-    MarkdownModule
+    MarkdownModule,
+    MJButtonDirective,
+    MJDialogComponent,
+    MJDialogTitlebarComponent,
+    MJDialogActionsComponent
   ],
   exports: [
     ComponentStudioDashboardComponent

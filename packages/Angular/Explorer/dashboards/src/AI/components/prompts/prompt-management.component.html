@@ -56,17 +56,11 @@
 
   <!-- Main Content with Splitter -->
   <div class="main-content">
-    <kendo-splitter
-      class="main-splitter"
-      orientation="horizontal">
+    <as-split direction="horizontal" class="main-splitter">
 
       <!-- Filter Panel (Left) -->
-      <kendo-splitter-pane
-        [size]="showFilters ? '320px' : '0px'"
-        [collapsible]="false"
-        [resizable]="showFilters"
-        [scrollable]="false"
-        [hidden]="!showFilters">
+      @if (showFilters) {
+      <as-split-area [size]="20" [minSize]="15" [maxSize]="30">
         <div class="filter-panel">
           <div class="filter-panel-header">
             <h3>Prompt Filters</h3>
@@ -145,12 +139,11 @@
             </div>
           </div>
         </div>
-      </kendo-splitter-pane>
+      </as-split-area>
+      }
 
       <!-- Prompts List Panel -->
-      <kendo-splitter-pane
-        [resizable]="true"
-        [scrollable]="true">
+      <as-split-area>
         <div class="prompts-content">
           <!-- Loading State -->
           @if (isLoading) {
@@ -372,8 +365,8 @@
             }
           }
         </div>
-      </kendo-splitter-pane>
-    </kendo-splitter>
+      </as-split-area>
+    </as-split>
   </div>
 
   <!-- Detail Panel Overlay -->

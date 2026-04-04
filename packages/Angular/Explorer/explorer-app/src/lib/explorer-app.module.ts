@@ -16,7 +16,7 @@ import { RouterModule } from '@angular/router';
 import { MJExplorerAppComponent } from './explorer-app.component';
 import { MJEnvironmentConfig, MJ_ENVIRONMENT, MJ_STARTUP_VALIDATION } from '@memberjunction/ng-bootstrap';
 import { ShellModule, StartupValidationService, SystemValidationBannerComponent } from '@memberjunction/ng-explorer-core';
-import { ChatOverlayModule } from '@memberjunction/ng-chat-overlay';
+import { ConversationsModule } from '@memberjunction/ng-conversations';
 
 @NgModule({
   declarations: [
@@ -27,7 +27,7 @@ import { ChatOverlayModule } from '@memberjunction/ng-chat-overlay';
     RouterModule,
     ShellModule,
     SystemValidationBannerComponent,  // Standalone component
-    ChatOverlayModule
+    ConversationsModule
   ],
   exports: [
     MJExplorerAppComponent

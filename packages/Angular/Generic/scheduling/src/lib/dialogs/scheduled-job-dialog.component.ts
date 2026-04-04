@@ -19,7 +19,7 @@ export interface ScheduledJobDialogResult {
     standalone: false,
     template: `
         @if (Visible) {
-            <kendo-dialog [title]="DialogTitle" (close)="OnClose()" [width]="Width">
+            <mj-dialog [Visible]="true" [Title]="DialogTitle" (Close)="OnClose()" [Width]="Width">
                 <mj-scheduled-job-editor
                     [ScheduledJobID]="ScheduledJobID"
                     [JobTypeID]="JobTypeID"
@@ -29,7 +29,7 @@ export interface ScheduledJobDialogResult {
                     (Deleted)="OnDeleted($event)"
                     (Cancelled)="OnClose()">
                 </mj-scheduled-job-editor>
-            </kendo-dialog>
+            </mj-dialog>
         }
     `,
     changeDetection: ChangeDetectionStrategy.OnPush,

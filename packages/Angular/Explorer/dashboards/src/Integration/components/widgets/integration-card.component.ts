@@ -68,11 +68,11 @@ import { IntegrationSummary, ResolveIntegrationIcon } from '../../services/integ
       }
 
       <div class="card-footer">
-        <button kendoButton [look]="'flat'" [themeColor]="'primary'"
+        <button mjButton variant="primary" size="sm"
                 (click)="OnRunNowClick()" [disabled]="!Summary.Integration.IsActive">
           <i class="fa-solid fa-play"></i> Run Now
         </button>
-        <button kendoButton [look]="'flat'" (click)="OnExpandToggle()">
+        <button mjButton variant="flat" size="sm" (click)="OnExpandToggle()">
           <i class="fa-solid" [class.fa-chevron-down]="!Expanded" [class.fa-chevron-up]="Expanded"></i>
           History
         </button>

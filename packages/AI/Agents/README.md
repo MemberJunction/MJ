@@ -78,6 +78,7 @@ The core execution engine that all agents use. Handles:
 
 - Hierarchical prompt execution (agent type's system prompt as parent, agent's prompts as children)
 - Action execution through the MJ Actions framework
+- **Client tool invocation** for browser-side UI operations (navigate to records, switch tabs, show search results) via PubSub round-trip
 - Sub-agent orchestration with full context propagation
 - Conversation context management with automatic message compaction
 - Memory retrieval (notes and examples) with optional reranking
@@ -117,7 +118,8 @@ Abstract base that all agent types extend. Defines the `DetermineNextStep()` int
 | Step | Description |
 |---|---|
 | `Chat` | Send a message back to the user |
-| `Actions` | Execute one or more actions |
+| `Actions` | Execute one or more server-side actions |
+| `ClientTools` | Invoke browser-side tools (navigate, switch tabs, show results) |
 | `SubAgents` | Delegate to sub-agents |
 | `MoreInfo` | Ask the user for additional information |
 | `Retry` | Retry the current step (e.g., after validation failure) |
@@ -301,6 +303,7 @@ Detailed guides are available in the [`docs/`](./docs/) directory:
 | Guide | Description |
 |---|---|
 | [Actions Guide](./docs/actions-guide.md) | Action discovery, execution, result lifecycle, expiration/compaction, context recovery |
+| [Client Tools Guide](./docs/CLIENT_TOOLS_GUIDE.md) | Browser-side tool invocation, runtime decoration, timeout config, prompt design, security |
 | [Sub-Agents Guide](./docs/sub-agents-guide.md) | Child agents, related agents, payload flow, context propagation, loops |
 | [Human-in-the-Loop](./docs/HUMAN_IN_THE_LOOP.md) | Feedback requests, assignment strategies, request lifecycle |
 | [Agent Memory Scoping](./docs/AGENT_MEMORY_SCOPING.md) | Multi-tenant memory (notes/examples) with UserScope support |

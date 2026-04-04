@@ -13,7 +13,6 @@ import { FormsModule } from '@angular/forms';
 import { BaseFormsModule } from '@memberjunction/ng-base-forms';
 import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
 import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
-import { LayoutModule } from '@progress/kendo-angular-layout';
 
 // Import Generated Components
 

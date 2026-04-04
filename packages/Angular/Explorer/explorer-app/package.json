@@ -25,7 +25,7 @@
     "@memberjunction/ng-bootstrap": "5.22.0",
     "@memberjunction/ng-explorer-core": "5.22.0",
     "@memberjunction/ng-workspace-initializer": "5.22.0",
-    "@memberjunction/ng-chat-overlay": "5.22.0"
+    "@memberjunction/ng-conversations": "5.22.0"
   },
   "peerDependencies": {
     "@angular/common": "^21.0.0",

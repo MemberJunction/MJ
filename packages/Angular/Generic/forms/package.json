@@ -8,7 +8,7 @@
     "/dist"
   ],
   "scripts": {
-    "test": "echo \"No tests configured yet\"",
+    "test": "vitest run",
     "build": "ngc",
     "test:watch": "vitest"
   },
@@ -34,9 +34,7 @@
   },
   "dependencies": {
     "@memberjunction/ai-core-plus": "5.22.0",
-    "@progress/kendo-angular-buttons": "22.0.1",
-    "@progress/kendo-angular-dateinputs": "22.0.1",
-    "@progress/kendo-angular-inputs": "22.0.1",
+    "@memberjunction/ng-ui-components": "5.22.0",
     "tslib": "^2.8.1"
   },
   "sideEffects": false,

@@ -1542,3 +1542,101 @@ describe('Field Type Enrichment from Entity Metadata', () => {
         expect(result[0].sourceEntity).toBe('Users');
     });
 });
+
+// ═══════════════════════════════════════════════════
+// MSTA Lapsed-Members-District-Movers — parameter extraction
+// Tests parameter extraction for the query that caused the
+// nested-WITH paging bug (composition + apostrophes in comments).
+// ═══════════════════════════════════════════════════
+
+describe('MSTA Lapsed Members District Movers — Parameter Extraction', () => {
+    it('should extract TargetYear and PriorYear parameters from the lapsed-members query', () => {
+        const sql = `SELECT DISTINCT
+    bridge.AccountId,
+    bridge.FirstName,
+    bridge.LastName,
+    bridge.PersonEmail,
+    bridge.Region__c,
+    bridge.District_Name AS Prior_District,
+    d_new.description AS New_District,
+    {{ PriorYear }} AS Prior_Year,
+    {{ TargetYear }} AS New_Year
+FROM {{query:"Golden-Queries/Membership/MSTA NAMS-DESE Member Bridge(TargetYear=PriorYear)"}} bridge
+INNER JOIN nams.vwNU__Membership__cs m1
+    ON m1.NU__Account__c = bridge.AccountId
+    AND m1.Year__c = {{ PriorYear }}
+    AND m1.NU__MembershipProductName__c NOT IN ('Student', 'Retired Annual', 'Retired Lifetime', 'Associate')
+INNER JOIN dese.vweducators e_new
+    ON e_new.edssn = bridge.edssn
+    AND CAST(e_new.year AS INT) = {{ TargetYear }}
+INNER JOIN dese.vwco_dist_descs d_new
+    ON d_new.co_dist_code = e_new.co_dist_code
+WHERE NOT EXISTS (
+    SELECT 1 FROM nams.vwNU__Membership__cs m2
+    WHERE m2.NU__Account__c = bridge.AccountId AND m2.Year__c = {{ TargetYear }}
+)
+AND e_new.co_dist_code != bridge.co_dist_code
+ORDER BY bridge.LastName, bridge.FirstName`;
+
+        const params = SQLParser.ExtractParameterInfo(sql);
+
+        expect(params).toHaveLength(2);
+
+        const priorYear = params.find(p => p.name === 'PriorYear')!;
+        expect(priorYear).toBeDefined();
+        expect(priorYear.isRequired).toBe(true);
+        // PriorYear is used in multiple locations
+        expect(priorYear.usageLocations.length).toBeGreaterThanOrEqual(2);
+
+        const targetYear = params.find(p => p.name === 'TargetYear')!;
+        expect(targetYear).toBeDefined();
+        expect(targetYear.isRequired).toBe(true);
+        // TargetYear is used in SELECT, CAST comparison, and NOT EXISTS
+        expect(targetYear.usageLocations.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('should extract composition ref for MSTA NAMS-DESE Member Bridge', () => {
+        const sql = `SELECT * FROM {{query:"Golden-Queries/Membership/MSTA NAMS-DESE Member Bridge(TargetYear=PriorYear)"}} bridge`;
+
+        const refs = SQLParser.ExtractCompositionRefs(sql);
+        expect(refs).toHaveLength(1);
+        expect(refs[0].queryName).toBe('MSTA NAMS-DESE Member Bridge');
+        expect(refs[0].categoryPath).toBe('Golden-Queries/Membership');
+        expect(refs[0].parameters).toHaveLength(1);
+        expect(refs[0].parameters[0].key).toBe('TargetYear');
+        expect(refs[0].parameters[0].value).toBe('PriorYear');
+        expect(refs[0].parameters[0].isPassThrough).toBe(true);
+    });
+
+    it('should extract parameters from the NAMS-DESE Member Bridge dependency query', () => {
+        const sql = `-- Bridge query: maps NAMS member accounts to DESE educator records
+-- Identity is verified by matching first+last name AND confirming the educator
+-- is in the same district as the member's Institution__c via co_dist_desc.
+SELECT DISTINCT
+    a.Id AS AccountId,
+    a.FirstName,
+    a.LastName,
+    a.PersonEmail,
+    a.Institution__c AS District_Name,
+    a.Region__c,
+    e.edssn,
+    e.co_dist_code,
+    e.year AS DESE_Year
+FROM nams.vwAccounts a
+INNER JOIN dese.vwco_dist_descs d
+    ON d.description = a.Institution__c
+INNER JOIN dese.vweducators e
+    ON UPPER(LTRIM(RTRIM(e.edfname))) = UPPER(LTRIM(RTRIM(a.FirstName)))
+    AND UPPER(LTRIM(RTRIM(e.edlname))) = UPPER(LTRIM(RTRIM(a.LastName)))
+    AND e.co_dist_code = d.co_dist_code
+    AND e.year = {{ TargetYear | sqlString }}
+WHERE a.IsPersonAccount = 1
+  AND a.Institution__c IS NOT NULL`;
+
+        const params = SQLParser.ExtractParameterInfo(sql);
+        expect(params).toHaveLength(1);
+        expect(params[0].name).toBe('TargetYear');
+        expect(params[0].type).toBe('string'); // sqlString filter
+        expect(params[0].isRequired).toBe(true);
+    });
+});
