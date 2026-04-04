@@ -147,6 +147,35 @@ export class ClusterScatterComponent implements AfterViewInit, OnDestroy, OnChan
     @Input() TooltipFields: string[] = [];
 
     /**
+     * Ordered list of metadata field keys for prioritized display in tooltips
+     * and the detail panel. When set, fields are displayed in this order instead
+     * of raw metadata key order. Fields not in this list appear after the
+     * prioritized fields.
+     *
+     * Typically computed from entity metadata (DefaultInView, Sequence) by the
+     * consuming component and passed in.
+     *
+     * @default [] (no prioritization — original key order)
+     */
+    @Input() FieldPriority: string[] = [];
+
+    /**
+     * Map of field names to human-readable display names.
+     * Used to show "First Name" instead of "FirstName" in tooltips and detail panels.
+     * If a field is not in this map, the raw key is shown.
+     *
+     * @default {} (use raw key names)
+     */
+    @Input() FieldDisplayNames: Record<string, string> = {};
+
+    /**
+     * The entity name for metadata-driven field display in tooltips and
+     * detail panels. When set, the mj-entity-card component uses EntityInfo
+     * to prioritize fields by IsNameField and DefaultInView.
+     */
+    @Input() EntityName: string | null = null;
+
+    /**
      * Override the default cluster color palette.
      *
      * Colors are assigned to clusters by index: cluster 0 gets
@@ -938,13 +967,16 @@ export class ClusterScatterComponent implements AfterViewInit, OnDestroy, OnChan
 
     /**
      * Compute the metadata entries for the detail panel, excluding internal fields.
+     * Uses FieldPriority for ordering when available.
      */
     private computeDetailEntries(point: ClusterPoint): void {
         const hidden = this.internalMetadataKeys;
-        this.DetailEntries = Object.entries(point.Metadata)
+        const raw = Object.entries(point.Metadata)
             .filter(([key]) => !hidden.has(key))
             .filter(([, value]) => value != null && String(value).trim() !== '')
             .map(([Key, Value]) => ({ Key, Value }));
+
+        this.DetailEntries = this.sortEntriesByPriority(raw);
     }
 
     /**
@@ -1041,15 +1073,33 @@ export class ClusterScatterComponent implements AfterViewInit, OnDestroy, OnChan
 
     /**
      * Compute the tooltip entries based on TooltipFields filter.
+     * Uses FieldPriority for ordering when available.
      */
     private computeTooltipEntries(point: ClusterPoint): void {
         const entries = Object.entries(point.Metadata);
+        let mapped: { Key: string; Value: unknown }[];
         if (this.TooltipFields.length > 0) {
-            this.TooltipEntries = entries
+            mapped = entries
                 .filter(([key]) => this.TooltipFields.includes(key))
                 .map(([Key, Value]) => ({ Key, Value }));
         } else {
-            this.TooltipEntries = entries.map(([Key, Value]) => ({ Key, Value }));
+            mapped = entries.map(([Key, Value]) => ({ Key, Value }));
         }
+        this.TooltipEntries = this.sortEntriesByPriority(mapped);
+    }
+
+    /**
+     * Sort entries using the FieldPriority ordering.
+     * Fields in FieldPriority come first (in priority order), then remaining fields.
+     */
+    private sortEntriesByPriority(entries: { Key: string; Value: unknown }[]): { Key: string; Value: unknown }[] {
+        if (this.FieldPriority.length === 0) return entries;
+
+        const priorityIndex = new Map(this.FieldPriority.map((key, idx) => [key, idx]));
+        return [...entries].sort((a, b) => {
+            const aIdx = priorityIndex.get(a.Key) ?? 99999;
+            const bIdx = priorityIndex.get(b.Key) ?? 99999;
+            return aIdx - bIdx;
+        });
     }
 }

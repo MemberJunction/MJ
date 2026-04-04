@@ -579,15 +579,31 @@
                                     }
                                 }
                             </div>
-                            @if (match.Match.ApprovalStatus !== 'Pending') {
-                                <span class="match-status-badge"
-                                      [class.status-approved]="match.Match.ApprovalStatus === 'Approved'"
-                                      [class.status-rejected]="match.Match.ApprovalStatus === 'Rejected'">
-                                    <i class="fa-solid" [class.fa-check]="match.Match.ApprovalStatus === 'Approved'"
-                                       [class.fa-times]="match.Match.ApprovalStatus === 'Rejected'"></i>
-                                    {{ match.Match.ApprovalStatus }}
-                                </span>
-                            }
+                            <!-- Per-match approval actions -->
+                            <div class="match-approval-actions">
+                                @if (match.Match.ApprovalStatus === 'Pending') {
+                                    <button class="match-action-btn match-skip-btn"
+                                            title="Skip this match (exclude from merge)"
+                                            (click)="RejectIndividualMatch(match)">
+                                        <i class="fa-solid fa-ban"></i> Skip
+                                    </button>
+                                } @else {
+                                    <span class="match-status-badge"
+                                          [class.status-approved]="match.Match.ApprovalStatus === 'Approved'"
+                                          [class.status-rejected]="match.Match.ApprovalStatus === 'Rejected'">
+                                        <i class="fa-solid" [class.fa-check]="match.Match.ApprovalStatus === 'Approved'"
+                                           [class.fa-times]="match.Match.ApprovalStatus === 'Rejected'"></i>
+                                        {{ match.Match.ApprovalStatus === 'Rejected' ? 'Skipped' : match.Match.ApprovalStatus }}
+                                    </span>
+                                    @if (match.Match.ApprovalStatus === 'Rejected') {
+                                        <button class="match-action-btn match-undo-btn"
+                                                title="Undo skip"
+                                                (click)="UndoRejectIndividualMatch(match)">
+                                            <i class="fa-solid fa-undo"></i> Undo
+                                        </button>
+                                    }
+                                }
+                            </div>
                         </div>
                     }
 

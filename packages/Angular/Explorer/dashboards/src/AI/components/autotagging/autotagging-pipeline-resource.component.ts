@@ -84,6 +84,8 @@ interface SourceCard {
     ContentFileTypeID: string;
     EmbeddingModelID: string;
     VectorIndexID: string;
+    EntityID: string;
+    EntityDocumentID: string;
 }
 
 interface ContentTypeCard {
@@ -264,9 +266,63 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     public FormTypeEmbeddingModelID = '';
     public FormTypeVectorIndexID = '';
 
+    // Entity source fields (shown when source type is "Entity")
+    public FormSourceEntityID = '';
+    public FormSourceEntityDocID = '';
+
     // Embedding model + vector index form fields (Content Source overrides)
     public FormSourceEmbeddingModelID = '';
     public FormSourceVectorIndexID = '';
+
+    /**
+     * Whether the currently selected source type is "Entity", which switches
+     * the URL field to Entity/EntityDocument pickers.
+     */
+    public get IsEntitySourceTypeSelected(): boolean {
+        if (!this.FormSourceTypeID) return false;
+        const sourceType = this.SourceTypeOptions.find(o => o.ID === this.FormSourceTypeID);
+        return sourceType?.Name?.toLowerCase() === 'entity';
+    }
+
+    /** Entities that have at least one EntityDocument configured */
+    public get EntitiesWithDocuments(): { ID: string; Name: string }[] {
+        try {
+            const engine = KnowledgeHubMetadataEngine.Instance;
+            const docs = engine.GetActiveEntityDocuments();
+            const entityMap = new Map<string, string>();
+            const md = new Metadata();
+            for (const doc of docs) {
+                const entityName = doc.Get('Entity') as string;
+                if (entityName) {
+                    const entityInfo = md.Entities.find(e => e.Name === entityName);
+                    if (entityInfo && !entityMap.has(entityInfo.ID)) {
+                        entityMap.set(entityInfo.ID, entityInfo.Name);
+                    }
+                }
+            }
+            return Array.from(entityMap.entries())
+                .map(([ID, Name]) => ({ ID, Name }))
+                .sort((a, b) => a.Name.localeCompare(b.Name));
+        } catch {
+            return [];
+        }
+    }
+
+    /** Entity documents for the selected entity */
+    public get EntityDocOptionsForSelectedEntity(): { ID: string; Name: string }[] {
+        if (!this.FormSourceEntityID) return [];
+        try {
+            const engine = KnowledgeHubMetadataEngine.Instance;
+            const md = new Metadata();
+            const entityInfo = md.Entities.find(e => e.ID === this.FormSourceEntityID);
+            if (!entityInfo) return [];
+            return engine.GetActiveEntityDocuments()
+                .filter(d => (d.Get('Entity') as string) === entityInfo.Name)
+                .map(d => ({ ID: d.ID, Name: d.Name }));
+        } catch {
+            return [];
+        }
+    }
 
     // ── Detail panels ──
     public SelectedFeedItem: ContentItemDetail | null = null;
@@ -543,7 +599,9 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
                 ContentTypeID: source['ContentTypeID'] as string,
                 ContentFileTypeID: source['ContentFileTypeID'] as string,
                 EmbeddingModelID: (source['EmbeddingModelID'] as string) ?? '',
-                VectorIndexID: (source['VectorIndexID'] as string) ?? ''
+                VectorIndexID: (source['VectorIndexID'] as string) ?? '',
+                EntityID: (source['EntityID'] as string) ?? '',
+                EntityDocumentID: (source['EntityDocumentID'] as string) ?? ''
             };
         });
     }
@@ -762,6 +820,8 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         this.FormContentTypeID = card.ContentTypeID;
         this.FormFileTypeID = card.ContentFileTypeID;
         this.FormSourceURL = card.URL;
+        this.FormSourceEntityID = card.EntityID ?? '';
+        this.FormSourceEntityDocID = card.EntityDocumentID ?? '';
         this.FormSourceEmbeddingModelID = card.EmbeddingModelID ?? '';
         this.FormSourceVectorIndexID = card.VectorIndexID ?? '';
         this.EditingSourceID = card.ID;
@@ -788,7 +848,9 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             entity.Set('ContentSourceTypeID', this.FormSourceTypeID);
             entity.Set('ContentTypeID', this.FormContentTypeID);
             entity.Set('ContentFileTypeID', this.FormFileTypeID);
-            entity.Set('URL', this.FormSourceURL);
+            entity.Set('URL', this.IsEntitySourceTypeSelected ? null : this.FormSourceURL);
+            entity.Set('EntityID', this.IsEntitySourceTypeSelected ? this.FormSourceEntityID || null : null);
+            entity.Set('EntityDocumentID', this.IsEntitySourceTypeSelected ? (this.FormSourceEntityDocID || this.EntityDocOptionsForSelectedEntity[0]?.ID || null) : null);
             entity.Set('EmbeddingModelID', this.FormSourceEmbeddingModelID || null);
             entity.Set('VectorIndexID', this.FormSourceVectorIndexID || null);
 
@@ -1312,6 +1374,8 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         this.FormContentTypeID = '';
         this.FormFileTypeID = '';
         this.FormSourceURL = '';
+        this.FormSourceEntityID = '';
+        this.FormSourceEntityDocID = '';
         this.FormSourceEmbeddingModelID = '';
         this.FormSourceVectorIndexID = '';
         this.EditingSourceID = '';

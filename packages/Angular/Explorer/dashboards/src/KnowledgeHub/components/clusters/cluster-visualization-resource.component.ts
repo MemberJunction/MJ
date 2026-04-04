@@ -12,7 +12,7 @@
 
 import { Component, ChangeDetectorRef, OnDestroy, AfterViewInit, inject, ViewChild } from '@angular/core';
 import { Subject } from 'rxjs';
-import { CompositeKey, Metadata } from '@memberjunction/core';
+import { CompositeKey, Metadata, EntityFieldInfo } from '@memberjunction/core';
 import { ResourceData, UserInfoEngine, MJUserSettingEntity, KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
@@ -82,6 +82,10 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
     public EntityOptions: ClusterConfigPanelEntityOption[] = [];
     /** Entity document options for the selected entity (shown when 2+) */
     public EntityDocOptions: ClusterConfigPanelEntityDocOption[] = [];
+    /** Ordered field keys for prioritized display in scatter tooltip/detail */
+    public FieldPriority: string[] = [];
+    /** Map of field names to human-readable display names */
+    public FieldDisplayNames: Record<string, string> = {};
 
     // Saved visualizations
     public SavedVisualizations: SavedClusterVisualization[] = [];
@@ -140,6 +144,9 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
         this.ActiveConfig = config;
         this.ClusterLabels = [];
 
+        // Auto-hide detail panel from previous visualization
+        this.scatterPlot?.CloseDetailPanel();
+
         // Update entity doc options if entity changed
         this.updateEntityDocOptions(config.EntityName);
 
@@ -152,6 +159,7 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
             // Run clustering (client-side UMAP + K-Means/DBSCAN)
             this.Result = await this.clusteringService.RunClustering(vectors, config);
             this.VisualizationTitle = `${config.EntityName} — ${config.Algorithm === 'kmeans' ? 'K-Means' : 'DBSCAN'}`;
+            this.FieldPriority = this.ComputeFieldPriority(config.EntityName);
 
             // Fire LLM cluster naming in the background (non-blocking).
             // Clusters render immediately; labels appear when LLM responds.
@@ -215,6 +223,7 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
 
     /** Select a saved visualization — restore from cache if available, otherwise re-run */
     public async OnSelectSaved(saved: SavedClusterVisualization): Promise<void> {
+        this.scatterPlot?.CloseDetailPanel();
         this.ActiveSavedId = saved.Id;
         this.VisualizationTitle = saved.Name;
 
@@ -261,6 +270,7 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
 
     /** Start a new analysis (clear current) */
     public OnNewAnalysis(): void {
+        this.scatterPlot?.CloseDetailPanel();
         this.ActiveSavedId = null;
         this.Result = null;
         this.ClusterLabels = [];
@@ -495,6 +505,43 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
         this.cdr.detectChanges();
     }
 
+    /**
+     * Compute the prioritized field order and display names from entity metadata.
+     * Sets both FieldPriority and FieldDisplayNames.
+     * Returns field names sorted: IsNameField first, then DefaultInView by Sequence,
+     * then remaining fields by Sequence.
+     */
+    private ComputeFieldPriority(entityName: string): string[] {
+        try {
+            const md = new Metadata();
+            const entityInfo = md.Entities.find(e => e.Name === entityName);
+            if (!entityInfo) return [];
+
+            const internalKeys = new Set([
+                'ID', 'Entity', 'EntityIcon', 'RecordID', 'TemplateID',
+                '__mj_UpdatedAt', '__mj_CreatedAt',
+            ]);
+
+            // Build display names map
+            const displayNames: Record<string, string> = {};
+            for (const f of entityInfo.Fields) {
+                displayNames[f.Name] = f.DisplayNameOrName;
+            }
+            this.FieldDisplayNames = displayNames;
+
+            return entityInfo.Fields
+                .filter(f => !internalKeys.has(f.Name) && !f.IsVirtual && !f.IsPrimaryKey)
+                .sort((a, b) => {
+                    if (a.IsNameField !== b.IsNameField) return a.IsNameField ? -1 : 1;
+                    if (a.DefaultInView !== b.DefaultInView) return a.DefaultInView ? -1 : 1;
+                    return (a.Sequence ?? 9999) - (b.Sequence ?? 9999);
+                })
+                .map(f => f.Name);
+        } catch {
+            return [];
+        }
+    }
+
     /** Apply cluster labels to the result's Clusters array (sets the Label property) */
     private applyLabelsToResult(): void {
         if (!this.Result || this.ClusterLabels.length === 0) return;
@@ -577,6 +624,7 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
             this.ClusterLabels = session.ClusterLabels ?? [];
             this.ActiveConfig = session.Config;
             this.VisualizationTitle = session.Title ?? 'Restored Session';
+            this.FieldPriority = this.ComputeFieldPriority(session.Config.EntityName);
             this.applyLabelsToResult();
             this.cdr.detectChanges();
 

@@ -520,10 +520,36 @@
                             }
                         </select>
                     </div>
-                    <div class="at-form-group">
-                        <label class="at-form-label">URL</label>
-                        <input type="text" class="at-form-input" [(ngModel)]="FormSourceURL" placeholder="https://...">
-                    </div>
+                    @if (IsEntitySourceTypeSelected) {
+                        <!-- Entity source: pick entity + entity document -->
+                        <div class="at-form-group">
+                            <label class="at-form-label">Entity</label>
+                            <select class="at-form-select" [(ngModel)]="FormSourceEntityID"
+                                    (ngModelChange)="FormSourceEntityDocID = EntityDocOptionsForSelectedEntity.length === 1 ? EntityDocOptionsForSelectedEntity[0].ID : ''">
+                                <option value="">Select entity...</option>
+                                @for (opt of EntitiesWithDocuments; track opt.ID) {
+                                    <option [value]="opt.ID">{{ opt.Name }}</option>
+                                }
+                            </select>
+                        </div>
+                        @if (FormSourceEntityID && EntityDocOptionsForSelectedEntity.length > 1) {
+                            <div class="at-form-group">
+                                <label class="at-form-label">Entity Document</label>
+                                <select class="at-form-select" [(ngModel)]="FormSourceEntityDocID">
+                                    @for (opt of EntityDocOptionsForSelectedEntity; track opt.ID) {
+                                        <option [value]="opt.ID">{{ opt.Name }}</option>
+                                    }
+                                </select>
+                                <span class="at-form-hint">Template used to render records for autotagging</span>
+                            </div>
+                        }
+                    } @else {
+                        <!-- Non-entity source: URL field -->
+                        <div class="at-form-group">
+                            <label class="at-form-label">URL</label>
+                            <input type="text" class="at-form-input" [(ngModel)]="FormSourceURL" placeholder="https://...">
+                        </div>
+                    }
                     <div class="at-form-group">
                         <label class="at-form-label">Embedding Model Override</label>
                         <mj-tree-dropdown

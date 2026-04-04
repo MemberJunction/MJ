@@ -1084,6 +1084,47 @@ app-duplicate-detection-resource {
     color: var(--mj-status-error-text);
 }
 
+.match-approval-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 6px;
+}
+
+.match-action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 10px;
+    border-radius: 6px;
+    font-size: 0.7rem;
+    font-weight: 500;
+    border: 1px solid var(--mj-border-default);
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.match-skip-btn {
+    background: var(--mj-bg-surface);
+    color: var(--mj-status-error);
+    border-color: color-mix(in srgb, var(--mj-status-error) 30%, var(--mj-border-default));
+}
+
+.match-skip-btn:hover {
+    background: var(--mj-status-error-bg);
+    border-color: var(--mj-status-error);
+}
+
+.match-undo-btn {
+    background: var(--mj-bg-surface);
+    color: var(--mj-text-secondary);
+}
+
+.match-undo-btn:hover {
+    background: var(--mj-bg-surface-hover);
+    border-color: var(--mj-border-strong);
+}
+
 .match-approved {
     border-top: 3px solid var(--mj-status-success);
 }

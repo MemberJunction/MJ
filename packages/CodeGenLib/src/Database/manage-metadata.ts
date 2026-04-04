@@ -4479,18 +4479,21 @@ export class ManageMetadataBase {
    ): Promise<void> {
       const sqlStatements: string[] = [];
 
-      // Find the name field (exactly one)
-      const nameField = fields.find(f => f.Name === result.nameField);
+      // Find the name field(s) — one or more fields that together form the display name
+      const nameFieldNames: string[] = result.nameFields ?? [];
 
-      if (nameField && nameField.AutoUpdateIsNameField && nameField.ID && !nameField.IsNameField /*don't waste SQL to set the value if IsNameField already set */) {
-         sqlStatements.push(`
-            UPDATE ${this.qs(mj_core_schema(), 'EntityField')}
-            SET IsNameField = 1
-            WHERE ID = '${nameField.ID}'
-            AND AutoUpdateIsNameField = 1
-         `);
-      } else if (!nameField) {
-         logError(`Smart field identification returned invalid nameField: '${result.nameField}' not found in entity fields`);
+      for (const nfName of nameFieldNames) {
+         const nameField = fields.find((f: Record<string, unknown>) => f.Name === nfName);
+         if (nameField && nameField.AutoUpdateIsNameField && nameField.ID && !nameField.IsNameField) {
+            sqlStatements.push(`
+               UPDATE ${this.qs(mj_core_schema(), 'EntityField')}
+               SET IsNameField = 1
+               WHERE ID = '${nameField.ID}'
+               AND AutoUpdateIsNameField = 1
+            `);
+         } else if (!nameField) {
+            logError(`Smart field identification returned invalid nameField: '${nfName}' not found in entity fields`);
+         }
       }
 
       // Find all default in view fields (one or more)

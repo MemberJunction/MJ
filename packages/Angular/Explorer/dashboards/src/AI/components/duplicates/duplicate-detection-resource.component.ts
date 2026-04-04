@@ -1291,10 +1291,19 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
         this.cdr.detectChanges();
     }
 
-    /** Reject an individual match */
+    /** Reject an individual match (skip it from merge) */
     public async RejectIndividualMatch(matchInfo: ComparisonMatchInfo): Promise<void> {
         this.IsSaving = true;
         matchInfo.Match.ApprovalStatus = 'Rejected';
+        await matchInfo.Match.Save();
+        this.IsSaving = false;
+        this.cdr.detectChanges();
+    }
+
+    /** Undo a rejected individual match (restore to Pending) */
+    public async UndoRejectIndividualMatch(matchInfo: ComparisonMatchInfo): Promise<void> {
+        this.IsSaving = true;
+        matchInfo.Match.ApprovalStatus = 'Pending';
         await matchInfo.Match.Save();
         this.IsSaving = false;
         this.cdr.detectChanges();
@@ -1440,7 +1449,13 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
             .sort((a, b) => b.MatchProbability - a.MatchProbability)
             .map(m => m.MatchRecordID);
 
-        for (const field of entityFields.sort((a, b) => a.Sequence - b.Sequence)) {
+        // Sort fields: IsNameField first, then DefaultInView, then by Sequence
+        const sortedFields = [...entityFields].sort((a, b) => {
+            if (a.IsNameField !== b.IsNameField) return a.IsNameField ? -1 : 1;
+            if (a.DefaultInView !== b.DefaultInView) return a.DefaultInView ? -1 : 1;
+            return (a.Sequence ?? 9999) - (b.Sequence ?? 9999);
+        });
+        for (const field of sortedFields) {
             if (skip.has(field.Name) || field.IsPrimaryKey) continue;
 
             const sourceVal = this.getRecordFieldValue(sourceId, field.Name);
