@@ -13,7 +13,7 @@
           "fields": {
             "JSONType": "IContentSourceTypeConfiguration",
             "JSONTypeIsArray": false,
-            "JSONTypeDefinition": "export interface IContentSourceTypeConfiguration {\n    /** Reserved for future type-wide settings shared by all sources of this type */\n}"
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IContentSourceTypeConfiguration.ts"
           },
           "_comments": [
             "Configuration field — JSON blob for type-level settings"
@@ -22,8 +22,8 @@
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Content Source Types&Name=Configuration"
           },
           "sync": {
-            "lastModified": "2026-04-04T01:10:05.557Z",
-            "checksum": "b9d9153d8a83c878f0747e998568614b58d5c50cb683b9ccb076ccc921580e12"
+            "lastModified": "2026-04-04T11:49:21.741Z",
+            "checksum": "997fb6c3611b37336ff73ae369b7f545028538d02e31c4c678813d8e1e4db667"
           }
         }
       ]
@@ -46,7 +46,7 @@
           "fields": {
             "JSONType": "IContentSourceConfiguration",
             "JSONTypeIsArray": false,
-            "JSONTypeDefinition": "export interface IContentSourceConfiguration {\n    /** Tag taxonomy matching mode: constrained (only match within subtree), auto-grow (match or create within subtree), free-flow (match or create anywhere) */\n    TagTaxonomyMode?: 'constrained' | 'auto-grow' | 'free-flow';\n    /** Root Tag ID for constrained/auto-grow modes — limits taxonomy operations to this subtree */\n    TagRootID?: string | null;\n    /** Similarity threshold (0.0-1.0) for matching ContentItemTags to formal Tags. Default 0.9 */\n    TagMatchThreshold?: number;\n    /** Whether to share existing tag taxonomy with the LLM during autotagging. Default true */\n    ShareTaxonomyWithLLM?: boolean;\n    /** Enable vectorization for this source. Default true */\n    EnableVectorization?: boolean;\n}"
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IContentSourceConfiguration.ts"
           },
           "_comments": [
             "Configuration field — JSON blob for source-instance settings including taxonomy mode and vectorization"
@@ -55,8 +55,8 @@
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Content Sources&Name=Configuration"
           },
           "sync": {
-            "lastModified": "2026-04-04T01:10:05.605Z",
-            "checksum": "56152cfd9f185459b472519a5bc1ceebe24ce9aaa23bfa31a2aecc150b394c7e"
+            "lastModified": "2026-04-04T11:49:21.784Z",
+            "checksum": "4d2577dd68d0206a85e3e665fd15a82ac35af39c1f1e88aac9164b5ec17bb1e9"
           }
         }
       ]
@@ -79,7 +79,7 @@
           "fields": {
             "JSONType": "IContentTypeConfiguration",
             "JSONTypeIsArray": false,
-            "JSONTypeDefinition": "export interface IContentTypeConfiguration {\n    /** Whether to share tag taxonomy with LLM by default for all sources of this type. Can be overridden per source. Default true */\n    ShareTaxonomyWithLLM?: boolean;\n    /** Default tag taxonomy mode for sources of this type. Can be overridden per source */\n    DefaultTagTaxonomyMode?: 'constrained' | 'auto-grow' | 'free-flow';\n}"
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IContentTypeConfiguration.ts"
           },
           "_comments": [
             "Configuration field — JSON blob for content-type-level settings"
@@ -88,8 +88,8 @@
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Content Types&Name=Configuration"
           },
           "sync": {
-            "lastModified": "2026-04-04T01:10:05.648Z",
-            "checksum": "7c04fbafec5ca9935ffbf67caa85b87ff74c8104d6bde43428d01f699a22a53f"
+            "lastModified": "2026-04-04T11:49:21.825Z",
+            "checksum": "8d8018d64dd8a1c3fae9003d99891dda595e34a690e59b2ba07862dac3e83e90"
           }
         }
       ]
