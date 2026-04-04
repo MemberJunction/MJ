@@ -267,14 +267,13 @@ export class GetLearnWorldsUserProgressAction extends LearnWorldsBaseAction {
    * Get progress for all user courses
    */
   private async getAllCoursesProgress(userId: string, includeUnits: boolean, includeLessons: boolean, contextUser: UserInfo): Promise<UserLearningProgress> {
-    const enrollmentsResponse = await this.makeLearnWorldsRequest<{ data: LWApiEnrollmentItem[] }>(
-      `users/${userId}/enrollments`,
-      'GET',
-      undefined,
+    const enrollmentsData = await this.makeLearnWorldsPaginatedRequest<LWApiEnrollmentItem>(
+      `users/${userId}/courses`,
+      {},
       contextUser,
     );
 
-    const courseProgressResults = await this.processInBatches(enrollmentsResponse.data, (enrollment) =>
+    const courseProgressResults = await this.processInBatches(enrollmentsData, (enrollment) =>
       this.getCourseProgress(userId, enrollment.course_id || enrollment.course?.id || '', includeUnits, includeLessons, contextUser).catch(() => null),
     );
     const validCourses = courseProgressResults.filter((p): p is CourseProgress => p !== null);

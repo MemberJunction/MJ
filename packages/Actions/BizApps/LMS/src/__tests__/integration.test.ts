@@ -566,10 +566,10 @@ describe.skipIf(!RUN_INTEGRATION)('LearnWorlds Integration Tests', () => {
             IncludeCourses: true,
             IncludeBundles: true,
             IncludeEnrollments: true,
-            IncludeProgress: false,
+            IncludeProgress: true,
             IncludeCertificates: false,
             IncludeQuizResults: false,
-            MaxResultsPerEntity: 100,
+            MaxResultsPerEntity: 20,
           },
           contextUser,
         );
@@ -611,6 +611,7 @@ describe.skipIf(!RUN_INTEGRATION)('LearnWorlds Integration Tests', () => {
         expect(result.users).toBeDefined();
         expect(result.users!.length).toBeGreaterThan(0);
         expect(result.enrollments).toBeDefined();
+        expect(result.progress).toBeDefined();
 
       } finally {
         console.warn = originalWarn;
