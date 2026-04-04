@@ -361,7 +361,7 @@ export class SearchKnowledgeResolver extends ResolverBase {
                 return [];
             }
 
-            return ftsResult.Results.map(r => ({
+            const results = ftsResult.Results.map(r => ({
                 ID: `ft-${r.EntityName}-${r.RecordID}`,
                 EntityName: r.EntityName,
                 RecordID: r.RecordID,
@@ -370,12 +370,90 @@ export class SearchKnowledgeResolver extends ResolverBase {
                 Snippet: r.Snippet,
                 Score: r.Score,
                 ScoreBreakdown: { FullText: r.Score },
-                Tags: [],
+                Tags: [] as string[],
                 MatchedAt: new Date()
             }));
+
+            // Batch-load tags from TaggedItems for FTS results
+            await this.enrichResultsWithTags(results, md, contextUser);
+            return results;
         } catch (error) {
             LogError(`SearchKnowledge: Full-text search error: ${error}`);
             return [];
+        }
+    }
+
+    /**
+     * Enrich search results with tags from the TaggedItems entity.
+     * Batch-loads all tagged items for the result entities in a single query,
+     * then maps tag names onto each result by EntityID + RecordID.
+     */
+    private async enrichResultsWithTags(
+        results: SearchKnowledgeResultItem[],
+        md: Metadata,
+        contextUser: UserInfo
+    ): Promise<void> {
+        if (results.length === 0) return;
+
+        try {
+            // Build a set of entity name → record IDs for batch lookup
+            const entityRecordPairs = results.map(r => ({
+                EntityName: r.EntityName,
+                RecordID: r.RecordID
+            }));
+
+            // Get entity IDs from metadata
+            const entityIdMap = new Map<string, string>();
+            for (const pair of entityRecordPairs) {
+                if (!entityIdMap.has(pair.EntityName)) {
+                    const entityInfo = md.Entities.find(e => e.Name === pair.EntityName);
+                    if (entityInfo) {
+                        entityIdMap.set(pair.EntityName, entityInfo.ID);
+                    }
+                }
+            }
+
+            if (entityIdMap.size === 0) return;
+
+            // Build filter for TaggedItems: OR across all entity+record pairs
+            const conditions: string[] = [];
+            for (const r of results) {
+                const entityID = entityIdMap.get(r.EntityName);
+                if (!entityID) continue;
+                conditions.push(`(EntityID='${entityID}' AND RecordID='${r.RecordID}')`);
+            }
+
+            if (conditions.length === 0) return;
+
+            const rv = new RunView();
+            const tagResult = await rv.RunView<{ EntityID: string; RecordID: string; Tag: string }>({
+                EntityName: 'MJ: Tagged Items',
+                ExtraFilter: conditions.join(' OR '),
+                Fields: ['EntityID', 'RecordID', 'Tag'],
+                ResultType: 'simple'
+            }, contextUser);
+
+            if (!tagResult.Success) return;
+
+            // Build a lookup: "entityID::recordID" -> tag names
+            const tagMap = new Map<string, string[]>();
+            for (const ti of tagResult.Results) {
+                const key = `${ti.EntityID}::${ti.RecordID}`;
+                const tags = tagMap.get(key) ?? [];
+                tags.push(ti.Tag);
+                tagMap.set(key, tags);
+            }
+
+            // Apply tags to results
+            for (const r of results) {
+                const entityID = entityIdMap.get(r.EntityName);
+                if (!entityID) continue;
+                const key = `${entityID}::${r.RecordID}`;
+                r.Tags = tagMap.get(key) ?? [];
+            }
+        } catch (error) {
+            LogError(`SearchKnowledge: Error enriching results with tags: ${error}`);
+            // Non-fatal — results still usable without tags
         }
     }
 
@@ -475,6 +553,9 @@ export class SearchKnowledgeResolver extends ResolverBase {
             const entityIcon = (meta['EntityIcon'] as string) || undefined;
             const updatedAt = meta['__mj_UpdatedAt'] ? new Date(meta['__mj_UpdatedAt'] as string) : new Date();
 
+            // Extract tags from vector metadata if stored during indexing
+            const metaTags = Array.isArray(meta['Tags']) ? (meta['Tags'] as string[]) : [];
+
             return {
                 ID: match.id,
                 EntityName: entityName,
@@ -484,7 +565,7 @@ export class SearchKnowledgeResolver extends ResolverBase {
                 Snippet: snippet,
                 Score: match.score ?? 0,
                 ScoreBreakdown: { Vector: match.score ?? 0 },
-                Tags: [],
+                Tags: metaTags,
                 EntityIcon: entityIcon,
                 RecordName: title,
                 MatchedAt: updatedAt,

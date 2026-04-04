@@ -8,7 +8,9 @@
     "/dist"
   ],
   "scripts": {
-    "build": "ngc"
+    "build": "ngc",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "keywords": [],
   "author": "MemberJunction.com",

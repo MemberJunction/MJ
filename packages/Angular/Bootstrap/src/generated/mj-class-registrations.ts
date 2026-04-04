@@ -404,7 +404,7 @@ import {
     WebURLPartComponent,
 } from '@memberjunction/ng-dashboard-viewer';
 
-// @memberjunction/ng-dashboards (65 classes)
+// @memberjunction/ng-dashboards (66 classes)
 import {
     APIKeysResourceComponent,
     ActionExplorerComponent,
@@ -412,6 +412,7 @@ import {
     ActivityComponent,
     AgentConfigurationComponent,
     AgentRequestsResourceComponent,
+    AnalyticsResourceComponent,
     AutotaggingPipelineResourceComponent,
     ClusterVisualizationResourceComponent,
     CodeManagementComponent,
@@ -865,6 +866,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     ActivityComponent,
     AgentConfigurationComponent,
     AgentRequestsResourceComponent,
+    AnalyticsResourceComponent,
     AutotaggingPipelineResourceComponent,
     ClusterVisualizationResourceComponent,
     CodeManagementComponent,
@@ -945,7 +947,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 433;
+export const CLASS_REGISTRATIONS_COUNT = 434;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

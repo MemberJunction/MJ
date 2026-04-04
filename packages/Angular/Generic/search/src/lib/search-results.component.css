@@ -140,6 +140,31 @@
     font-size: 0.7rem;
 }
 
+.result-card-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 4px;
+}
+
+.result-tag-chip {
+    display: inline-block;
+    padding: 1px 7px;
+    border-radius: 10px;
+    font-size: 0.65rem;
+    font-weight: 500;
+    background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+    color: var(--mj-brand-primary);
+    border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 20%, var(--mj-border-default));
+}
+
+.result-tag-more {
+    display: inline-block;
+    padding: 1px 6px;
+    font-size: 0.6rem;
+    color: var(--mj-text-muted);
+}
+
 .result-card-actions {
     display: flex;
     align-items: center;

@@ -1,0 +1,165 @@
+@if (IsLoading) {
+    <div class="loading-container">
+        <mj-loading text="Loading scheduled pipelines..."></mj-loading>
+    </div>
+} @else {
+    <!-- Page Header -->
+    <div class="page-header">
+        <h1>Scheduled Pipelines</h1>
+        <p>Automate content ingestion, autotagging, and vector sync</p>
+    </div>
+
+    <!-- Toolbar -->
+    <div class="toolbar">
+        <button class="btn-primary" (click)="OnNewSchedule()">
+            <i class="fa-solid fa-plus"></i> New Schedule
+        </button>
+        <select class="filter-select" [(ngModel)]="StatusFilter" (ngModelChange)="OnFilterChanged()">
+            <option value="">All Statuses</option>
+            <option value="Active">Active</option>
+            <option value="Paused">Paused</option>
+            <option value="Disabled">Disabled</option>
+            <option value="Pending">Pending</option>
+        </select>
+        <input type="text"
+               class="search-input"
+               placeholder="Search pipelines..."
+               [(ngModel)]="SearchQuery"
+               (ngModelChange)="OnSearchChanged()" />
+        <div class="toolbar-spacer"></div>
+        <span class="toolbar-stat">
+            <strong>{{ ActiveCount }}</strong> active
+            @if (PausedCount > 0) {
+                &middot; <strong>{{ PausedCount }}</strong> paused
+            }
+            @if (DisabledCount > 0) {
+                &middot; <strong>{{ DisabledCount }}</strong> disabled
+            }
+        </span>
+    </div>
+
+    <!-- Card Grid -->
+    @if (FilteredJobs.length > 0) {
+        <div class="card-grid">
+            @for (job of FilteredJobs; track job.ID) {
+                <div class="job-card"
+                     [class.disabled-card]="job.Status === 'Disabled'"
+                     (click)="OnEditJob(job)">
+                    <div class="card-actions">
+                        <button class="card-action-btn" (click)="OnEditJob(job); $event.stopPropagation()">Edit</button>
+                        <button class="card-action-btn run-now" (click)="OnRunNow(job); $event.stopPropagation()">
+                            <i class="fa-solid fa-play" style="font-size:9px"></i> Run Now
+                        </button>
+                    </div>
+                    <div>
+                        <div class="card-top">
+                            <div class="status-dot" [ngClass]="GetStatusDotClass(job)"></div>
+                            <div class="card-title-area">
+                                <div class="card-title">{{ job.Name }}</div>
+                                <div class="card-cron">
+                                    <i class="fa-regular fa-clock"></i>
+                                    {{ GetCronDescription(job.CronExpression) }}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="sparkline">
+                            @for (dot of GetSparkline(job.ID); track $index) {
+                                <div class="spark-dot" [ngClass]="dot"></div>
+                            }
+                            <span class="sparkline-label">last 7 runs</span>
+                        </div>
+                    </div>
+                    <div class="card-stats">
+                        <span class="card-stat">
+                            <i class="fa-regular fa-clock"></i> Last:
+                            <span class="value">{{ GetTimeAgo(job.LastRunAt) }}</span>
+                        </span>
+                        <span class="card-stat">
+                            <i class="fa-solid fa-check-circle"></i>
+                            <span class="success-rate" [ngClass]="GetSuccessRateClass(job)">
+                                {{ GetSuccessRate(job) }}
+                            </span>
+                        </span>
+                        @if (job.Status === 'Paused') {
+                            <span class="card-status-label paused">
+                                <i class="fa-solid fa-pause"></i> Paused
+                            </span>
+                        } @else if (job.Status === 'Disabled') {
+                            <span class="card-status-label disabled">
+                                <i class="fa-solid fa-ban"></i> Disabled
+                            </span>
+                        } @else {
+                            <span class="card-stat">
+                                <i class="fa-regular fa-calendar"></i> Next:
+                                <span class="value">{{ GetTimeUntil(job.NextRunAt) }}</span>
+                            </span>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    } @else {
+        <div class="empty-state">
+            <i class="fa-regular fa-calendar-xmark"></i>
+            <p>No scheduled pipelines found</p>
+            <span>Create a new schedule to automate your Knowledge Hub workflows</span>
+        </div>
+    }
+
+    <!-- Recent Activity -->
+    @if (RecentRuns.length > 0) {
+        <div class="section-header">
+            <h2>Recent Activity</h2>
+            <span class="badge">Last {{ RecentRuns.length }} runs</span>
+        </div>
+        <div class="activity-table">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Job Name</th>
+                        <th>Started</th>
+                        <th>Duration</th>
+                        <th>Status</th>
+                        <th style="text-align:right">Items Processed</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @for (run of RecentRuns; track run.ID) {
+                        <tr>
+                            <td class="job-name-cell">{{ run.ScheduledJob }}</td>
+                            <td class="time-cell">{{ GetTimeAgo(run.StartedAt) }}</td>
+                            <td class="time-cell">{{ GetDuration(run) }}</td>
+                            <td>
+                                @if (run.Status === 'Completed' && run.Success) {
+                                    <span class="status-badge success">
+                                        <i class="fa-solid fa-check"></i> Success
+                                    </span>
+                                } @else if (run.Status === 'Failed' || (run.Status === 'Completed' && !run.Success)) {
+                                    <span class="status-badge failed">
+                                        <i class="fa-solid fa-xmark"></i> Failed
+                                    </span>
+                                } @else if (run.Status === 'Running') {
+                                    <span class="status-badge running">
+                                        <i class="fa-solid fa-spinner fa-spin"></i> Running
+                                    </span>
+                                } @else {
+                                    <span class="status-badge">{{ run.Status }}</span>
+                                }
+                            </td>
+                            <td class="items-cell" [class.failed]="run.Status === 'Failed'">
+                                {{ GetItemsProcessed(run) }}
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
+    <!-- Edit Dialog (from @memberjunction/ng-scheduling) -->
+    <mj-scheduled-job-dialog
+        [Visible]="ShowEditDialog"
+        [ScheduledJobID]="EditingJobID"
+        (Close)="OnDialogClosed($event)">
+    </mj-scheduled-job-dialog>
+}

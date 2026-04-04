@@ -22,7 +22,7 @@ import { WordCloudItem } from '@memberjunction/ng-word-cloud';
 
 // ── Tab type ──
 
-type TabName = 'pipeline' | 'sources' | 'types' | 'tags' | 'history';
+type TabName = 'pipeline' | 'sources' | 'types' | 'tags' | 'taxonomy' | 'history';
 
 // ── Interfaces ──
 
@@ -142,6 +142,69 @@ interface DropdownOption {
     Name: string;
 }
 
+// ── Taxonomy Governance interfaces ──
+
+type TaxonomySubTab = 'tree' | 'duplicates' | 'orphans' | 'treemap' | 'audit';
+
+interface TaxTreeNode {
+    ID: string;
+    Name: string;
+    DisplayName: string;
+    Description: string;
+    ParentID: string | null;
+    Depth: number;
+    Children: TaxTreeNode[];
+    ItemCount: number;
+    AvgWeight: number;
+    HealthColor: 'green' | 'yellow' | 'red';
+    IsExpanded: boolean;
+    IsSelected: boolean;
+    FirstSeen: string;
+}
+
+interface TaxDuplicatePair {
+    TagA: string;
+    TagB: string;
+    TagAID: string;
+    TagBID: string;
+    Similarity: number;
+    SeverityClass: 'high' | 'moderate';
+}
+
+interface TaxOrphanCard {
+    ID: string;
+    Name: string;
+    UsageCount: number;
+    AvgWeight: number;
+    FirstSeen: string;
+    LastSeen: string;
+    IsSelected: boolean;
+}
+
+interface TaxTreemapCell {
+    Name: string;
+    ItemCount: number;
+    ColorClass: string;
+    RowSpan: number;
+}
+
+interface TaxAuditEvent {
+    Type: 'created' | 'merged' | 'moved' | 'deleted' | 'renamed';
+    Description: string;
+    TagRef: string;
+    User: string;
+    Timestamp: string;
+    DayHeader: string;
+}
+
+interface TaxHealthStat {
+    Total: number;
+    Healthy: number;
+    NeedAttention: number;
+    Orphaned: number;
+    Duplicates: number;
+}
+
 interface ContentItemDetail {
     ID: string;
     Name: string;
@@ -241,6 +304,40 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     public HistoryStatusFilter = '';
     public FilteredRunRows: RunHistoryRow[] = [];
     public HistorySourceOptions: string[] = [];
+
+    // ── Taxonomy Governance tab ──
+    public TaxSubTab: TaxonomySubTab = 'tree';
+    public TaxTreeNodes: TaxTreeNode[] = [];
+    public TaxFlatNodes: TaxTreeNode[] = [];
+    public TaxFilteredNodes: TaxTreeNode[] = [];
+    public TaxSelectedNode: TaxTreeNode | null = null;
+    public TaxTreeSearch = '';
+    public TaxDuplicates: TaxDuplicatePair[] = [];
+    public TaxOrphans: TaxOrphanCard[] = [];
+    public TaxAllOrphansSelected = false;
+    public TaxTreemapCells: TaxTreemapCell[] = [];
+    public TaxAuditEvents: TaxAuditEvent[] = [];
+    public TaxAuditFilterTypes = new Set<string>(['created', 'merged', 'moved', 'deleted', 'renamed']);
+    public TaxHealth: TaxHealthStat = { Total: 0, Healthy: 0, NeedAttention: 0, Orphaned: 0, Duplicates: 0 };
+    public TaxRecentItems: { Name: string; Weight: number; Date: string; Icon: string }[] = [];
+    public TaxTreemapKPIs: { Label: string; Value: string }[] = [];
+    public TaxIsEditing = false;
+
+    /** Count of high-confidence duplicate pairs (>85% similarity) */
+    public get TaxHighConfidenceDupeCount(): number {
+        return this.TaxDuplicates.filter(d => d.SeverityClass === 'high').length;
+    }
+
+    /** Count of moderate-confidence duplicate pairs (70-85% similarity) */
+    public get TaxModerateDupeCount(): number {
+        return this.TaxDuplicates.filter(d => d.SeverityClass === 'moderate').length;
+    }
+    public TaxEditName = '';
+    public TaxEditDescription = '';
+
+    // Raw taxonomy data cache
+    private tagsRaw: Record<string, unknown>[] = [];
+    private taggedItemsRaw: Record<string, unknown>[] = [];
 
     // ── Slide-in form ──
     public FormMode: FormMode = 'none';
@@ -436,6 +533,9 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             case 'tags':
                 await this.loadTagLibraryData();
                 break;
+            case 'taxonomy':
+                await this.loadTaxonomyData();
+                break;
             case 'history':
                 await this.loadRunHistoryData();
                 break;
@@ -482,6 +582,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             { Tab: 'sources', Icon: 'fa-solid fa-database', Label: 'Sources', BadgeText: String(this.contentSourcesRaw.length), BadgeClass: '' },
             { Tab: 'types', Icon: 'fa-solid fa-sliders', Label: 'Content Types', BadgeText: String(this.contentTypesRaw.length), BadgeClass: '' },
             { Tab: 'tags', Icon: 'fa-solid fa-tag', Label: 'Tag Library', BadgeText: String(this.contentTagsRaw.length), BadgeClass: '' },
+            { Tab: 'taxonomy', Icon: 'fa-solid fa-sitemap', Label: 'Taxonomy', BadgeText: String(this.tagsRaw.length || ''), BadgeClass: '' },
         ];
     }
 
@@ -1643,6 +1744,736 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         const engine = KnowledgeHubMetadataEngine.Instance;
         const idx = engine.GetVectorIndexById(indexId);
         return idx ? idx.Name : 'Unknown';
+    }
+
+    // ════════════════════════════════════════════
+    // TAXONOMY GOVERNANCE TAB
+    // ════════════════════════════════════════════
+
+    public SwitchTaxSubTab(sub: TaxonomySubTab): void {
+        this.TaxSubTab = sub;
+        this.cdr.detectChanges();
+    }
+
+    private async loadTaxonomyData(): Promise<void> {
+        try {
+            const rv = new RunView();
+            const [tagsResult, taggedItemsResult] = await rv.RunViews([
+                { EntityName: 'MJ: Tags', OrderBy: 'Name', ResultType: 'simple' },
+                { EntityName: 'MJ: Tagged Items', ResultType: 'simple' }
+            ]);
+
+            this.tagsRaw = tagsResult.Success ? tagsResult.Results : [];
+            this.taggedItemsRaw = taggedItemsResult.Success ? taggedItemsResult.Results : [];
+
+            // Also ensure content item tags are loaded for cross-referencing
+            await this.ensureBaseDataLoaded();
+
+            this.buildTaxTree();
+            this.buildTaxDuplicates();
+            this.buildTaxOrphans();
+            this.buildTaxTreemap();
+            this.buildTaxAuditLog();
+            this.buildTaxHealth();
+        } catch (error) {
+            console.error('[Autotagging] Error loading taxonomy data:', error);
+        }
+    }
+
+    // ── Tree View ──
+
+    private buildTaxTree(): void {
+        const tagMap = new Map<string, TaxTreeNode>();
+        const tagItemCounts = this.countItemsByTag();
+        const tagAvgWeights = this.computeTagAvgWeights();
+
+        // Create flat node list from raw tags
+        for (const tag of this.tagsRaw) {
+            const id = tag['ID'] as string;
+            const name = (tag['Name'] as string) ?? 'Unnamed';
+            const itemCount = tagItemCounts.get(id) ?? 0;
+            const avgWeight = tagAvgWeights.get(id) ?? 0;
+
+            tagMap.set(id, {
+                ID: id,
+                Name: name,
+                DisplayName: (tag['DisplayName'] as string) ?? name,
+                Description: (tag['Description'] as string) ?? '',
+                ParentID: (tag['ParentID'] as string) ?? null,
+                Depth: 0,
+                Children: [],
+                ItemCount: itemCount,
+                AvgWeight: avgWeight,
+                HealthColor: this.computeTagHealth(itemCount, avgWeight),
+                IsExpanded: false,
+                IsSelected: false,
+                FirstSeen: this.formatShortDate((tag['__mj_CreatedAt'] as string) ?? '')
+            });
+        }
+
+        // Build parent-child relationships
+        const roots: TaxTreeNode[] = [];
+        for (const node of tagMap.values()) {
+            if (node.ParentID && tagMap.has(node.ParentID)) {
+                tagMap.get(node.ParentID)!.Children.push(node);
+            } else {
+                roots.push(node);
+            }
+        }
+
+        // Compute depths and aggregate child counts
+        this.computeTreeDepths(roots, 0);
+        this.propagateItemCounts(roots);
+
+        // Sort children alphabetically
+        this.sortTreeNodes(roots);
+
+        // Expand top two levels by default
+        for (const root of roots) {
+            root.IsExpanded = true;
+            for (const child of root.Children) {
+                child.IsExpanded = true;
+            }
+        }
+
+        this.TaxTreeNodes = roots;
+        this.TaxFlatNodes = this.flattenTree(roots);
+        this.TaxFilteredNodes = this.TaxFlatNodes;
+
+        // Select first node if available
+        if (this.TaxFlatNodes.length > 0) {
+            this.SelectTaxNode(this.TaxFlatNodes[0]);
+        }
+    }
+
+    private computeTreeDepths(nodes: TaxTreeNode[], depth: number): void {
+        for (const node of nodes) {
+            node.Depth = depth;
+            this.computeTreeDepths(node.Children, depth + 1);
+        }
+    }
+
+    private propagateItemCounts(nodes: TaxTreeNode[]): number {
+        let total = 0;
+        for (const node of nodes) {
+            const childCount = this.propagateItemCounts(node.Children);
+            node.ItemCount = node.ItemCount + childCount;
+            total += node.ItemCount;
+        }
+        return total;
+    }
+
+    private sortTreeNodes(nodes: TaxTreeNode[]): void {
+        nodes.sort((a, b) => a.Name.localeCompare(b.Name));
+        for (const node of nodes) {
+            this.sortTreeNodes(node.Children);
+        }
+    }
+
+    private flattenTree(nodes: TaxTreeNode[]): TaxTreeNode[] {
+        const result: TaxTreeNode[] = [];
+        for (const node of nodes) {
+            result.push(node);
+            if (node.IsExpanded && node.Children.length > 0) {
+                result.push(...this.flattenTree(node.Children));
+            }
+        }
+        return result;
+    }
+
+    private computeTagHealth(itemCount: number, avgWeight: number): 'green' | 'yellow' | 'red' {
+        if (itemCount === 0) return 'red';
+        if (itemCount <= 2 || avgWeight < 0.3) return 'yellow';
+        return 'green';
+    }
+
+    private countItemsByTag(): Map<string, number> {
+        const counts = new Map<string, number>();
+        for (const ti of this.taggedItemsRaw) {
+            const tagId = ti['TagID'] as string;
+            if (tagId) counts.set(tagId, (counts.get(tagId) ?? 0) + 1);
+        }
+        // Also count from content item tags that reference TagID
+        for (const cit of this.contentTagsRaw) {
+            const tagId = cit['TagID'] as string;
+            if (tagId) counts.set(tagId, (counts.get(tagId) ?? 0) + 1);
+        }
+        return counts;
+    }
+
+    private computeTagAvgWeights(): Map<string, number> {
+        const sums = new Map<string, number>();
+        const counts = new Map<string, number>();
+        for (const cit of this.contentTagsRaw) {
+            const tagId = cit['TagID'] as string;
+            const w = Number(cit['Weight'] ?? 0.5);
+            if (tagId) {
+                sums.set(tagId, (sums.get(tagId) ?? 0) + w);
+                counts.set(tagId, (counts.get(tagId) ?? 0) + 1);
+            }
+        }
+        const avgs = new Map<string, number>();
+        for (const [t, sum] of sums) {
+            avgs.set(t, Math.round((sum / (counts.get(t) ?? 1)) * 100) / 100);
+        }
+        return avgs;
+    }
+
+    public ToggleTaxNode(node: TaxTreeNode): void {
+        if (node.Children.length > 0) {
+            node.IsExpanded = !node.IsExpanded;
+            this.TaxFlatNodes = this.flattenTree(this.TaxTreeNodes);
+            this.applyTaxTreeFilter();
+            this.cdr.detectChanges();
+        }
+    }
+
+    public SelectTaxNode(node: TaxTreeNode): void {
+        // Deselect previous
+        for (const n of this.TaxFlatNodes) {
+            n.IsSelected = false;
+        }
+        node.IsSelected = true;
+        this.TaxSelectedNode = node;
+        this.TaxIsEditing = false;
+        this.loadRecentItemsForTag(node);
+        this.cdr.detectChanges();
+    }
+
+    public FilterTaxTree(): void {
+        this.applyTaxTreeFilter();
+        this.cdr.detectChanges();
+    }
+
+    private applyTaxTreeFilter(): void {
+        const q = this.TaxTreeSearch.toLowerCase().trim();
+        if (!q) {
+            this.TaxFilteredNodes = this.TaxFlatNodes;
+        } else {
+            this.TaxFilteredNodes = this.TaxFlatNodes.filter(n =>
+                n.Name.toLowerCase().includes(q) || n.DisplayName.toLowerCase().includes(q)
+            );
+        }
+    }
+
+    public GetTaxBreadcrumb(node: TaxTreeNode): { ID: string; Name: string }[] {
+        const breadcrumb: { ID: string; Name: string }[] = [];
+        const tagMap = new Map<string, Record<string, unknown>>();
+        for (const t of this.tagsRaw) {
+            tagMap.set(t['ID'] as string, t);
+        }
+
+        let currentID: string | null = node.ParentID;
+        while (currentID) {
+            const parent = tagMap.get(currentID);
+            if (!parent) break;
+            breadcrumb.unshift({ ID: currentID, Name: (parent['Name'] as string) ?? '' });
+            currentID = (parent['ParentID'] as string) ?? null;
+        }
+        return breadcrumb;
+    }
+
+    public NavigateToBreadcrumb(tagId: string): void {
+        const node = this.TaxFlatNodes.find(n => n.ID === tagId);
+        if (node) {
+            this.SelectTaxNode(node);
+        }
+    }
+
+    private loadRecentItemsForTag(node: TaxTreeNode): void {
+        // Find content item tags that reference this tag's ID
+        const recentItems: { Name: string; Weight: number; Date: string; Icon: string }[] = [];
+        const matchingTags = this.contentTagsRaw.filter(cit =>
+            (cit['TagID'] as string) === node.ID
+        ).slice(0, 5);
+
+        for (const cit of matchingTags) {
+            const itemId = cit['ItemID'] as string;
+            const item = this.contentItemsRaw.find(i => (i['ID'] as string) === itemId);
+            const itemName = item ? ((item['Name'] as string) ?? 'Unnamed Item') : 'Unknown Item';
+            const sourceType = item ? ((item['ContentSourceType'] as string) ?? '') : '';
+            const icon = sourceType.toLowerCase().includes('web') ? 'fa-solid fa-globe'
+                : sourceType.toLowerCase().includes('rss') ? 'fa-solid fa-rss'
+                : 'fa-solid fa-file-lines';
+
+            recentItems.push({
+                Name: itemName,
+                Weight: Number(cit['Weight'] ?? 0.5),
+                Date: this.formatShortDate((cit['__mj_CreatedAt'] as string) ?? ''),
+                Icon: icon
+            });
+        }
+
+        this.TaxRecentItems = recentItems;
+    }
+
+    // ── Tag Operations ──
+
+    public StartEditTag(): void {
+        if (!this.TaxSelectedNode) return;
+        this.TaxIsEditing = true;
+        this.TaxEditName = this.TaxSelectedNode.Name;
+        this.TaxEditDescription = this.TaxSelectedNode.Description;
+        this.cdr.detectChanges();
+    }
+
+    public CancelEditTag(): void {
+        this.TaxIsEditing = false;
+        this.cdr.detectChanges();
+    }
+
+    public async SaveEditTag(): Promise<void> {
+        if (!this.TaxSelectedNode) return;
+        try {
+            const md = new Metadata();
+            const entity = await md.GetEntityObject<BaseEntity>('MJ: Tags');
+            await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: this.TaxSelectedNode.ID }]));
+            entity.Set('Name', this.TaxEditName);
+            entity.Set('Description', this.TaxEditDescription);
+            const saved = await entity.Save();
+            if (saved) {
+                this.TaxSelectedNode.Name = this.TaxEditName;
+                this.TaxSelectedNode.DisplayName = this.TaxEditName;
+                this.TaxSelectedNode.Description = this.TaxEditDescription;
+                this.TaxIsEditing = false;
+                this.addTaxAuditEntry('renamed', this.TaxEditName);
+                MJNotificationService.Instance.CreateSimpleNotification('Tag updated', 'success', 2500);
+            } else {
+                MJNotificationService.Instance.CreateSimpleNotification('Failed to update tag', 'error', 3000);
+            }
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            MJNotificationService.Instance.CreateSimpleNotification(`Error: ${msg}`, 'error', 4000);
+        }
+        this.cdr.detectChanges();
+    }
+
+    public async MoveTag(node: TaxTreeNode, newParentId: string | null): Promise<void> {
+        try {
+            const md = new Metadata();
+            const entity = await md.GetEntityObject<BaseEntity>('MJ: Tags');
+            await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: node.ID }]));
+            entity.Set('ParentID', newParentId);
+            const saved = await entity.Save();
+            if (saved) {
+                this.addTaxAuditEntry('moved', node.Name);
+                MJNotificationService.Instance.CreateSimpleNotification('Tag moved', 'success', 2500);
+                await this.RefreshTaxonomyData();
+            }
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            MJNotificationService.Instance.CreateSimpleNotification(`Error: ${msg}`, 'error', 4000);
+        }
+    }
+
+    public async DeleteTag(node: TaxTreeNode): Promise<void> {
+        if (!confirm(`Delete tag "${node.Name}"? This will also remove all tagged item associations.`)) return;
+        try {
+            const md = new Metadata();
+            const entity = await md.GetEntityObject<BaseEntity>('MJ: Tags');
+            await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: node.ID }]));
+            const deleted = await entity.Delete();
+            if (deleted) {
+                this.addTaxAuditEntry('deleted', node.Name);
+                MJNotificationService.Instance.CreateSimpleNotification('Tag deleted', 'success', 2500);
+                await this.RefreshTaxonomyData();
+            }
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            MJNotificationService.Instance.CreateSimpleNotification(`Error: ${msg}`, 'error', 4000);
+        }
+    }
+
+    public async MergeTags(sourceTagId: string, targetTagId: string, sourceName: string, targetName: string): Promise<void> {
+        try {
+            // Re-parent tagged items from source to target
+            const itemsToMove = this.taggedItemsRaw.filter(ti => (ti['TagID'] as string) === sourceTagId);
+            const md = new Metadata();
+            for (const ti of itemsToMove) {
+                const entity = await md.GetEntityObject<BaseEntity>('MJ: Tagged Items');
+                await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: ti['ID'] as string }]));
+                entity.Set('TagID', targetTagId);
+                await entity.Save();
+            }
+
+            // Re-parent children of source under target
+            const childTags = this.tagsRaw.filter(t => (t['ParentID'] as string) === sourceTagId);
+            for (const child of childTags) {
+                const entity = await md.GetEntityObject<BaseEntity>('MJ: Tags');
+                await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: child['ID'] as string }]));
+                entity.Set('ParentID', targetTagId);
+                await entity.Save();
+            }
+
+            // Delete source tag
+            const sourceEntity = await md.GetEntityObject<BaseEntity>('MJ: Tags');
+            await sourceEntity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: sourceTagId }]));
+            await sourceEntity.Delete();
+
+            this.addTaxAuditEntry('merged', `${sourceName} into ${targetName}`);
+            MJNotificationService.Instance.CreateSimpleNotification(`Merged "${sourceName}" into "${targetName}"`, 'success', 3000);
+            await this.RefreshTaxonomyData();
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            MJNotificationService.Instance.CreateSimpleNotification(`Merge error: ${msg}`, 'error', 4000);
+        }
+    }
+
+    public async MakeChildTag(childTagId: string, parentTagId: string): Promise<void> {
+        try {
+            const md = new Metadata();
+            const entity = await md.GetEntityObject<BaseEntity>('MJ: Tags');
+            await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: childTagId }]));
+            entity.Set('ParentID', parentTagId);
+            const saved = await entity.Save();
+            if (saved) {
+                this.addTaxAuditEntry('moved', (entity.Get('Name') as string) ?? 'tag');
+                MJNotificationService.Instance.CreateSimpleNotification('Tag reparented', 'success', 2500);
+                await this.RefreshTaxonomyData();
+            }
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            MJNotificationService.Instance.CreateSimpleNotification(`Error: ${msg}`, 'error', 4000);
+        }
+    }
+
+    public DismissDuplicate(pair: TaxDuplicatePair): void {
+        this.TaxDuplicates = this.TaxDuplicates.filter(d => d !== pair);
+        this.TaxHealth.Duplicates = this.TaxDuplicates.length;
+        this.cdr.detectChanges();
+    }
+
+    // ── Duplicates ──
+
+    private buildTaxDuplicates(): void {
+        const tags = this.tagsRaw.map(t => ({
+            ID: t['ID'] as string,
+            Name: (t['Name'] as string) ?? ''
+        }));
+
+        const pairs: TaxDuplicatePair[] = [];
+
+        for (let i = 0; i < tags.length; i++) {
+            for (let j = i + 1; j < tags.length; j++) {
+                const sim = this.computeStringSimilarity(tags[i].Name, tags[j].Name);
+                if (sim >= 0.70) {
+                    pairs.push({
+                        TagA: tags[i].Name,
+                        TagB: tags[j].Name,
+                        TagAID: tags[i].ID,
+                        TagBID: tags[j].ID,
+                        Similarity: Math.round(sim * 100),
+                        SeverityClass: sim >= 0.85 ? 'high' : 'moderate'
+                    });
+                }
+            }
+        }
+
+        pairs.sort((a, b) => b.Similarity - a.Similarity);
+        this.TaxDuplicates = pairs;
+    }
+
+    /** Simple string similarity using normalized Levenshtein-like approach and abbreviation detection */
+    private computeStringSimilarity(a: string, b: string): number {
+        const la = a.toLowerCase().trim();
+        const lb = b.toLowerCase().trim();
+
+        if (la === lb) return 1.0;
+
+        // Check if one is an abbreviation of the other
+        if (this.isAbbreviationOf(la, lb) || this.isAbbreviationOf(lb, la)) {
+            return 0.90;
+        }
+
+        // Check if one contains the other
+        if (lb.includes(la) || la.includes(lb)) {
+            const shorter = la.length < lb.length ? la : lb;
+            const longer = la.length < lb.length ? lb : la;
+            return shorter.length / longer.length;
+        }
+
+        // Levenshtein distance-based similarity
+        const dist = this.levenshteinDistance(la, lb);
+        const maxLen = Math.max(la.length, lb.length);
+        return maxLen > 0 ? 1 - dist / maxLen : 0;
+    }
+
+    private isAbbreviationOf(short: string, long: string): boolean {
+        if (short.length >= long.length) return false;
+        if (short.length < 2) return false;
+
+        // Check if short is initials of words in long
+        const words = long.split(/[\s\-_&]+/).filter(w => w.length > 0);
+        if (words.length < 2) return false;
+        const initials = words.map(w => w[0]).join('');
+        return initials === short;
+    }
+
+    private levenshteinDistance(a: string, b: string): number {
+        const m = a.length;
+        const n = b.length;
+        const dp: number[][] = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0) as number[]);
+
+        for (let i = 0; i <= m; i++) dp[i][0] = i;
+        for (let j = 0; j <= n; j++) dp[0][j] = j;
+
+        for (let i = 1; i <= m; i++) {
+            for (let j = 1; j <= n; j++) {
+                const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+                dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + cost);
+            }
+        }
+        return dp[m][n];
+    }
+
+    // ── Orphans ──
+
+    private buildTaxOrphans(): void {
+        const tagItemCounts = this.countItemsByTag();
+        const hasChildren = new Set<string>();
+        for (const t of this.tagsRaw) {
+            const pid = t['ParentID'] as string;
+            if (pid) hasChildren.add(pid);
+        }
+
+        this.TaxOrphans = this.tagsRaw
+            .filter(t => {
+                const id = t['ID'] as string;
+                const parentId = t['ParentID'] as string | null;
+                const itemCount = tagItemCounts.get(id) ?? 0;
+                // Orphan: no parent, no children, low usage
+                return !parentId && !hasChildren.has(id) && itemCount <= 3;
+            })
+            .map(t => {
+                const id = t['ID'] as string;
+                const itemCount = tagItemCounts.get(id) ?? 0;
+                const avgWeights = this.computeTagAvgWeights();
+                return {
+                    ID: id,
+                    Name: (t['Name'] as string) ?? 'Unnamed',
+                    UsageCount: itemCount,
+                    AvgWeight: avgWeights.get(id) ?? 0,
+                    FirstSeen: this.formatShortDate((t['__mj_CreatedAt'] as string) ?? ''),
+                    LastSeen: this.formatShortDate((t['__mj_UpdatedAt'] as string) ?? ''),
+                    IsSelected: false
+                };
+            })
+            .sort((a, b) => a.UsageCount - b.UsageCount);
+    }
+
+    public ToggleOrphanSelection(orphan: TaxOrphanCard): void {
+        orphan.IsSelected = !orphan.IsSelected;
+        this.TaxAllOrphansSelected = this.TaxOrphans.every(o => o.IsSelected);
+        this.cdr.detectChanges();
+    }
+
+    public ToggleAllOrphans(): void {
+        this.TaxAllOrphansSelected = !this.TaxAllOrphansSelected;
+        for (const o of this.TaxOrphans) {
+            o.IsSelected = this.TaxAllOrphansSelected;
+        }
+        this.cdr.detectChanges();
+    }
+
+    public async DeleteOrphan(orphan: TaxOrphanCard): Promise<void> {
+        if (!confirm(`Delete orphan tag "${orphan.Name}"?`)) return;
+        try {
+            const md = new Metadata();
+            const entity = await md.GetEntityObject<BaseEntity>('MJ: Tags');
+            await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: orphan.ID }]));
+            const deleted = await entity.Delete();
+            if (deleted) {
+                this.addTaxAuditEntry('deleted', orphan.Name);
+                MJNotificationService.Instance.CreateSimpleNotification('Orphan tag deleted', 'success', 2500);
+                this.TaxOrphans = this.TaxOrphans.filter(o => o.ID !== orphan.ID);
+                this.TaxHealth.Orphaned = this.TaxOrphans.length;
+                this.cdr.detectChanges();
+            }
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            MJNotificationService.Instance.CreateSimpleNotification(`Error: ${msg}`, 'error', 4000);
+        }
+    }
+
+    public async BulkDeleteOrphans(): Promise<void> {
+        const selected = this.TaxOrphans.filter(o => o.IsSelected);
+        if (selected.length === 0) return;
+        if (!confirm(`Delete ${selected.length} selected orphan tags?`)) return;
+
+        const md = new Metadata();
+        let deletedCount = 0;
+        for (const orphan of selected) {
+            try {
+                const entity = await md.GetEntityObject<BaseEntity>('MJ: Tags');
+                await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: orphan.ID }]));
+                if (await entity.Delete()) {
+                    deletedCount++;
+                    this.addTaxAuditEntry('deleted', orphan.Name);
+                }
+            } catch {
+                // continue with remaining
+            }
+        }
+
+        MJNotificationService.Instance.CreateSimpleNotification(`Deleted ${deletedCount} tags`, 'success', 3000);
+        this.TaxOrphans = this.TaxOrphans.filter(o => !o.IsSelected);
+        this.TaxHealth.Orphaned = this.TaxOrphans.length;
+        this.TaxAllOrphansSelected = false;
+        this.cdr.detectChanges();
+    }
+
+    // ── Treemap ──
+
+    private buildTaxTreemap(): void {
+        // Build treemap cells from root-level tags, sized by item count
+        const tagItemCounts = this.countItemsByTag();
+
+        // Group tags by root parent
+        const rootGroups = new Map<string, { Name: string; TotalItems: number }>();
+        for (const node of this.TaxTreeNodes) {
+            rootGroups.set(node.ID, { Name: node.Name, TotalItems: node.ItemCount });
+        }
+
+        const colorFamilies = ['at-tm-blue', 'at-tm-green', 'at-tm-purple', 'at-tm-orange'];
+        const cells: TaxTreemapCell[] = [];
+        let colorIdx = 0;
+
+        // For each root, add children as cells
+        for (const root of this.TaxTreeNodes) {
+            const family = colorFamilies[colorIdx % colorFamilies.length];
+            let shadeIdx = 1;
+
+            // Add root children (or the root itself if it has no children)
+            const childNodes = root.Children.length > 0 ? root.Children : [root];
+            const sortedChildren = [...childNodes].sort((a, b) => b.ItemCount - a.ItemCount);
+
+            for (const child of sortedChildren.slice(0, 4)) {
+                cells.push({
+                    Name: child.Name,
+                    ItemCount: child.ItemCount,
+                    ColorClass: `${family}-${shadeIdx}`,
+                    RowSpan: child.ItemCount > 10 ? 2 : 1
+                });
+                shadeIdx++;
+            }
+            colorIdx++;
+        }
+
+        this.TaxTreemapCells = cells;
+
+        // KPIs
+        const totalTags = this.tagsRaw.length;
+        const maxDepth = this.TaxFlatNodes.length > 0
+            ? Math.max(...this.TaxFlatNodes.map(n => n.Depth))
+            : 0;
+        const avgDepth = this.TaxFlatNodes.length > 0
+            ? (this.TaxFlatNodes.reduce((sum, n) => sum + n.Depth, 0) / this.TaxFlatNodes.length).toFixed(1)
+            : '0';
+        const mostUsed = this.TaxFlatNodes.length > 0
+            ? [...this.TaxFlatNodes].sort((a, b) => b.ItemCount - a.ItemCount)[0]?.Name ?? 'None'
+            : 'None';
+
+        this.TaxTreemapKPIs = [
+            { Label: 'Total Tags', Value: String(totalTags) },
+            { Label: 'Avg Depth', Value: avgDepth },
+            { Label: 'Max Depth', Value: String(maxDepth) },
+            { Label: 'Most Used Tag', Value: mostUsed }
+        ];
+    }
+
+    // ── Audit Log ──
+
+    private buildTaxAuditLog(): void {
+        // Build audit events from tag creation dates and known changes
+        const events: TaxAuditEvent[] = [];
+
+        for (const tag of this.tagsRaw) {
+            const name = (tag['Name'] as string) ?? 'Unnamed';
+            const createdAt = tag['__mj_CreatedAt'] as string;
+            if (createdAt) {
+                events.push({
+                    Type: 'created',
+                    Description: `Tag created`,
+                    TagRef: name,
+                    User: 'System',
+                    Timestamp: this.formatDate(createdAt),
+                    DayHeader: this.formatDayHeader(createdAt)
+                });
+            }
+        }
+
+        // Sort by date descending
+        events.sort((a, b) => b.Timestamp.localeCompare(a.Timestamp));
+        this.TaxAuditEvents = events.slice(0, 50);
+    }
+
+    private addTaxAuditEntry(type: TaxAuditEvent['Type'], tagRef: string): void {
+        const now = new Date().toISOString();
+        this.TaxAuditEvents.unshift({
+            Type: type,
+            Description: `Tag ${type}`,
+            TagRef: tagRef,
+            User: 'You',
+            Timestamp: this.formatDate(now),
+            DayHeader: 'Today'
+        });
+    }
+
+    public ToggleTaxAuditFilter(type: string): void {
+        if (this.TaxAuditFilterTypes.has(type)) {
+            this.TaxAuditFilterTypes.delete(type);
+        } else {
+            this.TaxAuditFilterTypes.add(type);
+        }
+        this.cdr.detectChanges();
+    }
+
+    public GetFilteredAuditEvents(): TaxAuditEvent[] {
+        return this.TaxAuditEvents.filter(e => this.TaxAuditFilterTypes.has(e.Type));
+    }
+
+    private formatDayHeader(dateStr: string): string {
+        try {
+            const d = new Date(dateStr);
+            const today = new Date();
+            const yesterday = new Date(today);
+            yesterday.setDate(yesterday.getDate() - 1);
+
+            if (d.toDateString() === today.toDateString()) return 'Today';
+            if (d.toDateString() === yesterday.toDateString()) return 'Yesterday';
+            return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+        } catch {
+            return '';
+        }
+    }
+
+    // ── Health Stats ──
+
+    private buildTaxHealth(): void {
+        const total = this.tagsRaw.length;
+        const orphaned = this.TaxOrphans.length;
+        const duplicates = this.TaxDuplicates.length;
+        const needAttention = this.TaxFlatNodes.filter(n => n.HealthColor === 'yellow').length;
+        const healthy = total - orphaned - needAttention;
+
+        this.TaxHealth = { Total: total, Healthy: Math.max(0, healthy), NeedAttention: needAttention, Orphaned: orphaned, Duplicates: duplicates };
+    }
+
+    public GetTaxAuditIcon(type: string): string {
+        const map: Record<string, string> = {
+            'created': 'fa-solid fa-plus',
+            'merged': 'fa-solid fa-code-merge',
+            'moved': 'fa-solid fa-arrows-up-down',
+            'deleted': 'fa-solid fa-trash',
+            'renamed': 'fa-solid fa-pen'
+        };
+        return map[type] ?? 'fa-solid fa-circle';
+    }
+
+    public async RefreshTaxonomyData(): Promise<void> {
+        this.tabDataLoaded.delete('taxonomy');
+        await this.loadTaxonomyData();
+        this.cdr.detectChanges();
     }
 }
 

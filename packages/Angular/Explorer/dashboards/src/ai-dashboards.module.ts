@@ -47,7 +47,16 @@ import {
   ClusterVisualizationResourceComponent,
   LoadClusterVisualizationResource
 } from './KnowledgeHub/components/clusters/cluster-visualization-resource.component';
+import {
+  SchedulingResourceComponent,
+  LoadSchedulingResource
+} from './KnowledgeHub/components/scheduling/scheduling-resource.component';
+import {
+  AnalyticsResourceComponent,
+  LoadAnalyticsResource
+} from './KnowledgeHub/components/analytics/analytics-resource.component';
 import { ClusteringModule } from '@memberjunction/ng-clustering';
+import { SchedulingModule } from '@memberjunction/ng-scheduling';
 import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
 
 /**
@@ -76,7 +85,9 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     KnowledgeSearchResourceComponent,
     KnowledgeConfigResourceComponent,
     SearchResultDetailComponent,
-    ClusterVisualizationResourceComponent
+    ClusterVisualizationResourceComponent,
+    SchedulingResourceComponent,
+    AnalyticsResourceComponent
   ],
   imports: [
     CommonModule,
@@ -93,6 +104,7 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     SharedPipesModule,
     SearchModule,
     ClusteringModule,
+    SchedulingModule,
     MJWordCloudComponent
   ],
   providers: [
@@ -114,6 +126,8 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     KnowledgeConfigResourceComponent,
     SearchResultDetailComponent,
     ClusterVisualizationResourceComponent,
+    SchedulingResourceComponent,
+    AnalyticsResourceComponent,
     SharedDashboardWidgetsModule
   ]
 })
@@ -121,5 +135,7 @@ export class AIDashboardsModule {
     constructor() {
         // Ensure tree-shaking prevention loaders are called
         LoadClusterVisualizationResource();
+        LoadSchedulingResource();
+        LoadAnalyticsResource();
     }
 }

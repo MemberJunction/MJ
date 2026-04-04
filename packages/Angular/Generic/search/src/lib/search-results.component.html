@@ -40,6 +40,16 @@
                         <div class="result-card-body">
                             <div class="result-card-title">{{ result.RecordName || result.Title }}</div>
                             <div class="result-card-entity">{{ result.EntityName }}</div>
+                            @if (result.Tags && result.Tags.length > 0) {
+                                <div class="result-card-tags">
+                                    @for (tag of result.Tags.slice(0, 5); track tag) {
+                                        <span class="result-tag-chip">{{ tag }}</span>
+                                    }
+                                    @if (result.Tags.length > 5) {
+                                        <span class="result-tag-more">+{{ result.Tags.length - 5 }}</span>
+                                    }
+                                </div>
+                            }
                         </div>
                         @if (ShowScores) {
                             <div class="result-card-score">

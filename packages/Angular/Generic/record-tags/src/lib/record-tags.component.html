@@ -56,6 +56,54 @@
                 </div>
             }
         </div>
+
+        <!-- Related Records Section -->
+        <div class="mj-related-records-section">
+            <div class="mj-related-header" (click)="ShowRelated = !ShowRelated">
+                <i class="fa-solid" [class.fa-chevron-down]="ShowRelated" [class.fa-chevron-right]="!ShowRelated"></i>
+                <span class="mj-related-title">Related Records</span>
+                @if (RelatedRecords.length > 0) {
+                    <span class="mj-related-count">{{ RelatedRecords.length }}</span>
+                }
+            </div>
+
+            @if (ShowRelated) {
+                @if (IsLoadingRelated) {
+                    <div class="mj-related-loading">
+                        <mj-loading text="Finding related records..." size="small"></mj-loading>
+                    </div>
+                } @else if (RelatedRecords.length === 0) {
+                    <div class="mj-related-empty">
+                        <p>No related records found via shared tags.</p>
+                    </div>
+                } @else {
+                    <div class="mj-related-list">
+                        @for (related of RelatedRecords; track related.RecordID) {
+                            <div class="mj-related-item" (click)="OnRelatedRecordClick(related)">
+                                <div class="mj-related-item-icon">
+                                    <i [class]="related.EntityIcon"></i>
+                                </div>
+                                <div class="mj-related-item-content">
+                                    <div class="mj-related-item-name">{{ related.DisplayName }}</div>
+                                    <div class="mj-related-item-entity">{{ related.EntityName }}</div>
+                                    <div class="mj-related-item-tags">
+                                        @for (tag of related.SharedTags.slice(0, 3); track tag) {
+                                            <span class="mj-related-shared-tag">{{ tag }}</span>
+                                        }
+                                        @if (related.SharedTags.length > 3) {
+                                            <span class="mj-related-tag-more">+{{ related.SharedTags.length - 3 }}</span>
+                                        }
+                                    </div>
+                                </div>
+                                <div class="mj-related-item-score">
+                                    {{ FormatScore(related.Score) }}
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            }
+        </div>
     }
 
 </mj-slide-panel>
