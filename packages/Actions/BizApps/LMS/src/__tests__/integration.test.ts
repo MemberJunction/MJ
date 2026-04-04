@@ -83,6 +83,7 @@ import { UpdateUserAction } from '../providers/learnworlds/actions/update-user.a
 import { AttachTagsAction } from '../providers/learnworlds/actions/attach-tags.action';
 import { DetachTagsAction } from '../providers/learnworlds/actions/detach-tags.action';
 import { OnboardLearnerAction } from '../providers/learnworlds/actions/onboard-learner.action';
+import { GetLearnWorldsBulkDataAction } from '../providers/learnworlds/actions/get-bulk-data.action';
 import { LearnWorldsBaseAction } from '../providers/learnworlds/learnworlds-base.action';
 import { UserInfo } from '@memberjunction/core';
 
@@ -506,5 +507,114 @@ describe.skipIf(!RUN_INTEGRATION)('LearnWorlds Integration Tests', () => {
       expect(result.LearnWorldsUserId).toBe(onboardedUserId);
       console.log(`  OnboardLearner (re-run): OK (isNewUser=false, same userId=${result.LearnWorldsUserId})`);
     });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════
+  // PHASE 6: Bulk data retrieval — rate limit stress test
+  //
+  // This is the test that reproduces GitHub issue #2312.
+  // It fetches ALL users then hits the enrollment endpoint for each one,
+  // which is the exact pattern that triggers 429 rate limiting.
+  // ═══════════════════════════════════════════════════════════════════
+
+  describe('Phase 6: GetBulkData rate limit stress test', () => {
+    it('GetBulkData — should fetch all users + enrollments without 429 failures', async () => {
+      // Reset global rate limiter to ensure a clean sliding window
+      LearnWorldsBaseAction.ResetRateLimiter();
+
+      // Seed the CLIENT_ID env var so buildRequestConfig resolves it
+      // (normally seeded by patchCredentials() in earlier phases)
+      const provider = 'LEARNWORLDS';
+      process.env[`BIZAPPS_${provider}_${COMPANY_ID}_CLIENT_ID`] = CLIENT_ID || SCHOOL_DOMAIN;
+
+      // Patch credentials at the prototype level so all inner action instances
+      // (GetUsersAction, GetUserEnrollmentsAction, etc.) also get them
+      const credentialMock = async () => ({
+        CompanyID: COMPANY_ID,
+        APIKey: API_KEY,
+        ExternalSystemID: SCHOOL_DOMAIN,
+        AccessToken: null,
+        CustomAttribute1: null,
+      });
+      const apiCredMock = async () => ({
+        apiKey: API_KEY,
+        apiSecret: undefined,
+        accessToken: undefined,
+      });
+      vi.spyOn(LearnWorldsBaseAction.prototype as Record<string, unknown>, 'getCompanyIntegration' as never).mockImplementation(credentialMock as never);
+      vi.spyOn(LearnWorldsBaseAction.prototype as Record<string, unknown>, 'getAPICredentials' as never).mockImplementation(apiCredMock as never);
+
+      // Track 429 retries via console.warn spy
+      const retryWarnings: string[] = [];
+      const originalWarn = console.warn;
+      console.warn = (...args: unknown[]) => {
+        const msg = String(args[0]);
+        if (msg.includes('429 rate limited')) {
+          retryWarnings.push(msg);
+        }
+        originalWarn.apply(console, args);
+      };
+
+      const action = new GetLearnWorldsBulkDataAction();
+      const startTime = Date.now();
+
+      try {
+        const result = await action.GetBulkData(
+          {
+            CompanyID: COMPANY_ID,
+            IncludeUsers: true,
+            IncludeCourses: true,
+            IncludeBundles: true,
+            IncludeEnrollments: true,
+            IncludeProgress: false,
+            IncludeCertificates: false,
+            IncludeQuizResults: false,
+            MaxResultsPerEntity: 100,
+          },
+          contextUser,
+        );
+
+        const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+
+        // Log comprehensive results
+        console.log(`\n  ══════════════════════════════════════════════════`);
+        console.log(`  GetBulkData Rate Limit Stress Test Results`);
+        console.log(`  ──────────────────────────────────────────────────`);
+        console.log(`  Duration:        ${elapsed}s`);
+        console.log(`  Total API calls: ${result.totalApiCalls}`);
+        console.log(`  Users:           ${result.users?.length ?? 0}`);
+        console.log(`  Courses:         ${result.courses?.length ?? 0}`);
+        console.log(`  Bundles:         ${result.bundles?.length ?? 0}`);
+        console.log(`  Enrollments:     ${result.enrollments?.length ?? 0}`);
+        console.log(`  Progress:        ${result.progress?.length ?? 0}`);
+        console.log(`  429 retries:     ${retryWarnings.length}`);
+        console.log(`  Errors:          ${result.errors.length}`);
+
+        if (retryWarnings.length > 0) {
+          console.log(`  ── Retry details ──`);
+          for (const warning of retryWarnings) {
+            console.log(`    ${warning}`);
+          }
+        }
+
+        if (result.errors.length > 0) {
+          console.log(`  ── Errors ──`);
+          for (const err of result.errors) {
+            console.log(`    [${err.entity}] ${err.entityId || '(no id)'}: ${err.message}`);
+          }
+        }
+        console.log(`  ══════════════════════════════════════════════════\n`);
+
+        // The key assertion: zero errors means all enrollment/progress fetches succeeded.
+        // Before the fix, ~35 out of 100+ users would fail with 429 errors.
+        expect(result.errors).toEqual([]);
+        expect(result.users).toBeDefined();
+        expect(result.users!.length).toBeGreaterThan(0);
+        expect(result.enrollments).toBeDefined();
+
+      } finally {
+        console.warn = originalWarn;
+      }
+    }, 300_000); // 5-minute timeout — rate limiting (25 req/10s + inter-batch delays) makes bulk runs slower
   });
 });
