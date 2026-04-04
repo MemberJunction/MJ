@@ -95,8 +95,13 @@
                                         }
                                     </div>
                                 </div>
-                                <div class="mj-related-item-score">
-                                    {{ FormatScore(related.Score) }}
+                                <div class="mj-related-item-meta">
+                                    <span class="mj-related-item-score">{{ FormatScore(related.Score) }}</span>
+                                    @if (related.Source === 'both') {
+                                        <span class="mj-related-source-badge mj-related-source-both" title="Found via tags and vector similarity">both</span>
+                                    } @else if (related.Source === 'vectors') {
+                                        <span class="mj-related-source-badge mj-related-source-vectors" title="Found via vector similarity">vector</span>
+                                    }
                                 </div>
                             </div>
                         }

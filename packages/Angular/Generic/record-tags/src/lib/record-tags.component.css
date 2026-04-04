@@ -236,10 +236,36 @@
     padding: 0 3px;
 }
 
+.mj-related-item-meta {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 3px;
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
 .mj-related-item-score {
     font-size: 0.72rem;
     font-weight: 600;
     color: var(--mj-text-muted);
-    flex-shrink: 0;
-    margin-top: 4px;
+}
+
+.mj-related-source-badge {
+    font-size: 0.55rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    padding: 1px 5px;
+    border-radius: 6px;
+}
+
+.mj-related-source-both {
+    background: color-mix(in srgb, var(--mj-status-success) 12%, var(--mj-bg-surface));
+    color: var(--mj-status-success);
+}
+
+.mj-related-source-vectors {
+    background: color-mix(in srgb, var(--mj-status-info) 12%, var(--mj-bg-surface));
+    color: var(--mj-status-info);
 }

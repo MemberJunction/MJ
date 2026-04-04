@@ -117,11 +117,131 @@ export class RecordTagsComponent implements OnInit {
     }
 
     /**
+     * Load related records using tags, vectors, or both.
+     * Merges results from both sources, combining scores via simple averaging.
+     */
+    private async LoadRelatedRecordsCombined(useTags: boolean, useVectors: boolean): Promise<void> {
+        this.IsLoadingRelated = true;
+
+        const tagResults: RelatedRecord[] = useTags ? await this.LoadTagRelatedRecords() : [];
+        const vectorResults: RelatedRecord[] = useVectors ? await this.LoadVectorRelatedRecords() : [];
+
+        // Merge tag and vector results
+        const merged = this.MergeRelatedResults(tagResults, vectorResults);
+        this.RelatedRecords = merged.slice(0, 10);
+        await this.ResolveRelatedRecordNames();
+
+        this.IsLoadingRelated = false;
+    }
+
+    /**
+     * Merge tag-based and vector-based related records.
+     * Records found by both sources get boosted score and Source='both'.
+     */
+    private MergeRelatedResults(tagResults: RelatedRecord[], vectorResults: RelatedRecord[]): RelatedRecord[] {
+        const map = new Map<string, RelatedRecord>();
+
+        for (const r of tagResults) {
+            map.set(`${r.EntityName}::${r.RecordID}`, r);
+        }
+
+        for (const r of vectorResults) {
+            const key = `${r.EntityName}::${r.RecordID}`;
+            const existing = map.get(key);
+            if (existing) {
+                // Found by both — boost score and merge
+                existing.Score = Math.min(1, (existing.Score + r.Score) / 1.5); // Weighted average with boost
+                existing.Source = 'both';
+                // Add any vector-only shared tags
+                for (const tag of r.SharedTags) {
+                    if (!existing.SharedTags.includes(tag)) {
+                        existing.SharedTags.push(tag);
+                    }
+                }
+            } else {
+                map.set(key, r);
+            }
+        }
+
+        return Array.from(map.values()).sort((a, b) => b.Score - a.Score);
+    }
+
+    /**
+     * Load related records via vector similarity using SearchKnowledge GraphQL mutation.
+     * Uses the record's display name as the search query.
+     */
+    private async LoadVectorRelatedRecords(): Promise<RelatedRecord[]> {
+        try {
+            const entityName = this.Record.EntityInfo.Name;
+            const recordID = this.Record.PrimaryKey.Values();
+
+            // Build a search query from the record's name fields
+            const nameFields = this.Record.EntityInfo.Fields
+                .filter(f => f.IsNameField)
+                .sort((a, b) => (a.Sequence ?? 9999) - (b.Sequence ?? 9999));
+            const searchQuery = nameFields
+                .map(f => this.Record.Get(f.Name))
+                .filter(v => v != null && String(v).trim() !== '')
+                .map(v => String(v))
+                .join(' ');
+
+            if (!searchQuery || searchQuery.trim().length < 2) return [];
+
+            const gql = `
+                mutation SearchKnowledge($query: String!, $maxResults: Float, $filters: SearchFiltersInput) {
+                    SearchKnowledge(query: $query, maxResults: $maxResults, filters: $filters) {
+                        Success
+                        Results {
+                            EntityName
+                            RecordID
+                            Title
+                            Score
+                            Tags
+                            EntityIcon
+                        }
+                    }
+                }
+            `;
+
+            const provider = GraphQLDataProvider.Instance;
+            const result = await provider.ExecuteGQL(gql, {
+                query: searchQuery,
+                maxResults: 15,
+                filters: { EntityNames: [entityName] }
+            });
+
+            const searchResult = (result as Record<string, unknown>)?.['SearchKnowledge'] as {
+                Success: boolean;
+                Results: Array<{
+                    EntityName: string; RecordID: string; Title: string;
+                    Score: number; Tags: string[]; EntityIcon: string;
+                }>;
+            };
+
+            if (!searchResult?.Success) return [];
+
+            // Filter out the current record and map to RelatedRecord
+            return searchResult.Results
+                .filter(r => r.RecordID !== recordID)
+                .map(r => ({
+                    EntityName: r.EntityName,
+                    RecordID: r.RecordID,
+                    DisplayName: r.Title || `${r.EntityName} Record`,
+                    EntityIcon: r.EntityIcon || 'fa-solid fa-table',
+                    Score: r.Score,
+                    Source: 'vectors' as const,
+                    SharedTags: r.Tags || [],
+                }));
+        } catch {
+            return [];
+        }
+    }
+
+    /**
      * Load related records by finding other records that share the same tags.
      * Groups by entity+recordID and scores by number of shared tags weighted by tag weight.
      */
-    private async LoadRelatedRecords(): Promise<void> {
-        this.IsLoadingRelated = true;
+    private async LoadTagRelatedRecords(): Promise<RelatedRecord[]> {
         const entityID = this.Record.EntityInfo.ID;
         const recordID = this.Record.PrimaryKey.Values();
 
@@ -132,8 +252,7 @@ export class RecordTagsComponent implements OnInit {
                 .filter(id => id != null);
 
             if (tagIDs.length === 0) {
-                this.IsLoadingRelated = false;
-                return;
+                return [];
             }
 
             // Find other records that share these tags
@@ -151,8 +270,7 @@ export class RecordTagsComponent implements OnInit {
             });
 
             if (!relatedResult.Success) {
-                this.IsLoadingRelated = false;
-                return;
+                return [];
             }
 
             // Group by entity+recordID, accumulate shared tags and score
@@ -185,27 +303,23 @@ export class RecordTagsComponent implements OnInit {
                 .sort((a, b) => b.TotalWeight - a.TotalWeight)
                 .slice(0, 10);
 
-            // Resolve display names using entity metadata
+            // Map to RelatedRecord format
             const md = new Metadata();
-            this.RelatedRecords = sorted.map(r => {
+            return sorted.map(r => {
                 const entityInfo = md.Entities.find(e => e.Name === r.EntityName);
                 return {
                     EntityName: r.EntityName,
                     RecordID: r.RecordID,
-                    DisplayName: r.EntityName + ' Record', // Will be resolved below
+                    DisplayName: r.EntityName + ' Record',
                     EntityIcon: entityInfo?.Icon ?? 'fa-solid fa-table',
                     Score: Math.min(1, r.TotalWeight / this.TaggedItems.length),
                     Source: 'tags' as const,
                     SharedTags: r.SharedTags,
                 };
             });
-
-            // Batch resolve record names
-            await this.ResolveRelatedRecordNames();
         } catch {
-            // Non-fatal
+            return [];
         }
-
         this.IsLoadingRelated = false;
     }
 
