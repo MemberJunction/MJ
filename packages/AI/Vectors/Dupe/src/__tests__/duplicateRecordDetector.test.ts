@@ -469,17 +469,15 @@ describe('DuplicateRecordDetector', () => {
 
     describe('buildSourceMetadataMap', () => {
         it('should build a map with entity name and display fields', () => {
-            // Use 'Name' as the NameField so the display field loop skips it
-            // (the code writes NameField value to meta['Name'], then skips
-            //  displayFieldNames entries where fn === nameField.Name)
+            // Fields now use IsNameField and DefaultInView instead of NameField
             const entityInfo = {
                 Name: 'Contacts',
-                NameField: { Name: 'Name' },
+                NameField: null,
                 Icon: 'fa-user',
                 Fields: [
-                    { Name: 'Name' },
-                    { Name: 'Title' },
-                    { Name: 'Status' },
+                    { Name: 'Name', IsNameField: true, DefaultInView: true, Sequence: 1, IsPrimaryKey: false },
+                    { Name: 'Title', IsNameField: false, DefaultInView: true, Sequence: 2, IsPrimaryKey: false },
+                    { Name: 'Status', IsNameField: false, DefaultInView: true, Sequence: 3, IsPrimaryKey: false },
                 ],
                 FirstPrimaryKey: { Name: 'ID', NeedsQuotes: true },
             };
@@ -506,7 +504,7 @@ describe('DuplicateRecordDetector', () => {
             const meta = JSON.parse(result.get('rec-1'));
             expect(meta.Entity).toBe('Contacts');
             expect(meta.EntityIcon).toBe('fa-user');
-            expect(meta.Name).toBe('John Doe'); // From NameField
+            expect(meta.Name).toBe('John Doe'); // From IsNameField
             expect(meta.Title).toBe('Manager');
             expect(meta.Status).toBe('Active');
         });
@@ -516,7 +514,9 @@ describe('DuplicateRecordDetector', () => {
                 Name: 'Items',
                 NameField: null,
                 Icon: null,
-                Fields: [{ Name: 'Description' }],
+                Fields: [
+                    { Name: 'Description', IsNameField: false, DefaultInView: true, Sequence: 1, IsPrimaryKey: false },
+                ],
                 FirstPrimaryKey: { Name: 'ID', NeedsQuotes: true },
             };
 
@@ -535,7 +535,7 @@ describe('DuplicateRecordDetector', () => {
             const meta = JSON.parse(result.get('item-1'));
             expect(meta.Entity).toBe('Items');
             expect(meta.EntityIcon).toBeUndefined();
-            expect(meta.Name).toBeUndefined(); // No NameField
+            expect(meta.Name).toBeUndefined(); // No IsNameField
             expect(meta.Description).toBe('A test item');
         });
 
@@ -545,7 +545,9 @@ describe('DuplicateRecordDetector', () => {
                 Name: 'Notes',
                 NameField: null,
                 Icon: null,
-                Fields: [{ Name: 'Description' }],
+                Fields: [
+                    { Name: 'Description', IsNameField: false, DefaultInView: true, Sequence: 1, IsPrimaryKey: false },
+                ],
                 FirstPrimaryKey: { Name: 'ID', NeedsQuotes: true },
             };
 
@@ -582,9 +584,13 @@ describe('DuplicateRecordDetector', () => {
         it('should skip null field values in display fields', () => {
             const entityInfo = {
                 Name: 'People',
-                NameField: { Name: 'Name' },
+                NameField: null,
                 Icon: null,
-                Fields: [{ Name: 'Name' }, { Name: 'Title' }, { Name: 'Status' }],
+                Fields: [
+                    { Name: 'Name', IsNameField: true, DefaultInView: true, Sequence: 1, IsPrimaryKey: false },
+                    { Name: 'Title', IsNameField: false, DefaultInView: true, Sequence: 2, IsPrimaryKey: false },
+                    { Name: 'Status', IsNameField: false, DefaultInView: true, Sequence: 3, IsPrimaryKey: false },
+                ],
                 FirstPrimaryKey: { Name: 'ID', NeedsQuotes: true },
             };
 
@@ -604,6 +610,74 @@ describe('DuplicateRecordDetector', () => {
             expect(meta.Name).toBe('Alice');
             expect(meta.Title).toBeUndefined();
             expect(meta.Status).toBeUndefined();
+        });
+
+        it('should combine multiple IsNameField fields into Name', () => {
+            const entityInfo = {
+                Name: 'Contacts',
+                NameField: null,
+                Icon: 'fa-user',
+                Fields: [
+                    { Name: 'FirstName', IsNameField: true, DefaultInView: true, Sequence: 1, IsPrimaryKey: false },
+                    { Name: 'LastName', IsNameField: true, DefaultInView: true, Sequence: 2, IsPrimaryKey: false },
+                    { Name: 'Email', IsNameField: false, DefaultInView: true, Sequence: 3, IsPrimaryKey: false },
+                ],
+                FirstPrimaryKey: { Name: 'ID', NeedsQuotes: true },
+            };
+
+            const mockRecord = {
+                PrimaryKey: {
+                    KeyValuePairs: [{ FieldName: 'ID', Value: 'c-1' }],
+                    Values: () => 'c-1',
+                },
+                Get: (fieldName: string) => {
+                    const data: Record<string, string> = {
+                        FirstName: 'John',
+                        LastName: 'Doe',
+                        Email: 'john@example.com',
+                    };
+                    return data[fieldName] ?? null;
+                },
+            };
+
+            const result = (detector as never)['buildSourceMetadataMap']([mockRecord], entityInfo);
+            const meta = JSON.parse(result.get('c-1'));
+
+            // Combined name from all IsNameField fields
+            expect(meta.Name).toBe('John Doe');
+            // Individual name fields should also be stored
+            expect(meta.FirstName).toBe('John');
+            expect(meta.LastName).toBe('Doe');
+            // Non-name DefaultInView field
+            expect(meta.Email).toBe('john@example.com');
+        });
+
+        it('should fall back to NameField when no IsNameField is set', () => {
+            const entityInfo = {
+                Name: 'OldEntity',
+                NameField: { Name: 'Title', IsNameField: false, DefaultInView: true, Sequence: 1, IsPrimaryKey: false },
+                Icon: null,
+                Fields: [
+                    { Name: 'Title', IsNameField: false, DefaultInView: true, Sequence: 1, IsPrimaryKey: false },
+                ],
+                FirstPrimaryKey: { Name: 'ID', NeedsQuotes: true },
+            };
+
+            const mockRecord = {
+                PrimaryKey: {
+                    KeyValuePairs: [{ FieldName: 'ID', Value: 'old-1' }],
+                    Values: () => 'old-1',
+                },
+                Get: (fieldName: string) => {
+                    if (fieldName === 'Title') return 'Legacy Record';
+                    return null;
+                },
+            };
+
+            const result = (detector as never)['buildSourceMetadataMap']([mockRecord], entityInfo);
+            const meta = JSON.parse(result.get('old-1'));
+            // Falls back to singular NameField
+            expect(meta.Name).toBe('Legacy Record');
         });
     });
 

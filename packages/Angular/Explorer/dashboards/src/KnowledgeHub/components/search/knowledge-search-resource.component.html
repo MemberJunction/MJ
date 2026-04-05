@@ -109,8 +109,10 @@
                         </div>
                     </div>
 
-                    <!-- Results List -->
+                    <!-- Results List (flat blended list sorted by relevance) -->
                     <mj-search-results
+                        DisplayMode="flat"
+                        [FlatResults]="AllResults"
                         [ResultGroups]="ResultGroups"
                         [IsLoading]="IsSearching"
                         [TotalCount]="TotalCount"

@@ -15,7 +15,7 @@ import {
     inject
 } from '@angular/core';
 import { SearchResultItem, SearchResultGroup, SearchResultSelectedEvent } from './search-types';
-import { Metadata, EntityFieldInfo } from '@memberjunction/core';
+import { Metadata } from '@memberjunction/core';
 
 @Component({
     standalone: false,
@@ -26,8 +26,14 @@ import { Metadata, EntityFieldInfo } from '@memberjunction/core';
 export class SearchResultsComponent {
     private cdr = inject(ChangeDetectorRef);
 
-    /** Grouped search results to display */
+    /** Grouped search results to display (used when DisplayMode is 'grouped') */
     @Input() ResultGroups: SearchResultGroup[] = [];
+
+    /** Flat list of all results sorted by score (used when DisplayMode is 'flat') */
+    @Input() FlatResults: SearchResultItem[] = [];
+
+    /** Display mode: 'flat' for blended list sorted by score, 'grouped' for source-type groups */
+    @Input() DisplayMode: 'flat' | 'grouped' = 'flat';
 
     /** Whether results are currently loading */
     @Input() IsLoading = false;
@@ -38,8 +44,11 @@ export class SearchResultsComponent {
     /** Elapsed search time in ms */
     @Input() ElapsedMs = 0;
 
-    /** Maximum results per group before "Show more" */
+    /** Maximum results per group before "Show more" (grouped mode only) */
     @Input() MaxPerGroup = 5;
+
+    /** Results per page in flat mode */
+    @Input() PageSize = 10;
 
     /** Whether to show score badges */
     @Input() ShowScores = true;
@@ -55,11 +64,51 @@ export class SearchResultsComponent {
     /** Emitted when user clicks "Open Record" — parent handles navigation */
     @Output() OpenRecordRequested = new EventEmitter<{ EntityName: string; RecordID: string }>();
 
+    /** Current page (1-based) for flat mode pagination */
+    public CurrentPage = 1;
+
     /** Tracks which groups are expanded */
     public ExpandedGroups = new Set<string>();
 
     /** Set of expanded result card IDs — multiple can be open simultaneously */
     public ExpandedResultIDs = new Set<string>();
+
+    // ── Flat mode pagination ──
+
+    /** Get results for the current page in flat mode */
+    public get PagedResults(): SearchResultItem[] {
+        const start = (this.CurrentPage - 1) * this.PageSize;
+        return this.FlatResults.slice(start, start + this.PageSize);
+    }
+
+    /** Total number of pages */
+    public get TotalPages(): number {
+        return Math.ceil(this.FlatResults.length / this.PageSize);
+    }
+
+    /** Page numbers to display in the pager */
+    public get PageNumbers(): number[] {
+        const total = this.TotalPages;
+        if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+
+        const pages: number[] = [1];
+        const start = Math.max(2, this.CurrentPage - 2);
+        const end = Math.min(total - 1, this.CurrentPage + 2);
+        if (start > 2) pages.push(-1); // ellipsis marker
+        for (let i = start; i <= end; i++) pages.push(i);
+        if (end < total - 1) pages.push(-1); // ellipsis marker
+        pages.push(total);
+        return pages;
+    }
+
+    /** Navigate to a specific page */
+    public GoToPage(page: number): void {
+        if (page < 1 || page > this.TotalPages) return;
+        this.CurrentPage = page;
+        this.cdr.detectChanges();
+    }
+
+    // ── Grouped mode ──
 
     /** Toggle group expansion */
     public ToggleGroup(sourceType: string): void {

@@ -12,7 +12,7 @@ import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { BaseEntity, CompositeKey, Metadata, RunView } from '@memberjunction/core';
 import { TreeBranchConfig, TreeLeafConfig } from '@memberjunction/ng-trees';
-import { ResourceData, KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
+import { ResourceData, KnowledgeHubMetadataEngine, MJContentSourceEntity, MJContentSourceTypeEntity_IContentSourceTypeField } from '@memberjunction/core-entities';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
@@ -434,6 +434,72 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
                 .map(d => ({ ID: d.ID, Name: d.Name }));
         } catch {
             return [];
+        }
+    }
+
+    // ── Dynamic source-type fields (metadata-driven) ──
+
+    /** Stores source-type-specific config values keyed by RequiredFields[].Key */
+    public FormSourceSpecificConfig: Record<string, string> = {};
+
+    /** Available MJ Storage provider keys for the storage-provider-picker widget */
+    public StorageProviderOptions: string[] = ['Azure Blob Storage', 'AWS S3', 'Google Cloud Storage', 'SharePoint', 'Dropbox', 'Box'];
+
+    /**
+     * The RequiredFields array from the selected source type's ConfigurationObject.
+     * Drives dynamic form rendering — each field becomes a widget.
+     */
+    public get SelectedSourceTypeFields(): MJContentSourceTypeEntity_IContentSourceTypeField[] {
+        if (!this.FormSourceTypeID) return [];
+        try {
+            const engine = KnowledgeHubMetadataEngine.Instance;
+            const sourceType = engine.ContentSourceTypes.find(st => st.ID === this.FormSourceTypeID);
+            if (!sourceType) return [];
+            const config = sourceType.ConfigurationObject;
+            return config?.RequiredFields ?? [];
+        } catch {
+            return [];
+        }
+    }
+
+    /**
+     * Get dependent options for a field (e.g., entity-doc-picker depends on entity-picker).
+     * Returns entity documents for the entity selected in the dependent field.
+     */
+    public GetDependentOptions(field: MJContentSourceTypeEntity_IContentSourceTypeField): { ID: string; Name: string }[] {
+        if (field.Type === 'entity-doc-picker' && field.DependsOnField) {
+            const entityID = this.FormSourceSpecificConfig[field.DependsOnField];
+            if (!entityID) return [];
+            try {
+                const engine = KnowledgeHubMetadataEngine.Instance;
+                const md = new Metadata();
+                const entityInfo = md.Entities.find(e => e.ID === entityID);
+                if (!entityInfo) return [];
+                return engine.GetActiveEntityDocuments()
+                    .filter(d => (d.Get('Entity') as string) === entityInfo.Name)
+                    .map(d => ({ ID: d.ID, Name: d.Name }));
+            } catch {
+                return [];
+            }
+        }
+        return [];
+    }
+
+    /**
+     * Handle a source-specific field value change.
+     * For entity-picker: auto-select the first entity doc if only one exists.
+     */
+    public OnSourceFieldChanged(fieldKey: string): void {
+        // Find fields that depend on this field
+        for (const field of this.SelectedSourceTypeFields) {
+            if (field.DependsOnField === fieldKey) {
+                const options = this.GetDependentOptions(field);
+                if (options.length === 1) {
+                    this.FormSourceSpecificConfig[field.Key] = options[0].ID;
+                } else {
+                    this.FormSourceSpecificConfig[field.Key] = '';
+                }
+            }
         }
     }
 
@@ -942,6 +1008,25 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         this.FormSourceEmbeddingModelID = card.EmbeddingModelID ?? '';
         this.FormSourceVectorIndexID = card.VectorIndexID ?? '';
         this.EditingSourceID = card.ID;
+
+        // Populate FormSourceSpecificConfig from existing Configuration JSON
+        this.FormSourceSpecificConfig = {};
+        const rawSource = this.contentSourcesRaw.find(s => s['ID'] === card.ID);
+        if (rawSource) {
+            const configStr = rawSource['Configuration'] as string | null;
+            if (configStr) {
+                try {
+                    const parsed = JSON.parse(configStr);
+                    const specific = parsed?.SourceSpecificConfiguration as Record<string, string> | undefined;
+                    if (specific) {
+                        this.FormSourceSpecificConfig = { ...specific };
+                    }
+                } catch {
+                    // Configuration not valid JSON, ignore
+                }
+            }
+        }
+
         this.FormMode = 'edit-source';
         this.cdr.detectChanges();
     }
@@ -953,7 +1038,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
 
         try {
             const md = new Metadata();
-            const entity = await md.GetEntityObject<BaseEntity>('MJ: Content Sources');
+            const entity = await md.GetEntityObject<MJContentSourceEntity>('MJ: Content Sources');
 
             if (this.FormMode === 'edit-source' && this.EditingSourceID) {
                 await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: this.EditingSourceID }]));
@@ -961,15 +1046,43 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
                 entity.NewRecord();
             }
 
-            entity.Set('Name', this.FormSourceName);
-            entity.Set('ContentSourceTypeID', this.FormSourceTypeID);
-            entity.Set('ContentTypeID', this.FormContentTypeID);
-            entity.Set('ContentFileTypeID', this.FormFileTypeID);
-            entity.Set('URL', this.IsEntitySourceTypeSelected ? null : this.FormSourceURL);
-            entity.Set('EntityID', this.IsEntitySourceTypeSelected ? this.FormSourceEntityID || null : null);
-            entity.Set('EntityDocumentID', this.IsEntitySourceTypeSelected ? (this.FormSourceEntityDocID || this.EntityDocOptionsForSelectedEntity[0]?.ID || null) : null);
-            entity.Set('EmbeddingModelID', this.FormSourceEmbeddingModelID || null);
-            entity.Set('VectorIndexID', this.FormSourceVectorIndexID || null);
+            entity.Name = this.FormSourceName;
+            entity.ContentSourceTypeID = this.FormSourceTypeID;
+
+            // For Entity source type, ContentType and FileType are not relevant
+            if (!this.IsEntitySourceTypeSelected) {
+                entity.ContentTypeID = this.FormContentTypeID;
+                entity.ContentFileTypeID = this.FormFileTypeID;
+            }
+
+            // Store source-type-specific values from the dynamic form
+            // For Entity type: EntityID and EntityDocumentID go on the entity directly
+            if (this.IsEntitySourceTypeSelected) {
+                entity.EntityID = this.FormSourceSpecificConfig['EntityID'] || null;
+                const entityDocID = this.FormSourceSpecificConfig['EntityDocumentID'];
+                if (entityDocID) {
+                    entity.EntityDocumentID = entityDocID;
+                } else {
+                    // Auto-select first doc if only one exists
+                    const docField = this.SelectedSourceTypeFields.find(f => f.Type === 'entity-doc-picker');
+                    const docs = docField ? this.GetDependentOptions(docField) : [];
+                    entity.EntityDocumentID = docs.length > 0 ? docs[0].ID : null;
+                }
+                entity.URL = '';
+            } else {
+                entity.EntityID = null;
+                entity.EntityDocumentID = null;
+                // URL comes from dynamic fields for RSS/Website, or empty for others
+                entity.URL = this.FormSourceSpecificConfig['URL'] || '';
+            }
+
+            // Store the full SourceSpecificConfiguration in the Configuration JSON
+            const currentConfig = entity.ConfigurationObject ?? {};
+            currentConfig.SourceSpecificConfiguration = { ...this.FormSourceSpecificConfig };
+            entity.ConfigurationObject = currentConfig;
+
+            entity.EmbeddingModelID = this.FormSourceEmbeddingModelID || null;
+            entity.VectorIndexID = this.FormSourceVectorIndexID || null;
 
             const saved = await entity.Save();
             if (saved) {
@@ -979,11 +1092,17 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
                 this.CloseForm();
                 await this.refreshSourcesTab();
             } else {
-                MJNotificationService.Instance.CreateSimpleNotification('Failed to save source', 'error', 3000);
+                // CP-4: Show detailed error from LatestResult
+                const errorDetail = entity.LatestResult?.Message ?? 'Unknown error';
+                console.error('[Classify] Save source failed:', entity.LatestResult);
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    `Failed to save source: ${errorDetail}`, 'error', 5000
+                );
             }
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
-            MJNotificationService.Instance.CreateSimpleNotification(`Error: ${msg}`, 'error', 4000);
+            console.error('[Classify] Save source exception:', error);
+            MJNotificationService.Instance.CreateSimpleNotification(`Error: ${msg}`, 'error', 5000);
         } finally {
             this.FormSaving = false;
             this.cdr.detectChanges();
@@ -1505,6 +1624,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         this.FormSourceEmbeddingModelID = '';
         this.FormSourceVectorIndexID = '';
         this.EditingSourceID = '';
+        this.FormSourceSpecificConfig = {};
     }
 
     private resetTypeForm(): void {

@@ -105,9 +105,16 @@
                         <div class="drill-down-panel">
                             <div class="drill-down-header">
                                 <span class="drill-down-title"><i class="fa-solid fa-table"></i> Detail View</span>
-                                <button class="drill-down-close" (click)="CloseDrillDown()">
-                                    <i class="fa-solid fa-times"></i>
-                                </button>
+                                <div class="drill-down-header-actions">
+                                    @if (DrillDownData.length > 0) {
+                                        <button class="drill-export-btn" (click)="ExportDrillDownCSV()" title="Export CSV">
+                                            <i class="fa-solid fa-download"></i> CSV
+                                        </button>
+                                    }
+                                    <button class="drill-down-close" (click)="CloseDrillDown()">
+                                        <i class="fa-solid fa-times"></i>
+                                    </button>
+                                </div>
                             </div>
                             @if (IsDrillDownLoading) {
                                 <mj-loading text="Loading details..." size="small"></mj-loading>
@@ -119,6 +126,9 @@
                                                 @for (col of DrillDownColumns; track col) {
                                                     <th>{{ col }}</th>
                                                 }
+                                                @if (DrillDownHasActions) {
+                                                    <th class="drill-action-col"></th>
+                                                }
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -126,6 +136,15 @@
                                                 <tr>
                                                     @for (col of DrillDownColumns; track col) {
                                                         <td>{{ row[col] }}</td>
+                                                    }
+                                                    @if (DrillDownHasActions) {
+                                                        <td class="drill-action-col">
+                                                            @if (row['_RecordID']) {
+                                                                <button class="drill-open-btn" (click)="OpenDrillDownRecord(row)" title="Open record">
+                                                                    <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                                                                </button>
+                                                            }
+                                                        </td>
                                                     }
                                                 </tr>
                                             }
@@ -293,6 +312,9 @@
                                                 @for (col of DrillDownColumns; track col) {
                                                     <th>{{ col }}</th>
                                                 }
+                                                @if (DrillDownHasActions) {
+                                                    <th class="drill-action-col"></th>
+                                                }
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -300,6 +322,15 @@
                                                 <tr>
                                                     @for (col of DrillDownColumns; track col) {
                                                         <td>{{ row[col] }}</td>
+                                                    }
+                                                    @if (DrillDownHasActions) {
+                                                        <td class="drill-action-col">
+                                                            @if (row['_RecordID']) {
+                                                                <button class="drill-open-btn" (click)="OpenDrillDownRecord(row)" title="Open record">
+                                                                    <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                                                                </button>
+                                                            }
+                                                        </td>
                                                     }
                                                 </tr>
                                             }
@@ -326,7 +357,14 @@
 
                     <!-- Top 20 Tags Table -->
                     <div class="sub-section" style="margin-top:0">
-                        <h3><i class="fa-solid fa-trophy"></i> Top 20 Tags</h3>
+                        <div class="sub-section-header">
+                            <h3><i class="fa-solid fa-trophy"></i> Top 20 Tags</h3>
+                            @if (TopTags.length > 0) {
+                                <button class="drill-export-btn" (click)="ExportTabDataCSV('top-tags')" title="Export CSV">
+                                    <i class="fa-solid fa-download"></i> CSV
+                                </button>
+                            }
+                        </div>
                         @if (TopTags.length > 0) {
                             <div class="table-scroll">
                                 <table class="data-table">

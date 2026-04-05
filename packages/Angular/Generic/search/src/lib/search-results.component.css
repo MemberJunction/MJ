@@ -387,3 +387,67 @@
 .results-show-more:hover {
     background: var(--mj-bg-surface-hover);
 }
+
+/* Google-style Pagination */
+.results-pager {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 1.25rem 0;
+    margin-top: 0.5rem;
+}
+
+.pager-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 32px;
+    height: 32px;
+    border: 1px solid var(--mj-border-default);
+    border-radius: 8px;
+    background: var(--mj-bg-surface);
+    color: var(--mj-text-secondary);
+    font-size: 0.82rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    padding: 0 6px;
+}
+
+.pager-btn:hover:not(:disabled) {
+    background: var(--mj-bg-surface-hover);
+    border-color: var(--mj-brand-primary);
+    color: var(--mj-brand-primary);
+}
+
+.pager-btn:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+
+.pager-active {
+    background: var(--mj-brand-primary);
+    border-color: var(--mj-brand-primary);
+    color: var(--mj-text-inverse);
+}
+
+.pager-active:hover:not(:disabled) {
+    background: var(--mj-brand-primary-hover);
+    border-color: var(--mj-brand-primary-hover);
+    color: var(--mj-text-inverse);
+}
+
+.pager-ellipsis {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    color: var(--mj-text-muted);
+    font-size: 0.8rem;
+}
+
+.pager-prev i,
+.pager-next i {
+    font-size: 0.7rem;
+}

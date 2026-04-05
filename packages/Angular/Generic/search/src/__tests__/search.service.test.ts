@@ -205,6 +205,102 @@ describe('SearchService', () => {
             expect(service.GetSourceIcon('unknown')).toContain('fa-circle');
         });
     });
+
+    // ═══════════════════════════════════════════════════════════════
+    // SR-3 Bug Fix: BuildFilters should preserve all options from full result set
+    // ═══════════════════════════════════════════════════════════════
+    describe('BuildFilters (SR-3: filter options from full result set)', () => {
+        it('should include all entity names even when results are filtered', () => {
+            // Full result set with 3 entities
+            const fullResults: SearchResultItem[] = [
+                createMockResult('1', 'entity', 'Contacts', ['crm']),
+                createMockResult('2', 'entity', 'Companies', ['crm']),
+                createMockResult('3', 'entity', 'Deals', ['sales']),
+            ];
+
+            // Build filters from FULL set (this is what the fix does)
+            const filters = service.BuildFilters(fullResults);
+            const entityFilter = filters.find(f => f.Category === 'Entity');
+
+            // All 3 entities should appear in filter options
+            expect(entityFilter?.Options).toHaveLength(3);
+            expect(entityFilter?.Options.map(o => o.Value)).toContain('Contacts');
+            expect(entityFilter?.Options.map(o => o.Value)).toContain('Companies');
+            expect(entityFilter?.Options.map(o => o.Value)).toContain('Deals');
+        });
+
+        it('should count tags correctly across all results', () => {
+            const results: SearchResultItem[] = [
+                createMockResult('1', 'entity', 'Contacts', ['crm', 'sales']),
+                createMockResult('2', 'entity', 'Companies', ['crm']),
+                createMockResult('3', 'entity', 'Deals', ['sales', 'pipeline']),
+            ];
+
+            const filters = service.BuildFilters(results);
+            const tagFilter = filters.find(f => f.Category === 'Tags');
+
+            // 'crm' appears in 2 results, 'sales' in 2, 'pipeline' in 1
+            expect(tagFilter?.Options).toHaveLength(3);
+            const crmOption = tagFilter?.Options.find(o => o.Value === 'crm');
+            expect(crmOption?.Count).toBe(2);
+        });
+
+        it('should not lose filter options when building from subset vs full set', () => {
+            const fullResults: SearchResultItem[] = [
+                createMockResult('1', 'entity', 'Contacts'),
+                createMockResult('2', 'entity', 'Companies'),
+                createMockResult('3', 'file', 'Documents'),
+            ];
+
+            // Simulating filtering to only Contacts
+            const filteredResults = fullResults.filter(r => r.EntityName === 'Contacts');
+
+            // Building from filtered set loses Companies and Documents
+            const filteredFilters = service.BuildFilters(filteredResults);
+            const filteredEntityFilter = filteredFilters.find(f => f.Category === 'Entity');
+            expect(filteredEntityFilter?.Options).toHaveLength(1); // Only Contacts
+
+            // Building from full set preserves all options (the fix)
+            const fullFilters = service.BuildFilters(fullResults);
+            const fullEntityFilter = fullFilters.find(f => f.Category === 'Entity');
+            expect(fullEntityFilter?.Options).toHaveLength(3); // Contacts + Companies + Documents
+        });
+    });
+
+    // ═══════════════════════════════════════════════════════════════
+    // SR-4 Bug Fix: GroupResults should sort within groups by score
+    // ═══════════════════════════════════════════════════════════════
+    describe('GroupResults (SR-4: grouping and sorting)', () => {
+        it('should group results by source type with correct labels', () => {
+            const results: SearchResultItem[] = [
+                { ...createMockResult('1', 'entity', 'Contacts'), Score: 0.9 },
+                { ...createMockResult('2', 'content-item', 'Items'), Score: 0.8 },
+                { ...createMockResult('3', 'entity', 'Companies'), Score: 0.7 },
+            ];
+
+            const groups = service.GroupResults(results);
+            expect(groups).toHaveLength(2);
+
+            const entityGroup = groups.find(g => g.SourceType === 'entity');
+            expect(entityGroup?.Label).toBe('Entity Records');
+            expect(entityGroup?.TotalCount).toBe(2);
+
+            const contentGroup = groups.find(g => g.SourceType === 'content-item');
+            expect(contentGroup?.Label).toBe('Content Items');
+            expect(contentGroup?.TotalCount).toBe(1);
+        });
+
+        it('should use fallback label for unknown source types', () => {
+            const results: SearchResultItem[] = [
+                createMockResult('1', 'entity', 'Test'),
+            ];
+            // Hack source type to unknown
+            (results[0] as unknown as Record<string, unknown>)['SourceType'] = 'custom-type';
+
+            const groups = service.GroupResults(results);
+            expect(groups[0].Label).toBe('custom-type'); // Falls back to raw type name
+        });
+    });
 });
 
 function createMockResult(

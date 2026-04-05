@@ -425,9 +425,29 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
 
             // Look up the EntityID from the entity document's entity name
             const entityInfo = md.Entities.find(e => e.Name === selectedDoc.EntityName);
-            if (entityInfo) {
-                dupeRun.EntityID = entityInfo.ID;
+            if (!entityInfo) {
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    `Entity "${selectedDoc.EntityName}" not found in metadata`, 'error', 5000
+                );
+                this.IsDetecting = false;
+                this.DetectionStage = '';
+                this.cdr.detectChanges();
+                return;
             }
+
+            // DD-1: Validate AllowRecordMerge before starting expensive detection
+            if (!entityInfo.AllowRecordMerge) {
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    `Entity "${entityInfo.Name}" does not allow record merging. Enable AllowRecordMerge in entity settings before running duplicate detection.`,
+                    'warning', 7000
+                );
+                this.IsDetecting = false;
+                this.DetectionStage = '';
+                this.cdr.detectChanges();
+                return;
+            }
+
+            dupeRun.EntityID = entityInfo.ID;
 
             dupeRun.StartedByUserID = new Metadata().CurrentUser.ID;
             dupeRun.StartedAt = new Date();

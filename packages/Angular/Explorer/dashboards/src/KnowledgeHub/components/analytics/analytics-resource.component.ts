@@ -10,10 +10,10 @@
 
 import { Component, ChangeDetectorRef, OnDestroy, AfterViewInit, inject } from '@angular/core';
 import { Subject } from 'rxjs';
-import { Metadata, RunView } from '@memberjunction/core';
+import { CompositeKey, Metadata, RunView } from '@memberjunction/core';
 import { ResourceData } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseResourceComponent } from '@memberjunction/ng-shared';
+import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 
 // ================================================================
 // Interfaces
@@ -213,6 +213,7 @@ interface DrillDownRecord {
 })
 export class AnalyticsResourceComponent extends BaseResourceComponent implements AfterViewInit, OnDestroy {
     private cdr = inject(ChangeDetectorRef);
+    private navigationService = inject(NavigationService);
     private destroy$ = new Subject<void>();
 
     async GetResourceDisplayName(_data: ResourceData): Promise<string> {
@@ -262,6 +263,25 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
     public DrillDownData: DrillDownRecord[] = [];
     public DrillDownColumns: string[] = [];
     public IsDrillDownLoading = false;
+    /** Whether the current drill-down rows have navigable records */
+    public DrillDownHasActions = false;
+
+    /** AN-1: Open a record from a drill-down table row */
+    public OpenDrillDownRecord(row: DrillDownRecord): void {
+        const entityName = row['_EntityName'] as string | null;
+        const recordID = row['_RecordID'] as string | null;
+        if (!entityName || !recordID) return;
+
+        const md = new Metadata();
+        const entityInfo = md.Entities.find(e => e.Name === entityName);
+        const pkey = new CompositeKey();
+        if (entityInfo) {
+            pkey.LoadFromURLSegment(entityInfo, recordID);
+        } else {
+            pkey.KeyValuePairs = [{ FieldName: 'ID', Value: recordID }];
+        }
+        this.navigationService.OpenEntityRecord(entityName, pkey);
+    }
 
     // ================================================================
     // Overview Tab Data
@@ -373,6 +393,7 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
     // ================================================================
 
     ngAfterViewInit(): void {
+        this.loadAnalyticsPreferences();
         this.loadAllData();
         this.NotifyLoadComplete();
     }
@@ -389,6 +410,7 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
     public SelectTab(tabId: string): void {
         this.ActiveTab = tabId;
         this.CloseDrillDown();
+        this.persistAnalyticsPreferences();
         this.cdr.detectChanges();
     }
 
@@ -396,6 +418,7 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
         this.ActiveDateRange = label;
         this.CloseDrillDown();
         this.rebuildAllAggregations();
+        this.persistAnalyticsPreferences();
         this.cdr.detectChanges();
     }
 
@@ -403,6 +426,7 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
         this.EntityFilter = value;
         this.CloseDrillDown();
         this.rebuildAllAggregations();
+        this.persistAnalyticsPreferences();
         this.cdr.detectChanges();
     }
 
@@ -422,7 +446,62 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
         this.DrillDownData = [];
         this.DrillDownColumns = [];
         this.IsDrillDownLoading = false;
+        this.DrillDownHasActions = false;
         this.cdr.detectChanges();
+    }
+
+    // ================================================================
+    // AN-3: Export (CSV)
+    // ================================================================
+
+    /** Export drill-down data as CSV */
+    public ExportDrillDownCSV(): void {
+        if (this.DrillDownData.length === 0 || this.DrillDownColumns.length === 0) return;
+        const filename = `analytics-${this.DrillDownTarget || 'data'}-${new Date().toISOString().slice(0, 10)}.csv`;
+        this.downloadCSV(this.DrillDownColumns, this.DrillDownData, filename);
+    }
+
+    /** Export a named data set (top-tags, sources, etc.) as CSV */
+    public ExportTabDataCSV(dataKey: string): void {
+        switch (dataKey) {
+            case 'top-tags': {
+                const cols = ['Rank', 'Name', 'Usage Count', 'Avg Weight', 'Top Entity', 'First Seen'];
+                const rows = this.TopTags.map(t => ({
+                    'Rank': t.Rank, 'Name': t.Name, 'Usage Count': t.UsageCount,
+                    'Avg Weight': t.AvgWeight, 'Top Entity': t.TopEntity, 'First Seen': t.FirstSeen,
+                }));
+                this.downloadCSV(cols, rows, `top-tags-${new Date().toISOString().slice(0, 10)}.csv`);
+                break;
+            }
+            case 'kpis': {
+                const cols = ['Metric', 'Value', 'Change'];
+                const rows = this.KPIs.map(k => ({
+                    'Metric': k.Label, 'Value': k.Value, 'Change': k.Delta,
+                }));
+                this.downloadCSV(cols, rows, `kpis-${new Date().toISOString().slice(0, 10)}.csv`);
+                break;
+            }
+            default:
+                break;
+        }
+    }
+
+    private downloadCSV(columns: string[], data: Record<string, string | number | null>[], filename: string): void {
+        const escape = (v: string | number | null): string => {
+            const s = String(v ?? '');
+            return s.includes(',') || s.includes('"') || s.includes('\n')
+                ? `"${s.replace(/"/g, '""')}"` : s;
+        };
+        const header = columns.map(escape).join(',');
+        const rows = data.map(row => columns.map(c => escape(row[c])).join(','));
+        const csv = [header, ...rows].join('\n');
+
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = filename;
+        link.click();
+        URL.revokeObjectURL(link.href);
     }
 
     public SelectSource(name: string): void {
@@ -1689,19 +1768,25 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
     // ================================================================
 
     private loadDrillDownData(key: string): void {
+        this.DrillDownHasActions = false;
+
         switch (key) {
             case 'kpi-totalTags':
                 this.DrillDownColumns = ['Name', 'Display Name', 'Description', 'Parent'];
+                this.DrillDownHasActions = true;
                 this.DrillDownData = this.rawTags.slice(0, 50).map(t => ({
                     'Name': String(t['Name'] || ''),
                     'Display Name': String(t['DisplayName'] || ''),
                     'Description': String(t['Description'] || '').slice(0, 100),
                     'Parent': String(t['Parent'] || 'Root'),
+                    '_RecordID': String(t['ID'] || ''),
+                    '_EntityName': 'MJ: Tags',
                 }));
                 break;
 
             case 'kpi-itemsProcessed':
                 this.DrillDownColumns = ['Name', 'Source', 'Content Type', 'Created'];
+                this.DrillDownHasActions = true;
                 this.DrillDownData = this.rawContentItems.slice(0, 50).map(i => {
                     const source = this.rawContentSources.find(s => String(s['ID']) === String(i['ContentSourceID']));
                     const ct = this.rawContentTypes.find(t => String(t['ID']) === String(i['ContentTypeID']));
@@ -1710,6 +1795,8 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
                         'Source': source ? String(source['Name']) : 'Unknown',
                         'Content Type': ct ? String(ct['Name']) : 'Unknown',
                         'Created': i['__mj_CreatedAt'] ? new Date(String(i['__mj_CreatedAt'])).toLocaleDateString() : '',
+                        '_RecordID': String(i['ID'] || ''),
+                        '_EntityName': 'MJ: Content Items',
                     };
                 });
                 break;
@@ -1717,11 +1804,14 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
             case 'kpi-avgConfidence':
             case 'kpi-coverage':
                 this.DrillDownColumns = ['Tag', 'Item', 'Weight', 'Created'];
+                this.DrillDownHasActions = true;
                 this.DrillDownData = this.rawContentItemTags.slice(0, 50).map(t => ({
                     'Tag': String(t['Tag'] || ''),
                     'Item': String(t['Item'] || ''),
                     'Weight': String(t['Weight'] || '0'),
                     'Created': t['__mj_CreatedAt'] ? new Date(String(t['__mj_CreatedAt'])).toLocaleDateString() : '',
+                    '_RecordID': String(t['ID'] || ''),
+                    '_EntityName': 'MJ: Content Item Tags',
                 }));
                 break;
 
@@ -1747,12 +1837,15 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
         switch (key) {
             case 'tagGrowth':
                 this.DrillDownColumns = ['Tag Name', 'Created'];
+                this.DrillDownHasActions = true;
                 this.DrillDownData = this.rawTags
                     .sort((a, b) => new Date(String(b['__mj_CreatedAt'] || 0)).getTime() - new Date(String(a['__mj_CreatedAt'] || 0)).getTime())
                     .slice(0, 50)
                     .map(t => ({
                         'Tag Name': String(t['Name'] || ''),
                         'Created': t['__mj_CreatedAt'] ? new Date(String(t['__mj_CreatedAt'])).toLocaleDateString() : '',
+                        '_RecordID': String(t['ID'] || ''),
+                        '_EntityName': 'MJ: Tags',
                     }));
                 break;
 
@@ -1784,6 +1877,7 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
 
             case 'dailyThroughput':
                 this.DrillDownColumns = ['Run ID', 'Source', 'Status', 'Items', 'Started'];
+                this.DrillDownHasActions = true;
                 this.DrillDownData = this.rawProcessRuns
                     .sort((a, b) => new Date(String(b['StartTime'] || 0)).getTime() - new Date(String(a['StartTime'] || 0)).getTime())
                     .slice(0, 30)
@@ -1795,12 +1889,15 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
                             'Status': String(r['Status'] || ''),
                             'Items': Number(r['ProcessedItems'] || 0),
                             'Started': r['StartTime'] ? new Date(String(r['StartTime'])).toLocaleString() : '',
+                            '_RecordID': String(r['ID'] || ''),
+                            '_EntityName': 'MJ: Content Process Runs',
                         };
                     });
                 break;
 
             case 'taxonomyHealth':
                 this.DrillDownColumns = ['Tag', 'Has Children', 'Is Used', 'Status'];
+                this.DrillDownHasActions = true;
                 const parentIds = new Set(this.rawTags.filter(t => t['ParentID']).map(t => String(t['ParentID'])));
                 const usedIds = new Set(this.rawContentItemTags.filter(ct => ct['TagID']).map(ct => String(ct['TagID'])));
                 this.DrillDownData = this.rawTags.slice(0, 50).map(t => {
@@ -1815,10 +1912,39 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
                         'Has Children': hasChildren ? 'Yes' : 'No',
                         'Is Used': isUsed ? 'Yes' : 'No',
                         'Status': status,
+                        '_RecordID': String(t['ID'] || ''),
+                        '_EntityName': 'MJ: Tags',
                     };
                 });
                 break;
         }
+    }
+
+    // ================================================================
+    // SR-6: Preference Persistence
+    // ================================================================
+
+    private persistAnalyticsPreferences(): void {
+        try {
+            const prefs = {
+                ActiveTab: this.ActiveTab,
+                ActiveDateRange: this.ActiveDateRange,
+                EntityFilter: this.EntityFilter,
+            };
+            localStorage.setItem('KH_AnalyticsPreferences', JSON.stringify(prefs));
+        } catch { /* ignore */ }
+    }
+
+    private loadAnalyticsPreferences(): void {
+        try {
+            const raw = localStorage.getItem('KH_AnalyticsPreferences');
+            if (raw) {
+                const prefs = JSON.parse(raw);
+                if (prefs.ActiveTab) this.ActiveTab = prefs.ActiveTab;
+                if (prefs.ActiveDateRange) this.ActiveDateRange = prefs.ActiveDateRange;
+                if (prefs.EntityFilter) this.EntityFilter = prefs.EntityFilter;
+            }
+        } catch { /* ignore */ }
     }
 }
 

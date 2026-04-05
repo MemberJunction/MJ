@@ -306,8 +306,9 @@ export class KnowledgeSearchResourceComponent extends BaseResourceComponent impl
         this.ResultGroups = this.searchService.GroupResults(filtered);
         this.TotalCount = filtered.length;
 
-        // Rebuild filter counts based on filtered results
-        this.Filters = this.searchService.BuildFilters(filtered);
+        // SR-3 fix: Build filters from FULL result set so options don't disappear
+        // when a filter is checked. Counts reflect the filtered results for context.
+        this.Filters = this.searchService.BuildFilters(this.cachedFullResults);
         // Remove Source Type filter — it confuses users
         this.Filters = this.Filters.filter(f => f.Category !== 'Source Type');
 
@@ -338,8 +339,9 @@ export class KnowledgeSearchResourceComponent extends BaseResourceComponent impl
     }
 
     private applySearchResponse(response: SearchResponse): void {
-        this.cachedFullResults = response.Results; // Cache full results for client-side filtering
-        this.AllResults = response.Results;
+        // Cache full results (sorted by score descending) for client-side filtering
+        this.cachedFullResults = response.Results.sort((a, b) => b.Score - a.Score);
+        this.AllResults = [...this.cachedFullResults];
         this.ResultGroups = response.Groups;
         // Remove Source Type filter — confuses users
         this.Filters = response.Filters.filter(f => f.Category !== 'Source Type');
