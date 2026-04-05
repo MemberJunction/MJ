@@ -7068,6 +7068,412 @@ export const MJApplicationSchema = z.object({
 export type MJApplicationEntityType = z.infer<typeof MJApplicationSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Archive Configuration Entities
+ */
+export const MJArchiveConfigurationEntitySchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ArchiveConfigurationID: z.string().describe(`
+        * * Field Name: ArchiveConfigurationID
+        * * Display Name: Archive Configuration
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Archive Configurations (vwArchiveConfigurations.ID)
+        * * Description: Foreign key to the parent ArchiveConfiguration.`),
+    EntityID: z.string().describe(`
+        * * Field Name: EntityID
+        * * Display Name: Entity
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+        * * Description: Foreign key to the Entity being archived.`),
+    Mode: z.union([z.literal('ArchiveOnly'), z.literal('HardDelete'), z.literal('SoftDelete'), z.literal('StripFields')]).nullable().describe(`
+        * * Field Name: Mode
+        * * Display Name: Archive Mode
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * ArchiveOnly
+    *   * HardDelete
+    *   * SoftDelete
+    *   * StripFields
+        * * Description: Archive mode override for this entity. NULL inherits from the parent configuration's DefaultMode.`),
+    RetentionDays: z.number().nullable().describe(`
+        * * Field Name: RetentionDays
+        * * Display Name: Retention Days
+        * * SQL Data Type: int
+        * * Description: Retention period override in days. NULL inherits from the parent configuration's DefaultRetentionDays.`),
+    DateField: z.string().describe(`
+        * * Field Name: DateField
+        * * Display Name: Retention Date Field
+        * * SQL Data Type: nvarchar(100)
+        * * Default Value: __mj_CreatedAt
+        * * Description: The date field on the entity used to determine record age for retention policy evaluation. Defaults to __mj_CreatedAt.`),
+    FilterExpression: z.string().nullable().describe(`
+        * * Field Name: FilterExpression
+        * * Display Name: Filter Expression
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional SQL WHERE clause fragment to further filter which records are eligible for archiving (e.g., "Status = 'Closed'").`),
+    BatchSize: z.number().nullable().describe(`
+        * * Field Name: BatchSize
+        * * Display Name: Batch Size
+        * * SQL Data Type: int
+        * * Description: Batch size override for this entity. NULL inherits from the parent configuration's DefaultBatchSize.`),
+    Priority: z.number().describe(`
+        * * Field Name: Priority
+        * * Display Name: Priority
+        * * SQL Data Type: int
+        * * Default Value: 100
+        * * Description: Processing priority — lower numbers are archived first. Default is 100.`),
+    FieldConfiguration: z.string().describe(`
+        * * Field Name: FieldConfiguration
+        * * Display Name: Field Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON configuration specifying which fields to include/exclude in the archive output. Required for all modes.`),
+    DriverClass: z.string().nullable().describe(`
+        * * Field Name: DriverClass
+        * * Display Name: Driver Class
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Optional fully-qualified class name of a custom archive driver to use for this entity, overriding the default archiver.`),
+    ArchiveRelatedRecordChanges: z.boolean().nullable().describe(`
+        * * Field Name: ArchiveRelatedRecordChanges
+        * * Display Name: Archive Related Record Changes
+        * * SQL Data Type: bit
+        * * Description: Override for archiving related Record Changes. NULL inherits from the parent configuration.`),
+    IsActive: z.boolean().describe(`
+        * * Field Name: IsActive
+        * * Display Name: Active
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Whether this entity is active within the archive configuration.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    ArchiveConfiguration: z.string().describe(`
+        * * Field Name: ArchiveConfiguration
+        * * Display Name: Archive Configuration Name
+        * * SQL Data Type: nvarchar(255)`),
+    Entity: z.string().describe(`
+        * * Field Name: Entity
+        * * Display Name: Entity Name
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJArchiveConfigurationEntityEntityType = z.infer<typeof MJArchiveConfigurationEntitySchema>;
+
+/**
+ * zod schema definition for the entity MJ: Archive Configurations
+ */
+export const MJArchiveConfigurationSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Human-readable name for this archive configuration.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)`),
+    StorageAccountID: z.string().describe(`
+        * * Field Name: StorageAccountID
+        * * Display Name: Storage Account
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: File Storage Accounts (vwFileStorageAccounts.ID)
+        * * Description: Foreign key to FileStorageAccount — the blob/file storage target for archived data.`),
+    RootPath: z.string().describe(`
+        * * Field Name: RootPath
+        * * Display Name: Root Path
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Root path within the storage account where archive files are written (e.g., "archives/production/").`),
+    ArchiveFormat: z.union([z.literal('CSV'), z.literal('JSON'), z.literal('Parquet')]).describe(`
+        * * Field Name: ArchiveFormat
+        * * Display Name: Archive Format
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: JSON
+    * * Value List Type: List
+    * * Possible Values 
+    *   * CSV
+    *   * JSON
+    *   * Parquet
+        * * Description: Output format for archived records: JSON, Parquet, or CSV.`),
+    IsActive: z.boolean().describe(`
+        * * Field Name: IsActive
+        * * Display Name: Active
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether this configuration is active and eligible for scheduled archive runs.`),
+    DefaultRetentionDays: z.number().describe(`
+        * * Field Name: DefaultRetentionDays
+        * * Display Name: Default Retention (Days)
+        * * SQL Data Type: int
+        * * Default Value: 365
+        * * Description: Default number of days after which records become eligible for archiving. Can be overridden per entity.`),
+    DefaultMode: z.union([z.literal('ArchiveOnly'), z.literal('HardDelete'), z.literal('SoftDelete'), z.literal('StripFields')]).describe(`
+        * * Field Name: DefaultMode
+        * * Display Name: Default Archive Mode
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: StripFields
+    * * Value List Type: List
+    * * Possible Values 
+    *   * ArchiveOnly
+    *   * HardDelete
+    *   * SoftDelete
+    *   * StripFields
+        * * Description: Default archive mode: StripFields (remove specified fields), SoftDelete (mark as deleted), HardDelete (remove from source), ArchiveOnly (copy without modifying source).`),
+    DefaultBatchSize: z.number().describe(`
+        * * Field Name: DefaultBatchSize
+        * * Display Name: Default Batch Size
+        * * SQL Data Type: int
+        * * Default Value: 100
+        * * Description: Default number of records to process per batch during archive runs.`),
+    ArchiveRelatedRecordChanges: z.boolean().describe(`
+        * * Field Name: ArchiveRelatedRecordChanges
+        * * Display Name: Archive Related Changes
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When enabled, related Record Changes entries are also archived alongside the source records.`),
+    Status: z.union([z.literal('Disabled'), z.literal('Error'), z.literal('Idle'), z.literal('Running')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Idle
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Disabled
+    *   * Error
+    *   * Idle
+    *   * Running
+        * * Description: Current operational status of this configuration: Idle, Running, Error, or Disabled.`),
+    CreatedByUserID: z.string().describe(`
+        * * Field Name: CreatedByUserID
+        * * Display Name: Created By User
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: The user who created this archive configuration.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    StorageAccount: z.string().describe(`
+        * * Field Name: StorageAccount
+        * * Display Name: Storage Account Name
+        * * SQL Data Type: nvarchar(200)`),
+    CreatedByUser: z.string().describe(`
+        * * Field Name: CreatedByUser
+        * * Display Name: Created By Name
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MJArchiveConfigurationEntityType = z.infer<typeof MJArchiveConfigurationSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Archive Run Details
+ */
+export const MJArchiveRunDetailSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ArchiveRunID: z.string().describe(`
+        * * Field Name: ArchiveRunID
+        * * Display Name: Archive Run
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Archive Runs (vwArchiveRuns.ID)
+        * * Description: Foreign key to the parent ArchiveRun.`),
+    EntityID: z.string().describe(`
+        * * Field Name: EntityID
+        * * Display Name: Entity
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+        * * Description: Foreign key to the Entity this record belongs to.`),
+    RecordID: z.string().describe(`
+        * * Field Name: RecordID
+        * * Display Name: Record ID
+        * * SQL Data Type: nvarchar(750)
+        * * Description: The primary key value of the archived record (string representation to support all key types).`),
+    Status: z.union([z.literal('Failed'), z.literal('Skipped'), z.literal('Success')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Failed
+    *   * Skipped
+    *   * Success
+        * * Description: Outcome for this record: Success, Failed, or Skipped.`),
+    StoragePath: z.string().nullable().describe(`
+        * * Field Name: StoragePath
+        * * Display Name: Storage Path
+        * * SQL Data Type: nvarchar(1000)
+        * * Description: Full path to the archived file in storage (e.g., "archives/production/Users/2026/04/record-id.json").`),
+    BytesArchived: z.number().describe(`
+        * * Field Name: BytesArchived
+        * * Display Name: Bytes Archived
+        * * SQL Data Type: bigint
+        * * Default Value: 0
+        * * Description: Number of bytes written to storage for this record.`),
+    ErrorMessage: z.string().nullable().describe(`
+        * * Field Name: ErrorMessage
+        * * Display Name: Error Message
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Error details when Status is Failed.`),
+    ArchivedAt: z.date().nullable().describe(`
+        * * Field Name: ArchivedAt
+        * * Display Name: Archived At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Timestamp when this record was successfully archived.`),
+    VersionStamp: z.date().nullable().describe(`
+        * * Field Name: VersionStamp
+        * * Display Name: Version Stamp
+        * * SQL Data Type: datetimeoffset
+        * * Description: The __mj_UpdatedAt timestamp of the record at the time of archiving, used for conflict detection during restore.`),
+    IsRecordChangeArchive: z.boolean().describe(`
+        * * Field Name: IsRecordChangeArchive
+        * * Display Name: Is Record Change Archive
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When true, this detail row represents an archived Record Change entry rather than a primary entity record.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Entity: z.string().describe(`
+        * * Field Name: Entity
+        * * Display Name: Entity Name
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJArchiveRunDetailEntityType = z.infer<typeof MJArchiveRunDetailSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Archive Runs
+ */
+export const MJArchiveRunSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: Run ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ArchiveConfigurationID: z.string().describe(`
+        * * Field Name: ArchiveConfigurationID
+        * * Display Name: Archive Configuration
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Archive Configurations (vwArchiveConfigurations.ID)
+        * * Description: Foreign key to the ArchiveConfiguration that was executed.`),
+    StartedAt: z.date().describe(`
+        * * Field Name: StartedAt
+        * * Display Name: Started At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
+        * * Description: Timestamp when the archive run started.`),
+    CompletedAt: z.date().nullable().describe(`
+        * * Field Name: CompletedAt
+        * * Display Name: Completed At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Timestamp when the archive run completed (NULL while still running).`),
+    Status: z.union([z.literal('Cancelled'), z.literal('Complete'), z.literal('Failed'), z.literal('PartialSuccess'), z.literal('Running')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: Running
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Cancelled
+    *   * Complete
+    *   * Failed
+    *   * PartialSuccess
+    *   * Running
+        * * Description: Current status: Running, Complete, Failed, Cancelled, or PartialSuccess.`),
+    TotalRecords: z.number().describe(`
+        * * Field Name: TotalRecords
+        * * Display Name: Total Records
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Total number of records identified for archiving in this run.`),
+    ArchivedRecords: z.number().describe(`
+        * * Field Name: ArchivedRecords
+        * * Display Name: Archived Records
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Number of records successfully archived.`),
+    FailedRecords: z.number().describe(`
+        * * Field Name: FailedRecords
+        * * Display Name: Failed Records
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Number of records that failed to archive.`),
+    SkippedRecords: z.number().describe(`
+        * * Field Name: SkippedRecords
+        * * Display Name: Skipped Records
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Number of records skipped (e.g., already archived or filtered out).`),
+    TotalBytesArchived: z.number().describe(`
+        * * Field Name: TotalBytesArchived
+        * * Display Name: Total Bytes Archived
+        * * SQL Data Type: bigint
+        * * Default Value: 0
+        * * Description: Total bytes written to archive storage during this run.`),
+    ErrorLog: z.string().nullable().describe(`
+        * * Field Name: ErrorLog
+        * * Display Name: Error Log
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Aggregated error log for the run. Contains error details when Status is Failed or PartialSuccess.`),
+    UserID: z.string().describe(`
+        * * Field Name: UserID
+        * * Display Name: User
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: The user who initiated this archive run.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    ArchiveConfiguration: z.string().describe(`
+        * * Field Name: ArchiveConfiguration
+        * * Display Name: Archive Configuration Name
+        * * SQL Data Type: nvarchar(255)`),
+    User: z.string().describe(`
+        * * Field Name: User
+        * * Display Name: User Name
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MJArchiveRunEntityType = z.infer<typeof MJArchiveRunSchema>;
+
+/**
  * zod schema definition for the entity MJ: Artifact Permissions
  */
 export const MJArtifactPermissionSchema = z.object({
@@ -42692,6 +43098,975 @@ export class MJApplicationEntity extends BaseEntity<MJApplicationEntityType> {
     }
     set AutoUpdatePath(value: boolean) {
         this.Set('AutoUpdatePath', value);
+    }
+}
+
+
+/**
+ * MJ: Archive Configuration Entities - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ArchiveConfigurationEntity
+ * * Base View: vwArchiveConfigurationEntities
+ * * @description Per-entity configuration within an archive pipeline. Allows overriding the parent configuration's defaults for mode, retention, batch size, and filtering on a per-entity basis.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Archive Configuration Entities')
+export class MJArchiveConfigurationEntityEntity extends BaseEntity<MJArchiveConfigurationEntityEntityType> {
+    /**
+    * Loads the MJ: Archive Configuration Entities record from the database
+    * @param ID: string - primary key value to load the MJ: Archive Configuration Entities record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJArchiveConfigurationEntityEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ArchiveConfigurationID
+    * * Display Name: Archive Configuration
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Archive Configurations (vwArchiveConfigurations.ID)
+    * * Description: Foreign key to the parent ArchiveConfiguration.
+    */
+    get ArchiveConfigurationID(): string {
+        return this.Get('ArchiveConfigurationID');
+    }
+    set ArchiveConfigurationID(value: string) {
+        this.Set('ArchiveConfigurationID', value);
+    }
+
+    /**
+    * * Field Name: EntityID
+    * * Display Name: Entity
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * Description: Foreign key to the Entity being archived.
+    */
+    get EntityID(): string {
+        return this.Get('EntityID');
+    }
+    set EntityID(value: string) {
+        this.Set('EntityID', value);
+    }
+
+    /**
+    * * Field Name: Mode
+    * * Display Name: Archive Mode
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * ArchiveOnly
+    *   * HardDelete
+    *   * SoftDelete
+    *   * StripFields
+    * * Description: Archive mode override for this entity. NULL inherits from the parent configuration's DefaultMode.
+    */
+    get Mode(): 'ArchiveOnly' | 'HardDelete' | 'SoftDelete' | 'StripFields' | null {
+        return this.Get('Mode');
+    }
+    set Mode(value: 'ArchiveOnly' | 'HardDelete' | 'SoftDelete' | 'StripFields' | null) {
+        this.Set('Mode', value);
+    }
+
+    /**
+    * * Field Name: RetentionDays
+    * * Display Name: Retention Days
+    * * SQL Data Type: int
+    * * Description: Retention period override in days. NULL inherits from the parent configuration's DefaultRetentionDays.
+    */
+    get RetentionDays(): number | null {
+        return this.Get('RetentionDays');
+    }
+    set RetentionDays(value: number | null) {
+        this.Set('RetentionDays', value);
+    }
+
+    /**
+    * * Field Name: DateField
+    * * Display Name: Retention Date Field
+    * * SQL Data Type: nvarchar(100)
+    * * Default Value: __mj_CreatedAt
+    * * Description: The date field on the entity used to determine record age for retention policy evaluation. Defaults to __mj_CreatedAt.
+    */
+    get DateField(): string {
+        return this.Get('DateField');
+    }
+    set DateField(value: string) {
+        this.Set('DateField', value);
+    }
+
+    /**
+    * * Field Name: FilterExpression
+    * * Display Name: Filter Expression
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional SQL WHERE clause fragment to further filter which records are eligible for archiving (e.g., "Status = 'Closed'").
+    */
+    get FilterExpression(): string | null {
+        return this.Get('FilterExpression');
+    }
+    set FilterExpression(value: string | null) {
+        this.Set('FilterExpression', value);
+    }
+
+    /**
+    * * Field Name: BatchSize
+    * * Display Name: Batch Size
+    * * SQL Data Type: int
+    * * Description: Batch size override for this entity. NULL inherits from the parent configuration's DefaultBatchSize.
+    */
+    get BatchSize(): number | null {
+        return this.Get('BatchSize');
+    }
+    set BatchSize(value: number | null) {
+        this.Set('BatchSize', value);
+    }
+
+    /**
+    * * Field Name: Priority
+    * * Display Name: Priority
+    * * SQL Data Type: int
+    * * Default Value: 100
+    * * Description: Processing priority — lower numbers are archived first. Default is 100.
+    */
+    get Priority(): number {
+        return this.Get('Priority');
+    }
+    set Priority(value: number) {
+        this.Set('Priority', value);
+    }
+
+    /**
+    * * Field Name: FieldConfiguration
+    * * Display Name: Field Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON configuration specifying which fields to include/exclude in the archive output. Required for all modes.
+    */
+    get FieldConfiguration(): string {
+        return this.Get('FieldConfiguration');
+    }
+    set FieldConfiguration(value: string) {
+        this.Set('FieldConfiguration', value);
+    }
+
+    /**
+    * * Field Name: DriverClass
+    * * Display Name: Driver Class
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Optional fully-qualified class name of a custom archive driver to use for this entity, overriding the default archiver.
+    */
+    get DriverClass(): string | null {
+        return this.Get('DriverClass');
+    }
+    set DriverClass(value: string | null) {
+        this.Set('DriverClass', value);
+    }
+
+    /**
+    * * Field Name: ArchiveRelatedRecordChanges
+    * * Display Name: Archive Related Record Changes
+    * * SQL Data Type: bit
+    * * Description: Override for archiving related Record Changes. NULL inherits from the parent configuration.
+    */
+    get ArchiveRelatedRecordChanges(): boolean | null {
+        return this.Get('ArchiveRelatedRecordChanges');
+    }
+    set ArchiveRelatedRecordChanges(value: boolean | null) {
+        this.Set('ArchiveRelatedRecordChanges', value);
+    }
+
+    /**
+    * * Field Name: IsActive
+    * * Display Name: Active
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Whether this entity is active within the archive configuration.
+    */
+    get IsActive(): boolean {
+        return this.Get('IsActive');
+    }
+    set IsActive(value: boolean) {
+        this.Set('IsActive', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: ArchiveConfiguration
+    * * Display Name: Archive Configuration Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ArchiveConfiguration(): string {
+        return this.Get('ArchiveConfiguration');
+    }
+
+    /**
+    * * Field Name: Entity
+    * * Display Name: Entity Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Entity(): string {
+        return this.Get('Entity');
+    }
+}
+
+
+/**
+ * MJ: Archive Configurations - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ArchiveConfiguration
+ * * Base View: vwArchiveConfigurations
+ * * @description Top-level configuration for an archive pipeline. Defines the storage target, default retention policy, archive format, and operational mode for archiving entity records.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Archive Configurations')
+export class MJArchiveConfigurationEntity extends BaseEntity<MJArchiveConfigurationEntityType> {
+    /**
+    * Loads the MJ: Archive Configurations record from the database
+    * @param ID: string - primary key value to load the MJ: Archive Configurations record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJArchiveConfigurationEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Human-readable name for this archive configuration.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: StorageAccountID
+    * * Display Name: Storage Account
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: File Storage Accounts (vwFileStorageAccounts.ID)
+    * * Description: Foreign key to FileStorageAccount — the blob/file storage target for archived data.
+    */
+    get StorageAccountID(): string {
+        return this.Get('StorageAccountID');
+    }
+    set StorageAccountID(value: string) {
+        this.Set('StorageAccountID', value);
+    }
+
+    /**
+    * * Field Name: RootPath
+    * * Display Name: Root Path
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Root path within the storage account where archive files are written (e.g., "archives/production/").
+    */
+    get RootPath(): string {
+        return this.Get('RootPath');
+    }
+    set RootPath(value: string) {
+        this.Set('RootPath', value);
+    }
+
+    /**
+    * * Field Name: ArchiveFormat
+    * * Display Name: Archive Format
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: JSON
+    * * Value List Type: List
+    * * Possible Values 
+    *   * CSV
+    *   * JSON
+    *   * Parquet
+    * * Description: Output format for archived records: JSON, Parquet, or CSV.
+    */
+    get ArchiveFormat(): 'CSV' | 'JSON' | 'Parquet' {
+        return this.Get('ArchiveFormat');
+    }
+    set ArchiveFormat(value: 'CSV' | 'JSON' | 'Parquet') {
+        this.Set('ArchiveFormat', value);
+    }
+
+    /**
+    * * Field Name: IsActive
+    * * Display Name: Active
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether this configuration is active and eligible for scheduled archive runs.
+    */
+    get IsActive(): boolean {
+        return this.Get('IsActive');
+    }
+    set IsActive(value: boolean) {
+        this.Set('IsActive', value);
+    }
+
+    /**
+    * * Field Name: DefaultRetentionDays
+    * * Display Name: Default Retention (Days)
+    * * SQL Data Type: int
+    * * Default Value: 365
+    * * Description: Default number of days after which records become eligible for archiving. Can be overridden per entity.
+    */
+    get DefaultRetentionDays(): number {
+        return this.Get('DefaultRetentionDays');
+    }
+    set DefaultRetentionDays(value: number) {
+        this.Set('DefaultRetentionDays', value);
+    }
+
+    /**
+    * * Field Name: DefaultMode
+    * * Display Name: Default Archive Mode
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: StripFields
+    * * Value List Type: List
+    * * Possible Values 
+    *   * ArchiveOnly
+    *   * HardDelete
+    *   * SoftDelete
+    *   * StripFields
+    * * Description: Default archive mode: StripFields (remove specified fields), SoftDelete (mark as deleted), HardDelete (remove from source), ArchiveOnly (copy without modifying source).
+    */
+    get DefaultMode(): 'ArchiveOnly' | 'HardDelete' | 'SoftDelete' | 'StripFields' {
+        return this.Get('DefaultMode');
+    }
+    set DefaultMode(value: 'ArchiveOnly' | 'HardDelete' | 'SoftDelete' | 'StripFields') {
+        this.Set('DefaultMode', value);
+    }
+
+    /**
+    * * Field Name: DefaultBatchSize
+    * * Display Name: Default Batch Size
+    * * SQL Data Type: int
+    * * Default Value: 100
+    * * Description: Default number of records to process per batch during archive runs.
+    */
+    get DefaultBatchSize(): number {
+        return this.Get('DefaultBatchSize');
+    }
+    set DefaultBatchSize(value: number) {
+        this.Set('DefaultBatchSize', value);
+    }
+
+    /**
+    * * Field Name: ArchiveRelatedRecordChanges
+    * * Display Name: Archive Related Changes
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When enabled, related Record Changes entries are also archived alongside the source records.
+    */
+    get ArchiveRelatedRecordChanges(): boolean {
+        return this.Get('ArchiveRelatedRecordChanges');
+    }
+    set ArchiveRelatedRecordChanges(value: boolean) {
+        this.Set('ArchiveRelatedRecordChanges', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Idle
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Disabled
+    *   * Error
+    *   * Idle
+    *   * Running
+    * * Description: Current operational status of this configuration: Idle, Running, Error, or Disabled.
+    */
+    get Status(): 'Disabled' | 'Error' | 'Idle' | 'Running' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Disabled' | 'Error' | 'Idle' | 'Running') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: CreatedByUserID
+    * * Display Name: Created By User
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: The user who created this archive configuration.
+    */
+    get CreatedByUserID(): string {
+        return this.Get('CreatedByUserID');
+    }
+    set CreatedByUserID(value: string) {
+        this.Set('CreatedByUserID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: StorageAccount
+    * * Display Name: Storage Account Name
+    * * SQL Data Type: nvarchar(200)
+    */
+    get StorageAccount(): string {
+        return this.Get('StorageAccount');
+    }
+
+    /**
+    * * Field Name: CreatedByUser
+    * * Display Name: Created By Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get CreatedByUser(): string {
+        return this.Get('CreatedByUser');
+    }
+}
+
+
+/**
+ * MJ: Archive Run Details - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ArchiveRunDetail
+ * * Base View: vwArchiveRunDetails
+ * * @description Per-record detail for each archive run. Tracks the outcome, storage location, and error information for each individual record processed.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Archive Run Details')
+export class MJArchiveRunDetailEntity extends BaseEntity<MJArchiveRunDetailEntityType> {
+    /**
+    * Loads the MJ: Archive Run Details record from the database
+    * @param ID: string - primary key value to load the MJ: Archive Run Details record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJArchiveRunDetailEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ArchiveRunID
+    * * Display Name: Archive Run
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Archive Runs (vwArchiveRuns.ID)
+    * * Description: Foreign key to the parent ArchiveRun.
+    */
+    get ArchiveRunID(): string {
+        return this.Get('ArchiveRunID');
+    }
+    set ArchiveRunID(value: string) {
+        this.Set('ArchiveRunID', value);
+    }
+
+    /**
+    * * Field Name: EntityID
+    * * Display Name: Entity
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * Description: Foreign key to the Entity this record belongs to.
+    */
+    get EntityID(): string {
+        return this.Get('EntityID');
+    }
+    set EntityID(value: string) {
+        this.Set('EntityID', value);
+    }
+
+    /**
+    * * Field Name: RecordID
+    * * Display Name: Record ID
+    * * SQL Data Type: nvarchar(750)
+    * * Description: The primary key value of the archived record (string representation to support all key types).
+    */
+    get RecordID(): string {
+        return this.Get('RecordID');
+    }
+    set RecordID(value: string) {
+        this.Set('RecordID', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Failed
+    *   * Skipped
+    *   * Success
+    * * Description: Outcome for this record: Success, Failed, or Skipped.
+    */
+    get Status(): 'Failed' | 'Skipped' | 'Success' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Failed' | 'Skipped' | 'Success') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: StoragePath
+    * * Display Name: Storage Path
+    * * SQL Data Type: nvarchar(1000)
+    * * Description: Full path to the archived file in storage (e.g., "archives/production/Users/2026/04/record-id.json").
+    */
+    get StoragePath(): string | null {
+        return this.Get('StoragePath');
+    }
+    set StoragePath(value: string | null) {
+        this.Set('StoragePath', value);
+    }
+
+    /**
+    * * Field Name: BytesArchived
+    * * Display Name: Bytes Archived
+    * * SQL Data Type: bigint
+    * * Default Value: 0
+    * * Description: Number of bytes written to storage for this record.
+    */
+    get BytesArchived(): number {
+        return this.Get('BytesArchived');
+    }
+    set BytesArchived(value: number) {
+        this.Set('BytesArchived', value);
+    }
+
+    /**
+    * * Field Name: ErrorMessage
+    * * Display Name: Error Message
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Error details when Status is Failed.
+    */
+    get ErrorMessage(): string | null {
+        return this.Get('ErrorMessage');
+    }
+    set ErrorMessage(value: string | null) {
+        this.Set('ErrorMessage', value);
+    }
+
+    /**
+    * * Field Name: ArchivedAt
+    * * Display Name: Archived At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp when this record was successfully archived.
+    */
+    get ArchivedAt(): Date | null {
+        return this.Get('ArchivedAt');
+    }
+    set ArchivedAt(value: Date | null) {
+        this.Set('ArchivedAt', value);
+    }
+
+    /**
+    * * Field Name: VersionStamp
+    * * Display Name: Version Stamp
+    * * SQL Data Type: datetimeoffset
+    * * Description: The __mj_UpdatedAt timestamp of the record at the time of archiving, used for conflict detection during restore.
+    */
+    get VersionStamp(): Date | null {
+        return this.Get('VersionStamp');
+    }
+    set VersionStamp(value: Date | null) {
+        this.Set('VersionStamp', value);
+    }
+
+    /**
+    * * Field Name: IsRecordChangeArchive
+    * * Display Name: Is Record Change Archive
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When true, this detail row represents an archived Record Change entry rather than a primary entity record.
+    */
+    get IsRecordChangeArchive(): boolean {
+        return this.Get('IsRecordChangeArchive');
+    }
+    set IsRecordChangeArchive(value: boolean) {
+        this.Set('IsRecordChangeArchive', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Entity
+    * * Display Name: Entity Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Entity(): string {
+        return this.Get('Entity');
+    }
+}
+
+
+/**
+ * MJ: Archive Runs - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ArchiveRun
+ * * Base View: vwArchiveRuns
+ * * @description Tracks each execution of an archive configuration, including timing, aggregate statistics, and overall status.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Archive Runs')
+export class MJArchiveRunEntity extends BaseEntity<MJArchiveRunEntityType> {
+    /**
+    * Loads the MJ: Archive Runs record from the database
+    * @param ID: string - primary key value to load the MJ: Archive Runs record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJArchiveRunEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: Run ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ArchiveConfigurationID
+    * * Display Name: Archive Configuration
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Archive Configurations (vwArchiveConfigurations.ID)
+    * * Description: Foreign key to the ArchiveConfiguration that was executed.
+    */
+    get ArchiveConfigurationID(): string {
+        return this.Get('ArchiveConfigurationID');
+    }
+    set ArchiveConfigurationID(value: string) {
+        this.Set('ArchiveConfigurationID', value);
+    }
+
+    /**
+    * * Field Name: StartedAt
+    * * Display Name: Started At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    * * Description: Timestamp when the archive run started.
+    */
+    get StartedAt(): Date {
+        return this.Get('StartedAt');
+    }
+    set StartedAt(value: Date) {
+        this.Set('StartedAt', value);
+    }
+
+    /**
+    * * Field Name: CompletedAt
+    * * Display Name: Completed At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp when the archive run completed (NULL while still running).
+    */
+    get CompletedAt(): Date | null {
+        return this.Get('CompletedAt');
+    }
+    set CompletedAt(value: Date | null) {
+        this.Set('CompletedAt', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: Running
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Cancelled
+    *   * Complete
+    *   * Failed
+    *   * PartialSuccess
+    *   * Running
+    * * Description: Current status: Running, Complete, Failed, Cancelled, or PartialSuccess.
+    */
+    get Status(): 'Cancelled' | 'Complete' | 'Failed' | 'PartialSuccess' | 'Running' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Cancelled' | 'Complete' | 'Failed' | 'PartialSuccess' | 'Running') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: TotalRecords
+    * * Display Name: Total Records
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Total number of records identified for archiving in this run.
+    */
+    get TotalRecords(): number {
+        return this.Get('TotalRecords');
+    }
+    set TotalRecords(value: number) {
+        this.Set('TotalRecords', value);
+    }
+
+    /**
+    * * Field Name: ArchivedRecords
+    * * Display Name: Archived Records
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Number of records successfully archived.
+    */
+    get ArchivedRecords(): number {
+        return this.Get('ArchivedRecords');
+    }
+    set ArchivedRecords(value: number) {
+        this.Set('ArchivedRecords', value);
+    }
+
+    /**
+    * * Field Name: FailedRecords
+    * * Display Name: Failed Records
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Number of records that failed to archive.
+    */
+    get FailedRecords(): number {
+        return this.Get('FailedRecords');
+    }
+    set FailedRecords(value: number) {
+        this.Set('FailedRecords', value);
+    }
+
+    /**
+    * * Field Name: SkippedRecords
+    * * Display Name: Skipped Records
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Number of records skipped (e.g., already archived or filtered out).
+    */
+    get SkippedRecords(): number {
+        return this.Get('SkippedRecords');
+    }
+    set SkippedRecords(value: number) {
+        this.Set('SkippedRecords', value);
+    }
+
+    /**
+    * * Field Name: TotalBytesArchived
+    * * Display Name: Total Bytes Archived
+    * * SQL Data Type: bigint
+    * * Default Value: 0
+    * * Description: Total bytes written to archive storage during this run.
+    */
+    get TotalBytesArchived(): number {
+        return this.Get('TotalBytesArchived');
+    }
+    set TotalBytesArchived(value: number) {
+        this.Set('TotalBytesArchived', value);
+    }
+
+    /**
+    * * Field Name: ErrorLog
+    * * Display Name: Error Log
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Aggregated error log for the run. Contains error details when Status is Failed or PartialSuccess.
+    */
+    get ErrorLog(): string | null {
+        return this.Get('ErrorLog');
+    }
+    set ErrorLog(value: string | null) {
+        this.Set('ErrorLog', value);
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: The user who initiated this archive run.
+    */
+    get UserID(): string {
+        return this.Get('UserID');
+    }
+    set UserID(value: string) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: ArchiveConfiguration
+    * * Display Name: Archive Configuration Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ArchiveConfiguration(): string {
+        return this.Get('ArchiveConfiguration');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string {
+        return this.Get('User');
     }
 }
 
