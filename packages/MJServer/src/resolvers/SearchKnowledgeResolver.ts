@@ -470,9 +470,14 @@ export class SearchKnowledgeResolver extends ResolverBase {
             return [];
         }
 
-        // If only one source has results, just return those
-        if (fullTextResults.length === 0) return vectorResults.slice(0, topK);
-        if (vectorResults.length === 0) return fullTextResults.slice(0, topK);
+        // If only one source has results, normalize scores relative to the top result
+        // so the best match shows ~90-95% instead of raw cosine similarity (~40-50%)
+        if (fullTextResults.length === 0) {
+            return this.normalizeScores(vectorResults.slice(0, topK));
+        }
+        if (vectorResults.length === 0) {
+            return this.normalizeScores(fullTextResults.slice(0, topK));
+        }
 
         // Build scored candidate lists for RRF
         const vectorCandidates: ScoredCandidate[] = vectorResults.map((r, i) => ({
@@ -517,6 +522,26 @@ export class SearchKnowledgeResolver extends ResolverBase {
                 MatchedAt: new Date()
             };
         });
+    }
+
+    /**
+     * Normalize scores when only one search source returned results.
+     * Scales scores relative to the top result so the best match shows
+     * ~90-95% instead of raw cosine similarity (~40-50%).
+     * This prevents artificially low-looking scores when RRF isn't applied.
+     */
+    private normalizeScores(results: SearchKnowledgeResultItem[]): SearchKnowledgeResultItem[] {
+        if (results.length === 0) return results;
+
+        const maxScore = results[0].Score; // Results are already sorted by score desc
+        if (maxScore <= 0) return results;
+
+        // Scale so the top result maps to ~0.95 and others proportionally
+        const scaleFactor = 0.95 / maxScore;
+        for (const r of results) {
+            r.Score = Math.min(0.99, r.Score * scaleFactor);
+        }
+        return results;
     }
 
     /** Build Pinecone metadata filter from input */

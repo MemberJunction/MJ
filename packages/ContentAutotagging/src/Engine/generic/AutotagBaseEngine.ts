@@ -22,6 +22,8 @@ import { AIPromptParams } from '@memberjunction/ai-core-plus'
 import type { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus'
 import { TextChunker, ChunkTextParams } from '@memberjunction/ai-vectors'
 import { VectorDBBase, VectorRecord, BaseResponse } from '@memberjunction/ai-vectordb'
+import { TagEngine } from '@memberjunction/tag-engine'
+import { TagEngineBase } from '@memberjunction/tag-engine-base'
 
 /**
  * Resolved vector infrastructure for a specific (embeddingModel + vectorIndex) pair.
@@ -201,6 +203,92 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
      * the JSON tree of existing tags so the LLM can prefer existing tags.
      */
     public TaxonomyContext: string | null = null;
+
+    /**
+     * Initialize the taxonomy bridge so ALL content source types (RSS, Entity, Website, etc.)
+     * automatically create formal Tag + TaggedItem records from LLM-generated ContentItemTags.
+     *
+     * This sets up:
+     * 1. TagEngine with semantic embeddings for tag matching
+     * 2. TaxonomyContext for prompt injection (tells LLM about existing tags)
+     * 3. OnContentItemTagSaved callback that bridges ContentItemTag → Tag + TaggedItem
+     *
+     * Call this ONCE before running any providers. The bridge stays active until
+     * CleanupTaxonomyBridge() is called.
+     */
+    public async InitializeTaxonomyBridge(contextUser: UserInfo): Promise<void> {
+        try {
+            await TagEngine.Instance.Config(false, contextUser);
+            LogStatus(`[TaxonomyBridge] TagEngine initialized with ${TagEngine.Instance.Tags.length} existing tags`);
+
+            // Inject taxonomy into prompt context if tags exist
+            if (TagEngine.Instance.Tags.length > 0) {
+                const tree = TagEngine.Instance.GetTaxonomyTree();
+                this.TaxonomyContext = JSON.stringify(tree, null, 2);
+                LogStatus(`[TaxonomyBridge] Taxonomy context injected (${tree.length} root nodes)`);
+            }
+
+            // Set up the bridge callback — fires after each ContentItemTag is saved
+            this.OnContentItemTagSaved = async (
+                contentItemTag: MJContentItemTagEntity,
+                parentTagName: string | null,
+                ctxUser: UserInfo
+            ) => {
+                await this.BridgeContentItemTagToTaxonomy(contentItemTag, parentTagName, ctxUser);
+            };
+            LogStatus(`[TaxonomyBridge] Bridge callback installed`);
+        } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            LogError(`[TaxonomyBridge] Initialization failed, taxonomy features disabled: ${msg}`);
+        }
+    }
+
+    /**
+     * Clean up the taxonomy bridge after all providers have finished.
+     */
+    public CleanupTaxonomyBridge(): void {
+        this.TaxonomyContext = null;
+        this.OnContentItemTagSaved = null;
+    }
+
+    /**
+     * Bridge a ContentItemTag to the formal MJ Tag taxonomy.
+     * Uses TagEngine.ResolveTag() in auto-grow mode by default.
+     */
+    private async BridgeContentItemTagToTaxonomy(
+        contentItemTag: MJContentItemTagEntity,
+        parentTagName: string | null,
+        contextUser: UserInfo
+    ): Promise<void> {
+        try {
+            // If parent tag is suggested by LLM, find/create it first
+            if (parentTagName) {
+                const parentTag = TagEngine.Instance.GetTagByName(parentTagName);
+                if (!parentTag) {
+                    await TagEngine.Instance.CreateTag(parentTagName, parentTagName, null, null, contextUser);
+                }
+            }
+
+            // Resolve the tag using auto-grow mode (create if no match)
+            const formalTag = await TagEngine.Instance.ResolveTag(
+                contentItemTag.Tag,
+                contentItemTag.Weight,
+                'auto-grow',
+                null,   // no root constraint
+                0.9,    // similarity threshold
+                contextUser
+            );
+
+            if (formalTag) {
+                // Link ContentItemTag to formal Tag
+                contentItemTag.TagID = formalTag.ID;
+                await contentItemTag.Save();
+            }
+        } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            LogError(`[TaxonomyBridge] Failed for tag "${contentItemTag.Tag}": ${msg}`);
+        }
+    }
 
     /**
      * Builds template data for the autotagging prompt from processing params and chunk context.

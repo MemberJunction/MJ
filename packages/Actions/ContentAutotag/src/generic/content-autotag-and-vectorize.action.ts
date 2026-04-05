@@ -36,9 +36,17 @@ export class AutotagAndVectorizeContentAction extends BaseAction {
             // Phase 1: Run autotag providers to create/update ContentItems in the DB.
             // Providers use checksum comparison to skip unchanged items.
             if (autotagParam.Value === 1) {
+                // Initialize the taxonomy bridge BEFORE providers run so ALL providers
+                // (RSS, Entity, Website, CloudStorage) get tag taxonomy bridging
+                LogStatus(`[AutotagAction] Initializing taxonomy bridge...`);
+                await AutotagBaseEngine.Instance.InitializeTaxonomyBridge(params.ContextUser);
+
                 LogStatus(`[AutotagAction] Phase 1: Running providers to create/update content items...`);
                 await this.RunAutotagProviders(params, onProgress);
                 LogStatus(`[AutotagAction] Phase 1 complete — providers finished`);
+
+                // Clean up the bridge
+                AutotagBaseEngine.Instance.CleanupTaxonomyBridge();
             }
 
             // Phase 2: Now that items exist in the DB, run LLM tagging and
