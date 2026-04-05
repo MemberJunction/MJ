@@ -35,6 +35,7 @@ export class SearchFilterComponent {
 
     @Output() FilterChanged = new EventEmitter<SearchFilterChangeEvent>();
     @Output() FiltersCleared = new EventEmitter<void>();
+    @Output() CloseRequested = new EventEmitter<void>();
 
     /** Collapsed state per category */
     public CollapsedCategories = new Set<string>();

@@ -108,7 +108,10 @@
 @if (ShowTagsPanel && EffectiveRecord) {
   <mj-record-tags
     [Record]="EffectiveRecord"
-    (PanelClosed)="OnTagsPanelClosed()">
+    [WidthPx]="TagsPanelWidth"
+    (PanelClosed)="OnTagsPanelClosed()"
+    (RecordNavigate)="OnTagsRecordNavigate($event)"
+    (WidthChanged)="OnTagsPanelWidthChanged($event)">
   </mj-record-tags>
 }
 

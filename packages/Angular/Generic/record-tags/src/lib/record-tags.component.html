@@ -5,7 +5,9 @@
     [Resizable]="true"
     [MinWidthPx]="350"
     [MaxWidthRatio]="0.5"
-    (Closed)="OnClose()">
+    [WidthPx]="WidthPx"
+    (Closed)="OnClose()"
+    (WidthChanged)="OnWidthChanged($event)">
 
     @if (IsLoading) {
         <mj-loading text="Loading tags..."></mj-loading>
@@ -101,6 +103,11 @@
                                         <span class="mj-related-source-badge mj-related-source-both" title="Found via tags and vector similarity">both</span>
                                     } @else if (related.Source === 'vectors') {
                                         <span class="mj-related-source-badge mj-related-source-vectors" title="Found via vector similarity">vector</span>
+                                    }
+                                    @if (ShowOpenRecordButton) {
+                                        <button class="mj-related-open-btn" (click)="OnRelatedRecordClick(related); $event.stopPropagation()" title="Open record">
+                                            <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                                        </button>
                                     }
                                 </div>
                             </div>

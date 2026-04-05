@@ -44,7 +44,18 @@ export interface RelatedRecord {
 export class RecordTagsComponent implements OnInit {
     @Input() Record!: BaseEntity;
     @Output() PanelClosed = new EventEmitter<void>();
+    /** Whether to show the "Open Record" button on related record rows. Default true. */
+    @Input() ShowOpenRecordButton = true;
+
+    /** Initial panel width in pixels. 0 = use slide panel default. */
+    @Input() WidthPx = 0;
+
     @Output() RecordNavigate = new EventEmitter<{ EntityName: string; RecordID: string }>();
+    @Output() WidthChanged = new EventEmitter<number>();
+
+    public OnWidthChanged(width: number): void {
+        this.WidthChanged.emit(width);
+    }
 
     /**
      * How related records are discovered:

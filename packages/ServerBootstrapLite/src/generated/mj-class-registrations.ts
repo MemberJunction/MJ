@@ -462,7 +462,7 @@ import {
     XMLParserAction,
 } from '@memberjunction/core-actions';
 
-// @memberjunction/core-entities (304 classes)
+// @memberjunction/core-entities (308 classes)
 import {
     MJAIActionEntity,
     MJAIAgentActionEntity,
@@ -570,6 +570,7 @@ import {
     MJComponentRegistryEntity,
     MJContentFileTypeEntity,
     MJContentItemAttributeEntity,
+    MJContentItemDuplicateEntity,
     MJContentItemEntity,
     MJContentItemTagEntity,
     MJContentProcessRunDetailEntity,
@@ -655,6 +656,7 @@ import {
     MJIntegrationObjectFieldEntity,
     MJIntegrationSourceTypeEntity,
     MJIntegrationURLFormatEntity,
+    MJKnowledgeHubSavedSearchEntity,
     MJLibraryEntity,
     MJLibraryItemEntity,
     MJListCategoryEntity,
@@ -721,6 +723,8 @@ import {
     MJScheduledJobTypeEntity,
     MJSchemaInfoEntity,
     MJSkillEntity,
+    MJTagAuditLogEntity,
+    MJTagCoOccurrenceEntity,
     MJTagEntity,
     MJTaggedItemEntity,
     MJTaskDependencyEntity,
@@ -1246,6 +1250,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJComponentRegistryEntity,
     MJContentFileTypeEntity,
     MJContentItemAttributeEntity,
+    MJContentItemDuplicateEntity,
     MJContentItemEntity,
     MJContentItemTagEntity,
     MJContentProcessRunDetailEntity,
@@ -1331,6 +1336,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJIntegrationObjectFieldEntity,
     MJIntegrationSourceTypeEntity,
     MJIntegrationURLFormatEntity,
+    MJKnowledgeHubSavedSearchEntity,
     MJLibraryEntity,
     MJLibraryItemEntity,
     MJListCategoryEntity,
@@ -1397,6 +1403,8 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJScheduledJobTypeEntity,
     MJSchemaInfoEntity,
     MJSkillEntity,
+    MJTagAuditLogEntity,
+    MJTagCoOccurrenceEntity,
     MJTagEntity,
     MJTaggedItemEntity,
     MJTaskDependencyEntity,
@@ -1487,7 +1495,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 632;
+export const CLASS_REGISTRATIONS_COUNT = 636;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

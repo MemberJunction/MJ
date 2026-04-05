@@ -645,6 +645,32 @@
     color: var(--mj-brand-primary);
 }
 
+.at-tag-weighted {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.at-tag-weight {
+    font-size: 0.6rem;
+    opacity: 0.6;
+    font-weight: 400;
+}
+
+.at-tag-row-clickable {
+    cursor: pointer;
+    transition: background 0.1s ease;
+}
+
+.at-tag-row-clickable:hover {
+    background: var(--mj-bg-surface-hover);
+}
+
+.at-tag-row-selected {
+    background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface)) !important;
+    border-left: 3px solid var(--mj-brand-primary);
+}
+
 .at-tag-pill.large {
     font-size: 0.85rem;
     padding: 5px 14px;

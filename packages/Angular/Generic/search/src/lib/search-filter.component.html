@@ -3,11 +3,16 @@
         <span class="filter-panel-title">
             <i class="fa-solid fa-filter"></i> Filters
         </span>
-        @if (HasActiveFilters()) {
-            <button class="filter-clear-all" (click)="ClearAll()">
-                Clear ({{ GetActiveFilterCount() }})
+        <div class="filter-header-actions">
+            @if (HasActiveFilters()) {
+                <button class="filter-clear-all" (click)="ClearAll()">
+                    Clear ({{ GetActiveFilterCount() }})
+                </button>
+            }
+            <button class="filter-close-btn" (click)="CloseRequested.emit()" title="Hide filters">
+                <i class="fa-solid fa-times"></i>
             </button>
-        }
+        </div>
     </div>
 
     @for (filter of Filters; track filter.Category) {

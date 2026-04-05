@@ -50,6 +50,9 @@ export class SearchResultsComponent {
     /** Results per page in flat mode */
     @Input() PageSize = 10;
 
+    /** Whether to show the results summary line (count + time). Set false when parent provides its own header. */
+    @Input() ShowSummary = true;
+
     /** Whether to show score badges */
     @Input() ShowScores = true;
 

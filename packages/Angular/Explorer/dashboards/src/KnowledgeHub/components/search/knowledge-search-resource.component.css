@@ -181,16 +181,19 @@
 .search-results-main {
     flex: 1;
     min-width: 0;
-    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
     max-height: calc(100vh - 220px);
+    overflow: hidden;
 }
 
 /* Results Header */
 .search-results-header {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    gap: 0.75rem;
     margin-bottom: 0.75rem;
+    flex-shrink: 0;
 }
 
 .search-results-count {
@@ -202,7 +205,8 @@
     color: var(--mj-text-muted);
 }
 
-.toggle-filters-btn {
+/* Show Filters button — appears on left when panel is hidden */
+.show-filters-btn {
     display: inline-flex;
     align-items: center;
     gap: 0.4rem;
@@ -213,10 +217,28 @@
     color: var(--mj-text-secondary);
     font-size: 0.82rem;
     cursor: pointer;
+    transition: all 0.15s;
+    flex-shrink: 0;
 }
 
-.toggle-filters-btn:hover {
+.show-filters-btn:hover {
     background: var(--mj-bg-surface-hover);
+    border-color: var(--mj-brand-primary);
+    color: var(--mj-brand-primary);
+}
+
+.filter-active-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 9px;
+    background: var(--mj-brand-primary);
+    color: var(--mj-text-inverse);
+    font-size: 0.65rem;
+    font-weight: 700;
 }
 
 /* Agent CTA */

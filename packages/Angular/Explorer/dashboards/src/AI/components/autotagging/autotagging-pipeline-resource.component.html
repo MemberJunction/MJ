@@ -181,7 +181,7 @@
 
                             <!-- Pipeline Settings Widget -->
                             <div class="at-card at-config-card">
-                                <div class="at-card-header" (click)="ShowPipelineConfig = !ShowPipelineConfig" style="cursor:pointer">
+                                <div class="at-card-header" (click)="TogglePipelineConfig()" style="cursor:pointer">
                                     <span class="at-card-title"><i class="fa-solid fa-sliders"></i> Pipeline Settings</span>
                                     <i class="fa-solid" [class.fa-chevron-down]="!ShowPipelineConfig" [class.fa-chevron-up]="ShowPipelineConfig" style="font-size:0.7rem; color:var(--mj-text-muted)"></i>
                                 </div>
@@ -412,7 +412,8 @@
                                         </thead>
                                         <tbody>
                                             @for (row of FilteredTagRows; track row.Tag) {
-                                                <tr>
+                                                <tr class="at-tag-row-clickable" (click)="DrillDownTag(row.Tag)"
+                                                    [class.at-tag-row-selected]="SelectedDrillDownTag === row.Tag">
                                                     <td class="at-tag-name-cell">{{ row.Tag }}</td>
                                                     <td>{{ row.UsageCount }}</td>
                                                     <td>
@@ -439,6 +440,48 @@
                                     </table>
                                 </div>
                             </div>
+
+                            <!-- Tag drill-down: content items matching selected tag -->
+                            @if (SelectedDrillDownTag) {
+                                <div class="at-card" style="margin-top: 12px;">
+                                    <div class="at-card-header">
+                                        <span class="at-card-title">
+                                            <i class="fa-solid fa-tag"></i>
+                                            Content items tagged "{{ SelectedDrillDownTag }}"
+                                            ({{ TagDrillDownItems.length }})
+                                        </span>
+                                        <button class="at-slide-close" (click)="CloseDrillDownTag()" style="background:none;border:none;cursor:pointer;color:var(--mj-text-muted)">
+                                            <i class="fa-solid fa-times"></i>
+                                        </button>
+                                    </div>
+                                    <div class="at-card-body" style="max-height: 300px; overflow-y: auto;">
+                                        @if (TagDrillDownItems.length === 0) {
+                                            <div class="at-empty-state"><p>No content items found for this tag.</p></div>
+                                        } @else {
+                                            <table class="at-tag-table">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Name</th>
+                                                        <th>Source</th>
+                                                        <th>Weight</th>
+                                                        <th>Updated</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    @for (di of TagDrillDownItems; track di.ID) {
+                                                        <tr class="at-tag-row-clickable" (click)="OpenItemDetailByID(di.ID)">
+                                                            <td>{{ di.Name }}</td>
+                                                            <td>{{ di.SourceName }}</td>
+                                                            <td>{{ FormatWeight(di.Weight) }}</td>
+                                                            <td>{{ di.UpdatedAt }}</td>
+                                                        </tr>
+                                                    }
+                                                </tbody>
+                                            </table>
+                                        }
+                                    </div>
+                                </div>
+                            }
                         </div>
                         <div class="at-tag-lib-sidebar">
                             <div class="at-card at-tag-cloud-card">
@@ -1153,9 +1196,11 @@
                     <h4 class="at-detail-item-name">{{ SelectedFeedItem.Name }}</h4>
                     <div class="at-detail-badges">
                         <span class="at-detail-badge at-detail-badge-source">{{ SelectedFeedItem.SourceName }}</span>
-                        <span class="at-detail-badge at-detail-badge-type">{{ SelectedFeedItem.ContentTypeName }}</span>
-                        @if (SelectedFeedItem.FileTypeName) {
-                            <span class="at-detail-badge at-detail-badge-file"><i class="fa-solid fa-file"></i> {{ SelectedFeedItem.FileTypeName }}</span>
+                        @if (SelectedFeedItem.RequiresContentType) {
+                            <span class="at-detail-badge at-detail-badge-type">{{ SelectedFeedItem.ContentTypeName }}</span>
+                            @if (SelectedFeedItem.FileTypeName) {
+                                <span class="at-detail-badge at-detail-badge-file"><i class="fa-solid fa-file"></i> {{ SelectedFeedItem.FileTypeName }}</span>
+                            }
                         }
                     </div>
                 </div>
@@ -1179,13 +1224,16 @@
                     </div>
                 }
 
-                <!-- Tags -->
+                <!-- Tags (weighted) -->
                 @if (SelectedFeedItem.Tags.length > 0) {
                     <div class="at-detail-section">
                         <div class="at-detail-section-label">Tags ({{ SelectedFeedItem.Tags.length }})</div>
                         <div class="at-detail-tags">
-                            @for (tag of SelectedFeedItem.Tags; track tag) {
-                                <span class="at-tag-pill">{{ tag }}</span>
+                            @for (wt of SelectedFeedItem.Tags; track wt.Tag) {
+                                <span class="at-tag-pill at-tag-weighted" [style.font-size]="TagFontSize(wt.Weight)">
+                                    {{ wt.Tag }}
+                                    <span class="at-tag-weight">{{ FormatWeight(wt.Weight) }}</span>
+                                </span>
                             }
                         </div>
                     </div>
@@ -1264,14 +1312,16 @@
                                     <a [href]="SelectedSource.URL" target="_blank" class="at-detail-link at-detail-meta-value">{{ SelectedSource.URL }}</a>
                                 </div>
                             }
-                            <div class="at-detail-meta-row">
-                                <span class="at-detail-meta-key">Content Type</span>
-                                <span class="at-detail-meta-value">{{ SelectedSource.ContentTypeName }}</span>
-                            </div>
-                            <div class="at-detail-meta-row">
-                                <span class="at-detail-meta-key">File Type</span>
-                                <span class="at-detail-meta-value">{{ SelectedSource.FileTypeName }}</span>
-                            </div>
+                            @if (SelectedSource.RequiresFileType) {
+                                <div class="at-detail-meta-row">
+                                    <span class="at-detail-meta-key">Content Type</span>
+                                    <span class="at-detail-meta-value">{{ SelectedSource.ContentTypeName }}</span>
+                                </div>
+                                <div class="at-detail-meta-row">
+                                    <span class="at-detail-meta-key">File Type</span>
+                                    <span class="at-detail-meta-value">{{ SelectedSource.FileTypeName }}</span>
+                                </div>
+                            }
                             <div class="at-detail-meta-row">
                                 <span class="at-detail-meta-key">Embedding Model</span>
                                 <span class="at-detail-meta-value">{{ SelectedSource.EmbeddingModelName }}</span>

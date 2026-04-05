@@ -1,5 +1,18 @@
 /* Search Results Component */
 
+:host {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    flex: 1;
+}
+
+.results-scroll-area {
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
+}
+
 .results-loading {
     display: flex;
     justify-content: center;
@@ -388,14 +401,16 @@
     background: var(--mj-bg-surface-hover);
 }
 
-/* Google-style Pagination */
+/* Google-style Pagination — pinned at bottom */
 .results-pager {
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 4px;
-    padding: 1.25rem 0;
-    margin-top: 0.5rem;
+    padding: 0.75rem 0;
+    flex-shrink: 0;
+    border-top: 1px solid var(--mj-border-subtle);
+    background: var(--mj-bg-surface);
 }
 
 .pager-btn {

@@ -76,7 +76,8 @@ export class KnowledgeSearchResourceComponent extends BaseResourceComponent impl
         return 'fa-solid fa-magnifying-glass';
     }
 
-    ngAfterViewInit(): void {
+    async ngAfterViewInit(): Promise<void> {
+        await UserInfoEngine.Instance.Config(false);
         this.LoadSearchPreferences();
         this.subscribeToSearchState();
         this.parseUrlParameters();
@@ -234,6 +235,10 @@ export class KnowledgeSearchResourceComponent extends BaseResourceComponent impl
         return Object.values(this.ActiveFilters).some(v => v.length > 0);
     }
 
+    public GetActiveFilterCount(): number {
+        return Object.values(this.ActiveFilters).reduce((sum, v) => sum + v.length, 0);
+    }
+
     // --- Private Methods ---
 
     /** Parse URL parameters for deep links (e.g., ?conversationId=xxx or ?q=search+term) */
@@ -315,27 +320,27 @@ export class KnowledgeSearchResourceComponent extends BaseResourceComponent impl
         this.cdr.detectChanges();
     }
 
-    /** Persist user search preferences (filter panel state, threshold) */
+    private static readonly PREFS_KEY = 'KH_Search_Preferences';
+
+    /** Persist user search preferences via UserInfoEngine */
     private PersistSearchPreferences(): void {
-        try {
-            const prefs = {
-                ShowFilters: this.ShowFilters,
-                MinScoreThreshold: this.MinScoreThreshold,
-            };
-            localStorage.setItem('KH_SearchPreferences', JSON.stringify(prefs));
-        } catch { /* ignore */ }
+        const prefs = JSON.stringify({
+            ShowFilters: this.ShowFilters,
+            MinScoreThreshold: this.MinScoreThreshold,
+        });
+        UserInfoEngine.Instance.SetSettingDebounced(KnowledgeSearchResourceComponent.PREFS_KEY, prefs);
     }
 
-    /** Load persisted search preferences */
+    /** Load persisted search preferences from UserInfoEngine */
     private LoadSearchPreferences(): void {
-        try {
-            const raw = localStorage.getItem('KH_SearchPreferences');
-            if (raw) {
+        const raw = UserInfoEngine.Instance.GetSetting(KnowledgeSearchResourceComponent.PREFS_KEY);
+        if (raw) {
+            try {
                 const prefs = JSON.parse(raw);
                 if (prefs.ShowFilters != null) this.ShowFilters = prefs.ShowFilters;
                 if (prefs.MinScoreThreshold != null) this.MinScoreThreshold = prefs.MinScoreThreshold;
-            }
-        } catch { /* ignore */ }
+            } catch { /* ignore parse errors */ }
+        }
     }
 
     private applySearchResponse(response: SearchResponse): void {
@@ -348,7 +353,11 @@ export class KnowledgeSearchResourceComponent extends BaseResourceComponent impl
         this.TotalCount = response.TotalCount;
         this.ElapsedMs = response.ElapsedMs;
         this.HasSearched = true;
-        this.ShowFilters = response.Filters.length > 0;
+        // Only auto-show filters on first search if user hasn't set a preference
+        const savedPref = UserInfoEngine.Instance.GetSetting(KnowledgeSearchResourceComponent.PREFS_KEY);
+        if (!savedPref) {
+            this.ShowFilters = response.Filters.length > 0;
+        }
         this.cdr.detectChanges();
     }
 }

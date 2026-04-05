@@ -1395,6 +1395,8 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         const meta: Record<string, string | number | boolean | string[]> = {
             RecordID: item.ID,
             Entity: 'MJ: Content Items',
+            ContentSourceID: item.ContentSourceID,
+            ContentSourceTypeID: item.ContentSourceTypeID,
         };
         if (item.Name) meta['Title'] = item.Name.substring(0, META_TEXT_LIMIT);
         if (item.Description) meta['Description'] = item.Description.substring(0, META_TEXT_LIMIT);

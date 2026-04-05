@@ -4,7 +4,8 @@ import {
   ContentChildren, QueryList, AfterContentInit, OnDestroy,
   ViewEncapsulation
 } from '@angular/core';
-import { BaseEntity, EntityInfo } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, EntityInfo, Metadata } from '@memberjunction/core';
+import { UserInfoEngine } from '@memberjunction/core-entities';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { FormToolbarConfig, DEFAULT_TOOLBAR_CONFIG } from '../types/toolbar-config';
@@ -73,6 +74,10 @@ export class MjRecordFormContainerComponent implements AfterContentInit, OnDestr
 
   /** Controls visibility of tags panel */
   ShowTagsPanel = false;
+
+  /** Persisted tags panel width */
+  TagsPanelWidth = 0;
+  private static readonly TAGS_WIDTH_KEY = 'MJ_TagsPanel_Width';
 
   /** Number of tags on this record */
   TagCount = 0;
@@ -312,6 +317,10 @@ export class MjRecordFormContainerComponent implements AfterContentInit, OnDestr
   // ---- Lifecycle ----
 
   ngAfterContentInit(): void {
+    // Load saved tags panel width
+    const savedWidth = UserInfoEngine.Instance.GetSetting(MjRecordFormContainerComponent.TAGS_WIDTH_KEY);
+    if (savedWidth) this.TagsPanelWidth = parseInt(savedWidth, 10) || 0;
+
     // Subscribe to panel Navigate events and relay them
     this.SubscribeToPanelNavigateEvents();
 
@@ -469,6 +478,23 @@ export class MjRecordFormContainerComponent implements AfterContentInit, OnDestr
   OnTagsPanelClosed(): void {
     this.ShowTagsPanel = false;
     this.cdr.detectChanges();
+  }
+
+  OnTagsPanelWidthChanged(width: number): void {
+    this.TagsPanelWidth = width;
+    UserInfoEngine.Instance.SetSettingDebounced(MjRecordFormContainerComponent.TAGS_WIDTH_KEY, String(width));
+  }
+
+  OnTagsRecordNavigate(event: { EntityName: string; RecordID: string }): void {
+    const md = new Metadata();
+    const entityInfo = md.Entities.find(e => e.Name === event.EntityName);
+    const pkey = new CompositeKey();
+    if (entityInfo) {
+      pkey.LoadFromURLSegment(entityInfo, event.RecordID);
+    } else {
+      pkey.KeyValuePairs = [{ FieldName: 'ID', Value: event.RecordID }];
+    }
+    this.Navigate.emit({ Kind: 'record', EntityName: event.EntityName, PrimaryKey: pkey });
   }
 
   OnRecordChangesClosed(): void {

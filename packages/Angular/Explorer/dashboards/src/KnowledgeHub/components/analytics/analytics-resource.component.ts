@@ -11,7 +11,7 @@
 import { Component, ChangeDetectorRef, OnDestroy, AfterViewInit, inject } from '@angular/core';
 import { Subject } from 'rxjs';
 import { CompositeKey, Metadata, RunView } from '@memberjunction/core';
-import { ResourceData } from '@memberjunction/core-entities';
+import { ResourceData, UserInfoEngine } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 
@@ -392,7 +392,8 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
     // Lifecycle
     // ================================================================
 
-    ngAfterViewInit(): void {
+    async ngAfterViewInit(): Promise<void> {
+        await UserInfoEngine.Instance.Config(false);
         this.loadAnalyticsPreferences();
         this.loadAllData();
         this.NotifyLoadComplete();
@@ -1924,27 +1925,27 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
     // SR-6: Preference Persistence
     // ================================================================
 
+    private static readonly PREFS_KEY = 'KH_Analytics_Preferences';
+
     private persistAnalyticsPreferences(): void {
-        try {
-            const prefs = {
-                ActiveTab: this.ActiveTab,
-                ActiveDateRange: this.ActiveDateRange,
-                EntityFilter: this.EntityFilter,
-            };
-            localStorage.setItem('KH_AnalyticsPreferences', JSON.stringify(prefs));
-        } catch { /* ignore */ }
+        const prefs = JSON.stringify({
+            ActiveTab: this.ActiveTab,
+            ActiveDateRange: this.ActiveDateRange,
+            EntityFilter: this.EntityFilter,
+        });
+        UserInfoEngine.Instance.SetSettingDebounced(AnalyticsResourceComponent.PREFS_KEY, prefs);
     }
 
     private loadAnalyticsPreferences(): void {
-        try {
-            const raw = localStorage.getItem('KH_AnalyticsPreferences');
-            if (raw) {
+        const raw = UserInfoEngine.Instance.GetSetting(AnalyticsResourceComponent.PREFS_KEY);
+        if (raw) {
+            try {
                 const prefs = JSON.parse(raw);
                 if (prefs.ActiveTab) this.ActiveTab = prefs.ActiveTab;
                 if (prefs.ActiveDateRange) this.ActiveDateRange = prefs.ActiveDateRange;
                 if (prefs.EntityFilter) this.EntityFilter = prefs.EntityFilter;
-            }
-        } catch { /* ignore */ }
+            } catch { /* ignore */ }
+        }
     }
 }
 

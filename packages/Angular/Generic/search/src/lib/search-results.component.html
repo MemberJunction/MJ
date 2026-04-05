@@ -9,20 +9,24 @@
     </div>
 } @else {
     <!-- Results summary -->
-    <div class="results-summary">
-        <span>{{ TotalCount }} results</span>
-        @if (ElapsedMs > 0) {
-            <span class="results-summary-time"> in {{ FormatTime(ElapsedMs) }}</span>
-        }
-    </div>
+    @if (ShowSummary) {
+        <div class="results-summary">
+            <span>{{ TotalCount }} results</span>
+            @if (ElapsedMs > 0) {
+                <span class="results-summary-time"> in {{ FormatTime(ElapsedMs) }}</span>
+            }
+        </div>
+    }
 
     @if (DisplayMode === 'flat') {
         <!-- ══════ FLAT BLENDED LIST (sorted by score) ══════ -->
-        @for (result of PagedResults; track result.ID) {
-            <ng-container *ngTemplateOutlet="resultCardTpl; context: { $implicit: result }"></ng-container>
-        }
+        <div class="results-scroll-area">
+            @for (result of PagedResults; track result.ID) {
+                <ng-container *ngTemplateOutlet="resultCardTpl; context: { $implicit: result }"></ng-container>
+            }
+        </div>
 
-        <!-- Google-style pagination -->
+        <!-- Google-style pagination (sticky at bottom) -->
         @if (TotalPages > 1) {
             <div class="results-pager">
                 <button class="pager-btn pager-prev" [disabled]="CurrentPage === 1"

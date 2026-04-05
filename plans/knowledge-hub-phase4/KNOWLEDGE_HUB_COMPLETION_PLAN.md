@@ -136,7 +136,29 @@ The pipeline and vectorization engines currently work for small datasets but lac
 - TagAuditLog entity reads (simple RunView with date filtering)
 - Timeline UI: icon per action type, grouped by day, user avatars
 
-### B9. Unit Tests
+### B9. Bulk Delete UX
+- Replace browser `confirm()` dialog with a styled MJ dialog (`MJDialogService`) for bulk delete in Orphans tab
+- Show count of tags to be deleted, with a warning about permanence
+- Same treatment for any other confirm() usage in KH dashboards
+
+### B10. Orphan Cleanup After Failed Runs
+- When a pipeline run fails or content items are deleted, clean up orphaned tags that have zero usage
+- Option in Orphans tab: "Delete All Orphaned Tags" with the styled confirmation dialog
+- Consider auto-flagging tags as Deprecated (not Deleted) if they become orphaned, so they can be reviewed
+
+### B11. Treemap Drill-In
+- Click a treemap cell → open slide-in showing tag details: child tags, content items using that tag, usage stats
+- Same slide-in pattern as the Tree View tag detail panel
+- Cell hover should show tooltip with tag name + item count
+
+### B12. Duplicate Detection Without Merge
+- Currently blocks dupe detection entirely if AllowRecordMerge is off — wrong behavior
+- Instead: show a styled confirmation dialog explaining detection will run but merging won't be available until a sys admin enables AllowRecordMerge
+- User can proceed with detection-only (useful for visibility/reporting)
+- In the dupe results UI: disable/hide the "Merge" button per-entity when AllowRecordMerge is off, show tooltip explaining why
+- Replace browser confirm() with MJDialogService styled dialog
+
+### B13. Unit Tests
 - TagGovernanceEngine: merge, split, move, rename, deprecate
 - Audit log creation for each operation
 - TagEngine filtering by Status
@@ -213,7 +235,23 @@ The pipeline and vectorization engines currently work for small datasets but lac
 - Click a run in Run History tab → navigate to ContentProcessRunDetail records
 - Show source-by-source breakdown, duration, token usage
 
-### D9. Unit Tests
+### D9. In-App Tag Navigation from Analytics
+- Analytics drill-down tables that show tags should navigate within the Knowledge Hub app instead of opening the Tag entity form
+- Use NavigationService to navigate to Classify → Tag Library tab with a query string parameter selecting the specific tag (e.g., `?tag=Cheese`)
+- Tag Library tab reads the query param on init and auto-selects/filters to that tag, triggering the drill-down
+- Applies to: all analytics drill-downs showing tag names (kpi-totalTags, tagGrowth, taxonomyHealth)
+- Keeps the user inside the Knowledge Hub experience instead of jumping to a generic entity form
+
+### D10. Drill-Downs on All Analytics Tabs
+- Currently only the Overview tab has clickable KPI cards and widget cards with drill-down panels
+- Add the same drill-down pattern to all 4 remaining tabs:
+  - **Tags tab**: click Top 20 tag rows → drill-down showing content items with that tag
+  - **Sources tab**: click source rows → drill-down showing recent runs, items processed, error details
+  - **Pipeline tab**: click throughput chart bars / error rows → drill-down showing individual run details
+  - **Quality tab**: click confidence histogram bins / low-confidence tag rows → drill-down showing matching items
+- Reuse the existing drill-down panel component pattern (DrillDownColumns, DrillDownData, DrillDownHasActions)
+
+### D11. Unit Tests
 - Cost aggregation queries
 - Status display logic
 
@@ -287,7 +325,14 @@ The pipeline and vectorization engines currently work for small datasets but lac
 - "Saved Searches" panel in the search sidebar (below Recent Searches)
 - Load saved search: populate query, filters, threshold, execute
 
-### F5. Unit Tests
+### F5. Search Filter Panel UX
+- Remove the "Filters" toggle button from the right-side results header
+- When filter panel is hidden: show a small "Show Filters" button on the left side of the results area (where the panel would appear)
+- When filter panel is visible: add a close (X) button to the filter panel header to dismiss it
+- Filter button should have visual indicator when active filters are applied (badge count or highlight)
+- Smoother panel animation (slide in/out from left)
+
+### F6. Unit Tests
 - FTS tag enrichment
 - Saved search CRUD
 - Server-side tag filtering
@@ -340,4 +385,35 @@ Phase F (Search Enhancement) ← Needs B for tag faceting
 Phase G (Content Dedup) ← Independent, can run anytime after A
 ```
 
-**Total**: ~50 implementation tasks + ~9 test suites across 7 phases
+---
+
+## Phase H: Record Form Enhancements
+
+### H1. Tag Count Badge on Toolbar
+- Show a small count badge on the Tags toolbar button indicating how many tags are associated with the current record
+- Load asynchronously after form renders (query TaggedItem where EntityID + RecordID) so it doesn't block form loading
+- Update the badge when tags are added/removed from the slide-in panel
+
+### H2. Record Changes Version Badge on Toolbar
+- Show the current version number and total version count on the Record Changes toolbar button (e.g., "v12 of 12")
+- Load asynchronously from Record Changes entity (count where EntityID + RecordID)
+- Gives user instant visibility into how many times the record has been modified without clicking
+
+### H3. Record Changes — Restore Previous Version
+- In the Record Changes form/viewer, add a "Restore" button on each historical version row (only if user has edit rights)
+- Clicking Restore opens a styled slide-in panel showing:
+  - The version date and who made that version
+  - A field-by-field diff: current value vs. the selected version's value, with changed fields highlighted
+  - Only fields that differ are shown
+- User confirms → the record is updated to match the old version's field values
+- This creates a new Record Change entry (standard MJ behavior on save), so the restore itself is versioned
+- Cancel closes the slide-in with no changes
+
+### H4. Unit Tests
+- Tag count badge async loading
+- Version count badge async loading
+- Restore diff computation (compare two version snapshots)
+
+---
+
+**Total**: ~60 implementation tasks + ~10 test suites across 8 phases

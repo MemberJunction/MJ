@@ -15,17 +15,10 @@
         "isDefault": true
       },
       {
-        "Label": "Vectors",
-        "Icon": "fa-solid fa-cubes",
+        "Label": "Classify",
+        "Icon": "fa-solid fa-tags",
         "ResourceType": "Custom",
-        "DriverClass": "VectorManagementResource",
-        "isDefault": false
-      },
-      {
-        "Label": "Duplicates",
-        "Icon": "fa-solid fa-clone",
-        "ResourceType": "Custom",
-        "DriverClass": "DuplicateDetectionResource",
+        "DriverClass": "AutotaggingPipelineResource",
         "isDefault": false
       },
       {
@@ -36,10 +29,10 @@
         "isDefault": false
       },
       {
-        "Label": "Classify",
-        "Icon": "fa-solid fa-tags",
+        "Label": "Duplicates",
+        "Icon": "fa-solid fa-clone",
         "ResourceType": "Custom",
-        "DriverClass": "AutotaggingPipelineResource",
+        "DriverClass": "DuplicateDetectionResource",
         "isDefault": false
       },
       {
@@ -47,6 +40,13 @@
         "Icon": "fa-solid fa-chart-line",
         "ResourceType": "Custom",
         "DriverClass": "AnalyticsResource",
+        "isDefault": false
+      },
+      {
+        "Label": "Vectors",
+        "Icon": "fa-solid fa-cubes",
+        "ResourceType": "Custom",
+        "DriverClass": "VectorManagementResource",
         "isDefault": false
       },
       {
@@ -65,7 +65,7 @@
     "ID": "796EB8B2-B392-428B-839C-E9637C3D7EDB"
   },
   "sync": {
-    "lastModified": "2026-04-05T00:58:40.912Z",
-    "checksum": "a0e4568ee0c360698f9748e31f96bdd6b39f9b81f33b74d8d4140e68173e8c43"
+    "lastModified": "2026-04-05T22:30:52.410Z",
+    "checksum": "e24bd79312848a246e85d687ff7acf0d3085ce1b6fb0f1e626bd725bdb1b1639"
   }
 }

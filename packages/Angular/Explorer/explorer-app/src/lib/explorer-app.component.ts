@@ -333,6 +333,8 @@ export class MJExplorerAppComponent implements OnInit, OnDestroy {
         Roles: currentUser?.UserRoles?.map(r => r.Role) || []
       }
     };
+    this.cdr.detectChanges();
+
     // Keep the bridge in sync with workspace visibility.
     // When the user is in the Chat app viewing Conversations, the workspace is "active"
     // for toast suppression. When they switch to any other app/tab, it's not.

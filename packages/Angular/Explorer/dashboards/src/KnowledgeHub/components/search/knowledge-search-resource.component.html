@@ -60,6 +60,7 @@
                             [ActiveFilters]="ActiveFilters"
                             (FilterChanged)="OnFilterChanged($event)"
                             (FiltersCleared)="OnFiltersCleared()"
+                            (CloseRequested)="ToggleFilters()"
                         ></mj-search-filter>
 
                         <!-- Relevance Threshold Slider -->
@@ -89,29 +90,28 @@
                 <div class="search-results-main">
                     <!-- Results Header -->
                     <div class="search-results-header">
+                        <!-- Show Filters button on left (visible when panel is hidden) -->
+                        @if (!ShowFilters && Filters.length > 0) {
+                            <button class="show-filters-btn" (click)="ToggleFilters()">
+                                <i class="fa-solid fa-filter"></i>
+                                Filters
+                                @if (HasActiveFilters()) {
+                                    <span class="filter-active-badge">{{ GetActiveFilterCount() }}</span>
+                                }
+                            </button>
+                        }
                         <span class="search-results-count">
                             {{ TotalCount }} results
                             @if (ElapsedMs > 0) {
                                 <span class="search-results-time">in {{ ElapsedMs }}ms</span>
                             }
                         </span>
-                        <div class="search-results-actions">
-                            @if (Filters.length > 0) {
-                                <button class="toggle-filters-btn" (click)="ToggleFilters()">
-                                    <i class="fa-solid fa-filter"></i>
-                                    @if (HasActiveFilters()) {
-                                        Filters Active
-                                    } @else {
-                                        Filters
-                                    }
-                                </button>
-                            }
-                        </div>
                     </div>
 
                     <!-- Results List (flat blended list sorted by relevance) -->
                     <mj-search-results
                         DisplayMode="flat"
+                        [ShowSummary]="false"
                         [FlatResults]="AllResults"
                         [ResultGroups]="ResultGroups"
                         [IsLoading]="IsSearching"

@@ -1,7 +1,7 @@
 import { Resolver, Mutation, Arg, Ctx, ObjectType, Field, Float, InputType } from 'type-graphql';
 import { AppContext } from '../types.js';
 import { LogError, LogStatus, Metadata, RunView, UserInfo, ComputeRRF, ScoredCandidate, EntityRecordNameInput, CompositeKey } from '@memberjunction/core';
-import { MJVectorIndexEntity, MJVectorDatabaseEntity } from '@memberjunction/core-entities';
+import { MJVectorIndexEntity, MJVectorDatabaseEntity, KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { AIEngine } from '@memberjunction/aiengine';
 import { BaseEmbeddings, GetAIAPIKey } from '@memberjunction/ai';
@@ -153,11 +153,16 @@ export class SearchKnowledgeResolver extends ResolverBase {
             const fusedResults = this.fuseResults(vectorResults, fullTextResults, topK);
             const dedupedResults = this.deduplicateResults(fusedResults);
 
+            // Exclude Content Items that originated from Entity sources — those entities
+            // are already searchable directly via their own vector embeddings, so showing
+            // the Content Item shadow result is redundant.
+            const withoutEntityContentItems = await this.excludeEntitySourcedContentItems(dedupedResults, currentUser);
+
             // Apply minimum score threshold (post-RRF, so fusion can surface cross-source matches first)
             const scoreThreshold = minScore ?? 0;
             const filteredResults = scoreThreshold > 0
-                ? dedupedResults.filter(r => r.Score >= scoreThreshold)
-                : dedupedResults;
+                ? withoutEntityContentItems.filter(r => r.Score >= scoreThreshold)
+                : withoutEntityContentItems;
             LogStatus(`SearchKnowledge: Fuse + dedup + threshold≥${Math.round(scoreThreshold * 100)}% (${dedupedResults.length} → ${filteredResults.length} results): ${Date.now() - t0}ms`);
 
             // Enrich with entity icons and record names
@@ -680,6 +685,49 @@ export class SearchKnowledgeResolver extends ResolverBase {
             }
         }
         return Array.from(seen.values()).sort((a, b) => b.Score - a.Score);
+    }
+
+    /**
+     * Remove Content Item results that originated from Entity-type content sources.
+     * These are redundant because the underlying entity records are already vectorized
+     * and searchable directly — showing both creates duplicate results.
+     */
+    private async excludeEntitySourcedContentItems(
+        results: SearchKnowledgeResultItem[],
+        contextUser: UserInfo
+    ): Promise<SearchKnowledgeResultItem[]> {
+        const contentItemResults = results.filter(r => r.EntityName === 'MJ: Content Items');
+        if (contentItemResults.length === 0) return results;
+
+        // Use cached engine data — no RunView needed
+        await KnowledgeHubMetadataEngine.Instance.Config(false, contextUser);
+        const engine = KnowledgeHubMetadataEngine.Instance;
+
+        // Find source type ID for "Entity"
+        const entitySourceType = engine.ContentSourceTypes.find(st => st.Name === 'Entity');
+        if (!entitySourceType) return results;
+
+        // Collect all ContentSource IDs that are entity-type
+        const entitySourceIDs = new Set(
+            engine.ContentSources
+                .filter(cs => UUIDsEqual(cs.ContentSourceTypeID, entitySourceType.ID))
+                .map(cs => cs.ID.toLowerCase())
+        );
+        if (entitySourceIDs.size === 0) return results;
+
+        // Filter using ContentSourceID from vector metadata — no DB lookup needed
+        return results.filter(r => {
+            if (r.EntityName !== 'MJ: Content Items') return true;
+            if (!r.RawMetadata) return true;
+            try {
+                const meta = JSON.parse(r.RawMetadata) as Record<string, string>;
+                const sourceID = meta.ContentSourceID;
+                if (!sourceID) return true;
+                return !entitySourceIDs.has(sourceID.toLowerCase());
+            } catch {
+                return true;
+            }
+        });
     }
 
     /** Enrich results with entity icons and record names */

@@ -269,3 +269,25 @@
     background: color-mix(in srgb, var(--mj-status-info) 12%, var(--mj-bg-surface));
     color: var(--mj-status-info);
 }
+
+.mj-related-open-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border: 1px solid var(--mj-border-default);
+    border-radius: 5px;
+    background: transparent;
+    color: var(--mj-text-muted);
+    font-size: 10px;
+    cursor: pointer;
+    transition: all 0.15s;
+    flex-shrink: 0;
+}
+
+.mj-related-open-btn:hover {
+    background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+    border-color: var(--mj-brand-primary);
+    color: var(--mj-brand-primary);
+}

@@ -38,6 +38,32 @@
     background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
 }
 
+.filter-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.filter-close-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border: none;
+    border-radius: 4px;
+    background: none;
+    color: var(--mj-text-muted);
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.filter-close-btn:hover {
+    background: var(--mj-bg-surface-hover);
+    color: var(--mj-text-primary);
+}
+
 /* Category */
 .filter-category {
     border-bottom: 1px solid var(--mj-border-subtle);

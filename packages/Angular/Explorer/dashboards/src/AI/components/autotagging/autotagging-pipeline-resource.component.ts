@@ -12,8 +12,8 @@ import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { BaseEntity, CompositeKey, Metadata, RunView } from '@memberjunction/core';
 import { TreeBranchConfig, TreeLeafConfig } from '@memberjunction/ng-trees';
-import { ResourceData, KnowledgeHubMetadataEngine, MJContentSourceEntity, MJContentSourceTypeEntity_IContentSourceTypeField } from '@memberjunction/core-entities';
-import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { ResourceData, KnowledgeHubMetadataEngine, MJContentSourceEntity, MJContentSourceTypeEntity_IContentSourceTypeField, UserInfoEngine } from '@memberjunction/core-entities';
+import { RegisterClass, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -206,6 +206,11 @@ interface TaxHealthStat {
     Duplicates: number;
 }
 
+interface WeightedTag {
+    Tag: string;
+    Weight: number;
+}
+
 interface ContentItemDetail {
     ID: string;
     Name: string;
@@ -216,12 +221,19 @@ interface ContentItemDetail {
     URL: string;
     TextContent: string;
     Checksum: string;
-    Tags: string[];
+    Tags: WeightedTag[];
     CreatedAt: string;
     UpdatedAt: string;
     ContentSourceID: string;
+    ContentSourceTypeID: string;
     StatusDot: 'complete' | 'processing' | 'error';
     TagCount: number;
+    /** Whether this source type uses content/file type (false for Entity sources) */
+    RequiresContentType: boolean;
+    /** Entity record ID if source is entity type (for direct entity navigation) */
+    EntityRecordID: string | null;
+    /** Entity name if source is entity type */
+    EntityName: string | null;
 }
 
 interface SourceDetailInfo {
@@ -230,6 +242,7 @@ interface SourceDetailInfo {
     SourceTypeName: string;
     FileTypeName: string;
     ContentTypeName: string;
+    RequiresFileType: boolean;
     StatusClass: 'active' | 'error' | 'inactive';
     StatusLabel: string;
     Icon: string;
@@ -295,6 +308,30 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         RateLimits: { LLM: { RequestsPerMinute: 60, TokensPerMinute: 100000 }, Embedding: { RequestsPerMinute: 300, TokensPerMinute: 500000 }, VectorDB: { RequestsPerMinute: 200 } }
     };
 
+    public TogglePipelineConfig(): void {
+        this.ShowPipelineConfig = !this.ShowPipelineConfig;
+        this.persistClassifyPreferences();
+    }
+
+    private persistClassifyPreferences(): void {
+        const prefs = JSON.stringify({
+            ActiveTab: this.ActiveTab,
+            ShowPipelineConfig: this.ShowPipelineConfig,
+        });
+        UserInfoEngine.Instance.SetSettingDebounced(AutotaggingPipelineResourceComponent.PREFS_KEY, prefs);
+    }
+
+    private loadClassifyPreferences(): void {
+        const raw = UserInfoEngine.Instance.GetSetting(AutotaggingPipelineResourceComponent.PREFS_KEY);
+        if (raw) {
+            try {
+                const prefs = JSON.parse(raw);
+                if (prefs.ActiveTab) this.ActiveTab = prefs.ActiveTab;
+                if (prefs.ShowPipelineConfig != null) this.ShowPipelineConfig = prefs.ShowPipelineConfig;
+            } catch { /* ignore */ }
+        }
+    }
+
     public FormatTokenCount(tokens: number): string {
         if (tokens >= 1000000) return `${(tokens / 1000000).toFixed(1)}M`;
         if (tokens >= 1000) return `${(tokens / 1000).toFixed(0)}K`;
@@ -314,6 +351,8 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     public TagsBySource: TagBySource[] = [];
     public TagSearchQuery = '';
     public FilteredTagRows: TagRow[] = [];
+    public SelectedDrillDownTag: string | null = null;
+    public TagDrillDownItems: { ID: string; Name: string; SourceName: string; Weight: number; UpdatedAt: string; FeedIndex: number }[] = [];
 
     // ── Run History tab ──
     public RunHistoryRows: RunHistoryRow[] = [];
@@ -580,8 +619,15 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
 
     // ── Lifecycle ──
 
+    private static readonly PREFS_KEY = 'KH_Classify_Preferences';
+
     async ngAfterViewInit(): Promise<void> {
-        await this.LoadPipelineData();
+        await Promise.all([
+            KnowledgeHubMetadataEngine.Instance.Config(false),
+            UserInfoEngine.Instance.Config(false),
+        ]);
+        this.loadClassifyPreferences();
+        await Promise.all([this.LoadPipelineData(), this.loadEntityRecordDocCache()]);
         this.tabDataLoaded.add('pipeline');
         this.IsLoading = false;
         this.cdr.detectChanges();
@@ -606,6 +652,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     public async SwitchTab(tab: TabName): Promise<void> {
         if (tab === this.ActiveTab) return;
         this.ActiveTab = tab;
+        this.persistClassifyPreferences();
         this.cdr.detectChanges();
 
         if (!this.tabDataLoaded.has(tab)) {
@@ -647,7 +694,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             const rv = new RunView();
             const [sourcesResult, itemsResult, runsResult, tagsResult, sourceTypesResult, contentTypesResult] = await rv.RunViews([
                 { EntityName: 'MJ: Content Sources', OrderBy: 'Name', ResultType: 'simple' },
-                { EntityName: 'MJ: Content Items', OrderBy: '__mj_UpdatedAt DESC', MaxRows: 200, ResultType: 'simple', Fields: ['ID', 'Name', 'ContentSourceID', 'ContentSource', 'ContentSourceType', 'ContentType', 'ContentFileType', 'URL', 'TextContent', 'Checksum', '__mj_CreatedAt', '__mj_UpdatedAt'] },
+                { EntityName: 'MJ: Content Items', OrderBy: '__mj_UpdatedAt DESC', MaxRows: 200, ResultType: 'simple', Fields: ['ID', 'Name', 'ContentSourceID', 'ContentSourceTypeID', 'ContentSource', 'ContentSourceType', 'ContentType', 'ContentFileType', 'URL', 'Text', 'Checksum', 'EntityRecordDocumentID', '__mj_CreatedAt', '__mj_UpdatedAt'] },
                 { EntityName: 'MJ: Content Process Runs', OrderBy: 'StartTime DESC', MaxRows: 100, ResultType: 'simple' },
                 { EntityName: 'MJ: Content Item Tags', ResultType: 'simple', Fields: ['ID', 'ItemID', 'Tag', 'Weight', '__mj_CreatedAt'] },
                 { EntityName: 'MJ: Content Source Types', ResultType: 'simple' },
@@ -711,13 +758,14 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
 
         this.FeedItems = this.contentItemsRaw.slice(0, 50).map(item => {
             const itemId = item['ID'] as string;
+            const normalizedId = NormalizeUUID(itemId);
             const itemTags = this.getTopTagsForItem(itemId, 3);
             return {
                 Name: (item['Name'] as string) ?? 'Unnamed Item',
                 SourceName: (item['ContentSource'] as string) ?? 'Unknown',
                 Tags: itemTags,
                 TimeAgo: this.formatRelativeTime(item['__mj_UpdatedAt'] as string),
-                Status: this.inferItemStatus(tagsByItem.get(itemId) ?? 0)
+                Status: this.inferItemStatus(tagsByItem.get(normalizedId) ?? 0)
             };
         });
     }
@@ -944,6 +992,53 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         this.FilteredTagRows = q
             ? this.TagRows.filter(r => r.Tag.toLowerCase().includes(q))
             : this.TagRows;
+        this.cdr.detectChanges();
+    }
+
+    /** Drill down into content items matching a specific tag */
+    public DrillDownTag(tagName: string): void {
+        if (this.SelectedDrillDownTag === tagName) {
+            this.CloseDrillDownTag();
+            return;
+        }
+        this.SelectedDrillDownTag = tagName;
+
+        // Find all content items that have this tag
+        const matchingItemIDs = new Map<string, number>(); // itemID → weight
+        for (const tag of this.contentTagsRaw) {
+            if ((tag['Tag'] as string) === tagName) {
+                matchingItemIDs.set(
+                    NormalizeUUID(tag['ItemID'] as string),
+                    Number(tag['Weight'] ?? 1)
+                );
+            }
+        }
+
+        this.TagDrillDownItems = [];
+        for (let i = 0; i < this.contentItemsRaw.length; i++) {
+            const item = this.contentItemsRaw[i];
+            const normalizedID = NormalizeUUID(item['ID'] as string);
+            const weight = matchingItemIDs.get(normalizedID);
+            if (weight !== undefined) {
+                this.TagDrillDownItems.push({
+                    ID: item['ID'] as string,
+                    Name: (item['Name'] as string) ?? 'Unnamed',
+                    SourceName: (item['ContentSource'] as string) ?? 'Unknown',
+                    Weight: weight,
+                    UpdatedAt: this.formatShortDate((item['__mj_UpdatedAt'] as string) ?? ''),
+                    FeedIndex: i,
+                });
+            }
+        }
+
+        // Sort by weight descending
+        this.TagDrillDownItems.sort((a, b) => b.Weight - a.Weight);
+        this.cdr.detectChanges();
+    }
+
+    public CloseDrillDownTag(): void {
+        this.SelectedDrillDownTag = null;
+        this.TagDrillDownItems = [];
         this.cdr.detectChanges();
     }
 
@@ -1405,7 +1500,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     private countTagsByItem(): Map<string, number> {
         const counts = new Map<string, number>();
         for (const tag of this.contentTagsRaw) {
-            const itemId = tag['ItemID'] as string;
+            const itemId = NormalizeUUID(tag['ItemID'] as string);
             if (itemId) counts.set(itemId, (counts.get(itemId) ?? 0) + 1);
         }
         return counts;
@@ -1414,7 +1509,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     private getTopTagsForItem(itemId: string, max: number): string[] {
         const tags: string[] = [];
         for (const tag of this.contentTagsRaw) {
-            if ((tag['ItemID'] as string) === itemId) {
+            if (UUIDsEqual(tag['ItemID'] as string, itemId)) {
                 tags.push(tag['Tag'] as string);
                 if (tags.length >= max) break;
             }
@@ -1565,6 +1660,18 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         return n.toLocaleString();
     }
 
+    /** Returns font size in rem for a tag based on its weight (0.0-1.0). Range: 0.7rem to 1.0rem */
+    public TagFontSize(weight: number): string {
+        const min = 0.7;
+        const max = 1.0;
+        return `${min + (max - min) * Math.min(1, Math.max(0, weight))}rem`;
+    }
+
+    /** Format weight as percentage for display in tag chip */
+    public FormatWeight(weight: number): string {
+        return `${Math.round(weight * 100)}%`;
+    }
+
     private formatShortDate(dateStr: string): string {
         try {
             const d = new Date(dateStr);
@@ -1705,8 +1812,32 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         if (!rawItem) return;
 
         const itemId = rawItem['ID'] as string;
-        const allTags = this.getAllTagsForItem(itemId);
+        const allTags = this.getAllWeightedTagsForItem(itemId);
         const tagCount = allTags.length;
+
+        const contentSourceTypeID = (rawItem['ContentSourceTypeID'] as string) ?? '';
+        const requiresContentType = this.sourceTypeRequiresFileType(contentSourceTypeID);
+
+        // For entity sources, resolve the entity record ID from the EntityRecordDocument
+        let entityRecordID: string | null = null;
+        let entityName: string | null = null;
+        if (!requiresContentType) {
+            const source = this.contentSourcesRaw.find(s => UUIDsEqual(s['ID'] as string, rawItem['ContentSourceID'] as string));
+            if (source) {
+                const entityID = source['EntityID'] as string | null;
+                if (entityID) {
+                    const md = new Metadata();
+                    const entityInfo = md.Entities.find(e => UUIDsEqual(e.ID, entityID));
+                    entityName = entityInfo?.Name ?? null;
+                    // Get RecordID from the EntityRecordDocument linked to this content item
+                    const erdID = rawItem['EntityRecordDocumentID'] as string | null;
+                    if (erdID) {
+                        const erd = this.entityRecordDocCache.get(NormalizeUUID(erdID));
+                        entityRecordID = erd ?? null;
+                    }
+                }
+            }
+        }
 
         this.SelectedFeedItem = {
             ID: itemId,
@@ -1716,14 +1847,18 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             ContentTypeName: (rawItem['ContentType'] as string) ?? 'Unknown',
             FileTypeName: (rawItem['ContentFileType'] as string) ?? '',
             URL: (rawItem['URL'] as string) ?? '',
-            TextContent: (rawItem['TextContent'] as string) ?? '',
+            TextContent: (rawItem['Text'] as string) ?? '',
             Checksum: (rawItem['Checksum'] as string) ?? '',
             Tags: allTags,
             CreatedAt: this.formatDate((rawItem['__mj_CreatedAt'] as string) ?? ''),
             UpdatedAt: this.formatDate((rawItem['__mj_UpdatedAt'] as string) ?? ''),
             ContentSourceID: (rawItem['ContentSourceID'] as string) ?? '',
+            ContentSourceTypeID: contentSourceTypeID,
             StatusDot: feed.Status,
-            TagCount: tagCount
+            TagCount: tagCount,
+            RequiresContentType: requiresContentType,
+            EntityRecordID: entityRecordID,
+            EntityName: entityName,
         };
         this.ShowItemDetail = true;
         this.cdr.detectChanges();
@@ -1731,6 +1866,60 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
 
     public OpenContentItemDetail(item: ContentItemDetail): void {
         this.SelectedFeedItem = item;
+        this.ShowItemDetail = true;
+        this.cdr.detectChanges();
+    }
+
+    /** Open content item detail slide-in by content item ID (used from tag drill-down) */
+    public OpenItemDetailByID(contentItemID: string): void {
+        const rawIndex = this.contentItemsRaw.findIndex(i => UUIDsEqual(i['ID'] as string, contentItemID));
+        if (rawIndex < 0) return;
+
+        const rawItem = this.contentItemsRaw[rawIndex];
+        const itemId = rawItem['ID'] as string;
+        const allTags = this.getAllWeightedTagsForItem(itemId);
+        const contentSourceTypeID = (rawItem['ContentSourceTypeID'] as string) ?? '';
+        const requiresContentType = this.sourceTypeRequiresFileType(contentSourceTypeID);
+
+        let entityRecordID: string | null = null;
+        let entityName: string | null = null;
+        if (!requiresContentType) {
+            const source = this.contentSourcesRaw.find(s => UUIDsEqual(s['ID'] as string, rawItem['ContentSourceID'] as string));
+            if (source) {
+                const entityID = source['EntityID'] as string | null;
+                if (entityID) {
+                    const md = new Metadata();
+                    const entityInfo = md.Entities.find(e => UUIDsEqual(e.ID, entityID));
+                    entityName = entityInfo?.Name ?? null;
+                    const erdID = rawItem['EntityRecordDocumentID'] as string | null;
+                    if (erdID) {
+                        entityRecordID = this.entityRecordDocCache.get(NormalizeUUID(erdID)) ?? null;
+                    }
+                }
+            }
+        }
+
+        this.SelectedFeedItem = {
+            ID: itemId,
+            Name: (rawItem['Name'] as string) ?? 'Unnamed',
+            SourceName: (rawItem['ContentSource'] as string) ?? 'Unknown',
+            SourceTypeName: (rawItem['ContentSourceType'] as string) ?? 'Unknown',
+            ContentTypeName: (rawItem['ContentType'] as string) ?? 'Unknown',
+            FileTypeName: (rawItem['ContentFileType'] as string) ?? '',
+            URL: (rawItem['URL'] as string) ?? '',
+            TextContent: (rawItem['Text'] as string) ?? '',
+            Checksum: (rawItem['Checksum'] as string) ?? '',
+            Tags: allTags,
+            CreatedAt: this.formatDate((rawItem['__mj_CreatedAt'] as string) ?? ''),
+            UpdatedAt: this.formatDate((rawItem['__mj_UpdatedAt'] as string) ?? ''),
+            ContentSourceID: (rawItem['ContentSourceID'] as string) ?? '',
+            ContentSourceTypeID: contentSourceTypeID,
+            StatusDot: allTags.length > 0 ? 'complete' : 'processing',
+            TagCount: allTags.length,
+            RequiresContentType: requiresContentType,
+            EntityRecordID: entityRecordID,
+            EntityName: entityName,
+        };
         this.ShowItemDetail = true;
         this.cdr.detectChanges();
     }
@@ -1744,18 +1933,53 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     public OpenRecordFromItem(item: ContentItemDetail): void {
         const md = new Metadata();
         const pkey = new CompositeKey();
-        pkey.KeyValuePairs = [{ FieldName: 'ID', Value: item.ID }];
-        this.navigationService.OpenEntityRecord('MJ: Content Items', pkey);
+
+        // For entity sources: navigate to the actual entity record, not the ContentItem
+        if (item.EntityName && item.EntityRecordID) {
+            const entityInfo = md.Entities.find(e => e.Name === item.EntityName);
+            if (entityInfo) {
+                pkey.LoadFromURLSegment(entityInfo, item.EntityRecordID);
+            } else {
+                pkey.KeyValuePairs = [{ FieldName: 'ID', Value: item.EntityRecordID }];
+            }
+            this.navigationService.OpenEntityRecord(item.EntityName, pkey);
+        } else {
+            // For non-entity sources: open the ContentItem record
+            pkey.KeyValuePairs = [{ FieldName: 'ID', Value: item.ID }];
+            this.navigationService.OpenEntityRecord('MJ: Content Items', pkey);
+        }
     }
 
-    private getAllTagsForItem(itemId: string): string[] {
-        const tags: string[] = [];
-        for (const tag of this.contentTagsRaw) {
-            if ((tag['ItemID'] as string) === itemId) {
-                tags.push(tag['Tag'] as string);
+    /** Cache: EntityRecordDocument ID → RecordID */
+    private entityRecordDocCache = new Map<string, string>();
+
+    /** Load ERD RecordIDs for entity-sourced content items */
+    private async loadEntityRecordDocCache(): Promise<void> {
+        if (this.entityRecordDocCache.size > 0) return;
+        const rv = new RunView();
+        const result = await rv.RunView<{ ID: string; RecordID: string }>({
+            EntityName: 'MJ: Entity Record Documents',
+            ResultType: 'simple',
+            Fields: ['ID', 'RecordID'],
+        });
+        if (result.Success) {
+            for (const erd of result.Results) {
+                this.entityRecordDocCache.set(NormalizeUUID(erd.ID), erd.RecordID);
             }
         }
-        return tags;
+    }
+
+    private getAllWeightedTagsForItem(itemId: string): WeightedTag[] {
+        const tags: WeightedTag[] = [];
+        for (const tag of this.contentTagsRaw) {
+            if (UUIDsEqual(tag['ItemID'] as string, itemId)) {
+                tags.push({
+                    Tag: tag['Tag'] as string,
+                    Weight: Number(tag['Weight'] ?? 1),
+                });
+            }
+        }
+        return tags.sort((a, b) => b.Weight - a.Weight);
     }
 
     // ════════════════════════════════════════════
@@ -1781,6 +2005,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
                 SourceTypeName: card.SourceTypeName,
                 FileTypeName: card.FileTypeName,
                 ContentTypeName: card.ContentTypeName,
+                RequiresFileType: card.RequiresFileType,
                 StatusClass: card.StatusClass,
                 StatusLabel: card.StatusLabel,
                 Icon: card.Icon,
@@ -1853,8 +2078,9 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         const tagsByItem = this.countTagsByItem();
         return result.Results.map(item => {
             const itemId = item['ID'] as string;
-            const allTags = this.getAllTagsForItem(itemId);
+            const allTags = this.getAllWeightedTagsForItem(itemId);
             const tagCount = tagsByItem.get(itemId) ?? allTags.length;
+            const contentSourceTypeID = (item['ContentSourceTypeID'] as string) ?? '';
             return {
                 ID: itemId,
                 Name: (item['Name'] as string) ?? 'Unnamed',
@@ -1863,14 +2089,18 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
                 ContentTypeName: (item['ContentType'] as string) ?? '',
                 FileTypeName: (item['ContentFileType'] as string) ?? '',
                 URL: (item['URL'] as string) ?? '',
-                TextContent: (item['TextContent'] as string) ?? '',
+                TextContent: (item['Text'] as string) ?? '',
                 Checksum: (item['Checksum'] as string) ?? '',
                 Tags: allTags,
                 CreatedAt: this.formatDate((item['__mj_CreatedAt'] as string) ?? ''),
                 UpdatedAt: this.formatDate((item['__mj_UpdatedAt'] as string) ?? ''),
                 ContentSourceID: sourceId,
+                ContentSourceTypeID: contentSourceTypeID,
                 StatusDot: tagCount > 0 ? 'complete' : 'processing',
-                TagCount: tagCount
+                TagCount: tagCount,
+                RequiresContentType: this.sourceTypeRequiresFileType(contentSourceTypeID),
+                EntityRecordID: null,
+                EntityName: null,
             };
         });
     }
