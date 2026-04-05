@@ -1,5 +1,5 @@
 import { Metadata, UserInfo, LogError, LogStatus } from '@memberjunction/core';
-import { MJGlobal } from '@memberjunction/global';
+import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { BaseEmbeddings, EmbedTextsResult, GetAIAPIKey } from '@memberjunction/ai';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { MJAIPromptRunEntityExtended, MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
@@ -148,7 +148,7 @@ export class AIModelRunner {
         // Find the embedding prompt
         let prompt: MJAIPromptEntityExtended | null = null;
         if (params.PromptID) {
-            prompt = aiEngine.Prompts.find(p => p.ID === params.PromptID) ?? null;
+            prompt = aiEngine.Prompts.find(p => UUIDsEqual(p.ID, params.PromptID)) ?? null;
         } else {
             // Find first active Embedding-type prompt
             prompt = aiEngine.Prompts.find(p =>
@@ -158,7 +158,7 @@ export class AIModelRunner {
 
         // If explicit model ID provided, use it directly
         if (params.ModelID) {
-            const model = aiEngine.Models.find(m => m.ID === params.ModelID);
+            const model = aiEngine.Models.find(m => UUIDsEqual(m.ID, params.ModelID));
             if (model) {
                 const vendor = this.findBestVendor(model.ID);
                 if (vendor) {

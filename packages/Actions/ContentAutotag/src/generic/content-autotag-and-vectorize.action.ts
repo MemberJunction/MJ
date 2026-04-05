@@ -1,5 +1,5 @@
 import { BaseAction } from "@memberjunction/actions";
-import { MJGlobal, RegisterClass } from "@memberjunction/global";
+import { MJGlobal, RegisterClass, UUIDsEqual } from "@memberjunction/global";
 import { AutotagBase, AutotagBaseEngine, AutotagProgressCallback } from '@memberjunction/content-autotagging';
 import { ActionParam, ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { LogError, LogStatus, RunView } from "@memberjunction/core";
@@ -122,7 +122,7 @@ export class AutotagAndVectorizeContentAction extends BaseAction {
 
             // Apply source ID filter if specified
             if (contentSourceIDs && contentSourceIDs.length > 0) {
-                sources = sources.filter(s => contentSourceIDs.some(id => id.toLowerCase() === s.ID.toLowerCase()));
+                sources = sources.filter(s => contentSourceIDs.some(id => UUIDsEqual(id, s.ID)));
             }
 
             if (sources.length === 0) {

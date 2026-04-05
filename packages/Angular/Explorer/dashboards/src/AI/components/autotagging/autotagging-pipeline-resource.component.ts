@@ -434,7 +434,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     /** Whether the selected source type is the Entity type (name-based check) */
     public get IsEntitySourceTypeSelected(): boolean {
         if (!this.FormSourceTypeID) return false;
-        const sourceType = this.SourceTypeOptions.find(o => o.ID === this.FormSourceTypeID);
+        const sourceType = this.SourceTypeOptions.find(o => UUIDsEqual(o.ID, this.FormSourceTypeID));
         return sourceType?.Name?.toLowerCase() === 'entity';
     }
 
@@ -480,7 +480,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         try {
             const engine = KnowledgeHubMetadataEngine.Instance;
             const md = new Metadata();
-            const entityInfo = md.Entities.find(e => e.ID === this.FormSourceEntityID);
+            const entityInfo = md.Entities.find(e => UUIDsEqual(e.ID, this.FormSourceEntityID));
             if (!entityInfo) return [];
             return engine.GetActiveEntityDocuments()
                 .filter(d => (d.Get('Entity') as string) === entityInfo.Name)
@@ -506,7 +506,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         if (!this.FormSourceTypeID) return [];
         try {
             const engine = KnowledgeHubMetadataEngine.Instance;
-            const sourceType = engine.ContentSourceTypes.find(st => st.ID === this.FormSourceTypeID);
+            const sourceType = engine.ContentSourceTypes.find(st => UUIDsEqual(st.ID, this.FormSourceTypeID));
             if (!sourceType) return [];
             const config = sourceType.ConfigurationObject;
             return config?.RequiredFields ?? [];
@@ -526,7 +526,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             try {
                 const engine = KnowledgeHubMetadataEngine.Instance;
                 const md = new Metadata();
-                const entityInfo = md.Entities.find(e => e.ID === entityID);
+                const entityInfo = md.Entities.find(e => UUIDsEqual(e.ID, entityID));
                 if (!entityInfo) return [];
                 return engine.GetActiveEntityDocuments()
                     .filter(d => (d.Get('Entity') as string) === entityInfo.Name)
@@ -1132,7 +1132,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
 
         // Populate FormSourceSpecificConfig from existing Configuration JSON
         this.FormSourceSpecificConfig = {};
-        const rawSource = this.contentSourcesRaw.find(s => s['ID'] === card.ID);
+        const rawSource = this.contentSourcesRaw.find(s => UUIDsEqual(s['ID'] as string, card.ID));
         if (rawSource) {
             const configStr = rawSource['Configuration'] as string | null;
             if (configStr) {
@@ -2384,7 +2384,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     }
 
     public NavigateToBreadcrumb(tagId: string): void {
-        const node = this.TaxFlatNodes.find(n => n.ID === tagId);
+        const node = this.TaxFlatNodes.find(n => UUIDsEqual(n.ID, tagId));
         if (node) {
             this.SelectTaxNode(node);
         }
@@ -2394,7 +2394,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         // Find content item tags that reference this tag's ID
         const recentItems: { Name: string; Weight: number; Date: string; Icon: string }[] = [];
         const matchingTags = this.contentTagsRaw.filter(cit =>
-            (cit['TagID'] as string) === node.ID
+            UUIDsEqual(cit['TagID'] as string, node.ID)
         ).slice(0, 5);
 
         for (const cit of matchingTags) {
@@ -2695,7 +2695,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             if (deleted) {
                 this.addTaxAuditEntry('deleted', orphan.Name);
                 MJNotificationService.Instance.CreateSimpleNotification('Orphan tag deleted', 'success', 2500);
-                this.TaxOrphans = this.TaxOrphans.filter(o => o.ID !== orphan.ID);
+                this.TaxOrphans = this.TaxOrphans.filter(o => !UUIDsEqual(o.ID, orphan.ID));
                 this.TaxHealth.Orphaned = this.TaxOrphans.length;
                 this.cdr.detectChanges();
             }
