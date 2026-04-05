@@ -12,11 +12,32 @@ MemberJunction's AI agent needs to understand what the user is currently looking
 
 2. **Agent Client Tools** -- functions the agent can invoke in the browser (e.g., "run a search", "toggle filters"). These are registered dynamically and scoped to whichever dashboard is currently active.
 
-Both mechanisms flow through `NavigationService` so that resource components never need to reference `AgentClientService` directly.
+Both mechanisms ultimately flow to `AgentClientService` (which manages the PubSub session with the server) and into `AppContextSnapshot.AdditionalContext` (which is injected into the agent's system prompt).
+
+**How context and tools reach the agent is application-specific.** Each host application (MJ Explorer, a custom Angular app, a React app, etc.) implements its own plumbing to collect context from active views and pass it to `AgentClientService`. The core agent infrastructure (`AppContextSnapshot`, `BaseAgent.buildAppContextSection()`, `AgentClientService`) is framework-agnostic.
 
 ---
 
-## Architecture
+## Core Architecture (Framework-Agnostic)
+
+These pieces are shared across all applications:
+
+- **`AppContextSnapshot`** (`@memberjunction/ai-core-plus`) — the data shape that describes what the user sees. Includes `AdditionalContext` for per-view state.
+- **`AgentClientService`** (`@memberjunction/ng-agent-client`) — Angular service wrapping `AgentClientSession`. Manages tool registration, PubSub subscriptions, and tool execution.
+- **`BaseAgent.buildAppContextSection()`** (`@memberjunction/ai-agents`) — server-side method that renders `AppContextSnapshot` (including `AdditionalContext`) into the agent's system prompt.
+
+```
+  AppContextSnapshot.AdditionalContext  ──▶  Chat Overlay  ──▶  Agent system prompt
+  AgentClientService.RegisterTool()     ──▶  Agent sees tools ──▶  Agent invokes tool ──▶  Handler runs in browser
+```
+
+---
+
+## MJ Explorer Implementation
+
+MJ Explorer uses `NavigationService` as its application-specific bridge between resource components and the agent infrastructure. **This pattern is specific to MJ Explorer** — other applications would implement their own mechanism to collect view state and register tools with `AgentClientService`.
+
+### Architecture
 
 ```
  Resource Component                NavigationService               explorer-app
@@ -40,11 +61,21 @@ Both mechanisms flow through `NavigationService` so that resource components nev
 
 ### Tab switch restoration
 
-When the user switches tabs, the `ComponentCacheManager` stores the outgoing component's `AgentContext` and `AgentClientTools` in `CachedComponentInfo`. When the component becomes active again, `explorer-app` replays the cached values -- restoring context and re-registering tools -- so the agent always reflects the active tab.
+When the user switches tabs, MJ Explorer's `ComponentCacheManager` stores the outgoing component's `AgentContext` and `AgentClientTools` in `CachedComponentInfo`. When the component becomes active again, `explorer-app` replays the cached values -- restoring context and re-registering tools -- so the agent always reflects the active tab.
+
+### For other applications
+
+If you are building a custom application (not MJ Explorer), you would:
+1. Populate an `AppContextSnapshot` object with your app's state
+2. Pass it to your chat/conversation component via its `AppContext` input
+3. Call `AgentClientService.RegisterTool()` / `UnregisterTool()` directly to manage tools
+4. The core agent infrastructure handles the rest (prompt injection, tool execution, PubSub)
 
 ---
 
-## How to Add Context to a New Dashboard
+## How to Add Context to a New Dashboard (MJ Explorer)
+
+The following pattern applies to resource components within MJ Explorer. Other applications would use `AgentClientService` directly.
 
 ### 1. Import and inject NavigationService
 
@@ -245,7 +276,7 @@ On the server, `BaseAgent.buildAppContextSection()` renders `AdditionalContext` 
 
 1. **Use `AdditionalContext`, not `DashboardContext`**. The field is named generically because the system is not specific to Explorer -- any view type (dashboard, form, report) can report context.
 
-2. **Components use `NavigationService`, not `AgentClientService` directly**. NavigationService is the Explorer-level abstraction. AgentClientService is a lower-level Angular service that manages the PubSub session. Components should not need to know about session management or tool lifecycle.
+2. **In MJ Explorer, components use `NavigationService`, not `AgentClientService` directly**. NavigationService is the Explorer-level abstraction that handles component caching, tab switch restoration, and tool lifecycle. Other applications may use `AgentClientService` directly — the core infrastructure supports both patterns.
 
 3. **Handler signature**: `(params: Record<string, unknown>) => Promise<unknown>`. Return an object with `{ Success: boolean; Data?: Record<string, unknown>; ErrorMessage?: string }` for consistency with global tools.
 
