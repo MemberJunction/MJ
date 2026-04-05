@@ -1,7 +1,7 @@
 {
   "fields": {
     "Name": "Knowledge Hub",
-    "Description": "Unified knowledge management: semantic search, vector management, duplicate detection, content autotagging, and AI assistant",
+    "Description": "Unified knowledge management: semantic search, vector management, duplicate detection, content classification, and AI assistant",
     "Icon": "fa-solid fa-brain",
     "DefaultForNewUser": false,
     "Color": "#7c3aed",
@@ -36,17 +36,10 @@
         "isDefault": false
       },
       {
-        "Label": "Autotagging",
+        "Label": "Classify",
         "Icon": "fa-solid fa-tags",
         "ResourceType": "Custom",
         "DriverClass": "AutotaggingPipelineResource",
-        "isDefault": false
-      },
-      {
-        "Label": "Schedules",
-        "Icon": "fa-solid fa-clock",
-        "ResourceType": "Custom",
-        "DriverClass": "SchedulingResource",
         "isDefault": false
       },
       {
@@ -72,7 +65,7 @@
     "ID": "796EB8B2-B392-428B-839C-E9637C3D7EDB"
   },
   "sync": {
-    "lastModified": "2026-04-04T22:32:26.748Z",
-    "checksum": "43113d22dc71e7cbc76c88d3304debb14c6ebf394d43b6ebec3a09eb52245a8b"
+    "lastModified": "2026-04-05T00:58:40.912Z",
+    "checksum": "a0e4568ee0c360698f9748e31f96bdd6b39f9b81f33b74d8d4140e68173e8c43"
   }
 }

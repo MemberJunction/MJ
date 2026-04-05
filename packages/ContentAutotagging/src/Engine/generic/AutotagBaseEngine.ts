@@ -167,6 +167,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         processingParams.maxTags = maxTags;
         processingParams.contentItemID = contentItem.ID;
 
+        LogStatus(`[Autotag] Built params for "${contentItem.Name}" — text length: ${processingParams.text?.length ?? 0}, modelID: ${modelID || 'default'}, tags: ${minTags}-${maxTags}`);
         return processingParams;
     }
 
@@ -227,25 +228,42 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     }
 
     public async promptAndRetrieveResultsFromLLM(params: ContentItemProcessParams, contextUser: UserInfo): Promise<JsonObject> {
+        LogStatus(`[Autotag] promptAndRetrieveResultsFromLLM: starting for item ${params.contentItemID}`);
         await AIEngine.Instance.Config(false, contextUser);
 
         const prompt = this.getAutotagPrompt();
+        LogStatus(`[Autotag] Found prompt "${prompt.Name}" (ID: ${prompt.ID}), Status: ${prompt.Status}`);
 
         // Determine token limit for chunking: use override model if set, else first prompt-model, else a default
         const tokenLimit = this.resolveTokenLimit(params.modelID);
+        const textLength = params.text?.length ?? 0;
         const chunks = this.chunkExtractedText(params.text, tokenLimit);
+        LogStatus(`[Autotag] Text length: ${textLength}, token limit: ${tokenLimit}, chunks: ${chunks.length}`);
+
+        if (chunks.length === 0 || (chunks.length === 1 && (!chunks[0] || chunks[0].trim().length === 0))) {
+            LogError(`[Autotag] No text to process for item ${params.contentItemID} — text is empty or whitespace only`);
+            return {};
+        }
 
         let LLMResults: JsonObject = {};
         const startTime = new Date();
 
-        for (const chunk of chunks) {
-            LLMResults = await this.processChunkWithPromptRunner(prompt, params, chunk, LLMResults, contextUser);
+        for (let ci = 0; ci < chunks.length; ci++) {
+            LogStatus(`[Autotag] Processing chunk ${ci + 1}/${chunks.length} (${chunks[ci].length} chars) for item ${params.contentItemID}`);
+            try {
+                LLMResults = await this.processChunkWithPromptRunner(prompt, params, chunks[ci], LLMResults, contextUser);
+                LogStatus(`[Autotag] Chunk ${ci + 1} completed. Keywords so far: ${Array.isArray(LLMResults.keywords) ? LLMResults.keywords.length : 'none'}`);
+            } catch (chunkError) {
+                const msg = chunkError instanceof Error ? chunkError.message : String(chunkError);
+                LogError(`[Autotag] Chunk ${ci + 1} THREW exception: ${msg}`);
+            }
         }
 
         LLMResults.processStartTime = startTime;
         LLMResults.processEndTime = new Date();
         LLMResults.contentItemID = params.contentItemID;
 
+        LogStatus(`[Autotag] LLM processing complete for item ${params.contentItemID}. Final keywords: ${Array.isArray(LLMResults.keywords) ? LLMResults.keywords.length : 'none'}, keys: ${Object.keys(LLMResults).join(', ')}`);
         return LLMResults;
     }
 
@@ -290,13 +308,14 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         }
 
         const runner = new AIPromptRunner();
-        // Per-item logging removed for cleanliness — batch-level logging in ExtractTextAndProcessWithLLM
+        LogStatus(`[Autotag] Calling AIPromptRunner.ExecutePrompt for item ${params.contentItemID}...`);
         const result = await runner.ExecutePrompt<JsonObject>(promptParams);
 
         if (!result.success) {
-            LogError(`AIPromptRunner FAILED for content item ${params.contentItemID}: ${result.errorMessage ?? 'no error message'}`, undefined, result);
+            LogError(`[Autotag] AIPromptRunner FAILED for content item ${params.contentItemID}: ${result.errorMessage ?? 'no error message'}`, undefined, result);
             return LLMResults;
         }
+        LogStatus(`[Autotag] AIPromptRunner SUCCEEDED for item ${params.contentItemID}. Result type: ${typeof result.result}, has data: ${result.result != null}`);
 
 
         // Parse the result — AIPromptRunner may return a raw JSON string or a parsed object
@@ -326,11 +345,16 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     }
 
     public async saveLLMResults(LLMResults: JsonObject, contextUser: UserInfo): Promise<void> {
+        LogStatus(`[Autotag] saveLLMResults: isValidContent=${LLMResults.isValidContent}, contentItemID=${LLMResults.contentItemID}, keywords=${Array.isArray(LLMResults.keywords) ? LLMResults.keywords.length : 'none'}`);
         if (LLMResults.isValidContent === true) {
             await this.saveResultsToContentItemAttribute(LLMResults, contextUser);
             await this.saveContentItemTags(LLMResults.contentItemID as string, LLMResults, contextUser);
-        } else {
+            LogStatus(`[Autotag] Saved tags + attributes for item ${LLMResults.contentItemID}`);
+        } else if (LLMResults.isValidContent === false) {
+            LogStatus(`[Autotag] Content marked INVALID by LLM for item ${LLMResults.contentItemID}, deleting`);
             await this.deleteInvalidContentItem(LLMResults.contentItemID as string, contextUser);
+        } else {
+            LogError(`[Autotag] isValidContent is undefined/null for item ${LLMResults.contentItemID} — LLM may not have returned expected format. Keys: ${Object.keys(LLMResults).join(', ')}`);
         }
     }
 
@@ -807,19 +831,30 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
 
         for (let i = 0; i < items.length; i += batchSize) {
             const batch = items.slice(i, i + batchSize);
-            const texts = batch.map(item => this.buildEmbeddingText(item));
 
+            // Build chunks for each item — items with long text produce multiple chunks
+            const allChunks: { item: MJContentItemEntity; chunkIndex: number; text: string }[] = [];
+            for (const item of batch) {
+                const chunks = this.buildEmbeddingChunks(item);
+                for (let ci = 0; ci < chunks.length; ci++) {
+                    allChunks.push({ item, chunkIndex: ci, text: chunks[ci] });
+                }
+            }
+
+            const texts = allChunks.map(c => c.text);
             const embedResult = await infra.embedding.EmbedTexts({ texts, model: infra.embeddingModelName });
-            if (!embedResult.vectors || embedResult.vectors.length !== batch.length) {
-                LogError(`VectorizeContentItems: embedding returned ${embedResult.vectors?.length ?? 0} vectors for ${batch.length} texts`);
+            if (!embedResult.vectors || embedResult.vectors.length !== allChunks.length) {
+                LogError(`VectorizeContentItems: embedding returned ${embedResult.vectors?.length ?? 0} vectors for ${allChunks.length} texts`);
                 onBatchComplete(batch.length);
                 continue;
             }
 
-            const records: VectorRecord[] = batch.map((item, idx) => ({
-                id: this.contentItemVectorId(item.ID),
+            const records: VectorRecord[] = allChunks.map((chunk, idx) => ({
+                id: chunk.chunkIndex === 0
+                    ? this.contentItemVectorId(chunk.item.ID)
+                    : this.contentItemVectorId(chunk.item.ID) + `_chunk${chunk.chunkIndex}`,
                 values: embedResult.vectors[idx],
-                metadata: this.buildVectorMetadata(item, tagMap.get(item.ID))
+                metadata: this.buildVectorMetadata(chunk.item, tagMap.get(chunk.item.ID))
             }));
 
             // Upsert records in parallel sub-batches for throughput
@@ -1092,12 +1127,49 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     }
 
     /** Build the text that gets embedded: Title + Description + full Text */
-    private buildEmbeddingText(item: MJContentItemEntity): string {
+    /**
+     * Max tokens per embedding chunk. text-embedding-3-small supports 8,191 tokens.
+     * We use a conservative limit to avoid hitting the boundary.
+     */
+    private static readonly MAX_EMBEDDING_TOKENS = 7500;
+
+    /**
+     * Build the text to embed for a content item, and chunk it if it exceeds
+     * the embedding model's token limit. Returns one or more text chunks.
+     */
+    private buildEmbeddingChunks(item: MJContentItemEntity): string[] {
         const parts: string[] = [];
         if (item.Name) parts.push(item.Name);
         if (item.Description) parts.push(item.Description);
         if (item.Text) parts.push(item.Text);
-        return parts.join('\n');
+        const full = parts.join('\n');
+
+        // Rough char estimate: 1 token ≈ 4 chars
+        const charLimit = AutotagBaseEngine.MAX_EMBEDDING_TOKENS * 4;
+
+        if (full.length <= charLimit) {
+            return [full];
+        }
+
+        // Chunk using TextChunker for token-aware splitting
+        LogStatus(`[Autotag] Chunking embedding text for "${item.Name}" (${full.length} chars, ~${Math.ceil(full.length / 4)} tokens)`);
+        try {
+            const chunkParams: ChunkTextParams = {
+                Text: full,
+                MaxChunkTokens: AutotagBaseEngine.MAX_EMBEDDING_TOKENS,
+                OverlapTokens: 100,
+            };
+            const chunks = TextChunker.ChunkText(chunkParams);
+            LogStatus(`[Autotag] Split into ${chunks.length} chunks for embedding`);
+            return chunks.map(c => c.Text);
+        } catch {
+            // Fallback: simple character-based splitting
+            const result: string[] = [];
+            for (let i = 0; i < full.length; i += charLimit) {
+                result.push(full.substring(i, i + charLimit));
+            }
+            return result;
+        }
     }
 
     /** Build metadata stored alongside the vector — truncate large text fields */

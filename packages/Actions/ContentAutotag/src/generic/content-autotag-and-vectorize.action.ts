@@ -31,15 +31,31 @@ export class AutotagAndVectorizeContentAction extends BaseAction {
             // Initialize the autotagging engine (loads cached metadata)
             await AutotagBaseEngine.Instance.Config(false, params.ContextUser);
 
-            // Run autotagging and vectorization in parallel when both are enabled
-            const promises: Promise<void>[] = [];
+            LogStatus(`[AutotagAction] Autotag=${autotagParam.Value}, Vectorize=${vectorizeParam.Value}`);
+
+            // Phase 1: Run autotag providers to create/update ContentItems in the DB.
+            // Providers use checksum comparison to skip unchanged items.
             if (autotagParam.Value === 1) {
-                promises.push(this.RunAutotagProviders(params, onProgress));
+                LogStatus(`[AutotagAction] Phase 1: Running providers to create/update content items...`);
+                await this.RunAutotagProviders(params, onProgress);
+                LogStatus(`[AutotagAction] Phase 1 complete — providers finished`);
             }
+
+            // Phase 2: Now that items exist in the DB, run LLM tagging and
+            // vectorization in parallel. Both read from the DB independently.
+            // - Tagging: only processes items returned by providers (new/changed)
+            // - Vectorization: processes ALL content items (upserts are idempotent)
+            const phase2: Promise<void>[] = [];
             if (vectorizeParam.Value === 1) {
-                promises.push(this.RunDirectVectorization(params));
+                LogStatus(`[AutotagAction] Phase 2: Starting vectorization...`);
+                phase2.push(this.RunDirectVectorization(params));
             }
-            await Promise.all(promises);
+            // Note: LLM tagging already ran inside each provider's Autotag() method
+            // in Phase 1 — it's not a separate step here.
+            if (phase2.length > 0) {
+                await Promise.all(phase2);
+            }
+            LogStatus(`[AutotagAction] All tasks completed`);
 
             return { Success: true, ResultCode: "SUCCESS" };
         } catch (error) {
@@ -84,8 +100,9 @@ export class AutotagAndVectorizeContentAction extends BaseAction {
             }
 
             try {
+                LogStatus(`[AutotagAction] >>> Running provider "${sourceType.Name}" (${sourceType.DriverClass}) with ${sources.length} source(s)...`);
                 await provider.Autotag(params.ContextUser, onProgress);
-                LogStatus(`Autotag provider "${sourceType.Name}" (${sourceType.DriverClass}) completed successfully`);
+                LogStatus(`[AutotagAction] <<< Provider "${sourceType.Name}" (${sourceType.DriverClass}) completed successfully`);
             } catch (providerError) {
                 const msg = providerError instanceof Error ? providerError.message : String(providerError);
                 LogError(`Autotag provider "${sourceType.Name}" (${sourceType.DriverClass}) failed: ${msg}`);

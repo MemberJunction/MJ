@@ -7,7 +7,7 @@
  * GraphQL subscriptions.
  */
 
-import { Component, ChangeDetectorRef, OnDestroy, AfterViewInit, Input, inject, ViewEncapsulation } from '@angular/core';
+import { Component, ChangeDetectorRef, OnDestroy, AfterViewInit, Input, inject, ViewEncapsulation, HostListener } from '@angular/core';
 import { Subject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
 import { CompositeKey, LogStatus, Metadata, RecordDependency, RecordMergeRequest, RunView } from '@memberjunction/core';
@@ -103,6 +103,14 @@ interface EntityDocumentOption {
     encapsulation: ViewEncapsulation.None
 })
 export class DuplicateDetectionResourceComponent extends BaseResourceComponent implements AfterViewInit, OnDestroy {
+
+    /** Close comparison panel on Escape key */
+    @HostListener('document:keydown.escape')
+    OnEscapeKey(): void {
+        if (this.ComparisonGroup) {
+            this.CloseComparison();
+        }
+    }
     private cdr = inject(ChangeDetectorRef);
     private navigationService = inject(NavigationService);
     private destroy$ = new Subject<void>();
@@ -614,6 +622,40 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
     }
 
     /** Format a date for display */
+    /**
+     * Format a composite key string (e.g., "ID|5A07433E-F36B-1410-8AA5-00F1597429B5")
+     * into a readable format. For single-key entities, shows just the value truncated.
+     * For composite keys, shows key: value pairs.
+     */
+    /** Whether there are any non-skipped matches available for merging */
+    public get HasMergeableMatches(): boolean {
+        return this.ComparisonMatches.some(m => m.Match.ApprovalStatus !== 'Rejected');
+    }
+
+    public FormatRecordID(recordID: string): string {
+        if (!recordID) return '';
+        const pairs = recordID.split('||');
+        if (pairs.length === 1) {
+            // Single key — extract just the value
+            const parts = pairs[0].split('|');
+            if (parts.length === 2) {
+                const val = parts[1];
+                // Truncate long UUIDs
+                return val.length > 12 ? val.substring(0, 8) + '...' : val;
+            }
+            return recordID.length > 12 ? recordID.substring(0, 8) + '...' : recordID;
+        }
+        // Composite key — show key: truncated value pairs
+        return pairs.map(p => {
+            const parts = p.split('|');
+            if (parts.length === 2) {
+                const val = parts[1].length > 8 ? parts[1].substring(0, 8) + '...' : parts[1];
+                return `${parts[0]}: ${val}`;
+            }
+            return p;
+        }).join(', ');
+    }
+
     public FormatDate(date: Date | null): string {
         if (!date) return '';
         const d = new Date(date);
@@ -827,7 +869,7 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
             const metadata = this.parseRecordMetadata(detail.RecordMetadata);
             const entityName = metadata.Entity || run?.Entity || 'Unknown';
             const entityIcon = metadata.EntityIcon || 'fa-solid fa-database';
-            const recordName = metadata.Name || detail.RecordID;
+            const recordName = this.resolveRecordName(metadata, entityName, detail.RecordID);
 
             // Build top match summaries from match metadata
             const topMatchSummaries = this.buildTopMatchSummaries(detailMatches, 3);
@@ -1187,11 +1229,17 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
     }
 
     /** Get non-surviving columns with their dependency counts */
+    /** Get non-surviving columns excluding skipped (Rejected) matches for merge confirmation display */
     public GetNonSurvivorColumns(): Array<{ ColumnIndex: number; Name: string; DepCount: number }> {
         const result: Array<{ ColumnIndex: number; Name: string; DepCount: number }> = [];
         const totalColumns = 1 + this.ComparisonMatches.length;
         for (let i = 0; i < totalColumns; i++) {
             if (i === this.SurvivorColumnIndex) continue;
+            // Skip records marked as Rejected/Skipped
+            if (i > 0) {
+                const matchInfo = this.ComparisonMatches[i - 1];
+                if (matchInfo?.Match?.ApprovalStatus === 'Rejected') continue;
+            }
             result.push({
                 ColumnIndex: i,
                 Name: this.GetColumnName(i),
@@ -1272,6 +1320,11 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
         const totalColumns = 1 + this.ComparisonMatches.length;
         for (let i = 0; i < totalColumns; i++) {
             if (i === this.SurvivorColumnIndex) continue;
+            // Skip records that the user has marked as "Skipped" (Rejected)
+            if (i > 0) {
+                const matchInfo = this.ComparisonMatches[i - 1];
+                if (matchInfo?.Match?.ApprovalStatus === 'Rejected') continue;
+            }
             const keyStr = this.getCompositeKeyStringForColumn(i);
             if (keyStr) {
                 const ck = new CompositeKey();
@@ -1424,11 +1477,12 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
             .sort((a, b) => b.MatchProbability - a.MatchProbability)
             .map(m => {
                 const meta = this.parseRecordMetadata(m.RecordMetadata);
-                // Try to get name from loaded entity record, fall back to vector metadata
-                const nameFromRecord = this.getRecordFieldValue(m.MatchRecordID, 'Name');
+                // Resolve display name using IsNameField fields from entity metadata
+                const entityName = this.ComparisonGroup!.EntityName;
+                const resolvedName = this.resolveMatchName(entityName, m.MatchRecordID, meta);
                 return {
                     Match: m,
-                    Name: nameFromRecord || meta.Name || m.MatchRecordID?.substring(0, 16) + '...',
+                    Name: resolvedName,
                     Score: m.MatchProbability,
                     Metadata: meta,
                     DiffCount: 0,
@@ -1505,10 +1559,84 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
             .map(m => {
                 const meta = this.parseRecordMetadata(m.RecordMetadata);
                 return {
-                    Name: meta.Name || m.MatchRecordID?.substring(0, 12) + '...',
+                    Name: this.resolveRecordName(meta, this.SelectedEntityFilter || 'Unknown', m.MatchRecordID ?? ''),
                     Score: m.MatchProbability,
                 };
             });
+    }
+
+    /**
+     * Resolve match record name from loaded entity records using IsNameField fields.
+     * Falls back to metadata, then truncated record ID.
+     */
+    private resolveMatchName(entityName: string, matchRecordID: string, meta: RecordMetadataInfo): string {
+        try {
+            const md = new Metadata();
+            const entityInfo = md.Entities.find(e => e.Name === entityName);
+            if (entityInfo) {
+                const nameFields = entityInfo.Fields
+                    .filter(f => f.IsNameField)
+                    .sort((a, b) => (a.Sequence ?? 9999) - (b.Sequence ?? 9999));
+                if (nameFields.length > 0) {
+                    // Try loaded entity record data first
+                    const parts = nameFields
+                        .map(f => this.getRecordFieldValue(matchRecordID, f.Name))
+                        .filter(v => v != null && String(v).trim() !== '')
+                        .map(v => String(v));
+                    if (parts.length > 0) return parts.join(' ');
+
+                    // Fall back to vector metadata
+                    const metaParts = nameFields
+                        .map(f => meta[f.Name])
+                        .filter(v => v != null && String(v).trim() !== '')
+                        .map(v => String(v));
+                    if (metaParts.length > 0) return metaParts.join(' ');
+                }
+            }
+        } catch { /* fall through */ }
+
+        return (meta.Name as string) || this.FormatRecordID(matchRecordID ?? '');
+    }
+
+    /**
+     * Resolve record display name from metadata using entity IsNameField fields.
+     * Combines multiple name fields (e.g., FirstName + LastName → "Sarah Chen").
+     * Falls back to metadata.Name, then recordID.
+     */
+    private resolveRecordName(metadata: RecordMetadataInfo, entityName: string, recordID: string): string {
+        try {
+            const md = new Metadata();
+            const entityInfo = md.Entities.find(e => e.Name === entityName);
+            if (entityInfo) {
+                const nameFields = entityInfo.Fields
+                    .filter(f => f.IsNameField)
+                    .sort((a, b) => (a.Sequence ?? 9999) - (b.Sequence ?? 9999));
+                if (nameFields.length > 0) {
+                    // 1. Try individual name fields from metadata (new rich metadata)
+                    const metaParts = nameFields
+                        .map(f => metadata[f.Name])
+                        .filter(v => v != null && String(v).trim() !== '')
+                        .map(v => String(v));
+                    if (metaParts.length > 0) return metaParts.join(' ');
+
+                    // 2. Try loaded entity records (available in comparison panel)
+                    const recordParts = nameFields
+                        .map(f => this.getRecordFieldValue(recordID, f.Name))
+                        .filter(v => v != null && String(v).trim() !== '')
+                        .map(v => String(v));
+                    if (recordParts.length > 0) return recordParts.join(' ');
+                }
+                // 3. Single NameField fallback
+                if (entityInfo.NameField && metadata[entityInfo.NameField.Name]) {
+                    return String(metadata[entityInfo.NameField.Name]);
+                }
+            }
+        } catch { /* fall through */ }
+
+        // 4. Heuristic — skip single-char or initial-only names from old sparse metadata
+        const metaName = metadata.Name as string;
+        if (metaName && metaName.length > 2) return metaName;
+        return (metadata.Title as string) || this.FormatRecordID(recordID);
     }
 
     /**

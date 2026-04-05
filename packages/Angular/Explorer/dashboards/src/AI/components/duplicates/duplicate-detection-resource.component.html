@@ -675,8 +675,9 @@
                             (click)="RejectMatch(ComparisonGroup!); CloseComparison()">
                         <i class="fa-solid fa-times"></i> Reject All
                     </button>
-                    <button class="action-btn merge-btn" [disabled]="IsSaving"
-                            (click)="OpenMergeConfirm()">
+                    <button class="action-btn merge-btn" [disabled]="IsSaving || !HasMergeableMatches"
+                            (click)="OpenMergeConfirm()"
+                            [title]="HasMergeableMatches ? 'Merge non-skipped records' : 'All matches have been skipped'">
                         <i class="fa-solid fa-code-merge"></i> Merge Records
                     </button>
                 </div>

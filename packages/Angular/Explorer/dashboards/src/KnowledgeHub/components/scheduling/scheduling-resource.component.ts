@@ -14,7 +14,7 @@ import { Subject } from 'rxjs';
 import { Metadata, RunView } from '@memberjunction/core';
 import { ResourceData, MJScheduledJobEntity, MJScheduledJobRunEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseResourceComponent } from '@memberjunction/ng-shared';
+import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ScheduledJobService, ScheduledJobDialogResult } from '@memberjunction/ng-scheduling';
 
@@ -37,6 +37,7 @@ interface CronParts {
 })
 export class SchedulingResourceComponent extends BaseResourceComponent implements AfterViewInit, OnDestroy {
     private cdr = inject(ChangeDetectorRef);
+    private navigationService = inject(NavigationService);
     private scheduledJobService = inject(ScheduledJobService);
     private destroy$ = new Subject<void>();
 
@@ -151,6 +152,20 @@ export class SchedulingResourceComponent extends BaseResourceComponent implement
         this.cdr.detectChanges();
     }
 
+    /** Navigate to the full Scheduling application */
+    public GoToSchedulingApp(): void {
+        const md = new Metadata();
+        const schedulingApp = md.Applications.find(a => a.Name === 'Scheduling');
+        if (schedulingApp) {
+            this.navigationService.SwitchToApp(schedulingApp.ID);
+        } else {
+            MJNotificationService.Instance.CreateSimpleNotification(
+                'Scheduling app not found. Check application configuration.',
+                'warning', 3000
+            );
+        }
+    }
+
     // ================================================================
     // Public Methods — Card Display Helpers
     // ================================================================
@@ -239,7 +254,7 @@ export class SchedulingResourceComponent extends BaseResourceComponent implement
             const [jobsResult, runsResult] = await rv.RunViews([
                 {
                     EntityName: 'MJ: Scheduled Jobs',
-                    ExtraFilter: '',
+                    ExtraFilter: `Name LIKE '%Autotag%' OR Name LIKE '%Vector%' OR Name LIKE '%Content%' OR Name LIKE '%Knowledge%' OR Name LIKE '%Tag%'`,
                     OrderBy: 'Name',
                     ResultType: 'entity_object',
                 },

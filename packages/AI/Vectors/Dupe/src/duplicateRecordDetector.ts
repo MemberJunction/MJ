@@ -796,10 +796,22 @@ export class DuplicateRecordDetector extends VectorBase {
      */
     protected buildSourceMetadataMap(records: BaseEntity[], entityInfo: EntityInfo): Map<string, string> {
         const metadataMap = new Map<string, string>();
-        const nameField = entityInfo.NameField;
-        // Collect a small set of useful display fields
-        const displayFieldNames = ['Name', 'Title', 'Description', 'Status', 'Type']
-            .filter(fn => entityInfo.Fields.find(f => f.Name === fn));
+
+        // Combine all IsNameField fields in Sequence order for the display name
+        const nameFields = entityInfo.Fields
+            .filter(f => f.IsNameField)
+            .sort((a, b) => (a.Sequence ?? 9999) - (b.Sequence ?? 9999));
+
+        // Fall back to singular NameField if no IsNameField flags
+        if (nameFields.length === 0 && entityInfo.NameField) {
+            nameFields.push(entityInfo.NameField);
+        }
+
+        // Use DefaultInView fields for display, plus IsNameField fields
+        const internalNames = new Set(['ID', '__mj_CreatedAt', '__mj_UpdatedAt']);
+        const displayFields = entityInfo.Fields
+            .filter(f => f.DefaultInView && !f.IsPrimaryKey && !internalNames.has(f.Name))
+            .sort((a, b) => (a.Sequence ?? 9999) - (b.Sequence ?? 9999));
 
         for (const record of records) {
             const pk = record.PrimaryKey;
@@ -810,19 +822,33 @@ export class DuplicateRecordDetector extends VectorBase {
             if (entityInfo.Icon) {
                 meta['EntityIcon'] = entityInfo.Icon;
             }
-            if (nameField) {
-                const nameVal = record.Get(nameField.Name);
-                if (nameVal != null) meta['Name'] = String(nameVal);
+
+            // Store combined name from all IsNameField fields
+            const nameParts = nameFields
+                .map(f => record.Get(f.Name))
+                .filter(v => v != null && String(v).trim() !== '')
+                .map(v => String(v));
+            if (nameParts.length > 0) {
+                meta['Name'] = nameParts.join(' ');
             }
-            for (const fn of displayFieldNames) {
-                if (fn !== nameField?.Name) {
-                    const val = record.Get(fn);
+
+            // Store all IsNameField values individually for downstream resolution
+            for (const nf of nameFields) {
+                const val = record.Get(nf.Name);
+                if (val != null) meta[nf.Name] = String(val);
+            }
+
+            // Store DefaultInView fields for rich display
+            for (const field of displayFields) {
+                if (!meta[field.Name]) { // Don't overwrite name fields
+                    const val = record.Get(field.Name);
                     if (val != null) {
                         const str = String(val);
-                        meta[fn] = str.length > 200 ? str.substring(0, 197) + '...' : str;
+                        meta[field.Name] = str.length > 200 ? str.substring(0, 197) + '...' : str;
                     }
                 }
             }
+
             metadataMap.set(id, JSON.stringify(meta));
         }
         return metadataMap;

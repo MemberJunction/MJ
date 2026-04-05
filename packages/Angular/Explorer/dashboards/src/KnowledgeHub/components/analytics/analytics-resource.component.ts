@@ -1598,48 +1598,18 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
     // ================================================================
 
     private buildModelComparisons(): void {
-        // Model comparison is informational since we don't track per-model tag data yet.
-        // Show placeholder based on available AI models.
-        this.ModelComparisons = [
-            {
-                Name: 'GPT-4o',
-                Icon: 'fa-solid fa-microchip',
-                IconColor: 'var(--mj-brand-primary)',
-                ScorePercentage: 84,
-                ScoreColor: 'var(--mj-status-success)',
-                AvgConfidence: 0.84,
-                TagsGenerated: Math.round(this.rawContentItemTags.length * 0.6),
-                Role: 'Primary model',
-                RoleColor: 'var(--mj-status-success)',
-                StrokeDash: '169 201',
-            },
-            {
-                Name: 'Claude 3.5 Sonnet',
-                Icon: 'fa-solid fa-brain',
-                IconColor: '#7c3aed',
-                ScorePercentage: 78,
-                ScoreColor: '#7c3aed',
-                AvgConfidence: 0.78,
-                TagsGenerated: Math.round(this.rawContentItemTags.length * 0.3),
-                Role: 'Fallback model',
-                RoleColor: '#7c3aed',
-                StrokeDash: '157 201',
-            },
-            {
-                Name: 'Gemini 1.5 Pro',
-                Icon: 'fa-solid fa-bolt',
-                IconColor: 'var(--mj-status-warning)',
-                ScorePercentage: 70,
-                ScoreColor: 'var(--mj-status-warning)',
-                AvgConfidence: 0.70,
-                TagsGenerated: Math.round(this.rawContentItemTags.length * 0.1),
-                Role: 'Testing',
-                RoleColor: 'var(--mj-text-muted)',
-                StrokeDash: '141 201',
-            },
-        ];
+        // Model comparison requires per-model tag tracking which isn't available yet.
+        // Show empty state prompting users to enable model tracking.
+        this.ModelComparisons = [];
+        this.ModelRecommendation = '';
 
-        this.ModelRecommendation = 'GPT-4o delivers the highest accuracy at 84% avg confidence. Claude 3.5 Sonnet is a strong fallback at 78%. Consider promoting Claude for cost-sensitive workloads where 6% accuracy difference is acceptable.';
+        // If we have content item tags with model info, we could derive this.
+        // For now, show an informational message.
+        if (this.rawContentItemTags.length === 0) {
+            this.ModelRecommendation = 'No autotagging data available yet. Run the autotagging pipeline to generate model performance metrics.';
+        } else {
+            this.ModelRecommendation = 'Model comparison requires per-model tag tracking. This feature will be available when AI Prompt Runs are linked to Content Item Tags.';
+        }
     }
 
     // ================================================================

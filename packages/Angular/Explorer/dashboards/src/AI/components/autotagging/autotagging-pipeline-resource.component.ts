@@ -498,7 +498,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     }
 
     async GetResourceDisplayName(_data: ResourceData): Promise<string> {
-        return 'Content Autotagging';
+        return 'Classify';
     }
 
     async GetResourceIconClass(_data: ResourceData): Promise<string> {

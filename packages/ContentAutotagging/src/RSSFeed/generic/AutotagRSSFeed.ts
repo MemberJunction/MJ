@@ -33,13 +33,31 @@ export class AutotagRSSFeed extends AutotagBase {
     public async Autotag(contextUser: UserInfo, onProgress?: AutotagProgressCallback): Promise<void> {
         this.contextUser = contextUser;
         this.contentSourceTypeID = this.engine.SetSubclassContentSourceType('RSS Feed');
+        LogStatus(`[RSS] Starting RSS autotag...`);
         const contentSources = await this.engine.getAllContentSources(this.contextUser, this.contentSourceTypeID);
-        const contentItemsToProcess = await this.SetContentItemsToProcess(contentSources);
+        LogStatus(`[RSS] Found ${contentSources.length} RSS source(s)`);
+
+        let contentItemsToProcess: MJContentItemEntity[];
+        try {
+            contentItemsToProcess = await this.SetContentItemsToProcess(contentSources);
+            LogStatus(`[RSS] SetContentItemsToProcess returned ${contentItemsToProcess.length} items`);
+        } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            LogError(`[RSS] SetContentItemsToProcess THREW: ${msg}`);
+            return;
+        }
 
         if (contentItemsToProcess.length > 0) {
-            await this.engine.ExtractTextAndProcessWithLLM(contentItemsToProcess, this.contextUser, undefined, onProgress);
+            LogStatus(`[RSS] Calling ExtractTextAndProcessWithLLM with ${contentItemsToProcess.length} items...`);
+            try {
+                await this.engine.ExtractTextAndProcessWithLLM(contentItemsToProcess, this.contextUser, undefined, onProgress);
+                LogStatus(`[RSS] ExtractTextAndProcessWithLLM completed successfully`);
+            } catch (e) {
+                const msg = e instanceof Error ? e.message : String(e);
+                LogError(`[RSS] ExtractTextAndProcessWithLLM THREW: ${msg}`);
+            }
         } else {
-            LogStatus('AutotagRSSFeed: no new or modified feed items to process');
+            LogStatus('[RSS] No new or modified feed items to process');
         }
     }
 
@@ -73,23 +91,33 @@ export class AutotagRSSFeed extends AutotagBase {
             URL: contentSource.URL
         };
 
+        LogStatus(`[RSS] Parsing feed "${contentSource.Name}" at ${contentSourceParams.URL}...`);
         const allRSSItems = await this.ParseRSSFeed(contentSourceParams.URL);
         if (allRSSItems.length === 0) {
             LogStatus(`AutotagRSSFeed: no items in feed "${contentSource.Name}"`);
             return [];
         }
+        LogStatus(`[RSS] Parsed ${allRSSItems.length} items from "${contentSource.Name}"`);
 
         // Load existing content items for upsert by URL
         const existingItems = await this.LoadExistingContentItems(contentSourceParams.contentSourceID);
+        LogStatus(`[RSS] ${existingItems.size} existing items for "${contentSource.Name}"`);
 
         const items: MJContentItemEntity[] = [];
-        for (const rssItem of allRSSItems) {
+        for (let idx = 0; idx < allRSSItems.length; idx++) {
+            const rssItem = allRSSItems[idx];
             try {
+                LogStatus(`[RSS] Processing item ${idx + 1}/${allRSSItems.length}: "${rssItem.title?.substring(0, 60) ?? 'untitled'}"...`);
                 const item = await this.ProcessSingleFeedItem(rssItem, contentSourceParams, existingItems);
-                if (item) items.push(item);
+                if (item) {
+                    items.push(item);
+                    LogStatus(`[RSS] Item ${idx + 1} created/updated (text: ${item.Text?.length ?? 0} chars)`);
+                } else {
+                    LogStatus(`[RSS] Item ${idx + 1} skipped (unchanged or empty)`);
+                }
             } catch (e) {
                 const msg = e instanceof Error ? e.message : String(e);
-                LogError(`AutotagRSSFeed: failed to process item "${rssItem.title ?? rssItem.link}": ${msg}`);
+                LogError(`[RSS] Item ${idx + 1} FAILED "${rssItem.title ?? rssItem.link}": ${msg}`);
             }
         }
 
@@ -194,9 +222,9 @@ export class AutotagRSSFeed extends AutotagBase {
      */
     private async FetchAndParseWebPage(url: string): Promise<string> {
         const response = await axios.get(url, {
-            timeout: 15000,
+            timeout: 8000,
             headers: {
-                'User-Agent': 'MemberJunction-Autotagging/1.0',
+                'User-Agent': 'Mozilla/5.0 (compatible; MemberJunction/1.0)',
                 'Accept': 'text/html,application/xhtml+xml'
             }
         });
