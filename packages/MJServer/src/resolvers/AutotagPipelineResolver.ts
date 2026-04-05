@@ -1,0 +1,146 @@
+import { Resolver, Mutation, Ctx, ObjectType, Field } from 'type-graphql';
+import { AppContext } from '../types.js';
+import { LogError, LogStatus } from '@memberjunction/core';
+import { ResolverBase } from '../generic/ResolverBase.js';
+import { ActionEngineServer } from '@memberjunction/actions';
+import { PubSubManager } from '../generic/PubSubManager.js';
+import { PipelineProgressNotification } from './PipelineProgressResolver.js';
+import { v4 as uuidv4 } from 'uuid';
+
+const PIPELINE_PROGRESS_TOPIC = 'PIPELINE_PROGRESS';
+
+@ObjectType()
+export class AutotagPipelineResult {
+    @Field()
+    Success: boolean;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    ErrorMessage?: string;
+
+    @Field({ nullable: true })
+    PipelineRunID?: string;
+}
+
+@Resolver()
+export class AutotagPipelineResolver extends ResolverBase {
+    @Mutation(() => AutotagPipelineResult)
+    async RunAutotagPipeline(
+        @Ctx() { userPayload }: AppContext = {} as AppContext
+    ): Promise<AutotagPipelineResult> {
+        try {
+            const currentUser = this.GetUserFromPayload(userPayload);
+            if (!currentUser) {
+                return { Success: false, Status: 'Error', ErrorMessage: 'Unable to determine current user' };
+            }
+
+            const pipelineRunID = uuidv4();
+            LogStatus(`RunAutotagPipeline: starting pipeline ${pipelineRunID}`);
+
+            // Fire-and-forget: start the pipeline in the background and return immediately
+            this.runPipelineInBackground(pipelineRunID, currentUser);
+
+            return {
+                Success: true,
+                Status: 'Started',
+                PipelineRunID: pipelineRunID,
+            };
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            LogError(`RunAutotagPipeline mutation failed: ${msg}`);
+            return {
+                Success: false,
+                Status: 'Error',
+                ErrorMessage: msg
+            };
+        }
+    }
+
+    /**
+     * Runs the autotag + vectorize pipeline in the background, publishing progress
+     * updates via PubSub so the client can subscribe via PipelineProgress.
+     */
+    private async runPipelineInBackground(
+        pipelineRunID: string,
+        currentUser: import('@memberjunction/core').UserInfo
+    ): Promise<void> {
+        const startTime = Date.now();
+        try {
+            this.publishProgress(pipelineRunID, 'autotag', 0, 0, startTime, 'Initializing pipeline...');
+
+            await ActionEngineServer.Instance.Config(false, currentUser);
+            const action = ActionEngineServer.Instance.Actions.find(
+                a => a.Name === 'Autotag and Vectorize Content'
+            );
+
+            if (!action) {
+                LogError(`RunAutotagPipeline: Action 'Autotag and Vectorize Content' not found`);
+                this.publishProgress(pipelineRunID, 'error', 0, 0, startTime, 'Autotag action not found');
+                return;
+            }
+
+            // Stage: autotagging — provide a progress callback that publishes per-item updates
+            this.publishProgress(pipelineRunID, 'autotag', 0, 0, startTime, 'Running autotaggers...');
+
+            const progressCallback = (processed: number, total: number, currentItem?: string) => {
+                const pct = total > 0 ? Math.round((processed / total) * 80) : 0; // 0-80% for tagging
+                this.publishProgress(pipelineRunID, 'autotag', total, pct, startTime, currentItem || `${processed}/${total} items`);
+            };
+
+            // Run with both Autotag=1 and Vectorize=1: the action will tag and embed in parallel
+            const result = await ActionEngineServer.Instance.RunAction({
+                Action: action,
+                ContextUser: currentUser,
+                Filters: [],
+                Params: [
+                    { Name: 'Autotag', Value: 1, Type: 'Input' },
+                    { Name: 'Vectorize', Value: 1, Type: 'Input' },
+                    { Name: '__progressCallback', Value: progressCallback, Type: 'Input' }
+                ]
+            });
+
+            // Stage: vectorize complete
+            this.publishProgress(pipelineRunID, 'vectorize', 100, 90, startTime, 'Vectorizing content...');
+
+            if (result.Success) {
+                LogStatus(`RunAutotagPipeline: pipeline ${pipelineRunID} completed successfully`);
+                this.publishProgress(pipelineRunID, 'complete', 100, 100, startTime);
+            } else {
+                LogError(`RunAutotagPipeline: pipeline ${pipelineRunID} failed: ${result.Message}`);
+                this.publishProgress(pipelineRunID, 'error', 0, 0, startTime, String(result.Message));
+            }
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            LogError(`RunAutotagPipeline pipeline ${pipelineRunID} failed: ${msg}`);
+            this.publishProgress(pipelineRunID, 'error', 0, 0, startTime, msg);
+        }
+    }
+
+    /**
+     * Publish a progress update to the PipelineProgress subscription topic.
+     */
+    private publishProgress(
+        pipelineRunID: string,
+        stage: string,
+        totalItems: number,
+        processedItems: number,
+        startTime: number,
+        currentItem?: string
+    ): void {
+        const elapsedMs = Date.now() - startTime;
+        const percentComplete = totalItems > 0 ? Math.round((processedItems / totalItems) * 100) : 0;
+
+        const notification: PipelineProgressNotification = {
+            PipelineRunID: pipelineRunID,
+            Stage: stage,
+            TotalItems: totalItems,
+            ProcessedItems: processedItems,
+            CurrentItem: currentItem,
+            ElapsedMs: elapsedMs,
+            PercentComplete: percentComplete,
+        };
+        PubSubManager.Instance.Publish(PIPELINE_PROGRESS_TOPIC, { ...notification });
+    }
+}

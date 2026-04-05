@@ -180,7 +180,7 @@ describe('GitHubReleaseProvider', () => {
       expect(result).toEqual([]);
     });
 
-    it('should use bootstrap download URL for tags in the fallback path', async () => {
+    it('should use zipball URL for tags in the fallback path', async () => {
       // First call: releases returns empty
       mockFetch.mockResolvedValueOnce(jsonResponse([]));
 
@@ -194,11 +194,10 @@ describe('GitHubReleaseProvider', () => {
       }));
 
       const result = await provider.ListReleases();
-      expect(result[0].DownloadUrl).toContain('Distributions/MemberJunction_Code_Bootstrap.zip');
-      expect(result[0].DownloadUrl).not.toContain('zipball');
+      expect(result[0].DownloadUrl).toContain('codeload.github.com');
     });
 
-    it('should prefer uploaded .zip asset URL over zipball_url', async () => {
+    it('should always use zipball_url (monorepo download)', async () => {
       const releases = [
         makeGitHubRelease({
           tag_name: 'v5.2.0',
@@ -214,11 +213,10 @@ describe('GitHubReleaseProvider', () => {
       mockFetch.mockResolvedValueOnce(jsonResponse(releases));
 
       const result = await provider.ListReleases();
-      expect(result[0].DownloadUrl).toContain('releases/download');
-      expect(result[0].DownloadUrl).not.toContain('zipball');
+      expect(result[0].DownloadUrl).toContain('codeload.github.com');
     });
 
-    it('should use bootstrap ZIP URL when no .zip asset is available', async () => {
+    it('should use zipball_url when no .zip asset is available', async () => {
       const releases = [
         makeGitHubRelease({
           tag_name: 'v5.2.0',
@@ -229,9 +227,8 @@ describe('GitHubReleaseProvider', () => {
       mockFetch.mockResolvedValueOnce(jsonResponse(releases));
 
       const result = await provider.ListReleases();
-      expect(result[0].DownloadUrl).toContain('Distributions/MemberJunction_Code_Bootstrap.zip');
+      expect(result[0].DownloadUrl).toContain('codeload.github.com');
       expect(result[0].DownloadUrl).toContain('v5.2.0');
-      expect(result[0].DownloadUrl).not.toContain('zipball');
     });
 
     it('should truncate release notes to 500 characters with ellipsis', async () => {
@@ -286,10 +283,10 @@ describe('GitHubReleaseProvider', () => {
       expect(result.Tag).toBe('v5.0.0');
       expect(result.Name).toBe('v5.0.0');
       expect(result.Prerelease).toBe(false);
-      expect(result.DownloadUrl).toContain('Distributions/MemberJunction_Code_Bootstrap.zip');
+      expect(result.DownloadUrl).toContain('codeload.github.com');
     });
 
-    it('should resolve without API when rate-limited, using bootstrap download URL', async () => {
+    it('should resolve without API when rate-limited, using codeload download URL', async () => {
       const rateLimitResponse = {
         ok: false,
         status: 403,
@@ -317,7 +314,7 @@ describe('GitHubReleaseProvider', () => {
 
       const result = await provider.GetReleaseByTag('v5.9.0');
       expect(result.Tag).toBe('v5.9.0');
-      expect(result.DownloadUrl).toContain('Distributions/MemberJunction_Code_Bootstrap.zip');
+      expect(result.DownloadUrl).toContain('codeload.github.com');
       expect(result.DownloadUrl).toContain('v5.9.0');
       // Should have made exactly 1 API call (the release lookup), not 2
       expect(mockFetch.mock.calls.length - callsBefore).toBe(1);

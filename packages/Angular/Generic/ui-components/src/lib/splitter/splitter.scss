@@ -1,0 +1,29 @@
+/**
+ * MJ Splitter Theme — overrides angular-split defaults with MJ design tokens.
+ */
+
+/* Override angular-split CSS custom properties */
+as-split {
+  --as-gutter-background-color: var(--mj-border-default);
+
+  .as-split-gutter {
+    transition: background-color var(--mj-transition-fast);
+
+    &:hover {
+      --as-gutter-background-color: var(--mj-bg-surface-hover);
+    }
+
+    &.as-dragged {
+      --as-gutter-background-color: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+    }
+  }
+
+  .as-split-gutter-icon {
+    opacity: 0.4;
+    transition: opacity var(--mj-transition-fast);
+  }
+
+  .as-split-gutter:hover .as-split-gutter-icon {
+    opacity: 0.7;
+  }
+}

@@ -104,6 +104,15 @@ export interface RunOptions {
    * quick-checking manifests before running the full rebuild cycle.
    */
   Fast?: boolean;
+  /**
+   * Overwrite existing configuration files (`.env`, `mj.config.cjs`,
+   * `environment.ts`) with installer-generated values.
+   *
+   * By default, existing config files are preserved and only empty fields
+   * are patched. When `true`, all config files are regenerated from the
+   * resolved configuration, replacing any dev customizations.
+   */
+  OverwriteConfig?: boolean;
 }
 
 /**

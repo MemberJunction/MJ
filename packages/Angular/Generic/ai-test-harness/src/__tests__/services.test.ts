@@ -7,18 +7,6 @@ vi.mock('@angular/core', () => ({
   Type: class {}
 }));
 
-vi.mock('@progress/kendo-angular-dialog', () => ({
-  WindowService: class {
-    open = vi.fn();
-  }
-}));
-
-vi.mock('@progress/kendo-angular-notification', () => ({
-  NotificationService: class {
-    show = vi.fn();
-  }
-}));
-
 vi.mock('@memberjunction/core', () => ({
   Metadata: class {},
   RunView: class {},

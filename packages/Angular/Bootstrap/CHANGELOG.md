@@ -1,5 +1,33 @@
 # @memberjunction/ng-bootstrap
 
+## 5.23.0
+
+### Patch Changes
+
+- Updated dependencies [247df16]
+- Updated dependencies [9250070]
+- Updated dependencies [513b20c]
+- Updated dependencies [44bc22b]
+- Updated dependencies [1d1e02e]
+- Updated dependencies [c17be20]
+  - @memberjunction/core@5.23.0
+  - @memberjunction/ng-dashboards@5.23.0
+  - @memberjunction/ng-explorer-core@5.23.0
+  - @memberjunction/ng-artifacts@5.23.0
+  - @memberjunction/ng-dashboard-viewer@5.23.0
+  - @memberjunction/graphql-dataprovider@5.23.0
+  - @memberjunction/core-entities@5.23.0
+  - @memberjunction/ai-core-plus@5.23.0
+  - @memberjunction/ai-engine-base@5.23.0
+  - @memberjunction/actions-base@5.23.0
+  - @memberjunction/ng-auth-services@5.23.0
+  - @memberjunction/ng-core-entity-forms@5.23.0
+  - @memberjunction/ng-explorer-settings@5.23.0
+  - @memberjunction/ng-shared@5.23.0
+  - @memberjunction/ng-file-storage@5.23.0
+  - @memberjunction/communication-types@5.23.0
+  - @memberjunction/entity-communications-base@5.23.0
+
 ## 5.22.0
 
 ### Minor Changes

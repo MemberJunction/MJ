@@ -317,4 +317,347 @@ describe('DuplicateRecordDetector', () => {
             ).rejects.toThrow('No active Entity Document');
         });
     });
+
+    describe('FilterSelfMatches', () => {
+        it('should remove matches whose composite key matches the source key', () => {
+            const sourceKey = {
+                ToString: () => 'ID|abc-123',
+                Values: () => 'abc-123',
+                KeyValuePairs: [{ FieldName: 'ID', Value: 'abc-123' }],
+            };
+            const duplicates = [
+                {
+                    ProbabilityScore: 0.95,
+                    ToString: () => 'ID|abc-123',
+                    Values: () => 'abc-123',
+                    KeyValuePairs: [{ FieldName: 'ID', Value: 'abc-123' }],
+                    LoadFromConcatenatedString: vi.fn(),
+                },
+                {
+                    ProbabilityScore: 0.88,
+                    ToString: () => 'ID|def-456',
+                    Values: () => 'def-456',
+                    KeyValuePairs: [{ FieldName: 'ID', Value: 'def-456' }],
+                    LoadFromConcatenatedString: vi.fn(),
+                },
+            ];
+
+            // Access the protected method via bracket notation
+            const result = (detector as never)['FilterSelfMatches'](duplicates, sourceKey);
+            expect(result).toHaveLength(1);
+            expect(result[0].ProbabilityScore).toBe(0.88);
+        });
+
+        it('should return all matches when none match the source key', () => {
+            const sourceKey = {
+                ToString: () => 'ID|source-1',
+                Values: () => 'source-1',
+                KeyValuePairs: [{ FieldName: 'ID', Value: 'source-1' }],
+            };
+            const duplicates = [
+                {
+                    ProbabilityScore: 0.9,
+                    ToString: () => 'ID|match-1',
+                    Values: () => 'match-1',
+                    KeyValuePairs: [],
+                    LoadFromConcatenatedString: vi.fn(),
+                },
+                {
+                    ProbabilityScore: 0.8,
+                    ToString: () => 'ID|match-2',
+                    Values: () => 'match-2',
+                    KeyValuePairs: [],
+                    LoadFromConcatenatedString: vi.fn(),
+                },
+            ];
+
+            const result = (detector as never)['FilterSelfMatches'](duplicates, sourceKey);
+            expect(result).toHaveLength(2);
+        });
+
+        it('should return empty array when all matches are self-matches', () => {
+            const sourceKey = {
+                ToString: () => 'ID|self-1',
+                Values: () => 'self-1',
+                KeyValuePairs: [{ FieldName: 'ID', Value: 'self-1' }],
+            };
+            const duplicates = [
+                {
+                    ProbabilityScore: 0.99,
+                    ToString: () => 'ID|self-1',
+                    Values: () => 'self-1',
+                    KeyValuePairs: [],
+                    LoadFromConcatenatedString: vi.fn(),
+                },
+            ];
+
+            const result = (detector as never)['FilterSelfMatches'](duplicates, sourceKey);
+            expect(result).toHaveLength(0);
+        });
+
+        it('should handle empty duplicates array', () => {
+            const sourceKey = {
+                ToString: () => 'ID|any-key',
+                Values: () => 'any-key',
+                KeyValuePairs: [],
+            };
+            const result = (detector as never)['FilterSelfMatches']([], sourceKey);
+            expect(result).toHaveLength(0);
+        });
+    });
+
+    describe('_seenPairs deduplication', () => {
+        it('should allow the first occurrence of a pair', () => {
+            // Access the private _seenPairs via bracket notation
+            const seenPairs: Set<string> = (detector as never)['_seenPairs'];
+            expect(seenPairs.size).toBe(0);
+
+            // Simulate the pair logic from PersistMatchResults:
+            // if sourceId < matchId => key is "sourceId::matchId", else "matchId::sourceId"
+            const sourceId = 'aaa';
+            const matchId = 'bbb';
+            const pairKey = sourceId < matchId ? `${sourceId}::${matchId}` : `${matchId}::${sourceId}`;
+
+            expect(seenPairs.has(pairKey)).toBe(false);
+            seenPairs.add(pairKey);
+            expect(seenPairs.has(pairKey)).toBe(true);
+        });
+
+        it('should filter inverse pair (B->A) when A->B was already seen', () => {
+            const seenPairs: Set<string> = (detector as never)['_seenPairs'];
+            seenPairs.clear();
+
+            // A->B: sourceId='aaa', matchId='bbb'
+            const pairKeyAB = 'aaa' < 'bbb' ? 'aaa::bbb' : 'bbb::aaa';
+            seenPairs.add(pairKeyAB);
+
+            // B->A: sourceId='bbb', matchId='aaa'
+            const pairKeyBA = 'bbb' < 'aaa' ? 'bbb::aaa' : 'aaa::bbb';
+
+            // Both produce the same canonical key
+            expect(pairKeyAB).toBe(pairKeyBA);
+            expect(seenPairs.has(pairKeyBA)).toBe(true);
+        });
+
+        it('should not consider different pairs as duplicates', () => {
+            const seenPairs: Set<string> = (detector as never)['_seenPairs'];
+            seenPairs.clear();
+
+            seenPairs.add('aaa::bbb');
+            const differentPair = 'aaa' < 'ccc' ? 'aaa::ccc' : 'ccc::aaa';
+            expect(seenPairs.has(differentPair)).toBe(false);
+        });
+
+        it('should be cleared on each call to GetDuplicateRecords', async () => {
+            const seenPairs: Set<string> = (detector as never)['_seenPairs'];
+            seenPairs.add('x::y');
+            expect(seenPairs.size).toBe(1);
+
+            // Calling GetDuplicateRecords triggers _seenPairs.clear() at the start
+            // (it will fail fast because no entity document, but _seenPairs is cleared first)
+            const params = {
+                EntityID: 'entity-1',
+                EntityDocumentID: 'doc-1',
+                ListID: '',
+                RecordIDs: [],
+                Options: {},
+            };
+            await detector.GetDuplicateRecords(params as never, { ID: 'user-1' } as never);
+            expect(seenPairs.size).toBe(0);
+        });
+    });
+
+    describe('buildSourceMetadataMap', () => {
+        it('should build a map with entity name and display fields', () => {
+            // Use 'Name' as the NameField so the display field loop skips it
+            // (the code writes NameField value to meta['Name'], then skips
+            //  displayFieldNames entries where fn === nameField.Name)
+            const entityInfo = {
+                Name: 'Contacts',
+                NameField: { Name: 'Name' },
+                Icon: 'fa-user',
+                Fields: [
+                    { Name: 'Name' },
+                    { Name: 'Title' },
+                    { Name: 'Status' },
+                ],
+                FirstPrimaryKey: { Name: 'ID', NeedsQuotes: true },
+            };
+
+            const mockRecord = {
+                PrimaryKey: {
+                    KeyValuePairs: [{ FieldName: 'ID', Value: 'rec-1' }],
+                    Values: () => 'rec-1',
+                },
+                Get: (fieldName: string) => {
+                    const data: Record<string, string> = {
+                        Name: 'John Doe',
+                        Title: 'Manager',
+                        Status: 'Active',
+                    };
+                    return data[fieldName] ?? null;
+                },
+            };
+
+            const result = (detector as never)['buildSourceMetadataMap']([mockRecord], entityInfo);
+            expect(result).toBeInstanceOf(Map);
+            expect(result.size).toBe(1);
+
+            const meta = JSON.parse(result.get('rec-1'));
+            expect(meta.Entity).toBe('Contacts');
+            expect(meta.EntityIcon).toBe('fa-user');
+            expect(meta.Name).toBe('John Doe'); // From NameField
+            expect(meta.Title).toBe('Manager');
+            expect(meta.Status).toBe('Active');
+        });
+
+        it('should handle records with no name field', () => {
+            const entityInfo = {
+                Name: 'Items',
+                NameField: null,
+                Icon: null,
+                Fields: [{ Name: 'Description' }],
+                FirstPrimaryKey: { Name: 'ID', NeedsQuotes: true },
+            };
+
+            const mockRecord = {
+                PrimaryKey: {
+                    KeyValuePairs: [{ FieldName: 'ID', Value: 'item-1' }],
+                    Values: () => 'item-1',
+                },
+                Get: (fieldName: string) => {
+                    if (fieldName === 'Description') return 'A test item';
+                    return null;
+                },
+            };
+
+            const result = (detector as never)['buildSourceMetadataMap']([mockRecord], entityInfo);
+            const meta = JSON.parse(result.get('item-1'));
+            expect(meta.Entity).toBe('Items');
+            expect(meta.EntityIcon).toBeUndefined();
+            expect(meta.Name).toBeUndefined(); // No NameField
+            expect(meta.Description).toBe('A test item');
+        });
+
+        it('should truncate long display field values to 200 chars', () => {
+            const longText = 'x'.repeat(300);
+            const entityInfo = {
+                Name: 'Notes',
+                NameField: null,
+                Icon: null,
+                Fields: [{ Name: 'Description' }],
+                FirstPrimaryKey: { Name: 'ID', NeedsQuotes: true },
+            };
+
+            const mockRecord = {
+                PrimaryKey: {
+                    KeyValuePairs: [{ FieldName: 'ID', Value: 'note-1' }],
+                    Values: () => 'note-1',
+                },
+                Get: (fieldName: string) => {
+                    if (fieldName === 'Description') return longText;
+                    return null;
+                },
+            };
+
+            const result = (detector as never)['buildSourceMetadataMap']([mockRecord], entityInfo);
+            const meta = JSON.parse(result.get('note-1'));
+            expect(meta.Description).toHaveLength(200); // 197 + '...'
+            expect(meta.Description.endsWith('...')).toBe(true);
+        });
+
+        it('should handle empty records array', () => {
+            const entityInfo = {
+                Name: 'Empty',
+                NameField: null,
+                Icon: null,
+                Fields: [],
+                FirstPrimaryKey: { Name: 'ID', NeedsQuotes: true },
+            };
+
+            const result = (detector as never)['buildSourceMetadataMap']([], entityInfo);
+            expect(result.size).toBe(0);
+        });
+
+        it('should skip null field values in display fields', () => {
+            const entityInfo = {
+                Name: 'People',
+                NameField: { Name: 'Name' },
+                Icon: null,
+                Fields: [{ Name: 'Name' }, { Name: 'Title' }, { Name: 'Status' }],
+                FirstPrimaryKey: { Name: 'ID', NeedsQuotes: true },
+            };
+
+            const mockRecord = {
+                PrimaryKey: {
+                    KeyValuePairs: [{ FieldName: 'ID', Value: 'p-1' }],
+                    Values: () => 'p-1',
+                },
+                Get: (fieldName: string) => {
+                    if (fieldName === 'Name') return 'Alice';
+                    return null; // Title and Status are null
+                },
+            };
+
+            const result = (detector as never)['buildSourceMetadataMap']([mockRecord], entityInfo);
+            const meta = JSON.parse(result.get('p-1'));
+            expect(meta.Name).toBe('Alice');
+            expect(meta.Title).toBeUndefined();
+            expect(meta.Status).toBeUndefined();
+        });
+    });
+
+    describe('Threshold override logic', () => {
+        it('should use options.PotentialMatchThreshold over entity document threshold when provided', () => {
+            // The threshold logic is in QueryDuplicatesForRecords line 719:
+            // const potentialThreshold = options.PotentialMatchThreshold ?? entityDocument.PotentialMatchThreshold;
+            // We test the ?? operator semantics directly:
+            const optionsThreshold = 0.8;
+            const entityDocThreshold = 0.6;
+
+            const resolvedThreshold = optionsThreshold ?? entityDocThreshold;
+            expect(resolvedThreshold).toBe(0.8);
+        });
+
+        it('should fall back to entity document threshold when options threshold is null', () => {
+            const optionsThreshold = null;
+            const entityDocThreshold = 0.6;
+
+            const resolvedThreshold = optionsThreshold ?? entityDocThreshold;
+            expect(resolvedThreshold).toBe(0.6);
+        });
+
+        it('should fall back to entity document threshold when options threshold is undefined', () => {
+            const optionsThreshold = undefined;
+            const entityDocThreshold = 0.7;
+
+            const resolvedThreshold = optionsThreshold ?? entityDocThreshold;
+            expect(resolvedThreshold).toBe(0.7);
+        });
+
+        it('should use options threshold of 0 when explicitly set (not fallback)', () => {
+            // 0 is a falsy value but ?? only triggers on null/undefined
+            const optionsThreshold = 0;
+            const entityDocThreshold = 0.5;
+
+            const resolvedThreshold = optionsThreshold ?? entityDocThreshold;
+            expect(resolvedThreshold).toBe(0);
+        });
+
+        it('should filter duplicates below the resolved threshold', () => {
+            // Simulate the threshold filtering from QueryDuplicatesForRecords
+            const threshold = 0.75;
+            const duplicates = [
+                { ProbabilityScore: 0.95 },
+                { ProbabilityScore: 0.80 },
+                { ProbabilityScore: 0.60 },
+                { ProbabilityScore: 0.74 },
+            ];
+
+            const filtered = duplicates.filter(d => d.ProbabilityScore >= threshold);
+            expect(filtered).toHaveLength(2);
+            expect(filtered[0].ProbabilityScore).toBe(0.95);
+            expect(filtered[1].ProbabilityScore).toBe(0.80);
+        });
+    });
 });

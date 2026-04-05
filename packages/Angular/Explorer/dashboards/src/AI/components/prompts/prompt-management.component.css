@@ -165,26 +165,8 @@
 }
 
 /* Splitter Styling */
-kendo-splitter {
+as-split {
   background: transparent;
-}
-
-:host ::ng-deep .k-splitter {
-  border: none;
-  background: transparent;
-}
-
-:host ::ng-deep .k-splitbar {
-  background: var(--mj-border-default);
-  width: 6px;
-}
-
-:host ::ng-deep .k-splitbar:hover {
-  background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
-}
-
-:host ::ng-deep .k-pane {
-  overflow: hidden;
 }
 
 /* Filter Panel */

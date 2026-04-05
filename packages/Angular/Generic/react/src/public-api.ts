@@ -17,3 +17,6 @@ export * from './lib/services/angular-adapter.service';
 
 // Configuration
 export * from './lib/config/react-debug.config';
+
+// Hooks
+export * from './lib/hooks/antd-dropdown-position-hook';

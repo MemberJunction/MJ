@@ -74,7 +74,7 @@ During the configure step, the installer will ask for:
 | API login | `MJ_Connect` | A SQL login for application data access |
 | API password | *(none)* | Password for the API login |
 | GraphQL API port | `4000` | Port for the MJAPI server |
-| Explorer UI port | `4200` | Port for the MJExplorer dev server |
+| Explorer UI port | `4201` | Port for the MJExplorer dev server |
 | Authentication provider | None | Choose Microsoft Entra (MSAL), Auth0, or skip for now |
 
 If you choose an authentication provider, you'll also be prompted for the provider-specific settings (Client ID, Tenant ID, etc.).
@@ -114,7 +114,7 @@ npm run start:api
 npm run start:explorer
 ```
 
-Then open your browser to `http://localhost:4200` (or whatever port you configured). You should see the MJExplorer login page.
+Then open your browser to `http://localhost:4201` (or whatever port you configured). You should see the MJExplorer login page.
 
 > **Important:** Always start MJAPI before MJExplorer — the Explorer needs the API server to be running.
 
@@ -203,7 +203,7 @@ Create an `install.config.json` to save your settings for reuse:
   "APIUser": "MJ_Connect",
   "APIPassword": "YourStrongPassword2!",
   "APIPort": 4000,
-  "ExplorerPort": 4200,
+  "ExplorerPort": 4201,
   "AuthProvider": "entra",
   "AuthProviderValues": {
     "TenantID": "your-tenant-id",
@@ -272,6 +272,16 @@ If you don't want the installer to start MJAPI and MJExplorer at the end:
 mj install --skip-start
 ```
 
+### Overwrite Configuration Files
+
+By default, the installer preserves existing configuration files (`.env`, `mj.config.cjs`, `environment.ts`) and only patches empty fields. If you want to regenerate all config files from scratch — for example, to fix incorrect auth settings or reset to installer defaults — use:
+
+```
+mj install --overwrite-config
+```
+
+This replaces all configuration files with freshly generated versions based on the values you provide during the configure step (or from `--config` / environment variables). **Any manual customizations in those files will be lost.**
+
 ### Dry Run
 
 See the install plan without actually executing anything:
@@ -298,16 +308,16 @@ MJExplorer requires an authentication provider to function. MemberJunction suppo
 
 1. Register an application in [Azure Portal > App Registrations](https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps/ApplicationsListBlade)
 2. Note the **Application (client) ID** and **Directory (tenant) ID**
-3. Under **Authentication**, add `http://localhost:4200` as a redirect URI (Single-page application type)
+3. Under **Authentication**, add `http://localhost:4201` as a redirect URI (Single-page application type)
 4. Provide these values during installer configuration, or edit the files manually afterward:
 
-**`.env`** (in the root directory and in `apps/MJAPI/.env`):
+**`.env`** (in the root directory and in `packages/MJAPI/.env`):
 ```
 TENANT_ID=your-tenant-id
 WEB_CLIENT_ID=your-client-id
 ```
 
-**Explorer environment files** (in `apps/MJExplorer/src/environments/environment.ts` and `environment.development.ts`):
+**Explorer environment files** (in `packages/MJExplorer/src/environments/environment.ts` and `environment.development.ts`):
 ```typescript
 AUTH_TYPE: 'msal' as const,
 CLIENT_ID: 'your-client-id',
@@ -319,7 +329,7 @@ CLIENT_AUTHORITY: 'https://login.microsoftonline.com/your-tenant-id',
 
 1. Create an application in your [Auth0 Dashboard](https://manage.auth0.com/)
 2. Note the **Domain**, **Client ID**, and **Client Secret**
-3. Under **Settings > Application URIs**, add `http://localhost:4200` as an Allowed Callback URL
+3. Under **Settings > Application URIs**, add `http://localhost:4201` as an Allowed Callback URL
 4. Provide these values during installer configuration, or edit the files manually afterward:
 
 **`.env`**:
@@ -348,7 +358,7 @@ Authentication is not configured. See [Configuring Authentication](#configuring-
 
 ### MJExplorer is stuck on the loading screen after a page refresh
 
-This usually means the MSAL token cache in your browser has expired. Open your browser's DevTools, go to **Application > Storage**, and clear **Local Storage** and **Session Storage** for `localhost:4200`. Then refresh the page.
+This usually means the MSAL token cache in your browser has expired. Open your browser's DevTools, go to **Application > Storage**, and clear **Local Storage** and **Session Storage** for `localhost:4201`. Then refresh the page.
 
 ### npm install fails with ERESOLVE errors
 
@@ -370,7 +380,7 @@ mj install --no-resume
 
 This ignores any saved checkpoint and runs the full installation from scratch.
 
-### Ports 4000 or 4200 are already in use
+### Ports 4000 or 4201 are already in use
 
 Either stop the processes using those ports, or configure different ports during installation (or via `install.config.json`).
 

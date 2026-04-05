@@ -48,9 +48,22 @@
   position: relative;
 }
 
-.search-icon {
-  color: var(--mj-text-secondary);
-  margin-left: 8px;
+.search-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.search-input-wrapper .search-icon {
+  position: absolute;
+  left: 12px;
+  color: var(--mj-text-muted);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.search-input-wrapper .mj-input {
+  padding-left: 36px;
 }
 
 .search-results {
@@ -285,8 +298,3 @@
   color: var(--mj-status-warning);
 }
 
-/* Dialog actions - buttons on left */
-:host ::ng-deep kendo-dialog-actions {
-  flex-direction: row;
-  justify-content: flex-start;
-}

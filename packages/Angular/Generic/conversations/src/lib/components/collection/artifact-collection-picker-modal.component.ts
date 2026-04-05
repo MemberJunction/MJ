@@ -3,9 +3,7 @@ import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChange
 import { FormsModule } from '@angular/forms';
 import { UserInfo, RunView, Metadata } from '@memberjunction/core';
 import { MJCollectionEntity } from '@memberjunction/core-entities';
-import { DialogModule } from '@progress/kendo-angular-dialog';
-import { ButtonsModule } from '@progress/kendo-angular-buttons';
-import { InputsModule } from '@progress/kendo-angular-inputs';
+import { MJDialogComponent, MJDialogActionsComponent, MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { ToastService } from '../../services/toast.service';
 import { CollectionPermissionService, CollectionPermission } from '../../services/collection-permission.service';
@@ -32,18 +30,19 @@ interface CollectionNode {
   standalone: true,
   imports: [
     FormsModule,
-    DialogModule,
-    ButtonsModule,
-    InputsModule,
+    MJDialogComponent,
+    MJDialogActionsComponent,
+    MJButtonDirective,
     SharedGenericModule
 ],
   template: `
     @if (isOpen) {
-      <kendo-dialog
-        title="Save to Collection"
-        (close)="onCancel()"
-        [width]="700"
-        [minWidth]="500">
+      <mj-dialog
+        Title="Save to Collection"
+        (Close)="onCancel()"
+        [Visible]="true"
+        [Width]="700"
+        [MinWidth]="500">
         <div class="picker-modal">
           <!-- Breadcrumb Navigation -->
           @if (navigationPath.length > 0) {
@@ -159,14 +158,14 @@ interface CollectionNode {
                   (keydown.enter)="createCollection()"
                   #newCollectionInput>
                 <div class="create-actions">
-                  <button class="btn-create" kendoButton (click)="createCollection()" [disabled]="isCreatingCollection || !newCollectionName.trim()">
+                  <button mjButton variant="primary" size="sm" (click)="createCollection()" [disabled]="isCreatingCollection || !newCollectionName.trim()">
                     @if (isCreatingCollection) {
                       <i class="fas fa-spinner fa-spin"></i>
                     } @else {
                       Create
                     }
                   </button>
-                  <button class="btn-cancel" kendoButton (click)="showCreateForm = false; newCollectionName = ''">
+                  <button mjButton size="sm" (click)="showCreateForm = false; newCollectionName = ''">
                     Cancel
                   </button>
                 </div>
@@ -174,12 +173,12 @@ interface CollectionNode {
             }
           </div>
         </div>
-        <kendo-dialog-actions>
-          <button kendoButton (click)="onCancel()">
+        <mj-dialog-actions>
+          <button mjButton (click)="onCancel()">
             Cancel
           </button>
-          <button kendoButton
-            [primary]="true"
+          <button mjButton
+            variant="primary"
             (click)="onSave()"
             [disabled]="selectedCollections.length === 0 || isSaving">
             @if (isSaving) {
@@ -188,8 +187,8 @@ interface CollectionNode {
               <i class="fas fa-save"></i> Save to {{ selectedCollections.length }} Collection(s)
             }
           </button>
-        </kendo-dialog-actions>
-      </kendo-dialog>
+        </mj-dialog-actions>
+      </mj-dialog>
     }
     `,
   styles: [`

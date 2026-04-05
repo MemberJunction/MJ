@@ -62,19 +62,11 @@
 
   <!-- Main Content with Splitter -->
   <div class="main-content" >
-    <kendo-splitter 
-      class="main-splitter"
-      orientation="horizontal"
-      (layoutChange)="onMainSplitterChange($event)"
-      >
-      
+    <as-split direction="horizontal" class="main-splitter">
+
       <!-- Filter Panel (Left) -->
-      <kendo-splitter-pane 
-        [size]="filterPanelVisible ? '320px' : '0px'"
-        [collapsible]="false"
-        [resizable]="filterPanelVisible"
-        [scrollable]="false"
-        [hidden]="!filterPanelVisible">
+      @if (filterPanelVisible) {
+      <as-split-area [size]="20" [minSize]="15" [maxSize]="30">
         <mj-agent-filter-panel
           [agents]="agents"
           [filteredAgents]="filteredAgents"
@@ -84,12 +76,11 @@
           (resetFilters)="onResetFilters()"
           (closePanel)="toggleFilterPanel()">
         </mj-agent-filter-panel>
-      </kendo-splitter-pane>
-      
+      </as-split-area>
+      }
+
       <!-- Agents List Panel -->
-      <kendo-splitter-pane
-        [resizable]="true"
-        [scrollable]="true">
+      <as-split-area>
         <div class="agents-content">
           <!-- Loading State -->
           @if (isLoading) {
@@ -410,8 +401,8 @@
             }
           }
         </div>
-      </kendo-splitter-pane>
-    </kendo-splitter>
+      </as-split-area>
+    </as-split>
   </div>
 
   <!-- Detail Panel Overlay -->

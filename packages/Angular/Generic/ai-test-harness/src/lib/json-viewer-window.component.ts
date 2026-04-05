@@ -26,14 +26,14 @@ import { Component, Input } from '@angular/core';
             display: flex;
             flex-direction: column;
             height: 100%;
-            background: white;
+            background: var(--mj-bg-surface);
             overflow: hidden;
         }
 
         .json-dialog-header {
             padding: 12px 16px;
-            background: #f8f9fa;
-            border-bottom: 1px solid #dee2e6;
+            background: var(--mj-bg-surface-card);
+            border-bottom: 1px solid var(--mj-border-default);
             display: flex;
             justify-content: flex-end;
             align-items: center;
@@ -49,14 +49,14 @@ import { Component, Input } from '@angular/core';
         }
 
         .custom-button {
-            background: white;
-            border: 1px solid #dee2e6;
-            border-radius: 4px;
+            background: var(--mj-bg-surface);
+            border: 1px solid var(--mj-border-default);
+            border-radius: var(--mj-radius-sm);
             padding: 6px 12px;
             font-size: 13px;
-            color: #495057;
+            color: var(--mj-text-secondary);
             cursor: pointer;
-            transition: all 0.2s;
+            transition: var(--mj-transition-colors);
             display: inline-flex;
             align-items: center;
             gap: 6px;
@@ -64,9 +64,9 @@ import { Component, Input } from '@angular/core';
         }
 
         .custom-button:hover:not(:disabled) {
-            background: #f8f9fa;
-            border-color: #adb5bd;
-            color: #212529;
+            background: var(--mj-bg-surface-hover);
+            border-color: var(--mj-border-strong);
+            color: var(--mj-text-primary);
         }
 
         .custom-button.icon-only {

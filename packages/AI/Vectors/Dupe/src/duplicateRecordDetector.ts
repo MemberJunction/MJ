@@ -5,7 +5,12 @@
  * optionally apply hybrid search (RRF) and reranking, persist match results,
  * and auto-merge high-confidence duplicates.
  *
- * Supports both list-based batch detection and single-record checks.
+ * Supports three record-source modes:
+ * 1. List-based batch detection (ListID provided)
+ * 2. View-based detection (ViewID provided)
+ * 3. Entity-wide detection (no ListID/ViewID — scans all records or applies ExtraFilter)
+ *
+ * Also supports single-record checks via CheckSingleRecord().
  *
  * @module @memberjunction/ai-vector-dupe
  */
@@ -25,8 +30,9 @@ import {
     PotentialDuplicate,
     DuplicateDetectionOptions,
     DuplicateDetectionProgress,
+    RunView,
 } from "@memberjunction/core";
-import { BaseResponse, VectorDBBase } from "@memberjunction/ai-vectordb";
+import { BaseResponse, VectorDBBase, VectorDatabaseConfiguration } from "@memberjunction/ai-vectordb";
 import { MJGlobal, UUIDsEqual } from "@memberjunction/global";
 import {
     MJDuplicateRunDetailEntity,
@@ -46,7 +52,10 @@ import { ComputeRRF, ScoredCandidate } from "@memberjunction/core";
 const DEFAULT_TOP_K = 5;
 
 /** Default concurrency limit for parallel vector queries */
-const QUERY_CONCURRENCY_LIMIT = 5;
+const DEFAULT_QUERY_CONCURRENCY = 10;
+
+/** Default batch size for loading records and parallel database saves */
+const DEFAULT_BATCH_SIZE = 500;
 
 /** Default batch size for parallel database saves */
 const SAVE_BATCH_SIZE = 20;
@@ -83,6 +92,7 @@ interface RecordQueryResult {
  *
  * Supports:
  * - List-based batch detection (getDuplicateRecords)
+ * - View/filter/full-entity batch detection (vector-first approach)
  * - Single-record duplicate check (CheckSingleRecord)
  * - Hybrid search via RRF when vector DB supports it
  * - Optional post-retrieval reranking via MJ's BaseReranker
@@ -91,14 +101,24 @@ interface RecordQueryResult {
 export class DuplicateRecordDetector extends VectorBase {
     private vectorDB: VectorDBBase;
     private embedding: BaseEmbeddings;
+    /** The Pinecone/pgvector/Qdrant index name resolved from the entity document's VectorIndex */
+    private indexName: string;
+    /**
+     * Tracks already-seen source↔match pairs across the entire run to suppress inverse duplicates.
+     * If A→B is persisted, B→A is skipped. Key format: "smallerID::largerID" for consistent ordering.
+     */
+    private _seenPairs = new Set<string>();
 
     /**
-     * Run duplicate detection for all records in a list.
+     * Run duplicate detection for records identified by ListID, ViewID, ExtraFilter,
+     * or all records in the entity (vector-first approach).
      *
-     * Flow: validate → vectorize → embed → query → (optional rerank) → persist → (optional merge)
+     * Flow: validate -> vectorize -> init providers -> load/create run ->
+     *       load record IDs -> batch(embed -> query -> persist) -> complete run -> auto-merge
      */
     public async GetDuplicateRecords(params: PotentialDuplicateRequest, contextUser?: UserInfo): Promise<PotentialDuplicateResponse> {
         this.CurrentUser = contextUser;
+        this._seenPairs.clear(); // Reset for each new run
         const options = params.Options ?? {};
         const startTime = Date.now();
 
@@ -113,52 +133,52 @@ export class DuplicateRecordDetector extends VectorBase {
             return response;
         }
 
-        // Step 2: Vectorize source records
-        this.reportProgress(options, 'Vectorizing', 0, 0, 0, startTime);
-        await this.VectorizeSourceRecords(entityDocument, contextUser);
+        // Step 2: Optionally vectorize source records (default: skip — vectors should already exist from sync)
+        if (options.Revectorize) {
+            this.reportProgress(options, 'Vectorizing', 0, 0, 0, startTime);
+            await this.VectorizeSourceRecords(entityDocument, contextUser);
+        }
 
         // Step 3: Initialize providers
-        this.InitializeProviders(entityDocument);
+        await this.InitializeProviders(entityDocument);
 
-        // Step 4: Load list and duplicate run
-        const list = await this.LoadListEntity(params.ListID);
-        const duplicateRun = options.DuplicateRunID
-            ? await this.LoadDuplicateRun(options.DuplicateRunID)
-            : await this.LoadDuplicateRunByListID(list.ID);
+        // Step 4: Create or load DuplicateRun
+        const duplicateRun = await this.ResolveOrCreateDuplicateRun(params, entityDocument, options);
 
-        // Step 5: Create run detail records in batches
-        const duplicateRunDetails = await this.CreateRunDetailRecordsFromList(list.ID, duplicateRun.ID);
-
-        // Step 6: Load and embed records
-        const records = await this.LoadRecordsByListID(list.ID, entityDocument.EntityID);
-        if (records.length === 0) {
-            LogError(`No records found in list ${list.Name}`);
-            response.ErrorMessage = `No records found in list ${list.Name}`;
+        // Step 5: Load record IDs to check (batch-friendly — only IDs)
+        this.reportProgress(options, 'Loading', 0, 0, 0, startTime);
+        const entityInfo = this.Metadata.EntityByID(entityDocument.EntityID);
+        if (!entityInfo) {
+            response.ErrorMessage = `Entity not found for ID ${entityDocument.EntityID}`;
             response.Status = 'Error';
             return response;
         }
 
-        this.reportProgress(options, 'Embedding', records.length, 0, 0, startTime);
+        const recordIDs = await this.LoadRecordIDsToCheck(params, entityInfo);
+        if (recordIDs.length === 0) {
+            response.ErrorMessage = 'No records found to check for duplicates';
+            response.Status = 'Error';
+            return response;
+        }
 
-        // Step 7: Generate template text and embeddings
-        const templateParser = EntityDocumentTemplateParser.CreateInstance();
-        const templateTexts = await this.GenerateTemplateTexts(templateParser, entityDocument, records, contextUser);
-        const embedResult = await this.embedding.EmbedTexts({ texts: templateTexts, model: null });
-
-        // Step 8: Query vector DB for each record (with concurrency control)
-        this.reportProgress(options, 'Querying', records.length, 0, 0, startTime);
+        // Step 6: Process in batches
+        const batchSize = DEFAULT_BATCH_SIZE;
+        const concurrency = this.GetQueryConcurrency(entityDocument);
         const topK = options.TopK ?? DEFAULT_TOP_K;
-        const queryResults = await this.QueryDuplicatesForRecords(
-            records, embedResult.vectors, templateTexts, entityDocument, topK, options
-        );
+        const templateParser = EntityDocumentTemplateParser.CreateInstance();
+        let totalMatchesFound = 0;
 
-        // Step 9: Persist match results and update run details
-        this.reportProgress(options, 'Matching', records.length, records.length, 0, startTime);
-        const results = await this.PersistMatchResults(
-            queryResults, duplicateRunDetails, entityDocument, options, startTime
-        );
+        for (let offset = 0; offset < recordIDs.length; offset += batchSize) {
+            const batchIDs = recordIDs.slice(offset, offset + batchSize);
+            const batchResults = await this.ProcessBatch(
+                batchIDs, entityInfo, entityDocument, templateParser, duplicateRun.ID,
+                topK, concurrency, options, startTime, recordIDs.length, offset, totalMatchesFound, contextUser
+            );
+            response.PotentialDuplicateResult.push(...batchResults.Results);
+            totalMatchesFound += batchResults.MatchesFound;
+        }
 
-        // Step 10: Complete the duplicate run
+        // Step 7: Complete the duplicate run
         duplicateRun.ProcessingStatus = 'Complete';
         duplicateRun.EndedAt = new Date();
         const runSaveSuccess = await this.SaveEntity(duplicateRun);
@@ -166,13 +186,12 @@ export class DuplicateRecordDetector extends VectorBase {
             throw new Error(`Failed to update Duplicate Run record ${duplicateRun.ID}`);
         }
 
-        // Step 11: Auto-merge high-confidence matches
-        this.reportProgress(options, 'Merging', records.length, records.length, results.length, startTime);
-        response.PotentialDuplicateResult = results;
-        await this.ProcessAutoMerges(response, entityDocument);
+        // Step 8: Auto-merge high-confidence matches
+        this.reportProgress(options, 'Merging', recordIDs.length, recordIDs.length, totalMatchesFound, startTime);
+        await this.ProcessAutoMerges(response, entityDocument, options);
 
         response.Status = 'Success';
-        LogStatus(`Duplicate detection complete: ${results.length} records checked`);
+        LogStatus(`Duplicate detection complete: ${recordIDs.length} records checked, ${totalMatchesFound} matches found`);
         return response;
     }
 
@@ -194,7 +213,7 @@ export class DuplicateRecordDetector extends VectorBase {
             throw new Error(`No active Entity Document found for ID ${EntityDocumentID}`);
         }
 
-        this.InitializeProviders(entityDocument);
+        await this.InitializeProviders(entityDocument);
 
         // Load the single record
         const entityInfo = this.Metadata.EntityByID(entityDocument.EntityID);
@@ -219,10 +238,155 @@ export class DuplicateRecordDetector extends VectorBase {
 
         const topK = options.TopK ?? DEFAULT_TOP_K;
         const queryResults = await this.QueryDuplicatesForRecords(
-            [record], embedResult.vectors, templateTexts, entityDocument, topK, options
+            [record], embedResult.vectors, templateTexts, entityDocument, topK, options,
+            this.GetQueryConcurrency(entityDocument)
         );
 
         return queryResults.length > 0 ? queryResults[0].Duplicates : new PotentialDuplicateResult();
+    }
+
+    // ─────────────────────────────────────────────
+    // Batch Processing
+    // ─────────────────────────────────────────────
+
+    /**
+     * Result from processing a single batch of records.
+     */
+    private async ProcessBatch(
+        batchIDs: string[],
+        entityInfo: EntityInfo,
+        entityDocument: MJEntityDocumentEntity,
+        templateParser: ReturnType<typeof EntityDocumentTemplateParser.CreateInstance>,
+        duplicateRunID: string,
+        topK: number,
+        concurrency: number,
+        options: DuplicateDetectionOptions,
+        startTime: number,
+        totalRecords: number,
+        processedSoFar: number,
+        matchesSoFar: number,
+        contextUser: UserInfo
+    ): Promise<{ Results: PotentialDuplicateResult[]; MatchesFound: number }> {
+        // 6a: Load full record data for this batch (needed for template rendering)
+        const compositeKeys = batchIDs.map(id => {
+            const ck = new CompositeKey();
+            ck.KeyValuePairs.push({ FieldName: entityInfo.FirstPrimaryKey.Name, Value: id });
+            return ck;
+        });
+        const records = await this.LoadRecordsByKeys(compositeKeys, entityInfo);
+        if (records.length === 0) {
+            return { Results: [], MatchesFound: 0 };
+        }
+
+        // 6b: Build source record metadata map for rich UI display
+        const sourceMetadataMap = this.buildSourceMetadataMap(records, entityInfo);
+
+        // 6c: Create DuplicateRunDetail records for this batch
+        const duplicateRunDetails = await this.CreateRunDetailRecords(batchIDs, duplicateRunID, entityInfo, sourceMetadataMap);
+
+        // 6c: Generate template texts and embed
+        this.reportProgress(options, 'Embedding', totalRecords, processedSoFar, matchesSoFar, startTime);
+        const templateTexts = await this.GenerateTemplateTexts(templateParser, entityDocument, records, contextUser);
+        const embedResult = await this.embedding.EmbedTexts({ texts: templateTexts, model: null });
+
+        // 6d: Query vector DB for each record with concurrency control
+        this.reportProgress(options, 'Querying', totalRecords, processedSoFar, matchesSoFar, startTime);
+        const queryResults = await this.QueryDuplicatesForRecords(
+            records, embedResult.vectors, templateTexts, entityDocument, topK, options, concurrency
+        );
+
+        // 6e: Persist match results and update run details
+        this.reportProgress(options, 'Matching', totalRecords, processedSoFar + records.length, matchesSoFar, startTime);
+        const results = await this.PersistMatchResults(
+            queryResults, duplicateRunDetails, entityDocument, options, startTime
+        );
+
+        const batchMatches = results.reduce((sum, r) => sum + r.Duplicates.length, 0);
+        return { Results: results, MatchesFound: batchMatches };
+    }
+
+    // ─────────────────────────────────────────────
+    // Record ID Loading (multiple strategies)
+    // ─────────────────────────────────────────────
+
+    /**
+     * Load the IDs of records to check, using the appropriate strategy based on the request.
+     * Returns an array of primary key value strings.
+     */
+    protected async LoadRecordIDsToCheck(params: PotentialDuplicateRequest, entityInfo: EntityInfo): Promise<string[]> {
+        if (params.ListID) {
+            return this.LoadRecordIDsFromList(params.ListID);
+        }
+        if (params.ViewID) {
+            return this.LoadRecordIDsFromView(params.ViewID, entityInfo);
+        }
+        // ExtraFilter or all records
+        return this.LoadRecordIDsFromEntity(entityInfo, params.ExtraFilter);
+    }
+
+    /**
+     * Load record IDs from a list's detail records.
+     */
+    protected async LoadRecordIDsFromList(listID: string): Promise<string[]> {
+        const sanitizedListID = listID.replace(/'/g, "''");
+        const viewResults = await this.RunView.RunView<{ RecordID: string }>({
+            EntityName: 'MJ: List Details',
+            ExtraFilter: `ListID = '${sanitizedListID}'`,
+            Fields: ['RecordID'],
+            ResultType: 'simple',
+        }, this.CurrentUser);
+
+        if (!viewResults.Success) {
+            throw new Error(`Failed to load list details: ${viewResults.ErrorMessage}`);
+        }
+        return viewResults.Results.map(r => r.RecordID);
+    }
+
+    /**
+     * Load record IDs by running a saved view.
+     */
+    protected async LoadRecordIDsFromView(viewID: string, entityInfo: EntityInfo): Promise<string[]> {
+        const pkField = entityInfo.FirstPrimaryKey.Name;
+        const sanitizedViewID = viewID.replace(/'/g, "''");
+
+        // Load the view definition to get its filter
+        const viewEntity = await this.RunViewForSingleValue<BaseEntity>(
+            'Views', `ID = '${sanitizedViewID}'`
+        );
+        if (!viewEntity) {
+            throw new Error(`View not found: ${viewID}`);
+        }
+
+        // Run the entity with the view's filter to get IDs
+        const viewResults = await this.RunView.RunView<Record<string, string>>({
+            ViewID: viewID,
+            Fields: [pkField],
+            ResultType: 'simple',
+        }, this.CurrentUser);
+
+        if (!viewResults.Success) {
+            throw new Error(`Failed to run view ${viewID}: ${viewResults.ErrorMessage}`);
+        }
+        return viewResults.Results.map(r => r[pkField]);
+    }
+
+    /**
+     * Load record IDs directly from the entity, optionally filtered.
+     * Uses Fields: ['ID'] and ResultType: 'simple' for efficiency.
+     */
+    protected async LoadRecordIDsFromEntity(entityInfo: EntityInfo, extraFilter?: string): Promise<string[]> {
+        const pkField = entityInfo.FirstPrimaryKey.Name;
+        const viewResults = await this.RunView.RunView<Record<string, string>>({
+            EntityName: entityInfo.Name,
+            ExtraFilter: extraFilter,
+            Fields: [pkField],
+            ResultType: 'simple',
+        }, this.CurrentUser);
+
+        if (!viewResults.Success) {
+            throw new Error(`Failed to load record IDs from ${entityInfo.Name}: ${viewResults.ErrorMessage}`);
+        }
+        return viewResults.Results.map(r => r[pkField]);
     }
 
     // ─────────────────────────────────────────────
@@ -241,7 +405,7 @@ export class DuplicateRecordDetector extends VectorBase {
     /**
      * Initialize embedding and vector DB providers via ClassFactory.
      */
-    protected InitializeProviders(entityDocument: MJEntityDocumentEntity): void {
+    protected async InitializeProviders(entityDocument: MJEntityDocumentEntity): Promise<void> {
         const aiModel = this.GetAIModel(entityDocument.AIModelID);
         const vectorDB = this.GetVectorDatabase(entityDocument.VectorDatabaseID);
 
@@ -269,7 +433,26 @@ export class DuplicateRecordDetector extends VectorBase {
             throw new Error(`Failed to create VectorDB instance for ${vectorDB.ClassKey}`);
         }
 
-        LogStatus(`Providers initialized: AI Model=${aiModel.DriverClass}, VectorDB=${vectorDB.ClassKey}`);
+        // Resolve the vector index name from the entity document's VectorIndexID
+        // This is the actual Pinecone/pgvector/Qdrant index name needed for QueryIndex calls
+        if (entityDocument.VectorIndexID) {
+            const rv = new RunView();
+            const indexResult = await rv.RunView<{ Name: string }>({
+                EntityName: 'MJ: Vector Indexes',
+                ExtraFilter: `ID='${entityDocument.VectorIndexID}'`,
+                Fields: ['Name'],
+                ResultType: 'simple',
+                MaxRows: 1
+            }, this.CurrentUser);
+            if (indexResult.Success && indexResult.Results.length > 0) {
+                this.indexName = indexResult.Results[0].Name;
+            }
+        }
+        if (!this.indexName) {
+            throw new Error(`No vector index found for entity document "${entityDocument.Name}". Ensure VectorIndexID is set on the entity document.`);
+        }
+
+        LogStatus(`Providers initialized: AI Model=${aiModel.DriverClass}, VectorDB=${vectorDB.ClassKey}, Index=${this.indexName}`);
     }
 
     /**
@@ -289,6 +472,156 @@ export class DuplicateRecordDetector extends VectorBase {
 
         LogStatus(`Vectorizing entity records for document ${entityDocument.Name}`);
         await vectorizer.VectorizeEntity(request, contextUser);
+    }
+
+    /**
+     * Read the maxConcurrentRequests from the VectorDatabase entity's Configuration column,
+     * falling back to DEFAULT_QUERY_CONCURRENCY if not set.
+     */
+    protected GetQueryConcurrency(entityDocument: MJEntityDocumentEntity): number {
+        const vectorDBEntity = this.GetVectorDatabase(entityDocument.VectorDatabaseID);
+        if (vectorDBEntity.Configuration) {
+            try {
+                const config: VectorDatabaseConfiguration = JSON.parse(vectorDBEntity.Configuration);
+                if (config.throughput?.maxConcurrentRequests != null) {
+                    return config.throughput.maxConcurrentRequests;
+                }
+            } catch {
+                // Invalid JSON in Configuration — fall through to default
+            }
+        }
+        return DEFAULT_QUERY_CONCURRENCY;
+    }
+
+    // ─────────────────────────────────────────────
+    // DuplicateRun Management
+    // ─────────────────────────────────────────────
+
+    /**
+     * Resolve an existing DuplicateRun or create a new one.
+     * Supports both list-based and list-free operation.
+     */
+    protected async ResolveOrCreateDuplicateRun(
+        params: PotentialDuplicateRequest,
+        entityDocument: MJEntityDocumentEntity,
+        options: DuplicateDetectionOptions
+    ): Promise<MJDuplicateRunEntity> {
+        // If a specific run ID was provided, load it
+        if (options.DuplicateRunID) {
+            return this.LoadDuplicateRun(options.DuplicateRunID);
+        }
+
+        // If a ListID is provided, try to find an existing run for that list
+        if (params.ListID) {
+            const existing = await this.FindDuplicateRunByListID(params.ListID);
+            if (existing) {
+                return existing;
+            }
+        }
+
+        // Create a new DuplicateRun
+        return this.CreateDuplicateRun(entityDocument, params.ListID);
+    }
+
+    /**
+     * Create a new DuplicateRun record.
+     */
+    protected async CreateDuplicateRun(
+        entityDocument: MJEntityDocumentEntity,
+        listID?: string
+    ): Promise<MJDuplicateRunEntity> {
+        const dupeRun = await this.Metadata.GetEntityObject<MJDuplicateRunEntity>('MJ: Duplicate Runs', this.CurrentUser);
+        dupeRun.NewRecord();
+        dupeRun.EntityID = entityDocument.EntityID;
+        dupeRun.StartedByUserID = this.CurrentUser?.ID;
+        dupeRun.StartedAt = new Date();
+        dupeRun.ProcessingStatus = 'In Progress';
+        dupeRun.ApprovalStatus = 'Pending';
+        if (listID) {
+            dupeRun.SourceListID = listID;
+        }
+
+        const success = await this.SaveEntity(dupeRun);
+        if (!success) {
+            throw new Error('Failed to create Duplicate Run record');
+        }
+        return dupeRun;
+    }
+
+    protected async LoadDuplicateRun(duplicateRunID: string): Promise<MJDuplicateRunEntity> {
+        const dupeRun = await this.Metadata.GetEntityObject<MJDuplicateRunEntity>('MJ: Duplicate Runs', this.CurrentUser);
+        dupeRun.ContextCurrentUser = this.CurrentUser;
+        const success = await dupeRun.Load(duplicateRunID);
+        if (!success) {
+            throw new Error(`Failed to load Duplicate Run record ${duplicateRunID}`);
+        }
+        return dupeRun;
+    }
+
+    /**
+     * Try to find an existing DuplicateRun for a given ListID. Returns null if none found.
+     */
+    protected async FindDuplicateRunByListID(listID: string): Promise<MJDuplicateRunEntity | null> {
+        return this.RunViewForSingleValue<MJDuplicateRunEntity>(
+            'MJ: Duplicate Runs', `SourceListID = '${listID.replace(/'/g, "''")}'`
+        );
+    }
+
+    // ─────────────────────────────────────────────
+    // Entity Loading
+    // ─────────────────────────────────────────────
+
+    /**
+     * Load full entity objects for a batch of composite keys.
+     */
+    protected async LoadRecordsByKeys(compositeKeys: CompositeKey[], entityInfo: EntityInfo): Promise<BaseEntity[]> {
+        if (compositeKeys.length === 0) {
+            return [];
+        }
+
+        const rvResult = await this.RunView.RunView<BaseEntity>({
+            EntityName: entityInfo.Name,
+            ExtraFilter: this.BuildExtraFilter(compositeKeys),
+            ResultType: 'entity_object',
+        }, this.CurrentUser);
+
+        if (!rvResult.Success) {
+            throw new Error(rvResult.ErrorMessage);
+        }
+        return rvResult.Results;
+    }
+
+    /**
+     * Load records from an entity that are members of the specified list.
+     * Kept for backward compatibility.
+     */
+    protected async LoadRecordsByListID(listID: string, entityID: string): Promise<BaseEntity[]> {
+        const entityInfo: EntityInfo = this.Metadata.EntityByID(entityID);
+        if (!entityInfo) {
+            throw new Error(`Entity not found for ID ${entityID}`);
+        }
+
+        const sanitizedListID = listID.replace(/'/g, "''");
+        const rvResult = await this.RunView.RunView<BaseEntity>({
+            EntityName: entityInfo.Name,
+            ExtraFilter: `ID IN (SELECT RecordID FROM __mj.vwListDetails WHERE ListID = '${sanitizedListID}')`,
+            ResultType: 'entity_object',
+        }, this.CurrentUser);
+
+        if (!rvResult.Success) {
+            throw new Error(rvResult.ErrorMessage);
+        }
+        return rvResult.Results;
+    }
+
+    protected async LoadListEntity(listID: string): Promise<MJListEntity> {
+        const list = await this.Metadata.GetEntityObject<MJListEntity>('MJ: Lists');
+        list.ContextCurrentUser = this.CurrentUser;
+        const success = await list.Load(listID);
+        if (!success) {
+            throw new Error(`Failed to load List record ${listID}`);
+        }
+        return list;
     }
 
     // ─────────────────────────────────────────────
@@ -363,7 +696,8 @@ export class DuplicateRecordDetector extends VectorBase {
         templateTexts: string[],
         entityDocument: MJEntityDocumentEntity,
         topK: number,
-        options: DuplicateDetectionOptions
+        options: DuplicateDetectionOptions,
+        concurrency: number
     ): Promise<RecordQueryResult[]> {
         const tasks = records.map((record, index) => async (): Promise<RecordQueryResult> => {
             const compositeKey = record.PrimaryKey;
@@ -382,8 +716,9 @@ export class DuplicateRecordDetector extends VectorBase {
 
             const dupeResult = this.ParseVectorMatches(queryResponse, compositeKey);
             dupeResult.Duplicates = this.FilterSelfMatches(dupeResult.Duplicates, compositeKey);
+            const potentialThreshold = options.PotentialMatchThreshold ?? entityDocument.PotentialMatchThreshold;
             dupeResult.Duplicates = dupeResult.Duplicates.filter(
-                (d) => d.ProbabilityScore >= entityDocument.PotentialMatchThreshold
+                (d) => d.ProbabilityScore >= potentialThreshold
             );
             dupeResult.EntityID = entityDocument.EntityID;
             dupeResult.RecordCompositeKey = compositeKey;
@@ -391,7 +726,7 @@ export class DuplicateRecordDetector extends VectorBase {
             return { SourceKey: compositeKey, TemplateText: templateText, Duplicates: dupeResult };
         });
 
-        return RunWithConcurrency(tasks, QUERY_CONCURRENCY_LIMIT);
+        return RunWithConcurrency(tasks, concurrency);
     }
 
     /**
@@ -416,6 +751,7 @@ export class DuplicateRecordDetector extends VectorBase {
         }
 
         return this.vectorDB.QueryIndex({
+            id: this.indexName,
             vector,
             topK,
             includeMetadata: true,
@@ -443,6 +779,8 @@ export class DuplicateRecordDetector extends VectorBase {
             const duplicate = new PotentialDuplicate();
             duplicate.LoadFromConcatenatedString(match.metadata.RecordID);
             duplicate.ProbabilityScore = match.score;
+            // Capture the full vector metadata for rich UI display
+            duplicate.VectorMetadata = { ...match.metadata } as Record<string, string>;
             result.Duplicates.push(duplicate);
         }
 
@@ -452,64 +790,46 @@ export class DuplicateRecordDetector extends VectorBase {
     /**
      * Filter out self-matches where the candidate is the same record as the source.
      */
+    /**
+     * Build a map of recordID → JSON metadata string from loaded BaseEntity records.
+     * Extracts the entity's name field and a few key display fields for rich UI rendering.
+     */
+    protected buildSourceMetadataMap(records: BaseEntity[], entityInfo: EntityInfo): Map<string, string> {
+        const metadataMap = new Map<string, string>();
+        const nameField = entityInfo.NameField;
+        // Collect a small set of useful display fields
+        const displayFieldNames = ['Name', 'Title', 'Description', 'Status', 'Type']
+            .filter(fn => entityInfo.Fields.find(f => f.Name === fn));
+
+        for (const record of records) {
+            const pk = record.PrimaryKey;
+            const id = pk.KeyValuePairs.length === 1 ? String(pk.KeyValuePairs[0].Value) : pk.Values();
+            const meta: Record<string, string> = {
+                Entity: entityInfo.Name,
+            };
+            if (entityInfo.Icon) {
+                meta['EntityIcon'] = entityInfo.Icon;
+            }
+            if (nameField) {
+                const nameVal = record.Get(nameField.Name);
+                if (nameVal != null) meta['Name'] = String(nameVal);
+            }
+            for (const fn of displayFieldNames) {
+                if (fn !== nameField?.Name) {
+                    const val = record.Get(fn);
+                    if (val != null) {
+                        const str = String(val);
+                        meta[fn] = str.length > 200 ? str.substring(0, 197) + '...' : str;
+                    }
+                }
+            }
+            metadataMap.set(id, JSON.stringify(meta));
+        }
+        return metadataMap;
+    }
+
     protected FilterSelfMatches(duplicates: PotentialDuplicate[], sourceKey: CompositeKey): PotentialDuplicate[] {
         return duplicates.filter((d) => d.ToString() !== sourceKey.ToString());
-    }
-
-    // ─────────────────────────────────────────────
-    // Entity Loading
-    // ─────────────────────────────────────────────
-
-    /**
-     * Load records from an entity that are members of the specified list.
-     */
-    protected async LoadRecordsByListID(listID: string, entityID: string): Promise<BaseEntity[]> {
-        const entityInfo: EntityInfo = this.Metadata.EntityByID(entityID);
-        if (!entityInfo) {
-            throw new Error(`Entity not found for ID ${entityID}`);
-        }
-
-        const sanitizedListID = listID.replace(/'/g, "''");
-        const rvResult = await this.RunView.RunView<BaseEntity>({
-            EntityName: entityInfo.Name,
-            ExtraFilter: `ID IN (SELECT RecordID FROM __mj.vwListDetails WHERE ListID = '${sanitizedListID}')`,
-            ResultType: 'entity_object',
-        }, this.CurrentUser);
-
-        if (!rvResult.Success) {
-            throw new Error(rvResult.ErrorMessage);
-        }
-        return rvResult.Results;
-    }
-
-    protected async LoadListEntity(listID: string): Promise<MJListEntity> {
-        const list = await this.Metadata.GetEntityObject<MJListEntity>('MJ: Lists');
-        list.ContextCurrentUser = this.CurrentUser;
-        const success = await list.Load(listID);
-        if (!success) {
-            throw new Error(`Failed to load List record ${listID}`);
-        }
-        return list;
-    }
-
-    protected async LoadDuplicateRun(duplicateRunID: string): Promise<MJDuplicateRunEntity> {
-        const dupeRun = await this.Metadata.GetEntityObject<MJDuplicateRunEntity>('MJ: Duplicate Runs');
-        dupeRun.ContextCurrentUser = this.CurrentUser;
-        const success = await dupeRun.Load(duplicateRunID);
-        if (!success) {
-            throw new Error(`Failed to load Duplicate Run record ${duplicateRunID}`);
-        }
-        return dupeRun;
-    }
-
-    protected async LoadDuplicateRunByListID(listID: string): Promise<MJDuplicateRunEntity> {
-        const entity = await this.RunViewForSingleValue<MJDuplicateRunEntity>(
-            'MJ: Duplicate Runs', `SourceListID = '${listID.replace(/'/g, "''")}'`
-        );
-        if (!entity) {
-            throw new Error(`No Duplicate Run found for List ${listID}`);
-        }
-        return entity;
     }
 
     // ─────────────────────────────────────────────
@@ -517,31 +837,28 @@ export class DuplicateRecordDetector extends VectorBase {
     // ─────────────────────────────────────────────
 
     /**
-     * Create DuplicateRunDetail records for each item in the list, saving in parallel batches.
+     * Create DuplicateRunDetail records for a batch of record IDs.
      */
-    protected async CreateRunDetailRecordsFromList(listID: string, duplicateRunID: string): Promise<MJDuplicateRunDetailEntity[]> {
-        const viewResults = await this.RunView.RunView<MJListDetailEntity>({
-            EntityName: 'MJ: List Details',
-            ExtraFilter: `ListID = '${listID.replace(/'/g, "''")}'`,
-            ResultType: 'entity_object',
-        }, this.CurrentUser);
-
-        if (!viewResults.Success) {
-            throw new Error(viewResults.ErrorMessage);
-        }
-
-        const listDetails = viewResults.Results;
+    protected async CreateRunDetailRecords(
+        recordIDs: string[],
+        duplicateRunID: string,
+        entityInfo: EntityInfo,
+        metadataMap?: Map<string, string>
+    ): Promise<MJDuplicateRunDetailEntity[]> {
         const results: MJDuplicateRunDetailEntity[] = [];
+        const pkFieldName = entityInfo.FirstPrimaryKey.Name;
 
-        for (const batch of chunkArray(listDetails, SAVE_BATCH_SIZE)) {
+        for (const batch of chunkArray(recordIDs, SAVE_BATCH_SIZE)) {
             const batchResults = await Promise.all(
-                batch.map(async (listDetail) => {
-                    const runDetail = await this.Metadata.GetEntityObject<MJDuplicateRunDetailEntity>('MJ: Duplicate Run Details');
+                batch.map(async (recordID) => {
+                    const runDetail = await this.Metadata.GetEntityObject<MJDuplicateRunDetailEntity>('MJ: Duplicate Run Details', this.CurrentUser);
                     runDetail.NewRecord();
                     runDetail.DuplicateRunID = duplicateRunID;
-                    runDetail.RecordID = listDetail.RecordID;
+                    // Store RecordID in standard MJ URL segment format (e.g., "ID|uuid")
+                    runDetail.RecordID = `${pkFieldName}|${recordID}`;
                     runDetail.MatchStatus = 'Pending';
                     runDetail.MergeStatus = 'Pending';
+                    runDetail.RecordMetadata = metadataMap?.get(recordID) ?? null;
                     const success = await this.SaveEntity(runDetail);
                     if (!success) {
                         LogError("Failed to save MJDuplicateRunDetailEntity", undefined, runDetail.LatestResult);
@@ -572,11 +889,28 @@ export class DuplicateRecordDetector extends VectorBase {
         let matchesFound = 0;
 
         for (const qr of queryResults) {
+            // Filter out inverse duplicates: if A→B was already persisted, skip B→A
+            const sourceId = qr.SourceKey.Values();
+            qr.Duplicates.Duplicates = qr.Duplicates.Duplicates.filter(dupe => {
+                const matchId = dupe.Values();
+                const pairKey = sourceId < matchId ? `${sourceId}::${matchId}` : `${matchId}::${sourceId}`;
+                if (this._seenPairs.has(pairKey)) {
+                    return false; // Inverse already recorded
+                }
+                this._seenPairs.add(pairKey);
+                return true;
+            });
+
             results.push(qr.Duplicates);
             matchesFound += qr.Duplicates.Duplicates.length;
 
+            const sourceKey = qr.SourceKey;
             const detail = duplicateRunDetails.find(
-                (d) => UUIDsEqual(d.RecordID, qr.SourceKey.Values())
+                (d) => {
+                    const detailKey = new CompositeKey();
+                    detailKey.LoadFromConcatenatedString(d.RecordID);
+                    return detailKey.Equals(sourceKey);
+                }
             );
 
             if (detail) {
@@ -610,16 +944,17 @@ export class DuplicateRecordDetector extends VectorBase {
             const batchResults = await Promise.all(
                 batch.map(async (dupe) => {
                     const match = await this.Metadata.GetEntityObject<MJDuplicateRunDetailMatchEntity>(
-                        'MJ: Duplicate Run Detail Matches'
+                        'MJ: Duplicate Run Detail Matches', this.CurrentUser
                     );
                     match.NewRecord();
                     match.DuplicateRunDetailID = duplicateRunDetailID;
-                    match.MatchRecordID = dupe.ToString();
+                    match.MatchRecordID = dupe.ToURLSegment();
                     match.MatchProbability = dupe.ProbabilityScore;
                     match.MatchedAt = new Date();
                     match.Action = '';
                     match.ApprovalStatus = 'Pending';
                     match.MergeStatus = 'Pending';
+                    match.RecordMetadata = dupe.VectorMetadata ? JSON.stringify(dupe.VectorMetadata) : null;
                     const success = await this.SaveEntity(match);
                     return success ? match : null;
                 })
@@ -641,11 +976,13 @@ export class DuplicateRecordDetector extends VectorBase {
      */
     protected async ProcessAutoMerges(
         response: PotentialDuplicateResponse,
-        entityDocument: MJEntityDocumentEntity
+        entityDocument: MJEntityDocumentEntity,
+        options: DuplicateDetectionOptions = {}
     ): Promise<void> {
+        const absoluteThreshold = options.AbsoluteMatchThreshold ?? entityDocument.AbsoluteMatchThreshold;
         for (const dupeResult of response.PotentialDuplicateResult) {
             for (const [index, dupe] of dupeResult.Duplicates.entries()) {
-                if (dupe.ProbabilityScore < entityDocument.AbsoluteMatchThreshold) {
+                if (dupe.ProbabilityScore < absoluteThreshold) {
                     continue;
                 }
 
