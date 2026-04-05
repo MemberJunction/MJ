@@ -10,7 +10,7 @@ import { Component, ChangeDetectorRef, OnDestroy, AfterViewInit, inject, Injecto
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { CompositeKey, Metadata } from '@memberjunction/core';
-import { ResourceData } from '@memberjunction/core-entities';
+import { ResourceData, UserInfoEngine } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import {
@@ -77,8 +77,10 @@ export class KnowledgeSearchResourceComponent extends BaseResourceComponent impl
     }
 
     ngAfterViewInit(): void {
+        this.LoadSearchPreferences();
         this.subscribeToSearchState();
         this.parseUrlParameters();
+        this.NotifyLoadComplete();
     }
 
     ngOnDestroy(): void {
@@ -142,26 +144,56 @@ export class KnowledgeSearchResourceComponent extends BaseResourceComponent impl
     /** Toggle the filter sidebar */
     public ToggleFilters(): void {
         this.ShowFilters = !this.ShowFilters;
+        this.PersistSearchPreferences();
         this.cdr.detectChanges();
     }
 
-    /** Handle a filter change from the filter component */
+    /**
+     * Handle a filter change from the filter component.
+     * Uses client-side filtering on the cached full result set — no server re-query.
+     */
     public OnFilterChanged(event: SearchFilterChangeEvent): void {
         this.ActiveFilters[event.Category] = event.SelectedValues;
-        this.RunSearch();
+        this.applyClientSideFilters();
+        this.PersistSearchPreferences();
     }
 
     /** Handle clearing all filters */
     public OnFiltersCleared(): void {
         this.ActiveFilters = {};
         this.MinScoreThreshold = 0.35;
-        this.RunSearch();
+        this.applyClientSideFilters();
+        this.PersistSearchPreferences();
     }
 
     /** Handle relevance threshold slider change */
     public OnThresholdChanged(value: number): void {
         this.MinScoreThreshold = value;
-        this.RunSearch();
+        this.applyClientSideFilters();
+    }
+
+    /** Toggle select all / unselect all for a filter category (Kayak-style) */
+    public ToggleSelectAll(category: string): void {
+        const filter = this.Filters.find(f => f.Category === category);
+        if (!filter) return;
+
+        const currentSelection = this.ActiveFilters[category] ?? [];
+        if (currentSelection.length === filter.Options.length) {
+            // All selected → unselect all
+            this.ActiveFilters[category] = [];
+        } else {
+            // Some or none selected → select all
+            this.ActiveFilters[category] = filter.Options.map(o => o.Value);
+        }
+        this.applyClientSideFilters();
+    }
+
+    /** Check if all options in a category are selected */
+    public IsAllSelected(category: string): boolean {
+        const filter = this.Filters.find(f => f.Category === category);
+        if (!filter) return false;
+        const selection = this.ActiveFilters[category] ?? [];
+        return selection.length === filter.Options.length;
     }
 
     /** Open the chat overlay with Knowledge Agent context */
@@ -240,10 +272,77 @@ export class KnowledgeSearchResourceComponent extends BaseResourceComponent impl
             });
     }
 
+    /** Full unfiltered result set from the last server query */
+    private cachedFullResults: SearchResultItem[] = [];
+
+    /**
+     * Apply filters client-side on the cached full result set.
+     * This avoids re-querying the server when entity/tag checkboxes change.
+     */
+    private applyClientSideFilters(): void {
+        let filtered = [...this.cachedFullResults];
+
+        // Apply entity filter
+        const entityFilter = this.ActiveFilters['Entity'];
+        if (entityFilter?.length > 0) {
+            filtered = filtered.filter(r => entityFilter.includes(r.EntityName));
+        }
+
+        // Apply tag filter
+        const tagFilter = this.ActiveFilters['Tags'];
+        if (tagFilter?.length > 0) {
+            filtered = filtered.filter(r =>
+                r.Tags?.some(t => tagFilter.includes(t))
+            );
+        }
+
+        // Apply score threshold
+        if (this.MinScoreThreshold > 0) {
+            filtered = filtered.filter(r => r.Score >= this.MinScoreThreshold);
+        }
+
+        // Rebuild groups and update counts
+        this.AllResults = filtered;
+        this.ResultGroups = this.searchService.GroupResults(filtered);
+        this.TotalCount = filtered.length;
+
+        // Rebuild filter counts based on filtered results
+        this.Filters = this.searchService.BuildFilters(filtered);
+        // Remove Source Type filter — it confuses users
+        this.Filters = this.Filters.filter(f => f.Category !== 'Source Type');
+
+        this.cdr.detectChanges();
+    }
+
+    /** Persist user search preferences (filter panel state, threshold) */
+    private PersistSearchPreferences(): void {
+        try {
+            const prefs = {
+                ShowFilters: this.ShowFilters,
+                MinScoreThreshold: this.MinScoreThreshold,
+            };
+            localStorage.setItem('KH_SearchPreferences', JSON.stringify(prefs));
+        } catch { /* ignore */ }
+    }
+
+    /** Load persisted search preferences */
+    private LoadSearchPreferences(): void {
+        try {
+            const raw = localStorage.getItem('KH_SearchPreferences');
+            if (raw) {
+                const prefs = JSON.parse(raw);
+                if (prefs.ShowFilters != null) this.ShowFilters = prefs.ShowFilters;
+                if (prefs.MinScoreThreshold != null) this.MinScoreThreshold = prefs.MinScoreThreshold;
+            }
+        } catch { /* ignore */ }
+    }
+
     private applySearchResponse(response: SearchResponse): void {
+        this.cachedFullResults = response.Results; // Cache full results for client-side filtering
         this.AllResults = response.Results;
         this.ResultGroups = response.Groups;
-        this.Filters = response.Filters;
+        // Remove Source Type filter — confuses users
+        this.Filters = response.Filters.filter(f => f.Category !== 'Source Type');
         this.TotalCount = response.TotalCount;
         this.ElapsedMs = response.ElapsedMs;
         this.HasSearched = true;

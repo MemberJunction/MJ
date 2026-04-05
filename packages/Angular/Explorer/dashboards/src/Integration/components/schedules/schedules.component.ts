@@ -115,6 +115,7 @@ export class SchedulesComponent extends BaseResourceComponent implements OnInit,
   async ngOnInit(): Promise<void> {
     this.buildTimelineHours();
     await this.LoadData();
+    this.NotifyLoadComplete();
     // Refresh relative times every 60 seconds
     this.refreshTimer = setInterval(() => this.cdr.detectChanges(), 60_000);
   }

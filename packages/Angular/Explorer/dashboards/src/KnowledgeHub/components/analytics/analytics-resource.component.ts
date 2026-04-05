@@ -374,6 +374,7 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
 
     ngAfterViewInit(): void {
         this.loadAllData();
+        this.NotifyLoadComplete();
     }
 
     ngOnDestroy(): void {

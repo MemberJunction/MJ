@@ -93,6 +93,7 @@ export class SchedulingResourceComponent extends BaseResourceComponent implement
 
     async ngAfterViewInit(): Promise<void> {
         await this.loadData();
+        this.NotifyLoadComplete();
     }
 
     ngOnDestroy(): void {

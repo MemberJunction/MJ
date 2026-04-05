@@ -173,6 +173,7 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
 
     ngAfterViewInit(): void {
         this.loadConfiguration();
+        this.NotifyLoadComplete();
     }
 
     ngOnDestroy(): void {

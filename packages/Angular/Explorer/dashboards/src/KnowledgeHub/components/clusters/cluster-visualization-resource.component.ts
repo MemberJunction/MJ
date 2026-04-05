@@ -102,6 +102,7 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
         await this.loadEntityOptions();
         this.loadSavedVisualizations();
         this.restoreLastSession();
+        this.NotifyLoadComplete();
     }
 
     ngOnDestroy(): void {
