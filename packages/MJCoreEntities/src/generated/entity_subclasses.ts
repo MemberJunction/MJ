@@ -9740,6 +9740,165 @@ export const MJContentItemSchema = z.object({
 export type MJContentItemEntityType = z.infer<typeof MJContentItemSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Content Process Run Details
+ */
+export const MJContentProcessRunDetailSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ContentProcessRunID: z.string().describe(`
+        * * Field Name: ContentProcessRunID
+        * * Display Name: Content Process Run
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Content Process Runs (vwContentProcessRuns.ID)
+        * * Description: The parent pipeline run this detail belongs to.`),
+    ContentSourceID: z.string().describe(`
+        * * Field Name: ContentSourceID
+        * * Display Name: Content Source
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Content Sources (vwContentSources.ID)
+        * * Description: The content source being processed in this detail record.`),
+    ContentSourceTypeID: z.string().describe(`
+        * * Field Name: ContentSourceTypeID
+        * * Display Name: Content Source Type
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Content Source Types (vwContentSourceTypes.ID)
+        * * Description: The type of content source (RSS Feed, Entity, Website, Cloud Storage, etc.).`),
+    Status: z.string().describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Pending
+        * * Description: Processing status: Pending, Running, Completed, Failed, or Skipped.`),
+    ItemsProcessed: z.number().describe(`
+        * * Field Name: ItemsProcessed
+        * * Display Name: Items Processed
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Total content items processed for this source during the run.`),
+    ItemsTagged: z.number().describe(`
+        * * Field Name: ItemsTagged
+        * * Display Name: Items Tagged
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Number of content items successfully tagged by the LLM.`),
+    ItemsVectorized: z.number().describe(`
+        * * Field Name: ItemsVectorized
+        * * Display Name: Items Vectorized
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Number of content items successfully embedded and upserted to the vector database.`),
+    TagsCreated: z.number().describe(`
+        * * Field Name: TagsCreated
+        * * Display Name: Tags Created
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Number of new ContentItemTag records created during LLM tagging.`),
+    ErrorCount: z.number().describe(`
+        * * Field Name: ErrorCount
+        * * Display Name: Error Count
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Number of errors encountered while processing this source.`),
+    StartTime: z.date().nullable().describe(`
+        * * Field Name: StartTime
+        * * Display Name: Start Time
+        * * SQL Data Type: datetimeoffset
+        * * Description: When processing started for this source within the pipeline run.`),
+    EndTime: z.date().nullable().describe(`
+        * * Field Name: EndTime
+        * * Display Name: End Time
+        * * SQL Data Type: datetimeoffset
+        * * Description: When processing completed for this source within the pipeline run.`),
+    TotalTokensUsed: z.number().describe(`
+        * * Field Name: TotalTokensUsed
+        * * Display Name: Total Tokens Used
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Rollup of all tokens used across LLM tagging and embedding calls for this source. Computed from linked AIPromptRun records via the ContentProcessRunPromptRun junction table.`),
+    TotalCost: z.number().describe(`
+        * * Field Name: TotalCost
+        * * Display Name: Total Cost
+        * * SQL Data Type: decimal(18, 6)
+        * * Default Value: 0
+        * * Description: Rollup of all costs across LLM tagging and embedding calls for this source. Computed from linked AIPromptRun records via the ContentProcessRunPromptRun junction table.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    ContentProcessRun: z.string().nullable().describe(`
+        * * Field Name: ContentProcessRun
+        * * Display Name: Process Run Name
+        * * SQL Data Type: nvarchar(255)`),
+    ContentSource: z.string().nullable().describe(`
+        * * Field Name: ContentSource
+        * * Display Name: Source Name
+        * * SQL Data Type: nvarchar(255)`),
+    ContentSourceType: z.string().describe(`
+        * * Field Name: ContentSourceType
+        * * Display Name: Source Type Name
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJContentProcessRunDetailEntityType = z.infer<typeof MJContentProcessRunDetailSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Content Process Run Prompt Runs
+ */
+export const MJContentProcessRunPromptRunSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ContentProcessRunDetailID: z.string().describe(`
+        * * Field Name: ContentProcessRunDetailID
+        * * Display Name: Content Process Run Detail
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Content Process Run Details (vwContentProcessRunDetails.ID)
+        * * Description: The content process run detail record this prompt run is associated with.`),
+    AIPromptRunID: z.string().describe(`
+        * * Field Name: AIPromptRunID
+        * * Display Name: AI Prompt Run
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Prompt Runs (vwAIPromptRuns.ID)
+        * * Description: The AI prompt run record containing token usage, cost, model, vendor, and execution details for this call.`),
+    RunType: z.union([z.literal('Embed'), z.literal('Tag')]).describe(`
+        * * Field Name: RunType
+        * * Display Name: Run Type
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Embed
+    *   * Tag
+        * * Description: Whether this AIPromptRun was for LLM tagging (Tag) or text embedding (Embed).`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    AIPromptRun: z.string().nullable().describe(`
+        * * Field Name: AIPromptRun
+        * * Display Name: AI Prompt Run Label
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJContentProcessRunPromptRunEntityType = z.infer<typeof MJContentProcessRunPromptRunSchema>;
+
+/**
  * zod schema definition for the entity MJ: Content Process Runs
  */
 export const MJContentProcessRunSchema = z.object({
@@ -9750,7 +9909,7 @@ export const MJContentProcessRunSchema = z.object({
         * * Default Value: newsequentialid()`),
     SourceID: z.string().describe(`
         * * Field Name: SourceID
-        * * Display Name: Source ID
+        * * Display Name: Source
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Content Sources (vwContentSources.ID)`),
     StartTime: z.date().nullable().describe(`
@@ -9782,10 +9941,59 @@ export const MJContentProcessRunSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    StartedByUserID: z.string().nullable().describe(`
+        * * Field Name: StartedByUserID
+        * * Display Name: Started By User
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: The user who triggered this pipeline run. NULL for system-initiated runs.`),
+    TotalItemCount: z.number().nullable().describe(`
+        * * Field Name: TotalItemCount
+        * * Display Name: Total Item Count
+        * * SQL Data Type: int
+        * * Description: Total number of content items to process in this run. Used for progress percentage calculation.`),
+    LastProcessedOffset: z.number().nullable().describe(`
+        * * Field Name: LastProcessedOffset
+        * * Display Name: Last Processed Offset
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: StartRow offset of the last successfully completed batch. Used for resume-from-crash: next batch starts at this offset. Reset to 0 on new runs.`),
+    BatchSize: z.number().nullable().describe(`
+        * * Field Name: BatchSize
+        * * Display Name: Batch Size
+        * * SQL Data Type: int
+        * * Default Value: 100
+        * * Description: Number of content items processed per batch. Configurable per run, default 100.`),
+    ErrorCount: z.number().nullable().describe(`
+        * * Field Name: ErrorCount
+        * * Display Name: Error Count
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Running count of errors encountered during processing. Used by the circuit breaker to halt the pipeline if error rate exceeds the configured threshold.`),
+    ErrorMessage: z.string().nullable().describe(`
+        * * Field Name: ErrorMessage
+        * * Display Name: Error Message
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Error details if the run failed. Includes error messages, stack traces, or circuit breaker trigger reason.`),
+    CancellationRequested: z.boolean().describe(`
+        * * Field Name: CancellationRequested
+        * * Display Name: Cancellation Requested
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When set to 1, the pipeline stops after completing the current batch. Used for pause and cancel operations. The Status column reflects the final state (Paused or Cancelled).`),
+    Configuration: z.string().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON snapshot of the pipeline configuration used for this run. Conforms to the IContentProcessRunConfiguration interface. Includes batch size, rate limits, error thresholds, and duplicate detection settings.`),
     Source: z.string().nullable().describe(`
         * * Field Name: Source
-        * * Display Name: Source
+        * * Display Name: Source Name
         * * SQL Data Type: nvarchar(255)`),
+    StartedByUser: z.string().nullable().describe(`
+        * * Field Name: StartedByUser
+        * * Display Name: Started By User Name
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type MJContentProcessRunEntityType = z.infer<typeof MJContentProcessRunSchema>;
@@ -11971,7 +12179,7 @@ export const MJDuplicateRunDetailSchema = z.object({
         * * Related Entity/Foreign Key: MJ: Duplicate Runs (vwDuplicateRuns.ID)`),
     RecordID: z.string().describe(`
         * * Field Name: RecordID
-        * * Display Name: Source Record
+        * * Display Name: Record ID
         * * SQL Data Type: nvarchar(500)
         * * Description: The ID of the record being analyzed for duplicates.`),
     MatchStatus: z.union([z.literal('Complete'), z.literal('Error'), z.literal('Pending'), z.literal('Skipped')]).describe(`
@@ -12028,9 +12236,19 @@ export const MJDuplicateRunDetailSchema = z.object({
         * * Display Name: Record Metadata
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON metadata snapshot of the source record from the vector database at detection time. Contains display fields (Name, Description, EntityIcon, etc.) for rich UI rendering without additional lookups.`),
+    StartedAt: z.date().nullable().describe(`
+        * * Field Name: StartedAt
+        * * Display Name: Started At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When processing started for this specific record during duplicate detection.`),
+    EndedAt: z.date().nullable().describe(`
+        * * Field Name: EndedAt
+        * * Display Name: Ended At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When processing completed for this specific record during duplicate detection.`),
     DuplicateRun: z.string().describe(`
         * * Field Name: DuplicateRun
-        * * Display Name: Run Name
+        * * Display Name: Duplicate Run Name
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -12042,22 +12260,22 @@ export type MJDuplicateRunDetailEntityType = z.infer<typeof MJDuplicateRunDetail
 export const MJDuplicateRunSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
-        * * Display Name: ID
+        * * Display Name: Run ID
         * * SQL Data Type: uniqueidentifier
         * * Default Value: newsequentialid()`),
     EntityID: z.string().describe(`
         * * Field Name: EntityID
-        * * Display Name: Entity
+        * * Display Name: Entity ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)`),
     StartedByUserID: z.string().describe(`
         * * Field Name: StartedByUserID
-        * * Display Name: Started By User
+        * * Display Name: Started By User ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)`),
     SourceListID: z.string().nullable().describe(`
         * * Field Name: SourceListID
-        * * Display Name: Source List
+        * * Display Name: Source List ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Lists (vwLists.ID)
         * * Description: Optional List ID to narrow the scope of duplicate detection. When NULL, all records in the entity are scanned. When set, only records in the specified list are checked for duplicates.`),
@@ -12088,7 +12306,7 @@ export const MJDuplicateRunSchema = z.object({
         * * Description: Comments or notes regarding the approval decision for this duplicate run.`),
     ApprovedByUserID: z.string().nullable().describe(`
         * * Field Name: ApprovedByUserID
-        * * Display Name: Approved By User
+        * * Display Name: Approved By User ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)`),
     ProcessingStatus: z.union([z.literal('Complete'), z.literal('Failed'), z.literal('In Progress'), z.literal('Pending')]).describe(`
@@ -12118,6 +12336,35 @@ export const MJDuplicateRunSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    TotalItemCount: z.number().nullable().describe(`
+        * * Field Name: TotalItemCount
+        * * Display Name: Total Items
+        * * SQL Data Type: int
+        * * Description: Total entity records to check for duplicates in this run.`),
+    ProcessedItemCount: z.number().nullable().describe(`
+        * * Field Name: ProcessedItemCount
+        * * Display Name: Processed Items
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Number of records checked so far. Used for progress percentage.`),
+    LastProcessedOffset: z.number().nullable().describe(`
+        * * Field Name: LastProcessedOffset
+        * * Display Name: Last Processed Offset
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Resume cursor for large-scale duplicate detection. Stores the offset of the last completed batch.`),
+    BatchSize: z.number().nullable().describe(`
+        * * Field Name: BatchSize
+        * * Display Name: Batch Size
+        * * SQL Data Type: int
+        * * Default Value: 100
+        * * Description: Number of records processed per batch during duplicate detection.`),
+    CancellationRequested: z.boolean().describe(`
+        * * Field Name: CancellationRequested
+        * * Display Name: Cancellation Requested
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When set to 1, duplicate detection stops after the current batch. Used for pause/cancel.`),
     Entity: z.string().describe(`
         * * Field Name: Entity
         * * Display Name: Entity
@@ -49500,6 +49747,397 @@ export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
 
 
 /**
+ * MJ: Content Process Run Details - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ContentProcessRunDetail
+ * * Base View: vwContentProcessRunDetails
+ * * @description Per-content-source tracking within a pipeline run. Each source processed during a ContentProcessRun gets one detail record with item counts, timing, token usage, and cost rollups.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Content Process Run Details')
+export class MJContentProcessRunDetailEntity extends BaseEntity<MJContentProcessRunDetailEntityType> {
+    /**
+    * Loads the MJ: Content Process Run Details record from the database
+    * @param ID: string - primary key value to load the MJ: Content Process Run Details record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJContentProcessRunDetailEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ContentProcessRunID
+    * * Display Name: Content Process Run
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Content Process Runs (vwContentProcessRuns.ID)
+    * * Description: The parent pipeline run this detail belongs to.
+    */
+    get ContentProcessRunID(): string {
+        return this.Get('ContentProcessRunID');
+    }
+    set ContentProcessRunID(value: string) {
+        this.Set('ContentProcessRunID', value);
+    }
+
+    /**
+    * * Field Name: ContentSourceID
+    * * Display Name: Content Source
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Content Sources (vwContentSources.ID)
+    * * Description: The content source being processed in this detail record.
+    */
+    get ContentSourceID(): string {
+        return this.Get('ContentSourceID');
+    }
+    set ContentSourceID(value: string) {
+        this.Set('ContentSourceID', value);
+    }
+
+    /**
+    * * Field Name: ContentSourceTypeID
+    * * Display Name: Content Source Type
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Content Source Types (vwContentSourceTypes.ID)
+    * * Description: The type of content source (RSS Feed, Entity, Website, Cloud Storage, etc.).
+    */
+    get ContentSourceTypeID(): string {
+        return this.Get('ContentSourceTypeID');
+    }
+    set ContentSourceTypeID(value: string) {
+        this.Set('ContentSourceTypeID', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Pending
+    * * Description: Processing status: Pending, Running, Completed, Failed, or Skipped.
+    */
+    get Status(): string {
+        return this.Get('Status');
+    }
+    set Status(value: string) {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: ItemsProcessed
+    * * Display Name: Items Processed
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Total content items processed for this source during the run.
+    */
+    get ItemsProcessed(): number {
+        return this.Get('ItemsProcessed');
+    }
+    set ItemsProcessed(value: number) {
+        this.Set('ItemsProcessed', value);
+    }
+
+    /**
+    * * Field Name: ItemsTagged
+    * * Display Name: Items Tagged
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Number of content items successfully tagged by the LLM.
+    */
+    get ItemsTagged(): number {
+        return this.Get('ItemsTagged');
+    }
+    set ItemsTagged(value: number) {
+        this.Set('ItemsTagged', value);
+    }
+
+    /**
+    * * Field Name: ItemsVectorized
+    * * Display Name: Items Vectorized
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Number of content items successfully embedded and upserted to the vector database.
+    */
+    get ItemsVectorized(): number {
+        return this.Get('ItemsVectorized');
+    }
+    set ItemsVectorized(value: number) {
+        this.Set('ItemsVectorized', value);
+    }
+
+    /**
+    * * Field Name: TagsCreated
+    * * Display Name: Tags Created
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Number of new ContentItemTag records created during LLM tagging.
+    */
+    get TagsCreated(): number {
+        return this.Get('TagsCreated');
+    }
+    set TagsCreated(value: number) {
+        this.Set('TagsCreated', value);
+    }
+
+    /**
+    * * Field Name: ErrorCount
+    * * Display Name: Error Count
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Number of errors encountered while processing this source.
+    */
+    get ErrorCount(): number {
+        return this.Get('ErrorCount');
+    }
+    set ErrorCount(value: number) {
+        this.Set('ErrorCount', value);
+    }
+
+    /**
+    * * Field Name: StartTime
+    * * Display Name: Start Time
+    * * SQL Data Type: datetimeoffset
+    * * Description: When processing started for this source within the pipeline run.
+    */
+    get StartTime(): Date | null {
+        return this.Get('StartTime');
+    }
+    set StartTime(value: Date | null) {
+        this.Set('StartTime', value);
+    }
+
+    /**
+    * * Field Name: EndTime
+    * * Display Name: End Time
+    * * SQL Data Type: datetimeoffset
+    * * Description: When processing completed for this source within the pipeline run.
+    */
+    get EndTime(): Date | null {
+        return this.Get('EndTime');
+    }
+    set EndTime(value: Date | null) {
+        this.Set('EndTime', value);
+    }
+
+    /**
+    * * Field Name: TotalTokensUsed
+    * * Display Name: Total Tokens Used
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Rollup of all tokens used across LLM tagging and embedding calls for this source. Computed from linked AIPromptRun records via the ContentProcessRunPromptRun junction table.
+    */
+    get TotalTokensUsed(): number {
+        return this.Get('TotalTokensUsed');
+    }
+    set TotalTokensUsed(value: number) {
+        this.Set('TotalTokensUsed', value);
+    }
+
+    /**
+    * * Field Name: TotalCost
+    * * Display Name: Total Cost
+    * * SQL Data Type: decimal(18, 6)
+    * * Default Value: 0
+    * * Description: Rollup of all costs across LLM tagging and embedding calls for this source. Computed from linked AIPromptRun records via the ContentProcessRunPromptRun junction table.
+    */
+    get TotalCost(): number {
+        return this.Get('TotalCost');
+    }
+    set TotalCost(value: number) {
+        this.Set('TotalCost', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: ContentProcessRun
+    * * Display Name: Process Run Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ContentProcessRun(): string | null {
+        return this.Get('ContentProcessRun');
+    }
+
+    /**
+    * * Field Name: ContentSource
+    * * Display Name: Source Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ContentSource(): string | null {
+        return this.Get('ContentSource');
+    }
+
+    /**
+    * * Field Name: ContentSourceType
+    * * Display Name: Source Type Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ContentSourceType(): string {
+        return this.Get('ContentSourceType');
+    }
+}
+
+
+/**
+ * MJ: Content Process Run Prompt Runs - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ContentProcessRunPromptRun
+ * * Base View: vwContentProcessRunPromptRuns
+ * * @description Links ContentProcessRunDetail records to their associated AIPromptRun records. Each LLM tagging call and embedding call creates an AIPromptRun, and this junction table provides the FK relationship for cost/token analytics.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Content Process Run Prompt Runs')
+export class MJContentProcessRunPromptRunEntity extends BaseEntity<MJContentProcessRunPromptRunEntityType> {
+    /**
+    * Loads the MJ: Content Process Run Prompt Runs record from the database
+    * @param ID: string - primary key value to load the MJ: Content Process Run Prompt Runs record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJContentProcessRunPromptRunEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ContentProcessRunDetailID
+    * * Display Name: Content Process Run Detail
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Content Process Run Details (vwContentProcessRunDetails.ID)
+    * * Description: The content process run detail record this prompt run is associated with.
+    */
+    get ContentProcessRunDetailID(): string {
+        return this.Get('ContentProcessRunDetailID');
+    }
+    set ContentProcessRunDetailID(value: string) {
+        this.Set('ContentProcessRunDetailID', value);
+    }
+
+    /**
+    * * Field Name: AIPromptRunID
+    * * Display Name: AI Prompt Run
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Prompt Runs (vwAIPromptRuns.ID)
+    * * Description: The AI prompt run record containing token usage, cost, model, vendor, and execution details for this call.
+    */
+    get AIPromptRunID(): string {
+        return this.Get('AIPromptRunID');
+    }
+    set AIPromptRunID(value: string) {
+        this.Set('AIPromptRunID', value);
+    }
+
+    /**
+    * * Field Name: RunType
+    * * Display Name: Run Type
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Embed
+    *   * Tag
+    * * Description: Whether this AIPromptRun was for LLM tagging (Tag) or text embedding (Embed).
+    */
+    get RunType(): 'Embed' | 'Tag' {
+        return this.Get('RunType');
+    }
+    set RunType(value: 'Embed' | 'Tag') {
+        this.Set('RunType', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: AIPromptRun
+    * * Display Name: AI Prompt Run Label
+    * * SQL Data Type: nvarchar(255)
+    */
+    get AIPromptRun(): string | null {
+        return this.Get('AIPromptRun');
+    }
+}
+
+
+/**
  * MJ: Content Process Runs - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: ContentProcessRun
@@ -49544,7 +50182,7 @@ export class MJContentProcessRunEntity extends BaseEntity<MJContentProcessRunEnt
 
     /**
     * * Field Name: SourceID
-    * * Display Name: Source ID
+    * * Display Name: Source
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Content Sources (vwContentSources.ID)
     */
@@ -49627,12 +50265,130 @@ export class MJContentProcessRunEntity extends BaseEntity<MJContentProcessRunEnt
     }
 
     /**
+    * * Field Name: StartedByUserID
+    * * Display Name: Started By User
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: The user who triggered this pipeline run. NULL for system-initiated runs.
+    */
+    get StartedByUserID(): string | null {
+        return this.Get('StartedByUserID');
+    }
+    set StartedByUserID(value: string | null) {
+        this.Set('StartedByUserID', value);
+    }
+
+    /**
+    * * Field Name: TotalItemCount
+    * * Display Name: Total Item Count
+    * * SQL Data Type: int
+    * * Description: Total number of content items to process in this run. Used for progress percentage calculation.
+    */
+    get TotalItemCount(): number | null {
+        return this.Get('TotalItemCount');
+    }
+    set TotalItemCount(value: number | null) {
+        this.Set('TotalItemCount', value);
+    }
+
+    /**
+    * * Field Name: LastProcessedOffset
+    * * Display Name: Last Processed Offset
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: StartRow offset of the last successfully completed batch. Used for resume-from-crash: next batch starts at this offset. Reset to 0 on new runs.
+    */
+    get LastProcessedOffset(): number | null {
+        return this.Get('LastProcessedOffset');
+    }
+    set LastProcessedOffset(value: number | null) {
+        this.Set('LastProcessedOffset', value);
+    }
+
+    /**
+    * * Field Name: BatchSize
+    * * Display Name: Batch Size
+    * * SQL Data Type: int
+    * * Default Value: 100
+    * * Description: Number of content items processed per batch. Configurable per run, default 100.
+    */
+    get BatchSize(): number | null {
+        return this.Get('BatchSize');
+    }
+    set BatchSize(value: number | null) {
+        this.Set('BatchSize', value);
+    }
+
+    /**
+    * * Field Name: ErrorCount
+    * * Display Name: Error Count
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Running count of errors encountered during processing. Used by the circuit breaker to halt the pipeline if error rate exceeds the configured threshold.
+    */
+    get ErrorCount(): number | null {
+        return this.Get('ErrorCount');
+    }
+    set ErrorCount(value: number | null) {
+        this.Set('ErrorCount', value);
+    }
+
+    /**
+    * * Field Name: ErrorMessage
+    * * Display Name: Error Message
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Error details if the run failed. Includes error messages, stack traces, or circuit breaker trigger reason.
+    */
+    get ErrorMessage(): string | null {
+        return this.Get('ErrorMessage');
+    }
+    set ErrorMessage(value: string | null) {
+        this.Set('ErrorMessage', value);
+    }
+
+    /**
+    * * Field Name: CancellationRequested
+    * * Display Name: Cancellation Requested
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When set to 1, the pipeline stops after completing the current batch. Used for pause and cancel operations. The Status column reflects the final state (Paused or Cancelled).
+    */
+    get CancellationRequested(): boolean {
+        return this.Get('CancellationRequested');
+    }
+    set CancellationRequested(value: boolean) {
+        this.Set('CancellationRequested', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON snapshot of the pipeline configuration used for this run. Conforms to the IContentProcessRunConfiguration interface. Includes batch size, rate limits, error thresholds, and duplicate detection settings.
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    /**
     * * Field Name: Source
-    * * Display Name: Source
+    * * Display Name: Source Name
     * * SQL Data Type: nvarchar(255)
     */
     get Source(): string | null {
         return this.Get('Source');
+    }
+
+    /**
+    * * Field Name: StartedByUser
+    * * Display Name: Started By User Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get StartedByUser(): string | null {
+        return this.Get('StartedByUser');
     }
 }
 
@@ -55587,7 +56343,7 @@ export class MJDuplicateRunDetailEntity extends BaseEntity<MJDuplicateRunDetailE
 
     /**
     * * Field Name: RecordID
-    * * Display Name: Source Record
+    * * Display Name: Record ID
     * * SQL Data Type: nvarchar(500)
     * * Description: The ID of the record being analyzed for duplicates.
     */
@@ -55711,8 +56467,34 @@ export class MJDuplicateRunDetailEntity extends BaseEntity<MJDuplicateRunDetailE
     }
 
     /**
+    * * Field Name: StartedAt
+    * * Display Name: Started At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When processing started for this specific record during duplicate detection.
+    */
+    get StartedAt(): Date | null {
+        return this.Get('StartedAt');
+    }
+    set StartedAt(value: Date | null) {
+        this.Set('StartedAt', value);
+    }
+
+    /**
+    * * Field Name: EndedAt
+    * * Display Name: Ended At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When processing completed for this specific record during duplicate detection.
+    */
+    get EndedAt(): Date | null {
+        return this.Get('EndedAt');
+    }
+    set EndedAt(value: Date | null) {
+        this.Set('EndedAt', value);
+    }
+
+    /**
     * * Field Name: DuplicateRun
-    * * Display Name: Run Name
+    * * Display Name: Duplicate Run Name
     * * SQL Data Type: nvarchar(255)
     */
     get DuplicateRun(): string {
@@ -55753,7 +56535,7 @@ export class MJDuplicateRunEntity extends BaseEntity<MJDuplicateRunEntityType> {
 
     /**
     * * Field Name: ID
-    * * Display Name: ID
+    * * Display Name: Run ID
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
@@ -55766,7 +56548,7 @@ export class MJDuplicateRunEntity extends BaseEntity<MJDuplicateRunEntityType> {
 
     /**
     * * Field Name: EntityID
-    * * Display Name: Entity
+    * * Display Name: Entity ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
     */
@@ -55779,7 +56561,7 @@ export class MJDuplicateRunEntity extends BaseEntity<MJDuplicateRunEntityType> {
 
     /**
     * * Field Name: StartedByUserID
-    * * Display Name: Started By User
+    * * Display Name: Started By User ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     */
@@ -55792,7 +56574,7 @@ export class MJDuplicateRunEntity extends BaseEntity<MJDuplicateRunEntityType> {
 
     /**
     * * Field Name: SourceListID
-    * * Display Name: Source List
+    * * Display Name: Source List ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Lists (vwLists.ID)
     * * Description: Optional List ID to narrow the scope of duplicate detection. When NULL, all records in the entity are scanned. When set, only records in the specified list are checked for duplicates.
@@ -55863,7 +56645,7 @@ export class MJDuplicateRunEntity extends BaseEntity<MJDuplicateRunEntityType> {
 
     /**
     * * Field Name: ApprovedByUserID
-    * * Display Name: Approved By User
+    * * Display Name: Approved By User ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     */
@@ -55925,6 +56707,75 @@ export class MJDuplicateRunEntity extends BaseEntity<MJDuplicateRunEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: TotalItemCount
+    * * Display Name: Total Items
+    * * SQL Data Type: int
+    * * Description: Total entity records to check for duplicates in this run.
+    */
+    get TotalItemCount(): number | null {
+        return this.Get('TotalItemCount');
+    }
+    set TotalItemCount(value: number | null) {
+        this.Set('TotalItemCount', value);
+    }
+
+    /**
+    * * Field Name: ProcessedItemCount
+    * * Display Name: Processed Items
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Number of records checked so far. Used for progress percentage.
+    */
+    get ProcessedItemCount(): number | null {
+        return this.Get('ProcessedItemCount');
+    }
+    set ProcessedItemCount(value: number | null) {
+        this.Set('ProcessedItemCount', value);
+    }
+
+    /**
+    * * Field Name: LastProcessedOffset
+    * * Display Name: Last Processed Offset
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Resume cursor for large-scale duplicate detection. Stores the offset of the last completed batch.
+    */
+    get LastProcessedOffset(): number | null {
+        return this.Get('LastProcessedOffset');
+    }
+    set LastProcessedOffset(value: number | null) {
+        this.Set('LastProcessedOffset', value);
+    }
+
+    /**
+    * * Field Name: BatchSize
+    * * Display Name: Batch Size
+    * * SQL Data Type: int
+    * * Default Value: 100
+    * * Description: Number of records processed per batch during duplicate detection.
+    */
+    get BatchSize(): number | null {
+        return this.Get('BatchSize');
+    }
+    set BatchSize(value: number | null) {
+        this.Set('BatchSize', value);
+    }
+
+    /**
+    * * Field Name: CancellationRequested
+    * * Display Name: Cancellation Requested
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When set to 1, duplicate detection stops after the current batch. Used for pause/cancel.
+    */
+    get CancellationRequested(): boolean {
+        return this.Get('CancellationRequested');
+    }
+    set CancellationRequested(value: boolean) {
+        this.Set('CancellationRequested', value);
     }
 
     /**

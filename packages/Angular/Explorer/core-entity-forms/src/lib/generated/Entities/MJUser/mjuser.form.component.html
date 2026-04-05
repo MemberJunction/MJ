@@ -1733,6 +1733,31 @@
         }
     </mj-collapsible-panel>
 
+    <!-- Content Process Runs Section -->
+    <mj-collapsible-panel
+        SectionKey="mJContentProcessRuns"
+        SectionName="Content Process Runs"
+        Icon="fa fa-cogs"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJContentProcessRuns')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Content Process Runs','StartedByUserID')"
+                [NewRecordValues]="NewRecordValues('MJ: Content Process Runs')"
+                [AllowLoad]="IsSectionExpanded('mJContentProcessRuns')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJContentProcessRuns', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <!-- Resource Permissions Section -->
     <mj-collapsible-panel
         SectionKey="mJResourcePermissions"
@@ -2083,10 +2108,10 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Duplicate Runs (Approved By User) Section -->
+    <!-- Duplicate Runs (Approved By User ID) Section -->
     <mj-collapsible-panel
         SectionKey="mJDuplicateRunsApprovedByUserID"
-        SectionName="Duplicate Runs (Approved By User)"
+        SectionName="Duplicate Runs (Approved By User ID)"
         Icon="fa fa-search"
         Variant="related-entity"
         [Form]="this"

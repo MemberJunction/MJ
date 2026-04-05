@@ -23,7 +23,8 @@ export class MJContentSourceFormComponent extends BaseFormComponent {
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJContentItems', sectionName: 'Content Items', isExpanded: false },
             { sectionKey: 'mJContentProcessRuns', sectionName: 'Content Process Runs', isExpanded: false },
-            { sectionKey: 'mJContentSourceParams', sectionName: 'Content Source Params', isExpanded: false }
+            { sectionKey: 'mJContentSourceParams', sectionName: 'Content Source Params', isExpanded: false },
+            { sectionKey: 'mJContentProcessRunDetails', sectionName: 'Content Process Run Details', isExpanded: false }
         ]);
     }
 }

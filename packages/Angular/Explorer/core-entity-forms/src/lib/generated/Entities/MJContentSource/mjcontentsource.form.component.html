@@ -240,5 +240,30 @@
         </div>
         }
     </mj-collapsible-panel>
+
+    <!-- Content Process Run Details Section -->
+    <mj-collapsible-panel
+        SectionKey="mJContentProcessRunDetails"
+        SectionName="Content Process Run Details"
+        Icon="fa fa-terminal"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJContentProcessRunDetails')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Content Process Run Details','ContentSourceID')"
+                [NewRecordValues]="NewRecordValues('MJ: Content Process Run Details')"
+                [AllowLoad]="IsSectionExpanded('mJContentProcessRunDetails')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJContentProcessRunDetails', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
 </mj-record-form-container>
         

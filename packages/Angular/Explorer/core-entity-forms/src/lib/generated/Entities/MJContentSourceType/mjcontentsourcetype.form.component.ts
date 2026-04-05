@@ -19,7 +19,8 @@ export class MJContentSourceTypeFormComponent extends BaseFormComponent {
             { sectionKey: 'sourceTypeConfiguration', sectionName: 'Source Type Configuration', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJContentSources', sectionName: 'Content Sources', isExpanded: false },
-            { sectionKey: 'mJContentItems', sectionName: 'Content Items', isExpanded: false }
+            { sectionKey: 'mJContentItems', sectionName: 'Content Items', isExpanded: false },
+            { sectionKey: 'mJContentProcessRunDetails', sectionName: 'Content Process Run Details', isExpanded: false }
         ]);
     }
 }
