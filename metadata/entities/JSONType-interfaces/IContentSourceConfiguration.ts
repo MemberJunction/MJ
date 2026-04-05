@@ -1,13 +1,13 @@
 /**
- * Per-source configuration for the Content Autotagging pipeline.
+ * Per-source configuration for the Content Classification pipeline.
  *
- * Settings here control how a single content source interacts with the tag taxonomy
- * and the vectorization engine. Every property is optional and falls back to a sensible
- * default, so an empty `{}` configuration is valid.
+ * Settings here control how a single content source interacts with the tag taxonomy,
+ * the vectorization engine, and source-type-specific parameters. Every property is
+ * optional and falls back to a sensible default, so an empty `{}` configuration is valid.
  *
- * Some properties (e.g. `ShareTaxonomyWithLLM`, `TagTaxonomyMode`) can also be set at
- * the content-type level via {@link IContentTypeConfiguration}; source-level values
- * take precedence when present.
+ * The SourceSpecificConfiguration sub-object holds type-specific settings whose shape
+ * depends on the content source type (Entity, RSS, Website, Cloud Storage, etc.).
+ * The keys match the RequiredFields defined on the parent ContentSourceType's Configuration.
  */
 export interface IContentSourceConfiguration {
     /** Tag taxonomy matching mode: constrained (only match within subtree), auto-grow (match or create within subtree), free-flow (match or create anywhere) */
@@ -20,4 +20,16 @@ export interface IContentSourceConfiguration {
     ShareTaxonomyWithLLM?: boolean;
     /** Enable vectorization for this source. Default true */
     EnableVectorization?: boolean;
+    /**
+     * Source-type-specific configuration values. The keys here correspond to the
+     * RequiredFields[].Key values defined on the parent ContentSourceType's Configuration.
+     *
+     * Examples:
+     * - Entity type: { EntityID: "uuid", EntityDocumentID: "uuid" }
+     * - RSS Feed: { URL: "https://example.com/feed.xml" }
+     * - Cloud Storage: { FileStorageProviderKey: "Azure Blob Storage", PathPrefix: "/documents" }
+     * - Local File System: { Path: "/var/data/documents" }
+     * - Website: { URL: "https://example.com", CrawlDepth: 2 }
+     */
+    SourceSpecificConfiguration?: Record<string, unknown>;
 }

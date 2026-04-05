@@ -50698,19 +50698,65 @@ export class MJContentSourceTypeParamEntity extends BaseEntity<MJContentSourceTy
 
 
 /**
- * Type-level configuration shared by all content sources of the same source type.
+ * Type-level configuration for a Content Source Type.
  *
- * Content Source Types represent the plugin mechanism for bringing content into the
- * autotagging pipeline (e.g. "Entity", "File", "Web"). Each type registers a `DriverClass`
- * that the ClassFactory resolves at runtime. This interface is the extension point for
- * settings that apply uniformly to every source instance of that type.
+ * Describes what fields/inputs are required when creating a content source
+ * of this type. The UI reads this to dynamically render the appropriate
+ * widgets (URL input, entity picker, storage provider selector, etc.)
+ * without hardcoding source-type-specific logic.
  *
- * Currently reserved for future use. As the plugin architecture matures, expect properties
- * such as default credential templates, rate-limit policies, or shared vectorization
- * settings to be added here.
+ * Each Content Source Type row (Entity, RSS Feed, Website, Cloud Storage,
+ * Local File System) stores its own RequiredFields array describing what
+ * the user needs to provide when configuring a source of that type.
  */
 export interface MJContentSourceTypeEntity_IContentSourceTypeConfiguration {
-    /** Reserved for future type-wide settings shared by all sources of this type */
+    /** Fields required when creating a content source of this type */
+    RequiredFields?: MJContentSourceTypeEntity_IContentSourceTypeField[];
+}
+
+/**
+ * Describes a single field/input that a content source of this type requires.
+ * The UI renders the appropriate widget based on the Type property.
+ */
+export interface MJContentSourceTypeEntity_IContentSourceTypeField {
+    /** Internal field key — stored in ContentSource.Configuration.SourceSpecificConfiguration */
+    Key: string;
+    /** Display label for the UI widget */
+    Label: string;
+    /**
+     * Widget type to render:
+     * - 'text': plain text input
+     * - 'url': URL input with validation
+     * - 'path': file/directory path input
+     * - 'entity-picker': dropdown of MJ entities (filtered to those with entity documents)
+     * - 'entity-doc-picker': dropdown of entity documents for the selected entity
+     * - 'storage-provider-picker': dropdown of registered MJ Storage providers
+     * - 'dropdown': generic dropdown with options from the Options array
+     */
+    Type: 'text' | 'url' | 'path' | 'entity-picker' | 'entity-doc-picker' | 'storage-provider-picker' | 'dropdown';
+    /** Help text shown below the widget */
+    Description?: string;
+    /** Whether this field must be filled before saving */
+    Required?: boolean;
+    /** Default value for the field */
+    DefaultValue?: string;
+    /** For 'dropdown' type: available options */
+    Options?: MJContentSourceTypeEntity_IContentSourceTypeFieldOption[];
+    /** For 'entity-doc-picker': only show if the selected entity has > 1 document */
+    ShowOnlyIfMultiple?: boolean;
+    /**
+     * For dependent fields: the Key of the field this depends on.
+     * E.g., entity-doc-picker depends on entity-picker's value.
+     */
+    DependsOnField?: string;
+}
+
+/** A selectable option for dropdown-type fields */
+export interface MJContentSourceTypeEntity_IContentSourceTypeFieldOption {
+    /** Display label */
+    Label: string;
+    /** Value stored in configuration */
+    Value: string;
 }
 
 /**
@@ -50851,15 +50897,15 @@ export class MJContentSourceTypeEntity extends BaseEntity<MJContentSourceTypeEnt
 
 
 /**
- * Per-source configuration for the Content Autotagging pipeline.
+ * Per-source configuration for the Content Classification pipeline.
  *
- * Settings here control how a single content source interacts with the tag taxonomy
- * and the vectorization engine. Every property is optional and falls back to a sensible
- * default, so an empty `{}` configuration is valid.
+ * Settings here control how a single content source interacts with the tag taxonomy,
+ * the vectorization engine, and source-type-specific parameters. Every property is
+ * optional and falls back to a sensible default, so an empty `{}` configuration is valid.
  *
- * Some properties (e.g. `ShareTaxonomyWithLLM`, `TagTaxonomyMode`) can also be set at
- * the content-type level via {@link IContentTypeConfiguration}; source-level values
- * take precedence when present.
+ * The SourceSpecificConfiguration sub-object holds type-specific settings whose shape
+ * depends on the content source type (Entity, RSS, Website, Cloud Storage, etc.).
+ * The keys match the RequiredFields defined on the parent ContentSourceType's Configuration.
  */
 export interface MJContentSourceEntity_IContentSourceConfiguration {
     /** Tag taxonomy matching mode: constrained (only match within subtree), auto-grow (match or create within subtree), free-flow (match or create anywhere) */
@@ -50872,6 +50918,18 @@ export interface MJContentSourceEntity_IContentSourceConfiguration {
     ShareTaxonomyWithLLM?: boolean;
     /** Enable vectorization for this source. Default true */
     EnableVectorization?: boolean;
+    /**
+     * Source-type-specific configuration values. The keys here correspond to the
+     * RequiredFields[].Key values defined on the parent ContentSourceType's Configuration.
+     *
+     * Examples:
+     * - Entity type: { EntityID: "uuid", EntityDocumentID: "uuid" }
+     * - RSS Feed: { URL: "https://example.com/feed.xml" }
+     * - Cloud Storage: { FileStorageProviderKey: "Azure Blob Storage", PathPrefix: "/documents" }
+     * - Local File System: { Path: "/var/data/documents" }
+     * - Website: { URL: "https://example.com", CrawlDepth: 2 }
+     */
+    SourceSpecificConfiguration?: Record<string, unknown>;
 }
 
 /**

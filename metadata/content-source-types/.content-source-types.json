@@ -1,72 +1,186 @@
 [
   {
+    "_comments": [
+      "Cloud Storage — uses MJ FileStorageBase providers (Azure Blob, S3, GCS, SharePoint, etc.).",
+      "Configuration.RequiredFields tells the UI to show a storage provider picker and optional path prefix."
+    ],
     "fields": {
       "Name": "Cloud Storage",
       "Description": "Cloud storage integration via MJ Storage providers (Azure Blob, S3, GCS, SharePoint, etc.)",
-      "DriverClass": "AutotagCloudStorage"
+      "DriverClass": "AutotagCloudStorage",
+      "Configuration": {
+        "RequiredFields": [
+          {
+            "Key": "FileStorageProviderKey",
+            "Label": "Storage Provider",
+            "Type": "storage-provider-picker",
+            "Description": "Select the MJ Storage provider to use (e.g., Azure Blob Storage, AWS S3)",
+            "Required": true
+          },
+          {
+            "Key": "PathPrefix",
+            "Label": "Path Prefix",
+            "Type": "path",
+            "Description": "Optional path prefix to restrict which files are scanned (e.g., /documents/reports)",
+            "Required": false
+          },
+          {
+            "Key": "IncludeExtensions",
+            "Label": "File Extensions",
+            "Type": "text",
+            "Description": "Comma-separated file extensions to include (e.g., .pdf,.docx,.txt). Leave empty for all files.",
+            "Required": false
+          }
+        ]
+      }
     },
     "primaryKey": {
       "ID": "B8B8C0BE-3E5F-EF11-991A-00224822CE23"
     },
     "sync": {
-      "lastModified": "2026-04-04T18:07:11.140Z",
-      "checksum": "7e54366790c984f8c71561e8231c2dbf0f3e97097ba5646bfa5c4d095234c837"
+      "lastModified": "2026-04-05T16:54:14.292Z",
+      "checksum": "9f809ee9f193897c761735c52b6c257830c4cc70c1c904054cf56b0ab155f414"
     }
   },
   {
+    "_comments": [
+      "Entity — reads MJ entity records via Entity Document templates.",
+      "Requires an entity picker and conditionally an entity document picker (only if > 1 doc).",
+      "ContentType and FileType are NOT relevant for Entity sources."
+    ],
     "fields": {
       "Name": "Entity",
       "Description": "MemberJunction entity records rendered via Entity Document templates",
-      "DriverClass": "AutotagEntity"
+      "DriverClass": "AutotagEntity",
+      "Configuration": {
+        "RequiredFields": [
+          {
+            "Key": "EntityID",
+            "Label": "Entity",
+            "Type": "entity-picker",
+            "Description": "Select the MJ entity to pull records from",
+            "Required": true
+          },
+          {
+            "Key": "EntityDocumentID",
+            "Label": "Entity Document",
+            "Type": "entity-doc-picker",
+            "Description": "Template used to render entity records for classification",
+            "Required": false,
+            "ShowOnlyIfMultiple": true,
+            "DependsOnField": "EntityID"
+          }
+        ]
+      }
     },
     "primaryKey": {
       "ID": "B0909B91-6487-EF11-8473-6045BDF05BB3"
     },
     "sync": {
-      "lastModified": "2026-04-04T01:08:36.436Z",
-      "checksum": "dc101ef3b930f94084a03428f41394f6edbc6f2f5fe2ecc323b6a718b166574f"
+      "lastModified": "2026-04-05T16:54:14.295Z",
+      "checksum": "9ddc597edba363ea4210f46a474a34a7d120f42525104b64bb7ef4fbfe57f5f8"
     }
   },
   {
+    "_comments": [
+      "Local File System — scans a local directory for documents.",
+      "Requires a file path. Optional file extension filter."
+    ],
     "fields": {
       "Name": "Local File System",
-      "Description": "Local file system directories containing documents for autotagging",
-      "DriverClass": "AutotagLocalFileSystem"
+      "Description": "Local file system directories containing documents for classification",
+      "DriverClass": "AutotagLocalFileSystem",
+      "Configuration": {
+        "RequiredFields": [
+          {
+            "Key": "Path",
+            "Label": "Directory Path",
+            "Type": "path",
+            "Description": "Local file system path to scan for documents (e.g., /var/data/documents)",
+            "Required": true
+          },
+          {
+            "Key": "IncludeExtensions",
+            "Label": "File Extensions",
+            "Type": "text",
+            "Description": "Comma-separated file extensions to include (e.g., .pdf,.docx,.txt). Leave empty for all files.",
+            "Required": false
+          }
+        ]
+      }
     },
     "primaryKey": {
       "ID": "23037E2A-9760-EF11-991A-00224822CE23"
     },
     "sync": {
-      "lastModified": "2026-04-04T01:08:36.438Z",
-      "checksum": "01618c12663f6f009a4ad0ce7dc475fa88f5a8aa0edff60f1d484db7d643abe7"
+      "lastModified": "2026-04-05T16:54:14.298Z",
+      "checksum": "8a683a47e9c2cbafe531ed6876ecabce427c2a8b7f6a73826215ba53a1763bf1"
     }
   },
   {
+    "_comments": [
+      "RSS Feed — parses RSS/Atom feeds, follows article links for full text.",
+      "Requires a feed URL."
+    ],
     "fields": {
       "Name": "RSS Feed",
       "Description": "RSS and Atom feed sources for content ingestion",
-      "DriverClass": "AutotagRSSFeed"
+      "DriverClass": "AutotagRSSFeed",
+      "Configuration": {
+        "RequiredFields": [
+          {
+            "Key": "URL",
+            "Label": "Feed URL",
+            "Type": "url",
+            "Description": "The RSS or Atom feed URL to parse (e.g., https://example.com/feed.xml)",
+            "Required": true
+          }
+        ]
+      }
     },
     "primaryKey": {
       "ID": "AC04F730-9760-EF11-991A-00224822CE23"
     },
     "sync": {
-      "lastModified": "2026-04-04T01:08:36.440Z",
-      "checksum": "ba882728608ee1d74fba008c3e0aa008e75d4f13b2f5362261a8e4b352682c63"
+      "lastModified": "2026-04-05T16:54:14.301Z",
+      "checksum": "924adaae165b4252db5900b9d652e5b3963a6c5e00a911bdf8c4524d56c39559"
     }
   },
   {
+    "_comments": [
+      "Website — crawls a website with configurable depth.",
+      "Requires a root URL. Optional crawl depth setting."
+    ],
     "fields": {
       "Name": "Website",
       "Description": "Web crawling source with configurable depth and link following",
-      "DriverClass": "AutotagWebsite"
+      "DriverClass": "AutotagWebsite",
+      "Configuration": {
+        "RequiredFields": [
+          {
+            "Key": "URL",
+            "Label": "Website URL",
+            "Type": "url",
+            "Description": "The root URL to crawl (e.g., https://example.com)",
+            "Required": true
+          },
+          {
+            "Key": "CrawlDepth",
+            "Label": "Crawl Depth",
+            "Type": "text",
+            "Description": "How many levels deep to follow links (default: 2)",
+            "Required": false,
+            "DefaultValue": "2"
+          }
+        ]
+      }
     },
     "primaryKey": {
       "ID": "24037E2A-9760-EF11-991A-00224822CE23"
     },
     "sync": {
-      "lastModified": "2026-04-04T01:08:36.442Z",
-      "checksum": "3dd062e53e162a6660a9484e3e1539cd56fd55c5e150e2797a7ba392daedb24a"
+      "lastModified": "2026-04-05T16:54:14.302Z",
+      "checksum": "006f3337c74283b657f80732ae74cc0d20c1fea2252e1d697e66387421660b05"
     }
   }
 ]
