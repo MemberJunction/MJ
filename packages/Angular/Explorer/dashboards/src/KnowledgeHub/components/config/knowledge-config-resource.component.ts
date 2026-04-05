@@ -11,7 +11,7 @@ import { Subject } from 'rxjs';
 import { Metadata, RunView } from '@memberjunction/core';
 import { ResourceData, MJVectorDatabaseEntity, MJVectorIndexEntity, MJEntityDocumentEntity, KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
-import { BaseResourceComponent } from '@memberjunction/ng-shared';
+import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 /** Configuration section definition */
@@ -80,6 +80,7 @@ interface FTSEntityRecord {
 })
 export class KnowledgeConfigResourceComponent extends BaseResourceComponent implements AfterViewInit, OnDestroy {
     private cdr = inject(ChangeDetectorRef);
+    private navigationService = inject(NavigationService);
     private destroy$ = new Subject<void>();
 
     async GetResourceDisplayName(_data: ResourceData): Promise<string> {
@@ -173,6 +174,9 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
 
     ngAfterViewInit(): void {
         this.loadConfiguration();
+        this.navigationService.SetAgentContext(this, {
+            ActiveSection: this.ActiveSection,
+        });
         this.NotifyLoadComplete();
     }
 

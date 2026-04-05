@@ -28,3 +28,25 @@ export class MyResourceComponent extends BaseResourceComponent implements AfterV
 
 ### What Happens Without It
 The shell component waits for `onFirstResourceLoadComplete()` before hiding the loading screen. That event is driven by `NotifyLoadComplete()`. If no resource component calls it, the user sees the loading animation indefinitely with only a "Reset" button (which clears all local data) as recovery.
+
+## Agent Context & Client Tools
+
+Every Knowledge Hub dashboard reports its state to the AI agent and registers tools the agent can invoke. This is done via `NavigationService` in `ngAfterViewInit()`.
+
+**Required for all KH resource components:**
+1. Call `this.navigationService.SetAgentContext(this, {...})` — report dashboard state on init and on every meaningful state change
+2. Call `this.navigationService.SetAgentClientTools(this, [...])` — register tools on init
+
+**Currently implemented dashboards:**
+
+| Dashboard | Context Fields | Tools |
+|-----------|---------------|-------|
+| Search | CurrentQuery, ResultCount, ShowFilters, MinScoreThreshold, TopResults | RunKnowledgeSearch, ClearKnowledgeSearch, ToggleSearchFilters |
+| Classify | ActiveTab, SourceCount, ContentItemCount, TagCount, PipelineStatus | SwitchClassifyTab, RunClassificationPipeline, SearchClassifyTags |
+| Analytics | ActiveTab, DateRange, EntityFilter, KPIs | SwitchAnalyticsTab, SetAnalyticsDateRange, ExportAnalyticsCSV |
+| Clusters | IsVisualizationLoaded, ClusterCount, TotalPoints | (context only) |
+| Duplicates | DetectionStatus, PendingCount, ApprovedCount, RejectedCount | (context only) |
+| Vectors | TotalVectors, KPICount | (context only) |
+| Config | ActiveSection | (context only) |
+
+See **[packages/AI/Agents/AGENT_CONTEXT_GUIDE.md](/packages/AI/Agents/AGENT_CONTEXT_GUIDE.md)** for the full architecture guide.

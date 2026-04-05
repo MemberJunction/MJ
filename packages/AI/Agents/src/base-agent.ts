@@ -4438,6 +4438,18 @@ The context is now within limits. Please retry your request with the recovered c
             lines.push(`**User:** ${user.Name}${user.Roles?.length ? ` (Roles: ${user.Roles.join(', ')})` : ''}`);
         }
 
+        // Additional context reported by the active view/component
+        const dashboardCtx = ctx['AdditionalContext'] as Record<string, unknown> | undefined;
+        if (dashboardCtx && Object.keys(dashboardCtx).length > 0) {
+            lines.push('');
+            lines.push('**Dashboard state:**');
+            for (const [key, value] of Object.entries(dashboardCtx)) {
+                if (value === null || value === undefined) continue;
+                const displayValue = typeof value === 'object' ? JSON.stringify(value) : String(value);
+                lines.push(`- ${key}: ${displayValue}`);
+            }
+        }
+
         return lines.join('\n');
     }
 

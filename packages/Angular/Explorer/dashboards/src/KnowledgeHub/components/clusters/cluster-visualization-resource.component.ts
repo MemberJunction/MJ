@@ -102,6 +102,12 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
         await this.loadEntityOptions();
         this.loadSavedVisualizations();
         this.restoreLastSession();
+        this.navigationService.SetAgentContext(this, {
+            IsVisualizationLoaded: !!this.Result,
+            VisualizationTitle: this.VisualizationTitle || null,
+            ClusterCount: this.Result?.Clusters?.length ?? 0,
+            TotalPoints: this.Result?.Points?.length ?? 0,
+        });
         this.NotifyLoadComplete();
     }
 

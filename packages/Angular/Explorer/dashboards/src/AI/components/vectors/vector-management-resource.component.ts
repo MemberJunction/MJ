@@ -23,7 +23,7 @@ import {
     KnowledgeHubMetadataEngine
 } from '@memberjunction/core-entities';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
-import { BaseResourceComponent } from '@memberjunction/ng-shared';
+import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { KPICardData } from '../widgets/kpi-card.component';
 import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
@@ -69,6 +69,7 @@ interface DocumentSuggestionResult {
 })
 export class VectorManagementResourceComponent extends BaseResourceComponent implements AfterViewInit, OnDestroy {
     private cdr = inject(ChangeDetectorRef);
+    private navigationService = inject(NavigationService);
     private destroy$ = new Subject<void>();
 
     /** View mode: 'index' = Option A (shared index as hero, entity docs as children),
@@ -256,6 +257,10 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
 
     async ngAfterViewInit(): Promise<void> {
         await this.LoadData();
+        this.navigationService.SetAgentContext(this, {
+            TotalVectors: this.TotalVectors,
+            KPICount: this.KPICards.length,
+        });
         this.NotifyLoadComplete();
     }
 

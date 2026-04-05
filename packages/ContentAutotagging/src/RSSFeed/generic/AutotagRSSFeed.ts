@@ -50,7 +50,7 @@ export class AutotagRSSFeed extends AutotagBase {
         if (contentItemsToProcess.length > 0) {
             LogStatus(`[RSS] Calling ExtractTextAndProcessWithLLM with ${contentItemsToProcess.length} items...`);
             try {
-                await this.engine.ExtractTextAndProcessWithLLM(contentItemsToProcess, this.contextUser, undefined, onProgress);
+                await this.engine.ExtractTextAndProcessWithLLM(contentItemsToProcess, this.contextUser, undefined, undefined, onProgress);
                 LogStatus(`[RSS] ExtractTextAndProcessWithLLM completed successfully`);
             } catch (e) {
                 const msg = e instanceof Error ? e.message : String(e);

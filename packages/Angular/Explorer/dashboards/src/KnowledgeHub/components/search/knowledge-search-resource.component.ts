@@ -81,12 +81,74 @@ export class KnowledgeSearchResourceComponent extends BaseResourceComponent impl
         this.LoadSearchPreferences();
         this.subscribeToSearchState();
         this.parseUrlParameters();
+        this.registerAgentTools();
+        this.emitAgentContext();
         this.NotifyLoadComplete();
     }
 
     ngOnDestroy(): void {
         this.destroy$.next();
         this.destroy$.complete();
+    }
+
+    /** Report current search state to the agent via NavigationService */
+    private emitAgentContext(): void {
+        this.navigationService.SetAgentContext(this, {
+            CurrentQuery: this.Query || null,
+            ResultCount: this.TotalCount,
+            ElapsedMs: this.ElapsedMs,
+            HasSearched: this.HasSearched,
+            ShowFilters: this.ShowFilters,
+            MinScoreThreshold: this.MinScoreThreshold,
+            ActiveFilterCount: this.GetActiveFilterCount(),
+            TopResults: this.AllResults.slice(0, 5).map(r => ({
+                Title: r.Title,
+                EntityName: r.EntityName,
+                Score: Math.round(r.Score * 100),
+            })),
+        });
+    }
+
+    /** Register client tools the agent can invoke on this dashboard */
+    private registerAgentTools(): void {
+        this.navigationService.SetAgentClientTools(this, [
+            {
+                Name: 'RunKnowledgeSearch',
+                Description: 'Execute a knowledge search query across all indexed content',
+                ParameterSchema: {
+                    type: 'object',
+                    properties: {
+                        query: { type: 'string', description: 'The search query text' },
+                        minScore: { type: 'number', description: 'Minimum relevance score 0-1 (default 0.35)' },
+                    },
+                    required: ['query'],
+                },
+                Handler: async (params: Record<string, unknown>) => {
+                    this.Query = String(params['query'] ?? '');
+                    if (params['minScore'] != null) this.MinScoreThreshold = Number(params['minScore']);
+                    await this.RunSearch();
+                    return { Success: true, Data: { ResultCount: this.TotalCount, ElapsedMs: this.ElapsedMs } };
+                },
+            },
+            {
+                Name: 'ClearKnowledgeSearch',
+                Description: 'Clear the current search query and results',
+                ParameterSchema: { type: 'object', properties: {} },
+                Handler: async () => {
+                    this.ClearSearch();
+                    return { Success: true };
+                },
+            },
+            {
+                Name: 'ToggleSearchFilters',
+                Description: 'Show or hide the search filter panel',
+                ParameterSchema: { type: 'object', properties: {} },
+                Handler: async () => {
+                    this.ToggleFilters();
+                    return { Success: true, Data: { ShowFilters: this.ShowFilters } };
+                },
+            },
+        ]);
     }
 
     /** Execute a search query */
@@ -318,6 +380,7 @@ export class KnowledgeSearchResourceComponent extends BaseResourceComponent impl
         this.Filters = this.Filters.filter(f => f.Category !== 'Source Type');
 
         this.cdr.detectChanges();
+        this.emitAgentContext();
     }
 
     private static readonly PREFS_KEY = 'KH_Search_Preferences';
@@ -359,6 +422,7 @@ export class KnowledgeSearchResourceComponent extends BaseResourceComponent impl
             this.ShowFilters = response.Filters.length > 0;
         }
         this.cdr.detectChanges();
+        this.emitAgentContext();
     }
 }
 

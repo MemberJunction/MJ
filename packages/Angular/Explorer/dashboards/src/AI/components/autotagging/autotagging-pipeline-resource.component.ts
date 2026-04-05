@@ -630,6 +630,8 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         await Promise.all([this.LoadPipelineData(), this.loadEntityRecordDocCache()]);
         this.tabDataLoaded.add('pipeline');
         this.IsLoading = false;
+        this.registerAgentTools();
+        this.emitAgentContext();
         this.cdr.detectChanges();
         this.NotifyLoadComplete();
     }
@@ -637,6 +639,71 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     ngOnDestroy(): void {
         this.destroy$.next();
         this.destroy$.complete();
+    }
+
+    /** Report current classify dashboard state to the agent */
+    private emitAgentContext(): void {
+        this.navigationService.SetAgentContext(this, {
+            ActiveTab: this.ActiveTab,
+            SourceCount: this.contentSourcesRaw.length,
+            ContentItemCount: this.contentItemsRaw.length,
+            TagCount: this.contentTagsRaw.length,
+            PipelineStatus: this.IsRunning ? 'running' : 'idle',
+            PipelineProgress: this.RunProgress,
+            ShowPipelineConfig: this.ShowPipelineConfig,
+        });
+    }
+
+    /** Register client tools the agent can invoke on the Classify dashboard */
+    private registerAgentTools(): void {
+        this.navigationService.SetAgentClientTools(this, [
+            {
+                Name: 'SwitchClassifyTab',
+                Description: 'Switch to a specific tab in the Classify dashboard',
+                ParameterSchema: {
+                    type: 'object',
+                    properties: {
+                        tab: { type: 'string', enum: ['pipeline', 'sources', 'types', 'tags', 'taxonomy', 'history'], description: 'The tab to switch to' },
+                    },
+                    required: ['tab'],
+                },
+                Handler: async (params: Record<string, unknown>) => {
+                    await this.SwitchTab(params['tab'] as TabName);
+                    return { Success: true, Data: { ActiveTab: this.ActiveTab } };
+                },
+            },
+            {
+                Name: 'RunClassificationPipeline',
+                Description: 'Trigger the content classification pipeline. Optionally filter to specific content source IDs.',
+                ParameterSchema: {
+                    type: 'object',
+                    properties: {
+                        sourceIDs: { type: 'array', items: { type: 'string' }, description: 'Optional array of ContentSource IDs to process. Omit to run all.' },
+                    },
+                },
+                Handler: async (params: Record<string, unknown>) => {
+                    const sourceIDs = params['sourceIDs'] as string[] | undefined;
+                    await this.RunPipeline(sourceIDs);
+                    return { Success: true, Data: { PipelineStatus: 'running' } };
+                },
+            },
+            {
+                Name: 'SearchClassifyTags',
+                Description: 'Filter the tag library by a search query',
+                ParameterSchema: {
+                    type: 'object',
+                    properties: {
+                        query: { type: 'string', description: 'Search text to filter tags by' },
+                    },
+                    required: ['query'],
+                },
+                Handler: async (params: Record<string, unknown>) => {
+                    this.TagSearchQuery = String(params['query'] ?? '');
+                    this.FilterTags();
+                    return { Success: true, Data: { MatchCount: this.FilteredTagRows.length } };
+                },
+            },
+        ]);
     }
 
     async GetResourceDisplayName(_data: ResourceData): Promise<string> {
@@ -653,6 +720,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         if (tab === this.ActiveTab) return;
         this.ActiveTab = tab;
         this.persistClassifyPreferences();
+        this.emitAgentContext();
         this.cdr.detectChanges();
 
         if (!this.tabDataLoaded.has(tab)) {

@@ -9,6 +9,21 @@
 
 See the root [CLAUDE.md](../../../CLAUDE.md) for the full pattern and examples.
 
+## Agent Context & Client Tools
+
+Resource components can report their state to the AI agent and register tools the agent can invoke. See **[packages/AI/Agents/AGENT_CONTEXT_GUIDE.md](/packages/AI/Agents/AGENT_CONTEXT_GUIDE.md)** for the full guide.
+
+Quick reference:
+```typescript
+// Report dashboard state to the agent
+this.navigationService.SetAgentContext(this, { ActiveTab: this.ActiveTab, ItemCount: 42 });
+
+// Register tools the agent can invoke
+this.navigationService.SetAgentClientTools(this, [
+    { Name: 'SwitchTab', Description: '...', ParameterSchema: {...}, Handler: async (params) => { ... } }
+]);
+```
+
 ## Package Structure
 
 - **base-application/** — ApplicationManager, TabService, WorkspaceStateManager

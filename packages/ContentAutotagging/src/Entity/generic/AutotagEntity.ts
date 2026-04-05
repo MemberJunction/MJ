@@ -50,7 +50,7 @@ export class AutotagEntity extends AutotagBase {
         const contentItemsToProcess = await this.SetContentItemsToProcess(contentSources);
 
         if (contentItemsToProcess.length > 0) {
-            await this.engine.ExtractTextAndProcessWithLLM(contentItemsToProcess, contextUser, undefined, onProgress);
+            await this.engine.ExtractTextAndProcessWithLLM(contentItemsToProcess, contextUser, undefined, undefined, onProgress);
         } else {
             LogStatus('AutotagEntity: no new or modified entity records to process');
         }

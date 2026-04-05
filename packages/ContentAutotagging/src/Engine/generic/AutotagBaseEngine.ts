@@ -106,52 +106,112 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
      * Given a list of content items, extract the text from each and process with LLM for tagging.
      * Items are processed in configurable batches with controlled concurrency within each batch.
      */
+    /**
+     * Process content items through the LLM tagging pipeline with production-grade
+     * batch management: cursor-based resume, pause/cancel support, rate limiting,
+     * and circuit breaker. Each batch checkpoints progress so interrupted runs
+     * can be resumed from where they left off.
+     *
+     * @param contentItems - items to process
+     * @param contextUser - current user for permissions/audit
+     * @param processRun - optional ContentProcessRun entity for checkpoint tracking
+     * @param config - optional pipeline configuration for rate limits, thresholds
+     * @param onProgress - optional callback for UI progress updates
+     */
     public async ExtractTextAndProcessWithLLM(
         contentItems: MJContentItemEntity[],
         contextUser: UserInfo,
-        batchSize: number = DEFAULT_VECTORIZE_BATCH_SIZE,
+        processRun?: MJContentProcessRunEntity,
+        config?: MJContentProcessRunEntity_IContentProcessRunConfiguration,
         onProgress?: (processed: number, total: number, currentItem?: string) => void
     ): Promise<void> {
         if (!contentItems || contentItems.length === 0) {
-            LogStatus('No content items to process');
+            LogStatus('[Autotag] No content items to process');
             return;
         }
 
-        const processRunParams = new ProcessRunParams();
-        processRunParams.sourceID = contentItems[0].ContentSourceID;
-        processRunParams.startTime = new Date();
-        processRunParams.numItemsProcessed = contentItems.length;
-        let totalProcessed = 0;
+        const batchSize = config?.Pipeline?.BatchSize ?? DEFAULT_VECTORIZE_BATCH_SIZE;
+        const errorThreshold = config?.Pipeline?.ErrorThresholdPercent ?? 20;
+        const delayMs = config?.Pipeline?.DelayBetweenBatchesMs ?? 0;
 
-        LogStatus(`ExtractTextAndProcessWithLLM: processing ${contentItems.length} items in batches of ${batchSize}`);
-        let batchSuccesses = 0;
-        let batchFailures = 0;
-        for (let i = 0; i < contentItems.length; i += batchSize) {
-            const batch = contentItems.slice(i, i + batchSize);
+        // Resume from cursor if available
+        const resumeOffset = processRun?.LastProcessedOffset ?? 0;
+        const itemsToProcess = resumeOffset > 0
+            ? contentItems.slice(resumeOffset)
+            : contentItems;
+
+        if (resumeOffset > 0) {
+            LogStatus(`[Autotag] Resuming from offset ${resumeOffset} (${itemsToProcess.length} remaining of ${contentItems.length})`);
+        }
+
+        LogStatus(`[Autotag] Processing ${itemsToProcess.length} items in batches of ${batchSize}`);
+        let totalSuccesses = 0;
+        let totalFailures = 0;
+        let totalProcessed = resumeOffset;
+
+        for (let i = 0; i < itemsToProcess.length; i += batchSize) {
+            const batch = itemsToProcess.slice(i, i + batchSize);
             const batchNum = Math.floor(i / batchSize) + 1;
-            let batchOk = 0, batchFail = 0;
+            let batchOk = 0;
+            let batchFail = 0;
+
+            // Rate limit before each batch of parallel LLM calls
+            await this.LLMRateLimiter.Acquire();
+
             const batchPromises = batch.map(async (contentItem) => {
                 try {
                     const processingParams = await this.buildProcessingParams(contentItem, contextUser);
                     await this.ProcessContentItemText(processingParams, contextUser);
-                    totalProcessed++;
                     batchOk++;
-                    onProgress?.(totalProcessed, contentItems.length, contentItem.Name);
                 } catch (e) {
-                    LogError(`Failed to process content item: ${contentItem.ID}`, undefined, e);
-                    totalProcessed++;
+                    LogError(`[Autotag] Failed to process item ${contentItem.ID}: ${e instanceof Error ? e.message : String(e)}`);
                     batchFail++;
-                    onProgress?.(totalProcessed, contentItems.length);
                 }
             });
             await Promise.all(batchPromises);
-            batchSuccesses += batchOk;
-            batchFailures += batchFail;
-            LogStatus(`Batch ${batchNum}: ${batchOk} succeeded, ${batchFail} failed (${totalProcessed}/${contentItems.length} total)`);
-        }
-        LogStatus(`ExtractTextAndProcessWithLLM complete: ${batchSuccesses} succeeded, ${batchFailures} failed out of ${contentItems.length}`);
 
+            totalSuccesses += batchOk;
+            totalFailures += batchFail;
+            totalProcessed += batch.length;
+            onProgress?.(totalProcessed, contentItems.length);
+            LogStatus(`[Autotag] Batch ${batchNum}: ${batchOk}/${batch.length} ok (${totalProcessed}/${contentItems.length} total, ${totalFailures} errors)`);
+
+            // Checkpoint: update cursor and check for cancellation
+            if (processRun) {
+                const shouldContinue = await this.UpdateBatchCursor(processRun, totalProcessed, totalFailures);
+                if (!shouldContinue) {
+                    LogStatus(`[Autotag] Pipeline paused/cancelled at offset ${totalProcessed}`);
+                    return;
+                }
+            }
+
+            // Circuit breaker: halt if error rate exceeds threshold
+            if (totalProcessed > 0 && totalFailures > 0) {
+                const errorRate = (totalFailures / totalProcessed) * 100;
+                if (errorRate > errorThreshold) {
+                    LogError(`[Autotag] Circuit breaker triggered: error rate ${errorRate.toFixed(1)}% exceeds threshold ${errorThreshold}%`);
+                    if (processRun) {
+                        processRun.ErrorMessage = `Auto-paused: error rate ${errorRate.toFixed(1)}% exceeded ${errorThreshold}% threshold`;
+                        await this.CompleteBatchedProcessRun(processRun, 'Failed', processRun.ErrorMessage);
+                    }
+                    return;
+                }
+            }
+
+            // Optional delay between batches (throttling)
+            if (delayMs > 0 && i + batchSize < itemsToProcess.length) {
+                await new Promise(resolve => setTimeout(resolve, delayMs));
+            }
+        }
+
+        LogStatus(`[Autotag] LLM tagging complete: ${totalSuccesses} succeeded, ${totalFailures} failed of ${contentItems.length}`);
+
+        // Legacy process run tracking (for backward compatibility)
+        const processRunParams = new ProcessRunParams();
+        processRunParams.sourceID = contentItems[0].ContentSourceID;
+        processRunParams.startTime = processRun?.StartTime ?? new Date();
         processRunParams.endTime = new Date();
+        processRunParams.numItemsProcessed = contentItems.length;
         await this.saveProcessRun(processRunParams, contextUser);
     }
 
@@ -179,8 +239,59 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
      * Process a content item's text with the LLM and save results.
      */
     public async ProcessContentItemText(params: ContentItemProcessParams, contextUser: UserInfo): Promise<void> {
-        const LLMResults: JsonObject = await this.promptAndRetrieveResultsFromLLM(params, contextUser);
-        await this.saveLLMResults(LLMResults, contextUser);
+        // A8: Update tagging status to Processing
+        await this.updateContentItemTaggingStatus(params.contentItemID, 'Processing', contextUser);
+
+        try {
+            const LLMResults: JsonObject = await this.promptAndRetrieveResultsFromLLM(params, contextUser);
+            await this.saveLLMResults(LLMResults, contextUser);
+            // A8: Update tagging status to Complete
+            await this.updateContentItemTaggingStatus(params.contentItemID, 'Complete', contextUser);
+        } catch (e) {
+            await this.updateContentItemTaggingStatus(params.contentItemID, 'Failed', contextUser);
+            throw e;
+        }
+    }
+
+    /** Update embedding status for a batch of content items */
+    private async updateEmbeddingStatusBatch(
+        items: MJContentItemEntity[],
+        status: 'Processing' | 'Complete' | 'Failed',
+        contextUser: UserInfo,
+        embeddingModelID?: string
+    ): Promise<void> {
+        for (const item of items) {
+            try {
+                item.EmbeddingStatus = status;
+                if (status === 'Complete') {
+                    item.LastEmbeddedAt = new Date();
+                    if (embeddingModelID) item.EmbeddingModelID = embeddingModelID;
+                }
+                await item.Save();
+            } catch {
+                // Non-critical
+            }
+        }
+    }
+
+    /** Update a content item's TaggingStatus and LastTaggedAt */
+    private async updateContentItemTaggingStatus(
+        contentItemID: string,
+        status: 'Pending' | 'Processing' | 'Complete' | 'Failed' | 'Skipped',
+        contextUser: UserInfo
+    ): Promise<void> {
+        try {
+            const md = new Metadata();
+            const item = await md.GetEntityObject<MJContentItemEntity>('MJ: Content Items', contextUser);
+            await item.Load(contentItemID);
+            item.TaggingStatus = status;
+            if (status === 'Complete') {
+                item.LastTaggedAt = new Date();
+            }
+            await item.Save();
+        } catch {
+            // Non-critical — don't fail the pipeline for a status update
+        }
     }
 
     /**
@@ -336,20 +447,14 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     }
 
     public async promptAndRetrieveResultsFromLLM(params: ContentItemProcessParams, contextUser: UserInfo): Promise<JsonObject> {
-        LogStatus(`[Autotag] promptAndRetrieveResultsFromLLM: starting for item ${params.contentItemID}`);
         await AIEngine.Instance.Config(false, contextUser);
 
         const prompt = this.getAutotagPrompt();
-        LogStatus(`[Autotag] Found prompt "${prompt.Name}" (ID: ${prompt.ID}), Status: ${prompt.Status}`);
-
-        // Determine token limit for chunking: use override model if set, else first prompt-model, else a default
         const tokenLimit = this.resolveTokenLimit(params.modelID);
-        const textLength = params.text?.length ?? 0;
         const chunks = this.chunkExtractedText(params.text, tokenLimit);
-        LogStatus(`[Autotag] Text length: ${textLength}, token limit: ${tokenLimit}, chunks: ${chunks.length}`);
 
         if (chunks.length === 0 || (chunks.length === 1 && (!chunks[0] || chunks[0].trim().length === 0))) {
-            LogError(`[Autotag] No text to process for item ${params.contentItemID} — text is empty or whitespace only`);
+            LogError(`[Autotag] No text to process for item ${params.contentItemID}`);
             return {};
         }
 
@@ -357,21 +462,16 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         const startTime = new Date();
 
         for (let ci = 0; ci < chunks.length; ci++) {
-            LogStatus(`[Autotag] Processing chunk ${ci + 1}/${chunks.length} (${chunks[ci].length} chars) for item ${params.contentItemID}`);
             try {
                 LLMResults = await this.processChunkWithPromptRunner(prompt, params, chunks[ci], LLMResults, contextUser);
-                LogStatus(`[Autotag] Chunk ${ci + 1} completed. Keywords so far: ${Array.isArray(LLMResults.keywords) ? LLMResults.keywords.length : 'none'}`);
             } catch (chunkError) {
-                const msg = chunkError instanceof Error ? chunkError.message : String(chunkError);
-                LogError(`[Autotag] Chunk ${ci + 1} THREW exception: ${msg}`);
+                LogError(`[Autotag] Chunk ${ci + 1}/${chunks.length} failed for item ${params.contentItemID}: ${chunkError instanceof Error ? chunkError.message : String(chunkError)}`);
             }
         }
 
         LLMResults.processStartTime = startTime;
         LLMResults.processEndTime = new Date();
         LLMResults.contentItemID = params.contentItemID;
-
-        LogStatus(`[Autotag] LLM processing complete for item ${params.contentItemID}. Final keywords: ${Array.isArray(LLMResults.keywords) ? LLMResults.keywords.length : 'none'}, keys: ${Object.keys(LLMResults).join(', ')}`);
         return LLMResults;
     }
 
@@ -416,14 +516,12 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         }
 
         const runner = new AIPromptRunner();
-        LogStatus(`[Autotag] Calling AIPromptRunner.ExecutePrompt for item ${params.contentItemID}...`);
         const result = await runner.ExecutePrompt<JsonObject>(promptParams);
 
         if (!result.success) {
-            LogError(`[Autotag] AIPromptRunner FAILED for content item ${params.contentItemID}: ${result.errorMessage ?? 'no error message'}`, undefined, result);
+            LogError(`[Autotag] LLM failed for item ${params.contentItemID}: ${result.errorMessage ?? 'unknown error'}`);
             return LLMResults;
         }
-        LogStatus(`[Autotag] AIPromptRunner SUCCEEDED for item ${params.contentItemID}. Result type: ${typeof result.result}, has data: ${result.result != null}`);
 
 
         // Parse the result — AIPromptRunner may return a raw JSON string or a parsed object
@@ -453,16 +551,13 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     }
 
     public async saveLLMResults(LLMResults: JsonObject, contextUser: UserInfo): Promise<void> {
-        LogStatus(`[Autotag] saveLLMResults: isValidContent=${LLMResults.isValidContent}, contentItemID=${LLMResults.contentItemID}, keywords=${Array.isArray(LLMResults.keywords) ? LLMResults.keywords.length : 'none'}`);
         if (LLMResults.isValidContent === true) {
             await this.saveResultsToContentItemAttribute(LLMResults, contextUser);
             await this.saveContentItemTags(LLMResults.contentItemID as string, LLMResults, contextUser);
-            LogStatus(`[Autotag] Saved tags + attributes for item ${LLMResults.contentItemID}`);
         } else if (LLMResults.isValidContent === false) {
-            LogStatus(`[Autotag] Content marked INVALID by LLM for item ${LLMResults.contentItemID}, deleting`);
             await this.deleteInvalidContentItem(LLMResults.contentItemID as string, contextUser);
         } else {
-            LogError(`[Autotag] isValidContent is undefined/null for item ${LLMResults.contentItemID} — LLM may not have returned expected format. Keys: ${Object.keys(LLMResults).join(', ')}`);
+            LogError(`[Autotag] Unexpected LLM format for item ${LLMResults.contentItemID} — isValidContent missing. Keys: ${Object.keys(LLMResults).join(', ')}`);
         }
     }
 
@@ -1056,6 +1151,8 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             }
 
             const texts = allChunks.map(c => c.text);
+            // Rate limit embedding API call
+            await this.EmbeddingRateLimiter.Acquire(texts.reduce((sum, t) => sum + Math.ceil(t.length / 4), 0));
             const embedResult = await infra.embedding.EmbedTexts({ texts, model: infra.embeddingModelName });
             if (!embedResult.vectors || embedResult.vectors.length !== allChunks.length) {
                 LogError(`VectorizeContentItems: embedding returned ${embedResult.vectors?.length ?? 0} vectors for ${allChunks.length} texts`);
@@ -1071,11 +1168,12 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
                 metadata: this.buildVectorMetadata(chunk.item, tagMap.get(chunk.item.ID))
             }));
 
-            // Upsert records in parallel sub-batches for throughput
+            // Upsert records in sub-batches with rate limiting
             const UPSERT_CHUNK = 50;
             const upsertPromises: Promise<BaseResponse>[] = [];
             for (let j = 0; j < records.length; j += UPSERT_CHUNK) {
                 const chunk = records.slice(j, j + UPSERT_CHUNK);
+                await this.VectorDBRateLimiter.Acquire();
                 upsertPromises.push(Promise.resolve(infra.vectorDB.CreateRecords(chunk, infra.indexName)));
             }
             const responses = await Promise.all(upsertPromises);

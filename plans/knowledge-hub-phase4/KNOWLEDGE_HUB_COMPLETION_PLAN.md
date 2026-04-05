@@ -1,7 +1,6 @@
 # Knowledge Hub — Completion Plan
 
 > **Goal**: 100% feature-complete Knowledge Hub. Every gap from the vision docs, every minor polish item.
-> **Excludes**: Client Tools / Agent Integration (Phase 4F) — deferred for separate review after 100% completion.
 > **Prerequisites**: Migrations V202604051600 + V202604051700 applied + CodeGen run.
 
 ---
@@ -416,4 +415,142 @@ Phase G (Content Dedup) ← Independent, can run anytime after A
 
 ---
 
-**Total**: ~60 implementation tasks + ~10 test suites across 8 phases
+---
+
+## Phase I: Agent Context & Client Tools
+
+### Architecture
+
+Each resource component reports its agent-visible state and tools to `NavigationService`, which manages caching and propagation.
+
+**NavigationService new methods:**
+- `SetAgentContext(caller: BaseResourceComponent, context: Record<string, unknown>)` — component passes `this` + its current agent-relevant state
+- `SetAgentClientTools(caller: BaseResourceComponent, tools: ClientToolDefinition[])` — component passes `this` + its available tools
+- NavigationService matches the `caller` reference against `ComponentCacheManager` entries to find the cache key
+- Updates `CachedComponentInfo.AgentContext` and `CachedComponentInfo.AgentClientTools`
+
+**CachedComponentInfo extensions:**
+- `AgentContext?: Record<string, unknown>` — last reported agent context for this component
+- `AgentClientTools?: ClientToolDefinition[]` — last reported tools for this component
+
+**AppContextSnapshot extension:**
+- `DashboardContext?: Record<string, unknown>` — merged into the snapshot from the active component's cached AgentContext
+
+**Flow:**
+1. Component calls `NavigationService.SetAgentContext(this, {...})` whenever internal state changes
+2. NavigationService identifies the component in the cache, stores the context
+3. If the component is currently active: immediately updates `AppContextSnapshot.DashboardContext` and pushes to chat overlay
+4. On tab/nav switch: the newly active component's cached AgentContext is restored and pushed; the old component's tools are unregistered, new component's tools are registered via `AgentClientService`
+5. Component never knows it was hidden/shown — cache handles restoration transparently
+6. Works identically in Golden Layout (multi-tab) and single-resource mode (same cache key pattern)
+
+### I1. Infrastructure — NavigationService + Cache Extensions
+- Add `SetAgentContext(caller, context)` and `SetAgentClientTools(caller, tools)` to NavigationService
+- Extend `CachedComponentInfo` with `AgentContext` and `AgentClientTools` fields
+- Extend `AppContextSnapshot` with `DashboardContext` field
+- On `markAsAttached`: restore cached context/tools → push to chat overlay
+- On `markAsDetached`: unregister the component's tools from AgentClientService
+- On active component calling Set*: update cache + push immediately
+
+### I2. Search — Agent Context & Tools
+**Context (reported on every search/filter/threshold change):**
+- CurrentQuery, ResultCount, ElapsedMs
+- ActiveFilters (entity names, tags selected), MinScoreThreshold
+- ShowFilters (panel visible or not)
+- Top 5 result summaries (title, entity, score)
+
+**Tools:**
+- `RunKnowledgeSearch(query, filters?, minScore?)` — execute a search
+- `RefineSearch(addFilters?, removeFilters?, newMinScore?)` — modify active search
+- `ClearSearch()` — reset everything
+- `ToggleSearchFilters()` — show/hide filter panel
+- `OpenSearchResult(index)` — expand a specific result card
+- `SaveCurrentSearch(name)` — save the current search as a named preset
+
+### I3. Classify — Agent Context & Tools
+**Context (reported on tab switch, pipeline state change, source selection):**
+- ActiveSubTab (pipeline/sources/types/tags/taxonomy/history)
+- SourceCount, ContentItemCount, TagCount
+- PipelineStatus (idle/running/paused), PipelineProgress %
+- For taxonomy sub-tab: SelectedTagName, OrphanCount, DuplicateCandidateCount
+- LastPipelineRunTime, LastPipelineRunResult
+
+**Tools:**
+- `SwitchClassifyTab(tab)` — navigate to a sub-tab
+- `RunPipeline(sourceIDs?, forceReprocess?)` — trigger classification pipeline
+- `PausePipeline()` / `ResumePipeline()` / `CancelPipeline()`
+- `CreateContentSource(name, sourceType, config)` — create a new source
+- `DeleteContentSource(sourceID)` — remove a source
+- `MergeTags(sourceTagIDs, survivingTagID)` — taxonomy merge operation
+- `RenameTag(tagID, newName)` — rename a tag
+- `DeleteTag(tagID)` — soft-delete a tag
+- `SearchTags(query)` — filter the tag library
+
+### I4. Clusters — Agent Context & Tools
+**Context (reported on clustering, label changes, viewport changes):**
+- SelectedEntityName, SelectedEntityDocName
+- ClusterCount, TotalPoints
+- ClusterLabels (array of {id, label})
+- IsVisualizationLoaded, VisualizationTitle
+
+**Tools:**
+- `RunClustering(entityName, entityDocName, numClusters?)` — start clustering
+- `SetClusterLabel(clusterId, label)` — rename a cluster
+- `SaveVisualization(name)` — save current view
+- `LoadVisualization(name)` — restore a saved visualization
+- `ResetView()` — reset zoom/pan to default
+
+### I5. Duplicates — Agent Context & Tools
+**Context (reported on detection status change, match actions):**
+- SelectedEntityDocName
+- DetectionStatus (idle/running), DetectionProgress %
+- PendingCount, ApprovedCount, RejectedCount
+- DuplicateGroupCount
+
+**Tools:**
+- `RunDuplicateDetection(entityDocName)` — start detection
+- `ApproveMatch(groupID)` — approve a duplicate pair
+- `RejectMatch(groupID)` — reject a false positive
+- `MergeRecords(survivingID, duplicateID)` — execute a merge
+
+### I6. Analytics — Agent Context & Tools
+**Context (reported on tab switch, date range change, drill-down):**
+- ActiveAnalyticsTab (overview/tags/sources/pipeline/quality)
+- DateRange (7D/30D/90D/YTD/All), EntityFilter
+- KPIs: TotalTags, ItemsProcessed, AvgConfidence, Coverage
+- ActiveDrillDown (key or null)
+
+**Tools:**
+- `SwitchAnalyticsTab(tab)` — change active tab
+- `SetDateRange(range)` — change date range filter
+- `SetEntityFilter(entity)` — filter by entity
+- `DrillDown(key)` — open a specific drill-down panel
+- `ExportCSV(dataKey)` — export data as CSV
+
+### I7. Vectors — Agent Context & Tools
+**Context (reported on stats refresh, sync operations):**
+- TotalVectors, IndexCount
+- EntitySyncStatuses (array of {entity, status, lastSynced, vectorCount})
+
+**Tools:**
+- `SyncEntity(entityDocName)` — trigger vector sync for an entity
+- `RefreshVectorStats()` — reload stats
+
+### I8. Configuration — Agent Context & Tools
+**Context (reported on config changes):**
+- ActiveConfigSection
+- PipelineSettings (batchSize, throttle, errorThreshold)
+- EmbeddingModelCount, VectorDBCount
+
+**Tools:**
+- `UpdatePipelineSetting(key, value)` — change a pipeline config value
+
+### I9. Unit Tests
+- NavigationService: SetAgentContext/SetAgentClientTools with component reference matching
+- Cache restoration on tab switch (context + tools)
+- Tool registration/unregistration lifecycle
+- AppContextSnapshot.DashboardContext propagation to chat overlay
+
+---
+
+**Total**: ~70 implementation tasks + ~11 test suites across 9 phases

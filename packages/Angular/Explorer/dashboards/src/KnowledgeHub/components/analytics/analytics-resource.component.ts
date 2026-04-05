@@ -396,7 +396,50 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
         await UserInfoEngine.Instance.Config(false);
         this.loadAnalyticsPreferences();
         this.loadAllData();
+        this.emitAgentContext();
+        this.registerAgentTools();
         this.NotifyLoadComplete();
+    }
+
+    private emitAgentContext(): void {
+        this.navigationService.SetAgentContext(this, {
+            ActiveTab: this.ActiveTab,
+            DateRange: this.ActiveDateRange,
+            EntityFilter: this.EntityFilter,
+            KPIs: this.KPIs.map(k => ({ Label: k.Label, Value: k.Value })),
+        });
+    }
+
+    private registerAgentTools(): void {
+        this.navigationService.SetAgentClientTools(this, [
+            {
+                Name: 'SwitchAnalyticsTab',
+                Description: 'Switch to a specific analytics tab (overview, tags, sources, pipeline, quality)',
+                ParameterSchema: { type: 'object', properties: { tab: { type: 'string' } }, required: ['tab'] },
+                Handler: async (params: Record<string, unknown>) => {
+                    this.SelectTab(params['tab'] as string);
+                    return { Success: true };
+                },
+            },
+            {
+                Name: 'SetAnalyticsDateRange',
+                Description: 'Set the analytics date range filter (7D, 30D, 90D, YTD, All)',
+                ParameterSchema: { type: 'object', properties: { range: { type: 'string' } }, required: ['range'] },
+                Handler: async (params: Record<string, unknown>) => {
+                    this.SetDateRange(params['range'] as string);
+                    return { Success: true };
+                },
+            },
+            {
+                Name: 'ExportAnalyticsCSV',
+                Description: 'Export analytics data as CSV',
+                ParameterSchema: { type: 'object', properties: { dataKey: { type: 'string' } }, required: ['dataKey'] },
+                Handler: async (params: Record<string, unknown>) => {
+                    this.ExportTabDataCSV(params['dataKey'] as string);
+                    return { Success: true };
+                },
+            },
+        ]);
     }
 
     ngOnDestroy(): void {
@@ -412,6 +455,7 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
         this.ActiveTab = tabId;
         this.CloseDrillDown();
         this.persistAnalyticsPreferences();
+        this.emitAgentContext();
         this.cdr.detectChanges();
     }
 

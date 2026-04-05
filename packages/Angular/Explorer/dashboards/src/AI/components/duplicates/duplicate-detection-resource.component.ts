@@ -306,6 +306,13 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
     async ngAfterViewInit(): Promise<void> {
         this.setupFilterDebounce();
         await this.LoadData();
+        this.navigationService.SetAgentContext(this, {
+            DetectionStatus: this.IsDetecting ? 'running' : 'idle',
+            PendingCount: this.PendingGroups.length,
+            ApprovedCount: this.ApprovedGroups.length,
+            RejectedCount: this.RejectedGroups.length,
+            SelectedEntityDoc: this.SelectedEntityDocumentID || null,
+        });
         this.NotifyLoadComplete();
     }
 
