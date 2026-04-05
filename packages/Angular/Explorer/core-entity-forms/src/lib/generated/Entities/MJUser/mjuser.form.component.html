@@ -1758,6 +1758,81 @@
         }
     </mj-collapsible-panel>
 
+    <!-- Tag Audit Logs Section -->
+    <mj-collapsible-panel
+        SectionKey="mJTagAuditLogs"
+        SectionName="Tag Audit Logs"
+        Icon="fa fa-history"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJTagAuditLogs')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tag Audit Logs','PerformedByUserID')"
+                [NewRecordValues]="NewRecordValues('MJ: Tag Audit Logs')"
+                [AllowLoad]="IsSectionExpanded('mJTagAuditLogs')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJTagAuditLogs', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Content Item Duplicates Section -->
+    <mj-collapsible-panel
+        SectionKey="mJContentItemDuplicates"
+        SectionName="Content Item Duplicates"
+        Icon="fa fa-clone"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJContentItemDuplicates')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Content Item Duplicates','ResolvedByUserID')"
+                [NewRecordValues]="NewRecordValues('MJ: Content Item Duplicates')"
+                [AllowLoad]="IsSectionExpanded('mJContentItemDuplicates')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJContentItemDuplicates', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Knowledge Hub Saved Searches Section -->
+    <mj-collapsible-panel
+        SectionKey="mJKnowledgeHubSavedSearches"
+        SectionName="Knowledge Hub Saved Searches"
+        Icon="fa fa-search-plus"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJKnowledgeHubSavedSearches')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Knowledge Hub Saved Searches','UserID')"
+                [NewRecordValues]="NewRecordValues('MJ: Knowledge Hub Saved Searches')"
+                [AllowLoad]="IsSectionExpanded('mJKnowledgeHubSavedSearches')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJKnowledgeHubSavedSearches', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <!-- Resource Permissions Section -->
     <mj-collapsible-panel
         SectionKey="mJResourcePermissions"

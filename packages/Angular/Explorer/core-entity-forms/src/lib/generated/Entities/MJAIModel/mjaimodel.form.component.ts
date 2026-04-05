@@ -36,6 +36,7 @@ export class MJAIModelFormComponent extends BaseFormComponent {
             { sectionKey: 'mJGeneratedCodes', sectionName: 'Generated Codes', isExpanded: false },
             { sectionKey: 'mJAIModelCosts', sectionName: 'AI Model Costs', isExpanded: false },
             { sectionKey: 'mJContentTypesEmbeddingModelID', sectionName: 'Content Types (Embedding Model)', isExpanded: false },
+            { sectionKey: 'mJContentItems', sectionName: 'Content Items', isExpanded: false },
             { sectionKey: 'mJAIPromptModels', sectionName: 'AI Prompt Models', isExpanded: false },
             { sectionKey: 'mJContentSources', sectionName: 'Content Sources', isExpanded: false },
             { sectionKey: 'mJAIPromptRunsOriginalModelID', sectionName: 'AI Prompt Runs (Original Model)', isExpanded: false },

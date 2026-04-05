@@ -20,7 +20,8 @@ export class MJScheduledActionFormComponent extends BaseFormComponent {
             { sectionKey: 'ownershipStatus', sectionName: 'Ownership & Status', isExpanded: true },
             { sectionKey: 'scheduleSettings', sectionName: 'Schedule Settings', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJScheduledActionParams', sectionName: 'Scheduled Action Params', isExpanded: false }
+            { sectionKey: 'mJScheduledActionParams', sectionName: 'Scheduled Action Params', isExpanded: false },
+            { sectionKey: 'mJContentSources', sectionName: 'Content Sources', isExpanded: false }
         ]);
     }
 }
