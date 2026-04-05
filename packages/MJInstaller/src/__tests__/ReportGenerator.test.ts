@@ -204,7 +204,7 @@ describe('ReportGenerator', () => {
         DatabasePort: 1433,
         DatabaseName: 'MemberJunction',
         APIPort: 4000,
-        ExplorerPort: 4200,
+        ExplorerPort: 4201,
         AuthProvider: 'entra',
       };
       const sanitized = generator.SanitizeConfig(config);
@@ -212,7 +212,7 @@ describe('ReportGenerator', () => {
       expect(sanitized['DatabasePort']).toBe(1433);
       expect(sanitized['DatabaseName']).toBe('MemberJunction');
       expect(sanitized['APIPort']).toBe(4000);
-      expect(sanitized['ExplorerPort']).toBe(4200);
+      expect(sanitized['ExplorerPort']).toBe(4201);
       expect(sanitized['AuthProvider']).toBe('entra');
     });
   });

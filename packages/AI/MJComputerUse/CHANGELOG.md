@@ -1,5 +1,28 @@
 # @memberjunction/computer-use-engine
 
+## 5.23.0
+
+### Patch Changes
+
+- c17be20: no migration/metadata
+- Updated dependencies [247df16]
+- Updated dependencies [9250070]
+- Updated dependencies [513b20c]
+- Updated dependencies [44bc22b]
+- Updated dependencies [1d1e02e]
+- Updated dependencies [c17be20]
+  - @memberjunction/core@5.23.0
+  - @memberjunction/global@5.23.0
+  - @memberjunction/ai-prompts@5.23.0
+  - @memberjunction/core-entities@5.23.0
+  - @memberjunction/ai-core-plus@5.23.0
+  - @memberjunction/computer-use@5.23.0
+  - @memberjunction/aiengine@5.23.0
+  - @memberjunction/actions-base@5.23.0
+  - @memberjunction/actions@5.23.0
+  - @memberjunction/testing-engine@5.23.0
+  - @memberjunction/ai@5.23.0
+
 ## 5.22.0
 
 ### Patch Changes

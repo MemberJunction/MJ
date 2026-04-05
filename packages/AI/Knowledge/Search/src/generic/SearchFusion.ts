@@ -54,26 +54,31 @@ export class SearchFusion {
         return results;
     }
 
+    /** Map from SearchSourceType (lowercase) to ScoreBreakdown property (PascalCase) */
+    private static readonly SOURCE_TO_BREAKDOWN_KEY: Record<SearchSourceType, 'Vector' | 'FullText' | 'Entity'> = {
+        vector: 'Vector',
+        fulltext: 'FullText',
+        entity: 'Entity',
+    };
+
     /**
      * Build a map of candidate ID -> per-source score for breakdown reporting.
+     * Keys use PascalCase to match the ScoreBreakdown interface directly.
      */
     private buildSourceScoreMap(
         lists: LabeledCandidateList[]
-    ): Map<string, Record<SearchSourceType, number | undefined>> {
-        const scoreMap = new Map<string, Record<SearchSourceType, number | undefined>>();
+    ): Map<string, { Vector?: number; FullText?: number; Entity?: number }> {
+        const scoreMap = new Map<string, { Vector?: number; FullText?: number; Entity?: number }>();
 
         for (const list of lists) {
+            const key = SearchFusion.SOURCE_TO_BREAKDOWN_KEY[list.Source];
             for (const candidate of list.Candidates) {
                 const existing = scoreMap.get(candidate.ID);
                 if (existing) {
-                    existing[list.Source] = candidate.Score;
+                    existing[key] = candidate.Score;
                 } else {
-                    const breakdown: Record<SearchSourceType, number | undefined> = {
-                        vector: undefined,
-                        fulltext: undefined,
-                        entity: undefined,
-                    };
-                    breakdown[list.Source] = candidate.Score;
+                    const breakdown: { Vector?: number; FullText?: number; Entity?: number } = {};
+                    breakdown[key] = candidate.Score;
                     scoreMap.set(candidate.ID, breakdown);
                 }
             }
@@ -87,7 +92,7 @@ export class SearchFusion {
      */
     private enrichCandidate(
         candidate: ScoredCandidate,
-        sourceScores: Map<string, Record<SearchSourceType, number | undefined>>
+        sourceScores: Map<string, { Vector?: number; FullText?: number; Entity?: number }>
     ): UnifiedSearchResult {
         const metadata = candidate.Metadata ?? {};
         const breakdown = sourceScores.get(candidate.ID);
@@ -101,9 +106,9 @@ export class SearchFusion {
             Snippet: String(metadata['Snippet'] ?? ''),
             Score: candidate.Score,
             ScoreBreakdown: {
-                Vector: breakdown?.vector,
-                FullText: breakdown?.fulltext,
-                Entity: breakdown?.entity,
+                Vector: breakdown?.Vector,
+                FullText: breakdown?.FullText,
+                Entity: breakdown?.Entity,
             },
             Tags: Array.isArray(metadata['Tags']) ? metadata['Tags'] as string[] : [],
             MatchedAt: new Date(),

@@ -8,8 +8,9 @@ import { Injectable, OnDestroy } from '@angular/core';
 import { BehaviorSubject, firstValueFrom } from 'rxjs';
 import { filter } from 'rxjs/operators';
 import { AngularAdapterService } from './angular-adapter.service';
-import { RuntimeContext } from '@memberjunction/react-runtime';
+import { RuntimeContext, reactRootManager } from '@memberjunction/react-runtime';
 import { ReactDebugConfig } from '../config/react-debug.config';
+import { createAntdDropdownPositionHook } from '../hooks/antd-dropdown-position-hook';
 
 /**
  * Service to manage React and ReactDOM instances with proper lifecycle.
@@ -50,7 +51,10 @@ export class ReactBridgeService implements OnDestroy {
       
       // Pass debug flag to get development builds when debug is enabled
       await this.adapter.initialize(undefined, undefined, { debug: this.debug });
-      
+
+      // Register Angular-specific runtime hooks for library compatibility
+      reactRootManager.RegisterHook(createAntdDropdownPositionHook());
+
       if (this.debug) {
         console.log('React ecosystem pre-loaded successfully with DEVELOPMENT builds (detailed error messages)');
       } else {
@@ -196,6 +200,9 @@ export class ReactBridgeService implements OnDestroy {
     // Reset readiness state
     this.reactReadySubject.next(false);
     this.firstComponentAttempted = false;
+
+    // Clean up runtime hooks (disconnects observers, removes injected styles, etc.)
+    reactRootManager.cleanup();
 
     // Clean up adapter
     this.adapter.destroy();

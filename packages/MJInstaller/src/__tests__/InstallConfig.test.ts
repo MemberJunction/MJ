@@ -31,8 +31,8 @@ describe('InstallConfigDefaults', () => {
     expect(InstallConfigDefaults.APIPort).toBe(4000);
   });
 
-  it('should set ExplorerPort to 4200', () => {
-    expect(InstallConfigDefaults.ExplorerPort).toBe(4200);
+  it('should set ExplorerPort to 4201', () => {
+    expect(InstallConfigDefaults.ExplorerPort).toBe(4201);
   });
 
   it('should set AuthProvider to "none"', () => {
@@ -265,7 +265,7 @@ describe('loadConfigFile', () => {
       APIUser: 'api',
       APIPassword: 'pass2',
       APIPort: 4000,
-      ExplorerPort: 4200,
+      ExplorerPort: 4201,
       AuthProvider: 'entra',
       AuthProviderValues: { TenantID: 't', ClientID: 'c' },
       OpenAIKey: 'ok',

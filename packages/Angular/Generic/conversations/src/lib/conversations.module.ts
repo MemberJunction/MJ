@@ -64,6 +64,7 @@ import { ArtifactShareModalComponent } from './components/artifact/artifact-shar
 import { GlobalTasksPanelComponent } from './components/global-tasks/global-tasks-panel.component';
 import { ImageViewerComponent } from './components/attachment/image-viewer.component';
 import { PinnedMessagesPanelComponent } from './components/conversation/pinned-messages-panel.component';
+import { ChatAgentsOverlayComponent } from './components/overlay/chat-overlay.component';
 
 // Directives
 import { SearchShortcutDirective } from './directives/search-shortcut.directive';
@@ -111,7 +112,8 @@ const COMPONENTS = [
   InputDialogComponent,
   GlobalTasksPanelComponent,
   ImageViewerComponent,
-  PinnedMessagesPanelComponent
+  PinnedMessagesPanelComponent,
+  ChatAgentsOverlayComponent
 ];
 
 @NgModule({
