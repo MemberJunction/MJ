@@ -382,7 +382,19 @@ export class ClusterScatterComponent implements AfterViewInit, OnDestroy, OnChan
     // ================================================================
 
     /** SVG viewBox parameters: [minX, minY, width, height]. */
-    public ViewBox = [0, 0, 1000, 700];
+    private _viewBox = [0, 0, 1000, 700];
+
+    /** Cached viewBox string for template binding (avoids NG0100 on recalc). */
+    public ViewBoxString = '0 0 1000 700';
+
+    public get ViewBox(): number[] {
+        return this._viewBox;
+    }
+
+    public set ViewBox(value: number[]) {
+        this._viewBox = value;
+        this.ViewBoxString = value.join(' ');
+    }
 
     /** Get the current viewport transform for saving/restoring. */
     public GetViewportTransform(): ViewportTransform {

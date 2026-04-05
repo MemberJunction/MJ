@@ -13,6 +13,10 @@
 export interface IContentSourceTypeConfiguration {
     /** Fields required when creating a content source of this type */
     RequiredFields?: IContentSourceTypeField[];
+    /** Whether this source type requires a Content Type selection. Default true. Entity sources set this to false. */
+    RequiresContentType?: boolean;
+    /** Whether this source type requires a File Type selection. Default true. Entity sources set this to false. */
+    RequiresFileType?: boolean;
 }
 
 /**

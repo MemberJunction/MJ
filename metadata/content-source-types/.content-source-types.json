@@ -53,6 +53,8 @@
       "Description": "MemberJunction entity records rendered via Entity Document templates",
       "DriverClass": "AutotagEntity",
       "Configuration": {
+        "RequiresContentType": false,
+        "RequiresFileType": false,
         "RequiredFields": [
           {
             "Key": "EntityID",
@@ -77,8 +79,8 @@
       "ID": "B0909B91-6487-EF11-8473-6045BDF05BB3"
     },
     "sync": {
-      "lastModified": "2026-04-05T16:54:14.295Z",
-      "checksum": "9ddc597edba363ea4210f46a474a34a7d120f42525104b64bb7ef4fbfe57f5f8"
+      "lastModified": "2026-04-05T20:32:15.387Z",
+      "checksum": "4616871d6f2e5f95fb1a41f1c6bab8e97260ecdd37aabbe2bbbdc24232ed4abc"
     }
   },
   {

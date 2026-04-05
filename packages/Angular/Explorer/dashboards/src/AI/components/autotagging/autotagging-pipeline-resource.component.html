@@ -275,7 +275,7 @@
                                     <div class="at-source-card-icon"><i [class]="card.Icon"></i></div>
                                     <div>
                                         <div class="at-source-card-title">{{ card.Name }}</div>
-                                        <div class="at-source-card-type">{{ card.SourceTypeName }} · {{ card.FileTypeName }}</div>
+                                        <div class="at-source-card-type">{{ card.SourceTypeName }}@if (card.RequiresFileType) { · {{ card.FileTypeName }}}</div>
                                     </div>
                                     <div class="at-source-card-status" [class]="card.StatusClass">
                                         <div class="at-source-mini-status" [class]="card.StatusClass"></div>
@@ -959,7 +959,7 @@
                         </select>
                     </div>
                     <!-- Content Type + File Type: hidden for Entity source type -->
-                    @if (!IsEntitySourceTypeSelected) {
+                    @if (SelectedSourceTypeRequiresContentType) {
                         <div class="at-form-group">
                             <label class="at-form-label">Content Type</label>
                             <select class="at-form-select" [(ngModel)]="FormContentTypeID">

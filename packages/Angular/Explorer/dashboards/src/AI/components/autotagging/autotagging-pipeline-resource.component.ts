@@ -86,6 +86,7 @@ interface SourceCard {
     VectorIndexID: string;
     EntityID: string;
     EntityDocumentID: string;
+    RequiresFileType: boolean;
 }
 
 interface ContentTypeCard {
@@ -391,10 +392,23 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
      * Whether the currently selected source type is "Entity", which switches
      * the URL field to Entity/EntityDocument pickers.
      */
+    /** Whether the selected source type is the Entity type (name-based check) */
     public get IsEntitySourceTypeSelected(): boolean {
         if (!this.FormSourceTypeID) return false;
         const sourceType = this.SourceTypeOptions.find(o => o.ID === this.FormSourceTypeID);
         return sourceType?.Name?.toLowerCase() === 'entity';
+    }
+
+    /** Whether the selected source type requires Content Type / File Type selection */
+    public get SelectedSourceTypeRequiresContentType(): boolean {
+        if (!this.FormSourceTypeID) return true;
+        try {
+            const engine = KnowledgeHubMetadataEngine.Instance;
+            const st = engine.ContentSourceTypes.find(t => UUIDsEqual(t.ID, this.FormSourceTypeID));
+            return st?.ConfigurationObject?.RequiresContentType !== false;
+        } catch {
+            return true;
+        }
     }
 
     /** Entities that have at least one EntityDocument configured */
@@ -784,9 +798,21 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
                 EmbeddingModelID: (source['EmbeddingModelID'] as string) ?? '',
                 VectorIndexID: (source['VectorIndexID'] as string) ?? '',
                 EntityID: (source['EntityID'] as string) ?? '',
-                EntityDocumentID: (source['EntityDocumentID'] as string) ?? ''
+                EntityDocumentID: (source['EntityDocumentID'] as string) ?? '',
+                RequiresFileType: this.sourceTypeRequiresFileType(source['ContentSourceTypeID'] as string),
             };
         });
+    }
+
+    /** Check if a source type's Configuration says RequiresFileType !== false */
+    private sourceTypeRequiresFileType(sourceTypeID: string): boolean {
+        try {
+            const engine = KnowledgeHubMetadataEngine.Instance;
+            const st = engine.ContentSourceTypes.find(t => UUIDsEqual(t.ID, sourceTypeID));
+            return st?.ConfigurationObject?.RequiresFileType !== false;
+        } catch {
+            return true;
+        }
     }
 
     // ════════════════════════════════════════════
@@ -1050,7 +1076,16 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             entity.ContentSourceTypeID = this.FormSourceTypeID;
 
             // For Entity source type, ContentType and FileType are not relevant
-            if (!this.IsEntitySourceTypeSelected) {
+            // but the DB columns are NOT NULL, so default to the first available value
+            if (this.IsEntitySourceTypeSelected) {
+                const engine = KnowledgeHubMetadataEngine.Instance;
+                if (!entity.ContentTypeID && engine.ContentTypes.length > 0) {
+                    entity.ContentTypeID = engine.ContentTypes[0].ID;
+                }
+                if (!entity.ContentFileTypeID && engine.ContentFileTypes.length > 0) {
+                    entity.ContentFileTypeID = engine.ContentFileTypes[0].ID;
+                }
+            } else {
                 entity.ContentTypeID = this.FormContentTypeID;
                 entity.ContentFileTypeID = this.FormFileTypeID;
             }

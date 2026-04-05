@@ -23,7 +23,7 @@
         <svg #svgElement
              class="scatter-svg"
              [class.no-transitions]="!AnimateTransitions"
-             [attr.viewBox]="GetViewBoxString()"
+             [attr.viewBox]="ViewBoxString"
              preserveAspectRatio="xMidYMid meet"
              (wheel)="OnWheel($event)"
              (mousedown)="OnMouseDown($event)">

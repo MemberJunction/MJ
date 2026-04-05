@@ -10,6 +10,12 @@
 
 The pipeline and vectorization engines currently work for small datasets but lack the durability, observability, and throttling needed for production-scale (100K+ items). This phase makes the engines production-grade.
 
+### A0. Pipeline Logging Verbosity
+- Reduce noisy per-item logging during pipeline runs — only post periodic summaries
+- Log every 10th item or every 5 seconds instead of every item
+- Keep detailed logging available at a configurable log level (debug vs info)
+- Source type "no sources configured, skipping" messages: suppress when filtering to specific source IDs
+
 ### A1. AIModelRunner → Embedding Pipeline Wiring
 - AIModelRunner class exists but isn't called during embedding operations
 - Wire `AIModelRunner.TrackEmbeddingCall()` into `EntityVectorSyncer.vectorizeRecords()`

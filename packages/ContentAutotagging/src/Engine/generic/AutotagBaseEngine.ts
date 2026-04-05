@@ -314,13 +314,17 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         chunk: string,
         previousResults: JsonObject
     ): Record<string, unknown> {
-        const contentType = this.GetContentTypeName(params.contentTypeID);
         const contentSourceType = this.GetContentSourceTypeName(params.contentSourceTypeID);
         const additionalAttributePrompts = this.GetAdditionalContentTypePrompt(params.contentTypeID);
         const hasPreviousResults = Object.keys(previousResults).length > 0;
 
+        // Check if this source type requires content type validation in the prompt
+        const sourceType = this._ContentSourceTypes.find(st => UUIDsEqual(st.ID, params.contentSourceTypeID));
+        const sourceConfig = sourceType?.ConfigurationObject;
+        const requiresContentType = sourceConfig?.RequiresContentType !== false;
+
         return {
-            contentType,
+            contentType: requiresContentType ? this.GetContentTypeName(params.contentTypeID) : undefined,
             contentSourceType,
             minTags: params.minTags,
             maxTags: params.maxTags,

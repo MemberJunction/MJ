@@ -1,7 +1,7 @@
 import { RegisterClass, UUIDsEqual, NormalizeUUID } from "@memberjunction/global";
 import { AutotagBase, AutotagProgressCallback } from "../../Core";
 import { AutotagBaseEngine, ContentSourceParams } from "../../Engine";
-import { UserInfo, Metadata, RunView, BaseEntity, LogStatus, LogError } from "@memberjunction/core";
+import { UserInfo, Metadata, RunView, LogStatus, LogError } from "@memberjunction/core";
 import {
     MJContentSourceEntity, MJContentItemEntity, MJContentItemTagEntity,
     MJEntityDocumentEntity, MJEntityRecordDocumentEntity,
@@ -227,7 +227,7 @@ export class AutotagEntity extends AutotagBase {
             return [];
         }
 
-        const templateText = this.GetTemplateText(entityDocument);
+        const templateText = await this.GetTemplateText(entityDocument);
         if (!templateText) {
             LogError(`AutotagEntity: no template content found for EntityDocument "${entityDocument.Name}"`);
             return [];
@@ -261,11 +261,13 @@ export class AutotagEntity extends AutotagBase {
         // Process each record: render template → create/update ERD → create/update ContentItem
         const contentItems: MJContentItemEntity[] = [];
         const parser = EntityDocumentTemplateParser.CreateInstance();
+        const pkFieldName = entityInfo.FirstPrimaryKey.Name;
 
         for (const record of modifiedRecords) {
+            const recordID = String(record[pkFieldName] ?? '');
             try {
                 const contentItem = await this.ProcessSingleRecord(
-                    record, contentSource, entityDocument,
+                    record, recordID, contentSource, entityDocument,
                     templateText, parser, existingERDs, existingContentItems
                 );
                 if (contentItem) {
@@ -273,7 +275,7 @@ export class AutotagEntity extends AutotagBase {
                 }
             } catch (e) {
                 const msg = e instanceof Error ? e.message : String(e);
-                LogError(`AutotagEntity: failed to process record ${record.PrimaryKey.Values()} for entity "${entityInfo.Name}": ${msg}`);
+                LogError(`AutotagEntity: failed to process record ${recordID} for entity "${entityInfo.Name}": ${msg}`);
             }
         }
 
@@ -300,8 +302,14 @@ export class AutotagEntity extends AutotagBase {
 
     /**
      * Retrieves the template text from the EntityDocument's linked Template.
+     * Ensures TemplateEngineServer is configured before accessing Templates.
      */
-    private GetTemplateText(entityDocument: MJEntityDocumentEntity): string | null {
+    private async GetTemplateText(entityDocument: MJEntityDocumentEntity): Promise<string | null> {
+        if (!entityDocument.TemplateID) return null;
+
+        // Ensure engine is loaded (no-op if already configured)
+        await TemplateEngineServer.Instance.Config(false, this.contextUser);
+
         const template = TemplateEngineServer.Instance.Templates.find(
             (t: MJTemplateEntityExtended) => UUIDsEqual(t.ID, entityDocument.TemplateID)
         );
@@ -314,12 +322,12 @@ export class AutotagEntity extends AutotagBase {
     /**
      * Query entity records modified since lastRunDate using __mj_UpdatedAt.
      */
-    private async GetModifiedRecords(entityName: string, lastRunDate: Date): Promise<BaseEntity[]> {
+    private async GetModifiedRecords(entityName: string, lastRunDate: Date): Promise<Record<string, unknown>[]> {
         const rv = new RunView();
-        const result = await rv.RunView<BaseEntity>({
+        const result = await rv.RunView<Record<string, unknown>>({
             EntityName: entityName,
             ExtraFilter: `__mj_UpdatedAt > '${lastRunDate.toISOString()}'`,
-            ResultType: 'entity_object'
+            ResultType: 'simple'
         }, this.contextUser);
 
         if (result.Success) {
@@ -381,7 +389,8 @@ export class AutotagEntity extends AutotagBase {
      * Process a single entity record: render template, create/update ERD, create/update ContentItem.
      */
     private async ProcessSingleRecord(
-        record: BaseEntity,
+        record: Record<string, unknown>,
+        recordID: string,
         contentSource: MJContentSourceEntity,
         entityDocument: MJEntityDocumentEntity,
         templateText: string,
@@ -389,12 +398,10 @@ export class AutotagEntity extends AutotagBase {
         existingERDs: Map<string, MJEntityRecordDocumentEntity>,
         existingContentItems: Map<string, MJContentItemEntity>
     ): Promise<MJContentItemEntity | null> {
-        const recordID = record.PrimaryKey.Values();
         const entityID = contentSource.EntityID!;
 
         // 1. Render the template for this record
-        const recordData = record.GetAll();
-        const renderedText = await parser.Parse(templateText, entityID, recordData, this.contextUser);
+        const renderedText = await parser.Parse(templateText, entityID, record, this.contextUser);
 
         if (!renderedText || renderedText.trim().length === 0) {
             LogStatus(`AutotagEntity: empty rendered text for record ${recordID}, skipping`);
@@ -466,7 +473,7 @@ export class AutotagEntity extends AutotagBase {
         erd: MJEntityRecordDocumentEntity,
         text: string,
         checksum: string,
-        record: BaseEntity,
+        record: Record<string, unknown>,
         existingContentItems: Map<string, MJContentItemEntity>
     ): Promise<MJContentItemEntity | null> {
         const md = new Metadata();
@@ -503,7 +510,7 @@ export class AutotagEntity extends AutotagBase {
         }
 
         // Set/update fields
-        contentItem.Name = record.Get('Name') as string ?? contentSourceParams.name;
+        contentItem.Name = (record['Name'] as string) ?? contentSourceParams.name;
         contentItem.Description = this.engine.GetContentItemDescription(contentSourceParams);
         contentItem.Text = text;
         contentItem.Checksum = checksum;

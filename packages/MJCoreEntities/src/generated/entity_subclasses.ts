@@ -51394,6 +51394,10 @@ export class MJContentSourceTypeParamEntity extends BaseEntity<MJContentSourceTy
 export interface MJContentSourceTypeEntity_IContentSourceTypeConfiguration {
     /** Fields required when creating a content source of this type */
     RequiredFields?: MJContentSourceTypeEntity_IContentSourceTypeField[];
+    /** Whether this source type requires a Content Type selection. Default true. Entity sources set this to false. */
+    RequiresContentType?: boolean;
+    /** Whether this source type requires a File Type selection. Default true. Entity sources set this to false. */
+    RequiresFileType?: boolean;
 }
 
 /**
