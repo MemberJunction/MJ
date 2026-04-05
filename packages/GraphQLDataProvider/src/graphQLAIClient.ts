@@ -911,11 +911,14 @@ export class GraphQLAIClient {
      * Trigger the autotagging pipeline (fire-and-forget).
      * Returns a PipelineRunID that can be used to subscribe to PipelineProgress.
      */
-    public async RunAutotagPipeline(): Promise<AutotagPipelineResult> {
+    public async RunAutotagPipeline(options?: {
+        contentSourceIDs?: string[];
+        forceReprocess?: boolean;
+    }): Promise<AutotagPipelineResult> {
         try {
             const mutation = gql`
-                mutation RunAutotagPipeline {
-                    RunAutotagPipeline {
+                mutation RunAutotagPipeline($contentSourceIDs: [String!], $forceReprocess: Boolean) {
+                    RunAutotagPipeline(contentSourceIDs: $contentSourceIDs, forceReprocess: $forceReprocess) {
                         Success
                         Status
                         ErrorMessage
@@ -924,7 +927,15 @@ export class GraphQLAIClient {
                 }
             `;
 
-            const result = await this._dataProvider.ExecuteGQL(mutation, {});
+            const variables: Record<string, unknown> = {};
+            if (options?.contentSourceIDs?.length) {
+                variables['contentSourceIDs'] = options.contentSourceIDs;
+            }
+            if (options?.forceReprocess) {
+                variables['forceReprocess'] = true;
+            }
+
+            const result = await this._dataProvider.ExecuteGQL(mutation, variables);
 
             if (!result?.RunAutotagPipeline) {
                 throw new Error('Invalid response from server');

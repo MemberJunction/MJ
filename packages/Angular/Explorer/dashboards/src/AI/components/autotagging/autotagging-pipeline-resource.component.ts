@@ -284,6 +284,22 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     public RunStage = '';
     public RunCurrentItem = '';
 
+    // ── Pipeline Config Widget ──
+    public ShowPipelineConfig = false;
+    public PipelineConfig: {
+        Pipeline?: { BatchSize?: number; MaxConcurrentBatches?: number; DelayBetweenBatchesMs?: number; ResumeFromLastBatch?: boolean; ErrorThresholdPercent?: number };
+        RateLimits?: { LLM?: { RequestsPerMinute?: number; TokensPerMinute?: number }; Embedding?: { RequestsPerMinute?: number; TokensPerMinute?: number }; VectorDB?: { RequestsPerMinute?: number } };
+    } = {
+        Pipeline: { BatchSize: 100, MaxConcurrentBatches: 1, DelayBetweenBatchesMs: 200, ResumeFromLastBatch: true, ErrorThresholdPercent: 20 },
+        RateLimits: { LLM: { RequestsPerMinute: 60, TokensPerMinute: 100000 }, Embedding: { RequestsPerMinute: 300, TokensPerMinute: 500000 }, VectorDB: { RequestsPerMinute: 200 } }
+    };
+
+    public FormatTokenCount(tokens: number): string {
+        if (tokens >= 1000000) return `${(tokens / 1000000).toFixed(1)}M`;
+        if (tokens >= 1000) return `${(tokens / 1000).toFixed(0)}K`;
+        return String(tokens);
+    }
+
     // ── Sources tab ──
     public SourceCards: SourceCard[] = [];
 
@@ -1070,7 +1086,14 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     // PIPELINE RUN
     // ════════════════════════════════════════════
 
-    public async RunPipeline(): Promise<void> {
+    /**
+     * Run the pipeline for a specific content source only.
+     */
+    public async RunPipelineForSource(contentSourceID: string): Promise<void> {
+        return this.RunPipeline([contentSourceID]);
+    }
+
+    public async RunPipeline(contentSourceIDs?: string[]): Promise<void> {
         if (this.IsRunning) return;
 
         const provider = Metadata.Provider as GraphQLDataProvider;
@@ -1084,7 +1107,9 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
 
         try {
             const aiClient = new GraphQLAIClient(provider);
-            const result = await aiClient.RunAutotagPipeline();
+            const result = await aiClient.RunAutotagPipeline(
+                contentSourceIDs ? { contentSourceIDs } : undefined
+            );
 
             if (!result.Success || !result.PipelineRunID) {
                 this.IsRunning = false;
@@ -1168,7 +1193,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
                 const pct = progress['PercentComplete'] as number;
                 const currentItem = progress['CurrentItem'] as string | undefined;
 
-                this.RunProgress = pct;
+                this.RunProgress = Math.min(100, Math.max(0, pct));
                 this.RunStage = this.formatStageName(stage);
                 this.RunCurrentItem = currentItem ?? '';
                 this.updateStagesForActiveRun(stage);

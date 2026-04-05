@@ -382,9 +382,11 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
             if (idleTimer) clearTimeout(idleTimer);
             rxSub?.unsubscribe();
 
-            // Use Promise.resolve().then() to defer state changes to the next
-            // microtask, avoiding ExpressionChangedAfterItHasBeenCheckedError
-            Promise.resolve().then(async () => {
+            // Use setTimeout to defer state changes to the next macrotask,
+            // avoiding ExpressionChangedAfterItHasBeenCheckedError.
+            // (Promise.resolve microtasks run between Angular's check passes
+            // and still trigger NG0100.)
+            setTimeout(async () => {
                 this.removeSyncingId(entityDocumentId);
 
                 if (success) {
@@ -399,8 +401,8 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
                         `Vectorization failed for ${entityName}`,
                         'error', 5000
                     );
-                    this.cdr.detectChanges();
                 }
+                this.cdr.detectChanges();
             });
         };
 

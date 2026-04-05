@@ -27,6 +27,18 @@ export class AutotagAndVectorizeContentAction extends BaseAction {
         const progressParam = params.Params.find(p => p.Name === '__progressCallback');
         const onProgress = progressParam?.Value as AutotagProgressCallback | undefined;
 
+        // Optional: filter to specific content source IDs (comma-separated or array)
+        const sourceFilterParam = params.Params.find(p => p.Name === 'ContentSourceIDs');
+        const contentSourceIDs: string[] | undefined = sourceFilterParam?.Value
+            ? (Array.isArray(sourceFilterParam.Value)
+                ? sourceFilterParam.Value as string[]
+                : String(sourceFilterParam.Value).split(',').map(s => s.trim()).filter(s => s.length > 0))
+            : undefined;
+
+        // Optional: force reprocessing of existing content items (skip checksum comparison)
+        const forceReprocessParam = params.Params.find(p => p.Name === 'ForceReprocess');
+        const forceReprocess = forceReprocessParam?.Value === 1 || forceReprocessParam?.Value === true;
+
         try {
             // Initialize the autotagging engine (loads cached metadata)
             await AutotagBaseEngine.Instance.Config(false, params.ContextUser);
@@ -42,7 +54,13 @@ export class AutotagAndVectorizeContentAction extends BaseAction {
                 await AutotagBaseEngine.Instance.InitializeTaxonomyBridge(params.ContextUser);
 
                 LogStatus(`[AutotagAction] Phase 1: Running providers to create/update content items...`);
-                await this.RunAutotagProviders(params, onProgress);
+                if (contentSourceIDs) {
+                    LogStatus(`[AutotagAction] Filtering to source IDs: ${contentSourceIDs.join(', ')}`);
+                }
+                if (forceReprocess) {
+                    LogStatus(`[AutotagAction] Force reprocess enabled — skipping checksum comparison`);
+                }
+                await this.RunAutotagProviders(params, onProgress, contentSourceIDs, forceReprocess);
                 LogStatus(`[AutotagAction] Phase 1 complete — providers finished`);
 
                 // Clean up the bridge
@@ -81,9 +99,17 @@ export class AutotagAndVectorizeContentAction extends BaseAction {
      * instantiates the provider via ClassFactory, and runs autotagging for
      * any sources configured for that type.
      */
-    private async RunAutotagProviders(params: RunActionParams, onProgress?: AutotagProgressCallback): Promise<void> {
+    private async RunAutotagProviders(
+        params: RunActionParams,
+        onProgress?: AutotagProgressCallback,
+        contentSourceIDs?: string[],
+        forceReprocess?: boolean
+    ): Promise<void> {
         const engine = AutotagBaseEngine.Instance;
         const sourceTypes = engine.ContentSourceTypes;
+
+        // Pass forceReprocess to the engine so providers can check it
+        engine.ForceReprocess = forceReprocess ?? false;
 
         for (const sourceType of sourceTypes) {
             if (!sourceType.DriverClass) {
@@ -92,7 +118,13 @@ export class AutotagAndVectorizeContentAction extends BaseAction {
             }
 
             // Check if any sources are configured for this type before instantiating
-            const sources = await engine.GetAllContentSourcesSafe(params.ContextUser, sourceType.ID);
+            let sources = await engine.GetAllContentSourcesSafe(params.ContextUser, sourceType.ID);
+
+            // Apply source ID filter if specified
+            if (contentSourceIDs && contentSourceIDs.length > 0) {
+                sources = sources.filter(s => contentSourceIDs.some(id => id.toLowerCase() === s.ID.toLowerCase()));
+            }
+
             if (sources.length === 0) {
                 LogStatus(`Content source type "${sourceType.Name}": no sources configured, skipping`);
                 continue;

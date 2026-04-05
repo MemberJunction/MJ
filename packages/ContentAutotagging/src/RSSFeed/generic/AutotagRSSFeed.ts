@@ -144,9 +144,9 @@ export class AutotagRSSFeed extends AutotagBase {
         const itemUrl = rssItem.link ?? '';
         const urlKey = itemUrl.toLowerCase();
 
-        // Check for existing content item
+        // Check for existing content item (skip if unchanged, unless force reprocess)
         const existing = existingItems.get(urlKey);
-        if (existing && existing.Checksum === checksum) {
+        if (existing && existing.Checksum === checksum && !this.engine.ForceReprocess) {
             return null; // Content unchanged
         }
 

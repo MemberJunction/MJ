@@ -71,6 +71,12 @@ export class MjRecordFormContainerComponent implements AfterContentInit, OnDestr
   /** Controls visibility of record changes drawer */
   ShowRecordChanges = false;
 
+  /** Controls visibility of tags panel */
+  ShowTagsPanel = false;
+
+  /** Number of tags on this record */
+  TagCount = 0;
+
   /** Controls visibility of list management dialog */
   ShowListManagement = false;
 
@@ -453,6 +459,16 @@ export class MjRecordFormContainerComponent implements AfterContentInit, OnDestr
 
     // Also emit for backward compatibility
     this.ListManagementRequested.emit();
+  }
+
+  OnTagsPanelToggled(): void {
+    this.ShowTagsPanel = !this.ShowTagsPanel;
+    this.cdr.detectChanges();
+  }
+
+  OnTagsPanelClosed(): void {
+    this.ShowTagsPanel = false;
+    this.cdr.detectChanges();
   }
 
   OnRecordChangesClosed(): void {

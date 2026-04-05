@@ -202,6 +202,14 @@ export class TagEngine extends BaseSingleton<TagEngine> {
     /**
      * Generate embeddings for a list of tags using the specified model.
      */
+    /** Batch size for parallel tag embedding */
+    private static readonly TAG_EMBED_BATCH_SIZE = 50;
+
+    /**
+     * Generate embeddings for tags in batches using EmbedTexts (plural).
+     * Uses AIEngine's local embedding model discovery and processes up to
+     * 50 tags per API call for efficiency.
+     */
     private async generateTagEmbeddings(
         tags: MJTagEntity[],
         modelInfo: EmbeddingModelInfo
@@ -219,10 +227,39 @@ export class TagEngine extends BaseSingleton<TagEngine> {
             return entries;
         }
 
-        for (const tag of tags) {
-            const entry = await this.embedSingleTag(tag, embeddingInstance, modelInfo.APIName);
-            if (entry) {
-                entries.push(entry);
+        // Process in batches for efficiency — local models handle batches well
+        for (let i = 0; i < tags.length; i += TagEngine.TAG_EMBED_BATCH_SIZE) {
+            const batch = tags.slice(i, i + TagEngine.TAG_EMBED_BATCH_SIZE);
+            const texts = batch.map(tag => this.buildTagEmbeddingText(tag));
+
+            try {
+                const result = await embeddingInstance.EmbedTexts({ texts, model: modelInfo.APIName });
+
+                if (result?.vectors?.length === batch.length) {
+                    for (let j = 0; j < batch.length; j++) {
+                        if (result.vectors[j]?.length > 0) {
+                            entries.push({
+                                key: NormalizeUUID(batch[j].ID),
+                                vector: result.vectors[j],
+                                metadata: { Name: batch[j].Name, ParentID: batch[j].ParentID }
+                            });
+                        }
+                    }
+                    LogStatus(`TagEngine: Embedded batch ${Math.floor(i / TagEngine.TAG_EMBED_BATCH_SIZE) + 1} (${batch.length} tags)`);
+                } else {
+                    LogError(`TagEngine: Batch embed returned ${result?.vectors?.length ?? 0} vectors for ${batch.length} texts, falling back to individual`);
+                    for (const tag of batch) {
+                        const entry = await this.embedSingleTag(tag, embeddingInstance, modelInfo.APIName);
+                        if (entry) entries.push(entry);
+                    }
+                }
+            } catch (error) {
+                const msg = error instanceof Error ? error.message : String(error);
+                LogError(`TagEngine: Batch embed failed: ${msg}, falling back to individual`);
+                for (const tag of batch) {
+                    const entry = await this.embedSingleTag(tag, embeddingInstance, modelInfo.APIName);
+                    if (entry) entries.push(entry);
+                }
             }
         }
 

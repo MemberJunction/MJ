@@ -59,6 +59,10 @@ export class SearchKnowledgeResultItem {
 
     @Field()
     MatchedAt: Date;
+
+    /** Raw vector metadata as JSON string — contains all entity fields stored in the vector DB */
+    @Field({ nullable: true })
+    RawMetadata?: string;
 }
 
 @ObjectType()
@@ -594,6 +598,7 @@ export class SearchKnowledgeResolver extends ResolverBase {
                 EntityIcon: entityIcon,
                 RecordName: title,
                 MatchedAt: updatedAt,
+                RawMetadata: JSON.stringify(meta),
             };
         });
     }

@@ -91,4 +91,29 @@ export class SearchFilterComponent {
         this.FiltersCleared.emit();
         this.cdr.detectChanges();
     }
+
+    /** Select all options in a category, or clear all if already all selected */
+    public SelectAll(category: string): void {
+        const filter = this.Filters.find(f => f.Category === category);
+        if (!filter) return;
+
+        const current = this.ActiveFilters[category] ?? [];
+        if (current.length === filter.Options.length) {
+            // All selected → clear
+            this.ActiveFilters[category] = [];
+        } else {
+            // Select all
+            this.ActiveFilters[category] = filter.Options.map(o => o.Value);
+        }
+        this.FilterChanged.emit({ Category: category, SelectedValues: this.ActiveFilters[category] });
+        this.cdr.detectChanges();
+    }
+
+    /** Check if all options in a category are selected */
+    public IsAllSelected(category: string): boolean {
+        const filter = this.Filters.find(f => f.Category === category);
+        if (!filter) return false;
+        const selection = this.ActiveFilters[category] ?? [];
+        return selection.length === filter.Options.length;
+    }
 }

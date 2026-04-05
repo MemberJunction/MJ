@@ -4,9 +4,11 @@ import {
     MJContentSourceEntity, MJContentItemEntity, MJContentFileTypeEntity,
     MJContentProcessRunEntity, MJContentTypeEntity, MJContentSourceTypeEntity,
     MJContentTypeAttributeEntity, MJContentSourceParamEntity, MJContentItemTagEntity,
-    MJContentItemAttributeEntity, MJContentSourceTypeParamEntity
+    MJContentItemAttributeEntity, MJContentSourceTypeParamEntity,
+    MJContentProcessRunEntity_IContentProcessRunConfiguration
 } from '@memberjunction/core-entities'
 import { ContentSourceParams, ContentSourceTypeParams, ContentSourceTypeParamValue } from './content.types'
+import { RateLimiter } from './RateLimiter'
 import pdfParse from 'pdf-parse'
 import officeparser from 'officeparser'
 import * as fs from 'fs'
@@ -203,6 +205,20 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
      * the JSON tree of existing tags so the LLM can prefer existing tags.
      */
     public TaxonomyContext: string | null = null;
+
+    /**
+     * When true, skip checksum comparison and reprocess all content items
+     * even if their content hasn't changed. Useful when changing embedding models,
+     * LLM models, or vector databases.
+     */
+    public ForceReprocess = false;
+
+    /** Rate limiter for LLM (tagging) API calls */
+    public LLMRateLimiter = new RateLimiter({ RequestsPerMinute: 60, TokensPerMinute: 100000, Name: 'LLM' });
+    /** Rate limiter for embedding API calls */
+    public EmbeddingRateLimiter = new RateLimiter({ RequestsPerMinute: 300, TokensPerMinute: 500000, Name: 'Embedding' });
+    /** Rate limiter for vector DB API calls */
+    public VectorDBRateLimiter = new RateLimiter({ RequestsPerMinute: 200, Name: 'VectorDB' });
 
     /**
      * Initialize the taxonomy bridge so ALL content source types (RSS, Entity, Website, etc.)
@@ -807,7 +823,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     }
 
     /**
-     * Saves process run metadata to the database.
+     * Saves process run metadata to the database (backward-compatible simple version).
      */
     public async saveProcessRun(processRunParams: ProcessRunParams, contextUser: UserInfo): Promise<void> {
         const md = new Metadata();
@@ -816,9 +832,115 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         processRun.SourceID = processRunParams.sourceID;
         processRun.StartTime = processRunParams.startTime;
         processRun.EndTime = processRunParams.endTime;
-        processRun.Status = 'Complete';
+        processRun.Status = 'Completed';
         processRun.ProcessedItems = processRunParams.numItemsProcessed;
+        processRun.StartedByUserID = contextUser.ID;
         await processRun.Save();
+    }
+
+    /**
+     * Create a new ContentProcessRun record for batched pipeline execution.
+     * Returns the entity so the caller can update cursor/status as batches complete.
+     * Uses the JSONType ConfigurationObject for strongly-typed configuration.
+     */
+    public async CreateBatchedProcessRun(
+        sourceID: string,
+        totalItemCount: number,
+        batchSize: number,
+        contextUser: UserInfo,
+        config?: MJContentProcessRunEntity_IContentProcessRunConfiguration
+    ): Promise<MJContentProcessRunEntity> {
+        const md = new Metadata();
+        const processRun = await md.GetEntityObject<MJContentProcessRunEntity>('MJ: Content Process Runs', contextUser);
+        processRun.NewRecord();
+        processRun.SourceID = sourceID;
+        processRun.StartTime = new Date();
+        processRun.Status = 'Running';
+        processRun.ProcessedItems = 0;
+        processRun.TotalItemCount = totalItemCount;
+        processRun.BatchSize = batchSize;
+        processRun.LastProcessedOffset = 0;
+        processRun.ErrorCount = 0;
+        processRun.CancellationRequested = false;
+        processRun.StartedByUserID = contextUser.ID;
+
+        if (config) {
+            processRun.ConfigurationObject = config;
+        }
+
+        const saved = await processRun.Save();
+        if (!saved) {
+            throw new Error('Failed to create ContentProcessRun record');
+        }
+        return processRun;
+    }
+
+    /**
+     * Update a batched process run's cursor position after a batch completes.
+     * Checks CancellationRequested to support pause/cancel.
+     * @returns true if processing should continue, false if cancelled/paused
+     */
+    public async UpdateBatchCursor(
+        processRun: MJContentProcessRunEntity,
+        processedCount: number,
+        errorCount: number
+    ): Promise<boolean> {
+        processRun.ProcessedItems = processedCount;
+        processRun.LastProcessedOffset = processedCount;
+        processRun.ErrorCount = errorCount;
+        await processRun.Save();
+
+        // Reload to check if cancellation was requested externally
+        await processRun.Load(processRun.ID);
+        if (processRun.CancellationRequested) {
+            processRun.Status = 'Paused';
+            processRun.EndTime = new Date();
+            await processRun.Save();
+            LogStatus(`[Pipeline] Cancellation requested — pausing at offset ${processedCount}`);
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Complete a batched process run (success or failure).
+     */
+    public async CompleteBatchedProcessRun(
+        processRun: MJContentProcessRunEntity,
+        status: 'Completed' | 'Failed' | 'Cancelled',
+        errorMessage?: string
+    ): Promise<void> {
+        processRun.Status = status;
+        processRun.EndTime = new Date();
+        if (errorMessage) {
+            processRun.ErrorMessage = errorMessage;
+        }
+        await processRun.Save();
+    }
+
+    /**
+     * Create rate limiters from the pipeline configuration.
+     */
+    public CreateRateLimiters(
+        config?: MJContentProcessRunEntity_IContentProcessRunConfiguration
+    ): { llm: RateLimiter; embedding: RateLimiter; vectorDB: RateLimiter } {
+        return {
+            llm: new RateLimiter({
+                RequestsPerMinute: config?.RateLimits?.LLM?.RequestsPerMinute ?? 60,
+                TokensPerMinute: config?.RateLimits?.LLM?.TokensPerMinute ?? 1000000,
+                Name: 'LLM',
+            }),
+            embedding: new RateLimiter({
+                RequestsPerMinute: config?.RateLimits?.Embedding?.RequestsPerMinute ?? 300,
+                TokensPerMinute: config?.RateLimits?.Embedding?.TokensPerMinute ?? 1000000,
+                Name: 'Embedding',
+            }),
+            vectorDB: new RateLimiter({
+                RequestsPerMinute: config?.RateLimits?.VectorDB?.RequestsPerMinute ?? 200,
+                Name: 'VectorDB',
+            }),
+        };
     }
 
     public async parsePDF(dataBuffer: Buffer): Promise<string> {

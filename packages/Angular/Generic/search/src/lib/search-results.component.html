@@ -108,6 +108,23 @@
                                     }
                                 </div>
                             }
+                            @if (GetResolvedLinks(result).length > 0) {
+                                <div class="detail-links">
+                                    @for (link of GetResolvedLinks(result); track link.Value) {
+                                        @if (link.Type === 'URL') {
+                                            <a [href]="link.Value" target="_blank" class="detail-link" (click)="$event.stopPropagation()">
+                                                <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                                                {{ TruncateUrl(link.Value) }}
+                                            </a>
+                                        } @else if (link.Type === 'Email') {
+                                            <a [href]="'mailto:' + link.Value" class="detail-link detail-link-email" (click)="$event.stopPropagation()">
+                                                <i class="fa-solid fa-envelope"></i>
+                                                {{ link.Value }}
+                                            </a>
+                                        }
+                                    }
+                                </div>
+                            }
                             <div class="detail-actions">
                                 <button class="detail-open-btn" (click)="OnOpenRecord(result, $event)">
                                     <i class="fa-solid fa-arrow-up-right-from-square"></i> Open Record

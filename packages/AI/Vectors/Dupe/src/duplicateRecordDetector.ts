@@ -161,14 +161,36 @@ export class DuplicateRecordDetector extends VectorBase {
             return response;
         }
 
-        // Step 6: Process in batches
+        // Step 6: Process in batches with resume support
         const batchSize = DEFAULT_BATCH_SIZE;
         const concurrency = this.GetQueryConcurrency(entityDocument);
         const topK = options.TopK ?? DEFAULT_TOP_K;
         const templateParser = EntityDocumentTemplateParser.CreateInstance();
         let totalMatchesFound = 0;
 
-        for (let offset = 0; offset < recordIDs.length; offset += batchSize) {
+        // Update run with total count for progress tracking
+        duplicateRun.TotalItemCount = recordIDs.length;
+        duplicateRun.BatchSize = batchSize;
+        await this.SaveEntity(duplicateRun);
+
+        // Resume from last processed offset if available
+        const resumeOffset = duplicateRun.LastProcessedOffset ?? 0;
+        if (resumeOffset > 0) {
+            LogStatus(`Duplicate detection: resuming from offset ${resumeOffset}`);
+        }
+
+        for (let offset = resumeOffset; offset < recordIDs.length; offset += batchSize) {
+            // Check for cancellation between batches
+            await duplicateRun.Load(duplicateRun.ID);
+            if (duplicateRun.CancellationRequested) {
+                LogStatus(`Duplicate detection: cancellation requested at offset ${offset}`);
+                duplicateRun.ProcessingStatus = 'In Progress'; // Will be resumed later
+                duplicateRun.EndedAt = new Date();
+                await this.SaveEntity(duplicateRun);
+                response.Status = 'Success'; // Partial success — can be resumed
+                return response;
+            }
+
             const batchIDs = recordIDs.slice(offset, offset + batchSize);
             const batchResults = await this.ProcessBatch(
                 batchIDs, entityInfo, entityDocument, templateParser, duplicateRun.ID,
@@ -176,6 +198,11 @@ export class DuplicateRecordDetector extends VectorBase {
             );
             response.PotentialDuplicateResult.push(...batchResults.Results);
             totalMatchesFound += batchResults.MatchesFound;
+
+            // Update cursor for resume support
+            duplicateRun.ProcessedItemCount = offset + batchIDs.length;
+            duplicateRun.LastProcessedOffset = offset + batchSize;
+            await this.SaveEntity(duplicateRun);
         }
 
         // Step 7: Complete the duplicate run

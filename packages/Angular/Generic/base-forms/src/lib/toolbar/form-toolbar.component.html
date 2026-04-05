@@ -65,6 +65,15 @@
           }
         </button>
       }
+      @if (Config.ShowTagsButton) {
+        <button class="mj-forms-btn" (click)="OnTagsPanel()"
+          [title]="TagCount > 0 ? TagCount + ' tag(s)' : 'View tags'">
+          <i class="fa-solid fa-tags"></i>
+          @if (TagCount > 0) {
+            <span class="mj-list-count-badge">{{ TagCount }}</span>
+          }
+        </button>
+      }
 
       <!-- Custom toolbar buttons -->
       @for (button of Config.CustomButtons; track button.Key) {

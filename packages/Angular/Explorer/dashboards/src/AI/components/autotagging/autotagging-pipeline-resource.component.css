@@ -2926,3 +2926,124 @@
         grid-template-columns: 1fr;
     }
 }
+
+/* ── Pipeline Config Widget ────────────────────────── */
+
+.at-config-card {
+    margin-top: 12px;
+}
+
+.at-config-body {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px !important;
+}
+
+.at-config-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.at-config-label {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--mj-text-secondary);
+    min-width: 90px;
+    flex-shrink: 0;
+}
+
+.at-config-control {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+    justify-content: flex-end;
+}
+
+.at-config-input {
+    width: 70px;
+    padding: 3px 6px;
+    border: 1px solid var(--mj-border-default);
+    border-radius: 4px;
+    font-size: 0.75rem;
+    text-align: right;
+    background: var(--mj-bg-surface);
+    color: var(--mj-text-primary);
+}
+
+.at-config-input:focus {
+    outline: none;
+    border-color: var(--mj-brand-primary);
+}
+
+.at-config-slider {
+    flex: 1;
+    max-width: 100px;
+    accent-color: var(--mj-brand-primary);
+    height: 4px;
+}
+
+.at-config-value {
+    font-size: 0.68rem;
+    color: var(--mj-text-muted);
+    min-width: 40px;
+    text-align: right;
+}
+
+.at-config-divider {
+    height: 1px;
+    background: var(--mj-border-default);
+    margin: 4px 0;
+}
+
+.at-config-section-label {
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: var(--mj-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+/* Toggle Switch */
+.at-config-toggle {
+    position: relative;
+    display: inline-block;
+    cursor: pointer;
+}
+
+.at-config-toggle input {
+    display: none;
+}
+
+.at-toggle-track {
+    display: block;
+    width: 32px;
+    height: 18px;
+    background: var(--mj-border-strong);
+    border-radius: 9px;
+    transition: background 0.2s ease;
+    position: relative;
+}
+
+.at-config-toggle input:checked + .at-toggle-track {
+    background: var(--mj-brand-primary);
+}
+
+.at-toggle-thumb {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 14px;
+    height: 14px;
+    background: var(--mj-bg-surface);
+    border-radius: 50%;
+    transition: transform 0.2s ease;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+}
+
+.at-config-toggle input:checked + .at-toggle-track .at-toggle-thumb {
+    transform: translateX(14px);
+}

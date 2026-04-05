@@ -47,6 +47,11 @@
     border-bottom: none;
 }
 
+.filter-category-header-row {
+    display: flex;
+    align-items: center;
+}
+
 .filter-category-header {
     display: flex;
     align-items: center;
@@ -54,10 +59,29 @@
     padding: 0.6rem 1rem;
     cursor: pointer;
     transition: background 0.1s ease;
+    flex: 1;
 }
 
 .filter-category-header:hover {
     background: var(--mj-bg-surface-hover);
+}
+
+.filter-select-all {
+    padding: 2px 8px;
+    border: 1px solid var(--mj-border-default);
+    border-radius: 4px;
+    background: none;
+    color: var(--mj-text-muted);
+    font-size: 0.65rem;
+    font-weight: 500;
+    cursor: pointer;
+    margin-right: 8px;
+    transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.filter-select-all:hover {
+    color: var(--mj-brand-primary);
+    border-color: var(--mj-brand-primary);
 }
 
 .filter-category-name {

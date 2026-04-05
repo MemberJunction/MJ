@@ -2,7 +2,6 @@
  * Public API Surface 
  */
 
-export * from './lib/generic/form-toolbar';
 export * from './lib/generic/resource-container-component';
 
 export * from './lib/resource-wrappers/dashboard-resource.component'
