@@ -9981,10 +9981,11 @@ export const MJContentProcessRunSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: When set to 1, the pipeline stops after completing the current batch. Used for pause and cancel operations. The Status column reflects the final state (Paused or Cancelled).`),
-    Configuration: z.string().nullable().describe(`
+    Configuration: z.any().nullable().describe(`
         * * Field Name: Configuration
         * * Display Name: Configuration
         * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJContentProcessRunEntity_IContentProcessRunConfiguration
         * * Description: JSON snapshot of the pipeline configuration used for this run. Conforms to the IContentProcessRunConfiguration interface. Includes batch size, rate limits, error thresholds, and duplicate detection settings.`),
     Source: z.string().nullable().describe(`
         * * Field Name: Source
@@ -50137,6 +50138,46 @@ export class MJContentProcessRunPromptRunEntity extends BaseEntity<MJContentProc
 }
 
 
+/** Pipeline configuration stored on ContentProcessRun.Configuration.
+ *  Controls batch size, rate limiting, error thresholds, and duplicate detection. */
+export interface MJContentProcessRunEntity_IContentProcessRunConfiguration {
+    /** Batch processing settings */
+    Pipeline?: {
+        /** Number of content items per batch. Default: 100 */
+        BatchSize?: number;
+        /** Maximum concurrent batches. Default: 1 */
+        MaxConcurrentBatches?: number;
+        /** Delay between batches in milliseconds. Default: 200 */
+        DelayBetweenBatchesMs?: number;
+        /** If true, resume from the last completed batch on restart. Default: true */
+        ResumeFromLastBatch?: boolean;
+        /** Error rate percentage that triggers the circuit breaker (0-100). Default: 20 */
+        ErrorThresholdPercent?: number;
+    };
+    /** API rate limiting per provider */
+    RateLimits?: {
+        /** LLM (tagging) rate limits */
+        LLM?: {
+            /** Maximum LLM requests per minute */
+            RequestsPerMinute?: number;
+            /** Maximum LLM tokens per minute */
+            TokensPerMinute?: number;
+        };
+        /** Embedding rate limits */
+        Embedding?: {
+            /** Maximum embedding requests per minute */
+            RequestsPerMinute?: number;
+            /** Maximum embedding tokens per minute */
+            TokensPerMinute?: number;
+        };
+        /** Vector database rate limits */
+        VectorDB?: {
+            /** Maximum vector DB requests per minute */
+            RequestsPerMinute?: number;
+        };
+    };
+}
+
 /**
  * MJ: Content Process Runs - strongly typed entity sub-class
  * * Schema: __mj
@@ -50364,6 +50405,7 @@ export class MJContentProcessRunEntity extends BaseEntity<MJContentProcessRunEnt
     * * Field Name: Configuration
     * * Display Name: Configuration
     * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJContentProcessRunEntity_IContentProcessRunConfiguration
     * * Description: JSON snapshot of the pipeline configuration used for this run. Conforms to the IContentProcessRunConfiguration interface. Includes batch size, rate limits, error thresholds, and duplicate detection settings.
     */
     get Configuration(): string | null {
@@ -50371,6 +50413,27 @@ export class MJContentProcessRunEntity extends BaseEntity<MJContentProcessRunEnt
     }
     set Configuration(value: string | null) {
         this.Set('Configuration', value);
+    }
+
+    private _ConfigurationObject_cached: MJContentProcessRunEntity_IContentProcessRunConfiguration | null | undefined = undefined;
+    private _ConfigurationObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for Configuration — returns parsed JSON as MJContentProcessRunEntity_IContentProcessRunConfiguration.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get ConfigurationObject(): MJContentProcessRunEntity_IContentProcessRunConfiguration | null {
+        const raw = this.Configuration;
+        if (raw !== this._ConfigurationObject_lastRaw) {
+            this._ConfigurationObject_cached = raw ? JSON.parse(raw) : null;
+            this._ConfigurationObject_lastRaw = raw;
+        }
+        return this._ConfigurationObject_cached!;
+    }
+    set ConfigurationObject(value: MJContentProcessRunEntity_IContentProcessRunConfiguration | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.Configuration = raw;
+        this._ConfigurationObject_cached = value;
+        this._ConfigurationObject_lastRaw = raw;
     }
 
     /**
