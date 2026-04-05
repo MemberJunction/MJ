@@ -78,7 +78,7 @@ export class MJCognitoProvider extends MJAuthBase {
           region: environment['COGNITO_REGION'] || environment['AWS_REGION'],
           domain: environment['COGNITO_DOMAIN'],
           redirectUri: environment['COGNITO_REDIRECT_URI'] || window.location.origin,
-          scopes: environment['COGNITO_SCOPES'] || ['openid', 'profile', 'email'],
+          scopes: environment['COGNITO_SCOPES'] || ['openid', 'profile', 'email', 'aws.cognito.signin.user.admin'],
           skipRedirectCallback: isMCPOAuthCallback,
         } as CognitoConfig
       }
@@ -102,7 +102,7 @@ export class MJCognitoProvider extends MJAuthBase {
           loginWith: {
             oauth: {
               domain: this.cognitoConfig.domain,
-              scopes: this.cognitoConfig.scopes || ['openid', 'profile', 'email'],
+              scopes: this.cognitoConfig.scopes || ['openid', 'profile', 'email', 'aws.cognito.signin.user.admin'],
               redirectSignIn: [redirectUri],
               redirectSignOut: [redirectUri],
               responseType: 'code', // Authorization code + PKCE for refresh tokens
