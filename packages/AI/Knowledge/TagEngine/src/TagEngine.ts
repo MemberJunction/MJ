@@ -58,8 +58,14 @@ export class TagEngine extends BaseSingleton<TagEngine> {
      * Without this, parallel batch processing (Promise.all) causes race conditions:
      * multiple items return the same tag from LLM, all call ResolveTag concurrently,
      * none finds the tag (not created yet), all create duplicates.
+     *
+     * Implementation: a simple async semaphore backed by a queue of resolve callbacks.
+     * When the mutex is free (_mutexLocked === false), the caller proceeds immediately.
+     * When locked, the caller's promise is parked in _mutexQueue and resolved in FIFO
+     * order when the current holder releases via _releaseMutex().
      */
-    private _resolveTagQueue: Promise<MJTagEntity | null> = Promise.resolve(null);
+    private _mutexLocked = false;
+    private _mutexQueue: Array<() => void> = [];
 
     /** Access to the underlying TagEngineBase instance */
     protected get Base(): TagEngineBase {
@@ -73,11 +79,6 @@ export class TagEngine extends BaseSingleton<TagEngine> {
     /** All loaded Tag entities */
     public get Tags(): MJTagEntity[] {
         return this.Base.Tags;
-    }
-
-    /** All loaded TaggedItem entities */
-    public get TaggedItems(): MJTaggedItemEntity[] {
-        return this.Base.TaggedItems;
     }
 
     /** The vector service containing tag embeddings, or null if not yet loaded or no embedding model available */
@@ -112,11 +113,6 @@ export class TagEngine extends BaseSingleton<TagEngine> {
     /** Get all descendants of a given root tag, recursively */
     public GetSubtree(rootID: string): MJTagEntity[] {
         return this.Base.GetSubtree(rootID);
-    }
-
-    /** Get all tagged items associated with a specific entity record */
-    public GetTaggedItemsForRecord(entityID: string, recordID: string): MJTaggedItemEntity[] {
-        return this.Base.GetTaggedItemsForRecord(entityID, recordID);
     }
 
     /** Build a hierarchical tree of TagTreeNode objects for LLM prompt injection */
@@ -386,7 +382,7 @@ export class TagEngine extends BaseSingleton<TagEngine> {
      * @param contextUser - The user context for the operation
      * @returns The matched or newly created MJTagEntity, or null if no match in constrained mode
      */
-    public ResolveTag(
+    public async ResolveTag(
         tagText: string,
         weight: number,
         mode: 'constrained' | 'auto-grow' | 'free-flow',
@@ -394,14 +390,41 @@ export class TagEngine extends BaseSingleton<TagEngine> {
         threshold: number,
         contextUser: UserInfo
     ): Promise<MJTagEntity | null> {
-        // Serialize all tag resolutions through a queue to prevent race conditions.
-        // Without this, parallel Promise.all batches cause duplicate tag creation
-        // when multiple items return the same tag name from the LLM.
-        this._resolveTagQueue = this._resolveTagQueue.then(
-            () => this.resolveTagInner(tagText, weight, mode, rootID, threshold, contextUser),
-            () => this.resolveTagInner(tagText, weight, mode, rootID, threshold, contextUser)
-        );
-        return this._resolveTagQueue;
+        // Acquire the mutex — only one resolveTagInner runs at a time.
+        await this.acquireMutex();
+        try {
+            return await this.resolveTagInner(tagText, weight, mode, rootID, threshold, contextUser);
+        } finally {
+            this.releaseMutex();
+        }
+    }
+
+    /**
+     * Acquire the async mutex. If free, proceeds immediately. If locked,
+     * parks this caller in the FIFO queue until the current holder releases.
+     */
+    private acquireMutex(): Promise<void> {
+        if (!this._mutexLocked) {
+            this._mutexLocked = true;
+            return Promise.resolve();
+        }
+        return new Promise<void>(resolve => {
+            this._mutexQueue.push(resolve);
+        });
+    }
+
+    /**
+     * Release the async mutex. If callers are queued, wake the next one (FIFO).
+     * Otherwise mark the mutex as free.
+     */
+    private releaseMutex(): void {
+        if (this._mutexQueue.length > 0) {
+            const next = this._mutexQueue.shift()!;
+            // Keep _mutexLocked = true; ownership transfers to next waiter
+            next();
+        } else {
+            this._mutexLocked = false;
+        }
     }
 
     private async resolveTagInner(
@@ -412,25 +435,31 @@ export class TagEngine extends BaseSingleton<TagEngine> {
         threshold: number,
         contextUser: UserInfo
     ): Promise<MJTagEntity | null> {
+        LogStatus(`[TagEngine:Mutex] ENTER resolveTagInner for "${tagText}" (mode=${mode}, rootID=${rootID ?? 'null'})`);
+
         // 1. Fast path: exact name match (case-insensitive)
         const exactMatch = this.GetTagByName(tagText);
         if (exactMatch) {
+            LogStatus(`[TagEngine:Mutex] EXIT resolveTagInner for "${tagText}" — exact match found: "${exactMatch.Name}" (${exactMatch.ID})`);
             return this.filterBySubtree(exactMatch, rootID);
         }
 
         // 2. Fuzzy match: normalize by stripping plurals, hyphens, extra spaces
         const fuzzyMatch = this.findFuzzyMatch(tagText, rootID);
         if (fuzzyMatch) {
+            LogStatus(`[TagEngine:Mutex] EXIT resolveTagInner for "${tagText}" — fuzzy match found: "${fuzzyMatch.Name}" (${fuzzyMatch.ID})`);
             return fuzzyMatch;
         }
 
         // 3. Semantic search if vector service is available
         const semanticMatch = await this.findSemanticMatch(tagText, rootID, threshold);
         if (semanticMatch) {
+            LogStatus(`[TagEngine:Mutex] EXIT resolveTagInner for "${tagText}" — semantic match found: "${semanticMatch.Name}" (${semanticMatch.ID})`);
             return semanticMatch;
         }
 
         // 4. No match found - behavior depends on mode
+        LogStatus(`[TagEngine:Mutex] EXIT resolveTagInner for "${tagText}" — no match, delegating to handleNoMatch (mode=${mode})`);
         return this.handleNoMatch(tagText, mode, rootID, contextUser);
     }
 

@@ -1549,6 +1549,28 @@
 }
 
 /* ── Co-Occurrence Section ── */
+
+/* Constrain the co-occurrence sub-section so an empty state or large table
+   does not blow out the page height and render the app unusable. */
+.co-occurrence-section {
+    max-height: 500px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.co-occurrence-section .table-scroll {
+    overflow-y: auto;
+    max-height: 400px;
+    flex: 1;
+    min-height: 0;
+}
+
+.co-occurrence-section .empty-state {
+    max-height: 200px;
+    overflow: hidden;
+}
+
 .co-occurrence-actions {
     display: flex;
     align-items: center;

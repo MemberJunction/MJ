@@ -86,7 +86,6 @@ vi.mock('@memberjunction/tag-engine-base', () => ({
         Instance: {
             Config: vi.fn().mockResolvedValue(undefined),
             Tags: mockTags,
-            TaggedItems: [],
             GetTagByID: vi.fn().mockImplementation((id: string) => mockTags.find(t => t.ID.toLowerCase() === id.toLowerCase())),
             GetTagByName: vi.fn().mockImplementation((name: string) => mockTags.find(t => t.Name.toLowerCase() === name.trim().toLowerCase())),
             GetChildTags: vi.fn().mockImplementation((pid: string) => mockTags.filter(t => t.ParentID?.toLowerCase() === pid.toLowerCase())),
@@ -103,7 +102,6 @@ vi.mock('@memberjunction/tag-engine-base', () => ({
                 collect(rootID);
                 return result;
             }),
-            GetTaggedItemsForRecord: vi.fn().mockReturnValue([]),
             GetTaxonomyTree: vi.fn().mockReturnValue([]),
             CreateTag: mockCreateTag.mockImplementation((name: string) =>
                 Promise.resolve({ ID: `new-${name.toLowerCase().replace(/ /g, '-')}`, Name: name, DisplayName: name, Description: null, ParentID: null })
@@ -201,9 +199,6 @@ describe('TagEngine', () => {
             expect(engine.Tags).toBe(mockTags);
         });
 
-        it('should expose TaggedItems from TagEngineBase', () => {
-            expect(engine.TaggedItems).toEqual([]);
-        });
     });
 
     // ========================================================================

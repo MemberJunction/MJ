@@ -179,22 +179,43 @@
                             }
 
                             <!-- Recent Processing Feed -->
-                            <div class="at-card" style="flex: 1;">
+                            <div class="at-card" style="flex: 1; display: flex; flex-direction: column; min-height: 0;">
                                 <div class="at-card-header">
                                     <span class="at-card-title"><i class="fa-solid fa-bolt"></i> Recent Processing</span>
+                                    <span class="at-feed-count">{{ FilteredFeedItems.length }} items</span>
                                 </div>
-                                <div class="at-card-body">
-                                    @if (FeedItems.length === 0) {
+                                <!-- Feed search bar -->
+                                <div class="at-feed-search-bar">
+                                    <i class="fa-solid fa-search at-feed-search-icon"></i>
+                                    <input type="text"
+                                           class="mj-input at-feed-search-input"
+                                           placeholder="Search items, sources, or tags..."
+                                           [(ngModel)]="FeedSearchQuery"
+                                           (input)="OnFeedSearchChange()">
+                                    @if (FeedSearchQuery) {
+                                        <button class="at-feed-search-clear" (click)="FeedSearchQuery = ''; OnFeedSearchChange()">
+                                            <i class="fa-solid fa-times"></i>
+                                        </button>
+                                    }
+                                </div>
+                                <div class="at-card-body at-feed-scroll-body">
+                                    @if (FilteredFeedItems.length === 0) {
                                         <div class="at-empty-state">
                                             <i class="fa-solid fa-inbox"></i>
-                                            <p>No processed items yet.</p>
+                                            @if (FeedSearchQuery) {
+                                                <p>No items match "{{ FeedSearchQuery }}"</p>
+                                            } @else {
+                                                <p>No processed items yet.</p>
+                                            }
                                         </div>
                                     }
-                                    @for (item of FeedItems; track $index) {
-                                        <div class="at-feed-item at-feed-item-clickable" (click)="OpenFeedItemDetail($index)">
+                                    @for (item of PaginatedFeedItems; track item.Name + item.SourceName + item.TimeAgo) {
+                                        <div class="at-feed-item at-feed-item-clickable" (click)="OpenFeedItemDetail(GetFeedItemOriginalIndex(item))">
                                             <div class="at-feed-status-dot" [class]="item.Status"></div>
-                                            <span class="at-feed-item-name">{{ item.Name }}</span>
-                                            <span class="at-feed-item-source">{{ item.SourceName }}</span>
+                                            <div class="at-feed-item-content">
+                                                <span class="at-feed-item-name">{{ item.Name }}</span>
+                                                <span class="at-feed-item-source-label">{{ item.SourceName }}</span>
+                                            </div>
                                             <div class="at-feed-item-tags">
                                                 @for (tag of item.Tags; track tag) {
                                                     <span class="at-feed-tag">{{ tag }}</span>
@@ -204,6 +225,18 @@
                                         </div>
                                     }
                                 </div>
+                                <!-- Feed pagination -->
+                                @if (FeedTotalPages > 1) {
+                                    <div class="at-feed-pagination">
+                                        <button class="at-action-btn at-secondary-btn" [disabled]="FeedPage === 0" (click)="FeedPrevPage()">
+                                            <i class="fa-solid fa-chevron-left"></i>
+                                        </button>
+                                        <span class="at-feed-pagination-label">Page {{ FeedPage + 1 }} of {{ FeedTotalPages }}</span>
+                                        <button class="at-action-btn at-secondary-btn" [disabled]="FeedPage >= FeedTotalPages - 1" (click)="FeedNextPage()">
+                                            <i class="fa-solid fa-chevron-right"></i>
+                                        </button>
+                                    </div>
+                                }
                             </div>
                         </div>
 

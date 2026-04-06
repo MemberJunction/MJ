@@ -57,6 +57,16 @@ export class KnowledgeSearchResourceComponent extends BaseResourceComponent impl
     /** Minimum relevance score threshold (0-1). Results below this are hidden. */
     public MinScoreThreshold = 0.35;
 
+    /**
+     * The minimum relevance threshold that was last sent to the server.
+     * When the slider moves above this, we filter client-side.
+     * When it moves below, we must re-fetch from the server.
+     */
+    public ServerMinRelevance = 0.35;
+
+    /** Count of server-side results before any client-side filtering */
+    public ServerResultCount = 0;
+
     // --- Recent & Saved ---
     public RecentSearches: RecentSearch[] = [];
     public SavedSearches: MJKnowledgeHubSavedSearchEntity[] = [];
@@ -158,6 +168,8 @@ export class KnowledgeSearchResourceComponent extends BaseResourceComponent impl
         const query = this.Query.trim();
         if (!query) return;
 
+        this.ServerMinRelevance = this.MinScoreThreshold;
+
         const request: SearchRequest = {
             Query: query,
             MaxResults: 50,
@@ -231,10 +243,41 @@ export class KnowledgeSearchResourceComponent extends BaseResourceComponent impl
         this.PersistSearchPreferences();
     }
 
-    /** Handle relevance threshold slider change */
+    /**
+     * Handle relevance threshold slider change.
+     * - Moving UP (narrowing): filter client-side from cached server results.
+     * - Moving DOWN past ServerMinRelevance (widening): re-fetch from server.
+     */
     public OnThresholdChanged(value: number): void {
         this.MinScoreThreshold = value;
-        this.applyClientSideFilters();
+        if (value >= this.ServerMinRelevance) {
+            // Narrowing — client-side filter is sufficient
+            this.applyClientSideFilters();
+        } else {
+            // Widening past what the server returned — need fresh data
+            this.RunSearchWithThreshold(value);
+        }
+    }
+
+    /**
+     * Re-fetch from the server with a new minimum relevance threshold,
+     * then update the server baseline so future narrowing stays client-side.
+     */
+    private async RunSearchWithThreshold(threshold: number): Promise<void> {
+        const query = this.Query.trim();
+        if (!query) return;
+
+        const request: SearchRequest = {
+            Query: query,
+            MaxResults: 50,
+            ActiveFilters: this.ActiveFilters,
+            IncludeSources: ['vector', 'fulltext', 'entity'],
+            MinScore: threshold,
+        };
+
+        const response = await this.searchService.ExecuteSearch(request);
+        this.ServerMinRelevance = threshold;
+        this.applySearchResponse(response);
     }
 
     /** Toggle select all / unselect all for a filter category (Kayak-style) */
@@ -280,6 +323,7 @@ export class KnowledgeSearchResourceComponent extends BaseResourceComponent impl
      * This provides a lightweight "more like this" experience without needing raw vector access.
      */
     public OnMoreLikeThis(result: SearchResultItem): void {
+        this.ActiveFilters = {};
         this.Query = result.RecordName ?? result.Title;
         this.RunSearch();
     }
@@ -392,6 +436,8 @@ export class KnowledgeSearchResourceComponent extends BaseResourceComponent impl
         this.Filters = [];
         this.ActiveFilters = {};
         this.TotalCount = 0;
+        this.ServerResultCount = 0;
+        this.ServerMinRelevance = 0.35;
         this.HasSearched = false;
         this.ShowFilters = false;
         this.cdr.detectChanges();
@@ -599,11 +645,19 @@ export class KnowledgeSearchResourceComponent extends BaseResourceComponent impl
     private applySearchResponse(response: SearchResponse): void {
         // Cache full results (sorted by score descending) for client-side filtering
         this.cachedFullResults = response.Results.sort((a, b) => b.Score - a.Score);
-        this.AllResults = [...this.cachedFullResults];
-        this.ResultGroups = response.Groups;
+        this.ServerResultCount = this.cachedFullResults.length;
+
+        // Apply current threshold client-side (may be higher than server threshold)
+        let filtered = this.cachedFullResults;
+        if (this.MinScoreThreshold > 0) {
+            filtered = filtered.filter(r => r.Score >= this.MinScoreThreshold);
+        }
+
+        this.AllResults = [...filtered];
+        this.ResultGroups = this.searchService.GroupResults(filtered);
         // Remove Source Type filter — confuses users
         this.Filters = response.Filters.filter(f => f.Category !== 'Source Type');
-        this.TotalCount = response.TotalCount;
+        this.TotalCount = filtered.length;
         this.ElapsedMs = response.ElapsedMs;
         this.HasSearched = true;
         // Only auto-show filters on first search if user hasn't set a preference

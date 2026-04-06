@@ -31,6 +31,9 @@ vi.mock('@memberjunction/core', () => {
         IMetadataProvider: class {},
         UserInfo: class {},
         Metadata: MockMetadata,
+        RunView: class {
+            RunView = vi.fn().mockResolvedValue({ Success: true, Results: [] });
+        },
         LogError: vi.fn(),
     };
 });
@@ -64,21 +67,12 @@ interface FakeTag {
     Status: 'Active' | 'Deleted' | 'Deprecated' | 'Merged';
 }
 
-interface FakeTaggedItem {
-    ID: string;
-    TagID: string;
-    EntityID: string;
-    RecordID: string;
-    Weight: number;
-}
-
 function makeFakeTag(id: string, name: string, parentID: string | null = null, description: string | null = null, status: 'Active' | 'Deleted' | 'Deprecated' | 'Merged' = 'Active'): FakeTag {
     return { ID: id, Name: name, DisplayName: name, Description: description, ParentID: parentID, Status: status };
 }
 
-function injectTags(engine: TagEngineBase, tags: FakeTag[], taggedItems: FakeTaggedItem[] = []): void {
+function injectTags(engine: TagEngineBase, tags: FakeTag[]): void {
     (engine as unknown as { _Tags: FakeTag[] })._Tags = tags;
-    (engine as unknown as { _TaggedItems: FakeTaggedItem[] })._TaggedItems = taggedItems;
 }
 
 // ============================================================================
@@ -195,24 +189,6 @@ describe('TagEngineBase', () => {
         });
     });
 
-    describe('GetTaggedItemsForRecord', () => {
-        it('should return tagged items matching entity+record', () => {
-            const taggedItems: FakeTaggedItem[] = [
-                { ID: 'ti-1', TagID: 'aaa', EntityID: 'ent-1', RecordID: 'rec-1', Weight: 0.9 },
-                { ID: 'ti-2', TagID: 'bbb', EntityID: 'ent-1', RecordID: 'rec-1', Weight: 0.7 },
-                { ID: 'ti-3', TagID: 'ccc', EntityID: 'ent-2', RecordID: 'rec-2', Weight: 0.5 },
-            ];
-            injectTags(engine, [...tags], taggedItems);
-
-            const items = engine.GetTaggedItemsForRecord('ent-1', 'rec-1');
-            expect(items).toHaveLength(2);
-        });
-
-        it('should return empty array when no matches', () => {
-            injectTags(engine, [...tags], []);
-            expect(engine.GetTaggedItemsForRecord('ent-99', 'rec-99')).toHaveLength(0);
-        });
-    });
 
     // ========================================================================
     // Taxonomy Serialization
@@ -272,29 +248,10 @@ describe('TagEngineBase', () => {
     });
 
     describe('CreateTaggedItem', () => {
-        it('should create a new tagged item and add it to the cache', async () => {
-            injectTags(engine, [...tags], []);
-            const beforeCount = engine.TaggedItems.length;
+        it('should create a new tagged item when none exists', async () => {
+            injectTags(engine, [...tags]);
             const item = await engine.CreateTaggedItem('aaa', 'ent-1', 'rec-1', 0.85, {} as never);
             expect(item).toBeDefined();
-            expect(engine.TaggedItems.length).toBe(beforeCount + 1);
-        });
-
-        it('should update weight of existing tagged item', async () => {
-            const existingItem = {
-                ID: 'ti-exist',
-                TagID: 'aaa',
-                EntityID: 'ent-1',
-                RecordID: 'rec-1',
-                Weight: 0.5,
-                Save: vi.fn().mockResolvedValue(true),
-                LatestResult: null,
-            };
-            (engine as unknown as { _TaggedItems: unknown[] })._TaggedItems = [existingItem];
-
-            const result = await engine.CreateTaggedItem('aaa', 'ent-1', 'rec-1', 0.9, {} as never);
-            expect(existingItem.Save).toHaveBeenCalled();
-            expect(existingItem.Weight).toBe(0.9);
         });
     });
 });

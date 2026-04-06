@@ -41,6 +41,7 @@ import {
     MJEntityDocumentEntity,
     MJListDetailEntity,
     MJListEntity,
+    KnowledgeHubMetadataEngine,
 } from "@memberjunction/core-entities";
 import { VectorBase } from "@memberjunction/ai-vectors";
 import { EntityDocumentTemplateParser, EntityVectorSyncer, VectorizeEntityParams } from "@memberjunction/ai-vector-sync";
@@ -481,16 +482,28 @@ export class DuplicateRecordDetector extends VectorBase {
     /**
      * Validate and return an entity document, or null if not found.
      */
+    /**
+     * Validates that an entity document exists and is usable. Uses the
+     * KnowledgeHubMetadataEngine cache for instant lookups without database queries.
+     */
     protected async ValidateEntityDocument(entityDocumentID: string): Promise<MJEntityDocumentEntity | null> {
-        const vectorizer = new EntityVectorSyncer();
-        vectorizer.CurrentUser = this.CurrentUser;
-        return vectorizer.GetEntityDocument(entityDocumentID);
+        // Ensure KH engine is initialized (no-op if already loaded)
+        await KnowledgeHubMetadataEngine.Instance.Config(false, this.CurrentUser);
+        const doc = KnowledgeHubMetadataEngine.Instance.GetEntityDocumentById(entityDocumentID);
+        return doc ?? null;
     }
 
     /**
-     * Initialize embedding and vector DB providers via ClassFactory.
+     * Initializes embedding model, vector DB, and index name providers.
+     * Called once per detection run rather than per-record. Uses AIEngine
+     * and KnowledgeHubMetadataEngine caches to avoid redundant database queries.
      */
     protected async InitializeProviders(entityDocument: MJEntityDocumentEntity): Promise<void> {
+        // Skip re-initialization if providers are already set for this entity document
+        if (this.embedding && this.vectorDB && this.indexName) {
+            return;
+        }
+
         const aiModel = this.GetAIModel(entityDocument.AIModelID);
         const vectorDB = this.GetVectorDatabase(entityDocument.VectorDatabaseID);
 
@@ -519,22 +532,19 @@ export class DuplicateRecordDetector extends VectorBase {
         }
 
         // Resolve the vector index name from the entity document's VectorIndexID
-        // This is the actual Pinecone/pgvector/Qdrant index name needed for QueryIndex calls
+        // Uses KnowledgeHubMetadataEngine cache instead of a RunView query
         if (entityDocument.VectorIndexID) {
-            const rv = new RunView();
-            const indexResult = await rv.RunView<{ Name: string }>({
-                EntityName: 'MJ: Vector Indexes',
-                ExtraFilter: `ID='${entityDocument.VectorIndexID}'`,
-                Fields: ['Name'],
-                ResultType: 'simple',
-                MaxRows: 1
-            }, this.CurrentUser);
-            if (indexResult.Success && indexResult.Results.length > 0) {
-                this.indexName = indexResult.Results[0].Name;
+            const vectorIndex = KnowledgeHubMetadataEngine.Instance.GetVectorIndexById(entityDocument.VectorIndexID);
+            if (vectorIndex) {
+                this.indexName = vectorIndex.Name;
             }
         }
         if (!this.indexName) {
-            throw new Error(`No vector index found for entity document "${entityDocument.Name}". Ensure VectorIndexID is set on the entity document.`);
+            throw new Error(
+                `No vector index found for entity document "${entityDocument.Name}" (ID: ${entityDocument.ID}). ` +
+                `Ensure VectorIndexID is set on the entity document. You can create and assign a Vector Index ` +
+                `in the Knowledge Hub > Vector Indexes section.`
+            );
         }
 
         LogStatus(`Providers initialized: AI Model=${aiModel.DriverClass}, VectorDB=${vectorDB.ClassKey}, Index=${this.indexName}`);

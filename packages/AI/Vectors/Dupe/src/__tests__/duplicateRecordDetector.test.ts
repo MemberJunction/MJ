@@ -129,6 +129,20 @@ vi.mock('@memberjunction/core-entities', () => ({
     MJEntityDocumentEntity: vi.fn(),
     MJListDetailEntity: vi.fn(),
     MJListEntity: vi.fn(),
+    KnowledgeHubMetadataEngine: {
+        Instance: {
+            Config: vi.fn().mockResolvedValue(undefined),
+            EntityDocuments: [],
+            VectorIndexes: [],
+            GetEntityDocumentById: vi.fn().mockReturnValue(undefined),
+            GetVectorIndexById: vi.fn().mockReturnValue({
+                ID: 'vi-1',
+                Name: 'mj-knowledge-index',
+                VectorDatabaseID: 'vdb-1',
+                EmbeddingModelID: 'model-1',
+            }),
+        },
+    },
 }));
 
 vi.mock('@memberjunction/ai-vectors', () => {

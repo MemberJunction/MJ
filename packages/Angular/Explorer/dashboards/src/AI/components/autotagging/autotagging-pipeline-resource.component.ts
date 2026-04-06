@@ -342,6 +342,61 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     public SourceMinis: SourceMini[] = [];
     public TrendingTags: TagCloudItem[] = [];
 
+    // ── Pipeline feed search & pagination ──
+    public FeedSearchQuery = '';
+    public FeedPage = 0;
+    public readonly FeedPageSize = 20;
+
+    /** Feed items filtered by search query */
+    public get FilteredFeedItems(): FeedItem[] {
+        if (!this.FeedSearchQuery.trim()) return this.FeedItems;
+        const q = this.FeedSearchQuery.toLowerCase();
+        return this.FeedItems.filter(item =>
+            item.Name.toLowerCase().includes(q) ||
+            item.SourceName.toLowerCase().includes(q) ||
+            item.Tags.some(t => t.toLowerCase().includes(q))
+        );
+    }
+
+    /** Paginated feed items for the current page */
+    public get PaginatedFeedItems(): FeedItem[] {
+        const items = this.FilteredFeedItems;
+        const start = this.FeedPage * this.FeedPageSize;
+        return items.slice(start, start + this.FeedPageSize);
+    }
+
+    /** Total pages for the feed */
+    public get FeedTotalPages(): number {
+        return Math.max(1, Math.ceil(this.FilteredFeedItems.length / this.FeedPageSize));
+    }
+
+    /** Handle feed search input change */
+    public OnFeedSearchChange(): void {
+        this.FeedPage = 0;
+        this.cdr.detectChanges();
+    }
+
+    /** Navigate to previous feed page */
+    public FeedPrevPage(): void {
+        if (this.FeedPage > 0) {
+            this.FeedPage--;
+            this.cdr.detectChanges();
+        }
+    }
+
+    /** Navigate to next feed page */
+    public FeedNextPage(): void {
+        if (this.FeedPage < this.FeedTotalPages - 1) {
+            this.FeedPage++;
+            this.cdr.detectChanges();
+        }
+    }
+
+    /** Get the index in the original FeedItems array for a paginated item */
+    public GetFeedItemOriginalIndex(item: FeedItem): number {
+        return this.FeedItems.indexOf(item);
+    }
+
     // Pipeline run state
     public IsRunning = false;
     public IsPaused = false;
@@ -840,6 +895,14 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         this.applyIncomingConfiguration();
         await Promise.all([this.LoadPipelineData(), this.loadEntityRecordDocCache()]);
         this.tabDataLoaded.add('pipeline');
+
+        // If user preferences or incoming config set a non-pipeline initial tab,
+        // eagerly load that tab's data so it is not blank on first render.
+        if (this.ActiveTab !== 'pipeline' && !this.tabDataLoaded.has(this.ActiveTab)) {
+            await this.loadTabData(this.ActiveTab);
+            this.tabDataLoaded.add(this.ActiveTab);
+        }
+
         this.IsLoading = false;
         this.registerAgentTools();
         this.emitAgentContext();

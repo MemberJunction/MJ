@@ -1,5 +1,5 @@
-import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, UserInfo, Metadata, LogError } from '@memberjunction/core';
-import { RegisterClass, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
+import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, UserInfo, Metadata, RunView, LogError } from '@memberjunction/core';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { MJTagEntity, MJTaggedItemEntity } from '@memberjunction/core-entities';
 
 /**
@@ -20,10 +20,13 @@ export interface TagTreeNode {
 }
 
 /**
- * Client+server shared engine that loads all Tags and TaggedItems at startup and provides
+ * Client+server shared engine that loads all Tags at startup and provides
  * hierarchy helpers, taxonomy serialization, and CRUD operations.
  *
  * Follows the BaseEngine pattern: call Config() once at startup, then use the cached data.
+ *
+ * Note: TaggedItems are NOT loaded at startup (they don't scale). Use RunView to query
+ * TaggedItems on demand. The CreateTaggedItem() method handles this internally.
  */
 @RegisterClass(BaseEngine, 'TagEngineBase')
 export class TagEngineBase extends BaseEngine<TagEngineBase> {
@@ -32,20 +35,14 @@ export class TagEngineBase extends BaseEngine<TagEngineBase> {
     }
 
     private _Tags: MJTagEntity[] = [];
-    private _TaggedItems: MJTaggedItemEntity[] = [];
 
     /** All loaded Tag entities */
     public get Tags(): MJTagEntity[] {
         return this._Tags;
     }
 
-    /** All loaded TaggedItem entities */
-    public get TaggedItems(): MJTaggedItemEntity[] {
-        return this._TaggedItems;
-    }
-
     /**
-     * Initialize the engine by loading Tags and TaggedItems from the database.
+     * Initialize the engine by loading Tags from the database.
      * @param forceRefresh - If true, reload even if already loaded
      * @param contextUser - Required for server-side operations
      * @param provider - Optional metadata provider override
@@ -56,11 +53,6 @@ export class TagEngineBase extends BaseEngine<TagEngineBase> {
                 Type: 'entity',
                 EntityName: 'MJ: Tags',
                 PropertyName: '_Tags'
-            },
-            {
-                Type: 'entity',
-                EntityName: 'MJ: Tagged Items',
-                PropertyName: '_TaggedItems'
             },
         ];
         await this.Load(configs, provider, forceRefresh, contextUser);
@@ -119,18 +111,6 @@ export class TagEngineBase extends BaseEngine<TagEngineBase> {
             result.push(child);
             this.collectDescendants(child.ID, result);
         }
-    }
-
-    /**
-     * Get all tagged items associated with a specific entity record.
-     * @param entityID - The entity ID (from the Entities metadata table)
-     * @param recordID - The specific record ID within that entity
-     * @returns Array of TaggedItem entities matching both entityID and recordID
-     */
-    public GetTaggedItemsForRecord(entityID: string, recordID: string): MJTaggedItemEntity[] {
-        return this._TaggedItems.filter(
-            ti => UUIDsEqual(ti.EntityID, entityID) && UUIDsEqual(ti.RecordID, recordID)
-        );
     }
 
     // ========================================================================
@@ -211,6 +191,9 @@ export class TagEngineBase extends BaseEngine<TagEngineBase> {
      * Create a new TaggedItem linking a tag to an entity record, or update the weight
      * if a TaggedItem for that tag+entity+record combination already exists.
      *
+     * Uses a RunView query to check for duplicates instead of an in-memory cache,
+     * since loading all TaggedItems at startup does not scale.
+     *
      * @param tagID - The tag to associate
      * @param entityID - The entity ID (from the Entities metadata)
      * @param recordID - The specific record ID
@@ -225,18 +208,37 @@ export class TagEngineBase extends BaseEngine<TagEngineBase> {
         weight: number,
         contextUser: UserInfo
     ): Promise<MJTaggedItemEntity> {
-        // Check for existing TaggedItem with same tag+entity+record
-        const existing = this._TaggedItems.find(
-            ti => UUIDsEqual(ti.TagID, tagID) &&
-                  UUIDsEqual(ti.EntityID, entityID) &&
-                  UUIDsEqual(ti.RecordID, recordID)
-        );
+        // Check for existing TaggedItem with same tag+entity+record via DB query
+        const existing = await this.findExistingTaggedItem(tagID, entityID, recordID, contextUser);
 
         if (existing) {
             return this.updateExistingTaggedItem(existing, weight);
         }
 
         return this.createNewTaggedItem(tagID, entityID, recordID, weight, contextUser);
+    }
+
+    /**
+     * Query the database for an existing TaggedItem matching the given tag+entity+record.
+     */
+    private async findExistingTaggedItem(
+        tagID: string,
+        entityID: string,
+        recordID: string,
+        contextUser: UserInfo
+    ): Promise<MJTaggedItemEntity | null> {
+        const rv = new RunView();
+        const result = await rv.RunView<MJTaggedItemEntity>({
+            EntityName: 'MJ: Tagged Items',
+            ExtraFilter: `TagID='${tagID}' AND EntityID='${entityID}' AND RecordID='${recordID}'`,
+            ResultType: 'entity_object',
+            MaxRows: 1
+        }, contextUser);
+
+        if (result.Success && result.Results.length > 0) {
+            return result.Results[0];
+        }
+        return null;
     }
 
     /**
@@ -255,7 +257,7 @@ export class TagEngineBase extends BaseEngine<TagEngineBase> {
     }
 
     /**
-     * Create a brand new tagged item, save it, and add it to the local cache.
+     * Create a brand new tagged item and save it.
      */
     private async createNewTaggedItem(
         tagID: string,
@@ -277,7 +279,6 @@ export class TagEngineBase extends BaseEngine<TagEngineBase> {
             throw new Error(`Failed to save new tagged item: ${item.LatestResult?.Message ?? 'Unknown error'}`);
         }
 
-        this._TaggedItems.push(item);
         return item;
     }
 }

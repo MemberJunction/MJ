@@ -16,7 +16,6 @@ type IContentSourceConfiguration = MJContentSourceEntity_IContentSourceConfigura
 import { EntityDocumentTemplateParser } from "@memberjunction/ai-vector-sync";
 import { TemplateEngineServer } from "@memberjunction/templates";
 import { TagEngine } from "@memberjunction/tag-engine";
-import { TagEngineBase } from "@memberjunction/tag-engine-base";
 
 /**
  * Autotag provider for MJ entity records. Uses the EntityDocument template pipeline
@@ -149,15 +148,13 @@ export class AutotagEntity extends AutotagBase {
         const rootID = config?.TagRootID ?? null;
         const threshold = config?.TagMatchThreshold ?? 0.9;
 
-        // If parent tag is suggested by LLM, try to find/create it first
-        if (parentTagName) {
-            const parentTag = TagEngine.Instance.GetTagByName(parentTagName);
-            if (!parentTag) {
-                // Create the parent tag if in auto-grow or free-flow mode
-                if (mode !== 'constrained') {
-                    await TagEngine.Instance.CreateTag(parentTagName, parentTagName, rootID, null, contextUser);
-                }
-            }
+        // If parent tag is suggested by LLM, resolve it through the mutex too
+        // to prevent duplicate parent tags from concurrent batch processing.
+        // ResolveTag handles find-or-create atomically.
+        if (parentTagName && mode !== 'constrained') {
+            await TagEngine.Instance.ResolveTag(
+                parentTagName, 0, mode, rootID, threshold, contextUser
+            );
         }
 
         // Resolve the tag to a formal Tag record

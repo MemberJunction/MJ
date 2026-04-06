@@ -118,6 +118,8 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
 
     // Loading state
     public IsLoading = false;
+    /** Whether the results area (runs/details/matches) is still loading */
+    public IsLoadingResults = false;
     public IsSaving = false;
     // ── Comparison Panel State ──
     /** The group being compared (null = panel closed) */
@@ -152,8 +154,8 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
     public IsMerging = false;
     /** Whether the current entity allows record merging (controls merge button availability) */
     public MergeEnabled = true;
-    /** Whether the "merge not available" warning dialog is visible */
-    public ShowMergeWarningDialog = false;
+    /** Whether merge-not-available inline banner should be shown in the results area */
+    public ShowMergeWarningBanner = false;
 
     // Raw data
     public Runs: MJDuplicateRunEntity[] = [];
@@ -182,6 +184,8 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
     public IsDetecting = false;
     public DetectionProgress = 0;
     public DetectionStage = '';
+    /** Raw stage key from the last progress event — used to detect phase transitions */
+    private detectionRawStage = '';
 
     /** Runtime threshold overrides — initialized from entity doc, adjustable via sliders */
     public RunPotentialThreshold = 0.70;
@@ -335,63 +339,81 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
 
     /**
      * Loads all duplicate run data and builds the Kanban groups.
+     * Split into two phases so that controls become interactive immediately:
+     *   Phase 1 - entity docs from KH engine cache (instant)
+     *   Phase 2 - runs/details/matches via RunViews (heavy)
      */
     public async LoadData(): Promise<void> {
         this.IsLoading = true;
         this.cdr.detectChanges();
 
         try {
-            // Use KnowledgeHubMetadataEngine for cached entity document data
-            const engine = KnowledgeHubMetadataEngine.Instance;
-            await engine.Config(false);
+            // Phase 1: Populate entity document picker from cache (instant)
+            await this.loadEntityDocuments();
 
-            const rv = new RunView();
-            const [runsResult, detailsResult, matchesResult] = await rv.RunViews([
-                {
-                    EntityName: 'MJ: Duplicate Runs',
-                    ExtraFilter: "ProcessingStatus IN ('Complete', 'Failed', 'In Progress')",
-                    OrderBy: 'StartedAt DESC',
-                    ResultType: 'entity_object'
-                },
-                {
-                    EntityName: 'MJ: Duplicate Run Details',
-                    ExtraFilter: "MatchStatus = 'Complete'",
-                    OrderBy: '__mj_CreatedAt DESC',
-                    ResultType: 'entity_object'
-                },
-                {
-                    EntityName: 'MJ: Duplicate Run Detail Matches',
-                    OrderBy: 'MatchProbability DESC',
-                    ResultType: 'entity_object'
-                }
-            ]);
+            // Controls are now interactive - only the results area is loading
+            this.IsLoading = false;
+            this.IsLoadingResults = true;
+            this.cdr.detectChanges();
 
-            if (runsResult.Success) {
-                this.Runs = runsResult.Results as MJDuplicateRunEntity[];
-            }
-            if (detailsResult.Success) {
-                this.Details = detailsResult.Results as MJDuplicateRunDetailEntity[];
-            }
-            if (matchesResult.Success) {
-                this.Matches = matchesResult.Results as MJDuplicateRunDetailMatchEntity[];
-            }
-
-            // Build entity document options from cached active documents
-            this.buildEntityDocumentOptionsFromEngine(engine.GetActiveEntityDocuments());
-
-            this.buildGroups();
-            this.extractEntityNames();
-            this.computeDataRanges();
-            this.applyFilters();
-
-            // Reconnect to any in-progress detection run
-            this.reconnectToActiveRun();
+            // Phase 2: Load heavy run/detail/match data
+            await this.loadRunData();
         } catch (error) {
             console.error('Error loading duplicate detection data:', error);
         } finally {
             this.IsLoading = false;
+            this.IsLoadingResults = false;
             this.cdr.detectChanges();
         }
+    }
+
+    /** Phase 1: Load entity documents from KH engine cache (instant). */
+    private async loadEntityDocuments(): Promise<void> {
+        const engine = KnowledgeHubMetadataEngine.Instance;
+        await engine.Config(false);
+        this.buildEntityDocumentOptionsFromEngine(engine.GetActiveEntityDocuments());
+    }
+
+    /** Phase 2: Load runs, details, and matches via RunViews batch. */
+    private async loadRunData(): Promise<void> {
+        const rv = new RunView();
+        const [runsResult, detailsResult, matchesResult] = await rv.RunViews([
+            {
+                EntityName: 'MJ: Duplicate Runs',
+                ExtraFilter: "ProcessingStatus IN ('Complete', 'Failed', 'In Progress')",
+                OrderBy: 'StartedAt DESC',
+                ResultType: 'entity_object'
+            },
+            {
+                EntityName: 'MJ: Duplicate Run Details',
+                ExtraFilter: "MatchStatus = 'Complete'",
+                OrderBy: '__mj_CreatedAt DESC',
+                ResultType: 'entity_object'
+            },
+            {
+                EntityName: 'MJ: Duplicate Run Detail Matches',
+                OrderBy: 'MatchProbability DESC',
+                ResultType: 'entity_object'
+            }
+        ]);
+
+        if (runsResult.Success) {
+            this.Runs = runsResult.Results as MJDuplicateRunEntity[];
+        }
+        if (detailsResult.Success) {
+            this.Details = detailsResult.Results as MJDuplicateRunDetailEntity[];
+        }
+        if (matchesResult.Success) {
+            this.Matches = matchesResult.Results as MJDuplicateRunDetailMatchEntity[];
+        }
+
+        this.buildGroups();
+        this.extractEntityNames();
+        this.computeDataRanges();
+        this.applyFilters();
+
+        // Reconnect to any in-progress detection run
+        this.reconnectToActiveRun();
     }
 
     /**
@@ -448,20 +470,7 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
 
             // DD-1: Track whether merging is available for the selected entity
             this.MergeEnabled = entityInfo.AllowRecordMerge;
-
-            // If merging is disabled, show a warning but allow detection to continue
-            if (!entityInfo.AllowRecordMerge) {
-                this.ShowMergeWarningDialog = true;
-                this.cdr.detectChanges();
-                // Wait for user to acknowledge the warning before proceeding
-                const userConfirmed = await this.waitForMergeWarningResponse();
-                if (!userConfirmed) {
-                    this.IsDetecting = false;
-                    this.DetectionStage = '';
-                    this.cdr.detectChanges();
-                    return;
-                }
-            }
+            this.ShowMergeWarningBanner = !entityInfo.AllowRecordMerge;
 
             dupeRun.EntityID = entityInfo.ID;
 
@@ -803,6 +812,9 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
 
         resetIdleTimer();
 
+        // Reset phase tracking for this new subscription
+        this.detectionRawStage = '';
+
         const sub = provider.subscribe(subscriptionQuery, { pipelineRunID });
         const rxSub = sub.pipe(takeUntil(this.destroy$)).subscribe({
             next: (data: Record<string, unknown>) => {
@@ -810,11 +822,23 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
                 if (!progress) return;
 
                 const stage = progress['Stage'] as string;
-                const pct = progress['PercentComplete'] as number;
+                const pct = Math.max(0, Math.min(100, progress['PercentComplete'] as number));
                 const currentItem = progress['CurrentItem'] as string | undefined;
 
-                this.DetectionProgress = pct;
-                this.DetectionStage = this.formatDetectionStage(stage);
+                // Detect phase transitions vs. within-phase updates
+                const isNewPhase = stage !== this.detectionRawStage;
+                if (isNewPhase) {
+                    // New phase: reset progress and update display
+                    this.detectionRawStage = stage;
+                    this.DetectionProgress = pct;
+                    this.DetectionStage = this.formatDetectionStage(stage);
+                } else {
+                    // Same phase: only move forward (never backward)
+                    if (pct >= this.DetectionProgress) {
+                        this.DetectionProgress = pct;
+                    }
+                }
+
                 this.DetectionCurrentItem = currentItem ?? '';
                 this.cdr.detectChanges();
 
@@ -1232,39 +1256,6 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
     }
 
     // ════════════════════════════════════════════
-    // Merge Warning Dialog (AllowRecordMerge=false)
-    // ════════════════════════════════════════════
-
-    /** Resolver for the merge warning dialog promise */
-    private mergeWarningResolver: ((value: boolean) => void) | null = null;
-
-    /** Returns a promise that resolves when the user responds to the merge warning dialog */
-    private waitForMergeWarningResponse(): Promise<boolean> {
-        return new Promise<boolean>((resolve) => {
-            this.mergeWarningResolver = resolve;
-        });
-    }
-
-    /** User chose to proceed with detection despite merge being unavailable */
-    public AcceptMergeWarning(): void {
-        this.ShowMergeWarningDialog = false;
-        if (this.mergeWarningResolver) {
-            this.mergeWarningResolver(true);
-            this.mergeWarningResolver = null;
-        }
-        this.cdr.detectChanges();
-    }
-
-    /** User cancelled after seeing merge warning */
-    public DeclineMergeWarning(): void {
-        this.ShowMergeWarningDialog = false;
-        if (this.mergeWarningResolver) {
-            this.mergeWarningResolver(false);
-            this.mergeWarningResolver = null;
-        }
-        this.cdr.detectChanges();
-    }
-
     // ════════════════════════════════════════════
     // Merge Confirmation
     // ════════════════════════════════════════════

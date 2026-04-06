@@ -97,6 +97,10 @@
                                 <span>All</span>
                                 <span>Strict</span>
                             </div>
+                            <div class="threshold-stats">
+                                <span class="threshold-stats-shown">{{ TotalCount }} of {{ ServerResultCount }} results shown</span>
+                                <span class="threshold-stats-range">Server range: {{ (ServerMinRelevance * 100) | number:'1.0-0' }}%&ndash;100%</span>
+                            </div>
                         </div>
                     </aside>
                 }

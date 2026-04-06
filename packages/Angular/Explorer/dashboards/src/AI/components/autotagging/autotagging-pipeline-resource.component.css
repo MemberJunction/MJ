@@ -1618,6 +1618,111 @@
     background: var(--mj-bg-surface-hover);
 }
 
+/* ══════ FEED SEARCH & PAGINATION ══════ */
+
+.at-feed-count {
+    font-size: 0.7rem;
+    color: var(--mj-text-muted);
+    margin-left: auto;
+}
+
+.at-feed-search-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    border-bottom: 1px solid var(--mj-border-subtle);
+    background: var(--mj-bg-surface-card);
+}
+
+.at-feed-search-icon {
+    color: var(--mj-text-disabled);
+    font-size: 0.72rem;
+    flex-shrink: 0;
+}
+
+.at-feed-search-input {
+    flex: 1;
+    border: none;
+    background: transparent;
+    font-size: 0.78rem;
+    color: var(--mj-text-primary);
+    outline: none;
+    padding: 4px 0;
+    min-width: 0;
+}
+
+.at-feed-search-input::placeholder {
+    color: var(--mj-text-disabled);
+}
+
+.at-feed-search-clear {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: var(--mj-border-default);
+    color: var(--mj-text-muted);
+    cursor: pointer;
+    font-size: 9px;
+    flex-shrink: 0;
+}
+
+.at-feed-search-clear:hover {
+    background: var(--mj-border-strong);
+    color: var(--mj-text-primary);
+}
+
+.at-feed-scroll-body {
+    overflow-y: auto;
+    max-height: 400px;
+    min-height: 0;
+    flex: 1;
+}
+
+.at-feed-item-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.at-feed-item-content .at-feed-item-name {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--mj-text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.at-feed-item-source-label {
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: var(--mj-brand-primary);
+}
+
+.at-feed-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 8px 14px;
+    border-top: 1px solid var(--mj-border-subtle);
+    background: var(--mj-bg-surface-card);
+}
+
+.at-feed-pagination-label {
+    font-size: 0.72rem;
+    color: var(--mj-text-muted);
+}
+
 /* ══════ CLICKABLE SOURCE CARDS ══════ */
 
 .at-source-card-clickable {

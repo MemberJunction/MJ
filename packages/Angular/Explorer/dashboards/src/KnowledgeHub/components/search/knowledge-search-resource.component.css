@@ -444,6 +444,28 @@
     margin-top: 0.25rem;
 }
 
+.threshold-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    margin-top: 0.6rem;
+    padding: 0.45rem 0.6rem;
+    border-radius: 6px;
+    background: var(--mj-bg-surface-sunken);
+    border: 1px solid var(--mj-border-subtle);
+}
+
+.threshold-stats-shown {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--mj-text-secondary);
+}
+
+.threshold-stats-range {
+    font-size: 0.7rem;
+    color: var(--mj-text-muted);
+}
+
 /* Save Search Button (in results header) */
 .save-search-btn {
     display: inline-flex;

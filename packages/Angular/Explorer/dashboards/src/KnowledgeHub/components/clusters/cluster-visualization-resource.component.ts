@@ -33,8 +33,25 @@ import {
 } from '@memberjunction/ng-clustering';
 import { ClusteringService, ClusterScatterComponent } from '@memberjunction/ng-clustering';
 
-const SAVED_CLUSTERS_KEY = 'KnowledgeHub_SavedClusters';
-const LAST_SESSION_KEY = 'KnowledgeHub_LastClusterSession';
+/**
+ * Build an environment-scoped storage key so cluster data does not bleed
+ * across different database environments that share the same browser.
+ * Uses the GraphQL endpoint origin as the environment fingerprint.
+ */
+function buildEnvScopedKey(base: string): string {
+    try {
+        const origin = (Metadata.Provider as GraphQLDataProvider).ConfigData?.URL;
+        if (origin) {
+            // Use just the origin portion (protocol + host) so path differences don't fragment keys
+            const url = new URL(origin);
+            return `${base}_${url.origin}`;
+        }
+    } catch { /* fall through */ }
+    return base;
+}
+
+const SAVED_CLUSTERS_BASE_KEY = 'KnowledgeHub_SavedClusters';
+const LAST_SESSION_BASE_KEY = 'KnowledgeHub_LastClusterSession';
 
 @RegisterClass(BaseResourceComponent, 'ClusterVisualizationResource')
 @Component({
@@ -604,8 +621,9 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
     /** Load saved visualizations from UserInfoEngine settings */
     private loadSavedVisualizations(): void {
         try {
+            const key = buildEnvScopedKey(SAVED_CLUSTERS_BASE_KEY);
             const engine = UserInfoEngine.Instance;
-            const setting = engine.UserSettings.find(s => s.Setting === SAVED_CLUSTERS_KEY);
+            const setting = engine.UserSettings.find(s => s.Setting === key);
             if (setting?.Value) {
                 this.userSettingEntity = setting;
                 this.SavedVisualizations = JSON.parse(setting.Value) as SavedClusterVisualization[];
@@ -631,7 +649,7 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
                 Title: this.VisualizationTitle,
                 Viewport: this.scatterPlot?.GetViewportTransform() ?? null,
             };
-            localStorage.setItem(LAST_SESSION_KEY, JSON.stringify(session));
+            localStorage.setItem(buildEnvScopedKey(LAST_SESSION_BASE_KEY), JSON.stringify(session));
         } catch {
             // localStorage quota exceeded or not available — non-critical
         }
@@ -644,7 +662,7 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
     private restoreLastSession(): void {
         if (this.Result || this.ActiveSavedId) return; // Already showing something
         try {
-            const raw = localStorage.getItem(LAST_SESSION_KEY);
+            const raw = localStorage.getItem(buildEnvScopedKey(LAST_SESSION_BASE_KEY));
             if (!raw) return;
             const session = JSON.parse(raw) as {
                 Result: ClusterVisualizationResult;
@@ -668,7 +686,7 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
                 }, 50);
             }
         } catch {
-            localStorage.removeItem(LAST_SESSION_KEY);
+            localStorage.removeItem(buildEnvScopedKey(LAST_SESSION_BASE_KEY));
         }
     }
 
@@ -680,14 +698,15 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
             if (!userId) return;
 
             if (!this.userSettingEntity) {
+                const key = buildEnvScopedKey(SAVED_CLUSTERS_BASE_KEY);
                 const engine = UserInfoEngine.Instance;
-                const existing = engine.UserSettings.find(s => s.Setting === SAVED_CLUSTERS_KEY);
+                const existing = engine.UserSettings.find(s => s.Setting === key);
                 if (existing) {
                     this.userSettingEntity = existing;
                 } else {
                     this.userSettingEntity = await md.GetEntityObject<MJUserSettingEntity>('MJ: User Settings');
                     this.userSettingEntity.UserID = userId;
-                    this.userSettingEntity.Setting = SAVED_CLUSTERS_KEY;
+                    this.userSettingEntity.Setting = buildEnvScopedKey(SAVED_CLUSTERS_BASE_KEY);
                 }
             }
 
