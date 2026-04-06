@@ -112,6 +112,37 @@ MJ stores integration metadata in two database tables that the engine uses at ru
 
 **For connectors with NO live discovery**, ALL objects and fields MUST be in the static metadata. The engine won't know about endpoints that aren't in `IntegrationObject` rows.
 
+D3. Parent-Child (Template Variable) Endpoints
+
+Some APIs require a parent ID to fetch child records (e.g., `/orders/{orderId}/items`, `/groups/{groupId}/members`). The base class `BaseRESTIntegrationConnector` has built-in support for this via **template variables** in `APIPath`:
+
+- Set `APIPath` to a path with `{VariableName}` placeholders: e.g., `orders/{OrderID}/items`
+- The engine detects template variables, looks up the parent IntegrationObject via FK metadata on `IntegrationObjectField.RelatedIntegrationObjectID`, loads parent IDs from the local MJ database, and iterates per parent.
+- **Important**: Template variables only work for **path segments**, not query parameters. If the API requires parent IDs as **query params** (e.g., `?BatchId=123`), you must handle this in a `FetchChanges()` override — see `YourMembershipConnector.ts` `FetchChildRecords()` for the pattern.
+- For every child object, ensure the FK field has `IsForeignKey: true` and `RelatedIntegrationObjectID` pointing to the parent object.
+
+D4. Additional Required Methods
+
+These methods are also required but often forgotten:
+
+| Method | Purpose |
+|---|---|
+| `TestConnection()` | Validates credentials by making a lightweight API call. Must return `ConnectionTestResult` with Success/Message. Called from the "Test Connection" UI button. |
+| `GetBaseURL()` | Returns the API base URL for a specific company integration. Override if the URL varies per tenant (e.g., Salesforce instance URLs, self-hosted platforms). |
+| `IntrospectSchema()` | Full schema introspection — called by SchemaBuilder to create DB tables. Returns `SourceSchemaInfo` with objects, fields, PKs, and relationships. Typically calls `DiscoverObjects()` + `DiscoverFields()` for each object internally. |
+| `GetDefaultFieldMappings(objectName)` | Returns default source→destination field mappings for auto-creating field maps during `IntegrationApplyAll`. If not overridden, the engine auto-maps by matching field names. Override to handle renamed fields or add computed mappings. |
+| `GetActionGeneratorConfig()` | Returns config for auto-generating MJ Actions (Search, List, Get, Create, Update, Delete) for each integration object. Set `IconClass`, `CategoryDescription`, `IncludeSearch`, `IncludeList`, etc. |
+
+D5. Bidirectional Sync Considerations
+
+The integration engine supports `SyncDirection: 'Pull' | 'Push' | 'Bidirectional'` on entity maps. If the connector supports writes:
+
+- The engine's `ProcessPushSync()` detects MJ-side changes via **Record Changes**, reverse-maps fields (MJ → external), and calls `CreateRecord()`/`UpdateRecord()`/`DeleteRecord()` on the connector.
+- Per-field Direction (`SourceToDest` | `DestToSource` | `Both`) controls which fields are pushed vs pulled.
+- The `SupportsCreate`/`SupportsUpdate`/`SupportsDelete` getters MUST return `true` for push to work.
+- Push watermarks are tracked separately from pull watermarks.
+- For bidirectional sync, the engine runs pull first, then push. Changes made by the pull sync are excluded from the push (filtered by source user ID) to prevent echo loops.
+
 E. Error Handling
 Map platform-specific HTTP errors to MJ's error types:
 
@@ -182,6 +213,12 @@ Go through each item. If ANY check fails, fix it before presenting results.
  index.ts updated with new export
  npm run build passes with zero errors and zero warnings
  Code comments explain platform-specific quirks
+ TestConnection() makes a real API call and returns meaningful success/failure
+ IntrospectSchema() returns complete SourceSchemaInfo for all objects
+ GetBaseURL() handles multi-tenant/instance-specific URLs
+ Parent-child endpoints use template variables or FetchChanges override
+ IntegrationObject metadata fields set: APIPath, PaginationType, ResponseDataKey, DefaultPageSize
+ IntegrationObjectField PKs and FKs correctly annotated
 
 
 Common Mistakes to Avoid
