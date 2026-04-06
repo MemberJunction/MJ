@@ -4,11 +4,16 @@ import { BaseArtifactViewerPluginComponent } from '../base-artifact-viewer.compo
 import { ArtifactFileService } from '../../services/artifact-file.service';
 
 /**
- * Viewer plugin for PDF artifact versions stored in MJStorage (ContentMode = 'File').
+ * Viewer plugin for PDF artifact versions stored in MJStorage (ContentMode = 'File')
+ * or as inline base64 content (ContentMode = 'Inline').
  *
- * Renders one page at a time using PDF.js with an in-process (fake) worker so
- * no separate worker bundle is required. Navigation arrows in the shared toolbar
- * let the user page through the document.
+ * Renders one page at a time using PDF.js. The toolbar provides page navigation
+ * (including a direct page-jump input), zoom in/out, download, and print.
+ *
+ * Aspect-ratio preservation: the canvas backing buffer is sized at full HiDPI
+ * resolution while the CSS size uses `aspect-ratio` + `height: auto` so that
+ * `max-width: 100%` scales both dimensions proportionally when the container
+ * is narrower than the natural page width.
  */
 @Component({
   standalone: false,
@@ -21,10 +26,18 @@ import { ArtifactFileService } from '../../services/artifact-file.service';
         [totalPages]="totalPages"
         [isDownloading]="isDownloading"
         [showPrint]="true"
+        [showZoom]="true"
+        [zoomPercent]="zoomPercent"
+        [canZoomIn]="canZoomIn"
+        [canZoomOut]="canZoomOut"
         (download)="onDownload()"
         (print)="onPrint()"
         (prevPage)="goToPrevPage()"
-        (nextPage)="goToNextPage()">
+        (nextPage)="goToNextPage()"
+        (pageChange)="onPageChange($event)"
+        (zoomIn)="onZoomIn()"
+        (zoomOut)="onZoomOut()"
+        (zoomReset)="onZoomReset()">
       </mj-file-artifact-toolbar>
 
       <div class="pdf-viewer__body">
@@ -79,11 +92,19 @@ import { ArtifactFileService } from '../../services/artifact-file.service';
       display: flex;
       justify-content: center;
       padding: 16px;
+      /* Prevent centered overflow from clipping the left side of zoomed pages.
+         min-width: fit-content makes the wrap grow to fit the canvas so the
+         parent overflow:auto container can scroll to both edges. */
+      min-width: fit-content;
     }
 
     canvas {
+      display: block;
       box-shadow: 0 2px 8px color-mix(in srgb, var(--mj-text-primary) 15%, transparent);
-      max-width: 100%;
+      /* Natural size — do NOT add max-width:100% here.
+         renderPage sets width/aspect-ratio/height inline so the canvas renders at
+         exactly the zoomed logical size. The scroll area (overflow:auto on the body)
+         handles pages wider than the panel, which is the correct UX for zoom. */
     }
   `]
 })
@@ -97,11 +118,17 @@ export class PdfArtifactViewerComponent extends BaseArtifactViewerPluginComponen
   public errorMessage = '';
   public currentPage = 1;
   public totalPages = 1;
+  public zoomLevel = 1.0;
 
   private pdfDoc: PdfDocumentProxy | null = null;
   private renderTask: PdfRenderTask | null = null;
   private downloadUrl = '';
   private _pdfjsLib: PdfJsLib | null = null;
+
+  /** Discrete zoom steps — 50 % to 400 %. */
+  private readonly ZOOM_STEPS = [0.5, 0.67, 0.75, 1.0, 1.25, 1.5, 2.0, 3.0, 4.0];
+  /** Base render scale (logical pixels per PDF point at zoom 1.0). */
+  private readonly BASE_SCALE = 1.5;
 
   constructor(
     private fileService: ArtifactFileService,
@@ -114,6 +141,17 @@ export class PdfArtifactViewerComponent extends BaseArtifactViewerPluginComponen
   public override get parentShouldShowRawContent(): boolean { return false; }
   public override GetStandardTabRemovals(): string[] { return ['JSON']; }
 
+  /** Current zoom as an integer percentage for toolbar display. */
+  public get zoomPercent(): number { return Math.round(this.zoomLevel * 100); }
+
+  public get canZoomIn(): boolean {
+    return this.zoomLevel < this.ZOOM_STEPS[this.ZOOM_STEPS.length - 1];
+  }
+
+  public get canZoomOut(): boolean {
+    return this.zoomLevel > this.ZOOM_STEPS[0];
+  }
+
   async ngOnInit(): Promise<void> {
     await this.loadPdf();
   }
@@ -124,19 +162,52 @@ export class PdfArtifactViewerComponent extends BaseArtifactViewerPluginComponen
     this.pdfDoc = null;
   }
 
+  // ─── Navigation ─────────────────────────────────────────────────────────────
+
   public async goToNextPage(): Promise<void> {
-    if (this.currentPage < this.totalPages) {
-      this.currentPage++;
+    await this.onPageChange(this.currentPage + 1);
+  }
+
+  public async goToPrevPage(): Promise<void> {
+    await this.onPageChange(this.currentPage - 1);
+  }
+
+  public async onPageChange(page: number): Promise<void> {
+    const clamped = Math.max(1, Math.min(page, this.totalPages));
+    if (clamped !== this.currentPage) {
+      this.currentPage = clamped;
       await this.renderPage(this.currentPage);
     }
   }
 
-  public async goToPrevPage(): Promise<void> {
-    if (this.currentPage > 1) {
-      this.currentPage--;
+  // ─── Zoom ────────────────────────────────────────────────────────────────────
+
+  public async onZoomIn(): Promise<void> {
+    const next = this.ZOOM_STEPS.find(z => z > this.zoomLevel);
+    if (next !== undefined) {
+      this.zoomLevel = next;
       await this.renderPage(this.currentPage);
     }
   }
+
+  public async onZoomOut(): Promise<void> {
+    for (let i = this.ZOOM_STEPS.length - 1; i >= 0; i--) {
+      if (this.ZOOM_STEPS[i] < this.zoomLevel) {
+        this.zoomLevel = this.ZOOM_STEPS[i];
+        await this.renderPage(this.currentPage);
+        return;
+      }
+    }
+  }
+
+  public async onZoomReset(): Promise<void> {
+    if (this.zoomLevel !== 1.0) {
+      this.zoomLevel = 1.0;
+      await this.renderPage(this.currentPage);
+    }
+  }
+
+  // ─── Download / Print ───────────────────────────────────────────────────────
 
   public async onDownload(): Promise<void> {
     if (!this.downloadUrl || this.isDownloading) {
@@ -196,10 +267,36 @@ export class PdfArtifactViewerComponent extends BaseArtifactViewerPluginComponen
       this.totalPages = pdfDoc.numPages;
       this.currentPage = 1;
       this.isLoading = false;
+      // detectChanges() forces a synchronous DOM update so the canvas element
+      // exists before renderPage() tries to draw on it.
       this.cdr.detectChanges();
+      await this.setFitWidthZoom();
       await this.renderPage(1);
     } catch (err) {
       this.showError(`Could not load PDF: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  /**
+   * Set the initial zoom so the first page fills the available panel width.
+   * Uses the exact ratio rather than snapping to a ZOOM_STEP so the page fits
+   * pixel-perfectly. Subsequent +/- presses will snap to the nearest step.
+   */
+  private async setFitWidthZoom(): Promise<void> {
+    if (!this.pdfDoc || !this.canvasRef?.nativeElement) {
+      return;
+    }
+    const page = await this.pdfDoc.getPage(1) as PdfPageProxy;
+    // naturalViewport.width is the CSS pixel width of the page at zoom = 1.0
+    const naturalViewport = page.getViewport({ scale: this.BASE_SCALE });
+    const body = this.canvasRef.nativeElement.closest('.pdf-viewer__body') as HTMLElement | null;
+    const availableWidth = (body?.clientWidth ?? 0) - 32; // 16px padding each side
+    if (availableWidth > 0 && naturalViewport.width > 0) {
+      const fitZoom = availableWidth / naturalViewport.width;
+      this.zoomLevel = Math.max(
+        this.ZOOM_STEPS[0],
+        Math.min(fitZoom, this.ZOOM_STEPS[this.ZOOM_STEPS.length - 1])
+      );
     }
   }
 
@@ -239,13 +336,24 @@ export class PdfArtifactViewerComponent extends BaseArtifactViewerPluginComponen
     }
 
     const pixelRatio = window.devicePixelRatio || 1;
-    const viewport = page.getViewport({ scale: 1.5 * pixelRatio });
+    // Scale = base * zoom * devicePixelRatio so backing buffer is always HiDPI-sharp.
+    const viewport = page.getViewport({ scale: this.BASE_SCALE * this.zoomLevel * pixelRatio });
 
+    // Backing buffer: full HiDPI resolution.
     canvas.width = viewport.width;
     canvas.height = viewport.height;
-    // CSS size stays at logical pixels so the canvas is sharp on high-DPI screens
-    canvas.style.width = `${viewport.width / pixelRatio}px`;
-    canvas.style.height = `${viewport.height / pixelRatio}px`;
+
+    // CSS logical pixel dimensions at the current zoom level.
+    const cssWidth = viewport.width / pixelRatio;
+    const cssHeight = viewport.height / pixelRatio;
+
+    canvas.style.width = `${cssWidth}px`;
+    // Use aspect-ratio + height:auto instead of an explicit height so that
+    // CSS max-width:100% can constrain the width without squishing the page.
+    // When the scroll-area is narrower than cssWidth, both dimensions shrink
+    // in proportion and the page aspect ratio is preserved.
+    canvas.style.aspectRatio = `${cssWidth} / ${cssHeight}`;
+    canvas.style.height = 'auto';
 
     const renderContext = { canvasContext: ctx, viewport };
     this.renderTask = page.render(renderContext) as PdfRenderTask;
@@ -267,17 +375,8 @@ export class PdfArtifactViewerComponent extends BaseArtifactViewerPluginComponen
     this.cdr.markForCheck();
   }
 
-  private async triggerBrowserDownload(url: string, fileName: string): Promise<void> {
-    const response = await fetch(url);
-    const blob = await response.blob();
-    const objectUrl = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = objectUrl;
-    anchor.download = fileName;
-    anchor.click();
-    URL.revokeObjectURL(objectUrl);
-  }
 }
+
 
 // ─── Minimal type shims for pdfjs-dist dynamic import ─────────────────────────
 // We avoid a hard build-time dependency on pdfjs-dist types by declaring only
