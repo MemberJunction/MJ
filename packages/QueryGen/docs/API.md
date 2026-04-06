@@ -218,7 +218,7 @@ console.log(query.sql);
 //   COALESCE(SUM(o.Total), 0) as TotalRevenue
 // FROM [dbo].[vwCustomers] c
 // LEFT JOIN [sales].[vwOrders] o ON o.CustomerID = c.ID
-// WHERE c.Name LIKE {{ searchTerm | sqlString }}
+// WHERE c.Name LIKE {{ searchTerm | sqlLikeContains }}
 // GROUP BY c.Name
 // ORDER BY TotalRevenue DESC
 
