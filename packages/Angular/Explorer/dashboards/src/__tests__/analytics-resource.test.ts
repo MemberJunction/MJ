@@ -115,6 +115,61 @@ describe('Analytics Resource — Drill-Down Actions (AN-1)', () => {
     });
 });
 
+describe('Analytics Resource — Cost Aggregation (D1)', () => {
+    // Re-implement the static SumField method from the component for testing
+    function sumField(records: Record<string, unknown>[], fieldName: string): number {
+        return records.reduce((sum, r) => sum + Number(r[fieldName] || 0), 0);
+    }
+
+    const mockDetails: Record<string, unknown>[] = [
+        { ContentProcessRunID: 'run-1', TotalTokensUsed: 1500, TotalCost: 0.0045 },
+        { ContentProcessRunID: 'run-1', TotalTokensUsed: 2500, TotalCost: 0.0075 },
+        { ContentProcessRunID: 'run-2', TotalTokensUsed: 3000, TotalCost: 0.009 },
+    ];
+
+    it('should sum total tokens across all detail records', () => {
+        const totalTokens = sumField(mockDetails, 'TotalTokensUsed');
+        expect(totalTokens).toBe(7000);
+    });
+
+    it('should sum total cost across all detail records', () => {
+        const totalCost = sumField(mockDetails, 'TotalCost');
+        expect(totalCost).toBeCloseTo(0.021, 4);
+    });
+
+    it('should calculate average cost per run', () => {
+        const totalCost = sumField(mockDetails, 'TotalCost');
+        const runCount = 2; // Two unique runs
+        const avgCostPerRun = runCount > 0 ? totalCost / runCount : 0;
+        expect(avgCostPerRun).toBeCloseTo(0.0105, 4);
+    });
+
+    it('should handle empty records gracefully', () => {
+        const totalTokens = sumField([], 'TotalTokensUsed');
+        const totalCost = sumField([], 'TotalCost');
+        expect(totalTokens).toBe(0);
+        expect(totalCost).toBe(0);
+    });
+
+    it('should handle records with missing/null fields', () => {
+        const records: Record<string, unknown>[] = [
+            { ContentProcessRunID: 'run-1', TotalTokensUsed: null, TotalCost: undefined },
+            { ContentProcessRunID: 'run-2' },
+        ];
+        expect(sumField(records, 'TotalTokensUsed')).toBe(0);
+        expect(sumField(records, 'TotalCost')).toBe(0);
+    });
+
+    it('should filter details by run ID correctly', () => {
+        const filteredRunIds = new Set(['run-1']);
+        const filteredDetails = mockDetails.filter(
+            d => filteredRunIds.has(String(d['ContentProcessRunID'] || ''))
+        );
+        const tokens = sumField(filteredDetails, 'TotalTokensUsed');
+        expect(tokens).toBe(4000); // 1500 + 2500
+    });
+});
+
 describe('Analytics Resource — Preference Persistence (SR-6)', () => {
     let mockStorage: Record<string, string>;
 

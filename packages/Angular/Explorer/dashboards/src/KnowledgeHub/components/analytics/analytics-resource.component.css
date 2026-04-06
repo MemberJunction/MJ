@@ -1435,4 +1435,130 @@
     .two-col {
         grid-template-columns: 1fr;
     }
+
+    .cost-kpi-row {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ===== COST & USAGE TAB (D1) ===== */
+
+.tab-header-actions {
+    display: flex;
+    gap: 8px;
+    margin-left: auto;
+}
+
+.cost-kpi-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.cost-kpi-card {
+    display: flex;
+    gap: 14px;
+    align-items: center;
+    background: var(--mj-bg-surface);
+    border: 1px solid var(--mj-border-default);
+    border-radius: 10px;
+    padding: 18px 20px;
+    transition: box-shadow 0.15s ease;
+}
+
+.cost-kpi-card:hover {
+    box-shadow: 0 2px 8px color-mix(in srgb, var(--mj-text-primary) 8%, transparent);
+}
+
+.cost-kpi-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    color: var(--mj-brand-primary);
+    background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+    flex-shrink: 0;
+}
+
+.cost-kpi-value {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--mj-text-primary);
+    line-height: 1.2;
+}
+
+.cost-kpi-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--mj-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.cost-kpi-sub {
+    font-size: 11px;
+    color: var(--mj-text-muted);
+    margin-top: 2px;
+}
+
+.empty-state-hint {
+    font-size: 12px;
+    color: var(--mj-text-muted);
+    margin-top: 4px;
+}
+
+/* ===== D5: PRINT STYLES ===== */
+
+@media print {
+    .analytics-sidebar,
+    .filter-bar,
+    .tab-header-actions,
+    .drill-down-close,
+    .drill-export-btn,
+    .drill-open-btn {
+        display: none !important;
+    }
+
+    .analytics-layout {
+        display: block;
+    }
+
+    .main-content {
+        padding: 0;
+    }
+
+    .tab-section {
+        padding: 0;
+    }
+
+    .widget-card,
+    .cost-kpi-card,
+    .kpi-card {
+        break-inside: avoid;
+        box-shadow: none;
+        border: 1px solid var(--mj-border-default);
+    }
+
+    .data-table {
+        font-size: 10px;
+    }
+}
+
+/* ── Co-Occurrence Section ── */
+.co-occurrence-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.co-occurrence-staleness {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.78rem;
+    color: var(--mj-text-muted);
 }

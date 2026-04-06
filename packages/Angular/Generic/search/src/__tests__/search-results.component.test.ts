@@ -183,6 +183,46 @@ describe('Pagination (SR-5)', () => {
     it('should handle zero pages', () => {
         expect(getTotalPages(0, 10)).toBe(0);
     });
+
+    it('should handle exact page boundary (e.g. 20 results / 10 per page)', () => {
+        const exactResults = Array.from({ length: 20 }, (_, i) => createResult(String(i + 1), 1 - i * 0.02));
+        expect(getTotalPages(20, 10)).toBe(2);
+
+        const page1 = getPagedResults(exactResults, 1, 10);
+        expect(page1).toHaveLength(10);
+        expect(page1[0].ID).toBe('1');
+
+        const page2 = getPagedResults(exactResults, 2, 10);
+        expect(page2).toHaveLength(10);
+        expect(page2[0].ID).toBe('11');
+
+        // Page 3 should be empty since 20/10 = exactly 2 pages
+        const page3 = getPagedResults(exactResults, 3, 10);
+        expect(page3).toHaveLength(0);
+    });
+
+    it('should return all results on single page when count equals page size', () => {
+        const singlePageResults = Array.from({ length: 10 }, (_, i) => createResult(String(i + 1), 0.9));
+        expect(getTotalPages(10, 10)).toBe(1);
+
+        const page = getPagedResults(singlePageResults, 1, 10);
+        expect(page).toHaveLength(10);
+
+        const pages = getPageNumbers(1, 1);
+        expect(pages).toEqual([1]);
+    });
+
+    it('should produce correct page numbers at boundary of 7 pages', () => {
+        // Exactly 7 pages — should show all, no ellipsis
+        const pages7 = getPageNumbers(4, 7);
+        expect(pages7).toEqual([1, 2, 3, 4, 5, 6, 7]);
+        expect(pages7).not.toContain(-1);
+
+        // 8 pages — should include ellipsis
+        const pages8 = getPageNumbers(4, 8);
+        expect(pages8[0]).toBe(1);
+        expect(pages8[pages8.length - 1]).toBe(8);
+    });
 });
 
 // ═══════════════════════════════════════════

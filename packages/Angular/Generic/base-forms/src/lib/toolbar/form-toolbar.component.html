@@ -52,8 +52,12 @@
         </button>
       }
       @if (Config.ShowHistoryButton && TracksChanges) {
-        <button class="mj-forms-btn" (click)="OnHistory()" title="MJ: Record Changes">
+        <button class="mj-forms-btn mj-forms-btn--history" (click)="OnHistory()"
+          [title]="VersionCount > 0 ? VersionCount + ' version(s) tracked' : 'Record Changes'">
           <i class="fa-regular fa-clock"></i>
+          @if (VersionCount > 0) {
+            <span class="mj-version-count-badge">v{{ VersionCount }}</span>
+          }
         </button>
       }
       @if (Config.ShowListButton) {

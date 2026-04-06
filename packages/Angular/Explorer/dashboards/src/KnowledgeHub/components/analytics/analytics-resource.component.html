@@ -381,7 +381,7 @@
                                     </thead>
                                     <tbody>
                                         @for (tag of TopTags; track tag.Name) {
-                                            <tr>
+                                            <tr style="cursor:pointer" (click)="OpenDrillDown('tag-row:' + tag.Name)">
                                                 <td>{{ tag.Rank }}</td>
                                                 <td><strong>{{ tag.Name }}</strong></td>
                                                 <td class="num">{{ FormatNumber(tag.UsageCount) }}</td>
@@ -408,6 +408,51 @@
                             </div>
                         }
                     </div>
+
+                    <!-- D10: Tags tab drill-down -->
+                    @if (DrillDownTarget && DrillDownTarget.startsWith('tag-row:')) {
+                        <div class="drill-down-panel">
+                            <div class="drill-down-header">
+                                <span class="drill-down-title"><i class="fa-solid fa-table"></i> Content Items Tagged "{{ DrillDownTarget.replace('tag-row:', '') }}"</span>
+                                <div class="drill-down-header-actions">
+                                    @if (DrillDownData.length > 0) {
+                                        <button class="drill-export-btn" (click)="ExportDrillDownCSV()" title="Export CSV">
+                                            <i class="fa-solid fa-download"></i> CSV
+                                        </button>
+                                    }
+                                    <button class="drill-down-close" (click)="CloseDrillDown()"><i class="fa-solid fa-times"></i></button>
+                                </div>
+                            </div>
+                            @if (IsDrillDownLoading) {
+                                <mj-loading text="Loading details..." size="small"></mj-loading>
+                            } @else if (DrillDownData.length > 0) {
+                                <div class="drill-down-table-wrap">
+                                    <table class="data-table">
+                                        <thead><tr>
+                                            @for (col of DrillDownColumns; track col) { <th>{{ col }}</th> }
+                                            @if (DrillDownHasActions) { <th class="drill-action-col"></th> }
+                                        </tr></thead>
+                                        <tbody>
+                                            @for (row of DrillDownData; track TrackByIndex($index)) {
+                                                <tr>
+                                                    @for (col of DrillDownColumns; track col) { <td>{{ row[col] }}</td> }
+                                                    @if (DrillDownHasActions) {
+                                                        <td class="drill-action-col">
+                                                            @if (row['_RecordID']) {
+                                                                <button class="drill-open-btn" (click)="OpenDrillDownRecord(row)" title="Open record"><i class="fa-solid fa-arrow-up-right-from-square"></i></button>
+                                                            }
+                                                        </td>
+                                                    }
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            } @else {
+                                <div class="drill-down-empty">No items found for this tag</div>
+                            }
+                        </div>
+                    }
 
                     <!-- Tag Distribution by Entity -->
                     @if (EntityDistribution.length > 0) {
@@ -450,6 +495,61 @@
                             </div>
                         </div>
                     }
+
+                    <!-- Frequently Paired Tags (Co-Occurrence) -->
+                    <div class="sub-section">
+                        <div class="sub-section-header">
+                            <h3><i class="fa-solid fa-link"></i> Frequently Paired Tags</h3>
+                            <div class="co-occurrence-actions">
+                                @if (CoOccurrenceLastComputed) {
+                                    <span class="co-occurrence-staleness" title="Last computed timestamp">
+                                        <i class="fa-regular fa-clock"></i>
+                                        Last computed: {{ CoOccurrenceLastComputed }}
+                                    </span>
+                                }
+                                <button class="drill-export-btn" (click)="RecomputeCoOccurrence()" [disabled]="IsRecomputingCoOccurrence" title="Recompute co-occurrence data">
+                                    @if (IsRecomputingCoOccurrence) {
+                                        <i class="fa-solid fa-spinner fa-spin"></i> Computing...
+                                    } @else {
+                                        <i class="fa-solid fa-arrows-rotate"></i> Recompute
+                                    }
+                                </button>
+                            </div>
+                        </div>
+                        @if (CoOccurrencePairs.length > 0) {
+                            <div class="table-scroll">
+                                <table class="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>#</th>
+                                            <th>Tag A</th>
+                                            <th>Tag B</th>
+                                            <th class="num">Co-Occurrences</th>
+                                            <th>Frequency</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @for (pair of CoOccurrencePairs; track pair.TagAName + pair.TagBName; let i = $index) {
+                                            <tr>
+                                                <td class="muted">{{ i + 1 }}</td>
+                                                <td><strong>{{ pair.TagAName }}</strong></td>
+                                                <td><strong>{{ pair.TagBName }}</strong></td>
+                                                <td class="num">{{ FormatNumber(pair.Count) }}</td>
+                                                <td>
+                                                    <span class="weight-bar" [style.width.px]="pair.BarWidth" style="background: var(--mj-status-info)"></span>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        } @else {
+                            <div class="empty-state">
+                                <i class="fa-solid fa-link"></i>
+                                <p>No co-occurrence data available yet. Process content and recompute to see which tags frequently appear together.</p>
+                            </div>
+                        }
+                    </div>
                 </section>
             }
 
@@ -483,7 +583,7 @@
                                     </thead>
                                     <tbody>
                                         @for (source of SourceComparison; track source.Name) {
-                                            <tr (click)="SelectSource(source.Name)" style="cursor:pointer" [class.source-selected]="SelectedSourceName === source.Name">
+                                            <tr (click)="SelectSource(source.Name); OpenDrillDown('source-row:' + source.Name)" style="cursor:pointer" [class.source-selected]="SelectedSourceName === source.Name">
                                                 <td><strong>{{ source.Name }}</strong></td>
                                                 <td><i [class]="source.TypeIcon" [style.color]="source.TypeColor" style="margin-right:4px"></i> {{ source.Type }}</td>
                                                 <td class="num">{{ FormatNumber(source.Items) }}</td>
@@ -504,6 +604,49 @@
                             </div>
                         }
                     </div>
+
+                    <!-- D10: Sources tab drill-down (recent runs) -->
+                    @if (DrillDownTarget && DrillDownTarget.startsWith('source-row:')) {
+                        <div class="drill-down-panel">
+                            <div class="drill-down-header">
+                                <span class="drill-down-title"><i class="fa-solid fa-table"></i> Recent Runs: {{ DrillDownTarget.replace('source-row:', '') }}</span>
+                                <div class="drill-down-header-actions">
+                                    @if (DrillDownData.length > 0) {
+                                        <button class="drill-export-btn" (click)="ExportDrillDownCSV()" title="Export CSV"><i class="fa-solid fa-download"></i> CSV</button>
+                                    }
+                                    <button class="drill-down-close" (click)="CloseDrillDown()"><i class="fa-solid fa-times"></i></button>
+                                </div>
+                            </div>
+                            @if (IsDrillDownLoading) {
+                                <mj-loading text="Loading details..." size="small"></mj-loading>
+                            } @else if (DrillDownData.length > 0) {
+                                <div class="drill-down-table-wrap">
+                                    <table class="data-table">
+                                        <thead><tr>
+                                            @for (col of DrillDownColumns; track col) { <th>{{ col }}</th> }
+                                            @if (DrillDownHasActions) { <th class="drill-action-col"></th> }
+                                        </tr></thead>
+                                        <tbody>
+                                            @for (row of DrillDownData; track TrackByIndex($index)) {
+                                                <tr>
+                                                    @for (col of DrillDownColumns; track col) { <td>{{ row[col] }}</td> }
+                                                    @if (DrillDownHasActions) {
+                                                        <td class="drill-action-col">
+                                                            @if (row['_RecordID']) {
+                                                                <button class="drill-open-btn" (click)="OpenDrillDownRecord(row)" title="Open record"><i class="fa-solid fa-arrow-up-right-from-square"></i></button>
+                                                            }
+                                                        </td>
+                                                    }
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            } @else {
+                                <div class="drill-down-empty">No run data for this source</div>
+                            }
+                        </div>
+                    }
 
                     <!-- Per-Source Detail -->
                     @if (SelectedSourceName && SourceComparison.length > 0) {
@@ -584,6 +727,8 @@
                                         [style.height.%]="bar.Percentage"
                                         [style.background]="bar.IsError ? 'var(--mj-status-error)' : 'var(--mj-brand-primary)'"
                                         [style.opacity]="bar.IsError ? 0.7 : (0.6 + bar.Percentage / 300)"
+                                        style="cursor:pointer"
+                                        (click)="OpenDrillDown('pipeline-throughput:' + $index)"
                                     ></div>
                                 }
                             </div>
@@ -594,6 +739,49 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- D10: Pipeline throughput drill-down -->
+                    @if (DrillDownTarget && DrillDownTarget.startsWith('pipeline-throughput:')) {
+                        <div class="drill-down-panel">
+                            <div class="drill-down-header">
+                                <span class="drill-down-title"><i class="fa-solid fa-table"></i> Runs for Selected Day</span>
+                                <div class="drill-down-header-actions">
+                                    @if (DrillDownData.length > 0) {
+                                        <button class="drill-export-btn" (click)="ExportDrillDownCSV()" title="Export CSV"><i class="fa-solid fa-download"></i> CSV</button>
+                                    }
+                                    <button class="drill-down-close" (click)="CloseDrillDown()"><i class="fa-solid fa-times"></i></button>
+                                </div>
+                            </div>
+                            @if (IsDrillDownLoading) {
+                                <mj-loading text="Loading details..." size="small"></mj-loading>
+                            } @else if (DrillDownData.length > 0) {
+                                <div class="drill-down-table-wrap">
+                                    <table class="data-table">
+                                        <thead><tr>
+                                            @for (col of DrillDownColumns; track col) { <th>{{ col }}</th> }
+                                            @if (DrillDownHasActions) { <th class="drill-action-col"></th> }
+                                        </tr></thead>
+                                        <tbody>
+                                            @for (row of DrillDownData; track TrackByIndex($index)) {
+                                                <tr>
+                                                    @for (col of DrillDownColumns; track col) { <td>{{ row[col] }}</td> }
+                                                    @if (DrillDownHasActions) {
+                                                        <td class="drill-action-col">
+                                                            @if (row['_RecordID']) {
+                                                                <button class="drill-open-btn" (click)="OpenDrillDownRecord(row)" title="Open record"><i class="fa-solid fa-arrow-up-right-from-square"></i></button>
+                                                            }
+                                                        </td>
+                                                    }
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            } @else {
+                                <div class="drill-down-empty">No runs for this day</div>
+                            }
+                        </div>
+                    }
 
                     <!-- Processing Time Breakdown -->
                     <div class="sub-section">
@@ -723,7 +911,7 @@
                         <div class="widget-card">
                             <div class="histogram">
                                 @for (bin of ConfidenceHistogram; track bin.Label) {
-                                    <div class="hist-bar-col">
+                                    <div class="hist-bar-col" style="cursor:pointer" (click)="OpenDrillDown('quality-bin:' + bin.Label)">
                                         <div class="hist-bar" [style.height.%]="bin.Percentage" [style.background]="bin.Color">
                                             @if (bin.Count > 0) { {{ bin.Count }} }
                                         </div>
@@ -738,6 +926,49 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- D10: Quality bin drill-down -->
+                    @if (DrillDownTarget && DrillDownTarget.startsWith('quality-bin:')) {
+                        <div class="drill-down-panel">
+                            <div class="drill-down-header">
+                                <span class="drill-down-title"><i class="fa-solid fa-table"></i> Items in Confidence Range {{ DrillDownTarget.replace('quality-bin:', '') }}</span>
+                                <div class="drill-down-header-actions">
+                                    @if (DrillDownData.length > 0) {
+                                        <button class="drill-export-btn" (click)="ExportDrillDownCSV()" title="Export CSV"><i class="fa-solid fa-download"></i> CSV</button>
+                                    }
+                                    <button class="drill-down-close" (click)="CloseDrillDown()"><i class="fa-solid fa-times"></i></button>
+                                </div>
+                            </div>
+                            @if (IsDrillDownLoading) {
+                                <mj-loading text="Loading details..." size="small"></mj-loading>
+                            } @else if (DrillDownData.length > 0) {
+                                <div class="drill-down-table-wrap">
+                                    <table class="data-table">
+                                        <thead><tr>
+                                            @for (col of DrillDownColumns; track col) { <th>{{ col }}</th> }
+                                            @if (DrillDownHasActions) { <th class="drill-action-col"></th> }
+                                        </tr></thead>
+                                        <tbody>
+                                            @for (row of DrillDownData; track TrackByIndex($index)) {
+                                                <tr>
+                                                    @for (col of DrillDownColumns; track col) { <td>{{ row[col] }}</td> }
+                                                    @if (DrillDownHasActions) {
+                                                        <td class="drill-action-col">
+                                                            @if (row['_RecordID']) {
+                                                                <button class="drill-open-btn" (click)="OpenDrillDownRecord(row)" title="Open record"><i class="fa-solid fa-arrow-up-right-from-square"></i></button>
+                                                            }
+                                                        </td>
+                                                    }
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            } @else {
+                                <div class="drill-down-empty">No items in this confidence range</div>
+                            }
+                        </div>
+                    }
 
                     <!-- Weight Distribution by Entity -->
                     @if (WeightByEntity.length > 0) {
@@ -859,6 +1090,92 @@
                                 <div>
                                     <strong>Recommendation:</strong> {{ ModelRecommendation }}
                                 </div>
+                            </div>
+                        }
+                    </div>
+                </section>
+            }
+
+            <!-- ====================================================== -->
+            <!-- TAB 6: COST & USAGE (D1)                              -->
+            <!-- ====================================================== -->
+            @if (ActiveTab === 'cost') {
+                <section class="tab-section">
+                    <div class="tab-section-header">
+                        <i class="fa-solid fa-coins"></i>
+                        <h1>Cost & Usage</h1>
+                        <div class="tab-header-actions">
+                            <button class="drill-export-btn" (click)="ExportTabDataCSV('cost-usage')" title="Export CSV">
+                                <i class="fa-solid fa-download"></i> CSV
+                            </button>
+                            <button class="drill-export-btn" (click)="PrintCurrentTab()" title="Print (PDF alternative)">
+                                <i class="fa-solid fa-print"></i> Print
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Filter Bar -->
+                    <div class="filter-bar">
+                        <div class="date-chips">
+                            @for (range of DateRanges; track range.Label) {
+                                <button
+                                    class="date-chip"
+                                    [class.active]="ActiveDateRange === range.Label"
+                                    (click)="SetDateRange(range.Label)"
+                                >{{ range.Label }}</button>
+                            }
+                        </div>
+                    </div>
+
+                    <!-- KPI Cards -->
+                    @if (CostKPIs.length > 0) {
+                        <div class="cost-kpi-row">
+                            @for (kpi of CostKPIs; track kpi.Label) {
+                                <div class="cost-kpi-card">
+                                    <div class="cost-kpi-icon"><i [class]="kpi.Icon"></i></div>
+                                    <div>
+                                        <div class="cost-kpi-value">{{ kpi.Value }}</div>
+                                        <div class="cost-kpi-label">{{ kpi.Label }}</div>
+                                        <div class="cost-kpi-sub">{{ kpi.SubLabel }}</div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+
+                    <!-- Per-Run Cost Table -->
+                    <div class="sub-section">
+                        <h3><i class="fa-solid fa-table"></i> Cost Breakdown by Run</h3>
+                        @if (CostPerRunRows.length > 0) {
+                            <div class="table-scroll">
+                                <table class="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Run ID</th>
+                                            <th>Source</th>
+                                            <th class="num">Tokens</th>
+                                            <th class="num">Cost</th>
+                                            <th>Started</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @for (row of CostPerRunRows; track row.RunID) {
+                                            <tr>
+                                                <td class="monospace-cell">{{ row.RunID }}</td>
+                                                <td>{{ row.Source }}</td>
+                                                <td class="num">{{ FormatNumber(row.Tokens) }}</td>
+                                                <td class="num">{{ row.Cost > 0 ? '$' + row.Cost.toFixed(4) : '$0.00' }}</td>
+                                                <td class="muted">{{ row.Started }}</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        } @else {
+                            <div class="empty-state">
+                                <i class="fa-solid fa-coins"></i>
+                                <p>No cost data available yet. Run the pipeline to generate cost and token usage metrics.</p>
+                                <p class="empty-state-hint">Cost data is aggregated from ContentProcessRunDetail records linked to AI Prompt Runs.</p>
                             </div>
                         }
                     </div>

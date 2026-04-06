@@ -675,11 +675,14 @@
                             (click)="RejectMatch(ComparisonGroup!); CloseComparison()">
                         <i class="fa-solid fa-times"></i> Reject All
                     </button>
-                    <button class="action-btn merge-btn" [disabled]="IsSaving || !HasMergeableMatches"
+                    <button class="action-btn merge-btn" [disabled]="IsSaving || !HasMergeableMatches || !MergeEnabled"
                             (click)="OpenMergeConfirm()"
-                            [title]="HasMergeableMatches ? 'Merge non-skipped records' : 'All matches have been skipped'">
+                            [title]="!MergeEnabled ? 'Merging is not enabled for this entity' : HasMergeableMatches ? 'Merge non-skipped records' : 'All matches have been skipped'">
                         <i class="fa-solid fa-code-merge"></i> Merge Records
                     </button>
+                    @if (!MergeEnabled) {
+                        <span class="merge-disabled-hint"><i class="fa-solid fa-info-circle"></i> Merging disabled for this entity</span>
+                    }
                 </div>
             </div>
         </div>
@@ -771,6 +774,27 @@
                             <i class="fa-solid fa-code-merge"></i> Confirm Merge ({{ GetNonSurvivorColumns().length + 1 }} records &rarr; 1)
                         }
                     </button>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- ═══ Merge Warning Dialog ═══ -->
+    @if (ShowMergeWarningDialog) {
+        <div class="merge-warning-backdrop" (click)="DeclineMergeWarning()">
+            <div class="merge-warning-dialog" (click)="$event.stopPropagation()">
+                <div class="merge-warning-header">
+                    <h3><i class="fa-solid fa-triangle-exclamation"></i> Merging Not Available</h3>
+                </div>
+                <div class="merge-warning-body">
+                    <p>This entity does not have <strong>AllowRecordMerge</strong> enabled. Duplicate detection will still run normally, but you will not be able to merge the detected duplicates from this dashboard.</p>
+                    <p>To enable merging, update the entity settings and re-run CodeGen.</p>
+                </div>
+                <div class="merge-warning-footer">
+                    <button class="action-btn proceed-btn" (click)="AcceptMergeWarning()">
+                        <i class="fa-solid fa-search"></i> Proceed with Detection Only
+                    </button>
+                    <button class="action-btn cancel-btn" (click)="DeclineMergeWarning()">Cancel</button>
                 </div>
             </div>
         </div>

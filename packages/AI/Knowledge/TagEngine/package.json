@@ -22,7 +22,8 @@
     "@memberjunction/core-entities": "5.23.0",
     "@memberjunction/ai": "5.23.0",
     "@memberjunction/ai-vectors-memory": "5.23.0",
-    "@memberjunction/aiengine": "5.23.0"
+    "@memberjunction/aiengine": "5.23.0",
+    "@memberjunction/ai-prompts": "5.23.0"
   },
   "devDependencies": {
     "@types/node": "24.10.11",

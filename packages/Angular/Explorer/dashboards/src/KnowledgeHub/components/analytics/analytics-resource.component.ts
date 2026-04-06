@@ -196,6 +196,14 @@ interface ModelComparison {
     StrokeDash: string;
 }
 
+interface CoOccurrencePairRow {
+    TagAName: string;
+    TagBName: string;
+    Count: number;
+    /** Bar width as percentage of the max count in the displayed list */
+    BarWidth: number;
+}
+
 interface DrillDownRecord {
     [key: string]: string | number | null;
 }
@@ -234,6 +242,7 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
         { ID: 'sources', Label: 'Sources', Icon: 'fa-solid fa-database' },
         { ID: 'pipeline', Label: 'Pipeline', Icon: 'fa-solid fa-gears' },
         { ID: 'quality', Label: 'Quality', Icon: 'fa-solid fa-circle-check' },
+        { ID: 'cost', Label: 'Cost & Usage', Icon: 'fa-solid fa-coins' },
     ];
 
     public ActiveTab = 'overview';
@@ -272,6 +281,13 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
         const recordID = row['_RecordID'] as string | null;
         if (!entityName || !recordID) return;
 
+        // D9: If this is a Tag record, navigate to Classify Tag Library instead
+        if (entityName === 'MJ: Tags') {
+            const tagName = row['Name'] as string ?? row['Tag Name'] as string ?? '';
+            this.navigateToClassifyTagLibrary(tagName);
+            return;
+        }
+
         const md = new Metadata();
         const entityInfo = md.Entities.find(e => e.Name === entityName);
         const pkey = new CompositeKey();
@@ -281,6 +297,18 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
             pkey.KeyValuePairs = [{ FieldName: 'ID', Value: recordID }];
         }
         this.navigationService.OpenEntityRecord(entityName, pkey);
+    }
+
+    /**
+     * D9: Navigate to the Classify dashboard's Tag Library tab with a tag pre-selected.
+     * Uses NavigationService.OpenNavItemByName to switch to the Classify nav item
+     * and passes the tag name and target tab via configuration.
+     */
+    private navigateToClassifyTagLibrary(tagName: string): void {
+        this.navigationService.OpenNavItemByName('Classify', {
+            initialTab: 'tags',
+            tagSearch: tagName,
+        });
     }
 
     // ================================================================
@@ -322,6 +350,11 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
         { Label: 'Other', Color: 'var(--mj-status-warning)' },
     ];
     public TagDepthBars: TagDepthBar[] = [];
+
+    // --- Co-occurrence data ---
+    public CoOccurrencePairs: CoOccurrencePairRow[] = [];
+    public CoOccurrenceLastComputed: string | null = null;
+    public IsRecomputingCoOccurrence = false;
 
     // ================================================================
     // Sources Tab Data
@@ -378,6 +411,13 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
     public PipelineStatusOk = true;
 
     // ================================================================
+    // Cost & Usage Tab Data (D1)
+    // ================================================================
+
+    public CostKPIs: { Label: string; Value: string; Icon: string; SubLabel: string }[] = [];
+    public CostPerRunRows: { RunID: string; Source: string; Tokens: number; Cost: number; Started: string }[] = [];
+
+    // ================================================================
     // Raw data for aggregation
     // ================================================================
 
@@ -387,6 +427,7 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
     public rawProcessRuns: Record<string, unknown>[] = [];
     private rawContentSources: Record<string, unknown>[] = [];
     private rawContentTypes: Record<string, unknown>[] = [];
+    private rawRunDetails: Record<string, unknown>[] = [];
 
     // ================================================================
     // Lifecycle
@@ -526,6 +567,15 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
                 this.downloadCSV(cols, rows, `kpis-${new Date().toISOString().slice(0, 10)}.csv`);
                 break;
             }
+            case 'cost-usage': {
+                const costCols = ['Run ID', 'Source', 'Tokens', 'Cost', 'Started'];
+                const costRows = this.CostPerRunRows.map(r => ({
+                    'Run ID': r.RunID, 'Source': r.Source, 'Tokens': r.Tokens,
+                    'Cost': r.Cost, 'Started': r.Started,
+                }));
+                this.downloadCSV(costCols, costRows, `cost-usage-${new Date().toISOString().slice(0, 10)}.csv`);
+                break;
+            }
             default:
                 break;
         }
@@ -587,6 +637,7 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
                 { EntityName: 'MJ: Content Process Runs', ExtraFilter: '', ResultType: 'simple' },
                 { EntityName: 'MJ: Content Sources', ExtraFilter: '', ResultType: 'simple' },
                 { EntityName: 'MJ: Content Types', ExtraFilter: '', ResultType: 'simple' },
+                { EntityName: 'MJ: Content Process Run Details', ExtraFilter: '', ResultType: 'simple' },
             ]);
 
             this.rawTags = results[0]?.Success ? results[0].Results : [];
@@ -595,6 +646,7 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
             this.rawProcessRuns = results[3]?.Success ? results[3].Results : [];
             this.rawContentSources = results[4]?.Success ? results[4].Results : [];
             this.rawContentTypes = results[5]?.Success ? results[5].Results : [];
+            this.rawRunDetails = results[6]?.Success ? results[6].Results : [];
 
             this.buildEntityFilterOptions();
             this.rebuildAllAggregations();
@@ -656,11 +708,15 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
         this.buildModelComparisons();
         this.buildTrendingTags(filteredTags);
         this.buildPipelineStatus(filteredRuns);
+        this.buildCostUsageData(filteredRuns);
 
         if (this.rawContentSources.length > 0) {
             this.SelectedSourceName = String(this.rawContentSources[0]['Name'] || '');
             this.buildSourceDetail();
         }
+
+        // Load co-occurrence data in background (non-blocking)
+        this.loadCoOccurrenceData();
     }
 
     // ================================================================
@@ -1870,8 +1926,19 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
                 break;
 
             default:
-                this.DrillDownColumns = [];
-                this.DrillDownData = [];
+                // D10: Handle tab-specific drill-down keys
+                if (key.startsWith('tag-row:')) {
+                    this.buildTagRowDrillDown(key.replace('tag-row:', ''));
+                } else if (key.startsWith('source-row:')) {
+                    this.buildSourceRowDrillDown(key.replace('source-row:', ''));
+                } else if (key.startsWith('pipeline-throughput:')) {
+                    this.buildPipelineThroughputDrillDown(key.replace('pipeline-throughput:', ''));
+                } else if (key.startsWith('quality-bin:')) {
+                    this.buildQualityBinDrillDown(key.replace('quality-bin:', ''));
+                } else {
+                    this.DrillDownColumns = [];
+                    this.DrillDownData = [];
+                }
         }
 
         this.IsDrillDownLoading = false;
@@ -1966,6 +2033,238 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
     }
 
     // ================================================================
+    // D10: Tab-Specific Drill-Down Builders
+    // ================================================================
+
+    /**
+     * D10 Tags tab: Click a tag row to see content items using that tag.
+     */
+    private buildTagRowDrillDown(tagName: string): void {
+        this.DrillDownColumns = ['Item Name', 'Source', 'Weight', 'Created'];
+        this.DrillDownHasActions = true;
+
+        const matchingTags = this.rawContentItemTags.filter(
+            t => String(t['Tag'] || '') === tagName
+        );
+
+        this.DrillDownData = matchingTags.slice(0, 50).map(t => {
+            const itemId = String(t['ItemID'] || '');
+            const item = this.rawContentItems.find(i => String(i['ID']) === itemId);
+            const source = item
+                ? this.rawContentSources.find(s => String(s['ID']) === String(item['ContentSourceID']))
+                : null;
+            return {
+                'Item Name': item ? String(item['Name'] || '') : 'Unknown',
+                'Source': source ? String(source['Name'] || '') : 'Unknown',
+                'Weight': String(t['Weight'] || '0'),
+                'Created': t['__mj_CreatedAt'] ? new Date(String(t['__mj_CreatedAt'])).toLocaleDateString() : '',
+                '_RecordID': itemId,
+                '_EntityName': 'MJ: Content Items',
+            };
+        });
+    }
+
+    /**
+     * D10 Sources tab: Click a source row to see recent runs, items, and errors.
+     */
+    private buildSourceRowDrillDown(sourceName: string): void {
+        const source = this.rawContentSources.find(s => String(s['Name']) === sourceName);
+        if (!source) {
+            this.DrillDownColumns = [];
+            this.DrillDownData = [];
+            return;
+        }
+
+        const sid = String(source['ID']);
+        const sourceRuns = this.rawProcessRuns
+            .filter(r => String(r['SourceID']) === sid)
+            .sort((a, b) => new Date(String(b['StartTime'] || 0)).getTime() - new Date(String(a['StartTime'] || 0)).getTime())
+            .slice(0, 20);
+
+        this.DrillDownColumns = ['Status', 'Items Processed', 'Start Time', 'Duration'];
+        this.DrillDownHasActions = true;
+
+        this.DrillDownData = sourceRuns.map(r => {
+            const startTime = r['StartTime'] ? new Date(String(r['StartTime'])) : null;
+            const endTime = r['EndTime'] ? new Date(String(r['EndTime'])) : null;
+            const durationMs = startTime && endTime ? endTime.getTime() - startTime.getTime() : 0;
+            const durationStr = durationMs > 60000 ? `${Math.round(durationMs / 60000)}m` : `${Math.round(durationMs / 1000)}s`;
+            return {
+                'Status': String(r['Status'] || 'Unknown'),
+                'Items Processed': Number(r['ProcessedItems'] || 0),
+                'Start Time': startTime ? startTime.toLocaleString() : '',
+                'Duration': durationStr,
+                '_RecordID': String(r['ID'] || ''),
+                '_EntityName': 'MJ: Content Process Runs',
+            };
+        });
+    }
+
+    /**
+     * D10 Pipeline tab: Click throughput chart to see individual run details.
+     */
+    private buildPipelineThroughputDrillDown(dayIndex: string): void {
+        const idx = parseInt(dayIndex, 10);
+        const now = new Date();
+        const targetDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (29 - idx));
+        const dayStr = targetDate.toISOString().slice(0, 10);
+
+        const dayRuns = this.rawProcessRuns.filter(r => {
+            const st = r['StartTime'];
+            return st && String(st).slice(0, 10) === dayStr;
+        });
+
+        this.DrillDownColumns = ['Run ID', 'Source', 'Status', 'Items', 'Start Time'];
+        this.DrillDownHasActions = true;
+
+        this.DrillDownData = dayRuns.map(r => {
+            const source = this.rawContentSources.find(s => String(s['ID']) === String(r['SourceID']));
+            return {
+                'Run ID': String(r['ID'] || '').slice(0, 14),
+                'Source': source ? String(source['Name']) : 'Unknown',
+                'Status': String(r['Status'] || ''),
+                'Items': Number(r['ProcessedItems'] || 0),
+                'Start Time': r['StartTime'] ? new Date(String(r['StartTime'])).toLocaleString() : '',
+                '_RecordID': String(r['ID'] || ''),
+                '_EntityName': 'MJ: Content Process Runs',
+            };
+        });
+    }
+
+    /**
+     * D10 Quality tab: Click confidence histogram bin to see matching items.
+     */
+    private buildQualityBinDrillDown(binLabel: string): void {
+        // Parse bin range from label like "0.7-0.8"
+        const parts = binLabel.split('-');
+        const lo = parseFloat(parts[0]);
+        const hi = parts.length > 1 ? parseFloat(parts[1]) : lo + 0.1;
+
+        const matchingTags = this.rawContentItemTags.filter(t => {
+            const w = Number(t['Weight'] || 0);
+            return w >= lo && w < hi;
+        });
+
+        this.DrillDownColumns = ['Tag', 'Item', 'Weight', 'Created'];
+        this.DrillDownHasActions = true;
+
+        this.DrillDownData = matchingTags.slice(0, 50).map(t => ({
+            'Tag': String(t['Tag'] || ''),
+            'Item': String(t['Item'] || ''),
+            'Weight': String(Number(t['Weight'] || 0).toFixed(3)),
+            'Created': t['__mj_CreatedAt'] ? new Date(String(t['__mj_CreatedAt'])).toLocaleDateString() : '',
+            '_RecordID': String(t['ID'] || ''),
+            '_EntityName': 'MJ: Content Item Tags',
+        }));
+    }
+
+    // ================================================================
+    // D1: Cost & Usage Aggregation
+    // ================================================================
+
+    /**
+     * Aggregates cost and token data from ContentProcessRunDetail records.
+     * Each detail record has TotalTokensUsed and TotalCost fields that are
+     * pre-rolled-up from linked AIPromptRun records.
+     */
+    private buildCostUsageData(filteredRuns: Record<string, unknown>[]): void {
+        // Filter run details to match the current date range by joining to filtered runs
+        const filteredRunIds = new Set(filteredRuns.map(r => String(r['ID'] || '')));
+        const filteredDetails = this.rawRunDetails.filter(
+            d => filteredRunIds.has(String(d['ContentProcessRunID'] || ''))
+        );
+
+        const totalTokens = this.sumField(filteredDetails, 'TotalTokensUsed');
+        const totalCost = this.sumField(filteredDetails, 'TotalCost');
+        const runCount = filteredRuns.length;
+        const avgCostPerRun = runCount > 0 ? totalCost / runCount : 0;
+
+        this.CostKPIs = [
+            {
+                Label: 'Total Tokens Used',
+                Value: this.formatLargeNumber(totalTokens),
+                Icon: 'fa-solid fa-microchip',
+                SubLabel: `Across ${runCount} run${runCount !== 1 ? 's' : ''}`,
+            },
+            {
+                Label: 'Total Cost',
+                Value: totalCost > 0 ? `$${totalCost.toFixed(4)}` : '$0.00',
+                Icon: 'fa-solid fa-dollar-sign',
+                SubLabel: 'Estimated from AI model usage',
+            },
+            {
+                Label: 'Avg Cost / Run',
+                Value: avgCostPerRun > 0 ? `$${avgCostPerRun.toFixed(4)}` : '$0.00',
+                Icon: 'fa-solid fa-calculator',
+                SubLabel: runCount > 0 ? `${runCount} total runs` : 'No runs yet',
+            },
+        ];
+
+        // Build per-run cost breakdown from detail records
+        this.CostPerRunRows = this.buildCostPerRunRows(filteredRuns, filteredDetails);
+    }
+
+    /** Sum a numeric field across an array of raw records */
+    public static SumField(records: Record<string, unknown>[], fieldName: string): number {
+        return records.reduce((sum, r) => sum + Number(r[fieldName] || 0), 0);
+    }
+
+    private sumField(records: Record<string, unknown>[], fieldName: string): number {
+        return AnalyticsResourceComponent.SumField(records, fieldName);
+    }
+
+    private formatLargeNumber(n: number): string {
+        if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
+        if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;
+        return String(Math.round(n));
+    }
+
+    private buildCostPerRunRows(
+        runs: Record<string, unknown>[],
+        details: Record<string, unknown>[],
+    ): { RunID: string; Source: string; Tokens: number; Cost: number; Started: string }[] {
+        // Group details by run
+        const detailsByRun = new Map<string, Record<string, unknown>[]>();
+        for (const d of details) {
+            const runId = String(d['ContentProcessRunID'] || '');
+            if (!detailsByRun.has(runId)) detailsByRun.set(runId, []);
+            detailsByRun.get(runId)!.push(d);
+        }
+
+        return runs
+            .sort((a, b) => new Date(String(b['StartTime'] || 0)).getTime() - new Date(String(a['StartTime'] || 0)).getTime())
+            .slice(0, 20)
+            .map(run => {
+                const runId = String(run['ID'] || '');
+                const runDetails = detailsByRun.get(runId) || [];
+                const tokens = this.sumField(runDetails, 'TotalTokensUsed');
+                const cost = this.sumField(runDetails, 'TotalCost');
+                const source = this.rawContentSources.find(s => String(s['ID']) === String(run['SourceID']));
+
+                return {
+                    RunID: runId.slice(0, 14),
+                    Source: source ? String(source['Name']) : 'Unknown',
+                    Tokens: tokens,
+                    Cost: cost,
+                    Started: run['StartTime'] ? new Date(String(run['StartTime'])).toLocaleString() : '',
+                };
+            });
+    }
+
+    // ================================================================
+    // D5: Print-Friendly Export
+    // ================================================================
+
+    /**
+     * D5: Opens the browser print dialog with print-friendly CSS.
+     * This is a zero-dependency approach to PDF export.
+     * NOTE: For full XLSX export, an xlsx library (e.g. SheetJS) can be added later.
+     */
+    public PrintCurrentTab(): void {
+        window.print();
+    }
+
+    // ================================================================
     // SR-6: Preference Persistence
     // ================================================================
 
@@ -1991,6 +2290,91 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
             } catch { /* ignore */ }
         }
     }
+
+    // ================================================================
+    // Co-Occurrence Data
+    // ================================================================
+
+    /**
+     * Load the top 20 co-occurring tag pairs and the staleness timestamp.
+     * Runs in background so it does not block initial render.
+     */
+    private async loadCoOccurrenceData(): Promise<void> {
+        try {
+            const rv = new RunView();
+            const result = await rv.RunView<{
+                TagA: string; TagB: string; CoOccurrenceCount: number; LastComputedAt: string | null;
+            }>({
+                EntityName: 'MJ: Tag Co Occurrences',
+                ExtraFilter: 'CoOccurrenceCount > 0',
+                OrderBy: 'CoOccurrenceCount DESC',
+                MaxRows: 20,
+                Fields: ['TagA', 'TagB', 'CoOccurrenceCount', 'LastComputedAt'],
+                ResultType: 'simple'
+            });
+
+            if (result.Success && result.Results.length > 0) {
+                const maxCount = result.Results[0].CoOccurrenceCount;
+                this.CoOccurrencePairs = result.Results.map(row => ({
+                    TagAName: row.TagA,
+                    TagBName: row.TagB,
+                    Count: row.CoOccurrenceCount,
+                    BarWidth: maxCount > 0 ? Math.round((row.CoOccurrenceCount / maxCount) * 100) : 0,
+                }));
+
+                // Find the most recent LastComputedAt value for staleness indicator
+                const computedDates = result.Results
+                    .map(r => r.LastComputedAt)
+                    .filter((d): d is string => d != null)
+                    .map(d => new Date(d))
+                    .filter(d => !isNaN(d.getTime()));
+
+                if (computedDates.length > 0) {
+                    const latest = new Date(Math.max(...computedDates.map(d => d.getTime())));
+                    this.CoOccurrenceLastComputed = this.formatRelativeTime(latest);
+                }
+            }
+            this.cdr.detectChanges();
+        } catch (error) {
+            console.error('[Analytics] Error loading co-occurrence data:', error);
+        }
+    }
+
+    /** Recompute co-occurrence data (triggered by user button click) */
+    public async RecomputeCoOccurrence(): Promise<void> {
+        if (this.IsRecomputingCoOccurrence) return;
+        this.IsRecomputingCoOccurrence = true;
+        this.cdr.detectChanges();
+
+        try {
+            const provider = Metadata.Provider as unknown;
+            const gql = `
+                mutation RecomputeTagCoOccurrence {
+                    RecomputeTagCoOccurrence {
+                        PairsUpdated
+                        PairsDeleted
+                    }
+                }
+            `;
+            // If GraphQL mutation not available, fall back to client-side reload
+            try {
+                const gqlProvider = provider as { ExecuteGQL: (query: string, variables: Record<string, unknown>) => Promise<unknown> };
+                if (typeof gqlProvider.ExecuteGQL === 'function') {
+                    await gqlProvider.ExecuteGQL(gql, {});
+                }
+            } catch {
+                // Mutation not available on server, just reload
+            }
+
+            // Reload the data
+            await this.loadCoOccurrenceData();
+        } finally {
+            this.IsRecomputingCoOccurrence = false;
+            this.cdr.detectChanges();
+        }
+    }
+
+    // NOTE: formatRelativeTime is defined above in the Source Detail section.
 }
 
 /** Tree-shaking prevention */

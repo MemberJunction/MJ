@@ -192,6 +192,59 @@ describe('SearchService', () => {
             const tagFilter = filters.find(f => f.Category === 'Tags');
             expect(tagFilter!.Options.length).toBeLessThanOrEqual(15);
         });
+
+        it('should generate correct tag filter options with counts and icon', () => {
+            const results: SearchResultItem[] = [
+                createMockResult('1', 'entity', 'Contacts', ['crm', 'active']),
+                createMockResult('2', 'entity', 'Companies', ['crm']),
+                createMockResult('3', 'file', 'Docs', ['internal']),
+            ];
+
+            const filters = service.BuildFilters(results);
+            const tagFilter = filters.find(f => f.Category === 'Tags');
+            expect(tagFilter).toBeDefined();
+            expect(tagFilter!.MultiSelect).toBe(true);
+
+            // 'crm' appears in 2 results, should be sorted first
+            const crmOption = tagFilter!.Options.find(o => o.Value === 'crm');
+            expect(crmOption).toBeDefined();
+            expect(crmOption!.Count).toBe(2);
+            expect(crmOption!.Icon).toBe('fa-solid fa-tag');
+            expect(crmOption!.IsSelected).toBe(false);
+
+            // 'active' and 'internal' each appear once
+            const activeOption = tagFilter!.Options.find(o => o.Value === 'active');
+            expect(activeOption!.Count).toBe(1);
+            const internalOption = tagFilter!.Options.find(o => o.Value === 'internal');
+            expect(internalOption!.Count).toBe(1);
+        });
+
+        it('should produce an empty Tags filter when no results have tags', () => {
+            const results: SearchResultItem[] = [
+                createMockResult('1', 'entity', 'Contacts'),
+                createMockResult('2', 'entity', 'Companies'),
+            ];
+
+            const filters = service.BuildFilters(results);
+            const tagFilter = filters.find(f => f.Category === 'Tags');
+            expect(tagFilter).toBeDefined();
+            expect(tagFilter!.Options).toHaveLength(0);
+        });
+
+        it('should sort tags by count descending', () => {
+            const results: SearchResultItem[] = [
+                createMockResult('1', 'entity', 'A', ['rare', 'common']),
+                createMockResult('2', 'entity', 'B', ['common']),
+                createMockResult('3', 'entity', 'C', ['common']),
+            ];
+
+            const filters = service.BuildFilters(results);
+            const tagFilter = filters.find(f => f.Category === 'Tags');
+            expect(tagFilter!.Options[0].Value).toBe('common');
+            expect(tagFilter!.Options[0].Count).toBe(3);
+            expect(tagFilter!.Options[1].Value).toBe('rare');
+            expect(tagFilter!.Options[1].Count).toBe(1);
+        });
     });
 
     describe('GetSourceIcon', () => {
@@ -299,6 +352,34 @@ describe('SearchService', () => {
 
             const groups = service.GroupResults(results);
             expect(groups[0].Label).toBe('custom-type'); // Falls back to raw type name
+        });
+
+        it('should use fallback icon for unknown source types', () => {
+            const results: SearchResultItem[] = [
+                createMockResult('1', 'entity', 'Test'),
+            ];
+            (results[0] as unknown as Record<string, unknown>)['SourceType'] = 'unknown-source';
+
+            const groups = service.GroupResults(results);
+            expect(groups[0].Icon).toBe('fa-solid fa-circle');
+        });
+
+        it('should handle mixed known and unknown source types', () => {
+            const results: SearchResultItem[] = [
+                createMockResult('1', 'entity', 'Contacts'),
+                createMockResult('2', 'entity', 'Companies'),
+            ];
+            (results[1] as unknown as Record<string, unknown>)['SourceType'] = 'custom-plugin';
+
+            const groups = service.GroupResults(results);
+            expect(groups).toHaveLength(2);
+
+            const entityGroup = groups.find(g => g.SourceType === 'entity');
+            expect(entityGroup?.Label).toBe('Entity Records');
+
+            const customGroup = groups.find(g => g.SourceType === 'custom-plugin');
+            expect(customGroup?.Label).toBe('custom-plugin');
+            expect(customGroup?.Icon).toBe('fa-solid fa-circle');
         });
     });
 });

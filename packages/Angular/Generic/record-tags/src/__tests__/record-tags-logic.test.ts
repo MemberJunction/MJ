@@ -27,6 +27,12 @@ vi.mock('@memberjunction/core-entities', () => {
     return { MJTaggedItemEntity: MockMJTaggedItemEntity };
 });
 
+vi.mock('@memberjunction/graphql-dataprovider', () => ({
+    GraphQLDataProvider: {
+        Instance: { ExecuteGQL: vi.fn().mockResolvedValue({}) },
+    },
+}));
+
 vi.mock('@memberjunction/global', () => ({
     UUIDsEqual: (a: string, b: string) => a === b,
 }));

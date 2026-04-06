@@ -45,6 +45,18 @@
                             Ask Knowledge Agent
                         </button>
                     </div>
+                    @if (PopularTags.length > 0) {
+                        <div class="search-tag-presets">
+                            <span class="tag-presets-label">
+                                <i class="fa-solid fa-tags"></i> Popular tags:
+                            </span>
+                            @for (tag of PopularTags; track tag) {
+                                <button class="tag-preset-btn" (click)="FilterByTag(tag)">
+                                    {{ tag }}
+                                </button>
+                            }
+                        </div>
+                    }
                 }
             </div>
         </div>
@@ -106,6 +118,10 @@
                                 <span class="search-results-time">in {{ ElapsedMs }}ms</span>
                             }
                         </span>
+                        <button class="save-search-btn" (click)="OpenSaveDialog()" title="Save this search">
+                            <i class="fa-solid fa-bookmark"></i>
+                            Save Search
+                        </button>
                     </div>
 
                     <!-- Results List (flat blended list sorted by relevance) -->
@@ -119,6 +135,7 @@
                         [ElapsedMs]="ElapsedMs"
                         (ResultSelected)="OnResultSelected($event)"
                         (OpenRecordRequested)="OnOpenRecord($event)"
+                        (MoreLikeThisRequested)="OnMoreLikeThis($event)"
                     ></mj-search-results>
 
                     <!-- Agent CTA at bottom -->
@@ -137,8 +154,26 @@
                 </div>
             </div>
         } @else if (!IsSearching) {
-            <!-- Empty state: recent searches -->
+            <!-- Empty state: recent & saved searches -->
             <div class="search-recent-area">
+                @if (SavedSearches.length > 0) {
+                    <h3 class="recent-title">Saved Searches</h3>
+                    <div class="recent-list">
+                        @for (saved of SavedSearches; track saved.ID; let i = $index) {
+                            @if (i < 8) {
+                                <div class="recent-item saved-item" (click)="ApplySavedSearch(saved)">
+                                    <i class="fa-solid fa-bookmark saved-icon"></i>
+                                    <span class="recent-query">{{ saved.Name }}</span>
+                                    <span class="saved-query-text">{{ saved.Query }}</span>
+                                    <button class="saved-delete-btn" (click)="DeleteSavedSearch(saved, $event)" title="Delete saved search">
+                                        <i class="fa-solid fa-times"></i>
+                                    </button>
+                                </div>
+                            }
+                        }
+                    </div>
+                }
+
                 @if (RecentSearches.length > 0) {
                     <h3 class="recent-title">Recent Searches</h3>
                     <div class="recent-list">
@@ -156,6 +191,31 @@
             </div>
         }
     </div>
+
+    <!-- Save Search Dialog Overlay -->
+    @if (ShowSaveDialog) {
+        <div class="save-dialog-overlay" (click)="CancelSaveDialog()">
+            <div class="save-dialog" (click)="$event.stopPropagation()">
+                <h3 class="save-dialog-title">Save Search</h3>
+                <p class="save-dialog-subtitle">Save "{{ Query }}" for quick access later</p>
+                <label class="save-dialog-label">Name</label>
+                <input
+                    type="text"
+                    class="mj-input save-dialog-input"
+                    [(ngModel)]="SaveSearchName"
+                    placeholder="Give this search a name..."
+                    (keydown.enter)="ConfirmSaveSearch()"
+                    autofocus
+                />
+                <div class="save-dialog-actions">
+                    <button class="save-dialog-confirm" (click)="ConfirmSaveSearch()" [disabled]="!SaveSearchName.trim()">
+                        <i class="fa-solid fa-bookmark"></i> Save
+                    </button>
+                    <button class="save-dialog-cancel" (click)="CancelSaveDialog()">Cancel</button>
+                </div>
+            </div>
+        </div>
+    }
 } @else {
     <!-- Result Detail View (Task 8) -->
     <app-search-result-detail

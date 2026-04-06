@@ -17,6 +17,7 @@
   [DirtyFieldNames]="EffectiveDirtyFieldNames"
   [ListCount]="ListCount"
   [TagCount]="TagCount"
+  [VersionCount]="VersionCount"
   [EntityInfo]="EffectiveEntityInfo"
   [Config]="ToolbarConfig"
   [IsSaving]="EffectiveIsSaving"
@@ -98,6 +99,8 @@
 @if (ShowRecordChanges && EffectiveRecord) {
   <mj-record-changes
     [record]="EffectiveRecord"
+    [AllowRestore]="EffectiveUserCanEdit"
+    (RestoreRequested)="OnRestoreRequested($event)"
     (dialogClosed)="OnRecordChangesClosed()">
   </mj-record-changes>
 }
@@ -110,6 +113,7 @@
     [Record]="EffectiveRecord"
     [WidthPx]="TagsPanelWidth"
     (PanelClosed)="OnTagsPanelClosed()"
+    (TagCountChanged)="OnTagCountChanged($event)"
     (RecordNavigate)="OnTagsRecordNavigate($event)"
     (WidthChanged)="OnTagsPanelWidthChanged($event)">
   </mj-record-tags>

@@ -12,7 +12,7 @@ import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { BaseEntity, CompositeKey, Metadata, RunView } from '@memberjunction/core';
 import { TreeBranchConfig, TreeLeafConfig } from '@memberjunction/ng-trees';
-import { ResourceData, KnowledgeHubMetadataEngine, MJContentSourceEntity, MJContentSourceTypeEntity_IContentSourceTypeField, UserInfoEngine } from '@memberjunction/core-entities';
+import { ResourceData, KnowledgeHubMetadataEngine, MJContentSourceEntity, MJContentSourceTypeEntity_IContentSourceTypeField, MJScheduledActionEntity, MJScheduledActionParamEntity, MJContentItemDuplicateEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { RegisterClass, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
@@ -87,6 +87,12 @@ interface SourceCard {
     EntityID: string;
     EntityDocumentID: string;
     RequiresFileType: boolean;
+    /** FK to ScheduledAction entity, null if no schedule configured */
+    ScheduledActionID: string | null;
+    /** Denormalized name of the linked ScheduledAction */
+    ScheduledActionName: string | null;
+    /** Human-readable schedule description (parsed from cron) */
+    ScheduleDescription: string | null;
 }
 
 interface ContentTypeCard {
@@ -143,6 +149,33 @@ interface DropdownOption {
     Name: string;
 }
 
+/** G3: Content item duplicate pair for review */
+interface ContentDuplicateRow {
+    ID: string;
+    ItemAName: string;
+    ItemASource: string;
+    ItemBName: string;
+    ItemBSource: string;
+    SimilarityScore: number;
+    DetectionMethod: string;
+    Status: 'Pending' | 'Confirmed' | 'Dismissed' | 'Merged';
+}
+
+/** D2/D3/D8: Per-source detail row for a specific pipeline run */
+interface RunDetailRow {
+    SourceName: string;
+    SourceType: string;
+    Status: string;
+    StatusClass: string;
+    ItemsProcessed: number;
+    ItemsTagged: number;
+    ItemsVectorized: number;
+    ErrorCount: number;
+    TotalTokens: number;
+    TotalCost: number;
+    Duration: string;
+}
+
 // ── Taxonomy Governance interfaces ──
 
 type TaxonomySubTab = 'tree' | 'duplicates' | 'orphans' | 'treemap' | 'audit';
@@ -183,14 +216,18 @@ interface TaxOrphanCard {
 }
 
 interface TaxTreemapCell {
+    ID: string;
     Name: string;
     ItemCount: number;
     ColorClass: string;
     RowSpan: number;
 }
 
+/** Supported audit action types — matches DB Action values (lowercased) */
+type TaxAuditAction = 'created' | 'merged' | 'moved' | 'deleted' | 'renamed' | 'deprecated' | 'descriptionchanged' | 'reactivated' | 'split';
+
 interface TaxAuditEvent {
-    Type: 'created' | 'merged' | 'moved' | 'deleted' | 'renamed';
+    Type: TaxAuditAction;
     Description: string;
     TagRef: string;
     User: string;
@@ -210,6 +247,9 @@ interface WeightedTag {
     Tag: string;
     Weight: number;
 }
+
+/** Status value for embedding or tagging pipeline phases */
+type ItemPipelineStatus = 'Complete' | 'Processing' | 'Failed' | 'Pending';
 
 interface ContentItemDetail {
     ID: string;
@@ -234,6 +274,10 @@ interface ContentItemDetail {
     EntityRecordID: string | null;
     /** Entity name if source is entity type */
     EntityName: string | null;
+    /** Embedding pipeline status for this content item */
+    EmbeddingStatus: ItemPipelineStatus;
+    /** Tagging pipeline status for this content item */
+    TaggingStatus: ItemPipelineStatus;
 }
 
 interface SourceDetailInfo {
@@ -294,9 +338,14 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
 
     // Pipeline run state
     public IsRunning = false;
+    public IsPaused = false;
     public RunProgress = 0;
     public RunStage = '';
     public RunCurrentItem = '';
+    /** The current pipeline run ID (from GraphQL subscription) */
+    public CurrentPipelineRunID: string | null = null;
+    /** The process run ID (server-side ContentProcessRun) for pause/cancel/resume */
+    public CurrentProcessRunID: string | null = null;
 
     // ── Pipeline Config Widget ──
     public ShowPipelineConfig = false;
@@ -340,6 +389,8 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
 
     // ── Sources tab ──
     public SourceCards: SourceCard[] = [];
+    public ContentDuplicates: ContentDuplicateRow[] = [];
+    public IsLoadingDuplicates = false;
 
     // ── Content Types tab ──
     public ContentTypeCards: ContentTypeCard[] = [];
@@ -361,6 +412,15 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     public FilteredRunRows: RunHistoryRow[] = [];
     public HistorySourceOptions: string[] = [];
 
+    // D3/D8: Run History Detail slide-in
+    public SelectedRunID: string | null = null;
+    public RunDetailRows: RunDetailRow[] = [];
+    public IsLoadingRunDetail = false;
+
+    // D2: Pipeline Monitor — live per-source progress
+    public LiveRunDetailRows: RunDetailRow[] = [];
+    public IsLoadingLiveDetails = false;
+
     // ── Taxonomy Governance tab ──
     public TaxSubTab: TaxonomySubTab = 'tree';
     public TaxTreeNodes: TaxTreeNode[] = [];
@@ -373,7 +433,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     public TaxAllOrphansSelected = false;
     public TaxTreemapCells: TaxTreemapCell[] = [];
     public TaxAuditEvents: TaxAuditEvent[] = [];
-    public TaxAuditFilterTypes = new Set<string>(['created', 'merged', 'moved', 'deleted', 'renamed']);
+    public TaxAuditFilterTypes = new Set<string>(['created', 'merged', 'moved', 'deleted', 'renamed', 'deprecated', 'descriptionchanged', 'reactivated', 'split']);
     public TaxHealth: TaxHealthStat = { Total: 0, Healthy: 0, NeedAttention: 0, Orphaned: 0, Duplicates: 0 };
     public TaxRecentItems: { Name: string; Weight: number; Date: string; Icon: string }[] = [];
     public TaxTreemapKPIs: { Label: string; Value: string }[] = [];
@@ -394,6 +454,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     // Raw taxonomy data cache
     private tagsRaw: Record<string, unknown>[] = [];
     private taggedItemsRaw: Record<string, unknown>[] = [];
+    private tagAuditLogsRaw: Record<string, unknown>[] = [];
 
     // ── Slide-in form ──
     public FormMode: FormMode = 'none';
@@ -426,6 +487,53 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     // Embedding model + vector index form fields (Content Source overrides)
     public FormSourceEmbeddingModelID = '';
     public FormSourceVectorIndexID = '';
+
+    // ── Schedule dialog ──
+    /** Whether the schedule creation dialog is visible */
+    public ShowScheduleDialog = false;
+    /** Whether a schedule save operation is in progress */
+    public ScheduleSaving = false;
+    /** Source card currently being scheduled */
+    public SchedulingSourceCard: SourceCard | null = null;
+    /** Cron expression for the schedule form */
+    public ScheduleCron = '0 2 * * *';
+    /** Whether the schedule should be active immediately */
+    public ScheduleEnabled = true;
+
+    // ── Confirmation dialog state ──
+    /** Whether a generic confirmation overlay is visible */
+    public ShowConfirmDialog = false;
+    /** Title text for the confirmation dialog */
+    public ConfirmDialogTitle = '';
+    /** Body message for the confirmation dialog */
+    public ConfirmDialogMessage = '';
+    /** Callback invoked when user confirms */
+    private confirmDialogAction: (() => Promise<void>) | null = null;
+
+    // ── Split dialog state ──
+    /** Whether the split-tag dialog is visible */
+    public ShowSplitDialog = false;
+    /** Comma-separated new child tag names for the split operation */
+    public SplitChildNames = '';
+    /** The node currently being split */
+    private splitTargetNode: TaxTreeNode | null = null;
+
+    // ── Move dialog state ──
+    /** Whether the move-tag dialog is visible */
+    public ShowMoveDialog = false;
+    /** Selected new parent tag ID for the move operation */
+    public MoveNewParentID: string | null = null;
+    /** The node currently being moved */
+    private moveTargetNode: TaxTreeNode | null = null;
+
+    // ── Treemap drill-in state ──
+    /** Whether the treemap drill-in panel is visible */
+    public ShowTreemapDrillIn = false;
+    /** Tag node currently displayed in treemap drill-in */
+    public TreemapDrillInNode: TaxTreeNode | null = null;
+
+    /** Cached ScheduledAction entities, keyed by normalized ID */
+    private scheduledActionsCache = new Map<string, MJScheduledActionEntity>();
 
     /**
      * Whether the currently selected source type is "Entity", which switches
@@ -563,6 +671,102 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     public ShowSourceDetail = false;
     public SourceDetailLoading = false;
 
+    // ── D4: Source detail status filter ──
+    /** Filter content items in source detail by pipeline status */
+    public SourceDetailStatusFilter: ItemPipelineStatus | 'All' = 'All';
+    /** Available status options for the filter dropdown */
+    public readonly SourceDetailStatusOptions: (ItemPipelineStatus | 'All')[] = ['All', 'Complete', 'Processing', 'Failed', 'Pending'];
+
+    // ── D7: Source detail pagination ──
+    /** Current page index (0-based) for source detail content list */
+    public SourceDetailPage = 0;
+    /** Number of content items per page in source detail */
+    public readonly SourceDetailPageSize = 10;
+
+    /**
+     * Returns source detail content items filtered by SourceDetailStatusFilter,
+     * then sliced to the current page.
+     */
+    public get FilteredSourceDetailItems(): ContentItemDetail[] {
+        if (!this.SelectedSource) return [];
+        const items = this.SourceDetailStatusFilter === 'All'
+            ? this.SelectedSource.ContentItems
+            : this.SelectedSource.ContentItems.filter(
+                  ci => ci.EmbeddingStatus === this.SourceDetailStatusFilter ||
+                        ci.TaggingStatus === this.SourceDetailStatusFilter
+              );
+        const start = this.SourceDetailPage * this.SourceDetailPageSize;
+        return items.slice(start, start + this.SourceDetailPageSize);
+    }
+
+    /** Total number of filtered items (before pagination) */
+    public get FilteredSourceDetailTotal(): number {
+        if (!this.SelectedSource) return 0;
+        if (this.SourceDetailStatusFilter === 'All') return this.SelectedSource.ContentItems.length;
+        return this.SelectedSource.ContentItems.filter(
+            ci => ci.EmbeddingStatus === this.SourceDetailStatusFilter ||
+                  ci.TaggingStatus === this.SourceDetailStatusFilter
+        ).length;
+    }
+
+    /** Total pages for source detail pagination */
+    public get SourceDetailTotalPages(): number {
+        return Math.max(1, Math.ceil(this.FilteredSourceDetailTotal / this.SourceDetailPageSize));
+    }
+
+    /** Navigate to the previous page in source detail content list */
+    public SourceDetailPrevPage(): void {
+        if (this.SourceDetailPage > 0) {
+            this.SourceDetailPage--;
+            this.cdr.detectChanges();
+        }
+    }
+
+    /** Navigate to the next page in source detail content list */
+    public SourceDetailNextPage(): void {
+        if (this.SourceDetailPage < this.SourceDetailTotalPages - 1) {
+            this.SourceDetailPage++;
+            this.cdr.detectChanges();
+        }
+    }
+
+    /** Handle change of the source detail status filter dropdown */
+    public OnSourceDetailStatusFilterChange(): void {
+        this.SourceDetailPage = 0;
+        this.cdr.detectChanges();
+    }
+
+    /**
+     * D4: Placeholder handler for retrying failed items in source detail.
+     * Re-runs the pipeline for the current source. In the future this could
+     * target only Failed items.
+     */
+    public RetryFailedItems(): void {
+        if (!this.SelectedSource) return;
+        const failedCount = this.SelectedSource.ContentItems.filter(
+            ci => ci.EmbeddingStatus === 'Failed' || ci.TaggingStatus === 'Failed'
+        ).length;
+        if (failedCount === 0) {
+            MJNotificationService.Instance.CreateSimpleNotification('No failed items to retry', 'info', 2500);
+            return;
+        }
+        MJNotificationService.Instance.CreateSimpleNotification(
+            `Retry queued for ${failedCount} failed item${failedCount > 1 ? 's' : ''}. Pipeline will re-process on next run.`,
+            'info',
+            3000
+        );
+    }
+
+    /** Returns the CSS class for a pipeline status badge color */
+    public GetStatusBadgeClass(status: ItemPipelineStatus): string {
+        switch (status) {
+            case 'Complete': return 'at-status-badge-complete';
+            case 'Processing': return 'at-status-badge-processing';
+            case 'Failed': return 'at-status-badge-failed';
+            case 'Pending': return 'at-status-badge-pending';
+        }
+    }
+
     // Dropdown options for forms
     public SourceTypeOptions: DropdownOption[] = [];
     public ContentTypeOptions: DropdownOption[] = [];
@@ -627,13 +831,51 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             UserInfoEngine.Instance.Config(false),
         ]);
         this.loadClassifyPreferences();
+        this.applyIncomingConfiguration();
         await Promise.all([this.LoadPipelineData(), this.loadEntityRecordDocCache()]);
         this.tabDataLoaded.add('pipeline');
         this.IsLoading = false;
         this.registerAgentTools();
         this.emitAgentContext();
+
+        // D9: If navigated with tagSearch, switch to tags tab and pre-fill search
+        await this.handleInitialTagSearch();
+
         this.cdr.detectChanges();
         this.NotifyLoadComplete();
+    }
+
+    /**
+     * D9: Read incoming configuration from ResourceData (e.g. from Analytics tag navigation).
+     * Sets the initial tab and tag search query if provided.
+     */
+    private applyIncomingConfiguration(): void {
+        const config = this.Data?.Configuration as Record<string, unknown> | undefined;
+        if (!config) return;
+
+        const initialTab = config['initialTab'] as TabName | undefined;
+        if (initialTab) {
+            this.ActiveTab = initialTab;
+        }
+    }
+
+    /**
+     * D9: If a tagSearch parameter was provided via configuration, switch to the tags tab
+     * and apply the search filter after tag data loads.
+     */
+    private async handleInitialTagSearch(): Promise<void> {
+        const config = this.Data?.Configuration as Record<string, unknown> | undefined;
+        const tagSearch = config?.['tagSearch'] as string | undefined;
+        if (!tagSearch) return;
+
+        // Ensure tag data is loaded
+        if (!this.tabDataLoaded.has('tags')) {
+            await this.loadTabData('tags');
+            this.tabDataLoaded.add('tags');
+        }
+
+        this.TagSearchQuery = tagSearch;
+        this.FilterTags();
     }
 
     ngOnDestroy(): void {
@@ -776,6 +1018,9 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             this.contentSourceTypesRaw = sourceTypesResult.Success ? sourceTypesResult.Results : [];
             this.contentTypesRaw = contentTypesResult.Success ? contentTypesResult.Results : [];
 
+            // Load ScheduledAction entities referenced by sources so cron descriptions are available
+            await this.loadScheduledActionsForSources();
+
             this.buildNavItems();
             this.buildKPIMetrics();
             this.buildPipelineStages();
@@ -854,13 +1099,19 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         });
     }
 
+    /**
+     * D6: Build trending tags weighted by recency (last 7 days).
+     * Counts tags from ContentItemTag records created in the last 7 days
+     * and weights by frequency. Falls back to all-time data if no recent tags.
+     */
     private buildTrendingTags(): void {
-        const tagCounts = this.countAllTags();
-        const avgWeights = this.computeAvgWeights();
-        const scored = Array.from(tagCounts.entries()).map(([tag, count]) => {
-            const weight = avgWeights.get(tag) ?? 1.0;
-            return { tag, count, weight, score: count * weight };
-        }).sort((a, b) => b.score - a.score).slice(0, 12);
+        const sevenDaysAgo = new Date(Date.now() - 7 * 86400000);
+        const recentTags = this.contentTagsRaw.filter(tag => {
+            const d = tag['__mj_CreatedAt'] as string | undefined;
+            return d && new Date(d) >= sevenDaysAgo;
+        });
+
+        const scored = this.computeTrendingFromTags(recentTags.length > 0 ? recentTags : this.contentTagsRaw);
         const maxScore = scored.length > 0 ? scored[0].score : 1;
 
         this.TrendingTags = scored.map(s => ({
@@ -868,6 +1119,27 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             AvgWeight: s.weight,
             SizeClass: s.score >= maxScore * 0.7 ? 'large' : s.score >= maxScore * 0.3 ? '' : 'small'
         }));
+    }
+
+    /**
+     * Compute scored trending tags from a given set of tag records.
+     * Returns top 12 tags sorted by score (frequency x avg weight).
+     */
+    private computeTrendingFromTags(tags: Record<string, unknown>[]): { tag: string; count: number; weight: number; score: number }[] {
+        const counts = new Map<string, number>();
+        const weightSums = new Map<string, number>();
+        for (const tag of tags) {
+            const t = tag['Tag'] as string;
+            const w = Number(tag['Weight'] ?? 0.5);
+            if (t) {
+                counts.set(t, (counts.get(t) ?? 0) + 1);
+                weightSums.set(t, (weightSums.get(t) ?? 0) + w);
+            }
+        }
+        return Array.from(counts.entries()).map(([tag, count]) => {
+            const weight = count > 0 ? (weightSums.get(tag) ?? 0) / count : 1.0;
+            return { tag, count, weight, score: count * weight };
+        }).sort((a, b) => b.score - a.score).slice(0, 12);
     }
 
     // ════════════════════════════════════════════
@@ -894,6 +1166,10 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             const lastRunStatus = lastRun ? (lastRun['Status'] as string)?.toLowerCase() : null;
             const hasError = lastRunStatus === 'error' || lastRunStatus === 'failed';
 
+            const scheduledActionID = (source['ScheduledActionID'] as string | null) ?? null;
+            const scheduledActionName = (source['ScheduledAction'] as string | null) ?? null;
+            const cronExpr = scheduledActionID ? this.getScheduledActionCron(scheduledActionID) : null;
+
             return {
                 ID: id,
                 Name: (source['Name'] as string) ?? 'Unnamed Source',
@@ -916,6 +1192,9 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
                 EntityID: (source['EntityID'] as string) ?? '',
                 EntityDocumentID: (source['EntityDocumentID'] as string) ?? '',
                 RequiresFileType: this.sourceTypeRequiresFileType(source['ContentSourceTypeID'] as string),
+                ScheduledActionID: scheduledActionID,
+                ScheduledActionName: scheduledActionName,
+                ScheduleDescription: cronExpr ? CronToHumanReadable(cronExpr) : null,
             };
         });
     }
@@ -1175,6 +1454,114 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     }
 
     // ════════════════════════════════════════════
+    // D3/D8: RUN HISTORY DETAIL SLIDE-IN
+    // ════════════════════════════════════════════
+
+    /**
+     * D3/D8: Open the detail view for a specific run, loading ContentProcessRunDetail records.
+     */
+    public async OpenRunDetail(runID: string): Promise<void> {
+        if (this.SelectedRunID === runID) {
+            this.CloseRunDetail();
+            return;
+        }
+        this.SelectedRunID = runID;
+        this.IsLoadingRunDetail = true;
+        this.RunDetailRows = [];
+        this.cdr.detectChanges();
+
+        await this.loadRunDetailRows(runID);
+
+        this.IsLoadingRunDetail = false;
+        this.cdr.detectChanges();
+    }
+
+    /** D3/D8: Close the run detail slide-in */
+    public CloseRunDetail(): void {
+        this.SelectedRunID = null;
+        this.RunDetailRows = [];
+        this.IsLoadingRunDetail = false;
+        this.cdr.detectChanges();
+    }
+
+    /**
+     * D2/D3/D8: Load ContentProcessRunDetail records for a given run and map to RunDetailRow[].
+     */
+    private async loadRunDetailRows(runID: string): Promise<void> {
+        const rv = new RunView();
+        const result = await rv.RunView({
+            EntityName: 'MJ: Content Process Run Details',
+            ExtraFilter: `ContentProcessRunID='${runID}'`,
+            OrderBy: 'ContentSource',
+            ResultType: 'simple',
+        });
+        if (result.Success) {
+            this.RunDetailRows = this.mapRunDetailRecords(result.Results);
+        }
+    }
+
+    /**
+     * D2: Load live per-source progress for the currently running pipeline.
+     * Called when the pipeline is actively running.
+     */
+    public async LoadLiveRunDetails(): Promise<void> {
+        // Find the most recent running pipeline run
+        const runningRun = this.contentRunsRaw.find(r => {
+            const status = String(r['Status'] || '').toLowerCase();
+            return status === 'running' || status === 'processing' || status === 'in progress';
+        });
+        if (!runningRun) {
+            this.LiveRunDetailRows = [];
+            return;
+        }
+
+        this.IsLoadingLiveDetails = true;
+        this.cdr.detectChanges();
+
+        const rv = new RunView();
+        const result = await rv.RunView({
+            EntityName: 'MJ: Content Process Run Details',
+            ExtraFilter: `ContentProcessRunID='${String(runningRun['ID'])}'`,
+            OrderBy: 'ContentSource',
+            ResultType: 'simple',
+        });
+        if (result.Success) {
+            this.LiveRunDetailRows = this.mapRunDetailRecords(result.Results);
+        }
+
+        this.IsLoadingLiveDetails = false;
+        this.cdr.detectChanges();
+    }
+
+    /** Map raw ContentProcessRunDetail records to RunDetailRow[] */
+    private mapRunDetailRecords(records: Record<string, unknown>[]): RunDetailRow[] {
+        return records.map(d => {
+            const status = String(d['Status'] || 'Pending');
+            const statusLower = status.toLowerCase();
+            const isFailed = statusLower === 'failed' || statusLower === 'error';
+            const isRunning = statusLower === 'running' || statusLower === 'processing';
+            const startTime = d['StartTime'] ? new Date(String(d['StartTime'])) : null;
+            const endTime = d['EndTime'] ? new Date(String(d['EndTime'])) : null;
+            const durationMs = startTime && endTime ? endTime.getTime() - startTime.getTime() : 0;
+            const durationStr = durationMs > 60000 ? `${Math.round(durationMs / 60000)}m` : `${Math.round(durationMs / 1000)}s`;
+
+            return {
+                SourceName: String(d['ContentSource'] || 'Unknown'),
+                SourceType: String(d['ContentSourceType'] || ''),
+                Status: this.displayStatus(status),
+                StatusClass: isFailed ? 'failed' : isRunning ? 'running' : 'complete',
+                ItemsProcessed: Number(d['ItemsProcessed'] || 0),
+                ItemsTagged: Number(d['ItemsTagged'] || 0),
+                ItemsVectorized: Number(d['ItemsVectorized'] || 0),
+                ErrorCount: Number(d['ErrorCount'] || 0),
+                TotalTokens: Number(d['TotalTokensUsed'] || 0),
+                TotalCost: Number(d['TotalCost'] || 0),
+                Duration: durationStr,
+            };
+        });
+    }
+
+    // ════════════════════════════════════════════
     // SLIDE-IN FORM — Sources
     // ════════════════════════════════════════════
 
@@ -1328,6 +1715,237 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     }
 
     // ════════════════════════════════════════════
+    // SCHEDULE DIALOG — Quick Schedule for Source
+    // ════════════════════════════════════════════
+
+    /**
+     * Opens the schedule dialog pre-filled for the given source card.
+     * Defaults to a daily 2 AM cron expression.
+     * @param card The source card to create a schedule for
+     */
+    public OpenScheduleDialog(card: SourceCard): void {
+        this.SchedulingSourceCard = card;
+        this.ScheduleCron = '0 2 * * *';
+        this.ScheduleEnabled = true;
+        this.ShowScheduleDialog = true;
+        this.cdr.detectChanges();
+    }
+
+    /** Closes the schedule dialog without saving */
+    public CloseScheduleDialog(): void {
+        this.ShowScheduleDialog = false;
+        this.SchedulingSourceCard = null;
+        this.cdr.detectChanges();
+    }
+
+    /**
+     * Saves a new ScheduledAction for the current source, links it
+     * via ContentSource.ScheduledActionID, and creates the default
+     * action params for the Autotag and Vectorize action.
+     */
+    public async SaveSchedule(): Promise<void> {
+        if (this.ScheduleSaving || !this.SchedulingSourceCard) return;
+        this.ScheduleSaving = true;
+        this.cdr.detectChanges();
+
+        const card = this.SchedulingSourceCard;
+
+        try {
+            const md = new Metadata();
+
+            // 1. Find the "Autotag and Vectorize Content" action
+            const actionID = await this.findAutotagActionID();
+            if (!actionID) {
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    'Could not find the "Autotag and Vectorize Content" action. Please check action configuration.',
+                    'error', 5000
+                );
+                return;
+            }
+
+            // 2. Create the ScheduledAction
+            const scheduledAction = await md.GetEntityObject<MJScheduledActionEntity>('MJ: Scheduled Actions');
+            scheduledAction.NewRecord();
+            scheduledAction.Name = `Autotag: ${card.Name}`;
+            scheduledAction.Description = `Automated classification pipeline for content source "${card.Name}"`;
+            scheduledAction.ActionID = actionID;
+            scheduledAction.Type = 'Custom';
+            scheduledAction.CronExpression = this.ScheduleCron;
+            scheduledAction.CustomCronExpression = this.ScheduleCron;
+            scheduledAction.Status = this.ScheduleEnabled ? 'Active' : 'Disabled';
+            scheduledAction.Timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+            const saved = await scheduledAction.Save();
+            if (!saved) {
+                const errorDetail = scheduledAction.LatestResult?.Message ?? 'Unknown error';
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    `Failed to create schedule: ${errorDetail}`, 'error', 5000
+                );
+                return;
+            }
+
+            // 3. Create ScheduledActionParam for sourceIDs
+            await this.createSourceIDParam(scheduledAction.ID, actionID, card.ID);
+
+            // 4. Link ScheduledAction to ContentSource
+            await this.linkScheduleToSource(card.ID, scheduledAction.ID);
+
+            // 5. Cache the new action for cron display
+            this.scheduledActionsCache.set(NormalizeUUID(scheduledAction.ID), scheduledAction);
+
+            MJNotificationService.Instance.CreateSimpleNotification(
+                `Schedule created: ${CronToHumanReadable(this.ScheduleCron)}`, 'success', 3000
+            );
+
+            this.CloseScheduleDialog();
+            await this.refreshSourcesTab();
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            console.error('[Classify] Schedule creation error:', error);
+            MJNotificationService.Instance.CreateSimpleNotification(`Error: ${msg}`, 'error', 5000);
+        } finally {
+            this.ScheduleSaving = false;
+            this.cdr.detectChanges();
+        }
+    }
+
+    /**
+     * Removes the schedule from a source card by unlinking the ScheduledActionID.
+     * @param card The source card to remove the schedule from
+     */
+    public async RemoveSchedule(card: SourceCard): Promise<void> {
+        if (!card.ScheduledActionID) return;
+        if (!confirm(`Remove the schedule "${card.ScheduleDescription ?? 'schedule'}" from "${card.Name}"?`)) return;
+
+        try {
+            await this.linkScheduleToSource(card.ID, null);
+            MJNotificationService.Instance.CreateSimpleNotification('Schedule removed from source', 'success', 2500);
+            await this.refreshSourcesTab();
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            MJNotificationService.Instance.CreateSimpleNotification(`Error: ${msg}`, 'error', 4000);
+        }
+    }
+
+    /**
+     * Returns the human-readable schedule description for a source card.
+     * Used in the template to display schedule indicators.
+     */
+    public GetScheduleLabel(card: SourceCard): string {
+        return card.ScheduleDescription ?? 'Scheduled';
+    }
+
+    /**
+     * Returns a human-readable preview of a cron expression for the schedule dialog.
+     * @param cron The cron expression to preview
+     */
+    public GetCronPreview(cron: string): string {
+        return CronToHumanReadable(cron);
+    }
+
+    /** Looks up the cron expression for a cached ScheduledAction by ID */
+    private getScheduledActionCron(scheduledActionID: string): string | null {
+        const cached = this.scheduledActionsCache.get(NormalizeUUID(scheduledActionID));
+        return cached?.CronExpression ?? null;
+    }
+
+    /**
+     * Loads ScheduledAction entities referenced by content sources into the local cache.
+     * Called during initial data load so cron descriptions are available for card rendering.
+     */
+    private async loadScheduledActionsForSources(): Promise<void> {
+        const actionIDs = this.contentSourcesRaw
+            .map(s => s['ScheduledActionID'] as string | null)
+            .filter((id): id is string => id != null);
+
+        if (actionIDs.length === 0) return;
+
+        const uniqueIDs = [...new Set(actionIDs.map(id => NormalizeUUID(id)))];
+        // Skip IDs already cached
+        const toLoad = uniqueIDs.filter(id => !this.scheduledActionsCache.has(id));
+        if (toLoad.length === 0) return;
+
+        const rv = new RunView();
+        const filter = toLoad.map(id => `'${id}'`).join(',');
+        const result = await rv.RunView<MJScheduledActionEntity>({
+            EntityName: 'MJ: Scheduled Actions',
+            ExtraFilter: `ID IN (${filter})`,
+            ResultType: 'entity_object',
+        });
+
+        if (result.Success) {
+            for (const action of result.Results) {
+                this.scheduledActionsCache.set(NormalizeUUID(action.ID), action);
+            }
+        }
+    }
+
+    /** Finds the Action ID for "Autotag and Vectorize Content" by querying actions */
+    private async findAutotagActionID(): Promise<string | null> {
+        const rv = new RunView();
+        const result = await rv.RunView<{ ID: string }>({
+            EntityName: 'Actions',
+            ExtraFilter: `Name = 'Autotag and Vectorize Content'`,
+            Fields: ['ID'],
+            ResultType: 'simple',
+            MaxRows: 1,
+        });
+        if (result.Success && result.Results.length > 0) {
+            return result.Results[0].ID;
+        }
+        return null;
+    }
+
+    /**
+     * Creates a ScheduledActionParam that passes the source ID to the action.
+     * Looks up the "EntityNames" action param and sets the source ID as its value.
+     */
+    private async createSourceIDParam(scheduledActionID: string, actionID: string, sourceID: string): Promise<void> {
+        // Find the "EntityNames" action param to get its ID
+        const rv = new RunView();
+        const paramResult = await rv.RunView<{ ID: string; Name: string }>({
+            EntityName: 'Action Params',
+            ExtraFilter: `ActionID = '${actionID}' AND Name = 'EntityNames'`,
+            Fields: ['ID', 'Name'],
+            ResultType: 'simple',
+            MaxRows: 1,
+        });
+
+        if (!paramResult.Success || paramResult.Results.length === 0) {
+            console.warn('[Classify] Could not find EntityNames action param for source ID scheduling');
+            return;
+        }
+
+        const md = new Metadata();
+        const param = await md.GetEntityObject<MJScheduledActionParamEntity>('MJ: Scheduled Action Params');
+        param.NewRecord();
+        param.ScheduledActionID = scheduledActionID;
+        param.ActionParamID = paramResult.Results[0].ID;
+        param.ValueType = 'Static';
+        param.Value = sourceID;
+
+        const saved = await param.Save();
+        if (!saved) {
+            console.warn('[Classify] Failed to save schedule param:', param.LatestResult?.Message);
+        }
+    }
+
+    /**
+     * Links (or unlinks) a ScheduledAction to a ContentSource by updating
+     * the ContentSource.ScheduledActionID field.
+     */
+    private async linkScheduleToSource(sourceID: string, scheduledActionID: string | null): Promise<void> {
+        const md = new Metadata();
+        const entity = await md.GetEntityObject<MJContentSourceEntity>('MJ: Content Sources');
+        await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: sourceID }]));
+        entity.ScheduledActionID = scheduledActionID;
+        const saved = await entity.Save();
+        if (!saved) {
+            throw new Error(entity.LatestResult?.Message ?? 'Failed to update content source');
+        }
+    }
+
+    // ════════════════════════════════════════════
     // SLIDE-IN FORM — Content Types
     // ════════════════════════════════════════════
 
@@ -1417,9 +2035,12 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         if (!provider) return;
 
         this.IsRunning = true;
+        this.IsPaused = false;
         this.RunProgress = 0;
         this.RunStage = 'Starting...';
         this.RunCurrentItem = '';
+        this.CurrentPipelineRunID = null;
+        this.CurrentProcessRunID = null;
         this.cdr.detectChanges();
 
         try {
@@ -1438,6 +2059,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
                 return;
             }
 
+            this.CurrentPipelineRunID = result.PipelineRunID;
             this.subscribeToPipelineProgress(result.PipelineRunID);
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
@@ -1447,6 +2069,98 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             MJNotificationService.Instance.CreateSimpleNotification(`Pipeline error: ${msg}`, 'error', 5000);
             this.cdr.detectChanges();
         }
+    }
+
+    /**
+     * Pause a running classification pipeline. The server sets CancellationRequested
+     * on the process run so the engine pauses gracefully after the current batch.
+     */
+    public async PausePipeline(): Promise<void> {
+        if (!this.IsRunning || this.IsPaused || !this.CurrentProcessRunID) return;
+
+        const provider = Metadata.Provider as GraphQLDataProvider;
+        if (!provider) return;
+
+        try {
+            const aiClient = new GraphQLAIClient(provider);
+            const result = await aiClient.PauseClassificationPipeline(this.CurrentProcessRunID);
+            if (result.Success) {
+                this.IsPaused = true;
+                this.RunStage = 'Pausing...';
+                MJNotificationService.Instance.CreateSimpleNotification('Pipeline pause requested', 'info', 3000);
+            } else {
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    `Pause failed: ${result.ErrorMessage ?? 'Unknown error'}`, 'error', 4000
+                );
+            }
+            this.cdr.detectChanges();
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            MJNotificationService.Instance.CreateSimpleNotification(`Pause error: ${msg}`, 'error', 4000);
+        }
+    }
+
+    /**
+     * Resume a paused classification pipeline from its last completed offset.
+     */
+    public async ResumePipeline(): Promise<void> {
+        if (!this.IsPaused || !this.CurrentProcessRunID) return;
+
+        const provider = Metadata.Provider as GraphQLDataProvider;
+        if (!provider) return;
+
+        try {
+            const aiClient = new GraphQLAIClient(provider);
+            const result = await aiClient.ResumeClassificationPipeline(this.CurrentProcessRunID);
+            if (result.Success) {
+                this.IsPaused = false;
+                this.IsRunning = true;
+                this.RunStage = 'Resuming...';
+                if (result.PipelineRunID) {
+                    this.CurrentPipelineRunID = result.PipelineRunID;
+                    this.subscribeToPipelineProgress(result.PipelineRunID);
+                }
+                MJNotificationService.Instance.CreateSimpleNotification('Pipeline resumed', 'success', 3000);
+            } else {
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    `Resume failed: ${result.ErrorMessage ?? 'Unknown error'}`, 'error', 4000
+                );
+            }
+            this.cdr.detectChanges();
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            MJNotificationService.Instance.CreateSimpleNotification(`Resume error: ${msg}`, 'error', 4000);
+        }
+    }
+
+    /**
+     * Cancel a running or paused pipeline. Uses pause mechanism and resets UI state.
+     */
+    public async CancelPipeline(): Promise<void> {
+        if (!this.CurrentProcessRunID && !this.IsRunning) return;
+
+        const provider = Metadata.Provider as GraphQLDataProvider;
+        if (!provider) return;
+
+        // If we have a process run ID, request server-side cancellation
+        if (this.CurrentProcessRunID) {
+            try {
+                const aiClient = new GraphQLAIClient(provider);
+                await aiClient.PauseClassificationPipeline(this.CurrentProcessRunID);
+            } catch {
+                // Best-effort cancellation — proceed with UI reset regardless
+            }
+        }
+
+        this.IsRunning = false;
+        this.IsPaused = false;
+        this.RunProgress = 0;
+        this.RunStage = '';
+        this.RunCurrentItem = '';
+        this.CurrentPipelineRunID = null;
+        this.CurrentProcessRunID = null;
+        MJNotificationService.Instance.CreateSimpleNotification('Pipeline cancelled', 'info', 3000);
+        this.cdr.detectChanges();
     }
 
     private subscribeToPipelineProgress(pipelineRunID: string): void {
@@ -1473,8 +2187,11 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
 
             Promise.resolve().then(async () => {
                 this.IsRunning = false;
+                this.IsPaused = false;
                 this.RunStage = success ? 'Complete' : 'Error';
                 this.RunProgress = success ? 100 : 0;
+                this.CurrentPipelineRunID = null;
+                this.CurrentProcessRunID = null;
 
                 for (const stage of this.PipelineStages) {
                     stage.Status = 'idle';
@@ -1854,6 +2571,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         const rv = new RunView();
         const result = await rv.RunView({ EntityName: 'MJ: Content Sources', OrderBy: 'Name', ResultType: 'simple' });
         if (result.Success) this.contentSourcesRaw = result.Results;
+        await this.loadScheduledActionsForSources();
         this.buildSourceCards();
         this.buildNavItems();
         this.cdr.detectChanges();
@@ -1907,6 +2625,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             }
         }
 
+        const statuses = this.inferPipelineStatuses(rawItem, tagCount);
         this.SelectedFeedItem = {
             ID: itemId,
             Name: feed.Name,
@@ -1927,6 +2646,8 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             RequiresContentType: requiresContentType,
             EntityRecordID: entityRecordID,
             EntityName: entityName,
+            EmbeddingStatus: statuses.EmbeddingStatus,
+            TaggingStatus: statuses.TaggingStatus,
         };
         this.ShowItemDetail = true;
         this.cdr.detectChanges();
@@ -1967,6 +2688,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             }
         }
 
+        const statuses2 = this.inferPipelineStatuses(rawItem, allTags.length);
         this.SelectedFeedItem = {
             ID: itemId,
             Name: (rawItem['Name'] as string) ?? 'Unnamed',
@@ -1987,6 +2709,8 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             RequiresContentType: requiresContentType,
             EntityRecordID: entityRecordID,
             EntityName: entityName,
+            EmbeddingStatus: statuses2.EmbeddingStatus,
+            TaggingStatus: statuses2.TaggingStatus,
         };
         this.ShowItemDetail = true;
         this.cdr.detectChanges();
@@ -2050,12 +2774,62 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         return tags.sort((a, b) => b.Weight - a.Weight);
     }
 
+    /**
+     * D4: Infer embedding and tagging pipeline statuses for a content item.
+     * Uses tag count and run history heuristics since dedicated status columns
+     * are not yet available on the ContentItem entity.
+     */
+    private inferPipelineStatuses(
+        rawItem: Record<string, unknown>,
+        tagCount: number
+    ): { EmbeddingStatus: ItemPipelineStatus; TaggingStatus: ItemPipelineStatus } {
+        const explicitEmbedding = rawItem['EmbeddingStatus'] as string | undefined;
+        const explicitTagging = rawItem['TaggingStatus'] as string | undefined;
+        if (explicitEmbedding || explicitTagging) {
+            return {
+                EmbeddingStatus: this.mapStatusString(explicitEmbedding),
+                TaggingStatus: this.mapStatusString(explicitTagging),
+            };
+        }
+
+        const hasChecksum = !!(rawItem['Checksum'] as string);
+        const hasText = !!((rawItem['Text'] as string)?.trim());
+        const sourceID = rawItem['ContentSourceID'] as string;
+        const lastRun = this.contentRunsRaw.find(r => r['SourceID'] as string === sourceID);
+        const lastRunFailed = lastRun &&
+            ((lastRun['Status'] as string)?.toLowerCase() === 'error' ||
+             (lastRun['Status'] as string)?.toLowerCase() === 'failed');
+
+        let embeddingStatus: ItemPipelineStatus = 'Pending';
+        if (hasChecksum || hasText) embeddingStatus = 'Complete';
+        else if (lastRunFailed) embeddingStatus = 'Failed';
+
+        let taggingStatus: ItemPipelineStatus = 'Pending';
+        if (tagCount > 0) taggingStatus = 'Complete';
+        else if (embeddingStatus === 'Complete') taggingStatus = lastRunFailed ? 'Failed' : 'Pending';
+        else if (lastRunFailed) taggingStatus = 'Failed';
+
+        return { EmbeddingStatus: embeddingStatus, TaggingStatus: taggingStatus };
+    }
+
+    /** Map a raw status string to the ItemPipelineStatus union */
+    private mapStatusString(status: string | undefined): ItemPipelineStatus {
+        if (!status) return 'Pending';
+        const lower = status.toLowerCase();
+        if (lower === 'complete' || lower === 'completed' || lower === 'done') return 'Complete';
+        if (lower === 'processing' || lower === 'running') return 'Processing';
+        if (lower === 'failed' || lower === 'error') return 'Failed';
+        return 'Pending';
+    }
+
     // ════════════════════════════════════════════
     // DETAIL PANELS — Source Detail
     // ════════════════════════════════════════════
 
     public async OpenSourceDetail(card: SourceCard): Promise<void> {
         this.SourceDetailLoading = true;
+        this.SourceDetailPage = 0;
+        this.SourceDetailStatusFilter = 'All';
         this.ShowSourceDetail = true;
         this.cdr.detectChanges();
 
@@ -2149,6 +2923,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             const allTags = this.getAllWeightedTagsForItem(itemId);
             const tagCount = tagsByItem.get(itemId) ?? allTags.length;
             const contentSourceTypeID = (item['ContentSourceTypeID'] as string) ?? '';
+            const itemStatuses = this.inferPipelineStatuses(item, tagCount);
             return {
                 ID: itemId,
                 Name: (item['Name'] as string) ?? 'Unnamed',
@@ -2169,6 +2944,8 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
                 RequiresContentType: this.sourceTypeRequiresFileType(contentSourceTypeID),
                 EntityRecordID: null,
                 EntityName: null,
+                EmbeddingStatus: itemStatuses.EmbeddingStatus,
+                TaggingStatus: itemStatuses.TaggingStatus,
             };
         });
     }
@@ -2233,16 +3010,22 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         this.cdr.detectChanges();
     }
 
+    /**
+     * Loads all data needed by the Taxonomy Governance sub-tabs:
+     * Tags, Tagged Items, Tag Audit Logs, and cross-references content item tags.
+     */
     private async loadTaxonomyData(): Promise<void> {
         try {
             const rv = new RunView();
-            const [tagsResult, taggedItemsResult] = await rv.RunViews([
+            const [tagsResult, taggedItemsResult, auditResult] = await rv.RunViews([
                 { EntityName: 'MJ: Tags', OrderBy: 'Name', ResultType: 'simple' },
-                { EntityName: 'MJ: Tagged Items', ResultType: 'simple' }
+                { EntityName: 'MJ: Tagged Items', ResultType: 'simple' },
+                { EntityName: 'MJ: Tag Audit Logs', OrderBy: '__mj_CreatedAt DESC', MaxRows: 200, ResultType: 'simple' }
             ]);
 
             this.tagsRaw = tagsResult.Success ? tagsResult.Results : [];
             this.taggedItemsRaw = taggedItemsResult.Success ? taggedItemsResult.Results : [];
+            this.tagAuditLogsRaw = auditResult.Success ? auditResult.Results : [];
 
             // Also ensure content item tags are loaded for cross-referencing
             await this.ensureBaseDataLoaded();
@@ -2260,6 +3043,10 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
 
     // ── Tree View ──
 
+    /**
+     * Builds the taxonomy tree from raw tag data, wiring up parent-child
+     * relationships and attaching item counts and average weights.
+     */
     private buildTaxTree(): void {
         const tagMap = new Map<string, TaxTreeNode>();
         const tagItemCounts = this.countItemsByTag();
@@ -2268,11 +3055,12 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         // Create flat node list from raw tags
         for (const tag of this.tagsRaw) {
             const id = tag['ID'] as string;
+            const normalizedId = NormalizeUUID(id);
             const name = (tag['Name'] as string) ?? 'Unnamed';
-            const itemCount = tagItemCounts.get(id) ?? 0;
-            const avgWeight = tagAvgWeights.get(id) ?? 0;
+            const itemCount = tagItemCounts.get(normalizedId) ?? 0;
+            const avgWeight = tagAvgWeights.get(normalizedId) ?? 0;
 
-            tagMap.set(id, {
+            tagMap.set(normalizedId, {
                 ID: id,
                 Name: name,
                 DisplayName: (tag['DisplayName'] as string) ?? name,
@@ -2292,8 +3080,9 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         // Build parent-child relationships
         const roots: TaxTreeNode[] = [];
         for (const node of tagMap.values()) {
-            if (node.ParentID && tagMap.has(node.ParentID)) {
-                tagMap.get(node.ParentID)!.Children.push(node);
+            const normalizedParent = node.ParentID ? NormalizeUUID(node.ParentID) : null;
+            if (normalizedParent && tagMap.has(normalizedParent)) {
+                tagMap.get(normalizedParent)!.Children.push(node);
             } else {
                 roots.push(node);
             }
@@ -2365,20 +3154,35 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         return 'green';
     }
 
+    /**
+     * Counts the number of items referencing each tag, combining both
+     * Tagged Items and Content Item Tags. Uses NormalizeUUID for
+     * cross-platform UUID case consistency.
+     */
     private countItemsByTag(): Map<string, number> {
         const counts = new Map<string, number>();
         for (const ti of this.taggedItemsRaw) {
             const tagId = ti['TagID'] as string;
-            if (tagId) counts.set(tagId, (counts.get(tagId) ?? 0) + 1);
+            if (tagId) {
+                const key = NormalizeUUID(tagId);
+                counts.set(key, (counts.get(key) ?? 0) + 1);
+            }
         }
         // Also count from content item tags that reference TagID
         for (const cit of this.contentTagsRaw) {
             const tagId = cit['TagID'] as string;
-            if (tagId) counts.set(tagId, (counts.get(tagId) ?? 0) + 1);
+            if (tagId) {
+                const key = NormalizeUUID(tagId);
+                counts.set(key, (counts.get(key) ?? 0) + 1);
+            }
         }
         return counts;
     }
 
+    /**
+     * Computes the average weight per tag from Content Item Tags.
+     * Uses NormalizeUUID for cross-platform UUID case consistency.
+     */
     private computeTagAvgWeights(): Map<string, number> {
         const sums = new Map<string, number>();
         const counts = new Map<string, number>();
@@ -2386,8 +3190,9 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             const tagId = cit['TagID'] as string;
             const w = Number(cit['Weight'] ?? 0.5);
             if (tagId) {
-                sums.set(tagId, (sums.get(tagId) ?? 0) + w);
-                counts.set(tagId, (counts.get(tagId) ?? 0) + 1);
+                const key = NormalizeUUID(tagId);
+                sums.set(key, (sums.get(key) ?? 0) + w);
+                counts.set(key, (counts.get(key) ?? 0) + 1);
             }
         }
         const avgs = new Map<string, number>();
@@ -2544,22 +3349,27 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         }
     }
 
-    public async DeleteTag(node: TaxTreeNode): Promise<void> {
-        if (!confirm(`Delete tag "${node.Name}"? This will also remove all tagged item associations.`)) return;
-        try {
-            const md = new Metadata();
-            const entity = await md.GetEntityObject<BaseEntity>('MJ: Tags');
-            await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: node.ID }]));
-            const deleted = await entity.Delete();
-            if (deleted) {
-                this.addTaxAuditEntry('deleted', node.Name);
-                MJNotificationService.Instance.CreateSimpleNotification('Tag deleted', 'success', 2500);
-                await this.RefreshTaxonomyData();
+    public DeleteTag(node: TaxTreeNode): void {
+        this.OpenConfirmDialog(
+            'Delete Tag',
+            `Delete tag "${node.Name}"? This will also remove all tagged item associations.`,
+            async () => {
+                try {
+                    const md = new Metadata();
+                    const entity = await md.GetEntityObject<BaseEntity>('MJ: Tags');
+                    await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: node.ID }]));
+                    const deleted = await entity.Delete();
+                    if (deleted) {
+                        this.addTaxAuditEntry('deleted', node.Name);
+                        MJNotificationService.Instance.CreateSimpleNotification('Tag deleted', 'success', 2500);
+                        await this.RefreshTaxonomyData();
+                    }
+                } catch (error) {
+                    const msg = error instanceof Error ? error.message : String(error);
+                    MJNotificationService.Instance.CreateSimpleNotification(`Error: ${msg}`, 'error', 4000);
+                }
             }
-        } catch (error) {
-            const msg = error instanceof Error ? error.message : String(error);
-            MJNotificationService.Instance.CreateSimpleNotification(`Error: ${msg}`, 'error', 4000);
-        }
+        );
     }
 
     public async MergeTags(sourceTagId: string, targetTagId: string, sourceName: string, targetName: string): Promise<void> {
@@ -2651,29 +3461,72 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         this.TaxDuplicates = pairs;
     }
 
-    /** Simple string similarity using normalized Levenshtein-like approach and abbreviation detection */
+    /**
+     * Enhanced string similarity: separator normalization, abbreviation,
+     * pluralization, token-overlap Jaccard, containment, and Levenshtein.
+     * Returns the highest score among all heuristics.
+     */
     private computeStringSimilarity(a: string, b: string): number {
         const la = a.toLowerCase().trim();
         const lb = b.toLowerCase().trim();
-
         if (la === lb) return 1.0;
 
-        // Check if one is an abbreviation of the other
+        // Strip separators and compare
+        const normA = la.replace(/[\s\-_&]+/g, '');
+        const normB = lb.replace(/[\s\-_&]+/g, '');
+        if (normA === normB) return 0.98;
+
+        let best = 0;
+
+        // Abbreviation
         if (this.isAbbreviationOf(la, lb) || this.isAbbreviationOf(lb, la)) {
-            return 0.90;
+            best = Math.max(best, 0.90);
         }
 
-        // Check if one contains the other
+        // Pluralization
+        best = Math.max(best, this.computePluralizationScore(la, lb));
+
+        // Token Jaccard
+        best = Math.max(best, this.computeTokenJaccardSimilarity(la, lb));
+
+        // Containment
         if (lb.includes(la) || la.includes(lb)) {
             const shorter = la.length < lb.length ? la : lb;
             const longer = la.length < lb.length ? lb : la;
-            return shorter.length / longer.length;
+            best = Math.max(best, shorter.length / longer.length);
         }
 
-        // Levenshtein distance-based similarity
+        // Levenshtein
         const dist = this.levenshteinDistance(la, lb);
         const maxLen = Math.max(la.length, lb.length);
-        return maxLen > 0 ? 1 - dist / maxLen : 0;
+        if (maxLen > 0) {
+            best = Math.max(best, 1 - dist / maxLen);
+        }
+
+        return best;
+    }
+
+    /** Scores simple English pluralization differences */
+    private computePluralizationScore(a: string, b: string): number {
+        const shorter = a.length <= b.length ? a : b;
+        const longer = a.length <= b.length ? b : a;
+        if (longer === shorter + 's') return 0.95;
+        if (longer === shorter + 'es') return 0.95;
+        if (shorter.endsWith('y') && longer === shorter.slice(0, -1) + 'ies') return 0.95;
+        return 0;
+    }
+
+    /** Jaccard similarity on word tokens */
+    private computeTokenJaccardSimilarity(a: string, b: string): number {
+        const tokensA = new Set(a.split(/[\s\-_&]+/).filter(w => w.length > 0));
+        const tokensB = new Set(b.split(/[\s\-_&]+/).filter(w => w.length > 0));
+        if (tokensA.size === 0 || tokensB.size === 0) return 0;
+        let intersection = 0;
+        for (const token of tokensA) {
+            if (tokensB.has(token)) intersection++;
+        }
+        const union = tokensA.size + tokensB.size - intersection;
+        return union > 0 ? intersection / union : 0;
     }
 
     private isAbbreviationOf(short: string, long: string): boolean {
@@ -2706,31 +3559,36 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
 
     // ── Orphans ──
 
+    /**
+     * Finds orphan tags: no parent, no children, and low usage (<=3 items).
+     * Uses NormalizeUUID for consistent cross-platform UUID comparisons.
+     */
     private buildTaxOrphans(): void {
         const tagItemCounts = this.countItemsByTag();
+        const tagAvgWeights = this.computeTagAvgWeights();
         const hasChildren = new Set<string>();
         for (const t of this.tagsRaw) {
             const pid = t['ParentID'] as string;
-            if (pid) hasChildren.add(pid);
+            if (pid) hasChildren.add(NormalizeUUID(pid));
         }
 
         this.TaxOrphans = this.tagsRaw
             .filter(t => {
-                const id = t['ID'] as string;
+                const normalizedId = NormalizeUUID(t['ID'] as string);
                 const parentId = t['ParentID'] as string | null;
-                const itemCount = tagItemCounts.get(id) ?? 0;
+                const itemCount = tagItemCounts.get(normalizedId) ?? 0;
                 // Orphan: no parent, no children, low usage
-                return !parentId && !hasChildren.has(id) && itemCount <= 3;
+                return !parentId && !hasChildren.has(normalizedId) && itemCount <= 3;
             })
             .map(t => {
                 const id = t['ID'] as string;
-                const itemCount = tagItemCounts.get(id) ?? 0;
-                const avgWeights = this.computeTagAvgWeights();
+                const normalizedId = NormalizeUUID(id);
+                const itemCount = tagItemCounts.get(normalizedId) ?? 0;
                 return {
                     ID: id,
                     Name: (t['Name'] as string) ?? 'Unnamed',
                     UsageCount: itemCount,
-                    AvgWeight: avgWeights.get(id) ?? 0,
+                    AvgWeight: tagAvgWeights.get(normalizedId) ?? 0,
                     FirstSeen: this.formatShortDate((t['__mj_CreatedAt'] as string) ?? ''),
                     LastSeen: this.formatShortDate((t['__mj_UpdatedAt'] as string) ?? ''),
                     IsSelected: false
@@ -2753,51 +3611,92 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         this.cdr.detectChanges();
     }
 
-    public async DeleteOrphan(orphan: TaxOrphanCard): Promise<void> {
-        if (!confirm(`Delete orphan tag "${orphan.Name}"?`)) return;
-        try {
-            const md = new Metadata();
-            const entity = await md.GetEntityObject<BaseEntity>('MJ: Tags');
-            await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: orphan.ID }]));
-            const deleted = await entity.Delete();
-            if (deleted) {
-                this.addTaxAuditEntry('deleted', orphan.Name);
-                MJNotificationService.Instance.CreateSimpleNotification('Orphan tag deleted', 'success', 2500);
-                this.TaxOrphans = this.TaxOrphans.filter(o => !UUIDsEqual(o.ID, orphan.ID));
-                this.TaxHealth.Orphaned = this.TaxOrphans.length;
-                this.cdr.detectChanges();
+    public DeleteOrphan(orphan: TaxOrphanCard): void {
+        this.OpenConfirmDialog(
+            'Delete Orphan Tag',
+            `Delete orphan tag "${orphan.Name}"?`,
+            async () => {
+                try {
+                    const md = new Metadata();
+                    const entity = await md.GetEntityObject<BaseEntity>('MJ: Tags');
+                    await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: orphan.ID }]));
+                    const deleted = await entity.Delete();
+                    if (deleted) {
+                        this.addTaxAuditEntry('deleted', orphan.Name);
+                        MJNotificationService.Instance.CreateSimpleNotification('Orphan tag deleted', 'success', 2500);
+                        this.TaxOrphans = this.TaxOrphans.filter(o => !UUIDsEqual(o.ID, orphan.ID));
+                        this.TaxHealth.Orphaned = this.TaxOrphans.length;
+                        this.cdr.detectChanges();
+                    }
+                } catch (error) {
+                    const msg = error instanceof Error ? error.message : String(error);
+                    MJNotificationService.Instance.CreateSimpleNotification(`Error: ${msg}`, 'error', 4000);
+                }
             }
-        } catch (error) {
-            const msg = error instanceof Error ? error.message : String(error);
-            MJNotificationService.Instance.CreateSimpleNotification(`Error: ${msg}`, 'error', 4000);
-        }
+        );
     }
 
-    public async BulkDeleteOrphans(): Promise<void> {
+    public BulkDeleteOrphans(): void {
         const selected = this.TaxOrphans.filter(o => o.IsSelected);
         if (selected.length === 0) return;
-        if (!confirm(`Delete ${selected.length} selected orphan tags?`)) return;
 
-        const md = new Metadata();
-        let deletedCount = 0;
-        for (const orphan of selected) {
-            try {
-                const entity = await md.GetEntityObject<BaseEntity>('MJ: Tags');
-                await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: orphan.ID }]));
-                if (await entity.Delete()) {
-                    deletedCount++;
-                    this.addTaxAuditEntry('deleted', orphan.Name);
+        this.OpenConfirmDialog(
+            'Bulk Delete Orphan Tags',
+            `Delete ${selected.length} selected orphan tag${selected.length > 1 ? 's' : ''}? This cannot be undone.`,
+            async () => {
+                const md = new Metadata();
+                let deletedCount = 0;
+                for (const orphan of selected) {
+                    try {
+                        const entity = await md.GetEntityObject<BaseEntity>('MJ: Tags');
+                        await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: orphan.ID }]));
+                        if (await entity.Delete()) {
+                            deletedCount++;
+                            this.addTaxAuditEntry('deleted', orphan.Name);
+                        }
+                    } catch {
+                        // continue with remaining
+                    }
                 }
-            } catch {
-                // continue with remaining
-            }
-        }
 
-        MJNotificationService.Instance.CreateSimpleNotification(`Deleted ${deletedCount} tags`, 'success', 3000);
-        this.TaxOrphans = this.TaxOrphans.filter(o => !o.IsSelected);
-        this.TaxHealth.Orphaned = this.TaxOrphans.length;
-        this.TaxAllOrphansSelected = false;
-        this.cdr.detectChanges();
+                MJNotificationService.Instance.CreateSimpleNotification(`Deleted ${deletedCount} tags`, 'success', 3000);
+                this.TaxOrphans = this.TaxOrphans.filter(o => !o.IsSelected);
+                this.TaxHealth.Orphaned = this.TaxOrphans.length;
+                this.TaxAllOrphansSelected = false;
+                this.cdr.detectChanges();
+            }
+        );
+    }
+
+    /** Delete all orphan tags at once with a styled confirmation dialog */
+    public DeleteAllOrphans(): void {
+        if (this.TaxOrphans.length === 0) return;
+        this.OpenConfirmDialog(
+            'Delete All Orphaned Tags',
+            `Delete all ${this.TaxOrphans.length} orphaned tag${this.TaxOrphans.length > 1 ? 's' : ''}? This cannot be undone.`,
+            async () => {
+                const md = new Metadata();
+                let deletedCount = 0;
+                for (const orphan of this.TaxOrphans) {
+                    try {
+                        const entity = await md.GetEntityObject<BaseEntity>('MJ: Tags');
+                        await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: orphan.ID }]));
+                        if (await entity.Delete()) {
+                            deletedCount++;
+                            this.addTaxAuditEntry('deleted', orphan.Name);
+                        }
+                    } catch {
+                        // continue with remaining
+                    }
+                }
+
+                MJNotificationService.Instance.CreateSimpleNotification(`Deleted ${deletedCount} orphan tags`, 'success', 3000);
+                this.TaxOrphans = [];
+                this.TaxHealth.Orphaned = 0;
+                this.TaxAllOrphansSelected = false;
+                this.cdr.detectChanges();
+            }
+        );
     }
 
     // ── Treemap ──
@@ -2827,6 +3726,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
 
             for (const child of sortedChildren.slice(0, 4)) {
                 cells.push({
+                    ID: child.ID,
                     Name: child.Name,
                     ItemCount: child.ItemCount,
                     ColorClass: `${family}-${shadeIdx}`,
@@ -2861,17 +3761,63 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
 
     // ── Audit Log ──
 
+    /**
+     * Builds the audit timeline from the MJ: Tag Audit Logs entity.
+     * Falls back to synthesizing "created" events from tag creation dates
+     * if no real audit log records exist yet.
+     */
     private buildTaxAuditLog(): void {
-        // Build audit events from tag creation dates and known changes
+        if (this.tagAuditLogsRaw.length > 0) {
+            this.TaxAuditEvents = this.buildAuditEventsFromLogs();
+        } else {
+            this.TaxAuditEvents = this.synthesizeAuditEventsFromTags();
+        }
+    }
+
+    /**
+     * Maps real Tag Audit Log records into TaxAuditEvent objects.
+     * Uses the view's denormalized Tag, PerformedByUser, and RelatedTag fields.
+     */
+    private buildAuditEventsFromLogs(): TaxAuditEvent[] {
         const events: TaxAuditEvent[] = [];
 
+        for (const log of this.tagAuditLogsRaw) {
+            const action = (log['Action'] as string) ?? '';
+            const type = this.mapAuditActionToType(action);
+            if (!type) continue;
+
+            const tagName = (log['Tag'] as string) ?? 'Unknown';
+            const relatedTag = (log['RelatedTag'] as string) ?? '';
+            const user = (log['PerformedByUser'] as string) ?? 'System';
+            const createdAt = (log['__mj_CreatedAt'] as string) ?? '';
+            const details = this.parseAuditDetails(log['Details'] as string | null);
+
+            events.push({
+                Type: type,
+                Description: this.buildAuditDescription(type, tagName, relatedTag, details),
+                TagRef: tagName,
+                User: user,
+                Timestamp: this.formatDate(createdAt),
+                DayHeader: this.formatDayHeader(createdAt)
+            });
+        }
+
+        return events;
+    }
+
+    /**
+     * Synthesizes audit events from tag __mj_CreatedAt dates when no
+     * real audit log records exist. Used as a fallback only.
+     */
+    private synthesizeAuditEventsFromTags(): TaxAuditEvent[] {
+        const events: TaxAuditEvent[] = [];
         for (const tag of this.tagsRaw) {
             const name = (tag['Name'] as string) ?? 'Unnamed';
             const createdAt = tag['__mj_CreatedAt'] as string;
             if (createdAt) {
                 events.push({
                     Type: 'created',
-                    Description: `Tag created`,
+                    Description: 'Tag created',
                     TagRef: name,
                     User: 'System',
                     Timestamp: this.formatDate(createdAt),
@@ -2879,17 +3825,77 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
                 });
             }
         }
-
-        // Sort by date descending
         events.sort((a, b) => b.Timestamp.localeCompare(a.Timestamp));
-        this.TaxAuditEvents = events.slice(0, 50);
+        return events.slice(0, 50);
     }
 
-    private addTaxAuditEntry(type: TaxAuditEvent['Type'], tagRef: string): void {
+    /**
+     * Maps a PascalCase DB Action value (e.g. "Renamed") to the lowercase
+     * TaxAuditAction type used in the UI. Returns null for unrecognized values.
+     */
+    private mapAuditActionToType(action: string): TaxAuditAction | null {
+        const mapped = action.toLowerCase() as TaxAuditAction;
+        const validTypes: Set<string> = new Set<string>([
+            'created', 'merged', 'moved', 'deleted', 'renamed',
+            'deprecated', 'descriptionchanged', 'reactivated', 'split'
+        ]);
+        return validTypes.has(mapped) ? mapped : null;
+    }
+
+    /**
+     * Safely parses the JSON Details column from a Tag Audit Log record.
+     * Returns an empty object on parse failure.
+     */
+    private parseAuditDetails(details: string | null): Record<string, string> {
+        if (!details) return {};
+        try {
+            return JSON.parse(details) as Record<string, string>;
+        } catch {
+            return {};
+        }
+    }
+
+    /**
+     * Builds a human-readable description for an audit event based on the
+     * action type and any additional context from the related tag or details JSON.
+     */
+    private buildAuditDescription(type: TaxAuditAction, tagName: string, relatedTag: string, details: Record<string, string>): string {
+        switch (type) {
+            case 'created':
+                return 'Tag created';
+            case 'renamed': {
+                const oldName = details['OldName'];
+                return oldName ? `Renamed from "${oldName}"` : 'Tag renamed';
+            }
+            case 'moved': {
+                return 'Tag moved to new parent';
+            }
+            case 'merged':
+                return relatedTag ? `Merged into "${relatedTag}"` : 'Tags merged';
+            case 'split':
+                return relatedTag ? `Split from "${relatedTag}"` : 'Tag split';
+            case 'deleted':
+                return 'Tag deleted';
+            case 'deprecated':
+                return 'Tag deprecated';
+            case 'reactivated':
+                return 'Tag reactivated';
+            case 'descriptionchanged':
+                return 'Description updated';
+            default:
+                return `Tag ${type}`;
+        }
+    }
+
+    /**
+     * Adds a local-only audit entry to the top of the timeline for
+     * immediate UI feedback after a user action (merge, delete, etc.).
+     */
+    private addTaxAuditEntry(type: TaxAuditAction, tagRef: string): void {
         const now = new Date().toISOString();
         this.TaxAuditEvents.unshift({
             Type: type,
-            Description: `Tag ${type}`,
+            Description: this.buildAuditDescription(type, tagRef, '', {}),
             TagRef: tagRef,
             User: 'You',
             Timestamp: this.formatDate(now),
@@ -2937,15 +3943,183 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         this.TaxHealth = { Total: total, Healthy: Math.max(0, healthy), NeedAttention: needAttention, Orphaned: orphaned, Duplicates: duplicates };
     }
 
+    /** Returns the Font Awesome icon class for an audit event action type. */
     public GetTaxAuditIcon(type: string): string {
         const map: Record<string, string> = {
             'created': 'fa-solid fa-plus',
             'merged': 'fa-solid fa-code-merge',
             'moved': 'fa-solid fa-arrows-up-down',
             'deleted': 'fa-solid fa-trash',
-            'renamed': 'fa-solid fa-pen'
+            'renamed': 'fa-solid fa-pen',
+            'deprecated': 'fa-solid fa-ban',
+            'descriptionchanged': 'fa-solid fa-file-pen',
+            'reactivated': 'fa-solid fa-rotate-left',
+            'split': 'fa-solid fa-code-branch'
         };
         return map[type] ?? 'fa-solid fa-circle';
+    }
+
+    // ── Confirmation Dialog ──
+
+    /** Opens a styled confirmation dialog, replacing browser `confirm()`. */
+    public OpenConfirmDialog(title: string, message: string, action: () => Promise<void>): void {
+        this.ConfirmDialogTitle = title;
+        this.ConfirmDialogMessage = message;
+        this.confirmDialogAction = action;
+        this.ShowConfirmDialog = true;
+        this.cdr.detectChanges();
+    }
+
+    /** User confirmed the dialog action */
+    public async ConfirmDialogAccept(): Promise<void> {
+        this.ShowConfirmDialog = false;
+        if (this.confirmDialogAction) {
+            await this.confirmDialogAction();
+        }
+        this.confirmDialogAction = null;
+        this.cdr.detectChanges();
+    }
+
+    /** User cancelled the confirmation dialog */
+    public ConfirmDialogCancel(): void {
+        this.ShowConfirmDialog = false;
+        this.confirmDialogAction = null;
+        this.cdr.detectChanges();
+    }
+
+    // ── Split Dialog ──
+
+    /** Opens the split-tag dialog for a given tree node */
+    public OpenSplitDialog(node: TaxTreeNode): void {
+        this.splitTargetNode = node;
+        this.SplitChildNames = '';
+        this.ShowSplitDialog = true;
+        this.cdr.detectChanges();
+    }
+
+    /** Closes the split-tag dialog without action */
+    public CloseSplitDialog(): void {
+        this.ShowSplitDialog = false;
+        this.splitTargetNode = null;
+        this.SplitChildNames = '';
+        this.cdr.detectChanges();
+    }
+
+    /** Executes the split operation, creating child tags from comma-separated names */
+    public async ExecuteSplit(): Promise<void> {
+        if (!this.splitTargetNode || !this.SplitChildNames.trim()) return;
+        const names = this.SplitChildNames.split(',')
+            .map(n => n.trim())
+            .filter(n => n.length > 0);
+        if (names.length === 0) return;
+
+        this.ShowSplitDialog = false;
+        const nodeName = this.splitTargetNode.Name;
+        const parentId = this.splitTargetNode.ParentID;
+
+        try {
+            const md = new Metadata();
+            for (const name of names) {
+                const entity = await md.GetEntityObject<BaseEntity>('MJ: Tags');
+                entity.NewRecord();
+                entity.Set('Name', name);
+                entity.Set('DisplayName', name);
+                entity.Set('ParentID', parentId);
+                await entity.Save();
+            }
+
+            this.addTaxAuditEntry('split', `${nodeName} into ${names.join(', ')}`);
+            MJNotificationService.Instance.CreateSimpleNotification(
+                `Split "${nodeName}" into ${names.length} new tags`, 'success', 3000
+            );
+            await this.RefreshTaxonomyData();
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            MJNotificationService.Instance.CreateSimpleNotification(`Split error: ${msg}`, 'error', 4000);
+        }
+        this.splitTargetNode = null;
+        this.SplitChildNames = '';
+        this.cdr.detectChanges();
+    }
+
+    // ── Move Dialog ──
+
+    /** Opens the move-tag dialog for a given tree node */
+    public OpenMoveDialog(node: TaxTreeNode): void {
+        this.moveTargetNode = node;
+        this.MoveNewParentID = node.ParentID;
+        this.ShowMoveDialog = true;
+        this.cdr.detectChanges();
+    }
+
+    /** Closes the move-tag dialog without action */
+    public CloseMoveDialog(): void {
+        this.ShowMoveDialog = false;
+        this.moveTargetNode = null;
+        this.MoveNewParentID = null;
+        this.cdr.detectChanges();
+    }
+
+    /** Returns flat list of tags eligible as move targets (excludes the node being moved and its descendants) */
+    public GetMoveTargetOptions(): { ID: string; Name: string; Depth: number }[] {
+        if (!this.moveTargetNode) return [];
+        const excludeIds = this.collectDescendantIds(this.moveTargetNode);
+        excludeIds.add(NormalizeUUID(this.moveTargetNode.ID));
+
+        return this.TaxFlatNodes
+            .filter(n => !excludeIds.has(NormalizeUUID(n.ID)))
+            .map(n => ({ ID: n.ID, Name: n.Name, Depth: n.Depth }));
+    }
+
+    /** Collects IDs of all descendants of a node */
+    private collectDescendantIds(node: TaxTreeNode): Set<string> {
+        const ids = new Set<string>();
+        for (const child of node.Children) {
+            ids.add(NormalizeUUID(child.ID));
+            for (const id of this.collectDescendantIds(child)) {
+                ids.add(id);
+            }
+        }
+        return ids;
+    }
+
+    /** Executes the move operation */
+    public async ExecuteMove(): Promise<void> {
+        if (!this.moveTargetNode) return;
+        const newParent = this.MoveNewParentID;
+        this.ShowMoveDialog = false;
+
+        await this.MoveTag(this.moveTargetNode, newParent);
+        this.moveTargetNode = null;
+        this.MoveNewParentID = null;
+        this.cdr.detectChanges();
+    }
+
+    // ── Treemap Drill-In ──
+
+    /** Opens treemap drill-in panel for the given cell */
+    public OpenTreemapDrillIn(cell: TaxTreemapCell): void {
+        const node = this.TaxFlatNodes.find(n => UUIDsEqual(n.ID, cell.ID));
+        if (node) {
+            this.TreemapDrillInNode = node;
+            this.ShowTreemapDrillIn = true;
+            this.loadRecentItemsForTag(node);
+            this.cdr.detectChanges();
+        }
+    }
+
+    /** Closes treemap drill-in panel */
+    public CloseTreemapDrillIn(): void {
+        this.ShowTreemapDrillIn = false;
+        this.TreemapDrillInNode = null;
+        this.cdr.detectChanges();
+    }
+
+    /** Navigate from treemap drill-in to the tag in the tree view */
+    public DrillInToTreeView(node: TaxTreeNode): void {
+        this.CloseTreemapDrillIn();
+        this.SwitchTaxSubTab('tree');
+        this.SelectTaxNode(node);
     }
 
     public async RefreshTaxonomyData(): Promise<void> {
@@ -2953,8 +4127,251 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         await this.loadTaxonomyData();
         this.cdr.detectChanges();
     }
+
+    // ════════════════════════════════════════════
+    // CONTENT ITEM DUPLICATES (G3)
+    // ════════════════════════════════════════════
+
+    /** Load pending content item duplicates for review */
+    public async LoadContentDuplicates(): Promise<void> {
+        this.IsLoadingDuplicates = true;
+        this.cdr.detectChanges();
+
+        try {
+            const rv = new RunView();
+            const result = await rv.RunView<{
+                ID: string; ContentItemA: string; ContentItemB: string;
+                ContentItemAID: string; ContentItemBID: string;
+                SimilarityScore: number; DetectionMethod: string; Status: string;
+            }>({
+                EntityName: 'MJ: Content Item Duplicates',
+                ExtraFilter: `Status = 'Pending'`,
+                OrderBy: 'SimilarityScore DESC',
+                MaxRows: 100,
+                ResultType: 'simple'
+            });
+
+            if (result.Success) {
+                // Look up source names for items
+                const itemIDs = new Set<string>();
+                for (const row of result.Results) {
+                    itemIDs.add(row.ContentItemAID);
+                    itemIDs.add(row.ContentItemBID);
+                }
+
+                const sourceNameMap = await this.resolveItemSourceNames(Array.from(itemIDs));
+
+                this.ContentDuplicates = result.Results.map(row => ({
+                    ID: row.ID,
+                    ItemAName: row.ContentItemA || 'Unknown',
+                    ItemASource: sourceNameMap.get(row.ContentItemAID) ?? 'Unknown',
+                    ItemBName: row.ContentItemB || 'Unknown',
+                    ItemBSource: sourceNameMap.get(row.ContentItemBID) ?? 'Unknown',
+                    SimilarityScore: row.SimilarityScore,
+                    DetectionMethod: row.DetectionMethod,
+                    Status: row.Status as ContentDuplicateRow['Status'],
+                }));
+            }
+        } catch (error) {
+            console.error('[Classify] Error loading content duplicates:', error);
+        } finally {
+            this.IsLoadingDuplicates = false;
+            this.cdr.detectChanges();
+        }
+    }
+
+    /** Resolve content source names for a list of content item IDs */
+    private async resolveItemSourceNames(itemIDs: string[]): Promise<Map<string, string>> {
+        const map = new Map<string, string>();
+        if (itemIDs.length === 0) return map;
+
+        const rv = new RunView();
+        const idFilter = itemIDs.map(id => `ID='${id}'`).join(' OR ');
+        const result = await rv.RunView<{ ID: string; ContentSource: string }>({
+            EntityName: 'MJ: Content Items',
+            ExtraFilter: `(${idFilter})`,
+            Fields: ['ID', 'ContentSource'],
+            ResultType: 'simple'
+        });
+
+        if (result.Success) {
+            for (const row of result.Results) {
+                map.set(row.ID, row.ContentSource || 'Unknown');
+            }
+        }
+        return map;
+    }
+
+    /** Confirm a content duplicate pair */
+    public async ConfirmContentDuplicate(dupRow: ContentDuplicateRow): Promise<void> {
+        try {
+            const md = new Metadata();
+            const entity = await md.GetEntityObject<MJContentItemDuplicateEntity>('MJ: Content Item Duplicates');
+            const loaded = await entity.Load(dupRow.ID);
+            if (!loaded) return;
+
+            entity.Status = 'Confirmed';
+            const saved = await entity.Save();
+            if (saved) {
+                this.ContentDuplicates = this.ContentDuplicates.filter(d => d.ID !== dupRow.ID);
+                MJNotificationService.Instance.CreateSimpleNotification('Duplicate confirmed', 'success', 2000);
+            }
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            MJNotificationService.Instance.CreateSimpleNotification(`Error: ${msg}`, 'error', 3000);
+        }
+        this.cdr.detectChanges();
+    }
+
+    /** Dismiss a content duplicate pair */
+    public async DismissContentDuplicate(dupRow: ContentDuplicateRow): Promise<void> {
+        try {
+            const md = new Metadata();
+            const entity = await md.GetEntityObject<MJContentItemDuplicateEntity>('MJ: Content Item Duplicates');
+            const loaded = await entity.Load(dupRow.ID);
+            if (!loaded) return;
+
+            entity.Status = 'Dismissed';
+            entity.Resolution = 'NotDuplicate';
+            const saved = await entity.Save();
+            if (saved) {
+                this.ContentDuplicates = this.ContentDuplicates.filter(d => d.ID !== dupRow.ID);
+                MJNotificationService.Instance.CreateSimpleNotification('Duplicate dismissed', 'success', 2000);
+            }
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            MJNotificationService.Instance.CreateSimpleNotification(`Error: ${msg}`, 'error', 3000);
+        }
+        this.cdr.detectChanges();
+    }
 }
 
 export function LoadAutotaggingPipelineResource(): void {
     // Prevents tree-shaking
+}
+
+// ================================================================
+// Cron-to-Human-Readable Utility
+// ================================================================
+
+/**
+ * Converts a 5-part or 6-part cron expression to a human-readable English string.
+ *
+ * Handles common patterns:
+ *   `0 * * * *`      -> "Every hour"
+ *   `0 2 * * *`      -> "Daily at 2:00 AM"
+ *   `0 2 * * 1`      -> "Weekly on Monday at 2:00 AM"
+ *   `star/15 * * * *` -> "Every 15 minutes"  (where star = asterisk)
+ *   `0 0 1 * *`      -> "Monthly on day 1 at 12:00 AM"
+ *
+ * Falls back to returning the raw cron string for unrecognized patterns.
+ *
+ * @param cron A cron expression string (5 or 6 parts)
+ * @returns A human-readable description or the raw cron if unrecognized
+ */
+export function CronToHumanReadable(cron: string): string {
+    if (!cron) return 'No schedule';
+
+    const parts = cron.trim().split(/\s+/);
+    const p = parseCronParts(parts);
+    if (!p) return cron;
+
+    return formatCronParts(p) ?? cron;
+}
+
+/** Internal cron field tuple */
+interface CronFields {
+    Minute: string;
+    Hour: string;
+    DayOfMonth: string;
+    Month: string;
+    DayOfWeek: string;
+}
+
+/**
+ * Parses 5-part or 6-part cron expressions into normalized fields.
+ * 6-part expressions have a leading seconds field that is discarded.
+ */
+function parseCronParts(parts: string[]): CronFields | null {
+    if (parts.length === 5) {
+        return { Minute: parts[0], Hour: parts[1], DayOfMonth: parts[2], Month: parts[3], DayOfWeek: parts[4] };
+    }
+    if (parts.length === 6) {
+        return { Minute: parts[1], Hour: parts[2], DayOfMonth: parts[3], Month: parts[4], DayOfWeek: parts[5] };
+    }
+    return null;
+}
+
+/**
+ * Attempts to map parsed cron fields to a human-readable string.
+ * Returns null when the pattern is not recognized.
+ */
+function formatCronParts(p: CronFields): string | null {
+    // Every N minutes: */N * * * *
+    if (p.Minute.startsWith('*/') && p.Hour === '*' && p.DayOfMonth === '*' && p.Month === '*' && p.DayOfWeek === '*') {
+        const interval = parseInt(p.Minute.slice(2), 10);
+        if (interval === 1) return 'Every minute';
+        return `Every ${interval} minutes`;
+    }
+
+    // Every hour at minute M: M * * * *
+    if (!p.Minute.includes('*') && !p.Minute.includes('/') && p.Hour === '*' && p.DayOfMonth === '*' && p.Month === '*' && p.DayOfWeek === '*') {
+        return 'Every hour';
+    }
+
+    // Every N hours: 0 */N * * *
+    if (!p.Minute.includes('*') && !p.Minute.includes('/') && p.Hour.startsWith('*/') && p.DayOfMonth === '*') {
+        const interval = parseInt(p.Hour.slice(2), 10);
+        if (interval === 1) return 'Every hour';
+        return `Every ${interval} hours`;
+    }
+
+    // Specific hour + minute with wildcard or specific day fields
+    if (!p.Minute.includes('*') && !p.Minute.includes('/') &&
+        !p.Hour.includes('*') && !p.Hour.includes('/') &&
+        p.Month === '*') {
+
+        const hour = parseInt(p.Hour, 10);
+        const minute = parseInt(p.Minute, 10);
+        const timeStr = formatTimeOfDay(hour, minute);
+
+        // Weekly: specific day of week
+        if (p.DayOfWeek !== '*' && p.DayOfMonth === '*') {
+            const dayName = dayOfWeekToName(p.DayOfWeek);
+            return `Weekly on ${dayName} at ${timeStr}`;
+        }
+
+        // Monthly: specific day of month
+        if (p.DayOfMonth !== '*' && p.DayOfWeek === '*') {
+            return `Monthly on day ${p.DayOfMonth} at ${timeStr}`;
+        }
+
+        // Daily
+        if (p.DayOfMonth === '*' && p.DayOfWeek === '*') {
+            return `Daily at ${timeStr}`;
+        }
+    }
+
+    return null;
+}
+
+/** Formats hour and minute to 12-hour AM/PM time string */
+function formatTimeOfDay(hour: number, minute: number): string {
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    const h = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+    const m = minute.toString().padStart(2, '0');
+    return `${h}:${m} ${ampm}`;
+}
+
+/** Maps day-of-week cron values (0-7 or SUN-SAT) to English names */
+function dayOfWeekToName(dow: string): string {
+    const names: Record<string, string> = {
+        '0': 'Sunday', '1': 'Monday', '2': 'Tuesday',
+        '3': 'Wednesday', '4': 'Thursday', '5': 'Friday',
+        '6': 'Saturday', '7': 'Sunday',
+        'SUN': 'Sunday', 'MON': 'Monday', 'TUE': 'Tuesday',
+        'WED': 'Wednesday', 'THU': 'Thursday', 'FRI': 'Friday',
+        'SAT': 'Saturday',
+    };
+    return names[dow.toUpperCase()] ?? dow;
 }

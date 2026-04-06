@@ -50,7 +50,7 @@ export class AutotagCloudStorage extends AutotagBase {
         const contentItemsToProcess = await this.SetContentItemsToProcess(contentSources);
 
         if (contentItemsToProcess.length > 0) {
-            await this.engine.ExtractTextAndProcessWithLLM(contentItemsToProcess, this.contextUser, undefined, onProgress);
+            await this.engine.ExtractTextAndProcessWithLLM(contentItemsToProcess, this.contextUser, undefined, undefined, onProgress);
         } else {
             LogStatus('AutotagCloudStorage: no new or modified files to process');
         }

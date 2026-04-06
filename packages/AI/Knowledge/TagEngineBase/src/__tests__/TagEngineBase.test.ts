@@ -61,6 +61,7 @@ interface FakeTag {
     DisplayName: string;
     Description: string | null;
     ParentID: string | null;
+    Status: 'Active' | 'Deleted' | 'Deprecated' | 'Merged';
 }
 
 interface FakeTaggedItem {
@@ -71,8 +72,8 @@ interface FakeTaggedItem {
     Weight: number;
 }
 
-function makeFakeTag(id: string, name: string, parentID: string | null = null, description: string | null = null): FakeTag {
-    return { ID: id, Name: name, DisplayName: name, Description: description, ParentID: parentID };
+function makeFakeTag(id: string, name: string, parentID: string | null = null, description: string | null = null, status: 'Active' | 'Deleted' | 'Deprecated' | 'Merged' = 'Active'): FakeTag {
+    return { ID: id, Name: name, DisplayName: name, Description: description, ParentID: parentID, Status: status };
 }
 
 function injectTags(engine: TagEngineBase, tags: FakeTag[], taggedItems: FakeTaggedItem[] = []): void {
@@ -142,6 +143,21 @@ describe('TagEngineBase', () => {
 
         it('should return undefined for unknown name', () => {
             expect(engine.GetTagByName('Quantum Computing')).toBeUndefined();
+        });
+
+        it('should exclude non-Active tags', () => {
+            const tagsWithInactive = [
+                ...tags,
+                makeFakeTag('ggg', 'Deprecated Tag', null, null, 'Deprecated'),
+                makeFakeTag('hhh', 'Merged Tag', null, null, 'Merged'),
+                makeFakeTag('iii', 'Deleted Tag', null, null, 'Deleted'),
+            ];
+            injectTags(engine, tagsWithInactive);
+            expect(engine.GetTagByName('Deprecated Tag')).toBeUndefined();
+            expect(engine.GetTagByName('Merged Tag')).toBeUndefined();
+            expect(engine.GetTagByName('Deleted Tag')).toBeUndefined();
+            // Active tags still found
+            expect(engine.GetTagByName('AI')?.ID).toBe('bbb');
         });
     });
 

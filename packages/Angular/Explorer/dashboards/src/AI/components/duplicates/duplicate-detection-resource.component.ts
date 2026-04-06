@@ -150,6 +150,10 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
     public ShowMergeConfirm = false;
     /** Whether the merge is currently executing */
     public IsMerging = false;
+    /** Whether the current entity allows record merging (controls merge button availability) */
+    public MergeEnabled = true;
+    /** Whether the "merge not available" warning dialog is visible */
+    public ShowMergeWarningDialog = false;
 
     // Raw data
     public Runs: MJDuplicateRunEntity[] = [];
@@ -442,16 +446,21 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
                 return;
             }
 
-            // DD-1: Validate AllowRecordMerge before starting expensive detection
+            // DD-1: Track whether merging is available for the selected entity
+            this.MergeEnabled = entityInfo.AllowRecordMerge;
+
+            // If merging is disabled, show a warning but allow detection to continue
             if (!entityInfo.AllowRecordMerge) {
-                MJNotificationService.Instance.CreateSimpleNotification(
-                    `Entity "${entityInfo.Name}" does not allow record merging. Enable AllowRecordMerge in entity settings before running duplicate detection.`,
-                    'warning', 7000
-                );
-                this.IsDetecting = false;
-                this.DetectionStage = '';
+                this.ShowMergeWarningDialog = true;
                 this.cdr.detectChanges();
-                return;
+                // Wait for user to acknowledge the warning before proceeding
+                const userConfirmed = await this.waitForMergeWarningResponse();
+                if (!userConfirmed) {
+                    this.IsDetecting = false;
+                    this.DetectionStage = '';
+                    this.cdr.detectChanges();
+                    return;
+                }
             }
 
             dupeRun.EntityID = entityInfo.ID;
@@ -1220,6 +1229,40 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
         if (columnIndex === 0) return this.ComparisonGroup.RecordName;
         const match = this.ComparisonMatches[columnIndex - 1];
         return match?.Name ?? 'Unknown';
+    }
+
+    // ════════════════════════════════════════════
+    // Merge Warning Dialog (AllowRecordMerge=false)
+    // ════════════════════════════════════════════
+
+    /** Resolver for the merge warning dialog promise */
+    private mergeWarningResolver: ((value: boolean) => void) | null = null;
+
+    /** Returns a promise that resolves when the user responds to the merge warning dialog */
+    private waitForMergeWarningResponse(): Promise<boolean> {
+        return new Promise<boolean>((resolve) => {
+            this.mergeWarningResolver = resolve;
+        });
+    }
+
+    /** User chose to proceed with detection despite merge being unavailable */
+    public AcceptMergeWarning(): void {
+        this.ShowMergeWarningDialog = false;
+        if (this.mergeWarningResolver) {
+            this.mergeWarningResolver(true);
+            this.mergeWarningResolver = null;
+        }
+        this.cdr.detectChanges();
+    }
+
+    /** User cancelled after seeing merge warning */
+    public DeclineMergeWarning(): void {
+        this.ShowMergeWarningDialog = false;
+        if (this.mergeWarningResolver) {
+            this.mergeWarningResolver(false);
+            this.mergeWarningResolver = null;
+        }
+        this.cdr.detectChanges();
     }
 
     // ════════════════════════════════════════════

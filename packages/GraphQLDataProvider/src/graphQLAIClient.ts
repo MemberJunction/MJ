@@ -954,6 +954,63 @@ export class GraphQLAIClient {
     }
 
     /**
+     * Pause a running classification pipeline.
+     * Sets CancellationRequested on the process run so the engine pauses after the current batch.
+     */
+    public async PauseClassificationPipeline(processRunID: string): Promise<AutotagPipelineResult> {
+        try {
+            const mutation = gql`
+                mutation PauseClassificationPipeline($processRunID: String!) {
+                    PauseClassificationPipeline(processRunID: $processRunID) {
+                        Success
+                        Status
+                        ErrorMessage
+                        PipelineRunID
+                    }
+                }
+            `;
+
+            const result = await this._dataProvider.ExecuteGQL(mutation, { processRunID });
+            if (!result?.PauseClassificationPipeline) {
+                throw new Error('Invalid response from server');
+            }
+            return result.PauseClassificationPipeline as AutotagPipelineResult;
+        } catch (error: unknown) {
+            const e = error as Error;
+            LogError('GraphQLAIClient.PauseClassificationPipeline failed', undefined, e);
+            return { Success: false, Status: 'Error', ErrorMessage: e.message || 'Unknown error' };
+        }
+    }
+
+    /**
+     * Resume a paused classification pipeline from its last completed offset.
+     */
+    public async ResumeClassificationPipeline(processRunID: string): Promise<AutotagPipelineResult> {
+        try {
+            const mutation = gql`
+                mutation ResumeClassificationPipeline($processRunID: String!) {
+                    ResumeClassificationPipeline(processRunID: $processRunID) {
+                        Success
+                        Status
+                        ErrorMessage
+                        PipelineRunID
+                    }
+                }
+            `;
+
+            const result = await this._dataProvider.ExecuteGQL(mutation, { processRunID });
+            if (!result?.ResumeClassificationPipeline) {
+                throw new Error('Invalid response from server');
+            }
+            return result.ResumeClassificationPipeline as AutotagPipelineResult;
+        } catch (error: unknown) {
+            const e = error as Error;
+            LogError('GraphQLAIClient.ResumeClassificationPipeline failed', undefined, e);
+            return { Success: false, Status: 'Error', ErrorMessage: e.message || 'Unknown error' };
+        }
+    }
+
+    /**
      * Trigger vectorization for an entity document.
      * Calls the server-side EntityVectorSyncer to embed and upsert entity records.
      */

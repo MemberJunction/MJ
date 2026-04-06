@@ -5,7 +5,8 @@ import {
     MJContentProcessRunEntity, MJContentTypeEntity, MJContentSourceTypeEntity,
     MJContentTypeAttributeEntity, MJContentSourceParamEntity, MJContentItemTagEntity,
     MJContentItemAttributeEntity, MJContentSourceTypeParamEntity,
-    MJContentProcessRunEntity_IContentProcessRunConfiguration
+    MJContentProcessRunEntity_IContentProcessRunConfiguration,
+    MJContentItemDuplicateEntity
 } from '@memberjunction/core-entities'
 import { ContentSourceParams, ContentSourceTypeParams, ContentSourceTypeParamValue } from './content.types'
 import { RateLimiter } from './RateLimiter'
@@ -19,7 +20,8 @@ import * as cheerio from 'cheerio'
 import crypto from 'crypto'
 import { BaseEmbeddings, GetAIAPIKey } from '@memberjunction/ai'
 import { AIEngine } from '@memberjunction/aiengine'
-import { AIPromptRunner } from '@memberjunction/ai-prompts'
+import { AIPromptRunner, AIModelRunner } from '@memberjunction/ai-prompts'
+import type { EmbeddingRunResult } from '@memberjunction/ai-prompts'
 import { AIPromptParams } from '@memberjunction/ai-core-plus'
 import type { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus'
 import { TextChunker, ChunkTextParams } from '@memberjunction/ai-vectors'
@@ -36,6 +38,21 @@ interface ResolvedVectorInfrastructure {
     vectorDB: VectorDBBase;
     indexName: string;
     embeddingModelName: string;
+    /** The AI model ID for the embedding model (UUID), used by AIModelRunner for tracking */
+    embeddingModelID: string;
+}
+
+/**
+ * Result of a vectorization operation, including counts and AIPromptRun IDs
+ * for linking to ContentProcessRunDetail records.
+ */
+export interface VectorizeResult {
+    /** Number of items successfully vectorized */
+    vectorized: number;
+    /** Number of items skipped (e.g., empty text) */
+    skipped: number;
+    /** AIPromptRun IDs created during embedding, for junction table linking */
+    promptRunIDs: string[];
 }
 
 /** Default batch size for vectorization processing */
@@ -205,6 +222,9 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         }
 
         LogStatus(`[Autotag] LLM tagging complete: ${totalSuccesses} succeeded, ${totalFailures} failed of ${contentItems.length}`);
+
+        // Post-pipeline hook: recompute tag co-occurrence if TagCoOccurrenceEngine is available
+        await this.recomputeCoOccurrenceIfAvailable(contextUser);
 
         // Legacy process run tracking (for backward compatibility)
         const processRunParams = new ProcessRunParams();
@@ -1084,17 +1104,26 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
      * from per-ContentSource overrides, per-ContentType defaults, or the global fallback
      * (first active VectorIndex). Each group is processed in configurable batches with
      * parallel upserts within each batch.
+     *
+     * Uses AIModelRunner to create AIPromptRun records for each embedding batch,
+     * enabling token/cost tracking and linking to ContentProcessRunDetail records.
+     *
+     * @param items - content items to vectorize
+     * @param contextUser - current user for permissions/audit
+     * @param onProgress - optional callback for progress updates
+     * @param batchSize - number of items per embedding batch
+     * @returns counts of vectorized/skipped items and collected AIPromptRun IDs
      */
     public async VectorizeContentItems(
         items: MJContentItemEntity[],
         contextUser: UserInfo,
         onProgress?: (processed: number, total: number) => void,
         batchSize: number = DEFAULT_VECTORIZE_BATCH_SIZE
-    ): Promise<{ vectorized: number; skipped: number }> {
+    ): Promise<VectorizeResult> {
         const eligible = items.filter(i => i.Text && i.Text.trim().length > 0);
         if (eligible.length === 0) {
             LogStatus('VectorizeContentItems: no items with text to vectorize');
-            return { vectorized: 0, skipped: items.length };
+            return { vectorized: 0, skipped: items.length, promptRunIDs: [] };
         }
 
         // Ensure AIEngine is loaded so we can resolve the embedding model
@@ -1111,79 +1140,83 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
 
         let vectorized = 0;
         let processed = 0;
+        const allPromptRunIDs: string[] = [];
 
         for (const [groupKey, groupItems] of groups) {
             const infra = await this.resolveGroupInfrastructure(groupKey, contextUser);
-            const groupVectorized = await this.vectorizeGroup(groupItems, infra, tagMap, batchSize, (batchProcessed) => {
+            const groupResult = await this.vectorizeGroup(groupItems, infra, tagMap, batchSize, contextUser, (batchProcessed) => {
                 processed += batchProcessed;
                 onProgress?.(Math.min(processed, eligible.length), eligible.length);
             });
-            vectorized += groupVectorized;
+            vectorized += groupResult.vectorized;
+            allPromptRunIDs.push(...groupResult.promptRunIDs);
         }
 
-        LogStatus(`VectorizeContentItems: ${vectorized} vectorized, ${items.length - eligible.length} skipped (empty text)`);
-        return { vectorized, skipped: items.length - eligible.length };
+        LogStatus(`VectorizeContentItems: ${vectorized} vectorized, ${items.length - eligible.length} skipped (empty text), ${allPromptRunIDs.length} prompt runs created`);
+        return { vectorized, skipped: items.length - eligible.length, promptRunIDs: allPromptRunIDs };
     }
 
     /**
      * Process a single infrastructure group: embed texts in batches and upsert to vector DB.
-     * Upserts within each batch run in parallel for throughput.
+     * Uses AIModelRunner for each embedding batch to create AIPromptRun records with
+     * token/cost tracking. Upserts within each batch run in parallel for throughput.
+     *
+     * @param items - content items in this infrastructure group
+     * @param infra - resolved embedding + vector DB infrastructure
+     * @param tagMap - pre-loaded tags for metadata enrichment
+     * @param batchSize - number of items per embedding batch
+     * @param contextUser - current user for AIModelRunner tracking
+     * @param onBatchComplete - callback invoked after each batch with item count
+     * @returns count of vectorized items and collected AIPromptRun IDs
      */
     private async vectorizeGroup(
         items: MJContentItemEntity[],
         infra: ResolvedVectorInfrastructure,
         tagMap: Map<string, string[]>,
         batchSize: number,
+        contextUser: UserInfo,
         onBatchComplete: (count: number) => void
-    ): Promise<number> {
+    ): Promise<{ vectorized: number; promptRunIDs: string[] }> {
         let vectorized = 0;
+        const promptRunIDs: string[] = [];
+        const modelRunner = new AIModelRunner();
+
+        // Resolve the "Content Embedding" prompt ID for tracking
+        const embeddingPromptID = this.resolveEmbeddingPromptID();
 
         for (let i = 0; i < items.length; i += batchSize) {
             const batch = items.slice(i, i + batchSize);
 
             // Build chunks for each item — items with long text produce multiple chunks
-            const allChunks: { item: MJContentItemEntity; chunkIndex: number; text: string }[] = [];
-            for (const item of batch) {
-                const chunks = this.buildEmbeddingChunks(item);
-                for (let ci = 0; ci < chunks.length; ci++) {
-                    allChunks.push({ item, chunkIndex: ci, text: chunks[ci] });
-                }
-            }
+            const allChunks = this.buildChunksForBatch(batch);
 
             const texts = allChunks.map(c => c.text);
             // Rate limit embedding API call
             await this.EmbeddingRateLimiter.Acquire(texts.reduce((sum, t) => sum + Math.ceil(t.length / 4), 0));
-            const embedResult = await infra.embedding.EmbedTexts({ texts, model: infra.embeddingModelName });
-            if (!embedResult.vectors || embedResult.vectors.length !== allChunks.length) {
-                LogError(`VectorizeContentItems: embedding returned ${embedResult.vectors?.length ?? 0} vectors for ${allChunks.length} texts`);
+
+            // Use AIModelRunner to embed texts with AIPromptRun tracking
+            const runResult = await modelRunner.RunEmbedding({
+                Texts: texts,
+                ModelID: infra.embeddingModelID,
+                PromptID: embeddingPromptID,
+                ContextUser: contextUser,
+                Description: `Content vectorization batch: ${batch.length} items, ${allChunks.length} chunks`,
+            });
+
+            if (!runResult.Success || runResult.Vectors.length !== allChunks.length) {
+                LogError(`VectorizeContentItems: embedding returned ${runResult.Vectors.length} vectors for ${allChunks.length} texts — ${runResult.ErrorMessage ?? 'unknown error'}`);
                 onBatchComplete(batch.length);
                 continue;
             }
 
-            const records: VectorRecord[] = allChunks.map((chunk, idx) => ({
-                id: chunk.chunkIndex === 0
-                    ? this.contentItemVectorId(chunk.item.ID)
-                    : this.contentItemVectorId(chunk.item.ID) + `_chunk${chunk.chunkIndex}`,
-                values: embedResult.vectors[idx],
-                metadata: this.buildVectorMetadata(chunk.item, tagMap.get(chunk.item.ID))
-            }));
+            // Track the AIPromptRun ID for junction table linking
+            if (runResult.PromptRunID) {
+                promptRunIDs.push(runResult.PromptRunID);
+            }
 
-            // Upsert records in sub-batches with rate limiting
-            const UPSERT_CHUNK = 50;
-            const upsertPromises: Promise<BaseResponse>[] = [];
-            for (let j = 0; j < records.length; j += UPSERT_CHUNK) {
-                const chunk = records.slice(j, j + UPSERT_CHUNK);
-                await this.VectorDBRateLimiter.Acquire();
-                upsertPromises.push(Promise.resolve(infra.vectorDB.CreateRecords(chunk, infra.indexName)));
-            }
-            const responses = await Promise.all(upsertPromises);
-            let batchSuccess = true;
-            for (const response of responses) {
-                if (!response.success) {
-                    LogError(`VectorizeContentItems: upsert failed: ${response.message}`);
-                    batchSuccess = false;
-                }
-            }
+            const records = this.buildVectorRecords(allChunks, runResult.Vectors, tagMap);
+
+            const batchSuccess = await this.upsertVectorRecords(records, infra);
             if (batchSuccess) {
                 vectorized += batch.length;
             }
@@ -1191,7 +1224,84 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             onBatchComplete(batch.length);
         }
 
-        return vectorized;
+        return { vectorized, promptRunIDs };
+    }
+
+    /**
+     * Resolve the "Content Embedding" prompt ID from AIEngine for AIModelRunner tracking.
+     * Returns undefined if the prompt is not found (AIModelRunner will fall back to
+     * the first active Embedding-type prompt).
+     */
+    private resolveEmbeddingPromptID(): string | undefined {
+        const prompt = AIEngine.Instance.Prompts.find(
+            p => p.Name === 'Content Embedding' && p.Status === 'Active'
+        );
+        if (prompt) {
+            return prompt.ID;
+        }
+        // Fall back: let AIModelRunner find the first active Embedding prompt
+        LogStatus('[Autotag] "Content Embedding" prompt not found — AIModelRunner will use default embedding prompt');
+        return undefined;
+    }
+
+    /**
+     * Build text chunks for a batch of content items. Items with long text
+     * produce multiple chunks via TextChunker.
+     */
+    private buildChunksForBatch(
+        batch: MJContentItemEntity[]
+    ): { item: MJContentItemEntity; chunkIndex: number; text: string }[] {
+        const allChunks: { item: MJContentItemEntity; chunkIndex: number; text: string }[] = [];
+        for (const item of batch) {
+            const chunks = this.buildEmbeddingChunks(item);
+            for (let ci = 0; ci < chunks.length; ci++) {
+                allChunks.push({ item, chunkIndex: ci, text: chunks[ci] });
+            }
+        }
+        return allChunks;
+    }
+
+    /**
+     * Build VectorRecord objects from embedding chunks and their corresponding vectors.
+     */
+    private buildVectorRecords(
+        allChunks: { item: MJContentItemEntity; chunkIndex: number; text: string }[],
+        vectors: number[][],
+        tagMap: Map<string, string[]>
+    ): VectorRecord[] {
+        return allChunks.map((chunk, idx) => ({
+            id: chunk.chunkIndex === 0
+                ? this.contentItemVectorId(chunk.item.ID)
+                : this.contentItemVectorId(chunk.item.ID) + `_chunk${chunk.chunkIndex}`,
+            values: vectors[idx],
+            metadata: this.buildVectorMetadata(chunk.item, tagMap.get(chunk.item.ID))
+        }));
+    }
+
+    /**
+     * Upsert vector records to the vector database in sub-batches with rate limiting.
+     * Returns true if all sub-batches succeeded.
+     */
+    private async upsertVectorRecords(
+        records: VectorRecord[],
+        infra: ResolvedVectorInfrastructure
+    ): Promise<boolean> {
+        const UPSERT_CHUNK = 50;
+        const upsertPromises: Promise<BaseResponse>[] = [];
+        for (let j = 0; j < records.length; j += UPSERT_CHUNK) {
+            const chunk = records.slice(j, j + UPSERT_CHUNK);
+            await this.VectorDBRateLimiter.Acquire();
+            upsertPromises.push(Promise.resolve(infra.vectorDB.CreateRecords(chunk, infra.indexName)));
+        }
+        const responses = await Promise.all(upsertPromises);
+        let allSuccess = true;
+        for (const response of responses) {
+            if (!response.success) {
+                LogError(`VectorizeContentItems: upsert failed: ${response.message}`);
+                allSuccess = false;
+            }
+        }
+        return allSuccess;
     }
 
     /**
@@ -1397,7 +1507,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         const embedding = this.createEmbeddingInstance(driverClass);
         const vectorDB = this.createVectorDBInstance(vectorDBClassKey);
 
-        return { embedding, vectorDB, indexName, embeddingModelName };
+        return { embedding, vectorDB, indexName, embeddingModelName, embeddingModelID };
     }
 
     /** Find an embedding model by ID in AIEngine, with helpful error reporting */
@@ -1525,5 +1635,431 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             }
         }
         return tagMap;
+    }
+
+    // ---- Content Deduplication ----
+
+    /**
+     * Attempts to recompute tag co-occurrence data after the LLM tagging pipeline completes.
+     * Uses dynamic import to avoid a hard dependency on the tag-engine package.
+     * If TagCoOccurrenceEngine is not available or fails, it logs a warning and continues.
+     */
+    private async recomputeCoOccurrenceIfAvailable(contextUser: UserInfo): Promise<void> {
+        try {
+            // Dynamic check: TagCoOccurrenceEngine is registered via class factory
+            const { TagCoOccurrenceEngine } = await import('@memberjunction/tag-engine');
+            const engine = TagCoOccurrenceEngine.Instance;
+            if (engine && typeof engine.RecomputeCoOccurrence === 'function') {
+                LogStatus('[Autotag] Recomputing tag co-occurrence after pipeline completion...');
+                const result = await engine.RecomputeCoOccurrence(contextUser);
+                LogStatus(`[Autotag] Co-occurrence recompute complete: ${result.PairsUpdated} pairs updated, ${result.PairsDeleted} deleted`);
+            }
+        } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            LogStatus(`[Autotag] Co-occurrence recompute skipped (not available): ${msg}`);
+        }
+    }
+
+    /**
+     * Detects duplicate content items by matching the given item's checksum against
+     * other content items from **different** content sources. When an exact checksum
+     * match is found, a {@link MJContentItemDuplicateEntity} record is created with
+     * `DetectionMethod = 'Checksum'` and `SimilarityScore = 1.0`.
+     *
+     * Duplicate pairs are stored in canonical order (lower ID = ContentItemAID) to
+     * prevent mirror duplicates. If a duplicate pair already exists for the same
+     * detection method, no new record is created.
+     *
+     * @param contentItem - The content item whose checksum should be checked for duplicates.
+     *                      Must already be saved (i.e., have a valid ID and Checksum).
+     * @param contextUser - The authenticated user context for data access and audit.
+     * @returns A promise that resolves when detection is complete. Does not throw on
+     *          failure — errors are logged and swallowed to avoid disrupting the pipeline.
+     */
+    public async DetectChecksumDuplicates(contentItem: MJContentItemEntity, contextUser: UserInfo): Promise<void> {
+        if (!contentItem.Checksum) {
+            return; // No checksum to compare
+        }
+
+        try {
+            const matches = await this.findItemsByChecksum(contentItem.Checksum, contentItem.ContentSourceID, contentItem.ID, contextUser);
+            for (const match of matches) {
+                await this.createDuplicateRecordIfNotExists(contentItem.ID, match.ID, 1.0, 'Checksum', contextUser);
+            }
+        } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            LogError(`[Dedup] Checksum detection failed for item ${contentItem.ID}: ${msg}`);
+        }
+    }
+
+    /**
+     * Detects duplicate content items by matching the given item's title (Name field)
+     * against other content items from **different** content sources. When an exact
+     * title match is found, a {@link MJContentItemDuplicateEntity} record is created
+     * with `DetectionMethod = 'Title'` and `SimilarityScore = 1.0`.
+     *
+     * Duplicate pairs are stored in canonical order (lower ID = ContentItemAID) to
+     * prevent mirror duplicates. If a duplicate pair already exists for the same
+     * detection method, no new record is created.
+     *
+     * @param contentItem - The content item whose title should be checked for duplicates.
+     *                      Must already be saved (i.e., have a valid ID and Name).
+     * @param contextUser - The authenticated user context for data access and audit.
+     * @returns A promise that resolves when detection is complete. Does not throw on
+     *          failure — errors are logged and swallowed to avoid disrupting the pipeline.
+     */
+    public async DetectTitleDuplicates(contentItem: MJContentItemEntity, contextUser: UserInfo): Promise<void> {
+        if (!contentItem.Name || contentItem.Name.trim().length === 0) {
+            return; // No title to compare
+        }
+
+        try {
+            const matches = await this.findItemsByTitle(contentItem.Name, contentItem.ContentSourceID, contentItem.ID, contextUser);
+            for (const match of matches) {
+                await this.createDuplicateRecordIfNotExists(contentItem.ID, match.ID, 1.0, 'Title', contextUser);
+            }
+        } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            LogError(`[Dedup] Title detection failed for item ${contentItem.ID}: ${msg}`);
+        }
+    }
+
+    /**
+     * Runs all non-vector deduplication checks (checksum and title) for a content item.
+     * This is a convenience method intended to be called after saving/updating a content item.
+     *
+     * @param contentItem - The saved content item to check for duplicates.
+     * @param contextUser - The authenticated user context for data access and audit.
+     */
+    public async DetectDuplicates(contentItem: MJContentItemEntity, contextUser: UserInfo): Promise<void> {
+        await Promise.all([
+            this.DetectChecksumDuplicates(contentItem, contextUser),
+            this.DetectTitleDuplicates(contentItem, contextUser),
+        ]);
+    }
+
+    /**
+     * Detects near-duplicate content items by querying the vector index for items
+     * with high cosine similarity (> 0.95 threshold). Only creates duplicate records
+     * for matches from DIFFERENT content sources to avoid self-matches.
+     *
+     * This is expensive so it only checks the top 3 most similar results.
+     * Controlled by the `enableVectorDedup` flag.
+     *
+     * @param contentItem - The content item to check (must have text and be vectorized).
+     * @param contextUser - The authenticated user context for data access and audit.
+     * @param enableVectorDedup - Whether to run vector-based dedup (default false).
+     */
+    public async DetectVectorDuplicates(
+        contentItem: MJContentItemEntity,
+        contextUser: UserInfo,
+        enableVectorDedup = false
+    ): Promise<void> {
+        if (!enableVectorDedup) return;
+        if (!contentItem.Text || contentItem.Text.trim().length === 0) return;
+
+        try {
+            await this.performVectorDedupCheck(contentItem, contextUser);
+        } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            LogError(`[Dedup] Vector detection failed for item ${contentItem.ID}: ${msg}`);
+        }
+    }
+
+    /**
+     * Internal implementation of vector-based dedup. Resolves the vector infrastructure
+     * for the item, embeds its text, queries for similar vectors, and creates duplicate
+     * records for high-similarity matches from different sources.
+     */
+    private async performVectorDedupCheck(
+        contentItem: MJContentItemEntity,
+        contextUser: UserInfo
+    ): Promise<void> {
+        // Need AIEngine loaded to resolve embedding model
+        await AIEngine.Instance.Config(false, contextUser);
+
+        // Load the content source + type maps for this single item
+        const { sourceMap, typeMap } = await this.loadContentSourceAndTypeMaps([contentItem], contextUser);
+
+        // Resolve infrastructure for this item
+        const groups = this.groupItemsByInfrastructure([contentItem], sourceMap, typeMap);
+        if (groups.size === 0) {
+            LogStatus(`[Dedup] No vector infrastructure found for item ${contentItem.ID}, skipping vector dedup`);
+            return;
+        }
+
+        const [groupKey] = groups.entries().next().value as [string, MJContentItemEntity[]];
+        const infra = await this.resolveGroupInfrastructure(groupKey, contextUser);
+
+        // Embed the item's text
+        const text = contentItem.Text.trim();
+        const truncated = text.length > 8000 ? text.substring(0, 8000) : text;
+
+        await this.EmbeddingRateLimiter.Acquire(Math.ceil(truncated.length / 4));
+
+        const modelRunner = new AIModelRunner();
+        const embeddingPromptID = this.resolveEmbeddingPromptID();
+        const runResult = await modelRunner.RunEmbedding({
+            ModelID: infra.embeddingModelID,
+            Texts: [truncated],
+            PromptID: embeddingPromptID ?? undefined,
+            ContextUser: contextUser,
+        });
+
+        if (!runResult?.Vectors || runResult.Vectors.length === 0) {
+            LogStatus(`[Dedup] Embedding failed for item ${contentItem.ID}, skipping vector dedup`);
+            return;
+        }
+
+        const queryVector = runResult.Vectors[0];
+
+        // Query vector DB for top 4 most similar (top 3 useful + 1 for self-match)
+        const queryResponse = await infra.vectorDB.QueryIndex({
+            vector: queryVector,
+            topK: 4,
+            includeMetadata: true,
+        });
+
+        const responseData = queryResponse as BaseResponse;
+        if (!responseData.success || !responseData.data) return;
+
+        // The data property contains matches (QueryResponse shape)
+        const matches = (responseData.data as { matches?: Array<{ id?: string; score?: number; metadata?: Record<string, unknown> }> }).matches;
+        if (!matches || matches.length === 0) return;
+
+        // Filter: different source, similarity > 0.95, not self
+        const VECTOR_DEDUP_THRESHOLD = 0.95;
+        let matchCount = 0;
+
+        for (const match of matches) {
+            if (matchCount >= 3) break; // Only check top 3
+
+            const matchScore = match.score ?? 0;
+            if (matchScore < VECTOR_DEDUP_THRESHOLD) continue;
+
+            // Extract content item ID from vector metadata
+            const matchItemID = match.metadata?.['contentItemID'] as string | undefined;
+            if (!matchItemID || matchItemID === contentItem.ID) continue;
+
+            // Check if the match is from a different source
+            const isDifferentSource = await this.isFromDifferentSource(matchItemID, contentItem.ContentSourceID, contextUser);
+            if (!isDifferentSource) continue;
+
+            await this.createDuplicateRecordIfNotExists(contentItem.ID, matchItemID, matchScore, 'Vector', contextUser);
+            matchCount++;
+        }
+
+        if (matchCount > 0) {
+            LogStatus(`[Dedup] Vector dedup found ${matchCount} near-duplicate(s) for item ${contentItem.ID}`);
+        }
+    }
+
+    /**
+     * Check if a content item belongs to a different source than the given sourceID.
+     */
+    private async isFromDifferentSource(itemID: string, excludeSourceID: string, contextUser: UserInfo): Promise<boolean> {
+        const rv = new RunView();
+        const result = await rv.RunView<{ ContentSourceID: string }>({
+            EntityName: 'MJ: Content Items',
+            Fields: ['ContentSourceID'],
+            ExtraFilter: `ID = '${itemID}'`,
+            ResultType: 'simple',
+            MaxRows: 1,
+        }, contextUser);
+
+        if (!result.Success || result.Results.length === 0) return false;
+        return result.Results[0].ContentSourceID !== excludeSourceID;
+    }
+
+    /**
+     * Resolves a duplicate record by updating its Status and Resolution fields.
+     *
+     * @param duplicateID - The ID of the ContentItemDuplicate record.
+     * @param resolution - The resolution choice: 'KeepA', 'KeepB', 'NotDuplicate'.
+     * @param contextUser - The authenticated user context.
+     */
+    public async ResolveContentDuplicate(
+        duplicateID: string,
+        resolution: 'KeepA' | 'KeepB' | 'NotDuplicate',
+        contextUser: UserInfo
+    ): Promise<boolean> {
+        try {
+            const md = new Metadata();
+            const duplicate = await md.GetEntityObject<MJContentItemDuplicateEntity>('MJ: Content Item Duplicates', contextUser);
+            const loaded = await duplicate.Load(duplicateID);
+            if (!loaded) {
+                LogError(`[Dedup] Could not load duplicate record ${duplicateID} for resolution`);
+                return false;
+            }
+
+            this.applyDuplicateResolution(duplicate, resolution);
+
+            const saved = await duplicate.Save();
+            if (!saved) {
+                LogError(`[Dedup] Failed to save resolution for duplicate ${duplicateID}: ${duplicate.LatestResult?.Message ?? 'Unknown error'}`);
+                return false;
+            }
+
+            LogStatus(`[Dedup] Resolved duplicate ${duplicateID}: ${resolution}`);
+            return true;
+        } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            LogError(`[Dedup] Error resolving duplicate ${duplicateID}: ${msg}`);
+            return false;
+        }
+    }
+
+    /**
+     * Applies the resolution to a duplicate record by setting the Status and Resolution fields.
+     */
+    private applyDuplicateResolution(
+        duplicate: MJContentItemDuplicateEntity,
+        resolution: 'KeepA' | 'KeepB' | 'NotDuplicate'
+    ): void {
+        if (resolution === 'NotDuplicate') {
+            duplicate.Status = 'Dismissed';
+            duplicate.Resolution = 'NotDuplicate';
+        } else {
+            // KeepA or KeepB — mark as Merged
+            duplicate.Status = 'Merged';
+            duplicate.Resolution = resolution;
+        }
+    }
+
+    /**
+     * Finds content items with the same checksum from different content sources.
+     *
+     * @param checksum - The SHA-256 checksum to search for.
+     * @param excludeSourceID - The content source ID to exclude (the item's own source).
+     * @param excludeItemID - The content item ID to exclude (the item itself).
+     * @param contextUser - The authenticated user context.
+     * @returns An array of matching content items (simple objects with ID field).
+     */
+    private async findItemsByChecksum(
+        checksum: string,
+        excludeSourceID: string,
+        excludeItemID: string,
+        contextUser: UserInfo
+    ): Promise<{ ID: string }[]> {
+        const rv = new RunView();
+        const result = await rv.RunView<{ ID: string }>({
+            EntityName: 'MJ: Content Items',
+            Fields: ['ID'],
+            ExtraFilter: `Checksum = '${checksum.replace(/'/g, "''")}' AND ContentSourceID <> '${excludeSourceID}' AND ID <> '${excludeItemID}'`,
+            ResultType: 'simple'
+        }, contextUser);
+
+        if (!result.Success) {
+            LogError(`[Dedup] RunView failed for checksum lookup: ${result.ErrorMessage}`);
+            return [];
+        }
+        return result.Results;
+    }
+
+    /**
+     * Finds content items with the same title (Name) from different content sources.
+     *
+     * @param title - The title to search for (exact match).
+     * @param excludeSourceID - The content source ID to exclude (the item's own source).
+     * @param excludeItemID - The content item ID to exclude (the item itself).
+     * @param contextUser - The authenticated user context.
+     * @returns An array of matching content items (simple objects with ID field).
+     */
+    private async findItemsByTitle(
+        title: string,
+        excludeSourceID: string,
+        excludeItemID: string,
+        contextUser: UserInfo
+    ): Promise<{ ID: string }[]> {
+        const rv = new RunView();
+        const escapedTitle = title.replace(/'/g, "''");
+        const result = await rv.RunView<{ ID: string }>({
+            EntityName: 'MJ: Content Items',
+            Fields: ['ID'],
+            ExtraFilter: `Name = '${escapedTitle}' AND ContentSourceID <> '${excludeSourceID}' AND ID <> '${excludeItemID}'`,
+            ResultType: 'simple'
+        }, contextUser);
+
+        if (!result.Success) {
+            LogError(`[Dedup] RunView failed for title lookup: ${result.ErrorMessage}`);
+            return [];
+        }
+        return result.Results;
+    }
+
+    /**
+     * Creates a {@link MJContentItemDuplicateEntity} record for a detected duplicate pair,
+     * but only if one does not already exist for the same pair and detection method.
+     *
+     * IDs are stored in canonical order: the lexicographically smaller ID is always
+     * ContentItemAID to prevent mirror duplicates (A,B) vs (B,A).
+     *
+     * @param itemAID - One of the duplicate item IDs.
+     * @param itemBID - The other duplicate item ID.
+     * @param similarityScore - The similarity score (0.0 to 1.0).
+     * @param detectionMethod - How the duplicate was detected.
+     * @param contextUser - The authenticated user context.
+     */
+    private async createDuplicateRecordIfNotExists(
+        itemAID: string,
+        itemBID: string,
+        similarityScore: number,
+        detectionMethod: 'Checksum' | 'Title' | 'URL' | 'Vector',
+        contextUser: UserInfo
+    ): Promise<void> {
+        // Canonical ordering: lower normalized ID = A
+        const normalizedA = NormalizeUUID(itemAID);
+        const normalizedB = NormalizeUUID(itemBID);
+        const [canonicalAID, canonicalBID] = normalizedA < normalizedB
+            ? [itemAID, itemBID]
+            : [itemBID, itemAID];
+
+        // Check if this pair already exists for the same detection method
+        const exists = await this.duplicatePairExists(canonicalAID, canonicalBID, detectionMethod, contextUser);
+        if (exists) {
+            return;
+        }
+
+        const md = new Metadata();
+        const duplicate = await md.GetEntityObject<MJContentItemDuplicateEntity>('MJ: Content Item Duplicates', contextUser);
+        duplicate.NewRecord();
+        duplicate.ContentItemAID = canonicalAID;
+        duplicate.ContentItemBID = canonicalBID;
+        duplicate.SimilarityScore = similarityScore;
+        duplicate.DetectionMethod = detectionMethod;
+        duplicate.Status = 'Pending';
+
+        const saved = await duplicate.Save();
+        if (!saved) {
+            LogError(`[Dedup] Failed to save duplicate record for pair (${canonicalAID}, ${canonicalBID}) method=${detectionMethod}`);
+        } else {
+            LogStatus(`[Dedup] Detected ${detectionMethod} duplicate: (${canonicalAID}, ${canonicalBID}) score=${similarityScore}`);
+        }
+    }
+
+    /**
+     * Checks whether a duplicate record already exists for the given pair and detection method.
+     *
+     * @param canonicalAID - The canonical (ordered) ContentItemAID.
+     * @param canonicalBID - The canonical (ordered) ContentItemBID.
+     * @param detectionMethod - The detection method to check.
+     * @param contextUser - The authenticated user context.
+     * @returns True if a record already exists.
+     */
+    private async duplicatePairExists(
+        canonicalAID: string,
+        canonicalBID: string,
+        detectionMethod: 'Checksum' | 'Title' | 'URL' | 'Vector',
+        contextUser: UserInfo
+    ): Promise<boolean> {
+        const rv = new RunView();
+        const result = await rv.RunView<{ ID: string }>({
+            EntityName: 'MJ: Content Item Duplicates',
+            Fields: ['ID'],
+            ExtraFilter: `ContentItemAID = '${canonicalAID}' AND ContentItemBID = '${canonicalBID}' AND DetectionMethod = '${detectionMethod}'`,
+            ResultType: 'simple'
+        }, contextUser);
+
+        return result.Success && result.Results.length > 0;
     }
 }

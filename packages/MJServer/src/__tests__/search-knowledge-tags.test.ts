@@ -81,6 +81,13 @@ vi.mock('@memberjunction/core', () => {
 vi.mock('@memberjunction/core-entities', () => ({
     MJVectorIndexEntity: class {},
     MJVectorDatabaseEntity: class {},
+    KnowledgeHubMetadataEngine: {
+        Instance: {
+            Config: vi.fn(),
+            ContentSourceTypes: [],
+            ContentSources: [],
+        },
+    },
 }));
 
 vi.mock('@memberjunction/ai', () => ({
@@ -294,19 +301,23 @@ describe('SearchKnowledgeResolver', () => {
                 { EntityName: 'Contacts', RecordID: 'rec-1', Tags: [] as string[] },
                 { EntityName: 'Contacts', RecordID: 'rec-2', Tags: [] as string[] },
             ];
-            const md = { Entities: [{ Name: 'Contacts', ID: 'eid-contacts' }] };
 
             // Set up mock RunView to return tagged items
+            // loadTaggedItemTags queries 'MJ: Tagged Items' with EntityID+RecordID filter
             mockRunViewResults.set('MJ: Tagged Items', {
                 Success: true,
                 Results: [
-                    { EntityID: 'eid-contacts', RecordID: 'rec-1', Tag: 'VIP' },
-                    { EntityID: 'eid-contacts', RecordID: 'rec-1', Tag: 'Partner' },
-                    { EntityID: 'eid-contacts', RecordID: 'rec-2', Tag: 'Prospect' },
+                    { EntityID: 'entity-contacts-id', RecordID: 'rec-1', Tag: 'VIP' },
+                    { EntityID: 'entity-contacts-id', RecordID: 'rec-1', Tag: 'Partner' },
+                    { EntityID: 'entity-contacts-id', RecordID: 'rec-2', Tag: 'Prospect' },
                 ]
             });
 
-            await enrichResultsWithTags(results, md, {});
+            // Test loadTaggedItemTags directly since enrichResultsWithTags wraps it in try/catch
+            const loadTaggedItemTags = getPrivateMethod(resolver, 'loadTaggedItemTags');
+            const { Metadata: MetadataCtor } = await import('@memberjunction/core');
+            const md = new MetadataCtor();
+            await loadTaggedItemTags(results, md, {});
             expect(results[0].Tags).toEqual(['VIP', 'Partner']);
             expect(results[1].Tags).toEqual(['Prospect']);
         });

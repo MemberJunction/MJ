@@ -53,6 +53,9 @@ export class RecordTagsComponent implements OnInit {
     @Output() RecordNavigate = new EventEmitter<{ EntityName: string; RecordID: string }>();
     @Output() WidthChanged = new EventEmitter<number>();
 
+    /** Emitted whenever the tag count changes (after load, add, or remove) */
+    @Output() TagCountChanged = new EventEmitter<number>();
+
     public OnWidthChanged(width: number): void {
         this.WidthChanged.emit(width);
     }
@@ -101,6 +104,7 @@ export class RecordTagsComponent implements OnInit {
             this.CloudItems = this.BuildCloudItems(this.TaggedItems);
         }
         this.IsLoading = false;
+        this.TagCountChanged.emit(this.TaggedItems.length);
 
         // Check if entity has vectors available
         this.HasVectors = this.CheckEntityHasVectors();
@@ -372,6 +376,7 @@ export class RecordTagsComponent implements OnInit {
         await taggedItem.Delete();
         this.TaggedItems = this.TaggedItems.filter(t => !UUIDsEqual(t.ID, taggedItem.ID));
         this.CloudItems = this.BuildCloudItems(this.TaggedItems);
+        this.TagCountChanged.emit(this.TaggedItems.length);
     }
 
     public ToggleViewMode(): void {

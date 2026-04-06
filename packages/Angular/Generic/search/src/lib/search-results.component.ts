@@ -67,6 +67,9 @@ export class SearchResultsComponent {
     /** Emitted when user clicks "Open Record" — parent handles navigation */
     @Output() OpenRecordRequested = new EventEmitter<{ EntityName: string; RecordID: string }>();
 
+    /** Emitted when user clicks "See Similar Items" — parent runs a "more like this" search */
+    @Output() MoreLikeThisRequested = new EventEmitter<SearchResultItem>();
+
     /** Current page (1-based) for flat mode pagination */
     public CurrentPage = 1;
 
@@ -177,6 +180,12 @@ export class SearchResultsComponent {
             EntityName: result.EntityName,
             RecordID: result.RecordID
         });
+    }
+
+    /** Handle "See Similar Items" button click — emits the result for a "more like this" search */
+    public OnMoreLikeThis(result: SearchResultItem, event: MouseEvent): void {
+        event.stopPropagation();
+        this.MoreLikeThisRequested.emit(result);
     }
 
     /** Format a score as a percentage */

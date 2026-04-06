@@ -81,12 +81,13 @@ export class TagEngineBase extends BaseEngine<TagEngineBase> {
 
     /**
      * Find a tag by its Name using case-insensitive string comparison.
+     * Only returns tags with Status='Active' (excludes merged, deprecated, and deleted tags).
      * @param name - The tag name to search for
-     * @returns The matching tag, or undefined if not found
+     * @returns The matching active tag, or undefined if not found
      */
     public GetTagByName(name: string): MJTagEntity | undefined {
         const lowerName = name.trim().toLowerCase();
-        return this._Tags.find(t => t.Name.trim().toLowerCase() === lowerName);
+        return this._Tags.find(t => t.Name.trim().toLowerCase() === lowerName && t.Status === 'Active');
     }
 
     /**

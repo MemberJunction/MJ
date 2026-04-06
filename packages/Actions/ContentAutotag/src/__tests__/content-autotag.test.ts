@@ -14,6 +14,8 @@ const {
     mockConfig,
     mockGetAllSafe,
     mockVectorize,
+    mockInitTaxonomyBridge,
+    mockCleanupTaxonomyBridge,
 } = vi.hoisted(() => ({
     mockProviderAutotag: vi.fn().mockResolvedValue(undefined),
     mockCreateInstance: vi.fn(),
@@ -25,7 +27,9 @@ const {
     mockSources: [{ ID: 'src-1', Name: 'Test Source' }],
     mockConfig: vi.fn().mockResolvedValue(undefined),
     mockGetAllSafe: vi.fn(),
-    mockVectorize: vi.fn().mockResolvedValue({ vectorized: 0, skipped: 0 }),
+    mockVectorize: vi.fn().mockResolvedValue({ vectorized: 0, skipped: 0, promptRunIDs: [] }),
+    mockInitTaxonomyBridge: vi.fn().mockResolvedValue(undefined),
+    mockCleanupTaxonomyBridge: vi.fn(),
 }));
 
 vi.mock('@memberjunction/actions', () => ({
@@ -36,6 +40,7 @@ vi.mock('@memberjunction/actions', () => ({
 
 vi.mock('@memberjunction/global', () => ({
     RegisterClass: () => (target: unknown) => target,
+    UUIDsEqual: (a: string, b: string) => a?.toLowerCase() === b?.toLowerCase(),
     MJGlobal: {
         Instance: {
             ClassFactory: { CreateInstance: mockCreateInstance }
@@ -47,15 +52,24 @@ vi.mock('@memberjunction/core', () => {
     class MockRunView {
         async RunView() { return { Success: true, Results: [] }; }
     }
+    class MockMetadata {
+        async GetEntityObject() { return {}; }
+    }
+    class MockUserInfo {}
     return {
         LogError: vi.fn(),
         LogStatus: vi.fn(),
         RunView: MockRunView,
+        Metadata: MockMetadata,
+        UserInfo: MockUserInfo,
     };
 });
 
 vi.mock('@memberjunction/core-entities', () => ({
-    MJContentItemEntity: class {}
+    MJContentItemEntity: class {},
+    MJContentSourceEntity: class {},
+    MJContentProcessRunDetailEntity: class {},
+    MJContentProcessRunPromptRunEntity: class {},
 }));
 
 vi.mock('@memberjunction/content-autotagging', () => {
@@ -67,6 +81,9 @@ vi.mock('@memberjunction/content-autotagging', () => {
                 ContentSourceTypes: mockContentSourceTypes,
                 GetAllContentSourcesSafe: mockGetAllSafe.mockResolvedValue(mockSources),
                 VectorizeContentItems: mockVectorize,
+                InitializeTaxonomyBridge: mockInitTaxonomyBridge,
+                CleanupTaxonomyBridge: mockCleanupTaxonomyBridge,
+                ForceReprocess: false,
             }
         },
         AutotagProgressCallback: undefined,

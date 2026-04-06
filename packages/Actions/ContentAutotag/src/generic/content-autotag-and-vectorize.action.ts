@@ -1,9 +1,14 @@
 import { BaseAction } from "@memberjunction/actions";
 import { MJGlobal, RegisterClass, UUIDsEqual } from "@memberjunction/global";
-import { AutotagBase, AutotagBaseEngine, AutotagProgressCallback } from '@memberjunction/content-autotagging';
+import { AutotagBase, AutotagBaseEngine, AutotagProgressCallback, VectorizeResult } from '@memberjunction/content-autotagging';
 import { ActionParam, ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
-import { LogError, LogStatus, RunView } from "@memberjunction/core";
-import { MJContentItemEntity } from "@memberjunction/core-entities";
+import { LogError, LogStatus, Metadata, RunView, UserInfo } from "@memberjunction/core";
+import {
+    MJContentItemEntity,
+    MJContentProcessRunDetailEntity,
+    MJContentProcessRunPromptRunEntity,
+    MJContentSourceEntity
+} from "@memberjunction/core-entities";
 
 /**
  * Params:
@@ -39,6 +44,10 @@ export class AutotagAndVectorizeContentAction extends BaseAction {
         const forceReprocessParam = params.Params.find(p => p.Name === 'ForceReprocess');
         const forceReprocess = forceReprocessParam?.Value === 1 || forceReprocessParam?.Value === true;
 
+        // Optional: ContentProcessRunID to link detail records for per-source tracking
+        const processRunParam = params.Params.find(p => p.Name === 'ContentProcessRunID');
+        const contentProcessRunID = processRunParam?.Value ? String(processRunParam.Value) : undefined;
+
         try {
             // Initialize the autotagging engine (loads cached metadata)
             await AutotagBaseEngine.Instance.Config(false, params.ContextUser);
@@ -71,16 +80,12 @@ export class AutotagAndVectorizeContentAction extends BaseAction {
             // vectorization in parallel. Both read from the DB independently.
             // - Tagging: only processes items returned by providers (new/changed)
             // - Vectorization: processes ALL content items (upserts are idempotent)
-            const phase2: Promise<void>[] = [];
             if (vectorizeParam.Value === 1) {
                 LogStatus(`[AutotagAction] Phase 2: Starting vectorization...`);
-                phase2.push(this.RunDirectVectorization(params));
+                await this.RunDirectVectorization(params, contentProcessRunID);
             }
             // Note: LLM tagging already ran inside each provider's Autotag() method
             // in Phase 1 — it's not a separate step here.
-            if (phase2.length > 0) {
-                await Promise.all(phase2);
-            }
             LogStatus(`[AutotagAction] All tasks completed`);
 
             return { Success: true, ResultCode: "SUCCESS" };
@@ -152,8 +157,18 @@ export class AutotagAndVectorizeContentAction extends BaseAction {
         LogStatus('Autotagging complete.');
     }
 
-    /** Embed all content items directly into the vector index */
-    private async RunDirectVectorization(params: RunActionParams): Promise<void> {
+    /**
+     * Embed all content items directly into the vector index. When a ContentProcessRunID
+     * is provided, creates ContentProcessRunDetail records per-source and links
+     * AIPromptRun records via the ContentProcessRunPromptRun junction table.
+     *
+     * @param params - action run params with ContextUser
+     * @param contentProcessRunID - optional parent run ID for detail tracking
+     */
+    private async RunDirectVectorization(
+        params: RunActionParams,
+        contentProcessRunID?: string
+    ): Promise<void> {
         const rv = new RunView();
         const result = await rv.RunView<MJContentItemEntity>({
             EntityName: 'MJ: Content Items',
@@ -168,7 +183,220 @@ export class AutotagAndVectorizeContentAction extends BaseAction {
         const items = result.Results;
         LogStatus(`VectorizeContentItems: ${items.length} content items loaded for vectorization`);
 
-        const stats = await AutotagBaseEngine.Instance.VectorizeContentItems(items, params.ContextUser);
-        LogStatus(`VectorizeContentItems: ${stats.vectorized} vectorized, ${stats.skipped} skipped`);
+        if (!contentProcessRunID) {
+            // No run tracking — simple vectorization
+            const stats = await AutotagBaseEngine.Instance.VectorizeContentItems(items, params.ContextUser);
+            LogStatus(`VectorizeContentItems: ${stats.vectorized} vectorized, ${stats.skipped} skipped`);
+            return;
+        }
+
+        // Group items by ContentSourceID for per-source detail tracking
+        const sourceGroups = this.groupItemsBySource(items);
+
+        for (const [sourceID, sourceItems] of sourceGroups) {
+            await this.vectorizeSourceWithTracking(
+                sourceID, sourceItems, contentProcessRunID, params.ContextUser
+            );
+        }
+    }
+
+    /**
+     * Group content items by their ContentSourceID for per-source processing.
+     */
+    private groupItemsBySource(
+        items: MJContentItemEntity[]
+    ): Map<string, MJContentItemEntity[]> {
+        const groups = new Map<string, MJContentItemEntity[]>();
+        for (const item of items) {
+            const key = item.ContentSourceID;
+            const group = groups.get(key) ?? [];
+            group.push(item);
+            groups.set(key, group);
+        }
+        return groups;
+    }
+
+    /**
+     * Vectorize items for a single content source with full ContentProcessRunDetail tracking.
+     * Creates a detail record, runs vectorization, updates counts, and links prompt runs.
+     *
+     * @param sourceID - ContentSource ID being processed
+     * @param items - content items belonging to this source
+     * @param contentProcessRunID - parent ContentProcessRun ID
+     * @param contextUser - current user for entity operations
+     */
+    private async vectorizeSourceWithTracking(
+        sourceID: string,
+        items: MJContentItemEntity[],
+        contentProcessRunID: string,
+        contextUser: UserInfo
+    ): Promise<void> {
+        const detail = await this.createRunDetail(sourceID, contentProcessRunID, contextUser);
+        if (!detail) {
+            // Fall back to untracked vectorization
+            LogError(`[AutotagAction] Failed to create detail record for source ${sourceID}, proceeding without tracking`);
+            await AutotagBaseEngine.Instance.VectorizeContentItems(items, contextUser);
+            return;
+        }
+
+        try {
+            const stats = await AutotagBaseEngine.Instance.VectorizeContentItems(items, contextUser);
+            await this.completeRunDetail(detail, stats, contextUser);
+
+            // Link AIPromptRun records to this detail via junction table
+            await this.linkPromptRuns(detail.ID, stats.promptRunIDs, 'Embed', contextUser);
+
+            LogStatus(`[AutotagAction] Source ${sourceID}: ${stats.vectorized} vectorized, ${stats.skipped} skipped, ${stats.promptRunIDs.length} prompt runs linked`);
+        } catch (error) {
+            await this.failRunDetail(detail, error, contextUser);
+        }
+    }
+
+    /**
+     * Create a ContentProcessRunDetail record for a content source before processing begins.
+     *
+     * @param sourceID - ContentSource ID being processed
+     * @param contentProcessRunID - parent ContentProcessRun ID
+     * @param contextUser - current user for entity creation
+     * @returns the saved detail entity, or null if creation failed
+     */
+    private async createRunDetail(
+        sourceID: string,
+        contentProcessRunID: string,
+        contextUser: UserInfo
+    ): Promise<MJContentProcessRunDetailEntity | null> {
+        try {
+            const md = new Metadata();
+            const detail = await md.GetEntityObject<MJContentProcessRunDetailEntity>(
+                'MJ: Content Process Run Details', contextUser
+            );
+            detail.NewRecord();
+            detail.ContentProcessRunID = contentProcessRunID;
+            detail.ContentSourceID = sourceID;
+            detail.ContentSourceTypeID = await this.resolveSourceTypeID(sourceID, contextUser);
+            detail.Status = 'Running';
+            detail.StartTime = new Date();
+            detail.ItemsProcessed = 0;
+            detail.ItemsTagged = 0;
+            detail.ItemsVectorized = 0;
+            detail.TagsCreated = 0;
+            detail.ErrorCount = 0;
+            detail.TotalTokensUsed = 0;
+            detail.TotalCost = 0;
+
+            const saved = await detail.Save();
+            if (!saved) {
+                LogError(`[AutotagAction] Failed to save ContentProcessRunDetail for source ${sourceID}`);
+                return null;
+            }
+            return detail;
+        } catch (error) {
+            LogError(`[AutotagAction] Error creating ContentProcessRunDetail: ${error instanceof Error ? error.message : String(error)}`);
+            return null;
+        }
+    }
+
+    /**
+     * Resolve the ContentSourceTypeID for a given ContentSource by loading the source record.
+     */
+    private async resolveSourceTypeID(
+        sourceID: string,
+        contextUser: UserInfo
+    ): Promise<string> {
+        const rv = new RunView();
+        const result = await rv.RunView<MJContentSourceEntity>({
+            EntityName: 'MJ: Content Sources',
+            ExtraFilter: `ID='${sourceID}'`,
+            ResultType: 'entity_object',
+            MaxRows: 1
+        }, contextUser);
+        if (result.Success && result.Results.length > 0) {
+            return result.Results[0].ContentSourceTypeID;
+        }
+        LogError(`[AutotagAction] Could not resolve ContentSourceTypeID for source ${sourceID}`);
+        return '';
+    }
+
+    /**
+     * Update a ContentProcessRunDetail record with final counts and mark as Completed.
+     *
+     * @param detail - the detail entity to update
+     * @param stats - vectorization result with counts and prompt run IDs
+     * @param contextUser - current user
+     */
+    private async completeRunDetail(
+        detail: MJContentProcessRunDetailEntity,
+        stats: VectorizeResult,
+        contextUser: UserInfo
+    ): Promise<void> {
+        try {
+            detail.Status = 'Completed';
+            detail.EndTime = new Date();
+            detail.ItemsProcessed = stats.vectorized + stats.skipped;
+            detail.ItemsVectorized = stats.vectorized;
+            await detail.Save();
+        } catch (error) {
+            LogError(`[AutotagAction] Error completing ContentProcessRunDetail: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+
+    /**
+     * Mark a ContentProcessRunDetail as Failed with error information.
+     *
+     * @param detail - the detail entity to update
+     * @param error - the error that caused the failure
+     * @param contextUser - current user
+     */
+    private async failRunDetail(
+        detail: MJContentProcessRunDetailEntity,
+        error: unknown,
+        contextUser: UserInfo
+    ): Promise<void> {
+        try {
+            detail.Status = 'Failed';
+            detail.EndTime = new Date();
+            detail.ErrorCount = (detail.ErrorCount ?? 0) + 1;
+            await detail.Save();
+            LogError(`[AutotagAction] Source processing failed: ${error instanceof Error ? error.message : String(error)}`);
+        } catch (saveError) {
+            LogError(`[AutotagAction] Error saving failed detail: ${saveError instanceof Error ? saveError.message : String(saveError)}`);
+        }
+    }
+
+    /**
+     * Create ContentProcessRunPromptRun junction records linking a detail record
+     * to its AIPromptRun records for cost/token analytics.
+     *
+     * @param detailID - ContentProcessRunDetail ID
+     * @param promptRunIDs - AIPromptRun IDs to link
+     * @param runType - whether these runs are for 'Tag' or 'Embed'
+     * @param contextUser - current user for entity creation
+     */
+    private async linkPromptRuns(
+        detailID: string,
+        promptRunIDs: string[],
+        runType: 'Tag' | 'Embed',
+        contextUser: UserInfo
+    ): Promise<void> {
+        if (promptRunIDs.length === 0) return;
+
+        const md = new Metadata();
+        for (const promptRunID of promptRunIDs) {
+            try {
+                const junction = await md.GetEntityObject<MJContentProcessRunPromptRunEntity>(
+                    'MJ: Content Process Run Prompt Runs', contextUser
+                );
+                junction.NewRecord();
+                junction.ContentProcessRunDetailID = detailID;
+                junction.AIPromptRunID = promptRunID;
+                junction.RunType = runType;
+                const saved = await junction.Save();
+                if (!saved) {
+                    LogError(`[AutotagAction] Failed to save prompt run junction: detail=${detailID}, promptRun=${promptRunID}`);
+                }
+            } catch (error) {
+                LogError(`[AutotagAction] Error linking prompt run: ${error instanceof Error ? error.message : String(error)}`);
+            }
+        }
     }
 }

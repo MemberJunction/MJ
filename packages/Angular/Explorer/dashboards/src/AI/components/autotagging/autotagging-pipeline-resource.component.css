@@ -474,6 +474,34 @@
     white-space: nowrap;
 }
 
+.at-progress-fill-paused {
+    background: var(--mj-status-warning);
+    animation: pulse-paused 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-paused {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.at-pipeline-controls {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+    justify-content: flex-end;
+}
+
+.at-danger-btn {
+    background: var(--mj-status-error);
+    color: var(--mj-text-inverse);
+    border-color: var(--mj-status-error);
+}
+
+.at-danger-btn:hover:not(:disabled) {
+    background: var(--mj-status-error-text);
+    border-color: var(--mj-status-error-text);
+}
+
 /* Feed items */
 
 .at-feed-item {
@@ -3072,4 +3100,550 @@
 
 .at-config-toggle input:checked + .at-toggle-track .at-toggle-thumb {
     transform: translateX(14px);
+}
+
+/* ── Schedule Indicator on Source Cards ─────────────────────── */
+
+.at-schedule-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 10px;
+    margin-top: 6px;
+    border-radius: 12px;
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: var(--mj-brand-primary);
+    background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface));
+    border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 20%, var(--mj-border-default));
+    cursor: pointer;
+    transition: all 0.15s ease;
+    width: fit-content;
+}
+
+.at-schedule-indicator i {
+    font-size: 0.62rem;
+}
+
+.at-schedule-indicator:hover {
+    background: color-mix(in srgb, var(--mj-status-error) 10%, var(--mj-bg-surface));
+    color: var(--mj-status-error);
+    border-color: color-mix(in srgb, var(--mj-status-error) 30%, var(--mj-border-default));
+}
+
+/* Schedule button in source card actions */
+.at-source-schedule-btn:hover {
+    border-color: var(--mj-brand-primary);
+    color: var(--mj-brand-primary);
+}
+
+/* ── Schedule Dialog ───────────────────────────────────────── */
+
+.at-schedule-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--mj-bg-overlay, rgba(0, 0, 0, 0.4));
+}
+
+.at-schedule-dialog {
+    background: var(--mj-bg-surface);
+    border: 1px solid var(--mj-border-default);
+    border-radius: var(--mj-radius-lg, 12px);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.16);
+    width: 420px;
+    max-width: 90vw;
+}
+
+.at-schedule-dialog-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--mj-border-default);
+}
+
+.at-schedule-dialog-header h3 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    font-size: 15px;
+    font-weight: 650;
+    color: var(--mj-text-primary);
+}
+
+.at-schedule-dialog-header h3 i {
+    color: var(--mj-brand-primary);
+}
+
+.at-schedule-dialog-close {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--mj-text-muted);
+    font-size: 16px;
+    padding: 4px;
+    line-height: 1;
+    transition: color 0.15s;
+}
+
+.at-schedule-dialog-close:hover {
+    color: var(--mj-text-primary);
+}
+
+.at-schedule-dialog-body {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.at-schedule-field label {
+    display: block;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--mj-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 6px;
+}
+
+.at-schedule-source-name {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--mj-text-primary);
+    padding: 8px 12px;
+    background: var(--mj-bg-surface-card);
+    border-radius: var(--mj-radius-sm, 6px);
+    border: 1px solid var(--mj-border-subtle);
+}
+
+.at-schedule-source-name i {
+    color: var(--mj-text-muted);
+}
+
+.at-schedule-action-name {
+    font-size: 13px;
+    color: var(--mj-text-secondary);
+    padding: 8px 12px;
+    background: var(--mj-bg-surface-card);
+    border-radius: var(--mj-radius-sm, 6px);
+    border: 1px solid var(--mj-border-subtle);
+}
+
+.at-schedule-cron-input {
+    width: 100%;
+    font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+    font-size: 13px;
+    letter-spacing: 0.02em;
+}
+
+.at-schedule-cron-preview {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 6px;
+    font-size: 12px;
+    color: var(--mj-text-muted);
+}
+
+.at-schedule-cron-preview i {
+    font-size: 11px;
+    color: var(--mj-brand-primary);
+}
+
+.at-schedule-toggle-row {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+}
+
+.at-schedule-toggle-row label {
+    margin-bottom: 0;
+}
+
+.at-schedule-dialog-footer {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 20px;
+    border-top: 1px solid var(--mj-border-default);
+}
+
+/* ══════ D4: Status Badges for Content Items ══════ */
+
+.at-status-badge {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 0.6rem;
+    font-weight: 600;
+    white-space: nowrap;
+    letter-spacing: 0.02em;
+}
+
+.at-status-badge-complete {
+    background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface));
+    color: var(--mj-status-success-text);
+}
+
+.at-status-badge-processing {
+    background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface));
+    color: var(--mj-status-warning-text);
+}
+
+.at-status-badge-failed {
+    background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
+    color: var(--mj-status-error-text);
+}
+
+.at-status-badge-pending {
+    background: var(--mj-bg-surface-sunken);
+    color: var(--mj-text-muted);
+}
+
+/* ══════ D4/D7: Source Detail Controls ══════ */
+
+.at-detail-section-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.at-detail-section-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.at-detail-filter-select {
+    padding: 4px 8px;
+    border: 1px solid var(--mj-border-default);
+    border-radius: 6px;
+    font-size: 0.72rem;
+    background: var(--mj-bg-surface);
+    color: var(--mj-text-primary);
+    cursor: pointer;
+}
+
+.at-retry-btn {
+    font-size: 0.7rem !important;
+    padding: 4px 8px !important;
+    background: color-mix(in srgb, var(--mj-status-error) 10%, var(--mj-bg-surface)) !important;
+    color: var(--mj-status-error-text) !important;
+    border: 1px solid color-mix(in srgb, var(--mj-status-error) 20%, var(--mj-border-default)) !important;
+}
+
+.at-retry-btn:hover {
+    background: color-mix(in srgb, var(--mj-status-error) 18%, var(--mj-bg-surface)) !important;
+}
+
+/* ══════ D7: Pagination ══════ */
+
+.at-detail-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 10px 0 4px;
+    border-top: 1px solid var(--mj-border-subtle);
+    margin-top: 4px;
+}
+
+.at-page-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    font-size: 0.72rem;
+    font-weight: 500;
+    border: 1px solid var(--mj-border-default);
+    border-radius: 6px;
+    background: var(--mj-bg-surface);
+    color: var(--mj-text-secondary);
+    cursor: pointer;
+    transition: all 0.12s ease;
+}
+
+.at-page-btn:hover:not(:disabled) {
+    background: var(--mj-bg-surface-hover);
+    color: var(--mj-text-primary);
+}
+
+.at-page-btn:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+.at-page-info {
+    font-size: 0.72rem;
+    color: var(--mj-text-muted);
+    font-weight: 500;
+}
+
+/* ══════ Confirmation Dialog ══════ */
+
+.at-confirm-message {
+    font-size: 13.5px;
+    color: var(--mj-text-secondary);
+    line-height: 1.5;
+    margin: 0;
+}
+
+.at-danger-btn {
+    background: var(--mj-status-error);
+    color: var(--mj-text-inverse);
+    border: none;
+    border-radius: var(--mj-radius-sm, 6px);
+    padding: 7px 14px;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.at-danger-btn:hover {
+    background: var(--mj-status-error-text);
+}
+
+/* ══════ Treemap Drill-In ══════ */
+
+.at-tax-treemap-cell-clickable {
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.at-tax-treemap-cell-clickable:hover {
+    transform: scale(1.02);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+    z-index: 1;
+}
+
+.at-tax-drillin-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-end;
+    background: var(--mj-bg-overlay, rgba(0, 0, 0, 0.4));
+}
+
+.at-tax-drillin-panel {
+    background: var(--mj-bg-surface);
+    border-left: 1px solid var(--mj-border-default);
+    width: 420px;
+    max-width: 90vw;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: -4px 0 24px rgba(0, 0, 0, 0.12);
+}
+
+.at-tax-drillin-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--mj-border-default);
+}
+
+.at-tax-drillin-header h3 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    font-size: 15px;
+    font-weight: 650;
+    color: var(--mj-text-primary);
+}
+
+.at-tax-drillin-header h3 i {
+    color: var(--mj-brand-primary);
+}
+
+.at-tax-drillin-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+}
+
+.at-tax-drillin-footer {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 20px;
+    border-top: 1px solid var(--mj-border-default);
+}
+
+/* D3/D8: Clickable run history rows */
+.at-run-row-clickable {
+    cursor: pointer;
+    transition: background 0.12s ease;
+}
+
+.at-run-row-clickable:hover {
+    background: var(--mj-bg-surface-hover);
+}
+
+.at-run-row-selected {
+    background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface)) !important;
+    border-left: 3px solid var(--mj-brand-primary);
+}
+
+/* D2: Error text in detail tables */
+.run-error-text {
+    color: var(--mj-status-error);
+    font-weight: 600;
+}
+
+/* ── Content Item Duplicates Section (G3) ── */
+
+.at-dedup-section {
+    margin-top: 24px;
+    border-top: 1px solid var(--mj-border-default);
+    padding-top: 20px;
+}
+
+.at-dedup-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 16px;
+}
+
+.at-dedup-title {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--mj-text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.at-dedup-subtitle {
+    font-size: 0.78rem;
+    color: var(--mj-text-muted);
+}
+
+.at-dedup-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.at-dedup-card {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 14px 16px;
+    border: 1px solid var(--mj-border-default);
+    border-radius: 10px;
+    background: var(--mj-bg-surface);
+    transition: border-color 0.15s;
+}
+
+.at-dedup-card:hover {
+    border-color: var(--mj-border-strong);
+}
+
+.at-dedup-pair {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+    min-width: 0;
+}
+
+.at-dedup-item {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1;
+}
+
+.at-dedup-item-name {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--mj-text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.at-dedup-item-source {
+    font-size: 0.72rem;
+    color: var(--mj-text-muted);
+}
+
+.at-dedup-vs {
+    color: var(--mj-text-muted);
+    font-size: 0.75rem;
+    flex-shrink: 0;
+}
+
+.at-dedup-meta {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 3px;
+    flex-shrink: 0;
+}
+
+.at-dedup-score {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--mj-text-primary);
+}
+
+.at-dedup-method {
+    font-size: 0.65rem;
+    color: var(--mj-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.at-dedup-actions {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.at-dedup-confirm {
+    font-size: 0.75rem !important;
+    padding: 4px 10px !important;
+}
+
+.at-dedup-dismiss {
+    font-size: 0.75rem !important;
+    padding: 4px 10px !important;
+}
+
+.at-dedup-empty {
+    text-align: center;
+    padding: 32px 16px;
+    color: var(--mj-text-muted);
+}
+
+.at-dedup-empty i {
+    font-size: 1.5rem;
+    margin-bottom: 8px;
+    color: var(--mj-status-success);
+}
+
+.at-dedup-empty p {
+    margin: 8px 0 0;
+    font-size: 0.82rem;
 }

@@ -5,6 +5,8 @@ import { TagEngineBase, TagTreeNode } from '@memberjunction/tag-engine-base';
 import { SimpleVectorService, VectorEntry } from '@memberjunction/ai-vectors-memory';
 import { BaseEmbeddings, EmbedTextParams, EmbedTextResult, GetAIAPIKey } from '@memberjunction/ai';
 import { AIEngine } from '@memberjunction/aiengine';
+import { AIModelRunner } from '@memberjunction/ai-prompts';
+import type { EmbeddingRunResult } from '@memberjunction/ai-prompts';
 
 /**
  * Metadata stored alongside each tag embedding in the vector service.
@@ -199,66 +201,40 @@ export class TagEngine extends BaseSingleton<TagEngine> {
         LogStatus(`TagEngine: Loaded ${entries.length} tag embeddings into vector service.`);
     }
 
-    /**
-     * Generate embeddings for a list of tags using the specified model.
-     */
     /** Batch size for parallel tag embedding */
     private static readonly TAG_EMBED_BATCH_SIZE = 50;
 
     /**
-     * Generate embeddings for tags in batches using EmbedTexts (plural).
-     * Uses AIEngine's local embedding model discovery and processes up to
-     * 50 tags per API call for efficiency.
+     * Generate embeddings for tags in batches using AIModelRunner.RunEmbedding()
+     * for tracked embedding runs with AIPromptRun records. Processes up to
+     * 50 tags per API call for efficiency. Falls back to direct BaseEmbeddings
+     * if AIModelRunner is unavailable.
      */
     private async generateTagEmbeddings(
         tags: MJTagEntity[],
         modelInfo: EmbeddingModelInfo
     ): Promise<VectorEntry<TagEmbeddingMetadata>[]> {
         const entries: VectorEntry<TagEmbeddingMetadata>[] = [];
-        const apiKey = GetAIAPIKey(modelInfo.DriverClass);
 
-        const embeddingInstance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseEmbeddings>(
-            BaseEmbeddings,
-            modelInfo.DriverClass,
-            apiKey
-        );
-        if (!embeddingInstance) {
-            LogError(`TagEngine: Failed to create embedding instance for driver class "${modelInfo.DriverClass}".`);
-            return entries;
-        }
+        // Resolve the "Tag Semantic Matching" prompt ID for tracked runs
+        const tagPromptID = this.resolveTagSemanticPromptID();
 
-        // Process in batches for efficiency — local models handle batches well
+        // Process in batches for efficiency
         for (let i = 0; i < tags.length; i += TagEngine.TAG_EMBED_BATCH_SIZE) {
             const batch = tags.slice(i, i + TagEngine.TAG_EMBED_BATCH_SIZE);
             const texts = batch.map(tag => this.buildTagEmbeddingText(tag));
+            const batchNum = Math.floor(i / TagEngine.TAG_EMBED_BATCH_SIZE) + 1;
 
-            try {
-                const result = await embeddingInstance.EmbedTexts({ texts, model: modelInfo.APIName });
-
-                if (result?.vectors?.length === batch.length) {
-                    for (let j = 0; j < batch.length; j++) {
-                        if (result.vectors[j]?.length > 0) {
-                            entries.push({
-                                key: NormalizeUUID(batch[j].ID),
-                                vector: result.vectors[j],
-                                metadata: { Name: batch[j].Name, ParentID: batch[j].ParentID }
-                            });
-                        }
-                    }
-                    LogStatus(`TagEngine: Embedded batch ${Math.floor(i / TagEngine.TAG_EMBED_BATCH_SIZE) + 1} (${batch.length} tags)`);
-                } else {
-                    LogError(`TagEngine: Batch embed returned ${result?.vectors?.length ?? 0} vectors for ${batch.length} texts, falling back to individual`);
-                    for (const tag of batch) {
-                        const entry = await this.embedSingleTag(tag, embeddingInstance, modelInfo.APIName);
-                        if (entry) entries.push(entry);
-                    }
-                }
-            } catch (error) {
-                const msg = error instanceof Error ? error.message : String(error);
-                LogError(`TagEngine: Batch embed failed: ${msg}, falling back to individual`);
-                for (const tag of batch) {
-                    const entry = await this.embedSingleTag(tag, embeddingInstance, modelInfo.APIName);
-                    if (entry) entries.push(entry);
+            const batchEntries = await this.embedBatchViaModelRunner(batch, texts, tagPromptID);
+            if (batchEntries.length > 0) {
+                entries.push(...batchEntries);
+                LogStatus(`TagEngine: Embedded batch ${batchNum} (${batch.length} tags) via AIModelRunner`);
+            } else {
+                // Fallback to direct embedding if AIModelRunner failed entirely
+                const fallbackEntries = await this.embedBatchDirect(batch, texts, modelInfo);
+                entries.push(...fallbackEntries);
+                if (fallbackEntries.length > 0) {
+                    LogStatus(`TagEngine: Embedded batch ${batchNum} (${fallbackEntries.length} tags) via direct fallback`);
                 }
             }
         }
@@ -267,38 +243,95 @@ export class TagEngine extends BaseSingleton<TagEngine> {
     }
 
     /**
-     * Embed a single tag and return a VectorEntry, or null on failure.
+     * Embed a batch of tags using AIModelRunner for tracked runs.
+     * Returns VectorEntry array (may be empty on failure).
      */
-    private async embedSingleTag(
-        tag: MJTagEntity,
-        embeddingInstance: BaseEmbeddings,
-        apiName: string
-    ): Promise<VectorEntry<TagEmbeddingMetadata> | null> {
+    private async embedBatchViaModelRunner(
+        batch: MJTagEntity[],
+        texts: string[],
+        promptID: string | undefined
+    ): Promise<VectorEntry<TagEmbeddingMetadata>[]> {
+        const entries: VectorEntry<TagEmbeddingMetadata>[] = [];
         try {
-            const embeddingText = this.buildTagEmbeddingText(tag);
-            const params: EmbedTextParams = {
-                text: embeddingText,
-                model: apiName
-            };
-            const result = await embeddingInstance.EmbedText(params);
+            const runner = new AIModelRunner();
+            const result: EmbeddingRunResult = await runner.RunEmbedding({
+                Texts: texts,
+                PromptID: promptID,
+                ContextUser: this._contextUser!,
+                Description: `Tag semantic embeddings (batch of ${batch.length})`
+            });
 
-            if (!result || result.vector.length === 0) {
-                LogError(`TagEngine: Failed to generate embedding for tag "${tag.Name}".`);
-                return null;
+            if (!result.Success || result.Vectors.length !== batch.length) {
+                LogError(`TagEngine: AIModelRunner returned ${result.Vectors.length} vectors for ${batch.length} texts: ${result.ErrorMessage ?? 'unknown error'}`);
+                return entries;
             }
 
-            return {
-                key: NormalizeUUID(tag.ID),
-                vector: result.vector,
-                metadata: {
-                    Name: tag.Name,
-                    ParentID: tag.ParentID
+            for (let j = 0; j < batch.length; j++) {
+                if (result.Vectors[j]?.length > 0) {
+                    entries.push({
+                        key: NormalizeUUID(batch[j].ID),
+                        vector: result.Vectors[j],
+                        metadata: { Name: batch[j].Name, ParentID: batch[j].ParentID }
+                    });
                 }
-            };
+            }
         } catch (error) {
-            LogError(`TagEngine: Error embedding tag "${tag.Name}": ${error instanceof Error ? error.message : String(error)}`);
-            return null;
+            const msg = error instanceof Error ? error.message : String(error);
+            LogError(`TagEngine: AIModelRunner batch embed failed: ${msg}`);
         }
+        return entries;
+    }
+
+    /**
+     * Direct fallback: embed a batch using BaseEmbeddings when AIModelRunner is unavailable.
+     */
+    private async embedBatchDirect(
+        batch: MJTagEntity[],
+        texts: string[],
+        modelInfo: EmbeddingModelInfo
+    ): Promise<VectorEntry<TagEmbeddingMetadata>[]> {
+        const entries: VectorEntry<TagEmbeddingMetadata>[] = [];
+        try {
+            const apiKey = GetAIAPIKey(modelInfo.DriverClass);
+            const embeddingInstance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseEmbeddings>(
+                BaseEmbeddings, modelInfo.DriverClass, apiKey
+            );
+            if (!embeddingInstance) {
+                LogError(`TagEngine: Failed to create embedding instance for driver class "${modelInfo.DriverClass}".`);
+                return entries;
+            }
+
+            const result = await embeddingInstance.EmbedTexts({ texts, model: modelInfo.APIName });
+            if (result?.vectors?.length === batch.length) {
+                for (let j = 0; j < batch.length; j++) {
+                    if (result.vectors[j]?.length > 0) {
+                        entries.push({
+                            key: NormalizeUUID(batch[j].ID),
+                            vector: result.vectors[j],
+                            metadata: { Name: batch[j].Name, ParentID: batch[j].ParentID }
+                        });
+                    }
+                }
+            }
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            LogError(`TagEngine: Direct batch embed failed: ${msg}`);
+        }
+        return entries;
+    }
+
+    /**
+     * Resolve the "Tag Semantic Matching" prompt ID from AIEngine, if available.
+     * Returns undefined if not found (AIModelRunner will fall back to first Embedding prompt).
+     */
+    private resolveTagSemanticPromptID(): string | undefined {
+        const aiEngine = AIEngine.Instance;
+        if (!aiEngine.Loaded) return undefined;
+
+        const prompt = aiEngine.Prompts.find(
+            p => p.Name === 'Tag Semantic Matching' && p.Status === 'Active'
+        );
+        return prompt?.ID;
     }
 
     /**
@@ -442,33 +475,31 @@ export class TagEngine extends BaseSingleton<TagEngine> {
     }
 
     /**
-     * Embed a query text string for similarity search.
+     * Embed a query text string for similarity search using AIModelRunner.
      */
     private async embedQueryText(
         text: string,
-        modelInfo: EmbeddingModelInfo
+        _modelInfo: EmbeddingModelInfo
     ): Promise<number[] | null> {
-        try {
-            const apiKey = GetAIAPIKey(modelInfo.DriverClass);
-            const embeddingInstance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseEmbeddings>(
-                BaseEmbeddings,
-                modelInfo.DriverClass,
-                apiKey
-            );
-            if (!embeddingInstance) {
-                LogError(`TagEngine: Failed to create embedding instance for query.`);
-                return null;
-            }
+        if (!this._contextUser) {
+            LogError('TagEngine: No contextUser available for query embedding.');
+            return null;
+        }
 
-            const params: EmbedTextParams = {
-                text,
-                model: modelInfo.APIName
-            };
-            const result = await embeddingInstance.EmbedText(params);
-            if (!result || result.vector.length === 0) {
+        try {
+            const runner = new AIModelRunner();
+            const promptID = this.resolveTagSemanticPromptID();
+            const result = await runner.RunEmbedding({
+                Texts: [text],
+                PromptID: promptID,
+                ContextUser: this._contextUser,
+                Description: `Tag resolution query: "${text}"`
+            });
+
+            if (!result.Success || result.Vectors.length === 0 || result.Vectors[0].length === 0) {
                 return null;
             }
-            return result.vector;
+            return result.Vectors[0];
         } catch (error) {
             LogError(`TagEngine: Error embedding query text: ${error instanceof Error ? error.message : String(error)}`);
             return null;
@@ -517,32 +548,46 @@ export class TagEngine extends BaseSingleton<TagEngine> {
 
     /**
      * Embed a single tag and add it to the existing vector service.
-     * No-op if no vector service or embedding model is available.
+     * Uses AIModelRunner for tracked runs. No-op if no vector service available.
      */
     private async addTagToVectorService(tag: MJTagEntity): Promise<void> {
-        if (!this._tagVectorService) {
+        if (!this._tagVectorService || !this._contextUser) {
             return;
         }
 
-        const modelInfo = this.getSmallestEmbeddingModel();
-        if (!modelInfo) {
-            return;
-        }
+        const text = this.buildTagEmbeddingText(tag);
+        const promptID = this.resolveTagSemanticPromptID();
 
-        const apiKey = GetAIAPIKey(modelInfo.DriverClass);
-        const embeddingInstance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseEmbeddings>(
-            BaseEmbeddings,
-            modelInfo.DriverClass,
-            apiKey
-        );
-        if (!embeddingInstance) {
-            return;
-        }
+        try {
+            const runner = new AIModelRunner();
+            const result = await runner.RunEmbedding({
+                Texts: [text],
+                PromptID: promptID,
+                ContextUser: this._contextUser,
+                Description: `Tag embedding for new tag "${tag.Name}"`
+            });
 
-        const entry = await this.embedSingleTag(tag, embeddingInstance, modelInfo.APIName);
-        if (entry) {
-            this._tagVectorService.AddVector(entry.key, entry.vector, entry.metadata);
+            if (result.Success && result.Vectors.length > 0 && result.Vectors[0].length > 0) {
+                this._tagVectorService.AddVector(
+                    NormalizeUUID(tag.ID),
+                    result.Vectors[0],
+                    { Name: tag.Name, ParentID: tag.ParentID }
+                );
+            }
+        } catch (error) {
+            LogError(`TagEngine: Failed to embed new tag "${tag.Name}": ${error instanceof Error ? error.message : String(error)}`);
         }
+    }
+
+    /**
+     * Re-embed a tag after it has been renamed or its description changed.
+     * Updates the vector in the active vector service. No-op if the vector service
+     * is not available (e.g., before BuildTagVectors has been called).
+     *
+     * @param tag - The tag entity with the updated name/description already saved
+     */
+    public async ReEmbedTag(tag: MJTagEntity): Promise<void> {
+        await this.addTagToVectorService(tag);
     }
 
     // ========================================================================

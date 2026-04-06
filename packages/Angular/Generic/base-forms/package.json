@@ -41,6 +41,7 @@
     "@memberjunction/global": "5.23.0",
     "@memberjunction/ng-base-types": "5.23.0",
     "@memberjunction/ng-list-management": "5.23.0",
+    "@memberjunction/ng-notifications": "5.23.0",
     "@memberjunction/ng-record-changes": "5.23.0",
     "@memberjunction/ng-record-tags": "5.23.0",
     "@memberjunction/ng-entity-viewer": "5.23.0",

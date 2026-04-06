@@ -96,6 +96,9 @@ export class MjFormToolbarComponent implements DoCheck {
   /** Whether the tags panel is currently open */
   @Input() IsTagsPanelOpen = false;
 
+  /** Number of record change versions for this record (displayed as "vN" badge on history button) */
+  @Input() VersionCount = 0;
+
   /** Entity info for IS-A hierarchy and metadata */
   @Input() EntityInfo: EntityInfo | null = null;
 

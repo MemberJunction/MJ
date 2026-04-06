@@ -57,6 +57,12 @@ const DEFAULT_QUERY_CONCURRENCY = 10;
 /** Default batch size for loading records and parallel database saves */
 const DEFAULT_BATCH_SIZE = 500;
 
+/**
+ * Maximum number of records to embed and query in a single vector similarity sub-batch.
+ * Keeps memory and API payload sizes bounded within each outer processing batch.
+ */
+const VECTOR_QUERY_BATCH_SIZE = 100;
+
 /** Default batch size for parallel database saves */
 const SAVE_BATCH_SIZE = 20;
 
@@ -113,8 +119,27 @@ export class DuplicateRecordDetector extends VectorBase {
      * Run duplicate detection for records identified by ListID, ViewID, ExtraFilter,
      * or all records in the entity (vector-first approach).
      *
-     * Flow: validate -> vectorize -> init providers -> load/create run ->
-     *       load record IDs -> batch(embed -> query -> persist) -> complete run -> auto-merge
+     * **Batching strategy:**
+     * - Records are loaded as lightweight IDs first, then processed in outer batches of
+     *   {@link DEFAULT_BATCH_SIZE} (500) records.
+     * - Within each outer batch, embedding and vector similarity queries are further
+     *   sub-batched into chunks of {@link VECTOR_QUERY_BATCH_SIZE} (100) records to keep
+     *   API payloads and memory bounded.
+     * - Vector queries within each sub-batch run with configurable concurrency
+     *   (default {@link DEFAULT_QUERY_CONCURRENCY} = 10).
+     *
+     * **Resume support:**
+     * - {@link MJDuplicateRunEntity.ProcessedItemCount} and
+     *   {@link MJDuplicateRunEntity.LastProcessedOffset} are persisted after each outer batch.
+     * - On restart, processing resumes from {@link MJDuplicateRunEntity.LastProcessedOffset}.
+     *
+     * **Cancellation:**
+     * - {@link MJDuplicateRunEntity.CancellationRequested} is re-loaded from the database
+     *   between outer batches. If set to `true`, processing stops and the run can be resumed later.
+     *
+     * @param params - The detection request specifying entity, document, list/view/filter, and options
+     * @param contextUser - The user context for entity operations and security
+     * @returns A response containing all potential duplicate results and an overall status
      */
     public async GetDuplicateRecords(params: PotentialDuplicateRequest, contextUser?: UserInfo): Promise<PotentialDuplicateResponse> {
         this.CurrentUser = contextUser;
@@ -277,7 +302,30 @@ export class DuplicateRecordDetector extends VectorBase {
     // ─────────────────────────────────────────────
 
     /**
-     * Result from processing a single batch of records.
+     * Process a single outer batch of record IDs through the full duplicate detection pipeline.
+     *
+     * Steps:
+     * 1. Load full record data for template rendering
+     * 2. Build source metadata for rich UI display
+     * 3. Create DuplicateRunDetail records
+     * 4. Sub-batch records into chunks of {@link VECTOR_QUERY_BATCH_SIZE} (default 100)
+     *    for embedding + vector similarity querying, keeping memory and API payloads bounded
+     * 5. Persist match results and update run details
+     *
+     * @param batchIDs - Primary key values for records in this batch
+     * @param entityInfo - Entity metadata
+     * @param entityDocument - The entity document driving vectorization
+     * @param templateParser - Reusable template parser instance
+     * @param duplicateRunID - ID of the parent DuplicateRun record
+     * @param topK - Number of nearest neighbors to retrieve per record
+     * @param concurrency - Max parallel vector queries within each sub-batch
+     * @param options - Detection options (thresholds, callbacks, etc.)
+     * @param startTime - Epoch ms for elapsed-time progress reporting
+     * @param totalRecords - Total records across all batches (for progress reporting)
+     * @param processedSoFar - Records processed before this batch (for progress reporting)
+     * @param matchesSoFar - Matches found before this batch (for progress reporting)
+     * @param contextUser - The user context for entity operations
+     * @returns Combined results and match count for this batch
      */
     private async ProcessBatch(
         batchIDs: string[],
@@ -311,21 +359,31 @@ export class DuplicateRecordDetector extends VectorBase {
         // 6c: Create DuplicateRunDetail records for this batch
         const duplicateRunDetails = await this.CreateRunDetailRecords(batchIDs, duplicateRunID, entityInfo, sourceMetadataMap);
 
-        // 6c: Generate template texts and embed
-        this.reportProgress(options, 'Embedding', totalRecords, processedSoFar, matchesSoFar, startTime);
-        const templateTexts = await this.GenerateTemplateTexts(templateParser, entityDocument, records, contextUser);
-        const embedResult = await this.embedding.EmbedTexts({ texts: templateTexts, model: null });
+        // 6d: Sub-batch embedding + vector queries in chunks of VECTOR_QUERY_BATCH_SIZE
+        //     to keep API payload sizes and memory bounded
+        const allQueryResults: RecordQueryResult[] = [];
+        const subBatches = chunkArray(records, VECTOR_QUERY_BATCH_SIZE);
 
-        // 6d: Query vector DB for each record with concurrency control
-        this.reportProgress(options, 'Querying', totalRecords, processedSoFar, matchesSoFar, startTime);
-        const queryResults = await this.QueryDuplicatesForRecords(
-            records, embedResult.vectors, templateTexts, entityDocument, topK, options, concurrency
-        );
+        for (let i = 0; i < subBatches.length; i++) {
+            const subRecords = subBatches[i];
+
+            // Embed this sub-batch
+            this.reportProgress(options, 'Embedding', totalRecords, processedSoFar, matchesSoFar, startTime);
+            const subTemplateTexts = await this.GenerateTemplateTexts(templateParser, entityDocument, subRecords, contextUser);
+            const subEmbedResult = await this.embedding.EmbedTexts({ texts: subTemplateTexts, model: null });
+
+            // Query vector DB for each record in the sub-batch with concurrency control
+            this.reportProgress(options, 'Querying', totalRecords, processedSoFar, matchesSoFar, startTime);
+            const subQueryResults = await this.QueryDuplicatesForRecords(
+                subRecords, subEmbedResult.vectors, subTemplateTexts, entityDocument, topK, options, concurrency
+            );
+            allQueryResults.push(...subQueryResults);
+        }
 
         // 6e: Persist match results and update run details
         this.reportProgress(options, 'Matching', totalRecords, processedSoFar + records.length, matchesSoFar, startTime);
         const results = await this.PersistMatchResults(
-            queryResults, duplicateRunDetails, entityDocument, options, startTime
+            allQueryResults, duplicateRunDetails, entityDocument, options, startTime
         );
 
         const batchMatches = results.reduce((sum, r) => sum + r.Duplicates.length, 0);
@@ -715,7 +773,27 @@ export class DuplicateRecordDetector extends VectorBase {
 
     /**
      * Query the vector DB for duplicates of each record, with concurrency control.
-     * Supports hybrid search and RRF fusion when the vector DB supports it.
+     *
+     * Creates one async task per record, then executes them via {@link RunWithConcurrency}
+     * with the specified concurrency limit. Each task embeds and queries a single record
+     * against the vector index.
+     *
+     * Supports hybrid search (vector + keyword) with RRF fusion when the vector DB provider
+     * supports it (checked via `SupportsHybridSearch`).
+     *
+     * Post-query, results are:
+     * 1. Parsed from raw vector matches into typed {@link PotentialDuplicate} objects
+     * 2. Filtered to remove self-matches (same record as source)
+     * 3. Filtered by the potential match threshold (from options or entity document)
+     *
+     * @param records - The source records to find duplicates for
+     * @param vectors - Pre-computed embedding vectors, one per record (same index order)
+     * @param templateTexts - Rendered template texts for hybrid keyword search
+     * @param entityDocument - The entity document providing thresholds and configuration
+     * @param topK - Number of nearest neighbors to retrieve per record
+     * @param options - Detection options including threshold overrides
+     * @param concurrency - Max parallel vector queries
+     * @returns One {@link RecordQueryResult} per input record
      */
     protected async QueryDuplicatesForRecords(
         records: BaseEntity[],

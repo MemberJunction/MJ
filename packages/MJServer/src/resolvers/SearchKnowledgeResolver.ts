@@ -350,6 +350,7 @@ export class SearchKnowledgeResolver extends ResolverBase {
      * Full-text search using the MJCore Metadata.FullTextSearch() method.
      * Delegates to the provider stack which uses database-native FTS
      * (SQL Server FREETEXT, PostgreSQL tsvector) via RunView + UserSearchString.
+     * When Tags filters are provided, post-filters results by checking tag associations.
      */
     private async searchFullText(
         query: string,
@@ -370,7 +371,7 @@ export class SearchKnowledgeResolver extends ResolverBase {
                 return [];
             }
 
-            const results = ftsResult.Results.map(r => ({
+            const results: SearchKnowledgeResultItem[] = ftsResult.Results.map(r => ({
                 ID: `ft-${r.EntityName}-${r.RecordID}`,
                 EntityName: r.EntityName,
                 RecordID: r.RecordID,
@@ -383,8 +384,14 @@ export class SearchKnowledgeResolver extends ResolverBase {
                 MatchedAt: new Date()
             }));
 
-            // Batch-load tags from TaggedItems for FTS results
+            // Batch-load tags from TaggedItems/ContentItemTags for FTS results
             await this.enrichResultsWithTags(results, md, contextUser);
+
+            // Apply tag filter: keep only results that have at least one matching tag
+            if (filters?.Tags?.length) {
+                return this.filterResultsByTags(results, filters.Tags);
+            }
+
             return results;
         } catch (error) {
             LogError(`SearchKnowledge: Full-text search error: ${error}`);
@@ -393,9 +400,20 @@ export class SearchKnowledgeResolver extends ResolverBase {
     }
 
     /**
-     * Enrich search results with tags from the TaggedItems entity.
-     * Batch-loads all tagged items for the result entities in a single query,
-     * then maps tag names onto each result by EntityID + RecordID.
+     * Filter results to only include those with at least one tag matching the specified tag list.
+     * Uses case-insensitive comparison for robustness.
+     */
+    private filterResultsByTags(results: SearchKnowledgeResultItem[], requiredTags: string[]): SearchKnowledgeResultItem[] {
+        const lowerTags = new Set(requiredTags.map(t => t.toLowerCase()));
+        return results.filter(r =>
+            r.Tags.some(t => lowerTags.has(t.toLowerCase()))
+        );
+    }
+
+    /**
+     * Enrich search results with tags from both the TaggedItems entity (for general entities)
+     * and the ContentItemTag entity (for Content Items). Runs both queries in parallel
+     * for maximum throughput, then merges the tag sets onto each result.
      */
     private async enrichResultsWithTags(
         results: SearchKnowledgeResultItem[],
@@ -405,64 +423,117 @@ export class SearchKnowledgeResolver extends ResolverBase {
         if (results.length === 0) return;
 
         try {
-            // Build a set of entity name → record IDs for batch lookup
-            const entityRecordPairs = results.map(r => ({
-                EntityName: r.EntityName,
-                RecordID: r.RecordID
-            }));
+            // Separate results into Content Items vs everything else
+            const contentItemResults = results.filter(r => r.EntityName === 'MJ: Content Items');
+            const generalResults = results.filter(r => r.EntityName !== 'MJ: Content Items');
 
-            // Get entity IDs from metadata
-            const entityIdMap = new Map<string, string>();
-            for (const pair of entityRecordPairs) {
-                if (!entityIdMap.has(pair.EntityName)) {
-                    const entityInfo = md.Entities.find(e => e.Name === pair.EntityName);
-                    if (entityInfo) {
-                        entityIdMap.set(pair.EntityName, entityInfo.ID);
-                    }
-                }
-            }
-
-            if (entityIdMap.size === 0) return;
-
-            // Build filter for TaggedItems: OR across all entity+record pairs
-            const conditions: string[] = [];
-            for (const r of results) {
-                const entityID = entityIdMap.get(r.EntityName);
-                if (!entityID) continue;
-                conditions.push(`(EntityID='${entityID}' AND RecordID='${r.RecordID}')`);
-            }
-
-            if (conditions.length === 0) return;
-
-            const rv = new RunView();
-            const tagResult = await rv.RunView<{ EntityID: string; RecordID: string; Tag: string }>({
-                EntityName: 'MJ: Tagged Items',
-                ExtraFilter: conditions.join(' OR '),
-                Fields: ['EntityID', 'RecordID', 'Tag'],
-                ResultType: 'simple'
-            }, contextUser);
-
-            if (!tagResult.Success) return;
-
-            // Build a lookup: "entityID::recordID" -> tag names
-            const tagMap = new Map<string, string[]>();
-            for (const ti of tagResult.Results) {
-                const key = `${ti.EntityID}::${ti.RecordID}`;
-                const tags = tagMap.get(key) ?? [];
-                tags.push(ti.Tag);
-                tagMap.set(key, tags);
-            }
-
-            // Apply tags to results
-            for (const r of results) {
-                const entityID = entityIdMap.get(r.EntityName);
-                if (!entityID) continue;
-                const key = `${entityID}::${r.RecordID}`;
-                r.Tags = tagMap.get(key) ?? [];
-            }
+            // Run both tag lookups in parallel
+            await Promise.all([
+                this.loadTaggedItemTags(generalResults, md, contextUser),
+                this.loadContentItemTags(contentItemResults, contextUser)
+            ]);
         } catch (error) {
             LogError(`SearchKnowledge: Error enriching results with tags: ${error}`);
             // Non-fatal — results still usable without tags
+        }
+    }
+
+    /**
+     * Load tags from the TaggedItems entity for non-Content-Item results.
+     * Queries by EntityID + RecordID pairs in a single batch.
+     */
+    private async loadTaggedItemTags(
+        results: SearchKnowledgeResultItem[],
+        md: Metadata,
+        contextUser: UserInfo
+    ): Promise<void> {
+        if (results.length === 0) return;
+
+        // Get entity IDs from metadata
+        const entityIdMap = new Map<string, string>();
+        for (const r of results) {
+            if (!entityIdMap.has(r.EntityName)) {
+                const entityInfo = md.Entities.find(e => e.Name === r.EntityName);
+                if (entityInfo) {
+                    entityIdMap.set(r.EntityName, entityInfo.ID);
+                }
+            }
+        }
+
+        if (entityIdMap.size === 0) return;
+
+        // Build filter for TaggedItems: OR across all entity+record pairs
+        const conditions: string[] = [];
+        for (const r of results) {
+            const entityID = entityIdMap.get(r.EntityName);
+            if (!entityID) continue;
+            conditions.push(`(EntityID='${entityID}' AND RecordID='${r.RecordID}')`);
+        }
+
+        if (conditions.length === 0) return;
+
+        const rv = new RunView();
+        const tagResult = await rv.RunView<{ EntityID: string; RecordID: string; Tag: string }>({
+            EntityName: 'MJ: Tagged Items',
+            ExtraFilter: conditions.join(' OR '),
+            Fields: ['EntityID', 'RecordID', 'Tag'],
+            ResultType: 'simple'
+        }, contextUser);
+
+        if (!tagResult.Success) return;
+
+        // Build a lookup: "entityID::recordID" -> tag names
+        const tagMap = new Map<string, string[]>();
+        for (const ti of tagResult.Results) {
+            const key = `${ti.EntityID}::${ti.RecordID}`;
+            const tags = tagMap.get(key) ?? [];
+            tags.push(ti.Tag);
+            tagMap.set(key, tags);
+        }
+
+        // Apply tags to results
+        for (const r of results) {
+            const entityID = entityIdMap.get(r.EntityName);
+            if (!entityID) continue;
+            const key = `${entityID}::${r.RecordID}`;
+            r.Tags = tagMap.get(key) ?? [];
+        }
+    }
+
+    /**
+     * Load tags from the ContentItemTag entity for Content Item results.
+     * Queries by ItemID (which maps to the result's RecordID) in a single batch.
+     */
+    private async loadContentItemTags(
+        results: SearchKnowledgeResultItem[],
+        contextUser: UserInfo
+    ): Promise<void> {
+        if (results.length === 0) return;
+
+        const recordIDs = results.map(r => `'${r.RecordID}'`);
+        const rv = new RunView();
+        const tagResult = await rv.RunView<{ ItemID: string; Tag: string }>({
+            EntityName: 'MJ: Content Item Tags',
+            ExtraFilter: `ItemID IN (${recordIDs.join(',')})`,
+            Fields: ['ItemID', 'Tag'],
+            ResultType: 'simple'
+        }, contextUser);
+
+        if (!tagResult.Success) return;
+
+        // Build a lookup: ItemID -> tag names
+        const tagMap = new Map<string, string[]>();
+        for (const ti of tagResult.Results) {
+            const key = ti.ItemID;
+            const tags = tagMap.get(key) ?? [];
+            tags.push(ti.Tag);
+            tagMap.set(key, tags);
+        }
+
+        // Apply tags to results (use case-insensitive UUID comparison)
+        for (const r of results) {
+            // Check both raw and lowercase keys since UUID casing may vary
+            r.Tags = tagMap.get(r.RecordID) ?? tagMap.get(r.RecordID.toLowerCase()) ?? [];
         }
     }
 

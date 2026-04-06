@@ -553,4 +553,15 @@ Each resource component reports its agent-visible state and tools to `Navigation
 
 ---
 
-**Total**: ~70 implementation tasks + ~11 test suites across 9 phases
+---
+
+## Final: Full Repo Validation
+
+- Run `npm test` from repo root (Turborepo runs all package tests)
+- Fix any failures caused by changes across all phases
+- Run `npm run build` from repo root to verify full compilation
+- Stage all changes for review (do NOT commit/push)
+
+---
+
+**Total**: ~70 implementation tasks + ~11 test suites across 9 phases + final validation

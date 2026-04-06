@@ -104,17 +104,77 @@
                                 </div>
                             }
 
-                            <!-- Progress bar (visible during run) -->
-                            @if (IsRunning) {
+                            <!-- Progress bar (visible during run or paused) -->
+                            @if (IsRunning || IsPaused) {
                                 <div class="at-progress-section">
                                     <div class="at-progress-header">
                                         <span class="at-progress-stage-label">{{ RunStage }}</span>
                                         <span class="at-progress-pct">{{ RunProgress | number:'1.0-0' }}%</span>
                                     </div>
-                                    <div class="at-progress-bar"><div class="at-progress-fill" [style.width.%]="RunProgress"></div></div>
+                                    <div class="at-progress-bar"><div class="at-progress-fill" [style.width.%]="RunProgress" [class.at-progress-fill-paused]="IsPaused"></div></div>
                                     @if (RunCurrentItem) {
                                         <div class="at-progress-current">{{ RunCurrentItem }}</div>
                                     }
+                                    <div class="at-pipeline-controls">
+                                        @if (IsRunning && !IsPaused) {
+                                            <button class="at-action-btn at-secondary-btn" (click)="PausePipeline()" [disabled]="!CurrentProcessRunID">
+                                                <i class="fa-solid fa-pause"></i> Pause
+                                            </button>
+                                        }
+                                        @if (IsPaused) {
+                                            <button class="at-action-btn at-primary-btn" (click)="ResumePipeline()">
+                                                <i class="fa-solid fa-play"></i> Resume
+                                            </button>
+                                        }
+                                        <button class="at-action-btn at-danger-btn" (click)="CancelPipeline()">
+                                            <i class="fa-solid fa-stop"></i> Cancel
+                                        </button>
+                                    </div>
+                                </div>
+                            }
+
+                            <!-- D2: Live Per-Source Progress (visible during run) -->
+                            @if (IsRunning && LiveRunDetailRows.length > 0) {
+                                <div class="at-card" style="margin-bottom: 12px;">
+                                    <div class="at-card-header">
+                                        <span class="at-card-title"><i class="fa-solid fa-list-check"></i> Per-Source Progress</span>
+                                        <button class="at-action-btn at-secondary-btn" style="font-size: 11px; padding: 3px 8px;" (click)="LoadLiveRunDetails()">
+                                            <i class="fa-solid fa-arrows-rotate"></i>
+                                        </button>
+                                    </div>
+                                    <div class="at-card-body" style="max-height: 200px; overflow-y: auto;">
+                                        <table class="at-run-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>Source</th>
+                                                    <th>Status</th>
+                                                    <th>Items</th>
+                                                    <th>Tagged</th>
+                                                    <th>Vectorized</th>
+                                                    <th>Errors</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @for (row of LiveRunDetailRows; track row.SourceName) {
+                                                    <tr>
+                                                        <td class="at-run-source-name">{{ row.SourceName }}</td>
+                                                        <td>
+                                                            <span class="at-run-status-badge" [class]="row.StatusClass">
+                                                                @if (row.StatusClass === 'running') {
+                                                                    <i class="fa-solid fa-spinner fa-spin" style="font-size: 0.55rem"></i>
+                                                                }
+                                                                {{ row.Status }}
+                                                            </span>
+                                                        </td>
+                                                        <td>{{ row.ItemsProcessed }}</td>
+                                                        <td>{{ row.ItemsTagged }}</td>
+                                                        <td>{{ row.ItemsVectorized }}</td>
+                                                        <td [class.run-error-text]="row.ErrorCount > 0">{{ row.ErrorCount }}</td>
+                                                    </tr>
+                                                }
+                                            </tbody>
+                                        </table>
+                                    </div>
                                 </div>
                             }
 
@@ -303,9 +363,19 @@
                                         <div class="at-source-stat-label">Last Run</div>
                                     </div>
                                 </div>
+                                <!-- Schedule indicator -->
+                                @if (card.ScheduledActionID) {
+                                    <div class="at-schedule-indicator" (click)="RemoveSchedule(card); $event.stopPropagation()" title="Click to remove schedule">
+                                        <i class="fa-regular fa-clock"></i>
+                                        <span>{{ GetScheduleLabel(card) }}</span>
+                                    </div>
+                                }
                                 <div class="at-source-card-actions">
                                     <button class="at-source-action-btn" (click)="OpenEditSourceForm(card); $event.stopPropagation()"><i class="fa-solid fa-pen"></i> Edit</button>
                                     <button class="at-source-action-btn" (click)="RunPipelineForSource(card.ID); $event.stopPropagation()"><i class="fa-solid fa-play"></i> Run</button>
+                                    @if (!card.ScheduledActionID) {
+                                        <button class="at-source-action-btn at-source-schedule-btn" (click)="OpenScheduleDialog(card); $event.stopPropagation()"><i class="fa-regular fa-clock"></i> Schedule</button>
+                                    }
                                     <button class="at-source-action-btn at-source-delete-btn" (click)="DeleteSource(card); $event.stopPropagation()"><i class="fa-solid fa-trash"></i> Delete</button>
                                 </div>
                             </div>
@@ -317,6 +387,65 @@
                             <span style="font-size: 0.85rem; font-weight: 600;">Add Content Source</span>
                             <span style="font-size: 0.72rem;">Web, RSS, Email, Files, API</span>
                         </div>
+                    </div>
+
+                    <!-- Content Item Duplicates Section -->
+                    <div class="at-dedup-section">
+                        <div class="at-dedup-header">
+                            <div>
+                                <h3 class="at-dedup-title">
+                                    <i class="fa-solid fa-clone"></i>
+                                    Content Duplicates
+                                </h3>
+                                <span class="at-dedup-subtitle">Review detected duplicate content items across sources</span>
+                            </div>
+                            <button class="at-action-btn at-secondary-btn" (click)="LoadContentDuplicates()" [disabled]="IsLoadingDuplicates">
+                                @if (IsLoadingDuplicates) {
+                                    <i class="fa-solid fa-spinner fa-spin"></i> Loading...
+                                } @else {
+                                    <i class="fa-solid fa-arrows-rotate"></i> Load Duplicates
+                                }
+                            </button>
+                        </div>
+
+                        @if (ContentDuplicates.length > 0) {
+                            <div class="at-dedup-list">
+                                @for (dup of ContentDuplicates; track dup.ID) {
+                                    <div class="at-dedup-card">
+                                        <div class="at-dedup-pair">
+                                            <div class="at-dedup-item">
+                                                <span class="at-dedup-item-name">{{ dup.ItemAName }}</span>
+                                                <span class="at-dedup-item-source">{{ dup.ItemASource }}</span>
+                                            </div>
+                                            <div class="at-dedup-vs">
+                                                <i class="fa-solid fa-arrows-left-right"></i>
+                                            </div>
+                                            <div class="at-dedup-item">
+                                                <span class="at-dedup-item-name">{{ dup.ItemBName }}</span>
+                                                <span class="at-dedup-item-source">{{ dup.ItemBSource }}</span>
+                                            </div>
+                                        </div>
+                                        <div class="at-dedup-meta">
+                                            <span class="at-dedup-score">{{ (dup.SimilarityScore * 100).toFixed(0) }}% match</span>
+                                            <span class="at-dedup-method">{{ dup.DetectionMethod }}</span>
+                                        </div>
+                                        <div class="at-dedup-actions">
+                                            <button class="at-action-btn at-primary-btn at-dedup-confirm" (click)="ConfirmContentDuplicate(dup)">
+                                                <i class="fa-solid fa-check"></i> Confirm
+                                            </button>
+                                            <button class="at-action-btn at-secondary-btn at-dedup-dismiss" (click)="DismissContentDuplicate(dup)">
+                                                <i class="fa-solid fa-times"></i> Dismiss
+                                            </button>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        } @else if (!IsLoadingDuplicates) {
+                            <div class="at-dedup-empty">
+                                <i class="fa-solid fa-check-circle"></i>
+                                <p>No pending duplicates. Click "Load Duplicates" to check.</p>
+                            </div>
+                        }
                     </div>
                 </div>
             }
@@ -662,6 +791,8 @@
                                     @if (!TaxIsEditing) {
                                         <div class="at-tax-action-toolbar">
                                             <button class="at-tax-action-btn" (click)="StartEditTag()"><i class="fa-solid fa-pen"></i> Rename</button>
+                                            <button class="at-tax-action-btn" (click)="OpenMoveDialog(TaxSelectedNode)"><i class="fa-solid fa-arrows-up-down"></i> Move</button>
+                                            <button class="at-tax-action-btn" (click)="OpenSplitDialog(TaxSelectedNode)"><i class="fa-solid fa-code-branch"></i> Split</button>
                                             <button class="at-tax-action-btn at-tax-action-danger" (click)="DeleteTag(TaxSelectedNode)"><i class="fa-solid fa-trash"></i> Delete</button>
                                         </div>
                                     }
@@ -788,6 +919,9 @@
                                 <button class="at-tax-bulk-btn at-tax-bulk-danger" (click)="BulkDeleteOrphans()">
                                     <i class="fa-solid fa-trash"></i> Bulk Delete
                                 </button>
+                                <button class="at-tax-bulk-btn at-tax-bulk-danger" (click)="DeleteAllOrphans()">
+                                    <i class="fa-solid fa-trash-can"></i> Delete All ({{ TaxOrphans.length }})
+                                </button>
                             </div>
                         </div>
 
@@ -842,12 +976,75 @@
                         } @else {
                             <div class="at-tax-treemap-container">
                                 @for (cell of TaxTreemapCells; track $index) {
-                                    <div class="at-tax-treemap-cell" [class]="cell.ColorClass"
-                                         [style.grid-row]="cell.RowSpan > 1 ? 'span ' + cell.RowSpan : ''">
+                                    <div class="at-tax-treemap-cell at-tax-treemap-cell-clickable" [class]="cell.ColorClass"
+                                         [style.grid-row]="cell.RowSpan > 1 ? 'span ' + cell.RowSpan : ''"
+                                         (click)="OpenTreemapDrillIn(cell)">
                                         <span class="at-tax-cell-name">{{ cell.Name }}</span>
                                         <span class="at-tax-cell-count">{{ cell.ItemCount }} items</span>
                                     </div>
                                 }
+                            </div>
+                        }
+
+                        <!-- Treemap Drill-In Panel -->
+                        @if (ShowTreemapDrillIn && TreemapDrillInNode) {
+                            <div class="at-tax-drillin-overlay" (click)="CloseTreemapDrillIn()">
+                                <div class="at-tax-drillin-panel" (click)="$event.stopPropagation()">
+                                    <div class="at-tax-drillin-header">
+                                        <h3><i class="fa-solid fa-tag"></i> {{ TreemapDrillInNode.Name }}</h3>
+                                        <button class="at-schedule-dialog-close" (click)="CloseTreemapDrillIn()">
+                                            <i class="fa-solid fa-times"></i>
+                                        </button>
+                                    </div>
+                                    <div class="at-tax-drillin-body">
+                                        <div class="at-tax-stats-row">
+                                            <div class="at-tax-stat-item">
+                                                <div class="at-tax-stat-value">{{ TreemapDrillInNode.ItemCount }}</div>
+                                                <div class="at-tax-stat-label">Items Tagged</div>
+                                            </div>
+                                            <div class="at-tax-stat-item">
+                                                <div class="at-tax-stat-value">{{ TreemapDrillInNode.AvgWeight.toFixed(2) }}</div>
+                                                <div class="at-tax-stat-label">Avg Weight</div>
+                                            </div>
+                                            <div class="at-tax-stat-item">
+                                                <div class="at-tax-stat-value">{{ TreemapDrillInNode.Children.length }}</div>
+                                                <div class="at-tax-stat-label">Children</div>
+                                            </div>
+                                        </div>
+
+                                        @if (TreemapDrillInNode.Children.length > 0) {
+                                            <div class="at-tax-detail-section">
+                                                <div class="at-tax-section-title">Child Tags</div>
+                                                <div class="at-tax-child-chips">
+                                                    @for (child of TreemapDrillInNode.Children; track child.ID) {
+                                                        <span class="at-tax-child-chip">{{ child.Name }} <span class="at-tax-chip-count">{{ child.ItemCount }}</span></span>
+                                                    }
+                                                </div>
+                                            </div>
+                                        }
+
+                                        @if (TaxRecentItems.length > 0) {
+                                            <div class="at-tax-detail-section">
+                                                <div class="at-tax-section-title">Recently Tagged Items</div>
+                                                <div class="at-tax-recent-list">
+                                                    @for (item of TaxRecentItems; track $index) {
+                                                        <div class="at-tax-recent-item">
+                                                            <div class="at-tax-recent-icon"><i [class]="item.Icon"></i></div>
+                                                            <div class="at-tax-recent-name">{{ item.Name }}</div>
+                                                            <div class="at-tax-recent-weight">{{ item.Weight.toFixed(2) }}</div>
+                                                            <div class="at-tax-recent-date">{{ item.Date }}</div>
+                                                        </div>
+                                                    }
+                                                </div>
+                                            </div>
+                                        }
+                                    </div>
+                                    <div class="at-tax-drillin-footer">
+                                        <button class="at-action-btn at-secondary-btn" (click)="DrillInToTreeView(TreemapDrillInNode)">
+                                            <i class="fa-solid fa-sitemap"></i> View in Tree
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                         }
                     }
@@ -871,6 +1068,15 @@
                                 </label>
                                 <label class="at-tax-audit-checkbox">
                                     <input type="checkbox" [checked]="TaxAuditFilterTypes.has('renamed')" (change)="ToggleTaxAuditFilter('renamed')"> Renamed
+                                </label>
+                                <label class="at-tax-audit-checkbox">
+                                    <input type="checkbox" [checked]="TaxAuditFilterTypes.has('deprecated')" (change)="ToggleTaxAuditFilter('deprecated')"> Deprecated
+                                </label>
+                                <label class="at-tax-audit-checkbox">
+                                    <input type="checkbox" [checked]="TaxAuditFilterTypes.has('split')" (change)="ToggleTaxAuditFilter('split')"> Split
+                                </label>
+                                <label class="at-tax-audit-checkbox">
+                                    <input type="checkbox" [checked]="TaxAuditFilterTypes.has('reactivated')" (change)="ToggleTaxAuditFilter('reactivated')"> Reactivated
                                 </label>
                             </div>
                         </div>
@@ -945,7 +1151,9 @@
                                 </thead>
                                 <tbody>
                                     @for (row of FilteredRunRows; track row.ID) {
-                                        <tr>
+                                        <tr class="at-run-row-clickable"
+                                            [class.at-run-row-selected]="SelectedRunID === row.ID"
+                                            (click)="OpenRunDetail(row.ID)">
                                             <td>
                                                 <span class="at-run-status-badge" [class]="row.StatusClass">
                                                     @if (row.StatusClass === 'running') {
@@ -966,6 +1174,66 @@
                             </table>
                         </div>
                     </div>
+
+                    <!-- D3/D8: Run Detail Slide-In Panel -->
+                    @if (SelectedRunID) {
+                        <div class="at-card" style="margin-top: 12px;">
+                            <div class="at-card-header">
+                                <span class="at-card-title">
+                                    <i class="fa-solid fa-magnifying-glass-chart"></i>
+                                    Run Detail: {{ SelectedRunID.slice(0, 14) }}...
+                                </span>
+                                <button class="at-action-btn at-secondary-btn" style="font-size: 11px; padding: 3px 8px;" (click)="CloseRunDetail()">
+                                    <i class="fa-solid fa-times"></i> Close
+                                </button>
+                            </div>
+                            <div class="at-card-body">
+                                @if (IsLoadingRunDetail) {
+                                    <mj-loading text="Loading run details..." size="small"></mj-loading>
+                                } @else if (RunDetailRows.length > 0) {
+                                    <table class="at-run-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Source</th>
+                                                <th>Source Type</th>
+                                                <th>Status</th>
+                                                <th>Items</th>
+                                                <th>Tagged</th>
+                                                <th>Vectorized</th>
+                                                <th>Errors</th>
+                                                <th>Tokens</th>
+                                                <th>Cost</th>
+                                                <th>Duration</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @for (detail of RunDetailRows; track detail.SourceName) {
+                                                <tr>
+                                                    <td class="at-run-source-name">{{ detail.SourceName }}</td>
+                                                    <td>{{ detail.SourceType }}</td>
+                                                    <td>
+                                                        <span class="at-run-status-badge" [class]="detail.StatusClass">{{ detail.Status }}</span>
+                                                    </td>
+                                                    <td>{{ detail.ItemsProcessed }}</td>
+                                                    <td>{{ detail.ItemsTagged }}</td>
+                                                    <td>{{ detail.ItemsVectorized }}</td>
+                                                    <td [class.run-error-text]="detail.ErrorCount > 0">{{ detail.ErrorCount }}</td>
+                                                    <td>{{ FormatTokenCount(detail.TotalTokens) }}</td>
+                                                    <td>{{ detail.TotalCost > 0 ? '$' + detail.TotalCost.toFixed(4) : '$0.00' }}</td>
+                                                    <td class="at-run-duration">{{ detail.Duration }}</td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                } @else {
+                                    <div class="at-empty-state">
+                                        <i class="fa-solid fa-info-circle"></i>
+                                        <p>No per-source detail records found for this run.</p>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
                 </div>
             }
         }
@@ -1360,24 +1628,50 @@
                         </div>
                     </div>
 
-                    <!-- Content Library -->
+                    <!-- Content Library (D4 status badges, D7 pagination) -->
                     <div class="at-detail-section">
-                        <div class="at-detail-section-label">Content Library ({{ SelectedSource.ContentItems.length }})</div>
+                        <div class="at-detail-section-header-row">
+                            <div class="at-detail-section-label">Content Library ({{ FilteredSourceDetailTotal }} of {{ SelectedSource.ContentItems.length }})</div>
+                            <div class="at-detail-section-controls">
+                                <select class="at-detail-filter-select" [(ngModel)]="SourceDetailStatusFilter" (ngModelChange)="OnSourceDetailStatusFilterChange()">
+                                    @for (opt of SourceDetailStatusOptions; track opt) {
+                                        <option [value]="opt">{{ opt }}</option>
+                                    }
+                                </select>
+                                <button class="at-action-btn at-retry-btn" (click)="RetryFailedItems()" title="Re-queue failed items for processing">
+                                    <i class="fa-solid fa-rotate-right"></i> Retry Failed
+                                </button>
+                            </div>
+                        </div>
                         <div class="at-detail-content-list">
-                            @if (SelectedSource.ContentItems.length === 0) {
+                            @if (FilteredSourceDetailItems.length === 0) {
                                 <div class="at-empty-state" style="padding: 16px;">
-                                    <p>No content items yet.</p>
+                                    <p>{{ SourceDetailStatusFilter === 'All' ? 'No content items yet.' : 'No items match this filter.' }}</p>
                                 </div>
                             }
-                            @for (ci of SelectedSource.ContentItems; track ci.ID) {
+                            @for (ci of FilteredSourceDetailItems; track ci.ID) {
                                 <div class="at-detail-content-item" (click)="OpenContentItemDetail(ci)">
                                     <div class="at-feed-status-dot" [class]="ci.StatusDot"></div>
                                     <span class="at-detail-content-item-name">{{ ci.Name }}</span>
+                                    <span class="at-status-badge" [class]="GetStatusBadgeClass(ci.EmbeddingStatus)">E:{{ ci.EmbeddingStatus }}</span>
+                                    <span class="at-status-badge" [class]="GetStatusBadgeClass(ci.TaggingStatus)">T:{{ ci.TaggingStatus }}</span>
                                     <span class="at-detail-content-item-tags">{{ ci.TagCount }} tags</span>
                                     <span class="at-detail-content-item-time">{{ ci.UpdatedAt }}</span>
                                 </div>
                             }
                         </div>
+                        <!-- Pagination -->
+                        @if (SourceDetailTotalPages > 1) {
+                            <div class="at-detail-pagination">
+                                <button class="at-page-btn" [disabled]="SourceDetailPage === 0" (click)="SourceDetailPrevPage()">
+                                    <i class="fa-solid fa-chevron-left"></i> Prev
+                                </button>
+                                <span class="at-page-info">Page {{ SourceDetailPage + 1 }} of {{ SourceDetailTotalPages }}</span>
+                                <button class="at-page-btn" [disabled]="SourceDetailPage >= SourceDetailTotalPages - 1" (click)="SourceDetailNextPage()">
+                                    Next <i class="fa-solid fa-chevron-right"></i>
+                                </button>
+                            </div>
+                        }
                     </div>
 
                     <!-- Run History -->
@@ -1410,6 +1704,145 @@
                         </button>
                     </div>
                 }
+            </div>
+        </div>
+    }
+
+    <!-- ══════ SCHEDULE DIALOG ══════ -->
+    @if (ShowScheduleDialog && SchedulingSourceCard) {
+        <div class="at-schedule-overlay" (click)="CloseScheduleDialog()">
+            <div class="at-schedule-dialog" (click)="$event.stopPropagation()">
+                <div class="at-schedule-dialog-header">
+                    <h3><i class="fa-regular fa-clock"></i> Schedule Pipeline</h3>
+                    <button class="at-schedule-dialog-close" (click)="CloseScheduleDialog()">
+                        <i class="fa-solid fa-times"></i>
+                    </button>
+                </div>
+                <div class="at-schedule-dialog-body">
+                    <div class="at-schedule-field">
+                        <label>Source</label>
+                        <div class="at-schedule-source-name">
+                            <i [class]="SchedulingSourceCard.Icon"></i>
+                            {{ SchedulingSourceCard.Name }}
+                        </div>
+                    </div>
+                    <div class="at-schedule-field">
+                        <label>Action</label>
+                        <div class="at-schedule-action-name">Autotag and Vectorize Content</div>
+                    </div>
+                    <div class="at-schedule-field">
+                        <label for="schedule-cron">Cron Expression</label>
+                        <input id="schedule-cron"
+                               type="text"
+                               class="mj-input at-schedule-cron-input"
+                               [(ngModel)]="ScheduleCron"
+                               placeholder="0 2 * * *" />
+                        <div class="at-schedule-cron-preview">
+                            <i class="fa-solid fa-info-circle"></i>
+                            {{ GetCronPreview(ScheduleCron) }}
+                        </div>
+                    </div>
+                    <div class="at-schedule-field at-schedule-toggle-row">
+                        <label for="schedule-enabled">Enabled</label>
+                        <input id="schedule-enabled"
+                               type="checkbox"
+                               class="mj-checkbox"
+                               [(ngModel)]="ScheduleEnabled" />
+                    </div>
+                </div>
+                <div class="at-schedule-dialog-footer">
+                    <button class="at-action-btn at-primary-btn" (click)="SaveSchedule()" [disabled]="ScheduleSaving">
+                        @if (ScheduleSaving) {
+                            <i class="fa-solid fa-spinner fa-spin"></i> Saving...
+                        } @else {
+                            <i class="fa-solid fa-check"></i> Create Schedule
+                        }
+                    </button>
+                    <button class="at-action-btn at-secondary-btn" (click)="CloseScheduleDialog()">Cancel</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- ══════ CONFIRMATION DIALOG ══════ -->
+    @if (ShowConfirmDialog) {
+        <div class="at-schedule-overlay" (click)="ConfirmDialogCancel()">
+            <div class="at-schedule-dialog" (click)="$event.stopPropagation()">
+                <div class="at-schedule-dialog-header">
+                    <h3><i class="fa-solid fa-triangle-exclamation"></i> {{ ConfirmDialogTitle }}</h3>
+                    <button class="at-schedule-dialog-close" (click)="ConfirmDialogCancel()">
+                        <i class="fa-solid fa-times"></i>
+                    </button>
+                </div>
+                <div class="at-schedule-dialog-body">
+                    <p class="at-confirm-message">{{ ConfirmDialogMessage }}</p>
+                </div>
+                <div class="at-schedule-dialog-footer">
+                    <button class="at-action-btn at-danger-btn" (click)="ConfirmDialogAccept()">
+                        <i class="fa-solid fa-check"></i> Confirm
+                    </button>
+                    <button class="at-action-btn at-secondary-btn" (click)="ConfirmDialogCancel()">Cancel</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- ══════ SPLIT DIALOG ══════ -->
+    @if (ShowSplitDialog) {
+        <div class="at-schedule-overlay" (click)="CloseSplitDialog()">
+            <div class="at-schedule-dialog" (click)="$event.stopPropagation()">
+                <div class="at-schedule-dialog-header">
+                    <h3><i class="fa-solid fa-code-branch"></i> Split Tag</h3>
+                    <button class="at-schedule-dialog-close" (click)="CloseSplitDialog()">
+                        <i class="fa-solid fa-times"></i>
+                    </button>
+                </div>
+                <div class="at-schedule-dialog-body">
+                    <div class="at-schedule-field">
+                        <label>New tag names (comma-separated)</label>
+                        <input type="text" class="mj-input" style="width: 100%;"
+                               [(ngModel)]="SplitChildNames"
+                               placeholder="Tag A, Tag B, Tag C" />
+                    </div>
+                    <p class="at-confirm-message">New tags will be created as siblings of the original tag under the same parent.</p>
+                </div>
+                <div class="at-schedule-dialog-footer">
+                    <button class="at-action-btn at-primary-btn" (click)="ExecuteSplit()" [disabled]="!SplitChildNames.trim()">
+                        <i class="fa-solid fa-code-branch"></i> Create Tags
+                    </button>
+                    <button class="at-action-btn at-secondary-btn" (click)="CloseSplitDialog()">Cancel</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- ══════ MOVE DIALOG ══════ -->
+    @if (ShowMoveDialog) {
+        <div class="at-schedule-overlay" (click)="CloseMoveDialog()">
+            <div class="at-schedule-dialog" (click)="$event.stopPropagation()">
+                <div class="at-schedule-dialog-header">
+                    <h3><i class="fa-solid fa-arrows-up-down"></i> Move Tag</h3>
+                    <button class="at-schedule-dialog-close" (click)="CloseMoveDialog()">
+                        <i class="fa-solid fa-times"></i>
+                    </button>
+                </div>
+                <div class="at-schedule-dialog-body">
+                    <div class="at-schedule-field">
+                        <label>New parent tag</label>
+                        <select class="mj-input" style="width: 100%;" [(ngModel)]="MoveNewParentID">
+                            <option [ngValue]="null">(Root level &mdash; no parent)</option>
+                            @for (opt of GetMoveTargetOptions(); track opt.ID) {
+                                <option [ngValue]="opt.ID">{{ '\u00A0\u00A0'.repeat(opt.Depth) }}{{ opt.Name }}</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="at-schedule-dialog-footer">
+                    <button class="at-action-btn at-primary-btn" (click)="ExecuteMove()">
+                        <i class="fa-solid fa-check"></i> Move
+                    </button>
+                    <button class="at-action-btn at-secondary-btn" (click)="CloseMoveDialog()">Cancel</button>
+                </div>
             </div>
         </div>
     }

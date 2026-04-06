@@ -32,17 +32,44 @@ vi.mock('@memberjunction/global', () => ({
         return a.toLowerCase() === b.toLowerCase();
     },
     NormalizeUUID: (id: string) => id.toLowerCase(),
+    RegisterClass: vi.fn(),
 }));
 
 vi.mock('@memberjunction/core', () => ({
     UserInfo: class {},
     LogError: vi.fn(),
     LogStatus: vi.fn(),
+    Metadata: class { Entities = []; CurrentUser = {}; },
+    RunView: class { RunView = vi.fn().mockResolvedValue({ Success: true, Results: [] }); },
+    BaseEngine: class {
+        static getInstance() { return new this(); }
+        async Load() {}
+        async Config() {}
+    },
+    RegisterForStartup: vi.fn(),
 }));
 
 vi.mock('@memberjunction/core-entities', () => ({
     MJTagEntity: class {},
     MJTaggedItemEntity: class {},
+    MJAICredentialBindingEntity: class {},
+    MJAIPromptEntity: class {},
+    MJAIPromptRunEntity: class {},
+    MJAIModelEntity: class {},
+    MJAIVendorEntity: class {},
+    KnowledgeHubMetadataEngine: { Instance: { Config: vi.fn() } },
+}));
+
+vi.mock('@memberjunction/ai-prompts', () => ({
+    AIModelRunner: class {
+        async RunEmbedding(params: { Texts: string[] }) {
+            // Generate dummy vectors (one per input text) so embedding succeeds
+            const vectors = (params.Texts || []).map((_: string, i: number) =>
+                Array.from({ length: 10 }, (__, j) => (i + 1) * 0.1 + j * 0.01)
+            );
+            return { Success: true, Vectors: vectors, PromptRunID: null, TokensUsed: 0, Cost: 0, ErrorMessage: null, ExecutionTimeMs: 0 };
+        }
+    },
 }));
 
 // Mock tag data — also needs to be hoisted since it's used in vi.mock factories
@@ -109,7 +136,9 @@ vi.mock('@memberjunction/ai', () => ({
 vi.mock('@memberjunction/aiengine', () => ({
     AIEngine: {
         Instance: {
+            Config: vi.fn(),
             Loaded: true,
+            Prompts: [],
             Models: [
                 { ID: 'model-1', Name: 'text-embedding-3-small', AIModelType: 'Embeddings', InputTokenLimit: 8191, DriverClass: 'OpenAIEmbeddings', APIName: 'text-embedding-3-small' },
             ],

@@ -9,9 +9,9 @@
 import { Component, ChangeDetectorRef, OnDestroy, AfterViewInit, inject, Injector } from '@angular/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
-import { CompositeKey, Metadata } from '@memberjunction/core';
-import { ResourceData, UserInfoEngine } from '@memberjunction/core-entities';
-import { RegisterClass } from '@memberjunction/global';
+import { CompositeKey, Metadata, RunView } from '@memberjunction/core';
+import { MJKnowledgeHubSavedSearchEntity, ResourceData, UserInfoEngine } from '@memberjunction/core-entities';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import {
     SearchResultItem,
@@ -24,13 +24,6 @@ import {
 } from '@memberjunction/ng-search';
 import { SearchService, RecentSearch } from '@memberjunction/ng-search';
 import { ConversationBridgeService } from '@memberjunction/ng-conversations';
-
-/** Saved search entry */
-interface SavedSearch {
-    Query: string;
-    FilterCount: number;
-    SavedAt: Date;
-}
 
 @RegisterClass(BaseResourceComponent, 'KnowledgeSearchResource')
 @Component({
@@ -66,7 +59,14 @@ export class KnowledgeSearchResourceComponent extends BaseResourceComponent impl
 
     // --- Recent & Saved ---
     public RecentSearches: RecentSearch[] = [];
-    public SavedSearches: SavedSearch[] = [];
+    public SavedSearches: MJKnowledgeHubSavedSearchEntity[] = [];
+
+    /** Popular tags for "Filter by Tag" preset buttons (loaded from top content item tags) */
+    public PopularTags: string[] = [];
+
+    // --- Save Search Dialog ---
+    public ShowSaveDialog = false;
+    public SaveSearchName = '';
 
     async GetResourceDisplayName(_data: ResourceData): Promise<string> {
         return 'Knowledge Search';
@@ -83,6 +83,8 @@ export class KnowledgeSearchResourceComponent extends BaseResourceComponent impl
         this.parseUrlParameters();
         this.registerAgentTools();
         this.emitAgentContext();
+        this.loadSavedSearches();
+        this.loadPopularTags();
         this.NotifyLoadComplete();
     }
 
@@ -273,9 +275,113 @@ export class KnowledgeSearchResourceComponent extends BaseResourceComponent impl
         }
     }
 
+    /**
+     * Handle "See Similar Items" — re-runs the search using the result's title as the query.
+     * This provides a lightweight "more like this" experience without needing raw vector access.
+     */
+    public OnMoreLikeThis(result: SearchResultItem): void {
+        this.Query = result.RecordName ?? result.Title;
+        this.RunSearch();
+    }
+
     /** Apply a recent search */
     public ApplyRecentSearch(recent: RecentSearch): void {
         this.Query = recent.Query;
+        this.RunSearch();
+    }
+
+    // --- Saved Searches ---
+
+    /** Open the save search dialog */
+    public OpenSaveDialog(): void {
+        this.SaveSearchName = this.Query;
+        this.ShowSaveDialog = true;
+        this.cdr.detectChanges();
+    }
+
+    /** Cancel the save dialog */
+    public CancelSaveDialog(): void {
+        this.ShowSaveDialog = false;
+        this.SaveSearchName = '';
+        this.cdr.detectChanges();
+    }
+
+    /**
+     * Save the current search as a named saved search using MJKnowledgeHubSavedSearchEntity.
+     * Persists query, active filters, min score, and max results.
+     */
+    public async ConfirmSaveSearch(): Promise<void> {
+        const name = this.SaveSearchName.trim();
+        if (!name || !this.Query.trim()) return;
+
+        try {
+            const md = new Metadata();
+            const entity = await md.GetEntityObject<MJKnowledgeHubSavedSearchEntity>('MJ: Knowledge Hub Saved Searches');
+            entity.Name = name;
+            entity.Query = this.Query;
+            entity.Filters = Object.keys(this.ActiveFilters).length > 0
+                ? JSON.stringify(this.ActiveFilters)
+                : null;
+            entity.MinScore = this.MinScoreThreshold > 0 ? this.MinScoreThreshold : null;
+            entity.MaxResults = 50;
+            entity.NotifyOnNewResults = false;
+
+            const saved = await entity.Save();
+            if (saved) {
+                this.SavedSearches = [entity, ...this.SavedSearches];
+            }
+        } catch (error) {
+            console.error('[KnowledgeSearch] Failed to save search:', error);
+        }
+
+        this.ShowSaveDialog = false;
+        this.SaveSearchName = '';
+        this.cdr.detectChanges();
+    }
+
+    /**
+     * Apply a saved search — populates query, filters, and threshold, then executes.
+     */
+    public ApplySavedSearch(saved: MJKnowledgeHubSavedSearchEntity): void {
+        this.Query = saved.Query;
+        if (saved.Filters) {
+            try {
+                this.ActiveFilters = JSON.parse(saved.Filters) as Record<string, string[]>;
+            } catch {
+                this.ActiveFilters = {};
+            }
+        } else {
+            this.ActiveFilters = {};
+        }
+        if (saved.MinScore != null) {
+            this.MinScoreThreshold = saved.MinScore;
+        }
+        this.RunSearch();
+    }
+
+    /**
+     * Delete a saved search by ID and remove it from the local list.
+     */
+    public async DeleteSavedSearch(saved: MJKnowledgeHubSavedSearchEntity, event: MouseEvent): Promise<void> {
+        event.stopPropagation();
+        try {
+            const success = await saved.Delete();
+            if (success) {
+                this.SavedSearches = this.SavedSearches.filter(s => !UUIDsEqual(s.ID, saved.ID));
+                this.cdr.detectChanges();
+            }
+        } catch (error) {
+            console.error('[KnowledgeSearch] Failed to delete saved search:', error);
+        }
+    }
+
+    /**
+     * Filter by a specific tag: set query to the tag name, apply a tag filter, and search.
+     * Provides a "show me all records tagged with X" experience.
+     */
+    public FilterByTag(tagName: string): void {
+        this.Query = tagName;
+        this.ActiveFilters = { Tags: [tagName] };
         this.RunSearch();
     }
 
@@ -320,6 +426,54 @@ export class KnowledgeSearchResourceComponent extends BaseResourceComponent impl
             }
         } catch {
             // Ignore URL parsing errors
+        }
+    }
+
+    /**
+     * Load saved searches for the current user from the database.
+     * Runs in the background — does not block initialization.
+     */
+    private async loadSavedSearches(): Promise<void> {
+        try {
+            const rv = new RunView();
+            const result = await rv.RunView<MJKnowledgeHubSavedSearchEntity>({
+                EntityName: 'MJ: Knowledge Hub Saved Searches',
+                OrderBy: '__mj_CreatedAt DESC',
+                MaxRows: 50,
+                ResultType: 'entity_object'
+            });
+            if (result.Success) {
+                this.SavedSearches = result.Results;
+                this.cdr.detectChanges();
+            }
+        } catch (error) {
+            console.error('[KnowledgeSearch] Failed to load saved searches:', error);
+        }
+    }
+
+    /**
+     * Load the top 8 most-used tags for the "Filter by Tag" preset buttons.
+     * Uses the Tag entity sorted by usage count.
+     */
+    private async loadPopularTags(): Promise<void> {
+        try {
+            const rv = new RunView();
+            const result = await rv.RunView<{ DisplayName: string }>({
+                EntityName: 'MJ: Tags',
+                ExtraFilter: '',
+                OrderBy: 'UsageCount DESC',
+                MaxRows: 8,
+                Fields: ['DisplayName'],
+                ResultType: 'simple'
+            });
+            if (result.Success) {
+                this.PopularTags = result.Results
+                    .map(r => r.DisplayName)
+                    .filter(name => name != null && name.trim().length > 0);
+                this.cdr.detectChanges();
+            }
+        } catch {
+            // Non-critical — tags are a convenience, not a blocker
         }
     }
 

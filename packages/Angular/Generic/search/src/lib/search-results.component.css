@@ -329,6 +329,27 @@
     background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
 }
 
+.detail-similar-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border: 1px solid var(--mj-border-default);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--mj-text-secondary);
+    font-size: 0.78rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.detail-similar-btn:hover {
+    border-color: var(--mj-brand-primary);
+    color: var(--mj-brand-primary);
+    background: color-mix(in srgb, var(--mj-brand-primary) 5%, var(--mj-bg-surface));
+}
+
 .result-card-snippet {
     color: var(--mj-text-secondary);
     font-size: 0.82rem;

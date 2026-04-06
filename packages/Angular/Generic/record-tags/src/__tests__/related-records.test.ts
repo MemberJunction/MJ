@@ -50,12 +50,27 @@ vi.mock('@memberjunction/core-entities', () => {
         Weight = 0;
         Delete = vi.fn();
     }
-    return { MJTaggedItemEntity: MockMJTaggedItemEntity };
+    class MockKnowledgeHubMetadataEngine {
+        static get Instance(): MockKnowledgeHubMetadataEngine {
+            return new MockKnowledgeHubMetadataEngine();
+        }
+        GetEntityDocumentsForEntity = vi.fn().mockReturnValue([]);
+    }
+    return {
+        MJTaggedItemEntity: MockMJTaggedItemEntity,
+        KnowledgeHubMetadataEngine: MockKnowledgeHubMetadataEngine,
+    };
 });
 
 vi.mock('@memberjunction/global', () => ({
     UUIDsEqual: (a: string, b: string) => a?.toLowerCase() === b?.toLowerCase(),
     NormalizeUUID: (uuid: string) => uuid?.toLowerCase() ?? '',
+}));
+
+vi.mock('@memberjunction/graphql-dataprovider', () => ({
+    GraphQLDataProvider: {
+        Instance: { ExecuteGQL: vi.fn().mockResolvedValue({}) },
+    },
 }));
 
 vi.mock('@memberjunction/ng-word-cloud', () => ({
@@ -65,7 +80,7 @@ vi.mock('@memberjunction/ng-word-cloud', () => ({
 
 import { RecordTagsComponent, RelatedRecord } from '../lib/record-tags.component';
 
-// Helper to access private methods
+// Helper to access private methods that return a value
 function callPrivate<T>(instance: T, method: string, ...args: unknown[]): unknown {
     return (instance as Record<string, (...args: unknown[]) => unknown>)[method](...args);
 }
@@ -122,22 +137,21 @@ describe('RecordTagsComponent — Related Records', () => {
         });
     });
 
-    // ─── LoadRelatedRecords grouping and scoring ──────────────────────
+    // ─── LoadTagRelatedRecords grouping and scoring ──────────────────
 
-    describe('LoadRelatedRecords', () => {
-        it('should not load when TaggedItems is empty', async () => {
+    describe('LoadTagRelatedRecords', () => {
+        it('should return empty when TaggedItems is empty', async () => {
             component.TaggedItems = [];
-            await callPrivate(component, 'LoadRelatedRecords');
-            expect(component.RelatedRecords).toEqual([]);
-            expect(component.IsLoadingRelated).toBe(false);
+            const results = await callPrivate(component, 'LoadTagRelatedRecords') as RelatedRecord[];
+            expect(results).toEqual([]);
         });
 
-        it('should not load when no tagIDs are available', async () => {
+        it('should return empty when no tagIDs are available', async () => {
             component.TaggedItems = [
                 { TagID: null, Tag: 'Orphan', Weight: 0.5 } as unknown as import('@memberjunction/core-entities').MJTaggedItemEntity,
             ];
-            await callPrivate(component, 'LoadRelatedRecords');
-            expect(component.RelatedRecords).toEqual([]);
+            const results = await callPrivate(component, 'LoadTagRelatedRecords') as RelatedRecord[];
+            expect(results).toEqual([]);
         });
 
         it('should group related items by entity+recordID and accumulate tags', async () => {
@@ -146,7 +160,6 @@ describe('RecordTagsComponent — Related Records', () => {
                 { TagID: 'tag-2', Tag: 'ML', Weight: 0.7, ID: 'ti-2' },
             ] as unknown as import('@memberjunction/core-entities').MJTaggedItemEntity[];
 
-            // LoadRelatedRecords makes one RunView call for related tagged items
             mockRunViewFn
                 .mockResolvedValueOnce({
                     Success: true,
@@ -157,18 +170,18 @@ describe('RecordTagsComponent — Related Records', () => {
                     ]
                 });
 
-            await callPrivate(component, 'LoadRelatedRecords');
+            const results = await callPrivate(component, 'LoadTagRelatedRecords') as RelatedRecord[];
 
             // comp-1 should have 2 shared tags, contact-99 should have 1
-            expect(component.RelatedRecords.length).toBe(2);
+            expect(results.length).toBe(2);
 
-            const comp = component.RelatedRecords.find(r => r.RecordID === 'comp-1');
+            const comp = results.find(r => r.RecordID === 'comp-1');
             expect(comp).toBeDefined();
             expect(comp!.SharedTags).toContain('AI');
             expect(comp!.SharedTags).toContain('ML');
             expect(comp!.EntityName).toBe('Companies');
 
-            const contact = component.RelatedRecords.find(r => r.RecordID === 'contact-99');
+            const contact = results.find(r => r.RecordID === 'contact-99');
             expect(contact).toBeDefined();
             expect(contact!.SharedTags).toEqual(['AI']);
         });
@@ -187,11 +200,11 @@ describe('RecordTagsComponent — Related Records', () => {
                 ]
             });
 
-            await callPrivate(component, 'LoadRelatedRecords');
+            const results = await callPrivate(component, 'LoadTagRelatedRecords') as RelatedRecord[];
 
-            expect(component.RelatedRecords[0].RecordID).toBe('high');
-            expect(component.RelatedRecords[1].RecordID).toBe('mid');
-            expect(component.RelatedRecords[2].RecordID).toBe('low');
+            expect(results[0].RecordID).toBe('high');
+            expect(results[1].RecordID).toBe('mid');
+            expect(results[2].RecordID).toBe('low');
         });
 
         it('should limit related records to 10', async () => {
@@ -211,9 +224,9 @@ describe('RecordTagsComponent — Related Records', () => {
 
             mockRunViewFn.mockResolvedValueOnce({ Success: true, Results: results });
 
-            await callPrivate(component, 'LoadRelatedRecords');
+            const related = await callPrivate(component, 'LoadTagRelatedRecords') as RelatedRecord[];
 
-            expect(component.RelatedRecords.length).toBeLessThanOrEqual(10);
+            expect(related.length).toBeLessThanOrEqual(10);
         });
 
         it('should set Source to "tags" for tag-based related records', async () => {
@@ -228,13 +241,12 @@ describe('RecordTagsComponent — Related Records', () => {
                 ]
             });
 
-            await callPrivate(component, 'LoadRelatedRecords');
+            const results = await callPrivate(component, 'LoadTagRelatedRecords') as RelatedRecord[];
 
-            expect(component.RelatedRecords[0].Source).toBe('tags');
+            expect(results[0].Source).toBe('tags');
         });
 
         it('should cap Score at 1.0', async () => {
-            // 3 tagged items, related record shares a tag with weight 5 (hypothetical)
             component.TaggedItems = [
                 { TagID: 'tag-1', Tag: 'AI', Weight: 0.9, ID: 'ti-1' },
             ] as unknown as import('@memberjunction/core-entities').MJTaggedItemEntity[];
@@ -246,9 +258,9 @@ describe('RecordTagsComponent — Related Records', () => {
                 ]
             });
 
-            await callPrivate(component, 'LoadRelatedRecords');
+            const results = await callPrivate(component, 'LoadTagRelatedRecords') as RelatedRecord[];
 
-            expect(component.RelatedRecords[0].Score).toBeLessThanOrEqual(1);
+            expect(results[0].Score).toBeLessThanOrEqual(1);
         });
 
         it('should resolve entity icons from metadata', async () => {
@@ -264,26 +276,25 @@ describe('RecordTagsComponent — Related Records', () => {
                 ]
             });
 
-            await callPrivate(component, 'LoadRelatedRecords');
+            const results = await callPrivate(component, 'LoadTagRelatedRecords') as RelatedRecord[];
 
-            const comp = component.RelatedRecords.find(r => r.EntityName === 'Companies');
+            const comp = results.find(r => r.EntityName === 'Companies');
             expect(comp!.EntityIcon).toBe('fa-solid fa-building');
 
-            const task = component.RelatedRecords.find(r => r.EntityName === 'Tasks');
+            const task = results.find(r => r.EntityName === 'Tasks');
             expect(task!.EntityIcon).toBe('fa-solid fa-table'); // fallback
         });
 
-        it('should handle RunView failure gracefully', async () => {
+        it('should return empty on RunView failure', async () => {
             component.TaggedItems = [
                 { TagID: 'tag-1', Tag: 'AI', Weight: 0.9, ID: 'ti-1' },
             ] as unknown as import('@memberjunction/core-entities').MJTaggedItemEntity[];
 
             mockRunViewFn.mockResolvedValueOnce({ Success: false, Results: [] });
 
-            await callPrivate(component, 'LoadRelatedRecords');
+            const results = await callPrivate(component, 'LoadTagRelatedRecords') as RelatedRecord[];
 
-            expect(component.RelatedRecords).toEqual([]);
-            expect(component.IsLoadingRelated).toBe(false);
+            expect(results).toEqual([]);
         });
 
         it('should not add duplicate tags for the same record', async () => {
@@ -300,10 +311,63 @@ describe('RecordTagsComponent — Related Records', () => {
                 ]
             });
 
-            await callPrivate(component, 'LoadRelatedRecords');
+            const results = await callPrivate(component, 'LoadTagRelatedRecords') as RelatedRecord[];
 
-            const comp = component.RelatedRecords.find(r => r.RecordID === 'comp-1');
+            const comp = results.find(r => r.RecordID === 'comp-1');
             expect(comp!.SharedTags).toEqual(['AI']); // No duplicate
+        });
+    });
+
+    // ─── MergeRelatedResults ─────────────────────────────────────────
+
+    describe('MergeRelatedResults', () => {
+        it('should merge tag-only and vector-only results', () => {
+            const tagResults: RelatedRecord[] = [
+                { EntityName: 'Companies', RecordID: 'comp-1', DisplayName: 'Company 1', EntityIcon: 'fa-solid fa-building', Score: 0.8, Source: 'tags', SharedTags: ['AI'] },
+            ];
+            const vectorResults: RelatedRecord[] = [
+                { EntityName: 'Contacts', RecordID: 'contact-1', DisplayName: 'Contact 1', EntityIcon: 'fa-solid fa-user', Score: 0.7, Source: 'vectors', SharedTags: [] },
+            ];
+
+            const merged = callPrivate(component, 'MergeRelatedResults', tagResults, vectorResults) as RelatedRecord[];
+            expect(merged).toHaveLength(2);
+            expect(merged[0].RecordID).toBe('comp-1'); // Higher score first
+            expect(merged[1].RecordID).toBe('contact-1');
+        });
+
+        it('should boost score and set Source to "both" for overlapping records', () => {
+            const tagResults: RelatedRecord[] = [
+                { EntityName: 'Companies', RecordID: 'comp-1', DisplayName: 'Company 1', EntityIcon: 'fa-solid fa-building', Score: 0.6, Source: 'tags', SharedTags: ['AI'] },
+            ];
+            const vectorResults: RelatedRecord[] = [
+                { EntityName: 'Companies', RecordID: 'comp-1', DisplayName: 'Company 1', EntityIcon: 'fa-solid fa-building', Score: 0.8, Source: 'vectors', SharedTags: ['ML'] },
+            ];
+
+            const merged = callPrivate(component, 'MergeRelatedResults', tagResults, vectorResults) as RelatedRecord[];
+            expect(merged).toHaveLength(1);
+            expect(merged[0].Source).toBe('both');
+            // Boosted: (0.6 + 0.8) / 1.5 ≈ 0.933
+            expect(merged[0].Score).toBeCloseTo(0.933, 2);
+            expect(merged[0].SharedTags).toContain('AI');
+            expect(merged[0].SharedTags).toContain('ML');
+        });
+
+        it('should return empty for two empty arrays', () => {
+            const merged = callPrivate(component, 'MergeRelatedResults', [], []) as RelatedRecord[];
+            expect(merged).toEqual([]);
+        });
+
+        it('should sort merged results by score descending', () => {
+            const tagResults: RelatedRecord[] = [
+                { EntityName: 'A', RecordID: 'low', DisplayName: 'Low', EntityIcon: '', Score: 0.2, Source: 'tags', SharedTags: [] },
+            ];
+            const vectorResults: RelatedRecord[] = [
+                { EntityName: 'B', RecordID: 'high', DisplayName: 'High', EntityIcon: '', Score: 0.9, Source: 'vectors', SharedTags: [] },
+            ];
+
+            const merged = callPrivate(component, 'MergeRelatedResults', tagResults, vectorResults) as RelatedRecord[];
+            expect(merged[0].RecordID).toBe('high');
+            expect(merged[1].RecordID).toBe('low');
         });
     });
 
