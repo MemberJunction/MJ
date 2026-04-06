@@ -1204,12 +1204,18 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         await this.EntityStatusCheck(params, 'PreRunView');
         const entityCheckTime = performance.now() - entityCheckStart;
 
-        // Handle entity_object result type - need all fields
+        // Save the caller's original Fields request for post-cache filtering.
+        // We always fetch ALL fields from the DB so the cache entry is a universal superset
+        // that satisfies any future query for the same entity+filter regardless of field subset.
         const entityLookupStart = performance.now();
-        if (params.ResultType === 'entity_object') {
-            const entity = this.EntityByName(params.EntityName);
-            if (!entity)
-                throw new Error(`Entity ${params.EntityName} not found in metadata`);
+        const callerRequestedFields = params.Fields && params.Fields.length > 0
+            ? params.Fields.map(f => f.trim().toLowerCase())
+            : null; // null = caller wants all fields
+
+        // Always override Fields to all entity fields for the DB query.
+        // This ensures one cache entry per entity+filter that satisfies all field subsets.
+        const entity = params.EntityName ? this.EntityByName(params.EntityName) : null;
+        if (entity) {
             params.Fields = entity.Fields.map(f => f.Name);
         }
         const entityLookupTime = performance.now() - entityLookupStart;
@@ -1224,12 +1230,26 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params, this.InstanceConnectionString);
             const cached = await LocalCacheManager.Instance.GetRunViewResult(fingerprint);
             if (cached) {
+                // Filter cached results to only the caller's requested fields (if specified)
+                let results = cached.results;
+                if (callerRequestedFields && params.ResultType !== 'entity_object') {
+                    results = results.map((row: Record<string, unknown>) => {
+                        const filtered: Record<string, unknown> = {};
+                        for (const key of Object.keys(row)) {
+                            if (callerRequestedFields.includes(key.toLowerCase())) {
+                                filtered[key] = row[key];
+                            }
+                        }
+                        return filtered;
+                    });
+                }
+
                 // Reconstruct RunViewResult from cached data
                 cachedResult = {
                     Success: true,
-                    Results: cached.results,
-                    RowCount: cached.results.length,
-                    TotalRowCount: cached.totalRowCount ?? cached.results.length,
+                    Results: results,
+                    RowCount: results.length,
+                    TotalRowCount: cached.totalRowCount ?? results.length,
                     ExecutionTime: 0, // Cached, no execution time
                     ErrorMessage: '',
                     UserViewRunID: '',
@@ -1237,7 +1257,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 };
                 cacheStatus = 'hit';
                 if (!params.CacheLocal && this.TrustLocalCacheCompletely) {
-                    LogStatusEx({ message: `  ✅ [Server Cache HIT] RunView "${params.EntityName || params.ViewName || 'unknown'}" — ${cached.results.length} rows served from server cache (no DB query)`, verboseOnly: true });
+                    LogStatusEx({ message: `  ✅ [Server Cache HIT] RunView "${params.EntityName || params.ViewName || 'unknown'}" — ${results.length} rows served from server cache (no DB query)`, verboseOnly: true });
                 }
             } else {
                 cacheStatus = 'miss';
@@ -1354,13 +1374,15 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // Entity status check
             await this.EntityStatusCheck(param, 'PreRunViews');
 
-            // Handle entity_object result type - need all fields
-            if (param.ResultType === 'entity_object') {
-                const entity = this.EntityByName(param.EntityName);
-                if (!entity) {
-                    throw new Error(`Entity ${param.EntityName} not found in metadata`);
-                }
-                param.Fields = entity.Fields.map(f => f.Name);
+            // Save caller's original Fields, then always fetch all fields from DB.
+            // One cache entry per entity+filter satisfies all field subsets.
+            const callerFields = param.Fields && param.Fields.length > 0
+                ? param.Fields.map(f => f.trim().toLowerCase())
+                : null;
+
+            const batchEntity = param.EntityName ? this.EntityByName(param.EntityName) : null;
+            if (batchEntity) {
+                param.Fields = batchEntity.Fields.map(f => f.Name);
             }
 
             // Check local cache if enabled or if server trusts its cache completely
@@ -1368,11 +1390,25 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(param, this.InstanceConnectionString);
                 const cached = await LocalCacheManager.Instance.GetRunViewResult(fingerprint);
                 if (cached) {
+                    // Filter cached results to caller's requested fields (if specified and not entity_object)
+                    let results = cached.results;
+                    if (callerFields && param.ResultType !== 'entity_object') {
+                        results = results.map((row: Record<string, unknown>) => {
+                            const filtered: Record<string, unknown> = {};
+                            for (const key of Object.keys(row)) {
+                                if (callerFields.includes(key.toLowerCase())) {
+                                    filtered[key] = row[key];
+                                }
+                            }
+                            return filtered;
+                        });
+                    }
+
                     const cachedViewResult: RunViewResult = {
                         Success: true,
-                        Results: cached.results,
-                        RowCount: cached.results.length,
-                        TotalRowCount: cached.totalRowCount ?? cached.results.length,
+                        Results: results,
+                        RowCount: results.length,
+                        TotalRowCount: cached.totalRowCount ?? results.length,
                         ExecutionTime: 0,
                         ErrorMessage: '',
                         UserViewRunID: '',
