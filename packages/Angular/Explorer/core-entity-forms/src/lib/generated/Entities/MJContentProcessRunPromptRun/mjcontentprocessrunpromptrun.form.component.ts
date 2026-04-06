@@ -15,7 +15,7 @@ export class MJContentProcessRunPromptRunFormComponent extends BaseFormComponent
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'runAssociation', sectionName: 'Run Association', isExpanded: true },
+            { sectionKey: 'promptExecutionLinks', sectionName: 'Prompt Execution Links', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

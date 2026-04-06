@@ -15,8 +15,9 @@ export class MJKnowledgeHubSavedSearchFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'searchDefinition', sectionName: 'Search Definition', isExpanded: true },
-            { sectionKey: 'searchSettings', sectionName: 'Search Settings', isExpanded: true },
+            { sectionKey: 'ownership', sectionName: 'Ownership', isExpanded: true },
+            { sectionKey: 'searchCriteria', sectionName: 'Search Criteria', isExpanded: true },
+            { sectionKey: 'resultsAndNotifications', sectionName: 'Results and Notifications', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

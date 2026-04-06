@@ -15,8 +15,8 @@ export class MJTagAuditLogFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'tagAssociations', sectionName: 'Tag Associations', isExpanded: true },
-            { sectionKey: 'auditLogInformation', sectionName: 'Audit Log Information', isExpanded: true },
+            { sectionKey: 'affectedTags', sectionName: 'Affected Tags', isExpanded: true },
+            { sectionKey: 'auditEvent', sectionName: 'Audit Event', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

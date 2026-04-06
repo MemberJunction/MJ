@@ -17,7 +17,7 @@ export class MJContentProcessRunFormComponent extends BaseFormComponent {
         await super.ngOnInit();
         this.initSections([
             { sectionKey: 'runMetadata', sectionName: 'Run Metadata', isExpanded: false },
-            { sectionKey: 'processingErrors', sectionName: 'Processing & Errors', isExpanded: true },
+            { sectionKey: 'executionDetails', sectionName: 'Execution Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJContentProcessRunDetails', sectionName: 'Content Process Run Details', isExpanded: false }
         ]);

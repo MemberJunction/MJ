@@ -12,7 +12,7 @@
     <mj-collapsible-panel
         SectionKey="contentTypeDetails"
         SectionName="Content Type Details"
-        Icon="fa fa-file-alt"
+        Icon="fa fa-align-left"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -28,14 +28,6 @@
             [ShowLabel]="true"
             FieldName="Description"
             Type="textarea"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="Configuration"
-            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -83,7 +75,7 @@
     <mj-collapsible-panel
         SectionKey="taggingRules"
         SectionName="Tagging Rules"
-        Icon="fa fa-tags"
+        Icon="fa fa-info-circle"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -99,6 +91,24 @@
             [ShowLabel]="true"
             FieldName="MaxTags"
             Type="number"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Advanced Configuration Section -->
+    <mj-collapsible-panel
+        SectionKey="advancedConfiguration"
+        SectionName="Advanced Configuration"
+        Icon="fa fa-tools"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="false"
+            FieldName="Configuration"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>

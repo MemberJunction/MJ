@@ -16,7 +16,7 @@ export class MJContentSourceTypeFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'sourceTypeConfiguration', sectionName: 'Source Type Configuration', isExpanded: true },
+            { sectionKey: 'sourceTypeDetails', sectionName: 'Source Type Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJContentSources', sectionName: 'Content Sources', isExpanded: false },
             { sectionKey: 'mJContentItems', sectionName: 'Content Items', isExpanded: false },

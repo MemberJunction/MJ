@@ -9605,12 +9605,12 @@ export const MJContentItemDuplicateSchema = z.object({
         * * Default Value: newsequentialid()`),
     ContentItemAID: z.string().describe(`
         * * Field Name: ContentItemAID
-        * * Display Name: Content Item A
+        * * Display Name: Content Item A ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Content Items (vwContentItems.ID)`),
     ContentItemBID: z.string().describe(`
         * * Field Name: ContentItemBID
-        * * Display Name: Content Item B
+        * * Display Name: Content Item B ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Content Items (vwContentItems.ID)`),
     SimilarityScore: z.number().describe(`
@@ -9644,7 +9644,7 @@ export const MJContentItemDuplicateSchema = z.object({
         * * Description: Current status: Pending (awaiting review), Confirmed (verified duplicate), Dismissed (not a duplicate), Merged (one item was removed).`),
     ResolvedByUserID: z.string().nullable().describe(`
         * * Field Name: ResolvedByUserID
-        * * Display Name: Resolved By
+        * * Display Name: Resolved By User ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)`),
     ResolvedAt: z.date().nullable().describe(`
@@ -9674,15 +9674,15 @@ export const MJContentItemDuplicateSchema = z.object({
         * * Default Value: getutcdate()`),
     ContentItemA: z.string().nullable().describe(`
         * * Field Name: ContentItemA
-        * * Display Name: Content Item A Preview
+        * * Display Name: Content Item A
         * * SQL Data Type: nvarchar(250)`),
     ContentItemB: z.string().nullable().describe(`
         * * Field Name: ContentItemB
-        * * Display Name: Content Item B Preview
+        * * Display Name: Content Item B
         * * SQL Data Type: nvarchar(250)`),
     ResolvedByUser: z.string().nullable().describe(`
         * * Field Name: ResolvedByUser
-        * * Display Name: Resolved By Name
+        * * Display Name: Resolved By User
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -9704,7 +9704,7 @@ export const MJContentItemTagSchema = z.object({
         * * Related Entity/Foreign Key: MJ: Content Items (vwContentItems.ID)`),
     Tag: z.string().describe(`
         * * Field Name: Tag
-        * * Display Name: Tag Text
+        * * Display Name: Tag
         * * SQL Data Type: nvarchar(200)
         * * Description: The tag text applied to the content item for categorization and search.`),
     __mj_CreatedAt: z.date().describe(`
@@ -9752,7 +9752,7 @@ export const MJContentItemSchema = z.object({
         * * Default Value: newsequentialid()`),
     ContentSourceID: z.string().describe(`
         * * Field Name: ContentSourceID
-        * * Display Name: Content Source
+        * * Display Name: Content Source ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Content Sources (vwContentSources.ID)`),
     Name: z.string().nullable().describe(`
@@ -9765,17 +9765,17 @@ export const MJContentItemSchema = z.object({
         * * SQL Data Type: nvarchar(MAX)`),
     ContentTypeID: z.string().describe(`
         * * Field Name: ContentTypeID
-        * * Display Name: Content Type
+        * * Display Name: Content Type ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Content Types (vwContentTypes.ID)`),
     ContentSourceTypeID: z.string().describe(`
         * * Field Name: ContentSourceTypeID
-        * * Display Name: Content Source Type
+        * * Display Name: Content Source Type ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Content Source Types (vwContentSourceTypes.ID)`),
     ContentFileTypeID: z.string().describe(`
         * * Field Name: ContentFileTypeID
-        * * Display Name: Content File Type
+        * * Display Name: Content File Type ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Content File Types (vwContentFileTypes.ID)`),
     Checksum: z.string().nullable().describe(`
@@ -9805,7 +9805,7 @@ export const MJContentItemSchema = z.object({
         * * Default Value: getutcdate()`),
     EntityRecordDocumentID: z.string().nullable().describe(`
         * * Field Name: EntityRecordDocumentID
-        * * Display Name: Entity Record Document
+        * * Display Name: Entity Record Document ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entity Record Documents (vwEntityRecordDocuments.ID)
         * * Description: For entity-sourced content items, links to the Entity Record Document snapshot that was rendered for this item. Provides traceability back to the source entity record via ERD.EntityID + ERD.RecordID. NULL for non-entity sources.`),
@@ -9829,7 +9829,7 @@ export const MJContentItemSchema = z.object({
         * * Description: Timestamp of the most recent successful embedding for this content item.`),
     EmbeddingModelID: z.string().nullable().describe(`
         * * Field Name: EmbeddingModelID
-        * * Display Name: Embedding Model
+        * * Display Name: Embedding Model ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
         * * Description: The AI model used to generate the most recent embedding for this content item.`),
@@ -9974,17 +9974,17 @@ export const MJContentProcessRunDetailSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    ContentProcessRun: z.date().nullable().describe(`
+    ContentProcessRun: z.string().nullable().describe(`
         * * Field Name: ContentProcessRun
-        * * Display Name: Process Run Name
-        * * SQL Data Type: datetimeoffset`),
+        * * Display Name: Content Process Run Name
+        * * SQL Data Type: nvarchar(255)`),
     ContentSource: z.string().nullable().describe(`
         * * Field Name: ContentSource
-        * * Display Name: Source Name
+        * * Display Name: Content Source Name
         * * SQL Data Type: nvarchar(255)`),
     ContentSourceType: z.string().describe(`
         * * Field Name: ContentSourceType
-        * * Display Name: Source Type Name
+        * * Display Name: Source Type Category
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -10030,13 +10030,9 @@ export const MJContentProcessRunPromptRunSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    ContentProcessRunDetail: z.string().nullable().describe(`
-        * * Field Name: ContentProcessRunDetail
-        * * Display Name: Content Process Run Detail
-        * * SQL Data Type: nvarchar(255)`),
     AIPromptRun: z.string().nullable().describe(`
         * * Field Name: AIPromptRun
-        * * Display Name: AI Prompt Run
+        * * Display Name: Prompt Run Label
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -10053,7 +10049,7 @@ export const MJContentProcessRunSchema = z.object({
         * * Default Value: newsequentialid()`),
     SourceID: z.string().describe(`
         * * Field Name: SourceID
-        * * Display Name: Source
+        * * Display Name: Source ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Content Sources (vwContentSources.ID)`),
     StartTime: z.date().nullable().describe(`
@@ -10087,7 +10083,7 @@ export const MJContentProcessRunSchema = z.object({
         * * Default Value: getutcdate()`),
     StartedByUserID: z.string().nullable().describe(`
         * * Field Name: StartedByUserID
-        * * Display Name: Started By User
+        * * Display Name: Started By User ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
         * * Description: The user who triggered this pipeline run. NULL for system-initiated runs.`),
@@ -10133,11 +10129,11 @@ export const MJContentProcessRunSchema = z.object({
         * * Description: JSON snapshot of the pipeline configuration used for this run. Conforms to the IContentProcessRunConfiguration interface. Includes batch size, rate limits, error thresholds, and duplicate detection settings.`),
     Source: z.string().nullable().describe(`
         * * Field Name: Source
-        * * Display Name: Source Name
+        * * Display Name: Source
         * * SQL Data Type: nvarchar(255)`),
     StartedByUser: z.string().nullable().describe(`
         * * Field Name: StartedByUser
-        * * Display Name: Started By User Name
+        * * Display Name: Started By User
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -10354,35 +10350,35 @@ export const MJContentSourceSchema = z.object({
         * * Description: Optional link to a MJ Scheduled Action that automatically runs the classification pipeline for this source on a cron schedule.`),
     ContentType: z.string().describe(`
         * * Field Name: ContentType
-        * * Display Name: Content Type Name
+        * * Display Name: Content Type
         * * SQL Data Type: nvarchar(255)`),
     ContentSourceType: z.string().describe(`
         * * Field Name: ContentSourceType
-        * * Display Name: Content Source Type Name
+        * * Display Name: Content Source Type
         * * SQL Data Type: nvarchar(255)`),
     ContentFileType: z.string().describe(`
         * * Field Name: ContentFileType
-        * * Display Name: Content File Type Name
+        * * Display Name: Content File Type
         * * SQL Data Type: nvarchar(255)`),
     EmbeddingModel: z.string().nullable().describe(`
         * * Field Name: EmbeddingModel
-        * * Display Name: Embedding Model Name
+        * * Display Name: Embedding Model
         * * SQL Data Type: nvarchar(50)`),
     VectorIndex: z.string().nullable().describe(`
         * * Field Name: VectorIndex
-        * * Display Name: Vector Index Name
+        * * Display Name: Vector Index
         * * SQL Data Type: nvarchar(255)`),
     Entity: z.string().nullable().describe(`
         * * Field Name: Entity
-        * * Display Name: Entity Name
+        * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)`),
     EntityDocument: z.string().nullable().describe(`
         * * Field Name: EntityDocument
-        * * Display Name: Entity Document Name
+        * * Display Name: Entity Document
         * * SQL Data Type: nvarchar(250)`),
     ScheduledAction: z.string().nullable().describe(`
         * * Field Name: ScheduledAction
-        * * Display Name: Scheduled Action Name
+        * * Display Name: Scheduled Action
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -12334,7 +12330,7 @@ export const MJDuplicateRunDetailSchema = z.object({
         * * Related Entity/Foreign Key: MJ: Duplicate Runs (vwDuplicateRuns.ID)`),
     RecordID: z.string().describe(`
         * * Field Name: RecordID
-        * * Display Name: Record ID
+        * * Display Name: Record
         * * SQL Data Type: nvarchar(500)
         * * Description: The ID of the record being analyzed for duplicates.`),
     MatchStatus: z.union([z.literal('Complete'), z.literal('Error'), z.literal('Pending'), z.literal('Skipped')]).describe(`
@@ -12401,10 +12397,10 @@ export const MJDuplicateRunDetailSchema = z.object({
         * * Display Name: Ended At
         * * SQL Data Type: datetimeoffset
         * * Description: When processing completed for this specific record during duplicate detection.`),
-    DuplicateRun: z.date().describe(`
+    DuplicateRun: z.string().describe(`
         * * Field Name: DuplicateRun
-        * * Display Name: Duplicate Run Name
-        * * SQL Data Type: datetimeoffset`),
+        * * Display Name: Run Name
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type MJDuplicateRunDetailEntityType = z.infer<typeof MJDuplicateRunDetailSchema>;
@@ -12415,22 +12411,22 @@ export type MJDuplicateRunDetailEntityType = z.infer<typeof MJDuplicateRunDetail
 export const MJDuplicateRunSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
-        * * Display Name: Run ID
+        * * Display Name: ID
         * * SQL Data Type: uniqueidentifier
         * * Default Value: newsequentialid()`),
     EntityID: z.string().describe(`
         * * Field Name: EntityID
-        * * Display Name: Entity ID
+        * * Display Name: Entity
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)`),
     StartedByUserID: z.string().describe(`
         * * Field Name: StartedByUserID
-        * * Display Name: Started By User ID
+        * * Display Name: Started By
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)`),
     SourceListID: z.string().nullable().describe(`
         * * Field Name: SourceListID
-        * * Display Name: Source List ID
+        * * Display Name: Source List
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Lists (vwLists.ID)
         * * Description: Optional List ID to narrow the scope of duplicate detection. When NULL, all records in the entity are scanned. When set, only records in the specified list are checked for duplicates.`),
@@ -12461,7 +12457,7 @@ export const MJDuplicateRunSchema = z.object({
         * * Description: Comments or notes regarding the approval decision for this duplicate run.`),
     ApprovedByUserID: z.string().nullable().describe(`
         * * Field Name: ApprovedByUserID
-        * * Display Name: Approved By User ID
+        * * Display Name: Approved By
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)`),
     ProcessingStatus: z.union([z.literal('Complete'), z.literal('Failed'), z.literal('In Progress'), z.literal('Pending')]).describe(`
@@ -12493,12 +12489,12 @@ export const MJDuplicateRunSchema = z.object({
         * * Default Value: getutcdate()`),
     TotalItemCount: z.number().nullable().describe(`
         * * Field Name: TotalItemCount
-        * * Display Name: Total Items
+        * * Display Name: Total Item Count
         * * SQL Data Type: int
         * * Description: Total entity records to check for duplicates in this run.`),
     ProcessedItemCount: z.number().nullable().describe(`
         * * Field Name: ProcessedItemCount
-        * * Display Name: Processed Items
+        * * Display Name: Processed Item Count
         * * SQL Data Type: int
         * * Default Value: 0
         * * Description: Number of records checked so far. Used for progress percentage.`),
@@ -12522,7 +12518,7 @@ export const MJDuplicateRunSchema = z.object({
         * * Description: When set to 1, duplicate detection stops after the current batch. Used for pause/cancel.`),
     Entity: z.string().describe(`
         * * Field Name: Entity
-        * * Display Name: Entity
+        * * Display Name: Entity Name
         * * SQL Data Type: nvarchar(255)`),
     StartedByUser: z.string().describe(`
         * * Field Name: StartedByUser
@@ -12530,7 +12526,7 @@ export const MJDuplicateRunSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
     SourceList: z.string().nullable().describe(`
         * * Field Name: SourceList
-        * * Display Name: Source List
+        * * Display Name: Source List Name
         * * SQL Data Type: nvarchar(100)`),
     ApprovedByUser: z.string().nullable().describe(`
         * * Field Name: ApprovedByUser
@@ -21010,7 +21006,7 @@ export type MJSQLDialectEntityType = z.infer<typeof MJSQLDialectSchema>;
 export const MJTagAuditLogSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
-        * * Display Name: Log ID
+        * * Display Name: ID
         * * SQL Data Type: uniqueidentifier
         * * Default Value: newsequentialid()`),
     TagID: z.string().describe(`
@@ -21089,24 +21085,24 @@ export const MJTagCoOccurrenceSchema = z.object({
         * * Default Value: newsequentialid()`),
     TagAID: z.string().describe(`
         * * Field Name: TagAID
-        * * Display Name: Tag A
+        * * Display Name: Tag A ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Tags (vwTags.ID)
         * * Description: First tag in the canonical pair (TagAID < TagBID ensures each pair is stored exactly once).`),
     TagBID: z.string().describe(`
         * * Field Name: TagBID
-        * * Display Name: Tag B
+        * * Display Name: Tag B ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Tags (vwTags.ID)`),
     CoOccurrenceCount: z.number().describe(`
         * * Field Name: CoOccurrenceCount
-        * * Display Name: Co-occurrence Count
+        * * Display Name: Co-Occurrence Count
         * * SQL Data Type: int
         * * Default Value: 0
         * * Description: Number of content items (or entity records via TaggedItem) that are tagged with both TagA and TagB.`),
     LastComputedAt: z.date().describe(`
         * * Field Name: LastComputedAt
-        * * Display Name: Last Computed
+        * * Display Name: Last Computed At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
     __mj_CreatedAt: z.date().describe(`
@@ -21121,11 +21117,11 @@ export const MJTagCoOccurrenceSchema = z.object({
         * * Default Value: getutcdate()`),
     TagA: z.string().describe(`
         * * Field Name: TagA
-        * * Display Name: Tag A Name
+        * * Display Name: Tag A
         * * SQL Data Type: nvarchar(255)`),
     TagB: z.string().describe(`
         * * Field Name: TagB
-        * * Display Name: Tag B Name
+        * * Display Name: Tag B
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -21142,12 +21138,12 @@ export const MJTaggedItemSchema = z.object({
         * * Default Value: newsequentialid()`),
     TagID: z.string().describe(`
         * * Field Name: TagID
-        * * Display Name: Tag
+        * * Display Name: Tag ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Tags (vwTags.ID)`),
     EntityID: z.string().describe(`
         * * Field Name: EntityID
-        * * Display Name: Entity
+        * * Display Name: Entity ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)`),
     RecordID: z.string().describe(`
@@ -21173,11 +21169,11 @@ export const MJTaggedItemSchema = z.object({
         * * Description: Relevance weight of this tag association (0.0 to 1.0). 1.0 indicates the tag is highly relevant or was manually applied. Lower values indicate decreasing relevance as determined by LLM autotagging. Default 1.0 for manually applied tags.`),
     Tag: z.string().describe(`
         * * Field Name: Tag
-        * * Display Name: Tag Name
+        * * Display Name: Tag
         * * SQL Data Type: nvarchar(255)`),
     Entity: z.string().describe(`
         * * Field Name: Entity
-        * * Display Name: Entity Name
+        * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -49783,7 +49779,7 @@ export class MJContentItemDuplicateEntity extends BaseEntity<MJContentItemDuplic
 
     /**
     * * Field Name: ContentItemAID
-    * * Display Name: Content Item A
+    * * Display Name: Content Item A ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Content Items (vwContentItems.ID)
     */
@@ -49796,7 +49792,7 @@ export class MJContentItemDuplicateEntity extends BaseEntity<MJContentItemDuplic
 
     /**
     * * Field Name: ContentItemBID
-    * * Display Name: Content Item B
+    * * Display Name: Content Item B ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Content Items (vwContentItems.ID)
     */
@@ -49862,7 +49858,7 @@ export class MJContentItemDuplicateEntity extends BaseEntity<MJContentItemDuplic
 
     /**
     * * Field Name: ResolvedByUserID
-    * * Display Name: Resolved By
+    * * Display Name: Resolved By User ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     */
@@ -49926,7 +49922,7 @@ export class MJContentItemDuplicateEntity extends BaseEntity<MJContentItemDuplic
 
     /**
     * * Field Name: ContentItemA
-    * * Display Name: Content Item A Preview
+    * * Display Name: Content Item A
     * * SQL Data Type: nvarchar(250)
     */
     get ContentItemA(): string | null {
@@ -49935,7 +49931,7 @@ export class MJContentItemDuplicateEntity extends BaseEntity<MJContentItemDuplic
 
     /**
     * * Field Name: ContentItemB
-    * * Display Name: Content Item B Preview
+    * * Display Name: Content Item B
     * * SQL Data Type: nvarchar(250)
     */
     get ContentItemB(): string | null {
@@ -49944,7 +49940,7 @@ export class MJContentItemDuplicateEntity extends BaseEntity<MJContentItemDuplic
 
     /**
     * * Field Name: ResolvedByUser
-    * * Display Name: Resolved By Name
+    * * Display Name: Resolved By User
     * * SQL Data Type: nvarchar(100)
     */
     get ResolvedByUser(): string | null {
@@ -50011,7 +50007,7 @@ export class MJContentItemTagEntity extends BaseEntity<MJContentItemTagEntityTyp
 
     /**
     * * Field Name: Tag
-    * * Display Name: Tag Text
+    * * Display Name: Tag
     * * SQL Data Type: nvarchar(200)
     * * Description: The tag text applied to the content item for categorization and search.
     */
@@ -50135,7 +50131,7 @@ export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
 
     /**
     * * Field Name: ContentSourceID
-    * * Display Name: Content Source
+    * * Display Name: Content Source ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Content Sources (vwContentSources.ID)
     */
@@ -50172,7 +50168,7 @@ export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
 
     /**
     * * Field Name: ContentTypeID
-    * * Display Name: Content Type
+    * * Display Name: Content Type ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Content Types (vwContentTypes.ID)
     */
@@ -50185,7 +50181,7 @@ export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
 
     /**
     * * Field Name: ContentSourceTypeID
-    * * Display Name: Content Source Type
+    * * Display Name: Content Source Type ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Content Source Types (vwContentSourceTypes.ID)
     */
@@ -50198,7 +50194,7 @@ export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
 
     /**
     * * Field Name: ContentFileTypeID
-    * * Display Name: Content File Type
+    * * Display Name: Content File Type ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Content File Types (vwContentFileTypes.ID)
     */
@@ -50270,7 +50266,7 @@ export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
 
     /**
     * * Field Name: EntityRecordDocumentID
-    * * Display Name: Entity Record Document
+    * * Display Name: Entity Record Document ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Entity Record Documents (vwEntityRecordDocuments.ID)
     * * Description: For entity-sourced content items, links to the Entity Record Document snapshot that was rendered for this item. Provides traceability back to the source entity record via ERD.EntityID + ERD.RecordID. NULL for non-entity sources.
@@ -50318,7 +50314,7 @@ export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
 
     /**
     * * Field Name: EmbeddingModelID
-    * * Display Name: Embedding Model
+    * * Display Name: Embedding Model ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
     * * Description: The AI model used to generate the most recent embedding for this content item.
@@ -50665,16 +50661,16 @@ export class MJContentProcessRunDetailEntity extends BaseEntity<MJContentProcess
 
     /**
     * * Field Name: ContentProcessRun
-    * * Display Name: Process Run Name
-    * * SQL Data Type: datetimeoffset
+    * * Display Name: Content Process Run Name
+    * * SQL Data Type: nvarchar(255)
     */
-    get ContentProcessRun(): Date | null {
+    get ContentProcessRun(): string | null {
         return this.Get('ContentProcessRun');
     }
 
     /**
     * * Field Name: ContentSource
-    * * Display Name: Source Name
+    * * Display Name: Content Source Name
     * * SQL Data Type: nvarchar(255)
     */
     get ContentSource(): string | null {
@@ -50683,7 +50679,7 @@ export class MJContentProcessRunDetailEntity extends BaseEntity<MJContentProcess
 
     /**
     * * Field Name: ContentSourceType
-    * * Display Name: Source Type Name
+    * * Display Name: Source Type Category
     * * SQL Data Type: nvarchar(255)
     */
     get ContentSourceType(): string {
@@ -50801,17 +50797,8 @@ export class MJContentProcessRunPromptRunEntity extends BaseEntity<MJContentProc
     }
 
     /**
-    * * Field Name: ContentProcessRunDetail
-    * * Display Name: Content Process Run Detail
-    * * SQL Data Type: nvarchar(255)
-    */
-    get ContentProcessRunDetail(): string | null {
-        return this.Get('ContentProcessRunDetail');
-    }
-
-    /**
     * * Field Name: AIPromptRun
-    * * Display Name: AI Prompt Run
+    * * Display Name: Prompt Run Label
     * * SQL Data Type: nvarchar(255)
     */
     get AIPromptRun(): string | null {
@@ -50905,7 +50892,7 @@ export class MJContentProcessRunEntity extends BaseEntity<MJContentProcessRunEnt
 
     /**
     * * Field Name: SourceID
-    * * Display Name: Source
+    * * Display Name: Source ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Content Sources (vwContentSources.ID)
     */
@@ -50989,7 +50976,7 @@ export class MJContentProcessRunEntity extends BaseEntity<MJContentProcessRunEnt
 
     /**
     * * Field Name: StartedByUserID
-    * * Display Name: Started By User
+    * * Display Name: Started By User ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     * * Description: The user who triggered this pipeline run. NULL for system-initiated runs.
@@ -51120,7 +51107,7 @@ export class MJContentProcessRunEntity extends BaseEntity<MJContentProcessRunEnt
 
     /**
     * * Field Name: Source
-    * * Display Name: Source Name
+    * * Display Name: Source
     * * SQL Data Type: nvarchar(255)
     */
     get Source(): string | null {
@@ -51129,7 +51116,7 @@ export class MJContentProcessRunEntity extends BaseEntity<MJContentProcessRunEnt
 
     /**
     * * Field Name: StartedByUser
-    * * Display Name: Started By User Name
+    * * Display Name: Started By User
     * * SQL Data Type: nvarchar(100)
     */
     get StartedByUser(): string | null {
@@ -51852,7 +51839,7 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
 
     /**
     * * Field Name: ContentType
-    * * Display Name: Content Type Name
+    * * Display Name: Content Type
     * * SQL Data Type: nvarchar(255)
     */
     get ContentType(): string {
@@ -51861,7 +51848,7 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
 
     /**
     * * Field Name: ContentSourceType
-    * * Display Name: Content Source Type Name
+    * * Display Name: Content Source Type
     * * SQL Data Type: nvarchar(255)
     */
     get ContentSourceType(): string {
@@ -51870,7 +51857,7 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
 
     /**
     * * Field Name: ContentFileType
-    * * Display Name: Content File Type Name
+    * * Display Name: Content File Type
     * * SQL Data Type: nvarchar(255)
     */
     get ContentFileType(): string {
@@ -51879,7 +51866,7 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
 
     /**
     * * Field Name: EmbeddingModel
-    * * Display Name: Embedding Model Name
+    * * Display Name: Embedding Model
     * * SQL Data Type: nvarchar(50)
     */
     get EmbeddingModel(): string | null {
@@ -51888,7 +51875,7 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
 
     /**
     * * Field Name: VectorIndex
-    * * Display Name: Vector Index Name
+    * * Display Name: Vector Index
     * * SQL Data Type: nvarchar(255)
     */
     get VectorIndex(): string | null {
@@ -51897,7 +51884,7 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
 
     /**
     * * Field Name: Entity
-    * * Display Name: Entity Name
+    * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
     get Entity(): string | null {
@@ -51906,7 +51893,7 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
 
     /**
     * * Field Name: EntityDocument
-    * * Display Name: Entity Document Name
+    * * Display Name: Entity Document
     * * SQL Data Type: nvarchar(250)
     */
     get EntityDocument(): string | null {
@@ -51915,7 +51902,7 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
 
     /**
     * * Field Name: ScheduledAction
-    * * Display Name: Scheduled Action Name
+    * * Display Name: Scheduled Action
     * * SQL Data Type: nvarchar(255)
     */
     get ScheduledAction(): string | null {
@@ -57173,7 +57160,7 @@ export class MJDuplicateRunDetailEntity extends BaseEntity<MJDuplicateRunDetailE
 
     /**
     * * Field Name: RecordID
-    * * Display Name: Record ID
+    * * Display Name: Record
     * * SQL Data Type: nvarchar(500)
     * * Description: The ID of the record being analyzed for duplicates.
     */
@@ -57324,10 +57311,10 @@ export class MJDuplicateRunDetailEntity extends BaseEntity<MJDuplicateRunDetailE
 
     /**
     * * Field Name: DuplicateRun
-    * * Display Name: Duplicate Run Name
-    * * SQL Data Type: datetimeoffset
+    * * Display Name: Run Name
+    * * SQL Data Type: nvarchar(255)
     */
-    get DuplicateRun(): Date {
+    get DuplicateRun(): string {
         return this.Get('DuplicateRun');
     }
 }
@@ -57365,7 +57352,7 @@ export class MJDuplicateRunEntity extends BaseEntity<MJDuplicateRunEntityType> {
 
     /**
     * * Field Name: ID
-    * * Display Name: Run ID
+    * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
@@ -57378,7 +57365,7 @@ export class MJDuplicateRunEntity extends BaseEntity<MJDuplicateRunEntityType> {
 
     /**
     * * Field Name: EntityID
-    * * Display Name: Entity ID
+    * * Display Name: Entity
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
     */
@@ -57391,7 +57378,7 @@ export class MJDuplicateRunEntity extends BaseEntity<MJDuplicateRunEntityType> {
 
     /**
     * * Field Name: StartedByUserID
-    * * Display Name: Started By User ID
+    * * Display Name: Started By
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     */
@@ -57404,7 +57391,7 @@ export class MJDuplicateRunEntity extends BaseEntity<MJDuplicateRunEntityType> {
 
     /**
     * * Field Name: SourceListID
-    * * Display Name: Source List ID
+    * * Display Name: Source List
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Lists (vwLists.ID)
     * * Description: Optional List ID to narrow the scope of duplicate detection. When NULL, all records in the entity are scanned. When set, only records in the specified list are checked for duplicates.
@@ -57475,7 +57462,7 @@ export class MJDuplicateRunEntity extends BaseEntity<MJDuplicateRunEntityType> {
 
     /**
     * * Field Name: ApprovedByUserID
-    * * Display Name: Approved By User ID
+    * * Display Name: Approved By
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     */
@@ -57541,7 +57528,7 @@ export class MJDuplicateRunEntity extends BaseEntity<MJDuplicateRunEntityType> {
 
     /**
     * * Field Name: TotalItemCount
-    * * Display Name: Total Items
+    * * Display Name: Total Item Count
     * * SQL Data Type: int
     * * Description: Total entity records to check for duplicates in this run.
     */
@@ -57554,7 +57541,7 @@ export class MJDuplicateRunEntity extends BaseEntity<MJDuplicateRunEntityType> {
 
     /**
     * * Field Name: ProcessedItemCount
-    * * Display Name: Processed Items
+    * * Display Name: Processed Item Count
     * * SQL Data Type: int
     * * Default Value: 0
     * * Description: Number of records checked so far. Used for progress percentage.
@@ -57610,7 +57597,7 @@ export class MJDuplicateRunEntity extends BaseEntity<MJDuplicateRunEntityType> {
 
     /**
     * * Field Name: Entity
-    * * Display Name: Entity
+    * * Display Name: Entity Name
     * * SQL Data Type: nvarchar(255)
     */
     get Entity(): string {
@@ -57628,7 +57615,7 @@ export class MJDuplicateRunEntity extends BaseEntity<MJDuplicateRunEntityType> {
 
     /**
     * * Field Name: SourceList
-    * * Display Name: Source List
+    * * Display Name: Source List Name
     * * SQL Data Type: nvarchar(100)
     */
     get SourceList(): string | null {
@@ -79509,7 +79496,7 @@ export class MJTagAuditLogEntity extends BaseEntity<MJTagAuditLogEntityType> {
 
     /**
     * * Field Name: ID
-    * * Display Name: Log ID
+    * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
@@ -79680,7 +79667,7 @@ export class MJTagCoOccurrenceEntity extends BaseEntity<MJTagCoOccurrenceEntityT
 
     /**
     * Validate() method override for MJ: Tag Co Occurrences entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * Table-Level: To maintain data consistency and prevent duplicate entries for the same pair of tags, the first tag ID must always be less than the second tag ID.
+    * * Table-Level: Tag A must be ordered before Tag B to ensure that each pair of tags is stored consistently and to prevent duplicate entries for the same combination.
     * @public
     * @method
     * @override
@@ -79694,16 +79681,16 @@ export class MJTagCoOccurrenceEntity extends BaseEntity<MJTagCoOccurrenceEntityT
     }
 
     /**
-    * To maintain data consistency and prevent duplicate entries for the same pair of tags, the first tag ID must always be less than the second tag ID.
+    * Tag A must be ordered before Tag B to ensure that each pair of tags is stored consistently and to prevent duplicate entries for the same combination.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
     public ValidateTagAIDLessThanTagBID(result: ValidationResult) {
-    	if (this.TagAID != null && this.TagBID != null && !(this.TagAID < this.TagBID)) {
+    	if (this.TagAID != null && this.TagBID != null && this.TagAID >= this.TagBID) {
     		result.Errors.push(new ValidationErrorInfo(
     			"TagAID",
-    			"The first tag ID must be less than the second tag ID to ensure a consistent pair ordering.",
+    			"Tag A must be ordered before Tag B to ensure a consistent ordering of tag pairs.",
     			this.TagAID,
     			ValidationErrorType.Failure
     		));
@@ -79725,7 +79712,7 @@ export class MJTagCoOccurrenceEntity extends BaseEntity<MJTagCoOccurrenceEntityT
 
     /**
     * * Field Name: TagAID
-    * * Display Name: Tag A
+    * * Display Name: Tag A ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Tags (vwTags.ID)
     * * Description: First tag in the canonical pair (TagAID < TagBID ensures each pair is stored exactly once).
@@ -79739,7 +79726,7 @@ export class MJTagCoOccurrenceEntity extends BaseEntity<MJTagCoOccurrenceEntityT
 
     /**
     * * Field Name: TagBID
-    * * Display Name: Tag B
+    * * Display Name: Tag B ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Tags (vwTags.ID)
     */
@@ -79752,7 +79739,7 @@ export class MJTagCoOccurrenceEntity extends BaseEntity<MJTagCoOccurrenceEntityT
 
     /**
     * * Field Name: CoOccurrenceCount
-    * * Display Name: Co-occurrence Count
+    * * Display Name: Co-Occurrence Count
     * * SQL Data Type: int
     * * Default Value: 0
     * * Description: Number of content items (or entity records via TaggedItem) that are tagged with both TagA and TagB.
@@ -79766,7 +79753,7 @@ export class MJTagCoOccurrenceEntity extends BaseEntity<MJTagCoOccurrenceEntityT
 
     /**
     * * Field Name: LastComputedAt
-    * * Display Name: Last Computed
+    * * Display Name: Last Computed At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
@@ -79799,7 +79786,7 @@ export class MJTagCoOccurrenceEntity extends BaseEntity<MJTagCoOccurrenceEntityT
 
     /**
     * * Field Name: TagA
-    * * Display Name: Tag A Name
+    * * Display Name: Tag A
     * * SQL Data Type: nvarchar(255)
     */
     get TagA(): string {
@@ -79808,7 +79795,7 @@ export class MJTagCoOccurrenceEntity extends BaseEntity<MJTagCoOccurrenceEntityT
 
     /**
     * * Field Name: TagB
-    * * Display Name: Tag B Name
+    * * Display Name: Tag B
     * * SQL Data Type: nvarchar(255)
     */
     get TagB(): string {
@@ -79862,7 +79849,7 @@ export class MJTaggedItemEntity extends BaseEntity<MJTaggedItemEntityType> {
 
     /**
     * * Field Name: TagID
-    * * Display Name: Tag
+    * * Display Name: Tag ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Tags (vwTags.ID)
     */
@@ -79875,7 +79862,7 @@ export class MJTaggedItemEntity extends BaseEntity<MJTaggedItemEntityType> {
 
     /**
     * * Field Name: EntityID
-    * * Display Name: Entity
+    * * Display Name: Entity ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
     */
@@ -79935,7 +79922,7 @@ export class MJTaggedItemEntity extends BaseEntity<MJTaggedItemEntityType> {
 
     /**
     * * Field Name: Tag
-    * * Display Name: Tag Name
+    * * Display Name: Tag
     * * SQL Data Type: nvarchar(255)
     */
     get Tag(): string {
@@ -79944,7 +79931,7 @@ export class MJTaggedItemEntity extends BaseEntity<MJTaggedItemEntityType> {
 
     /**
     * * Field Name: Entity
-    * * Display Name: Entity Name
+    * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
     get Entity(): string {

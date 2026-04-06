@@ -16,9 +16,9 @@ export class MJContentProcessRunDetailFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'sourceRunContext', sectionName: 'Source & Run Context', isExpanded: true },
+            { sectionKey: 'runContext', sectionName: 'Run Context', isExpanded: true },
             { sectionKey: 'processingMetrics', sectionName: 'Processing Metrics', isExpanded: true },
-            { sectionKey: 'timelineUsage', sectionName: 'Timeline & Usage', isExpanded: false },
+            { sectionKey: 'usageAndTimeline', sectionName: 'Usage and Timeline', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJContentProcessRunPromptRuns', sectionName: 'Content Process Run Prompt Runs', isExpanded: false }
         ]);

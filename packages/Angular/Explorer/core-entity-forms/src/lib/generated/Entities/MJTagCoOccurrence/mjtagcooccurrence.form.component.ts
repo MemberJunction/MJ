@@ -15,8 +15,8 @@ export class MJTagCoOccurrenceFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'tagPairDetails', sectionName: 'Tag Pair Details', isExpanded: true },
-            { sectionKey: 'occurrenceStatistics', sectionName: 'Occurrence Statistics', isExpanded: true },
+            { sectionKey: 'tagPairInformation', sectionName: 'Tag Pair Information', isExpanded: true },
+            { sectionKey: 'coOccurrenceMetrics', sectionName: 'Co-Occurrence Metrics', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

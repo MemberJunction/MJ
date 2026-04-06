@@ -14477,14 +14477,14 @@ export class MJAIPromptRun_ {
     @MaxLength(36)
     RootRerunFromPromptRunID?: string;
         
+    @Field(() => [MJContentProcessRunPromptRun_])
+    MJContentProcessRunPromptRuns_AIPromptRunIDArray: MJContentProcessRunPromptRun_[]; // Link to MJContentProcessRunPromptRuns
+    
     @Field(() => [MJAIPromptRun_])
     MJAIPromptRuns_RerunFromPromptRunIDArray: MJAIPromptRun_[]; // Link to MJAIPromptRuns
     
     @Field(() => [MJAIPromptRunMedia_])
     MJAIPromptRunMedias_PromptRunIDArray: MJAIPromptRunMedia_[]; // Link to MJAIPromptRunMedias
-    
-    @Field(() => [MJContentProcessRunPromptRun_])
-    MJContentProcessRunPromptRuns_AIPromptRunIDArray: MJContentProcessRunPromptRun_[]; // Link to MJContentProcessRunPromptRuns
     
     @Field(() => [MJAIResultCache_])
     MJAIResultCache_PromptRunIDArray: MJAIResultCache_[]; // Link to MJAIResultCache
@@ -15065,6 +15065,16 @@ export class MJAIPromptRunResolver extends ResolverBase {
         return result;
     }
     
+    @FieldResolver(() => [MJContentProcessRunPromptRun_])
+    async MJContentProcessRunPromptRuns_AIPromptRunIDArray(@Root() mjaipromptrun_: MJAIPromptRun_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Content Process Run Prompt Runs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwContentProcessRunPromptRuns')} WHERE ${provider.QuoteIdentifier('AIPromptRunID')}='${mjaipromptrun_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Content Process Run Prompt Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Content Process Run Prompt Runs', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
     @FieldResolver(() => [MJAIPromptRun_])
     async MJAIPromptRuns_RerunFromPromptRunIDArray(@Root() mjaipromptrun_: MJAIPromptRun_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Prompt Runs', userPayload);
@@ -15082,16 +15092,6 @@ export class MJAIPromptRunResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIPromptRunMedias')} WHERE ${provider.QuoteIdentifier('PromptRunID')}='${mjaipromptrun_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Prompt Run Medias', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Prompt Run Medias', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
-    @FieldResolver(() => [MJContentProcessRunPromptRun_])
-    async MJContentProcessRunPromptRuns_AIPromptRunIDArray(@Root() mjaipromptrun_: MJAIPromptRun_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Content Process Run Prompt Runs', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwContentProcessRunPromptRuns')} WHERE ${provider.QuoteIdentifier('AIPromptRunID')}='${mjaipromptrun_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Content Process Run Prompt Runs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Content Process Run Prompt Runs', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -27284,10 +27284,10 @@ export class MJContentItem_ {
     MJContentItemTags_ItemIDArray: MJContentItemTag_[]; // Link to MJContentItemTags
     
     @Field(() => [MJContentItemDuplicate_])
-    MJContentItemDuplicates_ContentItemBIDArray: MJContentItemDuplicate_[]; // Link to MJContentItemDuplicates
+    MJContentItemDuplicates_ContentItemAIDArray: MJContentItemDuplicate_[]; // Link to MJContentItemDuplicates
     
     @Field(() => [MJContentItemDuplicate_])
-    MJContentItemDuplicates_ContentItemAIDArray: MJContentItemDuplicate_[]; // Link to MJContentItemDuplicates
+    MJContentItemDuplicates_ContentItemBIDArray: MJContentItemDuplicate_[]; // Link to MJContentItemDuplicates
     
 }
 
@@ -27481,20 +27481,20 @@ export class MJContentItemResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJContentItemDuplicate_])
-    async MJContentItemDuplicates_ContentItemBIDArray(@Root() mjcontentitem_: MJContentItem_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJContentItemDuplicates_ContentItemAIDArray(@Root() mjcontentitem_: MJContentItem_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Content Item Duplicates', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwContentItemDuplicates')} WHERE ${provider.QuoteIdentifier('ContentItemBID')}='${mjcontentitem_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Content Item Duplicates', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwContentItemDuplicates')} WHERE ${provider.QuoteIdentifier('ContentItemAID')}='${mjcontentitem_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Content Item Duplicates', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Content Item Duplicates', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
     @FieldResolver(() => [MJContentItemDuplicate_])
-    async MJContentItemDuplicates_ContentItemAIDArray(@Root() mjcontentitem_: MJContentItem_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJContentItemDuplicates_ContentItemBIDArray(@Root() mjcontentitem_: MJContentItem_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Content Item Duplicates', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwContentItemDuplicates')} WHERE ${provider.QuoteIdentifier('ContentItemAID')}='${mjcontentitem_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Content Item Duplicates', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwContentItemDuplicates')} WHERE ${provider.QuoteIdentifier('ContentItemBID')}='${mjcontentitem_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Content Item Duplicates', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Content Item Duplicates', rows, this.GetUserFromPayload(userPayload));
         return result;
@@ -27588,7 +27588,8 @@ export class MJContentProcessRunDetail_ {
     _mj__UpdatedAt: Date;
         
     @Field({nullable: true}) 
-    ContentProcessRun?: Date;
+    @MaxLength(255)
+    ContentProcessRun?: string;
         
     @Field({nullable: true}) 
     @MaxLength(255)
@@ -27825,10 +27826,6 @@ export class MJContentProcessRunPromptRun_ {
         
     @Field() 
     _mj__UpdatedAt: Date;
-        
-    @Field({nullable: true}) 
-    @MaxLength(255)
-    ContentProcessRunDetail?: string;
         
     @Field({nullable: true}) 
     @MaxLength(255)
@@ -35032,7 +35029,8 @@ export class MJDuplicateRunDetail_ {
     EndedAt?: Date;
         
     @Field() 
-    DuplicateRun: Date;
+    @MaxLength(255)
+    DuplicateRun: string;
         
     @Field(() => [MJDuplicateRunDetailMatch_])
     MJDuplicateRunDetailMatches_DuplicateRunDetailIDArray: MJDuplicateRunDetailMatch_[]; // Link to MJDuplicateRunDetailMatches
@@ -37328,11 +37326,11 @@ export class MJEntity_ {
     @Field(() => [MJEntityField_])
     MJEntityFields_RelatedEntityIDArray: MJEntityField_[]; // Link to MJEntityFields
     
-    @Field(() => [MJContentSource_])
-    MJContentSources_EntityIDArray: MJContentSource_[]; // Link to MJContentSources
-    
     @Field(() => [MJResourceType_])
     MJResourceTypes_CategoryEntityIDArray: MJResourceType_[]; // Link to MJResourceTypes
+    
+    @Field(() => [MJContentSource_])
+    MJContentSources_EntityIDArray: MJContentSource_[]; // Link to MJContentSources
     
     @Field(() => [MJTestRun_])
     MJTestRuns_TargetLogEntityIDArray: MJTestRun_[]; // Link to MJTestRuns
@@ -38249,16 +38247,6 @@ export class MJEntityResolverBase extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [MJContentSource_])
-    async MJContentSources_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Content Sources', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwContentSources')} WHERE ${provider.QuoteIdentifier('EntityID')}='${mjentity_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Content Sources', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Content Sources', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
     @FieldResolver(() => [MJResourceType_])
     async MJResourceTypes_CategoryEntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Resource Types', userPayload);
@@ -38266,6 +38254,16 @@ export class MJEntityResolverBase extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwResourceTypes')} WHERE ${provider.QuoteIdentifier('CategoryEntityID')}='${mjentity_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Resource Types', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Resource Types', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJContentSource_])
+    async MJContentSources_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Content Sources', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwContentSources')} WHERE ${provider.QuoteIdentifier('EntityID')}='${mjentity_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Content Sources', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Content Sources', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -61603,13 +61601,13 @@ export class MJTag_ {
     MJContentItemTags_TagIDArray: MJContentItemTag_[]; // Link to MJContentItemTags
     
     @Field(() => [MJTagCoOccurrence_])
-    MJTagCoOccurrences_TagAIDArray: MJTagCoOccurrence_[]; // Link to MJTagCoOccurrences
+    MJTagCoOccurrences_TagBIDArray: MJTagCoOccurrence_[]; // Link to MJTagCoOccurrences
     
     @Field(() => [MJTagAuditLog_])
     MJTagAuditLogs_RelatedTagIDArray: MJTagAuditLog_[]; // Link to MJTagAuditLogs
     
     @Field(() => [MJTagCoOccurrence_])
-    MJTagCoOccurrences_TagBIDArray: MJTagCoOccurrence_[]; // Link to MJTagCoOccurrences
+    MJTagCoOccurrences_TagAIDArray: MJTagCoOccurrence_[]; // Link to MJTagCoOccurrences
     
     @Field(() => [MJTagAuditLog_])
     MJTagAuditLogs_TagIDArray: MJTagAuditLog_[]; // Link to MJTagAuditLogs
@@ -61765,10 +61763,10 @@ export class MJTagResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJTagCoOccurrence_])
-    async MJTagCoOccurrences_TagAIDArray(@Root() mjtag_: MJTag_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJTagCoOccurrences_TagBIDArray(@Root() mjtag_: MJTag_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Tag Co Occurrences', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwTagCoOccurrences')} WHERE ${provider.QuoteIdentifier('TagAID')}='${mjtag_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Tag Co Occurrences', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwTagCoOccurrences')} WHERE ${provider.QuoteIdentifier('TagBID')}='${mjtag_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Tag Co Occurrences', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Tag Co Occurrences', rows, this.GetUserFromPayload(userPayload));
         return result;
@@ -61785,10 +61783,10 @@ export class MJTagResolver extends ResolverBase {
     }
         
     @FieldResolver(() => [MJTagCoOccurrence_])
-    async MJTagCoOccurrences_TagBIDArray(@Root() mjtag_: MJTag_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async MJTagCoOccurrences_TagAIDArray(@Root() mjtag_: MJTag_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Tag Co Occurrences', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwTagCoOccurrences')} WHERE ${provider.QuoteIdentifier('TagBID')}='${mjtag_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Tag Co Occurrences', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwTagCoOccurrences')} WHERE ${provider.QuoteIdentifier('TagAID')}='${mjtag_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Tag Co Occurrences', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Tag Co Occurrences', rows, this.GetUserFromPayload(userPayload));
         return result;
@@ -69125,17 +69123,17 @@ export class MJUser_ {
     @Field(() => [MJOpenApp_])
     MJOpenApps_InstalledByUserIDArray: MJOpenApp_[]; // Link to MJOpenApps
     
-    @Field(() => [MJContentProcessRun_])
-    MJContentProcessRuns_StartedByUserIDArray: MJContentProcessRun_[]; // Link to MJContentProcessRuns
-    
-    @Field(() => [MJTagAuditLog_])
-    MJTagAuditLogs_PerformedByUserIDArray: MJTagAuditLog_[]; // Link to MJTagAuditLogs
-    
     @Field(() => [MJContentItemDuplicate_])
     MJContentItemDuplicates_ResolvedByUserIDArray: MJContentItemDuplicate_[]; // Link to MJContentItemDuplicates
     
+    @Field(() => [MJContentProcessRun_])
+    MJContentProcessRuns_StartedByUserIDArray: MJContentProcessRun_[]; // Link to MJContentProcessRuns
+    
     @Field(() => [MJKnowledgeHubSavedSearch_])
     MJKnowledgeHubSavedSearches_UserIDArray: MJKnowledgeHubSavedSearch_[]; // Link to MJKnowledgeHubSavedSearches
+    
+    @Field(() => [MJTagAuditLog_])
+    MJTagAuditLogs_PerformedByUserIDArray: MJTagAuditLog_[]; // Link to MJTagAuditLogs
     
     @Field(() => [MJResourcePermission_])
     MJResourcePermissions_UserIDArray: MJResourcePermission_[]; // Link to MJResourcePermissions
@@ -69975,26 +69973,6 @@ export class MJUserResolverBase extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [MJContentProcessRun_])
-    async MJContentProcessRuns_StartedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Content Process Runs', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwContentProcessRuns')} WHERE ${provider.QuoteIdentifier('StartedByUserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Content Process Runs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Content Process Runs', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
-    @FieldResolver(() => [MJTagAuditLog_])
-    async MJTagAuditLogs_PerformedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Tag Audit Logs', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwTagAuditLogs')} WHERE ${provider.QuoteIdentifier('PerformedByUserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Tag Audit Logs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Tag Audit Logs', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
     @FieldResolver(() => [MJContentItemDuplicate_])
     async MJContentItemDuplicates_ResolvedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Content Item Duplicates', userPayload);
@@ -70005,6 +69983,16 @@ export class MJUserResolverBase extends ResolverBase {
         return result;
     }
         
+    @FieldResolver(() => [MJContentProcessRun_])
+    async MJContentProcessRuns_StartedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Content Process Runs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwContentProcessRuns')} WHERE ${provider.QuoteIdentifier('StartedByUserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Content Process Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Content Process Runs', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
     @FieldResolver(() => [MJKnowledgeHubSavedSearch_])
     async MJKnowledgeHubSavedSearches_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Knowledge Hub Saved Searches', userPayload);
@@ -70012,6 +70000,16 @@ export class MJUserResolverBase extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwKnowledgeHubSavedSearches')} WHERE ${provider.QuoteIdentifier('UserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Knowledge Hub Saved Searches', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Knowledge Hub Saved Searches', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJTagAuditLog_])
+    async MJTagAuditLogs_PerformedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Tag Audit Logs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwTagAuditLogs')} WHERE ${provider.QuoteIdentifier('PerformedByUserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Tag Audit Logs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Tag Audit Logs', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         

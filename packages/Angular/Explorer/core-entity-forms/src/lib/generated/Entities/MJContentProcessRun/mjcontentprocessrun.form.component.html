@@ -27,6 +27,40 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
+            FieldName="Status"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="CancellationRequested"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Configuration"
+            Type="code"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Execution Details Section -->
+    <mj-collapsible-panel
+        SectionKey="executionDetails"
+        SectionName="Execution Details"
+        Icon="fa fa-tachometer-alt"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
             FieldName="StartTime"
             Type="datepicker"
             [EditMode]="EditMode"
@@ -43,8 +77,8 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="Status"
-            Type="textbox"
+            FieldName="ProcessedItems"
+            Type="number"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -56,24 +90,6 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
             LinkType="Record"
-        ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Processing & Errors Section -->
-    <mj-collapsible-panel
-        SectionKey="processingErrors"
-        SectionName="Processing & Errors"
-        Icon="fa fa-tasks"
-        [Form]="this"
-        [FormContext]="formContext">
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ProcessedItems"
-            Type="number"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [Record]="record"
@@ -115,22 +131,6 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="CancellationRequested"
-            Type="checkbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="Configuration"
-            Type="code"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
 
     </mj-collapsible-panel>
 
@@ -168,7 +168,7 @@
     <mj-collapsible-panel
         SectionKey="mJContentProcessRunDetails"
         SectionName="Content Process Run Details"
-        Icon="fa fa-terminal"
+        Icon="fa fa-tasks"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"

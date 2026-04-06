@@ -18,13 +18,12 @@ export class MJContentItemFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'sourceInformation', sectionName: 'Source Information', isExpanded: true },
             { sectionKey: 'contentDetails', sectionName: 'Content Details', isExpanded: true },
-            { sectionKey: 'extractedContent', sectionName: 'Extracted Content', isExpanded: false },
-            { sectionKey: 'aIProcessing', sectionName: 'AI Processing', isExpanded: false },
+            { sectionKey: 'aIVectorization', sectionName: 'AI & Vectorization', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJContentItemAttributes', sectionName: 'Content Item Attributes', isExpanded: false },
             { sectionKey: 'mJContentItemTags', sectionName: 'Content Item Tags', isExpanded: false },
-            { sectionKey: 'mJContentItemDuplicatesContentItemBID', sectionName: 'Content Item Duplicates (Content Item B)', isExpanded: false },
-            { sectionKey: 'mJContentItemDuplicatesContentItemAID', sectionName: 'Content Item Duplicates (Content Item A)', isExpanded: false }
+            { sectionKey: 'mJContentItemDuplicatesContentItemAID', sectionName: 'Content Item Duplicates (Content Item A ID)', isExpanded: false },
+            { sectionKey: 'mJContentItemDuplicatesContentItemBID', sectionName: 'Content Item Duplicates (Content Item B ID)', isExpanded: false }
         ]);
     }
 }

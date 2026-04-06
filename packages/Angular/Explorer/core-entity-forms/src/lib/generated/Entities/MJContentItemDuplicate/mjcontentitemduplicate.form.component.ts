@@ -15,8 +15,8 @@ export class MJContentItemDuplicateFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'duplicateAnalysis', sectionName: 'Duplicate Analysis', isExpanded: true },
-            { sectionKey: 'resolutionReview', sectionName: 'Resolution & Review', isExpanded: true },
+            { sectionKey: 'comparisonDetails', sectionName: 'Comparison Details', isExpanded: true },
+            { sectionKey: 'resolutionTracking', sectionName: 'Resolution Tracking', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

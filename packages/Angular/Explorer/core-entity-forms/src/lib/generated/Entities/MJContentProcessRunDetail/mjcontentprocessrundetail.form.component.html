@@ -8,11 +8,11 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Source & Run Context Section -->
+    <!-- Run Context Section -->
     <mj-collapsible-panel
-        SectionKey="sourceRunContext"
-        SectionName="Source & Run Context"
-        Icon="fa fa-project-diagram"
+        SectionKey="runContext"
+        SectionName="Run Context"
+        Icon="fa fa-info-circle"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -57,7 +57,7 @@
     <mj-collapsible-panel
         SectionKey="processingMetrics"
         SectionName="Processing Metrics"
-        Icon="fa fa-chart-line"
+        Icon="fa fa-chart-bar"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -103,11 +103,11 @@
 
     </mj-collapsible-panel>
 
-    <!-- Timeline & Usage Section -->
+    <!-- Usage and Timeline Section -->
     <mj-collapsible-panel
-        SectionKey="timelineUsage"
-        SectionName="Timeline & Usage"
-        Icon="fa fa-history"
+        SectionKey="usageAndTimeline"
+        SectionName="Usage and Timeline"
+        Icon="fa fa-clock"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -179,7 +179,7 @@
     <mj-collapsible-panel
         SectionKey="mJContentProcessRunPromptRuns"
         SectionName="Content Process Run Prompt Runs"
-        Icon="fa fa-link"
+        Icon="fa fa-robot"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"

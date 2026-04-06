@@ -8,22 +8,32 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Search Definition Section -->
+    <!-- Ownership Section -->
     <mj-collapsible-panel
-        SectionKey="searchDefinition"
-        SectionName="Search Definition"
-        Icon="fa fa-search"
+        SectionKey="ownership"
+        SectionName="Ownership"
+        Icon="fa fa-user-tag"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
-            [ShowLabel]="true"
+            [ShowLabel]="false"
             FieldName="UserID"
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
             LinkType="Record"
         ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Search Criteria Section -->
+    <mj-collapsible-panel
+        SectionKey="searchCriteria"
+        SectionName="Search Criteria"
+        Icon="fa fa-search"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -51,11 +61,11 @@
 
     </mj-collapsible-panel>
 
-    <!-- Search Settings Section -->
+    <!-- Results and Notifications Section -->
     <mj-collapsible-panel
-        SectionKey="searchSettings"
-        SectionName="Search Settings"
-        Icon="fa fa-sliders-h"
+        SectionKey="resultsAndNotifications"
+        SectionName="Results and Notifications"
+        Icon="fa fa-bell"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
