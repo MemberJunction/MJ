@@ -2639,7 +2639,11 @@ export class ManageMetadataBase {
             // statement in its own batch to avoid this.
             const statements = sql.split(';\n').filter(s => s.trim().length > 0);
             for (const stmt of statements) {
-               await this.LogSQLAndExecute(pool, stmt, `SQL text to add special date field ${fieldName} to entity ${entity.SchemaName}.${entity.BaseTable}`);
+               // Each statement needs a batch separator in the log so that ALTER TABLE ADD column
+               // and the subsequent UPDATE referencing that column run in separate batches.
+               // SQL Server compiles an entire batch before executing, so without the separator
+               // the UPDATE fails with "Invalid column name" since the column doesn't exist yet at compile time.
+               await this.LogSQLAndExecute(pool, stmt, `SQL text to add special date field ${fieldName} to entity ${entity.SchemaName}.${entity.BaseTable}`, false, true, this.dbProvider.BatchSeparator);
             }
          }
          else {
@@ -4858,7 +4862,7 @@ WHERE
     * @param isRecurringScript - if set to true tells the logger that the provided SQL represents a recurring script meaning it is something that is executed, generally, for all CodeGen runs. In these cases, the Config settings can result in omitting these recurring scripts from being logged because the configuration environment may have those recurring scripts already set to run after all run-specific migrations get run.
     * @returns - The result of the query execution.
     */
-   private async LogSQLAndExecute(pool: CodeGenConnection, query: string, description?: string, isRecurringScript: boolean = false): Promise<any> {
-      return await SQLLogging.LogSQLAndExecute(pool, this.qsql(query), description, isRecurringScript);
+   private async LogSQLAndExecute(pool: CodeGenConnection, query: string, description?: string, isRecurringScript: boolean = false, includeBatchSeparator: boolean = false, batchSeparator: string = 'GO'): Promise<any> {
+      return await SQLLogging.LogSQLAndExecute(pool, this.qsql(query), description, isRecurringScript, includeBatchSeparator, batchSeparator);
    }
 }
