@@ -38,9 +38,11 @@
                             @if (item.Weight < 1.0) {
                                 <span class="mj-record-tag-weight">{{ (item.Weight * 100).toFixed(0) }}%</span>
                             }
-                            <button class="mj-record-tag-remove" (click)="RemoveTag(item)" title="Remove tag">
-                                <i class="fa-solid fa-times"></i>
-                            </button>
+                            @if (AllowRemove) {
+                                <button class="mj-record-tag-remove" (click)="RemoveTag(item)" title="Remove tag">
+                                    <i class="fa-solid fa-times"></i>
+                                </button>
+                            }
                         </span>
                     }
                 </div>

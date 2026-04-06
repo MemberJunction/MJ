@@ -115,6 +115,13 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   /** Emitted when validation fails before save */
   @Output() ValidationFailed = new EventEmitter<ValidationFailedEvent>();
 
+  /**
+   * Emitted once after ngOnInit completes and the record is fully initialized
+   * (favorites loaded, form state initialized). This is the safe point for
+   * the container to start loading badge counts and other record-dependent data.
+   */
+  @Output() RecordReady = new EventEmitter<BaseEntity>();
+
   // #endregion
 
   /** Subscription to form state changes */
@@ -140,6 +147,11 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
           this.cdr.markForCheck();
         });
       }
+    }
+
+    // Signal that the record is fully initialized and ready for dependent operations
+    if (this.record) {
+      this.RecordReady.emit(this.record);
     }
 
     // Set up debounced filter subscription

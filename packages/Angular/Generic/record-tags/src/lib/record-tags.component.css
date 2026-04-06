@@ -52,7 +52,8 @@
     padding: 6px 12px;
     border-radius: 20px;
     background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
-    color: var(--mj-text-primary);
+    color: var(--mj-text-primary) !important;
+    font-size: 0.85rem;
     border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 25%, var(--mj-border-default));
     transition: opacity 0.2s ease, background 0.2s ease;
     cursor: default;

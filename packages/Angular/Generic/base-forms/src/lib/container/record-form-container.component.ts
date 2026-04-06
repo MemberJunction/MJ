@@ -339,8 +339,7 @@ export class MjRecordFormContainerComponent implements AfterContentInit, OnDestr
     // Watch for changes to record dirty state
     this.watchRecordChanges();
 
-    // Load badge counts for the toolbar (tags and record changes)
-    this.LoadBadgeCounts();
+    // Badge counts are loaded when the form emits RecordReady (see SubscribeToPanelNavigateEvents)
   }
 
   ngOnDestroy(): void {
@@ -356,6 +355,13 @@ export class MjRecordFormContainerComponent implements AfterContentInit, OnDestr
    */
   private SubscribeToPanelNavigateEvents(): void {
     this.panelNavReset$.next(); // tear down previous subscriptions
+    // Subscribe to RecordReady on the form component — fires once after record is fully initialized
+    if (this.fc) {
+      this.fc.RecordReady.pipe(takeUntil(this.panelNavReset$)).subscribe(() => {
+        this.LoadBadgeCounts();
+      });
+    }
+
     this.Panels.forEach(panel => {
       panel.Navigate.pipe(takeUntil(this.panelNavReset$)).subscribe((event: FormNavigationEvent) => {
         this.Navigate.emit(event);
@@ -385,9 +391,15 @@ export class MjRecordFormContainerComponent implements AfterContentInit, OnDestr
    * Loads tag count and record change version count for toolbar badges.
    * Both queries run in parallel for performance.
    */
+  private badgeCountsLoaded = false;
+
   private LoadBadgeCounts(): void {
+    if (this.badgeCountsLoaded) return;
+
     const record = this.EffectiveRecord;
     if (!record?.EntityInfo) return;
+
+    this.badgeCountsLoaded = true;
 
     // Fire both queries in parallel — no await needed, they update state async
     this.LoadTagCount(record);
@@ -401,15 +413,16 @@ export class MjRecordFormContainerComponent implements AfterContentInit, OnDestr
   private async LoadTagCount(record: BaseEntity): Promise<void> {
     try {
       const rv = new RunView();
-      const result = await rv.RunView<{ ID: string }>({
+      // Don't narrow Fields — the server caches RunView results by entity+filter (ignoring Fields),
+      // so a narrow query here would poison the cache for the subsequent full-field load in the Tags panel.
+      const result = await rv.RunView({
         EntityName: 'MJ: Tagged Items',
-        Fields: ['ID'],
         ExtraFilter: `EntityID='${record.EntityInfo.ID}' AND RecordID='${record.PrimaryKey.Values()}'`,
         ResultType: 'simple'
       });
       if (result.Success) {
         this.TagCount = result.Results.length;
-        this.cdr.markForCheck();
+        this.cdr.detectChanges();
       }
     } catch {
       // Non-critical — badge just stays at 0
@@ -432,7 +445,7 @@ export class MjRecordFormContainerComponent implements AfterContentInit, OnDestr
       });
       if (result.Success) {
         this.VersionCount = result.Results.length;
-        this.cdr.markForCheck();
+        this.cdr.detectChanges();
       }
     } catch {
       // Non-critical — badge just stays at 0
