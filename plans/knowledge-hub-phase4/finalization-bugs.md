@@ -20,7 +20,9 @@ note, after wiping db and only having one vector index, all works, so clearly th
 
 
 # Search
-The "See similar items" feature is great, but when it gets clicked on need to clear the filters or we often won't see proper results
+- Home search screen shows way too many popular tags, should be limited to maybe top 5 or 10 and also have tags sized based on relative use or something to make more visually itneresting? 
+- The "See similar items" feature is great, but when it gets clicked on need to clear the filters or we often won't see proper results
+- Changing relevance to a higher % should be client side relative to original server search as it is a narrowing function. But changing relevance to a lower % should trigger redoing on server. And on the slideing scale for relevance we should show stylishly below it the max/min and total counts for matches on server side 
 
 # Clusters
 - appear to be saved in local storage, i wiped index db and had brand new DB install but still had stuff from prior env in the brwoser. Bad, propse new structure for this.
@@ -29,6 +31,10 @@ The "See similar items" feature is great, but when it gets clicked on need to cl
 # Classify
 - Pipeline UI - hard to see the source name - make it clearer and maybe group recent processing by it or otherwise highlight, also should show MOST recent first in that list and make it scrollable and pageable to see as far back as user wants to go. And searchable
 - if I start the app on Classify, Content Types, Tag Lib etc they don't properly show data, they appear blank. If i then go to another tab and come back they load. Seems like timing related, they shoudl all await for their data to be ready to display and show mj-loading until. Fix this.
+
+# Duplicates
+- Right now it appears we're not allowed to run dupes on entities that don't have merging turned on. But we don't want that, we want to simply notify the user that merging won't be available but they can run dupe detection. 
+- Fix this - I asked for this before and it was forgotten. Styling warning message so they don't get annoyed later, but let em do the dupe detect process!
 
 # Tree Dropdown in ng-trees package
 - When the drop down is selected we should put focus on the search text box so user can type to search without having to click first
