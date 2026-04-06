@@ -79,12 +79,12 @@
           [currentUser]="currentUser"
           [disabled]="isProcessing"
           [showSidebarToggle]="showSidebarToggle"
+          [overlayMode]="overlayMode"
+          [greeting]="emptyStateGreeting"
           [enableAttachments]="enableAttachments"
           [maxAttachments]="maxAttachments"
           [maxAttachmentSizeBytes]="maxAttachmentSizeBytes"
           [acceptedFileTypes]="acceptedFileTypes"
-          [overlayMode]="overlayMode"
-          [greeting]="emptyStateGreeting"
           (sidebarToggleClicked)="sidebarToggleClicked.emit()"
           (messageSent)="onEmptyStateMessageSent($event)">
         </mj-conversation-empty-state>
