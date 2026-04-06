@@ -923,8 +923,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     private GenerateDedupKey(params: RunViewParams[], contextUser?: UserInfo): string {
         const parts = params.map(p => {
             const base = LocalCacheManager.Instance.GenerateRunViewFingerprint(p, this.InstanceConnectionString);
+            // Fields is intentionally excluded — cache stores full entity width
+            // and filters on return, so different Fields values are the same query.
             const extras = [
-                p.Fields?.join(',') ?? '',
                 p.UserSearchString ?? '',
                 p.ViewID ?? '',
                 p.ViewName ?? '',
