@@ -1907,7 +1907,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
 
             // Extract content item ID from vector metadata
             const matchItemID = match.metadata?.['contentItemID'] as string | undefined;
-            if (!matchItemID || matchItemID === contentItem.ID) continue;
+            if (!matchItemID || UUIDsEqual(matchItemID, contentItem.ID)) continue;
 
             // Check if the match is from a different source
             const isDifferentSource = await this.isFromDifferentSource(matchItemID, contentItem.ContentSourceID, contextUser);

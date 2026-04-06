@@ -4584,7 +4584,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             entity.Status = 'Confirmed';
             const saved = await entity.Save();
             if (saved) {
-                this.ContentDuplicates = this.ContentDuplicates.filter(d => d.ID !== dupRow.ID);
+                this.ContentDuplicates = this.ContentDuplicates.filter(d => !UUIDsEqual(d.ID, dupRow.ID));
                 MJNotificationService.Instance.CreateSimpleNotification('Duplicate confirmed', 'success', 2000);
             }
         } catch (error) {
@@ -4606,7 +4606,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             entity.Resolution = 'NotDuplicate';
             const saved = await entity.Save();
             if (saved) {
-                this.ContentDuplicates = this.ContentDuplicates.filter(d => d.ID !== dupRow.ID);
+                this.ContentDuplicates = this.ContentDuplicates.filter(d => !UUIDsEqual(d.ID, dupRow.ID));
                 MJNotificationService.Instance.CreateSimpleNotification('Duplicate dismissed', 'success', 2000);
             }
         } catch (error) {
