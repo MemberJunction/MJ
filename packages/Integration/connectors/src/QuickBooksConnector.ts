@@ -597,6 +597,24 @@ const QUICKBOOKS_OBJECTS: IntegrationObjectInfo[] = [
             { Name: 'TxnDate', DisplayName: 'Transaction Date', Type: 'datetime', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Transaction date' },
         ],
     },
+    {
+        Name: 'CustomerType', DisplayName: 'Customer Type',
+        Description: 'Customer categorization types in QuickBooks Online (read-only lookup)', SupportsWrite: false,
+        Fields: [
+            { Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'QuickBooks internal ID' },
+            { Name: 'Name', DisplayName: 'Name', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Customer type name' },
+            { Name: 'Active', DisplayName: 'Active', Type: 'boolean', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Whether the type is active' },
+        ],
+    },
+    {
+        Name: 'VendorType', DisplayName: 'Vendor Type',
+        Description: 'Vendor categorization types in QuickBooks Online (read-only, availability varies by edition)', SupportsWrite: false,
+        Fields: [
+            { Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'QuickBooks internal ID' },
+            { Name: 'Name', DisplayName: 'Name', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Vendor type name' },
+            { Name: 'Active', DisplayName: 'Active', Type: 'boolean', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Whether the type is active' },
+        ],
+    },
 ];
 
 // ─── Connector Implementation ─────────────────────────────────────────

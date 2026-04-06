@@ -1614,14 +1614,14 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
         }
         const { fromType, toType } = parsed;
 
-        const fields = this.GetCachedFields(obj.ID);
         const auth = await this.Authenticate(ctx.CompanyIntegration, ctx.ContextUser);
         const baseURL = this.GetBaseURL(ctx.CompanyIntegration, auth);
 
-        // Association objects have two PK fields: left (from-side) and right (to-side)
-        const pkFields = fields.filter(f => f.IsPrimaryKey).sort((a, b) => a.Sequence - b.Sequence);
-        const leftFieldName = pkFields[0]?.Name ?? `${fromType.replace(/s$/, '')}_id`;
-        const rightFieldName = pkFields[1]?.Name ?? `${toType.replace(/s$/, '')}_id`;
+        // Derive PK field names from the API path object type names.
+        // "companies" → "company_id", "emails" → "email_id", "contacts" → "contact_id"
+        const singularize = (t: string) => t.endsWith('ies') ? t.slice(0, -3) + 'y' : t.endsWith('s') ? t.slice(0, -1) : t;
+        const leftFieldName = `${singularize(fromType)}_id`;
+        const rightFieldName = `${singularize(toType)}_id`;
 
         const parentIDs = await this.LoadAssociationParentIDs(fromType, ctx);
         const parentOffset = ctx.CurrentOffset ?? 0;

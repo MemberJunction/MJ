@@ -25,6 +25,8 @@ import {
     type RSUPipelineInput,
     type RSUPipelineResult,
 } from '@memberjunction/schema-engine';
+import { Metadata } from '@memberjunction/core';
+import { DatabaseProviderBase } from '@memberjunction/core/dist/generic/databaseProviderBase.js';
 import { SoftFKConfigEmitter } from './SoftFKConfigEmitter.js';
 import { MetadataEmitter } from './MetadataEmitter.js';
 import { existsSync, readFileSync } from 'node:fs';
@@ -216,6 +218,11 @@ export class SchemaBuilder {
         const rsm = RuntimeSchemaManager.Instance;
         const pipelineResult = await rsm.RunPipeline(rsuInput);
 
+        // Step 4: Log DDL history to __mj_integration.SchemaHistory
+        if (pipelineResult.Success) {
+            await this.LogSchemaHistory(input, schemaOutput, pipelineResult);
+        }
+
         return { SchemaOutput: schemaOutput, PipelineResult: pipelineResult };
     }
 
@@ -403,5 +410,51 @@ export class SchemaBuilder {
         }
 
         return fromSource;
+    }
+
+    /**
+     * Logs DDL operations to __mj_integration.SchemaHistory for audit tracking.
+     * Uses RuntimeSchemaManager.ExecuteSQL() which has access to the DB connection.
+     * Best-effort — failures are logged but don't block the pipeline.
+     */
+    private async LogSchemaHistory(
+        input: SchemaBuilderInput,
+        output: SchemaBuilderOutput,
+        pipelineResult: RSUPipelineResult
+    ): Promise<void> {
+        try {
+            for (const config of input.TargetConfigs) {
+                const operationType = output.MigrationFiles.some(f => f.Content.includes('CREATE TABLE'))
+                    ? 'CREATE_TABLE'
+                    : 'ALTER_TABLE';
+
+                const ddl = output.MigrationFiles.map(f => f.Content).join('\n');
+                const columns = config.Columns?.map(c => c.TargetColumnName) ?? [];
+
+                // Escape single quotes in SQL values
+                const esc = (s: string) => s.replace(/'/g, "''");
+
+                const sql = `
+                    IF EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = '__mj_integration' AND TABLE_NAME = 'SchemaHistory')
+                    BEGIN
+                        INSERT INTO [__mj_integration].[SchemaHistory]
+                            (IntegrationName, SchemaName, TableName, OperationType, DDLStatement,
+                             Success, ErrorMessage, MigrationFile, AffectedColumns)
+                        VALUES
+                            (N'${esc(input.SourceType)}', N'${esc(config.SchemaName)}', N'${esc(config.TableName)}',
+                             N'${esc(operationType)}', N'${esc(ddl)}',
+                             ${pipelineResult.Success ? 1 : 0},
+                             ${pipelineResult.ErrorMessage ? `N'${esc(pipelineResult.ErrorMessage)}'` : 'NULL'},
+                             ${output.MigrationFiles[0]?.FilePath ? `N'${esc(output.MigrationFiles[0].FilePath)}'` : 'NULL'},
+                             N'${esc(JSON.stringify(columns))}')
+                    END`;
+
+                const dbProvider = Metadata.Provider as DatabaseProviderBase;
+                await dbProvider.ExecuteSQL(sql);
+            }
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            console.warn(`[SchemaBuilder] Failed to log schema history (non-fatal): ${msg}`);
+        }
     }
 }

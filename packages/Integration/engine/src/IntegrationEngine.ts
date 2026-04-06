@@ -360,7 +360,10 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     }
 
     /**
-     * Processes a single entity map: fetch → map → match → validate → apply.
+     * Processes a single entity map based on SyncDirection:
+     * - Pull: fetch from external → map → match → apply to MJ
+     * - Push: detect MJ changes → map → push to external
+     * - Bidirectional: pull first, then push
      */
     private async ProcessSingleEntityMap(
         config: RunConfiguration,
@@ -372,9 +375,39 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         onProgress?: OnProgressCallback,
         abortSignal?: AbortSignal
     ): Promise<SyncResult> {
+        const direction = entityMap.SyncDirection ?? 'Pull';
+
+        if (direction === 'Pull') {
+            return this.ProcessPullSync(config, entityMap, run, contextUser, entityMapIndex, totalEntityMaps, onProgress, abortSignal);
+        }
+
+        if (direction === 'Push') {
+            return this.ProcessPushSync(config, entityMap, run, contextUser, entityMapIndex, totalEntityMaps, onProgress, abortSignal);
+        }
+
+        // Bidirectional: pull first, then push
+        const pullResult = await this.ProcessPullSync(config, entityMap, run, contextUser, entityMapIndex, totalEntityMaps, onProgress, abortSignal);
+        const pushResult = await this.ProcessPushSync(config, entityMap, run, contextUser, entityMapIndex, totalEntityMaps, onProgress, abortSignal);
+        this.MergeResult(pullResult, pushResult);
+        return pullResult;
+    }
+
+    /**
+     * Pull sync: fetch from external → map → match → validate → apply to MJ.
+     */
+    private async ProcessPullSync(
+        config: RunConfiguration,
+        entityMap: ICompanyIntegrationEntityMap,
+        run: MJCompanyIntegrationRunEntity,
+        contextUser: UserInfo,
+        entityMapIndex: number,
+        totalEntityMaps: number,
+        onProgress?: OnProgressCallback,
+        abortSignal?: AbortSignal
+    ): Promise<SyncResult> {
         const entityMapID = entityMap.Get('ID') as string;
         const fieldMaps = await this.LoadFieldMaps(entityMapID, contextUser);
-        const watermark = await this.watermarkService.Load(entityMapID, contextUser);
+        const watermark = await this.watermarkService.Load(entityMapID, contextUser, 'Pull');
 
         // A6: Validate watermark before using it — skip entirely when FullSync requested
         let initialWatermark = config.fullSync ? null : (watermark?.WatermarkValue ?? null);
@@ -501,12 +534,221 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         }
 
         if (currentWatermark) {
-            await this.watermarkService.Update(entityMapID, currentWatermark, contextUser);
+            await this.watermarkService.Update(entityMapID, currentWatermark, contextUser, 'Pull');
             result.WatermarkAfter = currentWatermark;
         }
 
         await this.CreateRunDetail(run, entityMap, result, contextUser);
         return result;
+    }
+
+    /**
+     * Push sync: detect local MJ record changes → reverse-map fields → push to external system.
+     *
+     * Uses MJ's Record Changes entity to find records modified since the last push watermark.
+     * Filters out changes made by the integration engine itself to prevent echo loops.
+     * For each changed record, calls the connector's CreateRecord/UpdateRecord/DeleteRecord.
+     */
+    private async ProcessPushSync(
+        config: RunConfiguration,
+        entityMap: ICompanyIntegrationEntityMap,
+        run: MJCompanyIntegrationRunEntity,
+        contextUser: UserInfo,
+        entityMapIndex: number,
+        totalEntityMaps: number,
+        onProgress?: OnProgressCallback,
+        _abortSignal?: AbortSignal
+    ): Promise<SyncResult> {
+        const entityMapID = entityMap.Get('ID') as string;
+        const fieldMaps = await this.LoadFieldMaps(entityMapID, contextUser);
+        const pushWatermark = await this.watermarkService.Load(entityMapID, contextUser, 'Push');
+        const lastPushAt = pushWatermark?.WatermarkValue ?? null;
+
+        // Check connector write capability
+        if (!config.connector.SupportsCreate && !config.connector.SupportsUpdate) {
+            console.log(`[IntegrationEngine] Push skipped for ${entityMap.ExternalObjectName}: connector does not support writes`);
+            return this.EmptyResult();
+        }
+
+        // Find MJ records changed since last push via Record Changes
+        const changedRecords = await this.LoadChangedMJRecords(entityMap, lastPushAt, contextUser);
+
+        if (changedRecords.length === 0) {
+            console.log(`[IntegrationEngine] Push: no changes for ${entityMap.ExternalObjectName} since ${lastPushAt ?? 'beginning'}`);
+            await this.CreateRunDetail(run, entityMap, this.EmptyResult(), contextUser);
+            return this.EmptyResult();
+        }
+
+        console.log(`[IntegrationEngine] Push: ${changedRecords.length} changed records for ${entityMap.ExternalObjectName}`);
+
+        const result: SyncResult = {
+            Success: true, RecordsProcessed: 0, RecordsCreated: 0, RecordsUpdated: 0,
+            RecordsDeleted: 0, RecordsErrored: 0, RecordsSkipped: 0, Errors: [],
+        };
+
+        // Get push-direction field maps (DestToSource or Both)
+        const pushFieldMaps = fieldMaps.filter(
+            fm => fm.Direction === 'DestToSource' || fm.Direction === 'Both'
+        );
+
+        let latestChangeAt: string | null = null;
+
+        for (const change of changedRecords) {
+            result.RecordsProcessed++;
+            try {
+                await this.PushSingleRecord(change, config, entityMap, pushFieldMaps, result, contextUser);
+                if (change.ChangedAt && (!latestChangeAt || change.ChangedAt > latestChangeAt)) {
+                    latestChangeAt = change.ChangedAt;
+                }
+            } catch (err) {
+                const errMsg = err instanceof Error ? err.message : String(err);
+                result.RecordsErrored++;
+                result.Errors.push({
+                    ExternalID: change.RecordID,
+                    ChangeType: change.Type as 'Create' | 'Update' | 'Delete' | 'Skip',
+                    ErrorMessage: errMsg,
+                    ErrorCode: 'CONNECTOR_ERROR',
+                    Severity: 'Critical',
+                    ExternalRecord: { ExternalID: change.RecordID, ObjectType: entityMap.ExternalObjectName, Fields: {} },
+                });
+            }
+        }
+
+        // Update push watermark
+        if (latestChangeAt) {
+            await this.watermarkService.Update(entityMapID, latestChangeAt, contextUser, 'Push');
+        }
+
+        console.log(
+            `[IntegrationEngine] Push complete for ${entityMap.ExternalObjectName}: ` +
+            `${result.RecordsCreated} created, ${result.RecordsUpdated} updated, ` +
+            `${result.RecordsDeleted} deleted, ${result.RecordsErrored} errored`
+        );
+
+        await this.CreateRunDetail(run, entityMap, result, contextUser);
+        return result;
+    }
+
+    /** Loads MJ records changed since the last push watermark, excluding integration-engine changes. */
+    private async LoadChangedMJRecords(
+        entityMap: ICompanyIntegrationEntityMap,
+        lastPushAt: string | null,
+        contextUser: UserInfo
+    ): Promise<Array<{ RecordID: string; Type: string; ChangedAt: string; Fields: Record<string, unknown> }>> {
+        const rv = new RunView();
+
+        // Query Record Changes for this entity since the last push
+        let filter = `EntityID='${entityMap.EntityID}'`;
+        if (lastPushAt) {
+            filter += ` AND ChangedAt > '${lastPushAt}'`;
+        }
+        // Exclude changes made by the integration engine (System user or specific source)
+        filter += ` AND UserID != 'ECAFCCEC-6A37-EF11-86D4-000D3A4E707E'`; // System user
+        filter += ` AND Type IN ('Create', 'Update', 'Delete')`;
+
+        const result = await rv.RunView<{
+            RecordID: string; Type: string; ChangedAt: string;
+        }>({
+            EntityName: 'Record Changes',
+            ExtraFilter: filter,
+            OrderBy: 'ChangedAt ASC',
+            Fields: ['RecordID', 'Type', 'ChangedAt'],
+            ResultType: 'simple',
+        }, contextUser);
+
+        if (!result.Success) return [];
+
+        // Dedupe: keep only the latest change per RecordID
+        const latestByRecord = new Map<string, { RecordID: string; Type: string; ChangedAt: string; Fields: Record<string, unknown> }>();
+        for (const r of result.Results) {
+            latestByRecord.set(r.RecordID, { ...r, Fields: {} });
+        }
+
+        // Load current field values for each changed record
+        const md = new Metadata();
+        for (const [recordID, change] of latestByRecord) {
+            if (change.Type === 'Delete') continue; // No fields to load for deletes
+            try {
+                const entity = await md.GetEntityObject(entityMap.Entity, contextUser);
+                const loaded = await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: recordID }]));
+                if (loaded) {
+                    change.Fields = entity.GetAll();
+                }
+            } catch {
+                // Record may have been deleted between change detection and load
+            }
+        }
+
+        return [...latestByRecord.values()];
+    }
+
+    /** Pushes a single changed MJ record to the external system. */
+    private async PushSingleRecord(
+        change: { RecordID: string; Type: string; ChangedAt: string; Fields: Record<string, unknown> },
+        config: RunConfiguration,
+        entityMap: ICompanyIntegrationEntityMap,
+        pushFieldMaps: ICompanyIntegrationFieldMap[],
+        result: SyncResult,
+        contextUser: UserInfo
+    ): Promise<void> {
+        // Reverse-map MJ fields to external fields
+        const externalAttributes: Record<string, unknown> = {};
+        for (const fm of pushFieldMaps) {
+            const mjValue = change.Fields[fm.DestinationFieldName];
+            if (mjValue !== undefined) {
+                externalAttributes[fm.SourceFieldName] = mjValue;
+            }
+        }
+
+        // Look up the ExternalID from the record map
+        const rv = new RunView();
+        const mapResult = await rv.RunView<{ ExternalSystemRecordID: string }>({
+            EntityName: 'MJ: Company Integration Record Maps',
+            ExtraFilter: `EntityRecordID='${change.RecordID}' AND CompanyIntegrationID='${config.companyIntegration.Get('ID')}'`,
+            Fields: ['ExternalSystemRecordID'],
+            MaxRows: 1,
+            ResultType: 'simple',
+        }, contextUser);
+
+        const externalID = mapResult.Success && mapResult.Results.length > 0
+            ? mapResult.Results[0].ExternalSystemRecordID
+            : null;
+
+        const crudBase = {
+            CompanyIntegration: config.companyIntegration,
+            ObjectName: entityMap.ExternalObjectName,
+            ContextUser: contextUser,
+        };
+
+        if (change.Type === 'Delete' && externalID && config.connector.SupportsDelete) {
+            const delResult = await config.connector.DeleteRecord({ ...crudBase, ExternalID: externalID });
+            if (!delResult.Success) throw new Error(delResult.ErrorMessage ?? 'Delete failed');
+            result.RecordsDeleted++;
+        } else if (externalID) {
+            // Update existing external record
+            const updResult = await config.connector.UpdateRecord({
+                ...crudBase, ExternalID: externalID, Attributes: externalAttributes,
+            });
+            if (!updResult.Success) throw new Error(updResult.ErrorMessage ?? 'Update failed');
+            result.RecordsUpdated++;
+        } else if (config.connector.SupportsCreate) {
+            // Create new external record
+            const createResult = await config.connector.CreateRecord({
+                ...crudBase, Attributes: externalAttributes,
+            });
+            if (!createResult.Success) throw new Error(createResult.ErrorMessage ?? 'Create failed');
+            result.RecordsCreated++;
+        } else {
+            result.RecordsSkipped++;
+        }
+    }
+
+    /** Returns an empty SyncResult. */
+    private EmptyResult(): SyncResult {
+        return {
+            Success: true, RecordsProcessed: 0, RecordsCreated: 0, RecordsUpdated: 0,
+            RecordsDeleted: 0, RecordsErrored: 0, RecordsSkipped: 0, Errors: [],
+        };
     }
 
     /**
@@ -596,8 +838,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 result.RecordsCreated++;
                 break;
             case 'Update':
-                await this.UpdateRecord(record, contextUser);
-                result.RecordsUpdated++;
+                await this.UpdateRecord(record, companyIntegration, entityMap, result, contextUser);
                 break;
             case 'Delete':
                 await this.DeleteRecord(record, entityMap, contextUser);
@@ -644,13 +885,21 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
 
     /**
      * Updates an existing MJ record with pre-write validation.
+     * If the record cannot be loaded (e.g. it was deleted or never fully created),
+     * falls back to CreateRecord (upsert behavior).
      */
     private async UpdateRecord(
         record: MappedRecord,
+        companyIntegration: MJCompanyIntegrationEntity,
+        entityMap: ICompanyIntegrationEntityMap,
+        result: SyncResult,
         contextUser: UserInfo
     ): Promise<void> {
         if (!record.MatchedMJRecordID) {
-            throw new Error('Cannot update record without MatchedMJRecordID');
+            // No matched ID — treat as a new record
+            await this.CreateRecord(record, companyIntegration, entityMap, contextUser);
+            result.RecordsCreated++;
+            return;
         }
 
         const md = new Metadata();
@@ -659,7 +908,10 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         const pkFields = entityInfo?.PrimaryKeys ?? (entityInfo?.FirstPrimaryKey ? [entityInfo.FirstPrimaryKey] : []);
         const loaded = await entity.InnerLoad(this.BuildEntityPrimaryKey(record.MatchedMJRecordID, pkFields));
         if (!loaded) {
-            throw new Error(`Failed to load ${record.MJEntityName} record ${record.MatchedMJRecordID}`);
+            // Record doesn't exist in DB — fall back to INSERT (upsert)
+            await this.CreateRecord(record, companyIntegration, entityMap, contextUser);
+            result.RecordsCreated++;
+            return;
         }
 
         this.SetEntityFields(entity, record.MappedFields);
@@ -672,6 +924,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         if (!saved) {
             throw new Error(`Failed to update ${record.MJEntityName} record ${record.MatchedMJRecordID}`);
         }
+        result.RecordsUpdated++;
     }
 
     /**

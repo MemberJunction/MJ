@@ -508,6 +508,14 @@ class StartSyncOutput {
     @Field({ nullable: true }) RunID?: string;
 }
 
+@ObjectType()
+class WriteRecordOutput {
+    @Field() Success: boolean;
+    @Field() Message: string;
+    @Field({ nullable: true }) ExternalID?: string;
+    @Field({ nullable: true }) StatusCode?: number;
+}
+
 @InputType()
 class CreateScheduleInput {
     @Field() CompanyIntegrationID: string;
@@ -2276,6 +2284,85 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             return { Success: true, Message: 'Sync cancellation signalled — will stop after current batch completes' };
         } catch (e) {
             LogError(`IntegrationCancelSync error: ${e}`);
+            return { Success: false, Message: this.formatError(e) };
+        }
+    }
+
+    /**
+     * Writes a single record to an external system via the integration connector.
+     * Supports create, update, and delete operations.
+     */
+    @Mutation(() => WriteRecordOutput)
+    async IntegrationWriteRecord(
+        @Arg("companyIntegrationID") companyIntegrationID: string,
+        @Arg("objectName") objectName: string,
+        @Arg("operation", () => String, { description: 'create, update, or delete' }) operation: string,
+        @Arg("externalID", { nullable: true, description: 'Required for update/delete' }) externalID: string,
+        @Arg("attributes", () => String, { nullable: true, description: 'JSON object of field values for create/update' }) attributesJson: string,
+        @Ctx() ctx: AppContext
+    ): Promise<WriteRecordOutput> {
+        try {
+            const user = this.getAuthenticatedUser(ctx);
+            await IntegrationEngine.Instance.Config(false, user);
+
+            const rv = new RunView();
+            const ciResult = await rv.RunView<MJCompanyIntegrationEntity>({
+                EntityName: 'MJ: Company Integrations',
+                ExtraFilter: `ID='${companyIntegrationID}'`,
+                MaxRows: 1,
+                ResultType: 'entity_object',
+            }, user);
+
+            if (!ciResult.Success || ciResult.Results.length === 0) {
+                return { Success: false, Message: `Company Integration not found: ${companyIntegrationID}` };
+            }
+
+            const companyIntegration = ciResult.Results[0];
+
+            // Load the Integration entity to get the ClassName for connector resolution
+            const integResult = await rv.RunView<MJIntegrationEntity>({
+                EntityName: 'Integrations',
+                ExtraFilter: `ID='${companyIntegration.IntegrationID}'`,
+                MaxRows: 1,
+                ResultType: 'entity_object',
+            }, user);
+            if (!integResult.Success || integResult.Results.length === 0) {
+                return { Success: false, Message: `Integration not found: ${companyIntegration.IntegrationID}` };
+            }
+            const connector = ConnectorFactory.Resolve(integResult.Results[0]);
+
+            const attributes = attributesJson ? JSON.parse(attributesJson) as Record<string, unknown> : {};
+            const crudBase = { CompanyIntegration: companyIntegration, ObjectName: objectName, ContextUser: user };
+
+            let result: { Success: boolean; ExternalID?: string; ErrorMessage?: string; StatusCode: number };
+
+            switch (operation.toLowerCase()) {
+                case 'create':
+                    if (!connector.SupportsCreate) return { Success: false, Message: 'Connector does not support create' };
+                    result = await connector.CreateRecord({ ...crudBase, Attributes: attributes });
+                    break;
+                case 'update':
+                    if (!connector.SupportsUpdate) return { Success: false, Message: 'Connector does not support update' };
+                    if (!externalID) return { Success: false, Message: 'externalID is required for update' };
+                    result = await connector.UpdateRecord({ ...crudBase, ExternalID: externalID, Attributes: attributes });
+                    break;
+                case 'delete':
+                    if (!connector.SupportsDelete) return { Success: false, Message: 'Connector does not support delete' };
+                    if (!externalID) return { Success: false, Message: 'externalID is required for delete' };
+                    result = await connector.DeleteRecord({ ...crudBase, ExternalID: externalID });
+                    break;
+                default:
+                    return { Success: false, Message: `Invalid operation: ${operation}. Must be create, update, or delete` };
+            }
+
+            return {
+                Success: result.Success,
+                Message: result.Success ? `${operation} succeeded` : (result.ErrorMessage ?? `${operation} failed`),
+                ExternalID: result.ExternalID,
+                StatusCode: result.StatusCode,
+            };
+        } catch (e) {
+            LogError(`IntegrationWriteRecord error: ${e}`);
             return { Success: false, Message: this.formatError(e) };
         }
     }

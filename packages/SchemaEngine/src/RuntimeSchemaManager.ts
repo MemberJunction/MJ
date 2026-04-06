@@ -56,6 +56,9 @@ class RSUConfig {
   get CompilePackages(): string | undefined {
     return process.env.RSU_COMPILE_PACKAGES;
   }
+  get RestartCommand(): string | undefined {
+    return process.env.RSU_RESTART_COMMAND;
+  }
   get PM2ProcessName(): string {
     return process.env.RSU_PM2_PROCESS_NAME || 'mjapi';
   }
@@ -1063,6 +1066,23 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
    */
   private async restartMJAPI(): Promise<boolean> {
     const { execAsync } = await this.getExecAsync();
+
+    // Allow custom restart command via RSU_RESTART_COMMAND env var.
+    // Useful for environments that don't use PM2 (Docker, systemd, Azure Container Apps, etc.)
+    const customCmd = rsuConfig.RestartCommand;
+    if (customCmd) {
+      this.rsuLog(`Using custom restart command: ${customCmd}`);
+      try {
+        await execAsync(customCmd, { timeout: 30_000 });
+      } catch {
+        // Expected: restart may kill the current process
+        this.rsuLog('Custom restart command completed or process was recycled — treating as success');
+        return true;
+      }
+      return this.waitForMJAPI();
+    }
+
+    // Default: PM2-based restart
     const workDir = rsuConfig.WorkDir;
     const processName = rsuConfig.PM2ProcessName;
 
