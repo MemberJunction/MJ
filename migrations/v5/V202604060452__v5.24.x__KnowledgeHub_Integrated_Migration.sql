@@ -791,9 +791,28 @@ GO
 
 
 
+-- REFRESH METADATA AND RECOMPILE OBJECTS BEFORE RUNNING CODE GEN'S EMITTED OUTPUT
 
+/* SQL text to recompile all views */
+EXEC [${flyway:defaultSchema}].spRecompileAllViews
 
+/* SQL text to update existing entities from schema */
+EXEC [${flyway:defaultSchema}].spUpdateExistingEntitiesFromSchema @ExcludedSchemaNames='sys,staging'
 
+/* SQL text to sync schema info from database schemas */
+EXEC [${flyway:defaultSchema}].spUpdateSchemaInfoFromDatabase @ExcludedSchemaNames='sys,staging'
+
+/* SQL text to delete unneeded entity fields */
+EXEC [${flyway:defaultSchema}].spDeleteUnneededEntityFields @ExcludedSchemaNames='sys,staging'
+
+/* SQL text to update existing entity fields from schema */
+EXEC [${flyway:defaultSchema}].spUpdateExistingEntityFieldsFromSchema @ExcludedSchemaNames='sys,staging'
+
+/* SQL text to set default column width where needed */
+EXEC [${flyway:defaultSchema}].spSetDefaultColumnWidthWhereNeeded @ExcludedSchemaNames='sys,staging'
+
+/* SQL text to recompile all stored procedures in dependency order */
+EXEC [${flyway:defaultSchema}].spRecompileAllProceduresInDependencyOrder @ExcludedSchemaNames='sys,staging', @LogOutput=0, @ContinueOnError=1
 
 
 
@@ -1238,8 +1257,10 @@ INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
                                                    ('7ad7a0e4-0c8b-4131-9c6d-a7d90247cd15', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE())
 
+GO
 /* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.KnowledgeHubSavedSearch */
 ALTER TABLE [${flyway:defaultSchema}].[KnowledgeHubSavedSearch] ADD [__mj_CreatedAt] DATETIMEOFFSET NULL
+GO
 
 /* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.KnowledgeHubSavedSearch */
 UPDATE [${flyway:defaultSchema}].[KnowledgeHubSavedSearch] SET [__mj_CreatedAt] = GETUTCDATE() WHERE [__mj_CreatedAt] IS NULL
@@ -1252,6 +1273,7 @@ ALTER TABLE [${flyway:defaultSchema}].[KnowledgeHubSavedSearch] ADD CONSTRAINT [
 
 /* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.KnowledgeHubSavedSearch */
 ALTER TABLE [${flyway:defaultSchema}].[KnowledgeHubSavedSearch] ADD [__mj_UpdatedAt] DATETIMEOFFSET NULL
+GO
 
 /* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.KnowledgeHubSavedSearch */
 UPDATE [${flyway:defaultSchema}].[KnowledgeHubSavedSearch] SET [__mj_UpdatedAt] = GETUTCDATE() WHERE [__mj_UpdatedAt] IS NULL
@@ -1264,6 +1286,7 @@ ALTER TABLE [${flyway:defaultSchema}].[KnowledgeHubSavedSearch] ADD CONSTRAINT [
 
 /* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.ContentItemDuplicate */
 ALTER TABLE [${flyway:defaultSchema}].[ContentItemDuplicate] ADD [__mj_CreatedAt] DATETIMEOFFSET NULL
+GO
 
 /* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.ContentItemDuplicate */
 UPDATE [${flyway:defaultSchema}].[ContentItemDuplicate] SET [__mj_CreatedAt] = GETUTCDATE() WHERE [__mj_CreatedAt] IS NULL
@@ -1276,6 +1299,7 @@ ALTER TABLE [${flyway:defaultSchema}].[ContentItemDuplicate] ADD CONSTRAINT [DF_
 
 /* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.ContentItemDuplicate */
 ALTER TABLE [${flyway:defaultSchema}].[ContentItemDuplicate] ADD [__mj_UpdatedAt] DATETIMEOFFSET NULL
+GO
 
 /* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.ContentItemDuplicate */
 UPDATE [${flyway:defaultSchema}].[ContentItemDuplicate] SET [__mj_UpdatedAt] = GETUTCDATE() WHERE [__mj_UpdatedAt] IS NULL
@@ -1288,6 +1312,7 @@ ALTER TABLE [${flyway:defaultSchema}].[ContentItemDuplicate] ADD CONSTRAINT [DF_
 
 /* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.ContentProcessRunPromptRun */
 ALTER TABLE [${flyway:defaultSchema}].[ContentProcessRunPromptRun] ADD [__mj_CreatedAt] DATETIMEOFFSET NULL
+GO
 
 /* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.ContentProcessRunPromptRun */
 UPDATE [${flyway:defaultSchema}].[ContentProcessRunPromptRun] SET [__mj_CreatedAt] = GETUTCDATE() WHERE [__mj_CreatedAt] IS NULL
@@ -1300,6 +1325,7 @@ ALTER TABLE [${flyway:defaultSchema}].[ContentProcessRunPromptRun] ADD CONSTRAIN
 
 /* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.ContentProcessRunPromptRun */
 ALTER TABLE [${flyway:defaultSchema}].[ContentProcessRunPromptRun] ADD [__mj_UpdatedAt] DATETIMEOFFSET NULL
+GO
 
 /* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.ContentProcessRunPromptRun */
 UPDATE [${flyway:defaultSchema}].[ContentProcessRunPromptRun] SET [__mj_UpdatedAt] = GETUTCDATE() WHERE [__mj_UpdatedAt] IS NULL
@@ -1312,6 +1338,7 @@ ALTER TABLE [${flyway:defaultSchema}].[ContentProcessRunPromptRun] ADD CONSTRAIN
 
 /* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.TagAuditLog */
 ALTER TABLE [${flyway:defaultSchema}].[TagAuditLog] ADD [__mj_CreatedAt] DATETIMEOFFSET NULL
+GO
 
 /* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.TagAuditLog */
 UPDATE [${flyway:defaultSchema}].[TagAuditLog] SET [__mj_CreatedAt] = GETUTCDATE() WHERE [__mj_CreatedAt] IS NULL
@@ -1324,6 +1351,7 @@ ALTER TABLE [${flyway:defaultSchema}].[TagAuditLog] ADD CONSTRAINT [DF___mj_TagA
 
 /* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.TagAuditLog */
 ALTER TABLE [${flyway:defaultSchema}].[TagAuditLog] ADD [__mj_UpdatedAt] DATETIMEOFFSET NULL
+GO
 
 /* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.TagAuditLog */
 UPDATE [${flyway:defaultSchema}].[TagAuditLog] SET [__mj_UpdatedAt] = GETUTCDATE() WHERE [__mj_UpdatedAt] IS NULL
@@ -1336,6 +1364,7 @@ ALTER TABLE [${flyway:defaultSchema}].[TagAuditLog] ADD CONSTRAINT [DF___mj_TagA
 
 /* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.TagCoOccurrence */
 ALTER TABLE [${flyway:defaultSchema}].[TagCoOccurrence] ADD [__mj_CreatedAt] DATETIMEOFFSET NULL
+GO
 
 /* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.TagCoOccurrence */
 UPDATE [${flyway:defaultSchema}].[TagCoOccurrence] SET [__mj_CreatedAt] = GETUTCDATE() WHERE [__mj_CreatedAt] IS NULL
@@ -1348,6 +1377,7 @@ ALTER TABLE [${flyway:defaultSchema}].[TagCoOccurrence] ADD CONSTRAINT [DF___mj_
 
 /* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.TagCoOccurrence */
 ALTER TABLE [${flyway:defaultSchema}].[TagCoOccurrence] ADD [__mj_UpdatedAt] DATETIMEOFFSET NULL
+GO
 
 /* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.TagCoOccurrence */
 UPDATE [${flyway:defaultSchema}].[TagCoOccurrence] SET [__mj_UpdatedAt] = GETUTCDATE() WHERE [__mj_UpdatedAt] IS NULL
@@ -1360,6 +1390,7 @@ ALTER TABLE [${flyway:defaultSchema}].[TagCoOccurrence] ADD CONSTRAINT [DF___mj_
 
 /* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.ContentProcessRunDetail */
 ALTER TABLE [${flyway:defaultSchema}].[ContentProcessRunDetail] ADD [__mj_CreatedAt] DATETIMEOFFSET NULL
+GO
 
 /* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.ContentProcessRunDetail */
 UPDATE [${flyway:defaultSchema}].[ContentProcessRunDetail] SET [__mj_CreatedAt] = GETUTCDATE() WHERE [__mj_CreatedAt] IS NULL
@@ -1372,6 +1403,7 @@ ALTER TABLE [${flyway:defaultSchema}].[ContentProcessRunDetail] ADD CONSTRAINT [
 
 /* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.ContentProcessRunDetail */
 ALTER TABLE [${flyway:defaultSchema}].[ContentProcessRunDetail] ADD [__mj_UpdatedAt] DATETIMEOFFSET NULL
+GO
 
 /* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.ContentProcessRunDetail */
 UPDATE [${flyway:defaultSchema}].[ContentProcessRunDetail] SET [__mj_UpdatedAt] = GETUTCDATE() WHERE [__mj_UpdatedAt] IS NULL
@@ -1381,6 +1413,7 @@ ALTER TABLE [${flyway:defaultSchema}].[ContentProcessRunDetail] ALTER COLUMN [__
 
 /* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.ContentProcessRunDetail */
 ALTER TABLE [${flyway:defaultSchema}].[ContentProcessRunDetail] ADD CONSTRAINT [DF___mj_ContentProcessRunDetail___mj_UpdatedAt] DEFAULT GETUTCDATE() FOR [__mj_UpdatedAt]
+GO
 
 /* SQL text to insert new entity field */
 
