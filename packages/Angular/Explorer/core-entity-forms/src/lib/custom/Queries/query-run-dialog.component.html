@@ -1,14 +1,14 @@
 @if (isVisible) {
-  <kendo-dialog
-    [width]="900"
-    [height]="800"
-    (close)="close()">
-    <kendo-dialog-titlebar>
+  <mj-dialog
+    [Visible]="true"
+    [Width]="900"
+    (Close)="close()">
+    <mj-dialog-titlebar>
       <div style="display: flex; align-items: center; gap: 8px;">
         <i class="fa-solid fa-play-circle" style="color: var(--mj-brand-primary);"></i>
         Run Query: {{ query?.Name || 'Untitled' }}
       </div>
-    </kendo-dialog-titlebar>
+    </mj-dialog-titlebar>
     <div style="display: flex; flex-direction: column; height: 100%; overflow-y: auto; overflow-x: hidden;">
       @if (isLoadingParams) {
         <div style="display: flex; align-items: center; justify-content: center; padding: 40px;">
@@ -18,14 +18,14 @@
       } @else {
         <!-- Query Parameters Section -->
         @if (parameterPairs.length > 0) {
-          <kendo-expansionpanel
-            [(expanded)]="parametersExpanded"
+          <mj-accordion-panel
+            [(Expanded)]="parametersExpanded"
             style="margin-bottom: 16px; flex-shrink: 0;">
-            <ng-template kendoExpansionPanelTitleDirective>
+            <ng-template mjAccordionTitle>
               <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
                 <i class="fa-solid fa-sliders" style="color: var(--mj-text-muted);"></i>
                 Query Parameters
-                <span class="badge" style="background: #17a2b8; color: white; padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
+                <span style="background: var(--mj-status-info); color: var(--mj-text-inverse); padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
                   {{ parameterPairs.length }}
                 </span>
               </span>
@@ -65,18 +65,17 @@
                     </div>
                     <!-- Parameter Value Input -->
                     @if (param.type === 'number') {
-                      <kendo-numerictextbox
+                      <input type="number" class="mj-input"
                         [(ngModel)]="param.value"
                         placeholder="Enter number value..."
-                        style="width: 100%;">
-                      </kendo-numerictextbox>
+                        style="width: 100%;" />
                     } @else {
-                      <kendo-textarea
+                      <textarea class="mj-input"
                         [(ngModel)]="param.value"
-                        [rows]="2"
+                        rows="2"
                         placeholder="Enter value (JSON, string, or number)..."
                         style="width: 100%; font-family: 'Courier New', monospace;">
-                      </kendo-textarea>
+                      </textarea>
                     }
                     @if (param.defaultValue) {
                       <div style="font-size: 0.8em; color: var(--mj-text-muted); margin-top: 4px;">
@@ -87,22 +86,22 @@
                 }
               </div>
             </div>
-          </kendo-expansionpanel>
+          </mj-accordion-panel>
         } @else {
           <div style="padding: 20px; background: var(--mj-bg-surface-sunken); border-radius: 6px; margin-bottom: 16px; text-align: center; color: var(--mj-text-muted);">
             <i class="fa-solid fa-info-circle"></i> This query has no parameters.
           </div>
         }
         <!-- Pagination Settings -->
-        <kendo-expansionpanel
-          [(expanded)]="paginationExpanded"
+        <mj-accordion-panel
+          [(Expanded)]="paginationExpanded"
           style="margin-bottom: 16px;">
-          <ng-template kendoExpansionPanelTitleDirective>
+          <ng-template mjAccordionTitle>
             <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
               <i class="fa-solid fa-table-list" style="color: var(--mj-text-muted);"></i>
               Pagination Settings
               @if (maxRows && maxRows > 0) {
-                <span class="badge" style="background: var(--mj-text-muted); color: white; padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
+                <span style="background: var(--mj-text-muted); color: var(--mj-text-inverse); padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
                   {{ maxRows }} rows/page
                 </span>
               }
@@ -116,13 +115,12 @@
                   <i class="fa-solid fa-list-ol" style="color: var(--mj-text-muted); margin-right: 6px;"></i>
                   Max Rows:
                 </label>
-                <kendo-numerictextbox
+                <input type="number" class="mj-input"
                   [(ngModel)]="maxRows"
-                  [min]="1"
-                  [step]="100"
+                  min="1"
+                  step="100"
                   placeholder="All rows"
-                  style="width: 150px;">
-                </kendo-numerictextbox>
+                  style="width: 150px;" />
                 <span style="font-size: 0.85em; color: var(--mj-text-muted);">
                   Leave empty to return all rows
                 </span>
@@ -133,47 +131,38 @@
                   <i class="fa-solid fa-forward" style="color: var(--mj-text-muted); margin-right: 6px;"></i>
                   Start Row:
                 </label>
-                <kendo-numerictextbox
+                <input type="number" class="mj-input"
                   [(ngModel)]="startRow"
-                  [min]="0"
-                  [step]="1"
+                  min="0"
+                  step="1"
                   placeholder="0"
-                  style="width: 150px;">
-                </kendo-numerictextbox>
+                  style="width: 150px;" />
                 <span style="font-size: 0.85em; color: var(--mj-text-muted);">
                   0-based offset for pagination
                 </span>
               </div>
             </div>
           </div>
-        </kendo-expansionpanel>
+        </mj-accordion-panel>
         <!-- Results Section -->
         @if (runResult) {
-          <kendo-expansionpanel
-            [(expanded)]="resultsExpanded"
+          <mj-accordion-panel
+            [(Expanded)]="resultsExpanded"
             style="flex: 1; display: flex; flex-direction: column; overflow: hidden; min-height: 0;">
-            <ng-template kendoExpansionPanelTitleDirective>
+            <ng-template mjAccordionTitle>
               <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
-                <i class="fa-solid fa-table" style="color: #28a745;"></i>
-                Query Results
                 @if (runResult.Success) {
-                  <span class="badge" style="background: #28a745; color: white; padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
-                    {{ runResult.RowCount }} rows
+                  <i class="fa-solid fa-table" style="color: var(--mj-status-success);"></i>
+                  Query Results
+                  <span style="background: var(--mj-status-success); color: var(--mj-text-inverse); padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
+                    {{ runResult.RowCount }} rows@if (runResult.TotalRowCount > runResult.RowCount) { of {{ runResult.TotalRowCount }} total}
                   </span>
-                  @if (runResult.TotalRowCount > runResult.RowCount) {
-                    <span class="badge" style="background: #17a2b8; color: white; padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
-                      of {{ runResult.TotalRowCount }} total
-                    </span>
+                  @if (runResult.ExecutionTime) {
+                    <span style="color: var(--mj-text-muted); font-size: 0.85em; font-weight: normal;">&mdash; {{ runResult.ExecutionTime }}ms</span>
                   }
                 } @else {
-                  <span class="badge" style="background: #dc3545; color: white; padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
-                    Error
-                  </span>
-                }
-                @if (runResult.ExecutionTime) {
-                  <span style="font-size: 0.8em; color: var(--mj-text-muted); font-weight: normal;">
-                    ({{ runResult.ExecutionTime }}ms)
-                  </span>
+                  <i class="fa-solid fa-exclamation-circle" style="color: var(--mj-status-error);"></i>
+                  Query Results &mdash; Error
                 }
               </span>
             </ng-template>
@@ -189,33 +178,29 @@
                           Showing rows {{ startRow + 1 }} - {{ startRow + runResult.RowCount }} of {{ runResult.TotalRowCount }}
                         </span>
                         <div style="display: flex; gap: 4px;">
-                          <button kendoButton
-                            fillMode="flat"
-                            size="small"
+                          <button mjButton
+                            variant="flat"
                             [disabled]="startRow === 0"
                             (click)="goToFirstPage()"
                             title="First page">
                             <i class="fa-solid fa-angles-left"></i>
                           </button>
-                          <button kendoButton
-                            fillMode="flat"
-                            size="small"
+                          <button mjButton
+                            variant="flat"
                             [disabled]="startRow === 0"
                             (click)="goToPreviousPage()"
                             title="Previous page">
                             <i class="fa-solid fa-angle-left"></i>
                           </button>
-                          <button kendoButton
-                            fillMode="flat"
-                            size="small"
+                          <button mjButton
+                            variant="flat"
                             [disabled]="startRow + runResult.RowCount >= runResult.TotalRowCount"
                             (click)="goToNextPage()"
                             title="Next page">
                             <i class="fa-solid fa-angle-right"></i>
                           </button>
-                          <button kendoButton
-                            fillMode="flat"
-                            size="small"
+                          <button mjButton
+                            variant="flat"
                             [disabled]="startRow + runResult.RowCount >= runResult.TotalRowCount"
                             (click)="goToLastPage()"
                             title="Last page">
@@ -226,14 +211,14 @@
                     </div>
                     <!-- Export Buttons -->
                     <div style="display: flex; gap: 8px;">
-                      <button kendoButton
-                        fillMode="flat"
+                      <button mjButton
+                        variant="flat"
                         (click)="copyToClipboard()"
                         title="Copy to clipboard">
                         <i class="fa-solid fa-copy"></i> Copy
                       </button>
-                      <button kendoButton
-                        fillMode="flat"
+                      <button mjButton
+                        variant="flat"
                         (click)="exportToCSV()"
                         title="Export to CSV">
                         <i class="fa-solid fa-download"></i> Export CSV
@@ -292,17 +277,17 @@
                 </div>
               }
             </div>
-          </kendo-expansionpanel>
+          </mj-accordion-panel>
         }
       }
     </div>
-    <kendo-dialog-actions>
+    <mj-dialog-actions>
       @if (!runResult) {
-        <button kendoButton (click)="close()">
+        <button mjButton (click)="close()">
           <i class="fa-solid fa-times"></i> Cancel
         </button>
-        <button kendoButton
-          [themeColor]="'primary'"
+        <button mjButton
+          variant="primary"
           [disabled]="isRunning || hasInvalidParameters()"
           (click)="runQuery()">
           @if (isRunning) {
@@ -312,16 +297,16 @@
           }
         </button>
       } @else {
-        <button kendoButton (click)="close()">
+        <button mjButton (click)="close()">
           <i class="fa-solid fa-times"></i> Close
         </button>
-        <button kendoButton
-          [themeColor]="'primary'"
+        <button mjButton
+          variant="primary"
           [disabled]="isRunning"
           (click)="runQuery()">
           <i class="fa-solid fa-refresh"></i> Run Again
         </button>
       }
-    </kendo-dialog-actions>
-  </kendo-dialog>
+    </mj-dialog-actions>
+  </mj-dialog>
 }

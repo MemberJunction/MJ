@@ -166,28 +166,10 @@
 }
 
 /* Splitter */
-kendo-splitter {
+as-split {
   flex: 1;
   background: var(--mj-bg-surface-card);
   margin-top: 0;
-}
-
-:host ::ng-deep .k-splitter {
-  border: none;
-  background: transparent;
-}
-
-:host ::ng-deep .k-splitbar {
-  background: var(--mj-border-default);
-  width: 6px;
-}
-
-:host ::ng-deep .k-splitbar:hover {
-  background: color-mix(in srgb, var(--mj-brand-primary) 25%, var(--mj-bg-surface));
-}
-
-:host ::ng-deep .k-pane {
-  overflow: hidden;
 }
 
 /* Filter Panel */

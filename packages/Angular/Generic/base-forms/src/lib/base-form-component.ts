@@ -61,6 +61,18 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   public TopAreaHeight: string = '300px';
 
   /**
+   * Size of the top area as a percentage (0-100) for angular-split.
+   * Used by CodeGen-generated templates with as-split.
+   */
+  public TopAreaSize: number = 40;
+
+  /**
+   * Size of the bottom area as a percentage (0-100) for angular-split.
+   * Used by CodeGen-generated templates with as-split.
+   */
+  public BottomAreaSize: number = 60;
+
+  /**
    * Called when the splitter layout changes (for entities with "top area" sections).
    * No-op in the generic version; override in host application if splitter resizing is needed.
    */

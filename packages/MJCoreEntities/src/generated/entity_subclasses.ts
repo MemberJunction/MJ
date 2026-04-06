@@ -1029,6 +1029,59 @@ export const MJAIAgentCategorySchema = z.object({
 export type MJAIAgentCategoryEntityType = z.infer<typeof MJAIAgentCategorySchema>;
 
 /**
+ * zod schema definition for the entity MJ: AI Agent Client Tools
+ */
+export const MJAIAgentClientToolSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    AgentID: z.string().describe(`
+        * * Field Name: AgentID
+        * * Display Name: Agent
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)`),
+    ClientToolDefinitionID: z.string().describe(`
+        * * Field Name: ClientToolDefinitionID
+        * * Display Name: Tool Definition
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Client Tool Definitions (vwAIClientToolDefinitions.ID)`),
+    IsRequired: z.boolean().describe(`
+        * * Field Name: IsRequired
+        * * Display Name: Is Required
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When true, the agent expects this tool to always be available on the client. If the client has not registered a handler, agent execution may warn or fail depending on configuration.`),
+    Priority: z.number().describe(`
+        * * Field Name: Priority
+        * * Display Name: Priority
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Sort order for tool listing in prompts. Lower numbers appear first. Tools with the same priority are listed alphabetically.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Agent: z.string().nullable().describe(`
+        * * Field Name: Agent
+        * * Display Name: Agent Name
+        * * SQL Data Type: nvarchar(255)`),
+    ClientToolDefinition: z.string().describe(`
+        * * Field Name: ClientToolDefinition
+        * * Display Name: Tool Name
+        * * SQL Data Type: nvarchar(200)`),
+});
+
+export type MJAIAgentClientToolEntityType = z.infer<typeof MJAIAgentClientToolSchema>;
+
+/**
  * zod schema definition for the entity MJ: AI Agent Configurations
  */
 export const MJAIAgentConfigurationSchema = z.object({
@@ -3328,7 +3381,7 @@ export const MJAIAgentSchema = z.object({
         * * Description: Number of messages that triggers context compression when EnableContextCompression is true.`),
     ContextCompressionPromptID: z.string().nullable().describe(`
         * * Field Name: ContextCompressionPromptID
-        * * Display Name: Context Compression Prompt
+        * * Display Name: Compression Prompt
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)`),
     ContextCompressionMessageRetentionCount: z.number().nullable().describe(`
@@ -3497,7 +3550,7 @@ if this limit is exceeded.`),
         * * Description: Default artifact type produced by this agent. This is the primary artifact type; additional artifact types can be linked via AIAgentArtifactType junction table. Can be NULL if agent does not produce artifacts by default.`),
     OwnerUserID: z.string().describe(`
         * * Field Name: OwnerUserID
-        * * Display Name: Owner
+        * * Display Name: Owner User
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
         * * Default Value: ECAFCCEC-6A37-EF11-86D4-000D3A4E707E
@@ -3616,7 +3669,7 @@ if this limit is exceeded.`),
         * * Description: Base path within the storage provider for this agent's attachments. Agent run ID and sequence number are appended to create unique paths. Format: /folder/subfolder`),
     InlineStorageThresholdBytes: z.number().nullable().describe(`
         * * Field Name: InlineStorageThresholdBytes
-        * * Display Name: Inline Storage Threshold (Bytes)
+        * * Display Name: Inline Storage Threshold Bytes
         * * SQL Data Type: int
         * * Description: File size threshold for inline storage. Files <= this size are stored as base64 inline, larger files use MJStorage. NULL uses system default (1MB). Set to 0 to always use MJStorage.`),
     AgentTypePromptParams: z.string().nullable().describe(`
@@ -3631,13 +3684,13 @@ if this limit is exceeded.`),
         * * Description: JSON configuration defining scope dimensions for multi-tenant deployments. Example: {"dimensions":[{"name":"OrganizationID","entityId":"...","isPrimary":true,"required":true},{"name":"ContactID","entityId":"...","isPrimary":false,"required":false}],"inheritanceMode":"cascading"}`),
     NoteRetentionDays: z.number().nullable().describe(`
         * * Field Name: NoteRetentionDays
-        * * Display Name: Note Retention (Days)
+        * * Display Name: Note Retention Days
         * * SQL Data Type: int
         * * Default Value: 90
         * * Description: Number of days to retain notes before archiving due to inactivity. Default 90. NULL means use system default.`),
     ExampleRetentionDays: z.number().nullable().describe(`
         * * Field Name: ExampleRetentionDays
-        * * Display Name: Example Retention (Days)
+        * * Display Name: Example Retention Days
         * * SQL Data Type: int
         * * Default Value: 180
         * * Description: Number of days to retain examples before archiving due to inactivity. Default 180. NULL means use system default.`),
@@ -3658,6 +3711,12 @@ if this limit is exceeded.`),
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agent Categories (vwAIAgentCategories.ID)
         * * Description: Foreign key to AIAgentCategory. Assigns this agent to an organizational category for grouping, filtering, and inherited assignment strategy resolution.`),
+    AllowEphemeralClientTools: z.boolean().describe(`
+        * * Field Name: AllowEphemeralClientTools
+        * * Display Name: Allow Ephemeral Client Tools
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When true (default), this agent accepts runtime-registered ephemeral client tools that are not defined in metadata. Set to false for agents that require strict tool governance.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent Name
@@ -3676,7 +3735,7 @@ if this limit is exceeded.`),
         * * SQL Data Type: nvarchar(100)`),
     OwnerUser: z.string().describe(`
         * * Field Name: OwnerUser
-        * * Display Name: Owner Name
+        * * Display Name: Owner User Name
         * * SQL Data Type: nvarchar(100)`),
     AttachmentStorageProvider: z.string().nullable().describe(`
         * * Field Name: AttachmentStorageProvider
@@ -3760,6 +3819,65 @@ export const MJAIArchitectureSchema = z.object({
 });
 
 export type MJAIArchitectureEntityType = z.infer<typeof MJAIArchitectureSchema>;
+
+/**
+ * zod schema definition for the entity MJ: AI Client Tool Definitions
+ */
+export const MJAIClientToolDefinitionSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Tool Name
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Unique identifier for the client tool (e.g., NavigateToApp, NavigateToRecord). Used to match tool invocations from the LLM to registered handlers on the client.`),
+    Description: z.string().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Human-readable description of what the tool does. This text is injected into the LLM system prompt so it knows when and how to use the tool.`),
+    Category: z.string().nullable().describe(`
+        * * Field Name: Category
+        * * Display Name: Category
+        * * SQL Data Type: nvarchar(50)
+        * * Description: Tool category for grouping and filtering (e.g., navigation, form, display, data).`),
+    InputSchemaJSON: z.string().nullable().describe(`
+        * * Field Name: InputSchemaJSON
+        * * Display Name: Input Schema
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON Schema defining the input parameters the tool accepts. Included in the LLM prompt so it generates valid parameter objects.`),
+    OutputSchemaJSON: z.string().nullable().describe(`
+        * * Field Name: OutputSchemaJSON
+        * * Display Name: Output Schema
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON Schema describing the return value from the tool. Optional — used for documentation and LLM context.`),
+    DefaultTimeoutMs: z.number().nullable().describe(`
+        * * Field Name: DefaultTimeoutMs
+        * * Display Name: Default Timeout (ms)
+        * * SQL Data Type: int
+        * * Default Value: 30000
+        * * Description: Default timeout in milliseconds for this tool. Can be overridden per-invocation by the LLM or per-run by execution params. Default is 30000ms (30 seconds).`),
+    RequiresContextType: z.string().nullable().describe(`
+        * * Field Name: RequiresContextType
+        * * Display Name: Required Context Type
+        * * SQL Data Type: nvarchar(100)
+        * * Description: When set, the client only sends this tool to the server when the user is in the specified context (e.g., entity-form, dashboard, search). Null means the tool is always available.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type MJAIClientToolDefinitionEntityType = z.infer<typeof MJAIClientToolDefinitionSchema>;
 
 /**
  * zod schema definition for the entity MJ: AI Configuration Params
@@ -6879,10 +6997,11 @@ export const MJApplicationSchema = z.object({
         * * Display Name: Color
         * * SQL Data Type: nvarchar(20)
         * * Description: Hex color code for visual theming (e.g., #4caf50)`),
-    DefaultNavItems: z.string().nullable().describe(`
+    DefaultNavItems: z.any().nullable().describe(`
         * * Field Name: DefaultNavItems
         * * Display Name: Default Nav Items
         * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: Array<MJApplicationEntity_IDefaultNavItem>
         * * Description: JSON array of default navigation items for this application. Parsed by BaseApplication.GetNavItems()`),
     ClassName: z.string().nullable().describe(`
         * * Field Name: ClassName
@@ -9549,6 +9668,12 @@ export const MJContentItemTagSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Weight: z.number().describe(`
+        * * Field Name: Weight
+        * * Display Name: Weight
+        * * SQL Data Type: numeric(5, 4)
+        * * Default Value: 1.0
+        * * Description: Relevance weight for this tag (0.0-1.0). 1.0 = highly relevant central topic, 0.5 = moderately relevant, 0.1 = tangentially related. Assigned by the LLM during autotagging.`),
     Item: z.string().nullable().describe(`
         * * Field Name: Item
         * * Display Name: Item
@@ -9824,17 +9949,17 @@ export const MJContentSourceSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
     ContentTypeID: z.string().describe(`
         * * Field Name: ContentTypeID
-        * * Display Name: Content Type ID
+        * * Display Name: Content Type
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Content Types (vwContentTypes.ID)`),
     ContentSourceTypeID: z.string().describe(`
         * * Field Name: ContentSourceTypeID
-        * * Display Name: Content Source Type ID
+        * * Display Name: Content Source Type
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Content Source Types (vwContentSourceTypes.ID)`),
     ContentFileTypeID: z.string().describe(`
         * * Field Name: ContentFileTypeID
-        * * Display Name: Content File Type ID
+        * * Display Name: Content File Type
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Content File Types (vwContentFileTypes.ID)`),
     URL: z.string().describe(`
@@ -9852,6 +9977,18 @@ export const MJContentSourceSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    EmbeddingModelID: z.string().nullable().describe(`
+        * * Field Name: EmbeddingModelID
+        * * Display Name: Embedding Model
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
+        * * Description: Per-source override for the AI embedding model. When NULL, falls back to the ContentType default.`),
+    VectorIndexID: z.string().nullable().describe(`
+        * * Field Name: VectorIndexID
+        * * Display Name: Vector Index
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Vector Indexes (vwVectorIndexes.ID)
+        * * Description: Per-source override for the vector index. When NULL, falls back to the ContentType default.`),
     ContentType: z.string().describe(`
         * * Field Name: ContentType
         * * Display Name: Content Type
@@ -9863,6 +10000,14 @@ export const MJContentSourceSchema = z.object({
     ContentFileType: z.string().describe(`
         * * Field Name: ContentFileType
         * * Display Name: Content File Type
+        * * SQL Data Type: nvarchar(255)`),
+    EmbeddingModel: z.string().nullable().describe(`
+        * * Field Name: EmbeddingModel
+        * * Display Name: Embedding Model
+        * * SQL Data Type: nvarchar(50)`),
+    VectorIndex: z.string().nullable().describe(`
+        * * Field Name: VectorIndex
+        * * Display Name: Vector Index
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -9928,17 +10073,17 @@ export const MJContentTypeSchema = z.object({
         * * SQL Data Type: nvarchar(MAX)`),
     AIModelID: z.string().describe(`
         * * Field Name: AIModelID
-        * * Display Name: AIModel ID
+        * * Display Name: AI Model
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)`),
     MinTags: z.number().describe(`
         * * Field Name: MinTags
-        * * Display Name: Min Tags
+        * * Display Name: Minimum Tags
         * * SQL Data Type: int
         * * Description: Minimum number of tags that must be applied to content of this type.`),
     MaxTags: z.number().describe(`
         * * Field Name: MaxTags
-        * * Display Name: Max Tags
+        * * Display Name: Maximum Tags
         * * SQL Data Type: int
         * * Description: Maximum number of tags allowed on content of this type.`),
     __mj_CreatedAt: z.date().describe(`
@@ -9951,10 +10096,30 @@ export const MJContentTypeSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    EmbeddingModelID: z.string().nullable().describe(`
+        * * Field Name: EmbeddingModelID
+        * * Display Name: Embedding Model
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
+        * * Description: Default AI embedding model for vectorizing content items of this type. Sources can override per-source. If NULL, uses the first available embedding model.`),
+    VectorIndexID: z.string().nullable().describe(`
+        * * Field Name: VectorIndexID
+        * * Display Name: Vector Index
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Vector Indexes (vwVectorIndexes.ID)
+        * * Description: Default vector index for storing embeddings of this content type. Sources can override per-source. If NULL, uses the first available vector index.`),
     AIModel: z.string().describe(`
         * * Field Name: AIModel
-        * * Display Name: AIModel
+        * * Display Name: AI Model Name
         * * SQL Data Type: nvarchar(50)`),
+    EmbeddingModel: z.string().nullable().describe(`
+        * * Field Name: EmbeddingModel
+        * * Display Name: Embedding Model Name
+        * * SQL Data Type: nvarchar(50)`),
+    VectorIndex: z.string().nullable().describe(`
+        * * Field Name: VectorIndex
+        * * Display Name: Vector Index Name
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type MJContentTypeEntityType = z.infer<typeof MJContentTypeSchema>;
@@ -11676,7 +11841,7 @@ export const MJDuplicateRunDetailMatchSchema = z.object({
         * * Default Value: newsequentialid()`),
     DuplicateRunDetailID: z.string().describe(`
         * * Field Name: DuplicateRunDetailID
-        * * Display Name: Duplicate Run Detail
+        * * Display Name: Duplicate Run Detail ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Duplicate Run Details (vwDuplicateRunDetails.ID)`),
     MatchSource: z.union([z.literal('SP'), z.literal('Vector')]).describe(`
@@ -11691,7 +11856,7 @@ export const MJDuplicateRunDetailMatchSchema = z.object({
         * * Description: Either Vector or SP`),
     MatchRecordID: z.string().describe(`
         * * Field Name: MatchRecordID
-        * * Display Name: Match Record
+        * * Display Name: Match Record ID
         * * SQL Data Type: nvarchar(500)
         * * Description: The ID of the record identified as a potential duplicate match.`),
     MatchProbability: z.number().describe(`
@@ -11725,7 +11890,7 @@ export const MJDuplicateRunDetailMatchSchema = z.object({
         * * Description: Current approval status of the proposed action (Pending, Approved, Rejected).`),
     RecordMergeLogID: z.string().nullable().describe(`
         * * Field Name: RecordMergeLogID
-        * * Display Name: Record Merge Log
+        * * Display Name: Record Merge Log ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Record Merge Logs (vwRecordMergeLogs.ID)`),
     MergeStatus: z.union([z.literal('Complete'), z.literal('Error'), z.literal('Pending')]).describe(`
@@ -11755,6 +11920,11 @@ export const MJDuplicateRunDetailMatchSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    RecordMetadata: z.string().nullable().describe(`
+        * * Field Name: RecordMetadata
+        * * Display Name: Record Metadata
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON metadata snapshot of the matched record from the vector database at detection time. Contains display fields (Name, Description, EntityIcon, etc.) for rich UI rendering without additional lookups.`),
     DuplicateRunDetail: z.string().describe(`
         * * Field Name: DuplicateRunDetail
         * * Display Name: Duplicate Run Detail
@@ -11778,12 +11948,12 @@ export const MJDuplicateRunDetailSchema = z.object({
         * * Default Value: newsequentialid()`),
     DuplicateRunID: z.string().describe(`
         * * Field Name: DuplicateRunID
-        * * Display Name: Duplicate Run ID
+        * * Display Name: Duplicate Run
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Duplicate Runs (vwDuplicateRuns.ID)`),
     RecordID: z.string().describe(`
         * * Field Name: RecordID
-        * * Display Name: Record ID
+        * * Display Name: Source Record
         * * SQL Data Type: nvarchar(500)
         * * Description: The ID of the record being analyzed for duplicates.`),
     MatchStatus: z.union([z.literal('Complete'), z.literal('Error'), z.literal('Pending'), z.literal('Skipped')]).describe(`
@@ -11835,9 +12005,14 @@ export const MJDuplicateRunDetailSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    RecordMetadata: z.string().nullable().describe(`
+        * * Field Name: RecordMetadata
+        * * Display Name: Record Metadata
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON metadata snapshot of the source record from the vector database at detection time. Contains display fields (Name, Description, EntityIcon, etc.) for rich UI rendering without additional lookups.`),
     DuplicateRun: z.string().describe(`
         * * Field Name: DuplicateRun
-        * * Display Name: Duplicate Run
+        * * Display Name: Run Name
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -11862,11 +12037,12 @@ export const MJDuplicateRunSchema = z.object({
         * * Display Name: Started By User
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)`),
-    SourceListID: z.string().describe(`
+    SourceListID: z.string().nullable().describe(`
         * * Field Name: SourceListID
         * * Display Name: Source List
         * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Lists (vwLists.ID)`),
+        * * Related Entity/Foreign Key: MJ: Lists (vwLists.ID)
+        * * Description: Optional List ID to narrow the scope of duplicate detection. When NULL, all records in the entity are scanned. When set, only records in the specified list are checked for duplicates.`),
     StartedAt: z.date().describe(`
         * * Field Name: StartedAt
         * * Display Name: Started At
@@ -11932,7 +12108,7 @@ export const MJDuplicateRunSchema = z.object({
         * * Field Name: StartedByUser
         * * Display Name: Started By User
         * * SQL Data Type: nvarchar(100)`),
-    SourceList: z.string().describe(`
+    SourceList: z.string().nullable().describe(`
         * * Field Name: SourceList
         * * Display Name: Source List
         * * SQL Data Type: nvarchar(100)`),
@@ -13368,17 +13544,17 @@ export const MJEntityDocumentSchema = z.object({
         * * SQL Data Type: nvarchar(250)`),
     TypeID: z.string().describe(`
         * * Field Name: TypeID
-        * * Display Name: Type ID
+        * * Display Name: Type
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entity Document Types (vwEntityDocumentTypes.ID)`),
     EntityID: z.string().describe(`
         * * Field Name: EntityID
-        * * Display Name: Entity ID
+        * * Display Name: Entity
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)`),
     VectorDatabaseID: z.string().describe(`
         * * Field Name: VectorDatabaseID
-        * * Display Name: Vector Database ID
+        * * Display Name: Vector Database
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Vector Databases (vwVectorDatabases.ID)`),
     Status: z.union([z.literal('Active'), z.literal('Inactive')]).describe(`
@@ -13392,56 +13568,71 @@ export const MJEntityDocumentSchema = z.object({
     *   * Inactive`),
     TemplateID: z.string().describe(`
         * * Field Name: TemplateID
-        * * Display Name: Template ID
+        * * Display Name: Template
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Templates (vwTemplates.ID)`),
     AIModelID: z.string().describe(`
         * * Field Name: AIModelID
-        * * Display Name: AIModel ID
+        * * Display Name: AI Model
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)`),
     PotentialMatchThreshold: z.number().describe(`
         * * Field Name: PotentialMatchThreshold
         * * Display Name: Potential Match Threshold
         * * SQL Data Type: numeric(12, 11)
-        * * Default Value: 1
+        * * Default Value: 0.7
         * * Description: Value between 0 and 1 that determines what is considered a potential matching record. Value must be <= AbsoluteMatchThreshold. This is primarily used for duplicate detection but can be used for other applications as well where matching is relevant.`),
     AbsoluteMatchThreshold: z.number().describe(`
         * * Field Name: AbsoluteMatchThreshold
         * * Display Name: Absolute Match Threshold
         * * SQL Data Type: numeric(12, 11)
-        * * Default Value: 1
+        * * Default Value: 0.95
         * * Description: Value between 0 and 1 that determines what is considered an absolute matching record. Value must be >= PotentialMatchThreshold. This is primarily used for duplicate detection but can be used for other applications as well where matching is relevant.`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
-        * * Display Name: __mj _Created At
+        * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
     __mj_UpdatedAt: z.date().describe(`
         * * Field Name: __mj_UpdatedAt
-        * * Display Name: __mj _Updated At
+        * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    VectorIndexID: z.string().nullable().describe(`
+        * * Field Name: VectorIndexID
+        * * Display Name: Vector Index
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Vector Indexes (vwVectorIndexes.ID)
+        * * Description: Optional foreign key to the specific Vector Index where this entity document's embeddings should be stored. When specified, the vectorization pipeline will upsert vectors directly to this index rather than auto-creating or looking up an index based on VectorDatabaseID + AIModelID. This enables explicit control over which Pinecone/Weaviate/etc. index is used per entity document, supporting multi-index architectures and shared indexes across entity types.`),
+    Configuration: z.string().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON configuration settings for this entity document. Controls vector metadata field inclusion (which fields get stored in the vector index for search result display), large field truncation limits, and future settings like sync scheduling and threshold overrides. NULL means use system defaults.`),
     Type: z.string().describe(`
         * * Field Name: Type
-        * * Display Name: Type
+        * * Display Name: Type Name
         * * SQL Data Type: nvarchar(100)`),
     Entity: z.string().describe(`
         * * Field Name: Entity
-        * * Display Name: Entity
+        * * Display Name: Entity Name
         * * SQL Data Type: nvarchar(255)`),
     VectorDatabase: z.string().describe(`
         * * Field Name: VectorDatabase
-        * * Display Name: Vector Database
+        * * Display Name: Vector Database Name
         * * SQL Data Type: nvarchar(100)`),
     Template: z.string().describe(`
         * * Field Name: Template
-        * * Display Name: Template
+        * * Display Name: Template Name
         * * SQL Data Type: nvarchar(255)`),
     AIModel: z.string().describe(`
         * * Field Name: AIModel
-        * * Display Name: AIModel
+        * * Display Name: AI Model Name
         * * SQL Data Type: nvarchar(50)`),
+    VectorIndex: z.string().nullable().describe(`
+        * * Field Name: VectorIndex
+        * * Display Name: Vector Index Name
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type MJEntityDocumentEntityType = z.infer<typeof MJEntityDocumentSchema>;
@@ -13864,6 +14055,22 @@ export const MJEntityFieldSchema = z.object({
         * * Display Name: Related Entity Join Fields
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON configuration for additional fields to join from the related entity into this entity's base view. Supports modes: extend (add to NameField), override (replace NameField), disable (no joins). Schema: { mode?: string, fields?: [{ field: string, alias?: string }] }`),
+    JSONType: z.string().nullable().describe(`
+        * * Field Name: JSONType
+        * * Display Name: JSON Type
+        * * SQL Data Type: nvarchar(255)
+        * * Description: The name of the TypeScript interface/type for this JSON field. When set, CodeGen emits a strongly-typed Object-suffixed accessor using this type instead of only the default string getter/setter.`),
+    JSONTypeIsArray: z.boolean().describe(`
+        * * Field Name: JSONTypeIsArray
+        * * Display Name: JSON Type Is Array
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: If true, the field holds a JSON array of JSONType items. The Object accessor returns Array<JSONType> | null and the setter accepts Array<JSONType> | null.`),
+    JSONTypeDefinition: z.string().nullable().describe(`
+        * * Field Name: JSONTypeDefinition
+        * * Display Name: JSON Type Definition
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Raw TypeScript code emitted by CodeGen above the entity class definition. Typically contains the interface/type definition referenced by JSONType. Can include imports, multiple types, or any valid TypeScript.`),
     FieldCodeName: z.string().nullable().describe(`
         * * Field Name: FieldCodeName
         * * Display Name: Field Code Name
@@ -22912,6 +23119,11 @@ export const MJVectorDatabaseSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Configuration: z.string().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON configuration settings for this vector database provider. Stores provider-specific connection settings like custom host URLs, authentication configuration, timeouts, retry policies, and batch size limits. NULL means use defaults from environment variables or provider defaults.`),
 });
 
 export type MJVectorDatabaseEntityType = z.infer<typeof MJVectorDatabaseSchema>;
@@ -22935,12 +23147,12 @@ export const MJVectorIndexSchema = z.object({
         * * SQL Data Type: nvarchar(MAX)`),
     VectorDatabaseID: z.string().describe(`
         * * Field Name: VectorDatabaseID
-        * * Display Name: Vector Database ID
+        * * Display Name: Vector Database
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Vector Databases (vwVectorDatabases.ID)`),
     EmbeddingModelID: z.string().describe(`
         * * Field Name: EmbeddingModelID
-        * * Display Name: Embedding Model ID
+        * * Display Name: Embedding Model
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)`),
     __mj_CreatedAt: z.date().describe(`
@@ -22953,13 +23165,33 @@ export const MJVectorIndexSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    ExternalID: z.string().nullable().describe(`
+        * * Field Name: ExternalID
+        * * Display Name: External ID
+        * * SQL Data Type: nvarchar(500)
+        * * Description: The provider's native identifier for this index. For Pinecone this is the index name; for other providers it may be a separate UUID or identifier. Used for syncing operations between MJ metadata and the remote vector database.`),
+    Dimensions: z.number().nullable().describe(`
+        * * Field Name: Dimensions
+        * * Display Name: Dimensions
+        * * SQL Data Type: int
+        * * Description: The number of dimensions for vectors stored in this index. Determined by the embedding model (e.g., 1536 for text-embedding-3-small, 768 for all-mpnet-base-v2). Set automatically when the index is created via the vector database provider.`),
+    Metric: z.string().nullable().describe(`
+        * * Field Name: Metric
+        * * Display Name: Distance Metric
+        * * SQL Data Type: nvarchar(50)
+        * * Description: The distance metric used for similarity calculations in this index. Common values: cosine (default, measures angular similarity), euclidean (L2 distance), dotproduct (inner product). Must match what the vector database provider was configured with.`),
+    ProviderConfig: z.string().nullable().describe(`
+        * * Field Name: ProviderConfig
+        * * Display Name: Provider Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON object containing provider-specific configuration for this index. For Pinecone serverless: {"cloud":"aws","region":"us-east-1"}. For pod-based: {"environment":"us-east1-gcp","podType":"p1.x1","replicas":1}. Stored as a flexible JSON bag to support any provider without schema changes.`),
     VectorDatabase: z.string().describe(`
         * * Field Name: VectorDatabase
-        * * Display Name: Vector Database
+        * * Display Name: Vector Database Name
         * * SQL Data Type: nvarchar(100)`),
     EmbeddingModel: z.string().describe(`
         * * Field Name: EmbeddingModel
-        * * Display Name: Embedding Model
+        * * Display Name: Embedding Model Name
         * * SQL Data Type: nvarchar(50)`),
 });
 
@@ -26323,6 +26555,142 @@ export class MJAIAgentCategoryEntity extends BaseEntity<MJAIAgentCategoryEntityT
     */
     get RootParentID(): string | null {
         return this.Get('RootParentID');
+    }
+}
+
+
+/**
+ * MJ: AI Agent Client Tools - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIAgentClientTool
+ * * Base View: vwAIAgentClientTools
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Agent Client Tools')
+export class MJAIAgentClientToolEntity extends BaseEntity<MJAIAgentClientToolEntityType> {
+    /**
+    * Loads the MJ: AI Agent Client Tools record from the database
+    * @param ID: string - primary key value to load the MJ: AI Agent Client Tools record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJAIAgentClientToolEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: AgentID
+    * * Display Name: Agent
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
+    */
+    get AgentID(): string {
+        return this.Get('AgentID');
+    }
+    set AgentID(value: string) {
+        this.Set('AgentID', value);
+    }
+
+    /**
+    * * Field Name: ClientToolDefinitionID
+    * * Display Name: Tool Definition
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Client Tool Definitions (vwAIClientToolDefinitions.ID)
+    */
+    get ClientToolDefinitionID(): string {
+        return this.Get('ClientToolDefinitionID');
+    }
+    set ClientToolDefinitionID(value: string) {
+        this.Set('ClientToolDefinitionID', value);
+    }
+
+    /**
+    * * Field Name: IsRequired
+    * * Display Name: Is Required
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When true, the agent expects this tool to always be available on the client. If the client has not registered a handler, agent execution may warn or fail depending on configuration.
+    */
+    get IsRequired(): boolean {
+        return this.Get('IsRequired');
+    }
+    set IsRequired(value: boolean) {
+        this.Set('IsRequired', value);
+    }
+
+    /**
+    * * Field Name: Priority
+    * * Display Name: Priority
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Sort order for tool listing in prompts. Lower numbers appear first. Tools with the same priority are listed alphabetically.
+    */
+    get Priority(): number {
+        return this.Get('Priority');
+    }
+    set Priority(value: number) {
+        this.Set('Priority', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Agent
+    * * Display Name: Agent Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Agent(): string | null {
+        return this.Get('Agent');
+    }
+
+    /**
+    * * Field Name: ClientToolDefinition
+    * * Display Name: Tool Name
+    * * SQL Data Type: nvarchar(200)
+    */
+    get ClientToolDefinition(): string {
+        return this.Get('ClientToolDefinition');
     }
 }
 
@@ -32508,7 +32876,7 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
 
     /**
     * * Field Name: ContextCompressionPromptID
-    * * Display Name: Context Compression Prompt
+    * * Display Name: Compression Prompt
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
     */
@@ -32885,7 +33253,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: OwnerUserID
-    * * Display Name: Owner
+    * * Display Name: Owner User
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     * * Default Value: ECAFCCEC-6A37-EF11-86D4-000D3A4E707E
@@ -33132,7 +33500,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: InlineStorageThresholdBytes
-    * * Display Name: Inline Storage Threshold (Bytes)
+    * * Display Name: Inline Storage Threshold Bytes
     * * SQL Data Type: int
     * * Description: File size threshold for inline storage. Files <= this size are stored as base64 inline, larger files use MJStorage. NULL uses system default (1MB). Set to 0 to always use MJStorage.
     */
@@ -33171,7 +33539,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: NoteRetentionDays
-    * * Display Name: Note Retention (Days)
+    * * Display Name: Note Retention Days
     * * SQL Data Type: int
     * * Default Value: 90
     * * Description: Number of days to retain notes before archiving due to inactivity. Default 90. NULL means use system default.
@@ -33185,7 +33553,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: ExampleRetentionDays
-    * * Display Name: Example Retention (Days)
+    * * Display Name: Example Retention Days
     * * SQL Data Type: int
     * * Default Value: 180
     * * Description: Number of days to retain examples before archiving due to inactivity. Default 180. NULL means use system default.
@@ -33239,6 +33607,20 @@ if this limit is exceeded.
     }
 
     /**
+    * * Field Name: AllowEphemeralClientTools
+    * * Display Name: Allow Ephemeral Client Tools
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When true (default), this agent accepts runtime-registered ephemeral client tools that are not defined in metadata. Set to false for agents that require strict tool governance.
+    */
+    get AllowEphemeralClientTools(): boolean {
+        return this.Get('AllowEphemeralClientTools');
+    }
+    set AllowEphemeralClientTools(value: boolean) {
+        this.Set('AllowEphemeralClientTools', value);
+    }
+
+    /**
     * * Field Name: Parent
     * * Display Name: Parent Name
     * * SQL Data Type: nvarchar(255)
@@ -33276,7 +33658,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: OwnerUser
-    * * Display Name: Owner Name
+    * * Display Name: Owner User Name
     * * SQL Data Type: nvarchar(100)
     */
     get OwnerUser(): string {
@@ -33483,6 +33865,162 @@ export class MJAIArchitectureEntity extends BaseEntity<MJAIArchitectureEntityTyp
     */
     get RootParentArchitectureID(): string | null {
         return this.Get('RootParentArchitectureID');
+    }
+}
+
+
+/**
+ * MJ: AI Client Tool Definitions - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIClientToolDefinition
+ * * Base View: vwAIClientToolDefinitions
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Client Tool Definitions')
+export class MJAIClientToolDefinitionEntity extends BaseEntity<MJAIClientToolDefinitionEntityType> {
+    /**
+    * Loads the MJ: AI Client Tool Definitions record from the database
+    * @param ID: string - primary key value to load the MJ: AI Client Tool Definitions record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJAIClientToolDefinitionEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Tool Name
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Unique identifier for the client tool (e.g., NavigateToApp, NavigateToRecord). Used to match tool invocations from the LLM to registered handlers on the client.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Human-readable description of what the tool does. This text is injected into the LLM system prompt so it knows when and how to use the tool.
+    */
+    get Description(): string {
+        return this.Get('Description');
+    }
+    set Description(value: string) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: Category
+    * * Display Name: Category
+    * * SQL Data Type: nvarchar(50)
+    * * Description: Tool category for grouping and filtering (e.g., navigation, form, display, data).
+    */
+    get Category(): string | null {
+        return this.Get('Category');
+    }
+    set Category(value: string | null) {
+        this.Set('Category', value);
+    }
+
+    /**
+    * * Field Name: InputSchemaJSON
+    * * Display Name: Input Schema
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON Schema defining the input parameters the tool accepts. Included in the LLM prompt so it generates valid parameter objects.
+    */
+    get InputSchemaJSON(): string | null {
+        return this.Get('InputSchemaJSON');
+    }
+    set InputSchemaJSON(value: string | null) {
+        this.Set('InputSchemaJSON', value);
+    }
+
+    /**
+    * * Field Name: OutputSchemaJSON
+    * * Display Name: Output Schema
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON Schema describing the return value from the tool. Optional — used for documentation and LLM context.
+    */
+    get OutputSchemaJSON(): string | null {
+        return this.Get('OutputSchemaJSON');
+    }
+    set OutputSchemaJSON(value: string | null) {
+        this.Set('OutputSchemaJSON', value);
+    }
+
+    /**
+    * * Field Name: DefaultTimeoutMs
+    * * Display Name: Default Timeout (ms)
+    * * SQL Data Type: int
+    * * Default Value: 30000
+    * * Description: Default timeout in milliseconds for this tool. Can be overridden per-invocation by the LLM or per-run by execution params. Default is 30000ms (30 seconds).
+    */
+    get DefaultTimeoutMs(): number | null {
+        return this.Get('DefaultTimeoutMs');
+    }
+    set DefaultTimeoutMs(value: number | null) {
+        this.Set('DefaultTimeoutMs', value);
+    }
+
+    /**
+    * * Field Name: RequiresContextType
+    * * Display Name: Required Context Type
+    * * SQL Data Type: nvarchar(100)
+    * * Description: When set, the client only sends this tool to the server when the user is in the specified context (e.g., entity-form, dashboard, search). Null means the tool is always available.
+    */
+    get RequiresContextType(): string | null {
+        return this.Get('RequiresContextType');
+    }
+    set RequiresContextType(value: string | null) {
+        this.Set('RequiresContextType', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
     }
 }
 
@@ -41887,6 +42425,21 @@ export class MJApplicationSettingEntity extends BaseEntity<MJApplicationSettingE
 }
 
 
+export interface MJApplicationEntity_IDefaultNavItem {
+    /** Display label for the navigation item */
+    Label: string;
+    /** Font Awesome icon class (e.g., "fa-solid fa-database") */
+    Icon: string;
+    /** Type of resource: "Dashboards", "Custom", etc. */
+    ResourceType: string;
+    /** For Dashboard resources, the ID of the dashboard record */
+    RecordID?: string | null;
+    /** For Custom resources, the registered driver class name */
+    DriverClass?: string | null;
+    /** Whether this is the default tab when the app opens */
+    isDefault?: boolean;
+}
+
 /**
  * MJ: Applications - strongly typed entity sub-class
  * * Schema: __mj
@@ -42031,6 +42584,7 @@ export class MJApplicationEntity extends BaseEntity<MJApplicationEntityType> {
     * * Field Name: DefaultNavItems
     * * Display Name: Default Nav Items
     * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: Array<MJApplicationEntity_IDefaultNavItem>
     * * Description: JSON array of default navigation items for this application. Parsed by BaseApplication.GetNavItems()
     */
     get DefaultNavItems(): string | null {
@@ -42038,6 +42592,27 @@ export class MJApplicationEntity extends BaseEntity<MJApplicationEntityType> {
     }
     set DefaultNavItems(value: string | null) {
         this.Set('DefaultNavItems', value);
+    }
+
+    private _DefaultNavItemsObject_cached: Array<MJApplicationEntity_IDefaultNavItem> | null | undefined = undefined;
+    private _DefaultNavItemsObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for DefaultNavItems — returns parsed JSON as Array<MJApplicationEntity_IDefaultNavItem>.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get DefaultNavItemsObject(): Array<MJApplicationEntity_IDefaultNavItem> | null {
+        const raw = this.Get('DefaultNavItems');
+        if (raw !== this._DefaultNavItemsObject_lastRaw) {
+            this._DefaultNavItemsObject_cached = raw ? JSON.parse(raw) : null;
+            this._DefaultNavItemsObject_lastRaw = raw;
+        }
+        return this._DefaultNavItemsObject_cached!;
+    }
+    set DefaultNavItemsObject(value: Array<MJApplicationEntity_IDefaultNavItem> | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.Set('DefaultNavItems', raw);
+        this._DefaultNavItemsObject_cached = value;
+        this._DefaultNavItemsObject_lastRaw = raw;
     }
 
     /**
@@ -48693,6 +49268,20 @@ export class MJContentItemTagEntity extends BaseEntity<MJContentItemTagEntityTyp
     }
 
     /**
+    * * Field Name: Weight
+    * * Display Name: Weight
+    * * SQL Data Type: numeric(5, 4)
+    * * Default Value: 1.0
+    * * Description: Relevance weight for this tag (0.0-1.0). 1.0 = highly relevant central topic, 0.5 = moderately relevant, 0.1 = tangentially related. Assigned by the LLM during autotagging.
+    */
+    get Weight(): number {
+        return this.Get('Weight');
+    }
+    set Weight(value: number) {
+        this.Set('Weight', value);
+    }
+
+    /**
     * * Field Name: Item
     * * Display Name: Item
     * * SQL Data Type: nvarchar(250)
@@ -49444,7 +50033,7 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
 
     /**
     * * Field Name: ContentTypeID
-    * * Display Name: Content Type ID
+    * * Display Name: Content Type
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Content Types (vwContentTypes.ID)
     */
@@ -49457,7 +50046,7 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
 
     /**
     * * Field Name: ContentSourceTypeID
-    * * Display Name: Content Source Type ID
+    * * Display Name: Content Source Type
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Content Source Types (vwContentSourceTypes.ID)
     */
@@ -49470,7 +50059,7 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
 
     /**
     * * Field Name: ContentFileTypeID
-    * * Display Name: Content File Type ID
+    * * Display Name: Content File Type
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Content File Types (vwContentFileTypes.ID)
     */
@@ -49515,6 +50104,34 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
     }
 
     /**
+    * * Field Name: EmbeddingModelID
+    * * Display Name: Embedding Model
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
+    * * Description: Per-source override for the AI embedding model. When NULL, falls back to the ContentType default.
+    */
+    get EmbeddingModelID(): string | null {
+        return this.Get('EmbeddingModelID');
+    }
+    set EmbeddingModelID(value: string | null) {
+        this.Set('EmbeddingModelID', value);
+    }
+
+    /**
+    * * Field Name: VectorIndexID
+    * * Display Name: Vector Index
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Vector Indexes (vwVectorIndexes.ID)
+    * * Description: Per-source override for the vector index. When NULL, falls back to the ContentType default.
+    */
+    get VectorIndexID(): string | null {
+        return this.Get('VectorIndexID');
+    }
+    set VectorIndexID(value: string | null) {
+        this.Set('VectorIndexID', value);
+    }
+
+    /**
     * * Field Name: ContentType
     * * Display Name: Content Type
     * * SQL Data Type: nvarchar(255)
@@ -49539,6 +50156,24 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
     */
     get ContentFileType(): string {
         return this.Get('ContentFileType');
+    }
+
+    /**
+    * * Field Name: EmbeddingModel
+    * * Display Name: Embedding Model
+    * * SQL Data Type: nvarchar(50)
+    */
+    get EmbeddingModel(): string | null {
+        return this.Get('EmbeddingModel');
+    }
+
+    /**
+    * * Field Name: VectorIndex
+    * * Display Name: Vector Index
+    * * SQL Data Type: nvarchar(255)
+    */
+    get VectorIndex(): string | null {
+        return this.Get('VectorIndex');
     }
 }
 
@@ -49727,7 +50362,7 @@ export class MJContentTypeEntity extends BaseEntity<MJContentTypeEntityType> {
 
     /**
     * * Field Name: AIModelID
-    * * Display Name: AIModel ID
+    * * Display Name: AI Model
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
     */
@@ -49740,7 +50375,7 @@ export class MJContentTypeEntity extends BaseEntity<MJContentTypeEntityType> {
 
     /**
     * * Field Name: MinTags
-    * * Display Name: Min Tags
+    * * Display Name: Minimum Tags
     * * SQL Data Type: int
     * * Description: Minimum number of tags that must be applied to content of this type.
     */
@@ -49753,7 +50388,7 @@ export class MJContentTypeEntity extends BaseEntity<MJContentTypeEntityType> {
 
     /**
     * * Field Name: MaxTags
-    * * Display Name: Max Tags
+    * * Display Name: Maximum Tags
     * * SQL Data Type: int
     * * Description: Maximum number of tags allowed on content of this type.
     */
@@ -49785,12 +50420,58 @@ export class MJContentTypeEntity extends BaseEntity<MJContentTypeEntityType> {
     }
 
     /**
+    * * Field Name: EmbeddingModelID
+    * * Display Name: Embedding Model
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
+    * * Description: Default AI embedding model for vectorizing content items of this type. Sources can override per-source. If NULL, uses the first available embedding model.
+    */
+    get EmbeddingModelID(): string | null {
+        return this.Get('EmbeddingModelID');
+    }
+    set EmbeddingModelID(value: string | null) {
+        this.Set('EmbeddingModelID', value);
+    }
+
+    /**
+    * * Field Name: VectorIndexID
+    * * Display Name: Vector Index
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Vector Indexes (vwVectorIndexes.ID)
+    * * Description: Default vector index for storing embeddings of this content type. Sources can override per-source. If NULL, uses the first available vector index.
+    */
+    get VectorIndexID(): string | null {
+        return this.Get('VectorIndexID');
+    }
+    set VectorIndexID(value: string | null) {
+        this.Set('VectorIndexID', value);
+    }
+
+    /**
     * * Field Name: AIModel
-    * * Display Name: AIModel
+    * * Display Name: AI Model Name
     * * SQL Data Type: nvarchar(50)
     */
     get AIModel(): string {
         return this.Get('AIModel');
+    }
+
+    /**
+    * * Field Name: EmbeddingModel
+    * * Display Name: Embedding Model Name
+    * * SQL Data Type: nvarchar(50)
+    */
+    get EmbeddingModel(): string | null {
+        return this.Get('EmbeddingModel');
+    }
+
+    /**
+    * * Field Name: VectorIndex
+    * * Display Name: Vector Index Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get VectorIndex(): string | null {
+        return this.Get('VectorIndex');
     }
 }
 
@@ -54436,7 +55117,7 @@ export class MJDuplicateRunDetailMatchEntity extends BaseEntity<MJDuplicateRunDe
 
     /**
     * * Field Name: DuplicateRunDetailID
-    * * Display Name: Duplicate Run Detail
+    * * Display Name: Duplicate Run Detail ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Duplicate Run Details (vwDuplicateRunDetails.ID)
     */
@@ -54467,7 +55148,7 @@ export class MJDuplicateRunDetailMatchEntity extends BaseEntity<MJDuplicateRunDe
 
     /**
     * * Field Name: MatchRecordID
-    * * Display Name: Match Record
+    * * Display Name: Match Record ID
     * * SQL Data Type: nvarchar(500)
     * * Description: The ID of the record identified as a potential duplicate match.
     */
@@ -54541,7 +55222,7 @@ export class MJDuplicateRunDetailMatchEntity extends BaseEntity<MJDuplicateRunDe
 
     /**
     * * Field Name: RecordMergeLogID
-    * * Display Name: Record Merge Log
+    * * Display Name: Record Merge Log ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Record Merge Logs (vwRecordMergeLogs.ID)
     */
@@ -54603,6 +55284,19 @@ export class MJDuplicateRunDetailMatchEntity extends BaseEntity<MJDuplicateRunDe
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: RecordMetadata
+    * * Display Name: Record Metadata
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON metadata snapshot of the matched record from the vector database at detection time. Contains display fields (Name, Description, EntityIcon, etc.) for rich UI rendering without additional lookups.
+    */
+    get RecordMetadata(): string | null {
+        return this.Get('RecordMetadata');
+    }
+    set RecordMetadata(value: string | null) {
+        this.Set('RecordMetadata', value);
     }
 
     /**
@@ -54670,7 +55364,7 @@ export class MJDuplicateRunDetailEntity extends BaseEntity<MJDuplicateRunDetailE
 
     /**
     * * Field Name: DuplicateRunID
-    * * Display Name: Duplicate Run ID
+    * * Display Name: Duplicate Run
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Duplicate Runs (vwDuplicateRuns.ID)
     */
@@ -54683,7 +55377,7 @@ export class MJDuplicateRunDetailEntity extends BaseEntity<MJDuplicateRunDetailE
 
     /**
     * * Field Name: RecordID
-    * * Display Name: Record ID
+    * * Display Name: Source Record
     * * SQL Data Type: nvarchar(500)
     * * Description: The ID of the record being analyzed for duplicates.
     */
@@ -54794,8 +55488,21 @@ export class MJDuplicateRunDetailEntity extends BaseEntity<MJDuplicateRunDetailE
     }
 
     /**
+    * * Field Name: RecordMetadata
+    * * Display Name: Record Metadata
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON metadata snapshot of the source record from the vector database at detection time. Contains display fields (Name, Description, EntityIcon, etc.) for rich UI rendering without additional lookups.
+    */
+    get RecordMetadata(): string | null {
+        return this.Get('RecordMetadata');
+    }
+    set RecordMetadata(value: string | null) {
+        this.Set('RecordMetadata', value);
+    }
+
+    /**
     * * Field Name: DuplicateRun
-    * * Display Name: Duplicate Run
+    * * Display Name: Run Name
     * * SQL Data Type: nvarchar(255)
     */
     get DuplicateRun(): string {
@@ -54878,11 +55585,12 @@ export class MJDuplicateRunEntity extends BaseEntity<MJDuplicateRunEntityType> {
     * * Display Name: Source List
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Lists (vwLists.ID)
+    * * Description: Optional List ID to narrow the scope of duplicate detection. When NULL, all records in the entity are scanned. When set, only records in the specified list are checked for duplicates.
     */
-    get SourceListID(): string {
+    get SourceListID(): string | null {
         return this.Get('SourceListID');
     }
-    set SourceListID(value: string) {
+    set SourceListID(value: string | null) {
         this.Set('SourceListID', value);
     }
 
@@ -55032,7 +55740,7 @@ export class MJDuplicateRunEntity extends BaseEntity<MJDuplicateRunEntityType> {
     * * Display Name: Source List
     * * SQL Data Type: nvarchar(100)
     */
-    get SourceList(): string {
+    get SourceList(): string | null {
         return this.Get('SourceList');
     }
 
@@ -58687,7 +59395,7 @@ export class MJEntityDocumentEntity extends BaseEntity<MJEntityDocumentEntityTyp
 
     /**
     * * Field Name: TypeID
-    * * Display Name: Type ID
+    * * Display Name: Type
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Entity Document Types (vwEntityDocumentTypes.ID)
     */
@@ -58700,7 +59408,7 @@ export class MJEntityDocumentEntity extends BaseEntity<MJEntityDocumentEntityTyp
 
     /**
     * * Field Name: EntityID
-    * * Display Name: Entity ID
+    * * Display Name: Entity
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
     */
@@ -58713,7 +59421,7 @@ export class MJEntityDocumentEntity extends BaseEntity<MJEntityDocumentEntityTyp
 
     /**
     * * Field Name: VectorDatabaseID
-    * * Display Name: Vector Database ID
+    * * Display Name: Vector Database
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Vector Databases (vwVectorDatabases.ID)
     */
@@ -58743,7 +59451,7 @@ export class MJEntityDocumentEntity extends BaseEntity<MJEntityDocumentEntityTyp
 
     /**
     * * Field Name: TemplateID
-    * * Display Name: Template ID
+    * * Display Name: Template
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Templates (vwTemplates.ID)
     */
@@ -58756,7 +59464,7 @@ export class MJEntityDocumentEntity extends BaseEntity<MJEntityDocumentEntityTyp
 
     /**
     * * Field Name: AIModelID
-    * * Display Name: AIModel ID
+    * * Display Name: AI Model
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
     */
@@ -58771,7 +59479,7 @@ export class MJEntityDocumentEntity extends BaseEntity<MJEntityDocumentEntityTyp
     * * Field Name: PotentialMatchThreshold
     * * Display Name: Potential Match Threshold
     * * SQL Data Type: numeric(12, 11)
-    * * Default Value: 1
+    * * Default Value: 0.7
     * * Description: Value between 0 and 1 that determines what is considered a potential matching record. Value must be <= AbsoluteMatchThreshold. This is primarily used for duplicate detection but can be used for other applications as well where matching is relevant.
     */
     get PotentialMatchThreshold(): number {
@@ -58785,7 +59493,7 @@ export class MJEntityDocumentEntity extends BaseEntity<MJEntityDocumentEntityTyp
     * * Field Name: AbsoluteMatchThreshold
     * * Display Name: Absolute Match Threshold
     * * SQL Data Type: numeric(12, 11)
-    * * Default Value: 1
+    * * Default Value: 0.95
     * * Description: Value between 0 and 1 that determines what is considered an absolute matching record. Value must be >= PotentialMatchThreshold. This is primarily used for duplicate detection but can be used for other applications as well where matching is relevant.
     */
     get AbsoluteMatchThreshold(): number {
@@ -58797,7 +59505,7 @@ export class MJEntityDocumentEntity extends BaseEntity<MJEntityDocumentEntityTyp
 
     /**
     * * Field Name: __mj_CreatedAt
-    * * Display Name: __mj _Created At
+    * * Display Name: Created At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
@@ -58807,7 +59515,7 @@ export class MJEntityDocumentEntity extends BaseEntity<MJEntityDocumentEntityTyp
 
     /**
     * * Field Name: __mj_UpdatedAt
-    * * Display Name: __mj _Updated At
+    * * Display Name: Updated At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
@@ -58816,8 +59524,35 @@ export class MJEntityDocumentEntity extends BaseEntity<MJEntityDocumentEntityTyp
     }
 
     /**
+    * * Field Name: VectorIndexID
+    * * Display Name: Vector Index
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Vector Indexes (vwVectorIndexes.ID)
+    * * Description: Optional foreign key to the specific Vector Index where this entity document's embeddings should be stored. When specified, the vectorization pipeline will upsert vectors directly to this index rather than auto-creating or looking up an index based on VectorDatabaseID + AIModelID. This enables explicit control over which Pinecone/Weaviate/etc. index is used per entity document, supporting multi-index architectures and shared indexes across entity types.
+    */
+    get VectorIndexID(): string | null {
+        return this.Get('VectorIndexID');
+    }
+    set VectorIndexID(value: string | null) {
+        this.Set('VectorIndexID', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON configuration settings for this entity document. Controls vector metadata field inclusion (which fields get stored in the vector index for search result display), large field truncation limits, and future settings like sync scheduling and threshold overrides. NULL means use system defaults.
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    /**
     * * Field Name: Type
-    * * Display Name: Type
+    * * Display Name: Type Name
     * * SQL Data Type: nvarchar(100)
     */
     get Type(): string {
@@ -58826,7 +59561,7 @@ export class MJEntityDocumentEntity extends BaseEntity<MJEntityDocumentEntityTyp
 
     /**
     * * Field Name: Entity
-    * * Display Name: Entity
+    * * Display Name: Entity Name
     * * SQL Data Type: nvarchar(255)
     */
     get Entity(): string {
@@ -58835,7 +59570,7 @@ export class MJEntityDocumentEntity extends BaseEntity<MJEntityDocumentEntityTyp
 
     /**
     * * Field Name: VectorDatabase
-    * * Display Name: Vector Database
+    * * Display Name: Vector Database Name
     * * SQL Data Type: nvarchar(100)
     */
     get VectorDatabase(): string {
@@ -58844,7 +59579,7 @@ export class MJEntityDocumentEntity extends BaseEntity<MJEntityDocumentEntityTyp
 
     /**
     * * Field Name: Template
-    * * Display Name: Template
+    * * Display Name: Template Name
     * * SQL Data Type: nvarchar(255)
     */
     get Template(): string {
@@ -58853,11 +59588,20 @@ export class MJEntityDocumentEntity extends BaseEntity<MJEntityDocumentEntityTyp
 
     /**
     * * Field Name: AIModel
-    * * Display Name: AIModel
+    * * Display Name: AI Model Name
     * * SQL Data Type: nvarchar(50)
     */
     get AIModel(): string {
         return this.Get('AIModel');
+    }
+
+    /**
+    * * Field Name: VectorIndex
+    * * Display Name: Vector Index Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get VectorIndex(): string | null {
+        return this.Get('VectorIndex');
     }
 }
 
@@ -59810,6 +60554,46 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
     }
     set RelatedEntityJoinFields(value: string | null) {
         this.Set('RelatedEntityJoinFields', value);
+    }
+
+    /**
+    * * Field Name: JSONType
+    * * Display Name: JSON Type
+    * * SQL Data Type: nvarchar(255)
+    * * Description: The name of the TypeScript interface/type for this JSON field. When set, CodeGen emits a strongly-typed Object-suffixed accessor using this type instead of only the default string getter/setter.
+    */
+    get JSONType(): string | null {
+        return this.Get('JSONType');
+    }
+    set JSONType(value: string | null) {
+        this.Set('JSONType', value);
+    }
+
+    /**
+    * * Field Name: JSONTypeIsArray
+    * * Display Name: JSON Type Is Array
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: If true, the field holds a JSON array of JSONType items. The Object accessor returns Array<JSONType> | null and the setter accepts Array<JSONType> | null.
+    */
+    get JSONTypeIsArray(): boolean {
+        return this.Get('JSONTypeIsArray');
+    }
+    set JSONTypeIsArray(value: boolean) {
+        this.Set('JSONTypeIsArray', value);
+    }
+
+    /**
+    * * Field Name: JSONTypeDefinition
+    * * Display Name: JSON Type Definition
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Raw TypeScript code emitted by CodeGen above the entity class definition. Typically contains the interface/type definition referenced by JSONType. Can include imports, multiple types, or any valid TypeScript.
+    */
+    get JSONTypeDefinition(): string | null {
+        return this.Get('JSONTypeDefinition');
+    }
+    set JSONTypeDefinition(value: string | null) {
+        this.Set('JSONTypeDefinition', value);
     }
 
     /**
@@ -83421,6 +84205,19 @@ export class MJVectorDatabaseEntity extends BaseEntity<MJVectorDatabaseEntityTyp
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON configuration settings for this vector database provider. Stores provider-specific connection settings like custom host URLs, authentication configuration, timeouts, retry policies, and batch size limits. NULL means use defaults from environment variables or provider defaults.
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
 }
 
 
@@ -83493,7 +84290,7 @@ export class MJVectorIndexEntity extends BaseEntity<MJVectorIndexEntityType> {
 
     /**
     * * Field Name: VectorDatabaseID
-    * * Display Name: Vector Database ID
+    * * Display Name: Vector Database
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Vector Databases (vwVectorDatabases.ID)
     */
@@ -83506,7 +84303,7 @@ export class MJVectorIndexEntity extends BaseEntity<MJVectorIndexEntityType> {
 
     /**
     * * Field Name: EmbeddingModelID
-    * * Display Name: Embedding Model ID
+    * * Display Name: Embedding Model
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
     */
@@ -83538,8 +84335,60 @@ export class MJVectorIndexEntity extends BaseEntity<MJVectorIndexEntityType> {
     }
 
     /**
+    * * Field Name: ExternalID
+    * * Display Name: External ID
+    * * SQL Data Type: nvarchar(500)
+    * * Description: The provider's native identifier for this index. For Pinecone this is the index name; for other providers it may be a separate UUID or identifier. Used for syncing operations between MJ metadata and the remote vector database.
+    */
+    get ExternalID(): string | null {
+        return this.Get('ExternalID');
+    }
+    set ExternalID(value: string | null) {
+        this.Set('ExternalID', value);
+    }
+
+    /**
+    * * Field Name: Dimensions
+    * * Display Name: Dimensions
+    * * SQL Data Type: int
+    * * Description: The number of dimensions for vectors stored in this index. Determined by the embedding model (e.g., 1536 for text-embedding-3-small, 768 for all-mpnet-base-v2). Set automatically when the index is created via the vector database provider.
+    */
+    get Dimensions(): number | null {
+        return this.Get('Dimensions');
+    }
+    set Dimensions(value: number | null) {
+        this.Set('Dimensions', value);
+    }
+
+    /**
+    * * Field Name: Metric
+    * * Display Name: Distance Metric
+    * * SQL Data Type: nvarchar(50)
+    * * Description: The distance metric used for similarity calculations in this index. Common values: cosine (default, measures angular similarity), euclidean (L2 distance), dotproduct (inner product). Must match what the vector database provider was configured with.
+    */
+    get Metric(): string | null {
+        return this.Get('Metric');
+    }
+    set Metric(value: string | null) {
+        this.Set('Metric', value);
+    }
+
+    /**
+    * * Field Name: ProviderConfig
+    * * Display Name: Provider Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON object containing provider-specific configuration for this index. For Pinecone serverless: {"cloud":"aws","region":"us-east-1"}. For pod-based: {"environment":"us-east1-gcp","podType":"p1.x1","replicas":1}. Stored as a flexible JSON bag to support any provider without schema changes.
+    */
+    get ProviderConfig(): string | null {
+        return this.Get('ProviderConfig');
+    }
+    set ProviderConfig(value: string | null) {
+        this.Set('ProviderConfig', value);
+    }
+
+    /**
     * * Field Name: VectorDatabase
-    * * Display Name: Vector Database
+    * * Display Name: Vector Database Name
     * * SQL Data Type: nvarchar(100)
     */
     get VectorDatabase(): string {
@@ -83548,7 +84397,7 @@ export class MJVectorIndexEntity extends BaseEntity<MJVectorIndexEntityType> {
 
     /**
     * * Field Name: EmbeddingModel
-    * * Display Name: Embedding Model
+    * * Display Name: Embedding Model Name
     * * SQL Data Type: nvarchar(50)
     */
     get EmbeddingModel(): string {

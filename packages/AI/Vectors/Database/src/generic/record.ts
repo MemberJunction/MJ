@@ -99,12 +99,14 @@ export type VectorRecord<T extends RecordMetadata = RecordMetadata> = {
 
 export type BaseRequestParams = {
     id: string;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Provider-specific data
     data?: any
 }
 
-export type CreateIndexParams= BaseRequestParams & {
+export type CreateIndexParams = BaseRequestParams & {
     dimension: number;
     metric: IndexModelMetricEnum,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Provider-specific params
     additionalParams?: any
 }
 
@@ -134,5 +136,36 @@ export type UpdateOptions<T extends RecordMetadata = RecordMetadata> = {
 export type BaseResponse = {
     success: boolean;
     message: string;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Used by provider implementations
+    // (Pinecone, etc.) to store provider-specific objects. Requires a coordinated
+    // migration across all providers to properly type with generics.
     data: any
+}
+
+/**
+ * Parameters for listing vector IDs in an index.
+ */
+export type ListVectorIDsParams = {
+    /** Index name to list vectors from */
+    IndexName: string;
+    /** Optional metadata filter to narrow results (e.g., { Entity: 'Members' }) */
+    MetadataFilter?: Record<string, string>;
+    /** Optional ID prefix filter (Pinecone-specific: only return IDs starting with this prefix) */
+    Prefix?: string;
+    /** Maximum number of IDs to return per page (default: 100) */
+    Limit?: number;
+    /** Pagination token from a previous response */
+    PaginationToken?: string;
+    /** Optional namespace within the index */
+    Namespace?: string;
+}
+
+/**
+ * Result from listing vector IDs.
+ */
+export type ListVectorIDsResult = {
+    /** The vector IDs in this page */
+    IDs: string[];
+    /** Token to pass to get the next page, or undefined if no more pages */
+    NextPaginationToken?: string;
 }

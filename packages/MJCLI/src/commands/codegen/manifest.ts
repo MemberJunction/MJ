@@ -86,6 +86,11 @@ generate a supplemental manifest covering only your own application classes.`;
                 'Maps @RegisterClass keys from excluded packages to dynamic import() loaders based on package.json subpath exports. ' +
                 'Only packages with subpath exports in their package.json are included. Requires --exclude-packages.',
         }),
+        strict: Flags.boolean({
+            description: 'Treat coverage audit gaps as fatal errors. A gap is a @RegisterClass class in an excluded package ' +
+                'that is not reachable from any lazy chunk subpath export. Use in CI to catch tree-shaking issues before merge.',
+            default: false,
+        }),
     };
 
     async run(): Promise<void> {
@@ -106,6 +111,7 @@ generate a supplemental manifest covering only your own application classes.`;
             syncDependencies,
             scanDist,
             lazyConfigPath: lazyConfig,
+            strict: flags.strict,
         });
 
         if (!result.success) {

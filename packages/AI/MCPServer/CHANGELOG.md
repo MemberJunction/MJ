@@ -1,5 +1,66 @@
 # @memberjunction/ai-mcp-server
 
+## 5.23.0
+
+### Patch Changes
+
+- Updated dependencies [247df16]
+- Updated dependencies [9250070]
+- Updated dependencies [513b20c]
+- Updated dependencies [44bc22b]
+- Updated dependencies [1d1e02e]
+  - @memberjunction/core@5.23.0
+  - @memberjunction/global@5.23.0
+  - @memberjunction/ai-agents@5.23.0
+  - @memberjunction/ai-prompts@5.23.0
+  - @memberjunction/sqlserver-dataprovider@5.23.0
+  - @memberjunction/core-entities@5.23.0
+  - @memberjunction/server@5.23.0
+  - @memberjunction/ai-core-plus@5.23.0
+  - @memberjunction/aiengine@5.23.0
+  - @memberjunction/api-keys@5.23.0
+  - @memberjunction/actions-base@5.23.0
+  - @memberjunction/actions@5.23.0
+  - @memberjunction/auth-providers@5.23.0
+  - @memberjunction/credentials@5.23.0
+  - @memberjunction/encryption@5.23.0
+  - @memberjunction/server-bootstrap-lite@5.23.0
+  - @memberjunction/ai@5.23.0
+  - @memberjunction/ai-provider-bundle@5.23.0
+  - @memberjunction/config@5.23.0
+
+## 5.22.0
+
+### Patch Changes
+
+- e123e4b: bug fixes for RunView cache, Data Explorer, and MCP OAuth scopes
+- Updated dependencies [0b23772]
+- Updated dependencies [cf91278]
+- Updated dependencies [6a5093b]
+- Updated dependencies [e123e4b]
+- Updated dependencies [21e0b69]
+- Updated dependencies [a42aba6]
+- Updated dependencies [f2a6bec]
+  - @memberjunction/ai-core-plus@5.22.0
+  - @memberjunction/ai-prompts@5.22.0
+  - @memberjunction/ai-agents@5.22.0
+  - @memberjunction/server@5.22.0
+  - @memberjunction/core@5.22.0
+  - @memberjunction/server-bootstrap-lite@5.22.0
+  - @memberjunction/global@5.22.0
+  - @memberjunction/aiengine@5.22.0
+  - @memberjunction/actions@5.22.0
+  - @memberjunction/api-keys@5.22.0
+  - @memberjunction/actions-base@5.22.0
+  - @memberjunction/auth-providers@5.22.0
+  - @memberjunction/credentials@5.22.0
+  - @memberjunction/encryption@5.22.0
+  - @memberjunction/core-entities@5.22.0
+  - @memberjunction/sqlserver-dataprovider@5.22.0
+  - @memberjunction/ai-provider-bundle@5.22.0
+  - @memberjunction/ai@5.22.0
+  - @memberjunction/config@5.22.0
+
 ## 5.21.0
 
 ### Patch Changes

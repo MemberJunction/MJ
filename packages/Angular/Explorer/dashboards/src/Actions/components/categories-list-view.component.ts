@@ -23,14 +23,13 @@ interface CategoryWithStats extends MJActionCategoryEntity {
         </div>
         
         <div class="search-container">
-          <kendo-textbox 
-            placeholder="Search categories..." 
-            [value]="searchTerm$.value"
-            (valueChange)="onSearchChange($event)">
-            <ng-template kendoTextBoxPrefixTemplate>
-              <i class="fa-solid fa-search"></i>
-            </ng-template>
-          </kendo-textbox>
+          <div class="search-input-wrapper">
+            <i class="fa-solid fa-search search-icon"></i>
+            <input type="text" class="mj-input"
+              placeholder="Search categories..."
+              [value]="searchTerm$.value"
+              (input)="onSearchChange($any($event.target).value)" />
+          </div>
         </div>
       </div>
 
@@ -64,9 +63,9 @@ interface CategoryWithStats extends MJActionCategoryEntity {
               </div>
               
               <div class="category-footer">
-                <button kendoButton 
-                  [fillMode]="'outline'" 
-                  [size]="'small'"
+                <button mjButton
+                  variant="outline"
+                  size="sm"
                   (click)="viewActions(category, $event)">
                   <i class="fa-solid fa-cogs"></i> View Actions
                 </button>
@@ -119,12 +118,12 @@ interface CategoryWithStats extends MJActionCategoryEntity {
             gap: 0.5rem;
 
             i {
-              color: var(--kendo-color-primary);
+              color: var(--mj-brand-primary);
             }
           }
 
           .results-count {
-            color: var(--kendo-color-subtle);
+            color: var(--mj-text-muted);
             font-size: 0.875rem;
           }
         }
@@ -132,7 +131,7 @@ interface CategoryWithStats extends MJActionCategoryEntity {
         .search-container {
           min-width: 250px;
           
-          kendo-textbox {
+          .search-input-wrapper {
             width: 100%;
           }
         }
@@ -146,8 +145,8 @@ interface CategoryWithStats extends MJActionCategoryEntity {
         align-content: start;
 
         .category-card {
-          background: var(--kendo-color-surface);
-          border: 1px solid var(--kendo-color-border);
+          background: var(--mj-bg-surface-card);
+          border: 1px solid var(--mj-border-default);
           border-radius: 0.75rem;
           padding: 1.5rem;
           cursor: pointer;
@@ -159,7 +158,7 @@ interface CategoryWithStats extends MJActionCategoryEntity {
           &:hover {
             transform: translateY(-2px);
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-            border-color: var(--kendo-color-primary);
+            border-color: var(--mj-brand-primary);
           }
 
           .category-header {
@@ -173,11 +172,11 @@ interface CategoryWithStats extends MJActionCategoryEntity {
               justify-content: center;
               width: 3rem;
               height: 3rem;
-              background: var(--kendo-color-primary-subtle);
+              background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
               border-radius: 0.5rem;
 
               i {
-                color: var(--kendo-color-primary);
+                color: var(--mj-brand-primary);
                 font-size: 1.25rem;
               }
             }
@@ -191,7 +190,7 @@ interface CategoryWithStats extends MJActionCategoryEntity {
           }
 
           .category-description {
-            color: var(--kendo-color-subtle);
+            color: var(--mj-text-muted);
             font-size: 0.875rem;
             line-height: 1.5;
             display: -webkit-box;
@@ -204,7 +203,7 @@ interface CategoryWithStats extends MJActionCategoryEntity {
             display: flex;
             gap: 2rem;
             padding: 1rem;
-            background: var(--kendo-color-app-surface);
+            background: var(--mj-bg-surface);
             border-radius: 0.5rem;
 
             .stat-item {
@@ -215,16 +214,16 @@ interface CategoryWithStats extends MJActionCategoryEntity {
               .stat-value {
                 font-size: 1.5rem;
                 font-weight: 700;
-                color: var(--kendo-color-on-app-surface);
+                color: var(--mj-text-primary);
 
                 &.active {
-                  color: var(--kendo-color-success);
+                  color: var(--mj-status-success);
                 }
               }
 
               .stat-label {
                 font-size: 0.75rem;
-                color: var(--kendo-color-subtle);
+                color: var(--mj-text-muted);
                 font-weight: 600;
               }
             }
@@ -245,7 +244,7 @@ interface CategoryWithStats extends MJActionCategoryEntity {
         justify-content: center;
         padding: 4rem;
         text-align: center;
-        color: var(--kendo-color-subtle);
+        color: var(--mj-text-muted);
 
         i {
           font-size: 3rem;

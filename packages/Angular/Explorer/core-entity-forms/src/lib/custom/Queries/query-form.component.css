@@ -178,14 +178,14 @@
 }
 
 /* ========================================
-   Expansion Panel Overrides — Modern Style
+   Accordion Panel Overrides — Modern Style
    ======================================== */
 
 .query-panel {
     margin-bottom: 12px;
 }
 
-::ng-deep .query-content kendo-expansionpanel {
+::ng-deep .query-content mj-accordion-panel .mj-accordion-panel {
     border: none !important;
     border-radius: var(--mj-radius-md) !important;
     margin-bottom: 12px !important;
@@ -194,7 +194,7 @@
     overflow: hidden !important;
 }
 
-::ng-deep .query-content .k-expander-header {
+::ng-deep .query-content .mj-accordion-header {
     background: var(--mj-bg-surface) !important;
     border: none !important;
     padding: 14px 18px !important;
@@ -205,17 +205,17 @@
     transition: background 0.15s ease !important;
 }
 
-::ng-deep .query-content .k-expander-header:hover {
+::ng-deep .query-content .mj-accordion-header:hover {
     background: var(--mj-bg-surface-card) !important;
 }
 
-::ng-deep .query-content kendo-expansionpanel[aria-expanded="true"] .k-expander-header {
+::ng-deep .query-content .mj-accordion-panel--expanded .mj-accordion-header {
     background: var(--mj-brand-primary) !important;
     color: white !important;
     border-radius: var(--mj-radius-md) var(--mj-radius-md) 0 0 !important;
 }
 
-::ng-deep .query-content .k-expander-content {
+::ng-deep .query-content .mj-accordion-body {
     padding: 0 !important;
     border: none !important;
     background: var(--mj-bg-surface) !important;
@@ -249,7 +249,7 @@
     color: var(--mj-brand-primary);
 }
 
-::ng-deep kendo-expansionpanel[aria-expanded="true"] .panel-icon {
+::ng-deep .mj-accordion-panel--expanded .panel-icon {
     color: rgba(255, 255, 255, 0.85) !important;
     opacity: 1;
 }
@@ -271,11 +271,11 @@
     color: white;
 }
 
-::ng-deep kendo-expansionpanel[aria-expanded="true"] .panel-badge.count {
+::ng-deep .mj-accordion-panel--expanded .panel-badge.count {
     background: rgba(255, 255, 255, 0.25) !important;
 }
 
-::ng-deep kendo-expansionpanel[aria-expanded="true"] .panel-badge.defined {
+::ng-deep .mj-accordion-panel--expanded .panel-badge.defined {
     background: rgba(255, 255, 255, 0.25) !important;
 }
 

@@ -4,7 +4,7 @@
     <!-- Action Buttons -->
     <div class="action-buttons" role="toolbar" aria-label="User management actions">
       <button
-        class="mj-btn mj-btn-secondary mj-btn-icon-mobile"
+        mjButton variant="secondary" class="mj-btn-icon-mobile"
         (click)="refreshData()"
         [disabled]="isLoading"
         aria-label="Refresh user list"
@@ -13,7 +13,7 @@
         <span class="btn-text">Refresh</span>
       </button>
       <button
-        class="mj-btn mj-btn-secondary mj-btn-icon-mobile"
+        mjButton variant="secondary" class="mj-btn-icon-mobile"
         (click)="exportUsers()"
         aria-label="Export users to file"
       >
@@ -21,7 +21,7 @@
         <span class="btn-text">Export</span>
       </button>
       <button
-        class="mj-btn mj-btn-primary mj-btn-icon-mobile"
+        mjButton variant="primary" class="mj-btn-icon-mobile"
         (click)="createNewUser()"
         aria-label="Add new user"
       >
@@ -37,7 +37,7 @@
           <i class="fa-solid fa-check-square" aria-hidden="true"></i>
           <span>{{ selectedCount }} user{{ selectedCount > 1 ? 's' : '' }} selected</span>
           <button
-            class="mj-btn mj-btn-ghost mj-btn-sm"
+            mjButton variant="flat" size="sm"
             (click)="clearSelection()"
             aria-label="Clear selection"
           >
@@ -47,7 +47,7 @@
         </div>
         <div class="bulk-action-buttons">
           <button
-            class="mj-btn mj-btn-secondary mj-btn-sm"
+            mjButton variant="secondary" size="sm"
             (click)="confirmBulkAction('enable')"
             aria-label="Enable selected users"
           >
@@ -55,7 +55,7 @@
             <span class="btn-text">Enable</span>
           </button>
           <button
-            class="mj-btn mj-btn-secondary mj-btn-sm"
+            mjButton variant="secondary" size="sm"
             (click)="confirmBulkAction('disable')"
             aria-label="Disable selected users"
           >
@@ -63,7 +63,7 @@
             <span class="btn-text">Disable</span>
           </button>
           <button
-            class="mj-btn mj-btn-secondary mj-btn-sm"
+            mjButton variant="secondary" size="sm"
             (click)="openBulkRoleAssign()"
             aria-label="Assign role to selected users"
           >
@@ -71,7 +71,7 @@
             <span class="btn-text">Assign Role</span>
           </button>
           <button
-            class="mj-btn mj-btn-danger mj-btn-sm"
+            mjButton variant="danger" size="sm"
             (click)="confirmBulkAction('delete')"
             aria-label="Delete selected users"
           >
@@ -159,25 +159,22 @@
         <div class="mj-filter-group desktop-filter-group">
           <label class="mj-filter-label" id="status-filter-label">Status</label>
           <div class="mj-filter-buttons" role="group" aria-labelledby="status-filter-label">
-            <button
-              class="mj-btn mj-btn-ghost"
-              [class.mj-btn-primary]="filters$.value.status === 'all'"
+            <button mjButton
+              [variant]="filters$.value.status === 'all' ? 'primary' : 'flat'"
               (click)="onStatusFilterChange('all')"
               [attr.aria-pressed]="filters$.value.status === 'all'"
             >
               All
             </button>
-            <button
-              class="mj-btn mj-btn-ghost"
-              [class.mj-btn-primary]="filters$.value.status === 'active'"
+            <button mjButton
+              [variant]="filters$.value.status === 'active' ? 'primary' : 'flat'"
               (click)="onStatusFilterChange('active')"
               [attr.aria-pressed]="filters$.value.status === 'active'"
             >
               Active
             </button>
-            <button
-              class="mj-btn mj-btn-ghost"
-              [class.mj-btn-primary]="filters$.value.status === 'inactive'"
+            <button mjButton
+              [variant]="filters$.value.status === 'inactive' ? 'primary' : 'flat'"
               (click)="onStatusFilterChange('inactive')"
               [attr.aria-pressed]="filters$.value.status === 'inactive'"
             >
@@ -240,7 +237,7 @@
 
             <!-- Clear Filters Button -->
             @if (hasActiveFilters) {
-              <button class="mj-btn mj-btn-ghost mj-btn-sm clear-filters-btn" (click)="clearFilters()">
+              <button mjButton variant="flat" size="sm" class="clear-filters-btn" (click)="clearFilters()">
                 <i class="fa-solid fa-times" aria-hidden="true"></i>
                 Clear Filters
               </button>
@@ -343,7 +340,7 @@
                   </span>
                   <div class="user-actions desktop-only" (click)="$event.stopPropagation()">
                     <button
-                      class="mj-btn mj-btn-ghost mj-btn-sm"
+                      mjButton variant="flat" size="sm"
                       (click)="editUser(user)"
                       [attr.aria-label]="'Edit ' + user.Name"
                       title="Edit"
@@ -351,7 +348,7 @@
                       <i class="fa-solid fa-edit" aria-hidden="true"></i>
                     </button>
                     <button
-                      class="mj-btn mj-btn-ghost mj-btn-sm"
+                      mjButton variant="flat" size="sm"
                       (click)="toggleUserStatus(user)"
                       [attr.aria-label]="(user.IsActive ? 'Deactivate ' : 'Activate ') + user.Name"
                       [title]="user.IsActive ? 'Deactivate' : 'Activate'"
@@ -359,7 +356,7 @@
                       <i [class]="user.IsActive ? 'fa-solid fa-toggle-on' : 'fa-solid fa-toggle-off'" aria-hidden="true"></i>
                     </button>
                     <button
-                      class="mj-btn mj-btn-ghost mj-btn-sm mj-btn-danger"
+                      mjButton variant="danger" size="sm"
                       (click)="confirmDeleteUser(user)"
                       [attr.aria-label]="'Delete ' + user.Name"
                       title="Delete"
@@ -384,7 +381,7 @@
                     </span>
                     <div class="mobile-action-buttons">
                       <button
-                        class="mj-btn mj-btn-ghost mj-btn-sm"
+                        mjButton variant="flat" size="sm"
                         (click)="editUser(user)"
                         [attr.aria-label]="'Edit ' + user.Name"
                       >
@@ -392,7 +389,7 @@
                         <span class="btn-label">Edit</span>
                       </button>
                       <button
-                        class="mj-btn mj-btn-ghost mj-btn-sm"
+                        mjButton variant="flat" size="sm"
                         (click)="toggleUserStatus(user)"
                         [attr.aria-label]="(user.IsActive ? 'Deactivate ' : 'Activate ') + user.Name"
                       >
@@ -400,7 +397,7 @@
                         <span class="btn-label">{{ user.IsActive ? 'Disable' : 'Enable' }}</span>
                       </button>
                       <button
-                        class="mj-btn mj-btn-ghost mj-btn-sm mj-btn-danger"
+                        mjButton variant="danger" size="sm"
                         (click)="confirmDeleteUser(user)"
                         [attr.aria-label]="'Delete ' + user.Name"
                       >
@@ -509,11 +506,11 @@
           <p class="text-muted">This action cannot be undone.</p>
         </div>
         <div class="modal-footer">
-          <button class="mj-btn mj-btn-danger" (click)="deleteUser()">
+          <button mjButton variant="danger" (click)="deleteUser()">
             <i class="fa-solid fa-trash" aria-hidden="true"></i>
             Delete User
           </button>
-          <button class="mj-btn mj-btn-secondary" (click)="showDeleteConfirm = false">
+          <button mjButton (click)="showDeleteConfirm = false">
             Cancel
           </button>
         </div>
@@ -558,8 +555,8 @@
           }
         </div>
         <div class="modal-footer">
-          <button
-            [class]="bulkActionType === 'delete' ? 'mj-btn mj-btn-danger' : 'mj-btn mj-btn-primary'"
+          <button mjButton
+            [variant]="bulkActionType === 'delete' ? 'danger' : 'primary'"
             (click)="executeBulkAction()"
             [disabled]="isLoading"
           >
@@ -577,7 +574,7 @@
               {{ getBulkActionButtonText() }}
             }
           </button>
-          <button class="mj-btn mj-btn-secondary" (click)="cancelBulkAction()" [disabled]="isLoading">
+          <button mjButton (click)="cancelBulkAction()" [disabled]="isLoading">
             Cancel
           </button>
         </div>
@@ -628,7 +625,7 @@
         </div>
         <div class="modal-footer">
           <button
-            class="mj-btn mj-btn-primary"
+            mjButton variant="primary"
             (click)="executeBulkRoleAssign()"
             [disabled]="!bulkRoleId || isLoading"
           >
@@ -640,7 +637,7 @@
               Assign Role
             }
           </button>
-          <button class="mj-btn mj-btn-secondary" (click)="cancelBulkRoleAssign()" [disabled]="isLoading">
+          <button mjButton (click)="cancelBulkRoleAssign()" [disabled]="isLoading">
             Cancel
           </button>
         </div>

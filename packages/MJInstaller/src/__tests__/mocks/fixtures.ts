@@ -17,7 +17,7 @@ export function sampleConfig(): InstallConfig {
     APIUser: 'MJ_Connect',
     APIPassword: 'test_password_2',
     APIPort: 4000,
-    ExplorerPort: 4200,
+    ExplorerPort: 4201,
     AuthProvider: 'none',
     BaseEncryptionKey: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
   };

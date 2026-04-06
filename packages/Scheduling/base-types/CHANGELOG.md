@@ -1,5 +1,19 @@
 # @memberjunction/scheduling-base-types
 
+## 5.23.0
+
+### Patch Changes
+
+- Updated dependencies [247df16]
+  - @memberjunction/global@5.23.0
+
+## 5.22.0
+
+### Patch Changes
+
+- Updated dependencies [f2a6bec]
+  - @memberjunction/global@5.22.0
+
 ## 5.21.0
 
 ### Patch Changes

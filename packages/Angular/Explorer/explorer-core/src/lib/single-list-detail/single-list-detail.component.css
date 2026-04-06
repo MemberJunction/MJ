@@ -89,40 +89,61 @@
   overflow: hidden;
 }
 
-/* Add Button */
+/* Add Dropdown Button */
+.add-dropdown-wrapper {
+  position: relative;
+}
+
 .add-btn {
-  padding: 10px 30px;
-  border-radius: 10px;
-  color: white;
-  background-color: var(--mj-brand-primary);
-  font-size: initial;
-  cursor: pointer;
-}
-
-.add-btn:hover {
-  filter: brightness(85%);
-}
-
-::ng-deep .k-dropdown-button .k-button {
-  background: var(--mj-brand-primary) !important;
-  color: white !important;
   font-size: 16px;
-  border: none;
   padding: 8px 25px;
   border-radius: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-::ng-deep .k-dropdown-button .k-button:hover {
-  background: var(--mj-brand-primary) !important;
-  filter: brightness(85%);
+.add-dropdown-arrow {
+  font-size: 12px;
+  margin-left: 4px;
 }
 
-::ng-deep .k-dropdown-button .k-button .k-button-text {
-  color: white !important;
+.add-dropdown-panel {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  min-width: 240px;
+  background: var(--mj-bg-surface-elevated);
+  border: 1px solid var(--mj-border-default);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  z-index: 100;
+  overflow: hidden;
 }
 
-::ng-deep .k-dropdown-button .k-button .fa-plus {
-  color: white !important;
+.add-dropdown-item {
+  display: flex;
+  flex-direction: column;
+  padding: 10px 16px;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.add-dropdown-item:hover {
+  background: var(--mj-bg-surface-hover);
+}
+
+.add-dropdown-item-text {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--mj-text-primary);
+}
+
+.add-dropdown-item-desc {
+  font-size: 12px;
+  color: var(--mj-text-secondary);
+  margin-top: 2px;
 }
 
 /* ==========================================
@@ -186,13 +207,23 @@
   margin-bottom: 12px;
 }
 
-.search-input {
-  width: 100%;
+.search-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
 }
 
-.search-icon {
+.search-input-wrapper .search-icon {
+  position: absolute;
+  left: 10px;
   color: var(--mj-text-disabled);
-  padding-left: 8px;
+  font-size: 14px;
+  pointer-events: none;
+}
+
+.search-input-wrapper .search-input {
+  width: 100%;
+  padding-left: 32px;
 }
 
 .search-hint {

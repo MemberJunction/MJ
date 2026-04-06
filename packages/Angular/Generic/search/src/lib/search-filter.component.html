@@ -1,0 +1,54 @@
+<div class="filter-panel">
+    <div class="filter-panel-header">
+        <span class="filter-panel-title">
+            <i class="fa-solid fa-filter"></i> Filters
+        </span>
+        @if (HasActiveFilters()) {
+            <button class="filter-clear-all" (click)="ClearAll()">
+                Clear ({{ GetActiveFilterCount() }})
+            </button>
+        }
+    </div>
+
+    @for (filter of Filters; track filter.Category) {
+        <div class="filter-category">
+            <div
+                class="filter-category-header"
+                (click)="ToggleCategory(filter.Category)"
+                [class.filter-category-collapsed]="IsCategoryCollapsed(filter.Category)"
+            >
+                <span class="filter-category-name">{{ filter.Category }}</span>
+                @if (Collapsible) {
+                    <i class="fa-solid filter-category-chevron"
+                       [class.fa-chevron-down]="IsCategoryCollapsed(filter.Category)"
+                       [class.fa-chevron-up]="!IsCategoryCollapsed(filter.Category)"></i>
+                }
+            </div>
+
+            @if (!IsCategoryCollapsed(filter.Category)) {
+                <div class="filter-options">
+                    @for (option of filter.Options; track option.Value) {
+                        <label class="filter-option" (click)="ToggleOption(filter.Category, option.Value); $event.preventDefault()">
+                            <span class="filter-checkbox" [class.filter-checkbox-checked]="IsOptionSelected(filter.Category, option.Value)">
+                                @if (IsOptionSelected(filter.Category, option.Value)) {
+                                    <i class="fa-solid fa-check"></i>
+                                }
+                            </span>
+                            @if (option.Icon) {
+                                <i [class]="option.Icon + ' filter-option-icon'"></i>
+                            }
+                            <span class="filter-option-label">{{ option.Label }}</span>
+                            <span class="filter-option-count">{{ option.Count }}</span>
+                        </label>
+                    }
+                </div>
+            }
+        </div>
+    }
+
+    @if (Filters.length === 0) {
+        <div class="filter-empty">
+            <p>No filters available</p>
+        </div>
+    }
+</div>

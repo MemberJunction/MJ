@@ -270,7 +270,7 @@ describe('SmokeTestPhase', () => {
       expect(result.ExplorerUrl).toBe('http://localhost:5200/');
     });
 
-    it('should use default ports (4000, 4200) when no config or project files', async () => {
+    it('should use default ports (4000, 4201) when no config or project files', async () => {
       mockFs.DirectoryExists.mockResolvedValue(true);
       mockFs.FileExists.mockResolvedValue(false);
 
@@ -280,7 +280,7 @@ describe('SmokeTestPhase', () => {
 
       const result = await runPromise;
       expect(result.ApiUrl).toBe('http://localhost:4000/');
-      expect(result.ExplorerUrl).toBe('http://localhost:4200/');
+      expect(result.ExplorerUrl).toBe('http://localhost:4201/');
     });
   });
 
@@ -493,7 +493,7 @@ describe('SmokeTestPhase', () => {
       await runPromise;
 
       expect(mockRunner.killByPort).toHaveBeenCalledWith(4000);
-      expect(mockRunner.killByPort).toHaveBeenCalledWith(4200);
+      expect(mockRunner.killByPort).toHaveBeenCalledWith(4201);
     });
 
     it('should call killByPort with custom config ports', async () => {

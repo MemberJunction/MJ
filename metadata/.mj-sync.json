@@ -28,6 +28,7 @@
     "agent-categories",
     "agent-request-types",
     "agent-types",
+    "client-tool-definitions",
     "agents",
     "scheduled-jobs",
     "query-categories",

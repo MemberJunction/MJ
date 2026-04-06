@@ -1,6 +1,6 @@
 import { UserInfo, Metadata, RunView } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
-import { AutotagBase } from "../../Core";
+import { AutotagBase, AutotagProgressCallback } from "../../Core";
 import { AutotagBaseEngine, ContentSourceParams } from "../../Engine";
 import { MJContentSourceEntity, MJContentItemEntity } from '@memberjunction/core-entities';
 import { RSSItem } from './RSS.types';
@@ -30,12 +30,12 @@ export class AutotagRSSFeed extends AutotagBase {
      * It initializes the connection, retrieves the content sources corresponding to the content source type, sets the content items that we want to process, 
      * extracts and processes the text, and sets the results in the database.
      */
-    public async Autotag(contextUser: UserInfo): Promise<void> {
+    public async Autotag(contextUser: UserInfo, onProgress?: AutotagProgressCallback): Promise<void> {
         this.contextUser = contextUser;
-        this.contentSourceTypeID = await this.engine.setSubclassContentSourceType('RSS Feed', this.contextUser);
+        this.contentSourceTypeID = this.engine.SetSubclassContentSourceType('RSS Feed');
         const contentSources = await this.engine.getAllContentSources(this.contextUser, this.contentSourceTypeID);
         const contentItemsToProcess = await this.SetContentItemsToProcess(contentSources);
-        await this.engine.ExtractTextAndProcessWithLLM(contentItemsToProcess, this.contextUser);
+        await this.engine.ExtractTextAndProcessWithLLM(contentItemsToProcess, this.contextUser, undefined, onProgress);
     }
 
     /**
@@ -117,7 +117,7 @@ export class AutotagRSSFeed extends AutotagBase {
                 const contentItem = await md.GetEntityObject<MJContentItemEntity>('MJ: Content Items', this.contextUser);
                 contentItem.ContentSourceID = contentSourceParams.contentSourceID
                 contentItem.Name = contentSourceParams.name
-                contentItem.Description = RSSContentItem.description || await this.engine.getContentItemDescription(contentSourceParams, this.contextUser)
+                contentItem.Description = RSSContentItem.description || this.engine.GetContentItemDescription(contentSourceParams)
                 contentItem.ContentTypeID = contentSourceParams.ContentTypeID
                 contentItem.ContentFileTypeID = contentSourceParams.ContentFileTypeID
                 contentItem.ContentSourceTypeID = contentSourceParams.ContentSourceTypeID

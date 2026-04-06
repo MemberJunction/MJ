@@ -18,7 +18,7 @@ import { UUIDsEqual } from '@memberjunction/global';
   standalone: false,
   selector: 'mj-collections-full-view',
   template: `
-    <div class="collections-view" (keydown)="handleKeyboardShortcut($event)" kendoDialogContainer>
+    <div class="collections-view" (keydown)="handleKeyboardShortcut($event)">
       <!-- Mac Finder-style Header -->
       <div class="collections-header">
         <!-- Breadcrumb navigation -->

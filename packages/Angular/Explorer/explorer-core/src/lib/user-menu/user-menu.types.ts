@@ -81,10 +81,30 @@ export interface ApplicationInfoRef {
 }
 
 /**
+ * Minimal tab info exposed to user menu (avoids importing full WorkspaceTab)
+ */
+export interface WorkspaceTabRef {
+    id: string;
+    title: string;
+    applicationId: string;
+    resourceTypeId: string;
+    configuration: Record<string, unknown>;
+}
+
+/**
  * Interface for workspace manager operations needed by user menu
  */
 export interface WorkspaceManagerRef {
     GetConfiguration: () => unknown;
+    GetActiveTabId?: () => string | null;
+    GetTab?: (tabId: string) => WorkspaceTabRef | undefined;
+}
+
+/**
+ * Interface for pin service operations needed by user menu
+ */
+export interface PinServiceRef {
+    IsPinned: (resourceType: string, config: Record<string, unknown>) => boolean;
 }
 
 /**
@@ -124,6 +144,9 @@ export interface UserMenuContext {
 
     /** Auth service for logout operations */
     authService: AuthServiceRef;
+
+    /** Pin service for Home dashboard pinning */
+    pinService?: PinServiceRef;
 
     /** Function to open settings dialog */
     openSettings: () => void;

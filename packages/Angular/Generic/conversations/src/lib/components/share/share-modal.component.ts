@@ -17,21 +17,23 @@ interface SharePermission {
   selector: 'mj-share-modal',
   template: `
     @if (isOpen) {
-      <kendo-dialog
-        [title]="'Share: ' + (conversation.Name || '')"
-        [width]="500"
-        [height]="600"
-        (close)="onClose()">
+      <mj-dialog
+        [Title]="'Share: ' + (conversation.Name || '')"
+        [Width]="500"
+        [Height]="600"
+        [Visible]="true"
+        (Close)="onClose()">
         <div class="share-content">
           <div class="add-user-section">
             <h4>Add People</h4>
             <div class="add-user-form">
-              <kendo-textbox
-                [(value)]="newUserEmail"
+              <input
+                type="text"
+                [(ngModel)]="newUserEmail"
                 placeholder="Enter email address"
-                [style.flex]="1">
-              </kendo-textbox>
-              <button kendoButton [primary]="true" (click)="onAddUser()">
+                class="mj-textbox"
+                style="flex: 1;">
+              <button mjButton variant="primary" (click)="onAddUser()">
                 Add
               </button>
             </div>
@@ -54,14 +56,14 @@ interface SharePermission {
                     </div>
                   </div>
                   <div class="permission-controls">
-                    <kendo-dropdownlist
-                      [data]="accessLevels"
-                      [textField]="'label'"
-                      [valueField]="'value'"
-                      [value]="getAccessLevel(permission)"
-                      (valueChange)="onAccessLevelChange(permission, $event)"
-                      [style.width.px]="120">
-                    </kendo-dropdownlist>
+                    <select
+                      [ngModel]="permission.permissionLevel"
+                      (ngModelChange)="onAccessLevelChange(permission, $event)"
+                      style="width: 120px;" class="mj-select">
+                      @for (level of accessLevels; track level.value) {
+                        <option [value]="level.value">{{ level.label }}</option>
+                      }
+                    </select>
                     <button
                       class="btn-remove"
                       (click)="onRemoveUser(permission)"
@@ -76,30 +78,31 @@ interface SharePermission {
           <div class="link-section">
             <h4>Share Link</h4>
             <div class="link-controls">
-              <kendo-switch
+              <input
+                type="checkbox"
                 [(ngModel)]="isPublicLink"
-                (valueChange)="onTogglePublicLink()">
-              </kendo-switch>
+                (ngModelChange)="onTogglePublicLink()">
               <label>Anyone with the link can view</label>
             </div>
             @if (isPublicLink) {
               <div class="link-display">
-                <kendo-textbox
+                <input
+                  type="text"
                   [value]="shareLink"
-                  [readonly]="true"
-                  [style.flex]="1">
-                </kendo-textbox>
-                <button kendoButton (click)="onCopyLink()">
+                  readonly
+                  class="mj-textbox"
+                  style="flex: 1;">
+                <button mjButton variant="flat" (click)="onCopyLink()">
                   <i class="fas fa-copy"></i> Copy
                 </button>
               </div>
             }
           </div>
         </div>
-        <kendo-dialog-actions>
-          <button kendoButton (click)="onClose()">Close</button>
-        </kendo-dialog-actions>
-      </kendo-dialog>
+        <mj-dialog-actions>
+          <button mjButton (click)="onClose()">Close</button>
+        </mj-dialog-actions>
+      </mj-dialog>
     }
     `,
   styles: [`

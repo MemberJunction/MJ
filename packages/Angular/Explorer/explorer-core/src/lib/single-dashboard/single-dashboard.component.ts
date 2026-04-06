@@ -1,5 +1,4 @@
 import { Component, ElementRef, EventEmitter, Input, OnInit, Output, ViewChild } from '@angular/core';
-import { TileLayoutReorderEvent, TileLayoutResizeEvent } from "@progress/kendo-angular-layout";
 import { ResourceData } from '@memberjunction/core-entities';
 import { MJDashboardEntityExtended, MJResourceTypeEntity } from '@memberjunction/core-entities';
 import { Metadata } from '@memberjunction/core';
@@ -37,7 +36,6 @@ export class SingleDashboardComponent extends BaseDashboard implements OnInit {
   public selectedResource!: MJResourceTypeEntity | null;
   public selectedDashboardItem!: DashboardItem | null;
   private saveChangesSubject: Subject<any> = new Subject();
-  private selectedComponent: SingleDashboardComponent | null = null;
   private editOnLoad: boolean = false;
   private recentAccessService: RecentAccessService;
 
@@ -307,41 +305,32 @@ export class SingleDashboardComponent extends BaseDashboard implements OnInit {
     return this.isEditingDashboard ? "bg-dark-grey" : "bg-blue";
   }
 
-  onReorder(e: TileLayoutReorderEvent): void {
-    const item = this.items.find(i => i.uniqueId === parseInt(e.item.elem.nativeElement.id));
+  onReorder(e: { oldIndex: number; newIndex: number; newCol?: number; newRow?: number; uniqueId?: number }): void {
+    const item = e.uniqueId != null ? this.items.find(i => i.uniqueId === e.uniqueId) : this.items[e.oldIndex];
     if (item) {
-      // move the item in our config state to the new index
       if (e.oldIndex !== e.newIndex) {
         this.items.splice(e.oldIndex, 1);
-        this.items.splice(e.newIndex, 0, item);  
+        this.items.splice(e.newIndex, 0, item);
       }
-      //item.order = e.item.order;
-      item.col = e.newCol ? e.newCol : item.col;
-      item.row = e.newRow ? e.newRow : item.row;
+      item.col = e.newCol ?? item.col;
+      item.row = e.newRow ?? item.row;
     }
   }
-  
-  onResize(e: TileLayoutResizeEvent): void {
-    const item = this.items.find(i => i.uniqueId === parseInt(e.item.elem.nativeElement.id));
-    if (item) {      
+
+  onResize(e: { newColSpan: number; newRowSpan: number; uniqueId?: number }): void {
+    const item = e.uniqueId != null ? this.items.find(i => i.uniqueId === e.uniqueId) : undefined;
+    if (item) {
       item.colSpan = e.newColSpan;
       item.rowSpan = e.newRowSpan;
     }
   }
 
   onMouseEnter(e: MouseEvent): void {
-    this.selectedComponent = <SingleDashboardComponent>(e.target as any);
+    // Available for future drag-and-drop support
   }
 
   onMouseOut(e: MouseEvent): void {
-    this.selectedComponent = null;
-  }
-
-  //Apply this style to the component we're hovering over
-  //so that it is not offset by a wide margin when we click/drag it
-  //https://github.com/telerik/kendo-angular/issues/3492
-  getSelectedComponentStyle(component: SingleDashboardComponent): string {
-    return this.selectedComponent === component ? "position: unset" : "";
+    // Available for future drag-and-drop support
   }
 
   /**

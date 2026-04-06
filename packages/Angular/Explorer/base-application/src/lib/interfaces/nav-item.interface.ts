@@ -5,6 +5,9 @@ export interface NavItem {
   /** Display label for the nav item */
   Label: string;
 
+  /** Optional description — shown as tooltip in UI and passed to AI for context */
+  Description?: string;
+
   /** Route to navigate to when clicked (optional if ResourceType is provided) */
   Route?: string;
 
@@ -43,6 +46,24 @@ export interface NavItem {
    * - 'Disabled': Hidden, explicitly disabled
    */
   Status?: 'Active' | 'Pending' | 'Disabled';
+
+  /**
+   * Client tools that become available when this nav item is active.
+   * References MJ: AI Client Tool Definitions by ID. When the user navigates
+   * to this nav item, these tools are activated for the agent session.
+   * When the user leaves, they deactivate.
+   */
+  ClientTools?: NavItemClientTool[];
+}
+
+/**
+ * A client tool binding on a nav item, with optional default parameters.
+ */
+export interface NavItemClientTool {
+  /** ID of the MJ: AI Client Tool Definition */
+  ToolDefinitionID: string;
+  /** Optional default parameter values for this tool in this nav item context */
+  DefaultParams?: Record<string, unknown>;
 }
 
 /**

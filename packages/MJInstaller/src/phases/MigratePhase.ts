@@ -10,12 +10,8 @@
  * in version order, creating the `__mj` schema tables, stored procedures,
  * views, and seed data that MemberJunction requires.
  *
- * **CLI resolution strategy** (in order):
- * 1. Local npm script `mj:migrate` — works in the full monorepo where
- *    `@memberjunction/cli` is a workspace dependency.
- * 2. `npx @memberjunction/cli@<version> migrate` — works in the bootstrap
- *    distribution where the CLI is not installed locally. Uses the version
- *    tag from the install plan to ensure version consistency.
+ * **CLI resolution**: Uses the local `@memberjunction/cli` binary installed
+ * as a workspace dependency in the monorepo.
  *
  * @module phases/MigratePhase
  * @see ConfigurePhase — generates the `.env` file with database credentials.
@@ -84,7 +80,7 @@ export class MigratePhase {
    *
    * @param context - Migrate input with directory, config, and emitter.
    * @returns Migration result with success status and raw output.
-   * @throws {InstallerError} With code `MIGRATE_TIMEOUT` if migrations exceed 5 minutes.
+   * @throws {InstallerError} With code `MIGRATE_TIMEOUT` if migrations exceed 10 minutes.
    * @throws {InstallerError} With code `MIGRATE_FAILED` if the migration command exits non-zero.
    */
   async Run(context: MigrateContext): Promise<MigrateResult> {
@@ -100,7 +96,7 @@ export class MigratePhase {
 
     const result = await this.processRunner.Run(cmd, args, {
       Cwd: context.Dir,
-      TimeoutMs: 300_000, // 5 minutes
+      TimeoutMs: 600_000, // 10 minutes
       OnStdout: (line: string) => {
         emitter.Emit('step:progress', {
           Type: 'step:progress',
@@ -157,33 +153,31 @@ export class MigratePhase {
   /**
    * Resolve the CLI command and arguments.
    *
-   * Tries the local CLI binary first (used by the full monorepo where
-   * `@memberjunction/cli` is hoisted to `apps/MJAPI/node_modules/`).
-   * Falls back to `npx @memberjunction/cli@<version>` for the bootstrap
-   * distribution where the CLI is not installed locally.
+   * Resolves the local CLI binary from the monorepo's `node_modules/`.
    *
    * @param dir - Repo root directory.
-   * @param versionTag - Release tag (e.g., `"v5.9.0"`) for version pinning.
+   * @param _versionTag - Unused (retained for interface compatibility).
    * @param cliArgs - Arguments to pass to the CLI (e.g., `['migrate', '--verbose']`).
    * @returns Command and args array suitable for `ProcessRunner.Run()`.
    */
   private async resolveCli(
     dir: string,
-    versionTag: string | undefined,
+    _versionTag: string | undefined,
     cliArgs: string[]
   ): Promise<{ cmd: string; args: string[] }> {
-    // Try local CLI binary (monorepo layout)
-    const localCli = path.join(dir, 'apps', 'MJAPI', 'node_modules', '@memberjunction', 'cli', 'bin', 'run.js');
-    if (await this.fileSystem.FileExists(localCli)) {
-      return { cmd: 'node', args: [localCli, ...cliArgs] };
+    const candidates = [
+      path.join(dir, 'node_modules', '@memberjunction', 'cli', 'bin', 'run.js'),
+      path.join(dir, 'apps', 'MJAPI', 'node_modules', '@memberjunction', 'cli', 'bin', 'run.js'),
+    ];
+
+    for (const localCli of candidates) {
+      if (await this.fileSystem.FileExists(localCli)) {
+        return { cmd: 'node', args: [localCli, ...cliArgs] };
+      }
     }
 
-    // Fall back to npx with version-pinned package
-    const cliPackage = versionTag
-      ? `@memberjunction/cli@${versionTag.replace(/^v/, '')}`
-      : '@memberjunction/cli';
-
-    return { cmd: 'npx', args: [cliPackage, ...cliArgs] };
+    // Last resort: use npx (shouldn't happen in monorepo layout)
+    return { cmd: 'npx', args: ['@memberjunction/cli', ...cliArgs] };
   }
 
   // ---------------------------------------------------------------------------

@@ -1,5 +1,42 @@
 # @memberjunction/ng-react
 
+## 5.23.0
+
+### Patch Changes
+
+- c17be20: no migration/metadata
+- Updated dependencies [247df16]
+- Updated dependencies [9250070]
+- Updated dependencies [513b20c]
+- Updated dependencies [44bc22b]
+- Updated dependencies [1d1e02e]
+- Updated dependencies [c17be20]
+  - @memberjunction/core@5.23.0
+  - @memberjunction/global@5.23.0
+  - @memberjunction/ai-vectors-memory@5.23.0
+  - @memberjunction/graphql-dataprovider@5.23.0
+  - @memberjunction/core-entities@5.23.0
+  - @memberjunction/react-runtime@5.23.0
+  - @memberjunction/ng-notifications@5.23.0
+  - @memberjunction/interactive-component-types@5.23.0
+
+## 5.22.0
+
+### Patch Changes
+
+- Updated dependencies [6a5093b]
+- Updated dependencies [e123e4b]
+- Updated dependencies [a42aba6]
+- Updated dependencies [f2a6bec]
+  - @memberjunction/core@5.22.0
+  - @memberjunction/ai-vectors-memory@5.22.0
+  - @memberjunction/global@5.22.0
+  - @memberjunction/graphql-dataprovider@5.22.0
+  - @memberjunction/ng-notifications@5.22.0
+  - @memberjunction/interactive-component-types@5.22.0
+  - @memberjunction/core-entities@5.22.0
+  - @memberjunction/react-runtime@5.22.0
+
 ## 5.21.0
 
 ### Patch Changes
