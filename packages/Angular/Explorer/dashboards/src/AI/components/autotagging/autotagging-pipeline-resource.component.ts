@@ -1199,6 +1199,27 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         });
     }
 
+    /** Resolve the entity record ID from the EntityRecordDocument for entity-sourced content items */
+    private resolveEntityRecordID(item: Record<string, unknown>, sourceId: string): string | null {
+        const erdID = item['EntityRecordDocumentID'] as string | null;
+        if (!erdID) return null;
+        return this.entityRecordDocCache.get(NormalizeUUID(erdID)) ?? null;
+    }
+
+    /** Resolve the entity name for an entity-sourced content source */
+    private resolveEntityName(sourceId: string): string | null {
+        try {
+            const engine = KnowledgeHubMetadataEngine.Instance;
+            const source = engine.ContentSources.find(cs => UUIDsEqual(cs.ID, sourceId));
+            if (!source?.EntityID) return null;
+            const md = new Metadata();
+            const entityInfo = md.Entities.find(e => UUIDsEqual(e.ID, source.EntityID));
+            return entityInfo?.Name ?? null;
+        } catch {
+            return null;
+        }
+    }
+
     /** Check if a source type's Configuration says RequiresFileType !== false */
     private sourceTypeRequiresFileType(sourceTypeID: string): boolean {
         try {
@@ -2200,7 +2221,13 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
 
                 if (success) {
                     this.tabDataLoaded.clear();
-                    await this.LoadPipelineData();
+                    // Reload pipeline data AND refresh ERD cache (new EntityRecordDocuments
+                    // may have been created by the pipeline for entity sources)
+                    this.entityRecordDocCache.clear();
+                    await Promise.all([
+                        this.LoadPipelineData(),
+                        this.loadEntityRecordDocCache(),
+                    ]);
                     this.tabDataLoaded.add('pipeline');
                     MJNotificationService.Instance.CreateSimpleNotification('Pipeline complete', 'success', 3000);
                 }
@@ -2942,8 +2969,8 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
                 StatusDot: tagCount > 0 ? 'complete' : 'processing',
                 TagCount: tagCount,
                 RequiresContentType: this.sourceTypeRequiresFileType(contentSourceTypeID),
-                EntityRecordID: null,
-                EntityName: null,
+                EntityRecordID: this.resolveEntityRecordID(item, sourceId),
+                EntityName: this.resolveEntityName(sourceId),
                 EmbeddingStatus: itemStatuses.EmbeddingStatus,
                 TaggingStatus: itemStatuses.TaggingStatus,
             };

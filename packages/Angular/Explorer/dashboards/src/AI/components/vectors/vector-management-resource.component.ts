@@ -823,7 +823,8 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
     // ================================================================
 
     private async fetchAllData(): Promise<void> {
-        // Use KnowledgeHubMetadataEngine for cached global reference data
+        // Use cached engine data — BaseEngine's entity-event auto-refresh handles
+        // updates from saves/deletes on the entities it tracks.
         const engine = KnowledgeHubMetadataEngine.Instance;
         await engine.Config(false);
 

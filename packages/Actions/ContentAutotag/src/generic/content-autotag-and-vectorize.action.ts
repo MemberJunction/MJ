@@ -7,8 +7,10 @@ import {
     MJContentItemEntity,
     MJContentProcessRunDetailEntity,
     MJContentProcessRunPromptRunEntity,
-    MJContentSourceEntity
+    MJContentSourceEntity,
+    KnowledgeHubMetadataEngine
 } from "@memberjunction/core-entities";
+import { EntityVectorSyncer } from "@memberjunction/ai-vector-sync";
 
 /**
  * Params:
@@ -81,11 +83,15 @@ export class AutotagAndVectorizeContentAction extends BaseAction {
             // - Tagging: only processes items returned by providers (new/changed)
             // - Vectorization: processes ALL content items (upserts are idempotent)
             if (vectorizeParam.Value === 1) {
-                LogStatus(`[AutotagAction] Phase 2: Starting vectorization...`);
-                await this.RunDirectVectorization(params, contentProcessRunID);
+                // Phase 2a: Vectorize content items into Pinecone (content-level vectors)
+                // Phase 2b: Sync entity vectors for Entity-type sources (entity-level vectors)
+                // These use different models/services and can run in parallel.
+                LogStatus(`[AutotagAction] Phase 2: Starting vectorization (content items + entity vectors in parallel)...`);
+                await Promise.all([
+                    this.RunDirectVectorization(params, contentProcessRunID),
+                    this.SyncEntitySourceVectors(params, contentSourceIDs),
+                ]);
             }
-            // Note: LLM tagging already ran inside each provider's Autotag() method
-            // in Phase 1 — it's not a separate step here.
             LogStatus(`[AutotagAction] All tasks completed`);
 
             return { Success: true, ResultCode: "SUCCESS" };
@@ -145,8 +151,9 @@ export class AutotagAndVectorizeContentAction extends BaseAction {
             }
 
             try {
+                const sourceIDsForProvider = sources.map(s => s.ID);
                 LogStatus(`[AutotagAction] >>> Running provider "${sourceType.Name}" (${sourceType.DriverClass}) with ${sources.length} source(s)...`);
-                await provider.Autotag(params.ContextUser, onProgress);
+                await provider.Autotag(params.ContextUser, onProgress, contentSourceIDs ? sourceIDsForProvider : undefined);
                 LogStatus(`[AutotagAction] <<< Provider "${sourceType.Name}" (${sourceType.DriverClass}) completed successfully`);
             } catch (providerError) {
                 const msg = providerError instanceof Error ? providerError.message : String(providerError);
@@ -169,6 +176,9 @@ export class AutotagAndVectorizeContentAction extends BaseAction {
         params: RunActionParams,
         contentProcessRunID?: string
     ): Promise<void> {
+        // Load all content items, then exclude Entity-sourced items.
+        // Entity sources get their vectors via EntityVectorSyncer (Phase 2b),
+        // not through content item vectorization.
         const rv = new RunView();
         const result = await rv.RunView<MJContentItemEntity>({
             EntityName: 'MJ: Content Items',
@@ -180,8 +190,22 @@ export class AutotagAndVectorizeContentAction extends BaseAction {
             return;
         }
 
-        const items = result.Results;
-        LogStatus(`VectorizeContentItems: ${items.length} content items loaded for vectorization`);
+        // Filter out Entity-sourced content items — those entities are vectorized
+        // directly via EntityVectorSyncer, not as content items.
+        await KnowledgeHubMetadataEngine.Instance.Config(false, params.ContextUser);
+        const khEngine = KnowledgeHubMetadataEngine.Instance;
+        const entitySourceType = khEngine.ContentSourceTypes.find(st => st.Name === 'Entity');
+        const entitySourceIDs = entitySourceType
+            ? new Set(khEngine.ContentSources
+                .filter(cs => UUIDsEqual(cs.ContentSourceTypeID, entitySourceType.ID))
+                .map(cs => cs.ID.toLowerCase()))
+            : new Set<string>();
+
+        const items = entitySourceIDs.size > 0
+            ? result.Results.filter(ci => !entitySourceIDs.has(ci.ContentSourceID.toLowerCase()))
+            : result.Results;
+
+        LogStatus(`VectorizeContentItems: ${items.length} content items loaded for vectorization (${result.Results.length - items.length} entity-sourced items excluded)`);
 
         if (!contentProcessRunID) {
             // No run tracking — simple vectorization
@@ -397,6 +421,64 @@ export class AutotagAndVectorizeContentAction extends BaseAction {
             } catch (error) {
                 LogError(`[AutotagAction] Error linking prompt run: ${error instanceof Error ? error.message : String(error)}`);
             }
+        }
+    }
+
+    /**
+     * For Entity-type content sources, trigger EntityVectorSyncer to sync the
+     * source entity's own vectors. This ensures entity records (e.g., Products)
+     * are directly searchable in the vector index — not just their Content Item shadows.
+     *
+     * If the entity doc has already been synced and nothing changed, this is a no-op.
+     * If records were modified by tagging, the vectors get updated.
+     */
+    private async SyncEntitySourceVectors(
+        params: RunActionParams,
+        contentSourceIDs?: string[]
+    ): Promise<void> {
+        try {
+            await KnowledgeHubMetadataEngine.Instance.Config(false, params.ContextUser);
+            const engine = KnowledgeHubMetadataEngine.Instance;
+
+            // Find Entity-type source type
+            const entitySourceType = engine.ContentSourceTypes.find(st => st.Name === 'Entity');
+            if (!entitySourceType) return;
+
+            // Get entity sources (filtered if source IDs specified)
+            let entitySources = engine.ContentSources.filter(
+                cs => UUIDsEqual(cs.ContentSourceTypeID, entitySourceType.ID)
+            );
+
+            if (contentSourceIDs && contentSourceIDs.length > 0) {
+                entitySources = entitySources.filter(
+                    cs => contentSourceIDs.some(id => UUIDsEqual(id, cs.ID))
+                );
+            }
+
+            if (entitySources.length === 0) return;
+
+            const syncer = new EntityVectorSyncer();
+            await syncer.Config(false, params.ContextUser);
+
+            for (const source of entitySources) {
+                if (!source.EntityID || !source.EntityDocumentID) continue;
+
+                try {
+                    LogStatus(`[AutotagAction] Syncing entity vectors for "${source.Name}" (Entity: ${source.EntityID}, Doc: ${source.EntityDocumentID})`);
+                    await syncer.VectorizeEntity(
+                        { entityID: source.EntityID, entityDocumentID: source.EntityDocumentID },
+                        params.ContextUser
+                    );
+                    LogStatus(`[AutotagAction] Entity vector sync complete for "${source.Name}"`);
+                } catch (syncError) {
+                    const msg = syncError instanceof Error ? syncError.message : String(syncError);
+                    LogError(`[AutotagAction] Entity vector sync failed for "${source.Name}": ${msg}`);
+                    // Non-fatal — continue with other sources
+                }
+            }
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            LogError(`[AutotagAction] SyncEntitySourceVectors failed: ${msg}`);
         }
     }
 }

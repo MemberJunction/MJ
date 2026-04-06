@@ -37,12 +37,19 @@ export class AutotagEntity extends AutotagBase {
     /** Cached content source entities keyed by normalized source ID for ERD lookups */
     private contentSourceMap = new Map<string, MJContentSourceEntity>();
 
-    public async Autotag(contextUser: UserInfo, onProgress?: AutotagProgressCallback): Promise<void> {
+    public async Autotag(contextUser: UserInfo, onProgress?: AutotagProgressCallback, contentSourceIDs?: string[]): Promise<void> {
         this.contextUser = contextUser;
         this.engine = AutotagBaseEngine.Instance;
         this.contentSourceTypeID = this.engine.SetSubclassContentSourceType('Entity');
 
-        const contentSources = await this.engine.getAllContentSources(contextUser, this.contentSourceTypeID);
+        let contentSources = await this.engine.getAllContentSources(contextUser, this.contentSourceTypeID);
+
+        // Apply source ID filter if specified
+        if (contentSourceIDs && contentSourceIDs.length > 0) {
+            contentSources = contentSources.filter(s =>
+                contentSourceIDs.some(id => UUIDsEqual(id, s.ID))
+            );
+        }
 
         // Cache content source configs and set up taxonomy
         await this.SetupTaxonomyAndBridge(contentSources, contextUser);

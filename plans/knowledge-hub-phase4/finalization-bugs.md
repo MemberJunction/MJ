@@ -28,7 +28,7 @@ The "See similar items" feature is great, but when it gets clicked on need to cl
 
 # Classify
 - Pipeline UI - hard to see the source name - make it clearer and maybe group recent processing by it or otherwise highlight, also should show MOST recent first in that list and make it scrollable and pageable to see as far back as user wants to go. And searchable
-
+- if I start the app on Classify, Content Types, Tag Lib etc they don't properly show data, they appear blank. If i then go to another tab and come back they load. Seems like timing related, they shoudl all await for their data to be ready to display and show mj-loading until. Fix this.
 
 # Tree Dropdown in ng-trees package
 - When the drop down is selected we should put focus on the search text box so user can type to search without having to click first

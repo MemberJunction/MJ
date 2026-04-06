@@ -6,7 +6,8 @@ import {
     MJContentTypeAttributeEntity, MJContentSourceParamEntity, MJContentItemTagEntity,
     MJContentItemAttributeEntity, MJContentSourceTypeParamEntity,
     MJContentProcessRunEntity_IContentProcessRunConfiguration,
-    MJContentItemDuplicateEntity
+    MJContentItemDuplicateEntity, MJTaggedItemEntity,
+    MJEntityRecordDocumentEntity
 } from '@memberjunction/core-entities'
 import { ContentSourceParams, ContentSourceTypeParams, ContentSourceTypeParamValue } from './content.types'
 import { RateLimiter } from './RateLimiter'
@@ -401,6 +402,10 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     /**
      * Bridge a ContentItemTag to the formal MJ Tag taxonomy.
      * Uses TagEngine.ResolveTag() in auto-grow mode by default.
+     *
+     * After resolving/creating the formal Tag, also creates a TaggedItem record:
+     * - For Entity sources: tags the original entity record (e.g., Products row)
+     * - For non-Entity sources (RSS, Website, etc.): tags the ContentItem itself
      */
     private async BridgeContentItemTagToTaxonomy(
         contentItemTag: MJContentItemTagEntity,
@@ -430,10 +435,101 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
                 // Link ContentItemTag to formal Tag
                 contentItemTag.TagID = formalTag.ID;
                 await contentItemTag.Save();
+
+                // Create TaggedItem linking the formal Tag to the appropriate entity record
+                await this.createTaggedItemFromContentItemTag(
+                    contentItemTag, formalTag.ID, contextUser
+                );
             }
         } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
             LogError(`[TaxonomyBridge] Failed for tag "${contentItemTag.Tag}": ${msg}`);
+        }
+    }
+
+    /**
+     * Creates a TaggedItem record linking a formal Tag to the appropriate entity record.
+     *
+     * For Entity-sourced content items: resolves the EntityRecordDocument to find the
+     * original entity (e.g., Products) and record ID, then tags that entity record.
+     *
+     * For non-Entity-sourced content items (RSS, Website, Cloud Storage): tags the
+     * ContentItem itself (EntityID = "MJ: Content Items" entity, RecordID = content item ID).
+     */
+    private async createTaggedItemFromContentItemTag(
+        contentItemTag: MJContentItemTagEntity,
+        tagID: string,
+        contextUser: UserInfo
+    ): Promise<void> {
+        try {
+            const md = new Metadata();
+            let entityID: string;
+            let recordID: string;
+
+            // Load the content item to determine source type
+            const rv = new RunView();
+            const ciResult = await rv.RunView<{
+                ID: string;
+                EntityRecordDocumentID: string | null;
+                ContentSourceID: string;
+            }>({
+                EntityName: 'MJ: Content Items',
+                ExtraFilter: `ID='${contentItemTag.ItemID}'`,
+                ResultType: 'simple',
+                Fields: ['ID', 'EntityRecordDocumentID', 'ContentSourceID'],
+                MaxRows: 1,
+            }, contextUser);
+
+            if (!ciResult.Success || ciResult.Results.length === 0) return;
+            const ci = ciResult.Results[0];
+
+            if (ci.EntityRecordDocumentID) {
+                // Entity source — resolve to the original entity record
+                const erdResult = await rv.RunView<{
+                    EntityID: string;
+                    RecordID: string;
+                }>({
+                    EntityName: 'MJ: Entity Record Documents',
+                    ExtraFilter: `ID='${ci.EntityRecordDocumentID}'`,
+                    ResultType: 'simple',
+                    Fields: ['EntityID', 'RecordID'],
+                    MaxRows: 1,
+                }, contextUser);
+
+                if (!erdResult.Success || erdResult.Results.length === 0) return;
+                entityID = erdResult.Results[0].EntityID;
+                recordID = erdResult.Results[0].RecordID;
+            } else {
+                // Non-entity source — tag the ContentItem itself
+                const contentItemsEntity = md.Entities.find(e => e.Name === 'MJ: Content Items');
+                if (!contentItemsEntity) return;
+                entityID = contentItemsEntity.ID;
+                recordID = contentItemTag.ItemID;
+            }
+
+            // Check if this TaggedItem already exists (avoid duplicates)
+            const existingResult = await rv.RunView<{ ID: string }>({
+                EntityName: 'MJ: Tagged Items',
+                ExtraFilter: `TagID='${tagID}' AND EntityID='${entityID}' AND RecordID='${recordID}'`,
+                ResultType: 'simple',
+                Fields: ['ID'],
+                MaxRows: 1,
+            }, contextUser);
+
+            if (existingResult.Success && existingResult.Results.length > 0) return; // Already exists
+
+            // Create the TaggedItem
+            const taggedItem = await md.GetEntityObject<MJTaggedItemEntity>('MJ: Tagged Items', contextUser);
+            taggedItem.NewRecord();
+            taggedItem.TagID = tagID;
+            taggedItem.EntityID = entityID;
+            taggedItem.RecordID = recordID;
+            taggedItem.Weight = contentItemTag.Weight;
+            await taggedItem.Save();
+        } catch (e) {
+            // Non-critical — the ContentItemTag is already saved, TaggedItem is supplemental
+            const msg = e instanceof Error ? e.message : String(e);
+            LogError(`[TaxonomyBridge] Failed to create TaggedItem for tag "${contentItemTag.Tag}": ${msg}`);
         }
     }
 
