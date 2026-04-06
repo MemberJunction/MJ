@@ -799,7 +799,7 @@ ALTER TABLE [${flyway:defaultSchema}].[ArchiveConfigurationEntity] ADD CONSTRAIN
             16,
             0,
             0,
-            0,
+            1,
             NULL,
             0,
             1,
