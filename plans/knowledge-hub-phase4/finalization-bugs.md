@@ -90,5 +90,22 @@ telemetryManager.ts:1367
 ```
 
 
+# Tag Deduplication / Taxonomy
+- **ResolveTag mutex not serializing**: Server was restarted with latest build but tags still created at identical milliseconds (e.g., "AI Agent" ×2 at same ms, "Knowledge Management" ×5 within 200ms). Proves the promise-chain mutex isn't working. Investigate: (1) is the promise chain on `_resolveTagQueue` actually serializing concurrent calls? (2) is ResolveTag even the code path creating all tags, or does TagEngineBase.CreateTag get called directly elsewhere? (3) add logging inside resolveTagInner to confirm mutex entry/exit ordering
+- **Fuzzy match gap**: "AI Agent" and "AI Agents" plural pair not caught by normalizer — verify `normalizeTagName` strips trailing 's' from multi-word tags like "AI Agents" → "AI Agent"
+- **MJTagEntityServer embedding sync**: Created server entity subclass that overrides Save/Delete to keep TagEngine vector service in sync. Verify it's being picked up by ClassFactory (registration priority) and that embeddings are actually added on each Save
+- **Remove Tagged Items from TagEngineBase**: TagEngineBase bulk-loads ALL TaggedItems into memory via BaseEngine config. This will be massive at scale. Should not be cached in engine. Also check CacheLocal setting on all TaggedItem RunViews
+
+# Duplicates
+- Right now it appears we're not allowed to run dupes on entities that don't have merging turned on. But we don't want that, we want to simply notify the user that merging won't be available but they can run dupe detection. 
+- Fix this - I asked for this before and it was forgotten. Styling warning message so they don't get annoyed later, but let em do the dupe detect process!
+- **Merge warning UX**: The warning dialog already exists in code but feels like a blocker — consider replacing the modal with an inline banner so detection starts immediately without a confirmation step
+- **Dropdown + button unresponsive**: Controls don't respond until full LoadData completes. EntityDocuments populated at line 380 but detectChanges only fires at line 393 after heavy RunViews batch. Move entity doc population + detectChanges earlier so controls are interactive immediately
+- **Progress bar loops**: Shows 100% then resets to 0% repeatedly, alternating "Querying Database" and "Analyzing matches". Investigate progress subscription logic for cycling/duplicate events during detection run
+- **Provider re-initialization per record (perf + memory)**: Dupe detection re-initializes providers on every iteration instead of once. Log shows "Providers initialized: AI Model=OpenAIEmbedding, VectorDB=PineconeDatabase, Index=mj-knowledge-index" repeated, "MJ: Vector Indexes" queried 92 times with 4 filter combos, "MJ: AI Models" queried 10 times identically. entityVectorSync.GetOrCreateVectorIndex and provider init should be done ONCE and reused. Use KH engine cached VectorIndexes and AIEngine cached Models. Likely source of memory issues too.
+
+# Pipeline UI
+- **UI staleness after batch completion**: Pipeline UI doesn't auto-refresh after batch 2 completes — items show blue "in progress" circles even though DB shows all 32 items as Complete. Requires manual page refresh. Investigate WebSocket/subscription notification gap
+
 # Record Form / Tags
 - Should we allow users to manually add/remove tags? If so we need to think about how automated tagging interacts, overrides, respect, etc. let's think about this and discuss! 
