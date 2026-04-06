@@ -22,6 +22,9 @@ const loadActionsDashboardsModule = featureLoader(() => import('@memberjunction/
 // --- @memberjunction/ng-dashboards → ./ai-dashboards.module (12 entries) ---
 const loadAiDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/ai-dashboards.module'));
 
+// --- @memberjunction/ng-dashboards → ./archiving-dashboards.module (2 entries) ---
+const loadArchivingDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/archiving-dashboards.module'));
+
 // --- @memberjunction/ng-dashboards → ./communication-dashboards.module (6 entries) ---
 const loadCommunicationDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/communication-dashboards.module'));
 
@@ -88,6 +91,10 @@ export const LAZY_FEATURE_CONFIG: Record<string, () => Promise<void>> = {
   'BaseResourceComponent::KnowledgeConfigResource': loadAiDashboardsModule,
   'BaseResourceComponent::KnowledgeSearchResource': loadAiDashboardsModule,
   'BaseResourceComponent::VectorManagementResource': loadAiDashboardsModule,
+
+  // @memberjunction/ng-dashboards → ./archiving-dashboards.module
+  'BaseResourceComponent::ArchiveConfigResource': loadArchivingDashboardsModule,
+  'BaseResourceComponent::ArchiveRunsResource': loadArchivingDashboardsModule,
 
   // @memberjunction/ng-dashboards → ./communication-dashboards.module
   'BaseDashboard::CommunicationDashboard': loadCommunicationDashboardsModule,
@@ -173,4 +180,4 @@ export const LAZY_FEATURE_CONFIG: Record<string, () => Promise<void>> = {
 
 };
 
-export const LAZY_FEATURE_CONFIG_COUNT = 75;
+export const LAZY_FEATURE_CONFIG_COUNT = 77;

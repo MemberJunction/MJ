@@ -31,20 +31,18 @@
                 <span class="config-card-name">{{ config.Name }}</span>
                 <span
                   class="config-status-badge"
-                  [class.status-active]="config.Status === 'Active'"
-                  [class.status-inactive]="config.Status !== 'Active'">
+                  [class.status-active]="config.Status === 'Idle' || config.Status === 'Running'"
+                  [class.status-inactive]="config.Status === 'Disabled' || config.Status === 'Error'">
                   {{ GetStatusLabel(config.Status) }}
                 </span>
               </div>
               <div class="config-card-meta">
                 <span><i class="fa-solid fa-database"></i> {{ config.StorageAccountName || 'No storage' }}</span>
-                <span><i class="fa-solid fa-table"></i> {{ config.EntityCount }} entities</span>
+                <span><i class="fa-solid fa-folder"></i> {{ config.RootPath }}</span>
               </div>
-              @if (config.LastRunDate) {
-                <div class="config-card-date">
-                  <i class="fa-solid fa-clock"></i> Last run: {{ config.LastRunDate }}
-                </div>
-              }
+              <div class="config-card-date">
+                <span class="config-status-mode"><i class="fa-solid fa-sliders"></i> {{ config.DefaultMode }}</span>
+              </div>
             </div>
           }
 
@@ -92,8 +90,8 @@
                     <label class="toggle-label">
                       <input
                         type="checkbox"
-                        [checked]="SelectedConfig.Status === 'Active'"
-                        (change)="SelectedConfig.Status = SelectedConfig.Status === 'Active' ? 'Inactive' : 'Active'; OnConfigFieldChanged()" />
+                        [checked]="SelectedConfig.Status === 'Idle'"
+                        (change)="SelectedConfig.Status = SelectedConfig.Status === 'Idle' ? 'Disabled' : 'Idle'; OnConfigFieldChanged()" />
                       <span class="toggle-text">{{ GetStatusLabel(SelectedConfig.Status) }}</span>
                     </label>
                   </div>
@@ -166,7 +164,7 @@
                     <label for="config-mode">Archive Mode</label>
                     <select
                       id="config-mode"
-                      [(ngModel)]="SelectedConfig.DefaultArchiveMode"
+                      [(ngModel)]="SelectedConfig.DefaultMode"
                       (ngModelChange)="OnConfigFieldChanged()"
                       class="detail-input">
                       @for (mode of ArchiveModes; track mode) {
@@ -179,9 +177,9 @@
                     <label class="toggle-label">
                       <input
                         type="checkbox"
-                        [(ngModel)]="SelectedConfig.ArchiveRecordChanges"
+                        [(ngModel)]="SelectedConfig.ArchiveRelatedRecordChanges"
                         (ngModelChange)="OnConfigFieldChanged()" />
-                      <span class="toggle-text">{{ SelectedConfig.ArchiveRecordChanges ? 'Enabled' : 'Disabled' }}</span>
+                      <span class="toggle-text">{{ SelectedConfig.ArchiveRelatedRecordChanges ? 'Enabled' : 'Disabled' }}</span>
                     </label>
                   </div>
                 </div>
@@ -223,7 +221,7 @@
                             </td>
                             <td>
                               <select
-                                [(ngModel)]="entity.ArchiveMode"
+                                [(ngModel)]="entity.Mode"
                                 (ngModelChange)="OnEntityChanged(entity)"
                                 class="entity-input">
                                 @for (mode of ArchiveModes; track mode) {
@@ -248,7 +246,7 @@
                             <td>
                               <input
                                 type="text"
-                                [(ngModel)]="entity.DateFieldName"
+                                [(ngModel)]="entity.DateField"
                                 (ngModelChange)="OnEntityChanged(entity)"
                                 class="entity-input"
                                 placeholder="e.g. CreatedAt" />

@@ -136,10 +136,10 @@ export class ArchiveStatusBadgeComponent implements OnDestroy {
 
     return rv.RunView<ArchiveDetailRecord>({
       EntityName: 'MJ: Archive Run Details',
-      ExtraFilter: `EntityName='${escapedEntity}' AND RecordID='${escapedRecord}' AND Status='Success'`,
+      ExtraFilter: `Entity='${escapedEntity}' AND RecordID='${escapedRecord}' AND Status='Success'`,
       OrderBy: '__mj_CreatedAt DESC',
       ResultType: 'simple',
-      Fields: ['ID', 'EntityName', 'RecordID', 'FieldCount', 'Bytes', '__mj_CreatedAt'],
+      Fields: ['ID', 'Entity', 'RecordID', 'BytesArchived', '__mj_CreatedAt'],
     });
   }
 
@@ -152,7 +152,7 @@ export class ArchiveStatusBadgeComponent implements OnDestroy {
 
     const latest = result.Results[0];
     this.HasArchivedFields = true;
-    this.ArchivedFieldCount = latest.FieldCount ?? 0;
+    this.ArchivedFieldCount = result.Results.length;
     this.LastArchivedDate = latest.__mj_CreatedAt ? new Date(latest.__mj_CreatedAt) : null;
     this.TooltipText = this.buildTooltipText();
     this.latestVersion = this.buildVersionInfo(latest);
@@ -173,9 +173,9 @@ export class ArchiveStatusBadgeComponent implements OnDestroy {
       DetailID: record.ID,
       EntityName: this._entityName,
       RecordID: this._recordID,
-      FieldCount: record.FieldCount ?? 0,
+      FieldCount: 0,
       ArchivedAt: record.__mj_CreatedAt ? new Date(record.__mj_CreatedAt) : new Date(),
-      Bytes: record.Bytes ?? 0,
+      Bytes: record.BytesArchived ?? 0,
     };
   }
 
@@ -192,9 +192,8 @@ export class ArchiveStatusBadgeComponent implements OnDestroy {
 /** Shape of the simple result from the archive run details query */
 interface ArchiveDetailRecord {
   ID: string;
-  EntityName: string;
+  Entity: string;
   RecordID: string;
-  FieldCount: number;
-  Bytes: number;
+  BytesArchived: number;
   __mj_CreatedAt: string;
 }

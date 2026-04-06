@@ -217,10 +217,10 @@ export class ArchiveRestoreDialogComponent implements OnDestroy {
 
     return rv.RunView<VersionDetailRecord>({
       EntityName: 'MJ: Archive Run Details',
-      ExtraFilter: `EntityName='${escapedEntity}' AND RecordID='${escapedRecord}' AND Status='Success'`,
+      ExtraFilter: `Entity='${escapedEntity}' AND RecordID='${escapedRecord}' AND Status='Success'`,
       OrderBy: '__mj_CreatedAt DESC',
       ResultType: 'simple',
-      Fields: ['ID', 'FieldCount', 'Bytes', 'StoragePath', 'ArchivedData', '__mj_CreatedAt'],
+      Fields: ['ID', 'BytesArchived', 'StoragePath', '__mj_CreatedAt'],
     });
   }
 
@@ -232,10 +232,10 @@ export class ArchiveRestoreDialogComponent implements OnDestroy {
     return result.Results.map((r) => ({
       ID: r.ID,
       ArchivedAt: new Date(r.__mj_CreatedAt),
-      FieldCount: r.FieldCount ?? 0,
-      Bytes: r.Bytes ?? 0,
+      FieldCount: 0,
+      Bytes: r.BytesArchived ?? 0,
       StoragePath: r.StoragePath ?? '',
-      ArchivedData: r.ArchivedData ?? '{}',
+      ArchivedData: '{}',
     }));
   }
 
@@ -277,9 +277,7 @@ export class ArchiveRestoreDialogComponent implements OnDestroy {
 /** Shape of a version detail record from the simple RunView query */
 interface VersionDetailRecord {
   ID: string;
-  FieldCount: number;
-  Bytes: number;
+  BytesArchived: number;
   StoragePath: string;
-  ArchivedData: string;
   __mj_CreatedAt: string;
 }

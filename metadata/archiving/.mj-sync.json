@@ -17,6 +17,11 @@
     "ignoreNullFields": true,
     "ignoreVirtualFields": true,
     "lookupFields": {},
-    "relatedEntities": {}
+    "relatedEntities": {
+      "MJ: Archive Configuration Entities": {
+        "entity": "MJ: Archive Configuration Entities",
+        "foreignKey": "ArchiveConfigurationID"
+      }
+    }
   }
 }

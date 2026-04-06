@@ -60,6 +60,10 @@
     "./module": {
       "types": "./dist/module.d.ts",
       "default": "./dist/module.js"
+    },
+    "./archiving-dashboards.module": {
+      "types": "./dist/archiving-dashboards.module.d.ts",
+      "default": "./dist/archiving-dashboards.module.js"
     }
   },
   "files": [
@@ -104,6 +108,7 @@
     "@memberjunction/graphql-dataprovider": "5.23.0",
     "@memberjunction/integration-engine-base": "5.23.0",
     "@memberjunction/interactive-component-types": "5.23.0",
+    "@memberjunction/ng-archive-manager": "5.23.0",
     "@memberjunction/ng-action-gallery": "5.23.0",
     "@memberjunction/ng-actions": "5.23.0",
     "@memberjunction/ng-agent-requests": "5.23.0",

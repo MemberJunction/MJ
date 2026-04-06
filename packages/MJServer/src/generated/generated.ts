@@ -19400,9 +19400,9 @@ export class MJArchiveConfiguration_ {
     @Field({nullable: true}) 
     Description?: string;
         
-    @Field({description: `Foreign key to FileStorageAccount — the blob/file storage target for archived data.`}) 
+    @Field({nullable: true, description: `Foreign key to FileStorageAccount — the blob/file storage target for archived data.`}) 
     @MaxLength(36)
-    StorageAccountID: string;
+    StorageAccountID?: string;
         
     @Field({description: `Root path within the storage account where archive files are written (e.g., "archives/production/").`}) 
     @MaxLength(500)
@@ -19442,9 +19442,9 @@ export class MJArchiveConfiguration_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
-    @Field() 
+    @Field({nullable: true}) 
     @MaxLength(200)
-    StorageAccount: string;
+    StorageAccount?: string;
         
     @Field() 
     @MaxLength(100)
@@ -19473,7 +19473,7 @@ export class CreateMJArchiveConfigurationInput {
     Description: string | null;
 
     @Field({ nullable: true })
-    StorageAccountID?: string;
+    StorageAccountID: string | null;
 
     @Field({ nullable: true })
     RootPath?: string;
@@ -19519,7 +19519,7 @@ export class UpdateMJArchiveConfigurationInput {
     Description?: string | null;
 
     @Field({ nullable: true })
-    StorageAccountID?: string;
+    StorageAccountID?: string | null;
 
     @Field({ nullable: true })
     RootPath?: string;
@@ -19707,6 +19707,10 @@ export class MJArchiveRunDetail_ {
         
     @Field() 
     _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(255)
+    ArchiveRun: string;
         
     @Field() 
     @MaxLength(255)

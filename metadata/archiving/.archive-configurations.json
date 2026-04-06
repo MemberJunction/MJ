@@ -2,89 +2,265 @@
   {
     "fields": {
       "Name": "Record Changes - 12 Month",
-      "Description": "Archives Record Changes data older than 12 months. Captures ChangesJSON, FullRecordJSON, and ChangesDescription fields before nullifying them to reclaim storage.",
-      "EntityName": "Record Changes",
-      "RetentionDays": 365,
-      "ArchiveMode": "archive",
+      "Description": "Archives Record Changes data older than 12 months. Strips ChangesJSON, FullRecordJSON, and ChangesDescription fields to reclaim storage while preserving row skeletons.",
+      "RootPath": "/archives",
+      "ArchiveFormat": "JSON",
       "IsActive": false,
-      "FieldConfiguration": "{\"Fields\":[{\"FieldName\":\"ChangesJSON\",\"IsActive\":true},{\"FieldName\":\"FullRecordJSON\",\"IsActive\":true},{\"FieldName\":\"ChangesDescription\",\"IsActive\":true}],\"ArchiveFullRecord\":true,\"SkipIfAllNullFields\":[\"ChangesJSON\",\"FullRecordJSON\",\"ChangesDescription\"]}"
+      "DefaultRetentionDays": 365,
+      "DefaultMode": "StripFields",
+      "DefaultBatchSize": 100,
+      "ArchiveRelatedRecordChanges": false,
+      "Status": "Disabled",
+      "CreatedByUserID": "aeca30c7-0d3f-4b65-a70d-26b725981abf"
+    },
+    "relatedEntities": {
+      "MJ: Archive Configuration Entities": [
+        {
+          "fields": {
+            "ArchiveConfigurationID": "@parent:ID",
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: Record Changes",
+            "Mode": "StripFields",
+            "RetentionDays": 365,
+            "DateField": "__mj_CreatedAt",
+            "BatchSize": 100,
+            "Priority": 1,
+            "FieldConfiguration": "{\"Fields\":[{\"FieldName\":\"ChangesJSON\",\"IsActive\":true},{\"FieldName\":\"FullRecordJSON\",\"IsActive\":true},{\"FieldName\":\"ChangesDescription\",\"IsActive\":true}],\"ArchiveFullRecord\":true,\"SkipIfAllNullFields\":[\"ChangesJSON\",\"FullRecordJSON\",\"ChangesDescription\"]}",
+            "ArchiveRelatedRecordChanges": false,
+            "IsActive": true
+          }
+        }
+      ]
     }
   },
   {
     "fields": {
       "Name": "AI Prompt Runs - 6 Month",
-      "Description": "Archives AI Prompt Runs data older than 6 months. Captures Messages, Result, ErrorMessage, and ValidationAttempts fields.",
-      "EntityName": "MJ: AI Prompt Runs",
-      "RetentionDays": 180,
-      "ArchiveMode": "archive",
+      "Description": "Archives AI Prompt Runs data older than 6 months. Strips Messages, Result, ErrorMessage, and ValidationAttempts fields.",
+      "RootPath": "/archives",
+      "ArchiveFormat": "JSON",
       "IsActive": false,
-      "FieldConfiguration": "{\"Fields\":[{\"FieldName\":\"Messages\",\"IsActive\":true},{\"FieldName\":\"Result\",\"IsActive\":true},{\"FieldName\":\"ErrorMessage\",\"IsActive\":true},{\"FieldName\":\"ValidationAttempts\",\"IsActive\":true}],\"ArchiveFullRecord\":true,\"SkipIfAllNullFields\":[\"Messages\",\"Result\",\"ErrorMessage\",\"ValidationAttempts\"]}"
+      "DefaultRetentionDays": 180,
+      "DefaultMode": "StripFields",
+      "DefaultBatchSize": 100,
+      "ArchiveRelatedRecordChanges": true,
+      "Status": "Disabled",
+      "CreatedByUserID": "aeca30c7-0d3f-4b65-a70d-26b725981abf"
+    },
+    "relatedEntities": {
+      "MJ: Archive Configuration Entities": [
+        {
+          "fields": {
+            "ArchiveConfigurationID": "@parent:ID",
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: AI Prompt Runs",
+            "Mode": "StripFields",
+            "RetentionDays": 180,
+            "DateField": "__mj_CreatedAt",
+            "BatchSize": 100,
+            "Priority": 1,
+            "FieldConfiguration": "{\"Fields\":[{\"FieldName\":\"Messages\",\"IsActive\":true},{\"FieldName\":\"Result\",\"IsActive\":true},{\"FieldName\":\"ErrorMessage\",\"IsActive\":true},{\"FieldName\":\"ValidationAttempts\",\"IsActive\":true}],\"ArchiveFullRecord\":true,\"SkipIfAllNullFields\":[\"Messages\",\"Result\"]}",
+            "ArchiveRelatedRecordChanges": true,
+            "IsActive": true
+          }
+        }
+      ]
     }
   },
   {
     "fields": {
       "Name": "AI Agent Run Steps - 6 Month",
-      "Description": "Archives AI Agent Run Steps data older than 6 months. Captures InputData, OutputData, PayloadAtStart, PayloadAtEnd, ErrorMessage, and Comments fields.",
-      "EntityName": "MJ: AI Agent Run Steps",
-      "RetentionDays": 180,
-      "ArchiveMode": "archive",
+      "Description": "Archives AI Agent Run Steps data older than 6 months. Strips InputData, OutputData, PayloadAtStart, PayloadAtEnd, ErrorMessage, and Comments fields.",
+      "RootPath": "/archives",
+      "ArchiveFormat": "JSON",
       "IsActive": false,
-      "FieldConfiguration": "{\"Fields\":[{\"FieldName\":\"InputData\",\"IsActive\":true},{\"FieldName\":\"OutputData\",\"IsActive\":true},{\"FieldName\":\"PayloadAtStart\",\"IsActive\":true},{\"FieldName\":\"PayloadAtEnd\",\"IsActive\":true},{\"FieldName\":\"ErrorMessage\",\"IsActive\":true},{\"FieldName\":\"Comments\",\"IsActive\":true}],\"ArchiveFullRecord\":true,\"SkipIfAllNullFields\":[\"InputData\",\"OutputData\",\"PayloadAtStart\",\"PayloadAtEnd\",\"ErrorMessage\",\"Comments\"]}"
+      "DefaultRetentionDays": 180,
+      "DefaultMode": "StripFields",
+      "DefaultBatchSize": 100,
+      "ArchiveRelatedRecordChanges": true,
+      "Status": "Disabled",
+      "CreatedByUserID": "aeca30c7-0d3f-4b65-a70d-26b725981abf"
+    },
+    "relatedEntities": {
+      "MJ: Archive Configuration Entities": [
+        {
+          "fields": {
+            "ArchiveConfigurationID": "@parent:ID",
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: AI Agent Run Steps",
+            "Mode": "StripFields",
+            "RetentionDays": 180,
+            "DateField": "__mj_CreatedAt",
+            "BatchSize": 100,
+            "Priority": 1,
+            "FieldConfiguration": "{\"Fields\":[{\"FieldName\":\"InputData\",\"IsActive\":true},{\"FieldName\":\"OutputData\",\"IsActive\":true},{\"FieldName\":\"PayloadAtStart\",\"IsActive\":true},{\"FieldName\":\"PayloadAtEnd\",\"IsActive\":true},{\"FieldName\":\"ErrorMessage\",\"IsActive\":true},{\"FieldName\":\"Comments\",\"IsActive\":true}],\"ArchiveFullRecord\":true,\"SkipIfAllNullFields\":[\"InputData\",\"OutputData\"]}",
+            "ArchiveRelatedRecordChanges": true,
+            "IsActive": true
+          }
+        }
+      ]
     }
   },
   {
     "fields": {
       "Name": "AI Agent Runs - 6 Month",
-      "Description": "Archives AI Agent Runs data older than 6 months. Captures Result, FinalPayload, StartingPayload, Data, Message, ErrorMessage, and AgentState fields.",
-      "EntityName": "MJ: AI Agent Runs",
-      "RetentionDays": 180,
-      "ArchiveMode": "archive",
+      "Description": "Archives AI Agent Runs data older than 6 months. Strips Result, FinalPayload, StartingPayload, Data, Message, ErrorMessage, and AgentState fields.",
+      "RootPath": "/archives",
+      "ArchiveFormat": "JSON",
       "IsActive": false,
-      "FieldConfiguration": "{\"Fields\":[{\"FieldName\":\"Result\",\"IsActive\":true},{\"FieldName\":\"FinalPayload\",\"IsActive\":true},{\"FieldName\":\"StartingPayload\",\"IsActive\":true},{\"FieldName\":\"Data\",\"IsActive\":true},{\"FieldName\":\"Message\",\"IsActive\":true},{\"FieldName\":\"ErrorMessage\",\"IsActive\":true},{\"FieldName\":\"AgentState\",\"IsActive\":true}],\"ArchiveFullRecord\":true,\"SkipIfAllNullFields\":[\"Result\",\"FinalPayload\",\"StartingPayload\",\"Data\",\"Message\",\"ErrorMessage\",\"AgentState\"]}"
+      "DefaultRetentionDays": 180,
+      "DefaultMode": "StripFields",
+      "DefaultBatchSize": 100,
+      "ArchiveRelatedRecordChanges": true,
+      "Status": "Disabled",
+      "CreatedByUserID": "aeca30c7-0d3f-4b65-a70d-26b725981abf"
+    },
+    "relatedEntities": {
+      "MJ: Archive Configuration Entities": [
+        {
+          "fields": {
+            "ArchiveConfigurationID": "@parent:ID",
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: AI Agent Runs",
+            "Mode": "StripFields",
+            "RetentionDays": 180,
+            "DateField": "__mj_CreatedAt",
+            "BatchSize": 100,
+            "Priority": 2,
+            "FieldConfiguration": "{\"Fields\":[{\"FieldName\":\"Result\",\"IsActive\":true},{\"FieldName\":\"FinalPayload\",\"IsActive\":true},{\"FieldName\":\"StartingPayload\",\"IsActive\":true},{\"FieldName\":\"Data\",\"IsActive\":true},{\"FieldName\":\"Message\",\"IsActive\":true},{\"FieldName\":\"ErrorMessage\",\"IsActive\":true},{\"FieldName\":\"AgentState\",\"IsActive\":true}],\"ArchiveFullRecord\":true,\"SkipIfAllNullFields\":[\"Result\",\"FinalPayload\"]}",
+            "ArchiveRelatedRecordChanges": true,
+            "IsActive": true
+          }
+        }
+      ]
     }
   },
   {
     "fields": {
       "Name": "Audit Logs - 18 Month",
-      "Description": "Archives Audit Logs data older than 18 months. Captures Details and Description fields.",
-      "EntityName": "Audit Logs",
-      "RetentionDays": 540,
-      "ArchiveMode": "archive",
+      "Description": "Archives Audit Logs data older than 18 months. Strips Details and Description fields.",
+      "RootPath": "/archives",
+      "ArchiveFormat": "JSON",
       "IsActive": false,
-      "FieldConfiguration": "{\"Fields\":[{\"FieldName\":\"Details\",\"IsActive\":true},{\"FieldName\":\"Description\",\"IsActive\":true}],\"ArchiveFullRecord\":true,\"SkipIfAllNullFields\":[\"Details\",\"Description\"]}"
+      "DefaultRetentionDays": 540,
+      "DefaultMode": "StripFields",
+      "DefaultBatchSize": 100,
+      "ArchiveRelatedRecordChanges": false,
+      "Status": "Disabled",
+      "CreatedByUserID": "aeca30c7-0d3f-4b65-a70d-26b725981abf"
+    },
+    "relatedEntities": {
+      "MJ: Archive Configuration Entities": [
+        {
+          "fields": {
+            "ArchiveConfigurationID": "@parent:ID",
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: Audit Logs",
+            "Mode": "StripFields",
+            "RetentionDays": 540,
+            "DateField": "__mj_CreatedAt",
+            "BatchSize": 100,
+            "Priority": 1,
+            "FieldConfiguration": "{\"Fields\":[{\"FieldName\":\"Details\",\"IsActive\":true},{\"FieldName\":\"Description\",\"IsActive\":true}],\"ArchiveFullRecord\":true,\"SkipIfAllNullFields\":[\"Details\",\"Description\"]}",
+            "ArchiveRelatedRecordChanges": false,
+            "IsActive": true
+          }
+        }
+      ]
     }
   },
   {
     "fields": {
       "Name": "Action Execution Logs - 12 Month",
       "Description": "Archives Action Execution Logs data older than 12 months. Archives the full record to external storage.",
-      "EntityName": "Action Execution Logs",
-      "RetentionDays": 365,
-      "ArchiveMode": "archive",
+      "RootPath": "/archives",
+      "ArchiveFormat": "JSON",
       "IsActive": false,
-      "FieldConfiguration": "{\"Fields\":[],\"ArchiveFullRecord\":true}"
+      "DefaultRetentionDays": 365,
+      "DefaultMode": "StripFields",
+      "DefaultBatchSize": 100,
+      "ArchiveRelatedRecordChanges": false,
+      "Status": "Disabled",
+      "CreatedByUserID": "aeca30c7-0d3f-4b65-a70d-26b725981abf"
+    },
+    "relatedEntities": {
+      "MJ: Archive Configuration Entities": [
+        {
+          "fields": {
+            "ArchiveConfigurationID": "@parent:ID",
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: Action Execution Logs",
+            "Mode": "StripFields",
+            "RetentionDays": 365,
+            "DateField": "__mj_CreatedAt",
+            "BatchSize": 100,
+            "Priority": 1,
+            "FieldConfiguration": "{\"Fields\":[],\"ArchiveFullRecord\":true}",
+            "ArchiveRelatedRecordChanges": false,
+            "IsActive": true
+          }
+        }
+      ]
     }
   },
   {
     "fields": {
       "Name": "Scheduled Job Runs - 12 Month",
       "Description": "Archives Scheduled Job Runs data older than 12 months. Archives the full record to external storage.",
-      "EntityName": "Scheduled Job Runs",
-      "RetentionDays": 365,
-      "ArchiveMode": "archive",
+      "RootPath": "/archives",
+      "ArchiveFormat": "JSON",
       "IsActive": false,
-      "FieldConfiguration": "{\"Fields\":[],\"ArchiveFullRecord\":true}"
+      "DefaultRetentionDays": 365,
+      "DefaultMode": "StripFields",
+      "DefaultBatchSize": 100,
+      "ArchiveRelatedRecordChanges": false,
+      "Status": "Disabled",
+      "CreatedByUserID": "aeca30c7-0d3f-4b65-a70d-26b725981abf"
+    },
+    "relatedEntities": {
+      "MJ: Archive Configuration Entities": [
+        {
+          "fields": {
+            "ArchiveConfigurationID": "@parent:ID",
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: Scheduled Job Runs",
+            "Mode": "StripFields",
+            "RetentionDays": 365,
+            "DateField": "__mj_CreatedAt",
+            "BatchSize": 100,
+            "Priority": 1,
+            "FieldConfiguration": "{\"Fields\":[],\"ArchiveFullRecord\":true}",
+            "ArchiveRelatedRecordChanges": false,
+            "IsActive": true
+          }
+        }
+      ]
     }
   },
   {
     "fields": {
       "Name": "Communication Logs - 12 Month",
       "Description": "Archives Communication Logs data older than 12 months. Archives the full record to external storage.",
-      "EntityName": "Communication Logs",
-      "RetentionDays": 365,
-      "ArchiveMode": "archive",
+      "RootPath": "/archives",
+      "ArchiveFormat": "JSON",
       "IsActive": false,
-      "FieldConfiguration": "{\"Fields\":[],\"ArchiveFullRecord\":true}"
+      "DefaultRetentionDays": 365,
+      "DefaultMode": "StripFields",
+      "DefaultBatchSize": 100,
+      "ArchiveRelatedRecordChanges": false,
+      "Status": "Disabled",
+      "CreatedByUserID": "aeca30c7-0d3f-4b65-a70d-26b725981abf"
+    },
+    "relatedEntities": {
+      "MJ: Archive Configuration Entities": [
+        {
+          "fields": {
+            "ArchiveConfigurationID": "@parent:ID",
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: Communication Logs",
+            "Mode": "StripFields",
+            "RetentionDays": 365,
+            "DateField": "__mj_CreatedAt",
+            "BatchSize": 100,
+            "Priority": 1,
+            "FieldConfiguration": "{\"Fields\":[],\"ArchiveFullRecord\":true}",
+            "ArchiveRelatedRecordChanges": false,
+            "IsActive": true
+          }
+        }
+      ]
     }
   }
 ]

@@ -7187,7 +7187,7 @@ export const MJArchiveConfigurationSchema = z.object({
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
-    StorageAccountID: z.string().describe(`
+    StorageAccountID: z.string().nullable().describe(`
         * * Field Name: StorageAccountID
         * * Display Name: Storage Account
         * * SQL Data Type: uniqueidentifier
@@ -7273,7 +7273,7 @@ export const MJArchiveConfigurationSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    StorageAccount: z.string().describe(`
+    StorageAccount: z.string().nullable().describe(`
         * * Field Name: StorageAccount
         * * Display Name: Storage Account Name
         * * SQL Data Type: nvarchar(200)`),
@@ -7363,9 +7363,13 @@ export const MJArchiveRunDetailSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    ArchiveRun: z.string().describe(`
+        * * Field Name: ArchiveRun
+        * * Display Name: Archive Run
+        * * SQL Data Type: nvarchar(255)`),
     Entity: z.string().describe(`
         * * Field Name: Entity
-        * * Display Name: Entity Name
+        * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -43427,10 +43431,10 @@ export class MJArchiveConfigurationEntity extends BaseEntity<MJArchiveConfigurat
     * * Related Entity/Foreign Key: MJ: File Storage Accounts (vwFileStorageAccounts.ID)
     * * Description: Foreign key to FileStorageAccount — the blob/file storage target for archived data.
     */
-    get StorageAccountID(): string {
+    get StorageAccountID(): string | null {
         return this.Get('StorageAccountID');
     }
-    set StorageAccountID(value: string) {
+    set StorageAccountID(value: string | null) {
         this.Set('StorageAccountID', value);
     }
 
@@ -43601,7 +43605,7 @@ export class MJArchiveConfigurationEntity extends BaseEntity<MJArchiveConfigurat
     * * Display Name: Storage Account Name
     * * SQL Data Type: nvarchar(200)
     */
-    get StorageAccount(): string {
+    get StorageAccount(): string | null {
         return this.Get('StorageAccount');
     }
 
@@ -43819,8 +43823,17 @@ export class MJArchiveRunDetailEntity extends BaseEntity<MJArchiveRunDetailEntit
     }
 
     /**
+    * * Field Name: ArchiveRun
+    * * Display Name: Archive Run
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ArchiveRun(): string {
+        return this.Get('ArchiveRun');
+    }
+
+    /**
     * * Field Name: Entity
-    * * Display Name: Entity Name
+    * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
     get Entity(): string {

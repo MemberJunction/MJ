@@ -191,14 +191,14 @@ export class ArchiveRunViewerComponent implements OnInit, OnDestroy {
 
     return {
       ID: r.ID,
-      ConfigurationName: r.ConfigurationName ?? '',
+      ConfigurationName: r.ArchiveConfiguration ?? '',
       StartedAt: startedAt,
       CompletedAt: completedAt,
       Status: r.Status ?? 'Unknown',
-      RecordsArchived: r.RecordsArchived ?? 0,
-      RecordsFailed: r.RecordsFailed ?? 0,
-      RecordsSkipped: r.RecordsSkipped ?? 0,
-      TotalBytes: r.TotalBytes ?? 0,
+      RecordsArchived: r.ArchivedRecords ?? 0,
+      RecordsFailed: r.FailedRecords ?? 0,
+      RecordsSkipped: r.SkippedRecords ?? 0,
+      TotalBytes: r.TotalBytesArchived ?? 0,
       DurationSeconds: durationSeconds,
     };
   }
@@ -227,7 +227,7 @@ export class ArchiveRunViewerComponent implements OnInit, OnDestroy {
         ExtraFilter: `ArchiveRunID='${escapedId}'`,
         OrderBy: '__mj_CreatedAt DESC',
         ResultType: 'simple',
-        Fields: ['ID', 'EntityName', 'RecordID', 'Status', 'StoragePath', 'Bytes', '__mj_CreatedAt'],
+        Fields: ['ID', 'Entity', 'RecordID', 'Status', 'StoragePath', 'BytesArchived', '__mj_CreatedAt'],
       });
 
       if (result.Success) {
@@ -245,11 +245,11 @@ export class ArchiveRunViewerComponent implements OnInit, OnDestroy {
   private mapDetailRecord(r: DetailRecord): ArchiveRunDetailRow {
     return {
       ID: r.ID,
-      EntityName: r.EntityName ?? '',
+      EntityName: r.Entity ?? '',
       RecordID: r.RecordID ?? '',
       Status: r.Status ?? 'Unknown',
       StoragePath: r.StoragePath ?? '',
-      Bytes: r.Bytes ?? 0,
+      Bytes: r.BytesArchived ?? 0,
       ArchivedAt: r.__mj_CreatedAt ?? '',
     };
   }
@@ -265,23 +265,23 @@ export class ArchiveRunViewerComponent implements OnInit, OnDestroy {
 /** Shape of a run record from the simple RunView query */
 interface RunRecord {
   ID: string;
-  ConfigurationName: string;
+  ArchiveConfiguration: string;
   StartedAt: string;
   CompletedAt: string;
   Status: string;
-  RecordsArchived: number;
-  RecordsFailed: number;
-  RecordsSkipped: number;
-  TotalBytes: number;
+  ArchivedRecords: number;
+  FailedRecords: number;
+  SkippedRecords: number;
+  TotalBytesArchived: number;
 }
 
 /** Shape of a detail record from the simple RunView query */
 interface DetailRecord {
   ID: string;
-  EntityName: string;
+  Entity: string;
   RecordID: string;
   Status: string;
   StoragePath: string;
-  Bytes: number;
+  BytesArchived: number;
   __mj_CreatedAt: string;
 }

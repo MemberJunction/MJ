@@ -7,34 +7,42 @@ import {
   inject,
 } from '@angular/core';
 import { CompositeKey, Metadata, RunView } from '@memberjunction/core';
+import {
+  MJArchiveConfigurationEntity,
+  MJArchiveConfigurationEntityEntity,
+  MJArchiveConfigurationEntityType,
+  MJArchiveConfigurationEntityEntityType,
+} from '@memberjunction/core-entities';
+
+type ArchiveStatus = MJArchiveConfigurationEntityType['Status'];
+type ArchiveMode = MJArchiveConfigurationEntityType['DefaultMode'];
+type EntityMode = MJArchiveConfigurationEntityEntityType['Mode'];
 
 /** Represents an archive configuration record */
 export interface ArchiveConfig {
   ID: string;
   Name: string;
   Description: string;
-  Status: string;
+  Status: ArchiveStatus;
   StorageAccountID: string;
   StorageAccountName: string;
   RootPath: string;
   DefaultRetentionDays: number;
   DefaultBatchSize: number;
-  DefaultArchiveMode: string;
-  ArchiveRecordChanges: boolean;
-  EntityCount: number;
-  LastRunDate: string;
+  DefaultMode: ArchiveMode;
+  ArchiveRelatedRecordChanges: boolean;
   IsDirty: boolean;
 }
 
 /** Represents an entity within a configuration */
 export interface ArchiveConfigEntity {
   ID: string;
-  ConfigurationID: string;
+  ArchiveConfigurationID: string;
   EntityName: string;
-  ArchiveMode: string;
+  Mode: EntityMode;
   RetentionDays: number;
   BatchSize: number;
-  DateFieldName: string;
+  DateField: string;
   IsActive: boolean;
   IsNew: boolean;
   IsDirty: boolean;
@@ -69,7 +77,7 @@ export class ArchiveConfigAdminComponent implements OnInit, OnDestroy {
   StorageAccounts: StorageAccountOption[] = [];
 
   /** Available archive modes */
-  ArchiveModes: string[] = ['Full', 'Incremental', 'Selective'];
+  ArchiveModes: string[] = ['StripFields', 'SoftDelete', 'HardDelete', 'ArchiveOnly'];
 
   /** Whether the list is loading */
   IsLoading = true;
@@ -114,12 +122,12 @@ export class ArchiveConfigAdminComponent implements OnInit, OnDestroy {
 
     const newEntity: ArchiveConfigEntity = {
       ID: `new-${Date.now()}`,
-      ConfigurationID: this.SelectedConfig.ID,
+      ArchiveConfigurationID: this.SelectedConfig.ID,
       EntityName: '',
-      ArchiveMode: this.SelectedConfig.DefaultArchiveMode || 'Full',
-      RetentionDays: this.SelectedConfig.DefaultRetentionDays || 90,
+      Mode: this.SelectedConfig.DefaultMode ?? 'StripFields',
+      RetentionDays: this.SelectedConfig.DefaultRetentionDays || 365,
       BatchSize: this.SelectedConfig.DefaultBatchSize || 100,
-      DateFieldName: '',
+      DateField: '__mj_CreatedAt',
       IsActive: true,
       IsNew: true,
       IsDirty: true,
@@ -177,7 +185,6 @@ export class ArchiveConfigAdminComponent implements OnInit, OnDestroy {
     const configId = this.SelectedConfig.ID;
     this.clearStatus();
 
-    // Reload from the original data
     const original = this.Configs.find((c) => c.ID === configId);
     if (original) {
       this.SelectedConfig = { ...original };
@@ -191,16 +198,14 @@ export class ArchiveConfigAdminComponent implements OnInit, OnDestroy {
       ID: `new-${Date.now()}`,
       Name: 'New Configuration',
       Description: '',
-      Status: 'Inactive',
+      Status: 'Disabled',
       StorageAccountID: '',
       StorageAccountName: '',
       RootPath: '/archives',
-      DefaultRetentionDays: 90,
+      DefaultRetentionDays: 365,
       DefaultBatchSize: 100,
-      DefaultArchiveMode: 'Full',
-      ArchiveRecordChanges: false,
-      EntityCount: 0,
-      LastRunDate: '',
+      DefaultMode: 'StripFields',
+      ArchiveRelatedRecordChanges: false,
       IsDirty: true,
     };
     this.Configs = [newConfig, ...this.Configs];
@@ -208,8 +213,13 @@ export class ArchiveConfigAdminComponent implements OnInit, OnDestroy {
   }
 
   /** Get a display label for the status */
-  GetStatusLabel(status: string): string {
-    return status === 'Active' ? 'Active' : 'Inactive';
+  GetStatusLabel(status: string | undefined): string {
+    switch (status) {
+      case 'Idle': return 'Idle';
+      case 'Running': return 'Running';
+      case 'Error': return 'Error';
+      default: return 'Disabled';
+    }
   }
 
   /** Load all initial data using batched RunViews */
@@ -227,7 +237,7 @@ export class ArchiveConfigAdminComponent implements OnInit, OnDestroy {
           ResultType: 'simple',
         },
         {
-          EntityName: 'Storage Accounts',
+          EntityName: 'MJ: File Storage Accounts',
           ExtraFilter: '',
           OrderBy: 'Name',
           ResultType: 'simple',
@@ -256,16 +266,14 @@ export class ArchiveConfigAdminComponent implements OnInit, OnDestroy {
       ID: String(r['ID'] ?? ''),
       Name: String(r['Name'] ?? ''),
       Description: String(r['Description'] ?? ''),
-      Status: String(r['Status'] ?? 'Inactive'),
+      Status: (r['Status'] as ArchiveStatus) ?? 'Disabled',
       StorageAccountID: String(r['StorageAccountID'] ?? ''),
-      StorageAccountName: String(r['StorageAccountName'] ?? ''),
+      StorageAccountName: String(r['StorageAccount'] ?? ''),
       RootPath: String(r['RootPath'] ?? ''),
-      DefaultRetentionDays: Number(r['DefaultRetentionDays'] ?? 90),
+      DefaultRetentionDays: Number(r['DefaultRetentionDays'] ?? 365),
       DefaultBatchSize: Number(r['DefaultBatchSize'] ?? 100),
-      DefaultArchiveMode: String(r['DefaultArchiveMode'] ?? 'Full'),
-      ArchiveRecordChanges: Boolean(r['ArchiveRecordChanges']),
-      EntityCount: Number(r['EntityCount'] ?? 0),
-      LastRunDate: String(r['LastRunDate'] ?? ''),
+      DefaultMode: (r['DefaultMode'] as ArchiveMode) ?? 'StripFields',
+      ArchiveRelatedRecordChanges: Boolean(r['ArchiveRelatedRecordChanges']),
       IsDirty: false,
     }));
   }
@@ -289,8 +297,8 @@ export class ArchiveConfigAdminComponent implements OnInit, OnDestroy {
       const escapedId = configId.replace(/'/g, "''");
       const result = await rv.RunView<Record<string, unknown>>({
         EntityName: 'MJ: Archive Configuration Entities',
-        ExtraFilter: `ConfigurationID='${escapedId}'`,
-        OrderBy: 'EntityName',
+        ExtraFilter: `ArchiveConfigurationID='${escapedId}'`,
+        OrderBy: 'Entity',
         ResultType: 'simple',
       });
 
@@ -308,24 +316,24 @@ export class ArchiveConfigAdminComponent implements OnInit, OnDestroy {
     if (!result.Success) return [];
     return result.Results.map((r) => ({
       ID: String(r['ID'] ?? ''),
-      ConfigurationID: String(r['ConfigurationID'] ?? ''),
-      EntityName: String(r['EntityName'] ?? ''),
-      ArchiveMode: String(r['ArchiveMode'] ?? 'Full'),
-      RetentionDays: Number(r['RetentionDays'] ?? 90),
+      ArchiveConfigurationID: String(r['ArchiveConfigurationID'] ?? ''),
+      EntityName: String(r['Entity'] ?? ''),
+      Mode: (r['Mode'] as EntityMode) ?? 'StripFields',
+      RetentionDays: Number(r['RetentionDays'] ?? 365),
       BatchSize: Number(r['BatchSize'] ?? 100),
-      DateFieldName: String(r['DateFieldName'] ?? ''),
+      DateField: String(r['DateField'] ?? '__mj_CreatedAt'),
       IsActive: Boolean(r['IsActive']),
       IsNew: false,
       IsDirty: false,
     }));
   }
 
-  /** Save the configuration record */
+  /** Save the configuration record using strongly-typed entity */
   private async saveConfiguration(): Promise<void> {
     if (!this.SelectedConfig?.IsDirty) return;
 
     const md = new Metadata();
-    const entity = await md.GetEntityObject('MJ: Archive Configurations');
+    const entity = await md.GetEntityObject<MJArchiveConfigurationEntity>('MJ: Archive Configurations');
 
     if (!this.SelectedConfig.ID.startsWith('new-')) {
       await entity.InnerLoad(CompositeKey.FromKeyValuePair('ID', this.SelectedConfig.ID));
@@ -333,29 +341,28 @@ export class ArchiveConfigAdminComponent implements OnInit, OnDestroy {
       entity.NewRecord();
     }
 
-    this.applyConfigToEntity(entity);
+    entity.Name = this.SelectedConfig.Name;
+    entity.Description = this.SelectedConfig.Description;
+    entity.Status = this.SelectedConfig.Status ?? 'Disabled';
+    if (this.SelectedConfig.StorageAccountID) {
+      entity.StorageAccountID = this.SelectedConfig.StorageAccountID;
+    }
+    entity.RootPath = this.SelectedConfig.RootPath;
+    entity.DefaultRetentionDays = this.SelectedConfig.DefaultRetentionDays;
+    entity.DefaultBatchSize = this.SelectedConfig.DefaultBatchSize;
+    entity.DefaultMode = this.SelectedConfig.DefaultMode ?? 'StripFields';
+    entity.ArchiveRelatedRecordChanges = this.SelectedConfig.ArchiveRelatedRecordChanges;
+
     const saved = await entity.Save();
     if (!saved) {
       throw new Error('Failed to save configuration.');
     }
 
+    // Update the ID if this was a new record
+    if (this.SelectedConfig.ID.startsWith('new-')) {
+      this.SelectedConfig.ID = entity.ID;
+    }
     this.SelectedConfig.IsDirty = false;
-  }
-
-  /** Apply config fields to an entity object for saving */
-  private applyConfigToEntity(entity: {
-    Set: (field: string, value: unknown) => void;
-  }): void {
-    if (!this.SelectedConfig) return;
-    entity.Set('Name', this.SelectedConfig.Name);
-    entity.Set('Description', this.SelectedConfig.Description);
-    entity.Set('Status', this.SelectedConfig.Status);
-    entity.Set('StorageAccountID', this.SelectedConfig.StorageAccountID);
-    entity.Set('RootPath', this.SelectedConfig.RootPath);
-    entity.Set('DefaultRetentionDays', this.SelectedConfig.DefaultRetentionDays);
-    entity.Set('DefaultBatchSize', this.SelectedConfig.DefaultBatchSize);
-    entity.Set('DefaultArchiveMode', this.SelectedConfig.DefaultArchiveMode);
-    entity.Set('ArchiveRecordChanges', this.SelectedConfig.ArchiveRecordChanges);
   }
 
   /** Save all dirty/new entity records */
@@ -366,10 +373,10 @@ export class ArchiveConfigAdminComponent implements OnInit, OnDestroy {
     }
   }
 
-  /** Save a single config entity record */
+  /** Save a single config entity record using strongly-typed entity */
   private async saveConfigEntity(configEntity: ArchiveConfigEntity): Promise<void> {
     const md = new Metadata();
-    const entity = await md.GetEntityObject('MJ: Archive Configuration Entities');
+    const entity = await md.GetEntityObject<MJArchiveConfigurationEntityEntity>('MJ: Archive Configuration Entities');
 
     if (!configEntity.IsNew) {
       await entity.InnerLoad(CompositeKey.FromKeyValuePair('ID', configEntity.ID));
@@ -377,13 +384,12 @@ export class ArchiveConfigAdminComponent implements OnInit, OnDestroy {
       entity.NewRecord();
     }
 
-    entity.Set('ConfigurationID', configEntity.ConfigurationID);
-    entity.Set('EntityName', configEntity.EntityName);
-    entity.Set('ArchiveMode', configEntity.ArchiveMode);
-    entity.Set('RetentionDays', configEntity.RetentionDays);
-    entity.Set('BatchSize', configEntity.BatchSize);
-    entity.Set('DateFieldName', configEntity.DateFieldName);
-    entity.Set('IsActive', configEntity.IsActive);
+    entity.ArchiveConfigurationID = configEntity.ArchiveConfigurationID;
+    entity.Mode = configEntity.Mode ?? null;
+    entity.RetentionDays = configEntity.RetentionDays;
+    entity.BatchSize = configEntity.BatchSize;
+    entity.DateField = configEntity.DateField;
+    entity.IsActive = configEntity.IsActive;
 
     const saved = await entity.Save();
     if (!saved) {
