@@ -67,4 +67,29 @@ export class ArtifactFileService {
             // Prefetch failures are silently ignored — the component will retry on display
         });
     }
+
+    /**
+     * Converts a base64 data URL (data:mime;base64,...) to an ArrayBuffer.
+     * Used by viewers to handle inline artifact content (ContentMode='Text').
+     */
+    public dataUrlToArrayBuffer(dataUrl: string): ArrayBuffer {
+        const commaIndex = dataUrl.indexOf(',');
+        const base64 = commaIndex >= 0 ? dataUrl.slice(commaIndex + 1) : dataUrl;
+        const binary = atob(base64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+            bytes[i] = binary.charCodeAt(i);
+        }
+        return bytes.buffer;
+    }
+
+    /**
+     * Converts a base64 data URL to an object URL suitable for download/display.
+     * Used by viewers to create downloadable links for inline artifacts.
+     */
+    public dataUrlToObjectUrl(dataUrl: string, mimeType: string): string {
+        const arrayBuffer = this.dataUrlToArrayBuffer(dataUrl);
+        const blob = new Blob([arrayBuffer], { type: mimeType });
+        return URL.createObjectURL(blob);
+    }
 }

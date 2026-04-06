@@ -1248,24 +1248,44 @@ export class AgentRunner {
         return { fileName, mimeType, fileData, fileId, sizeBytes: fo['sizeBytes'] as number | undefined };
     }
 
-    /** Uploads or resolves a single file output and creates the artifact records. */
+    /** Uploads or resolves a single file output and creates the artifact records.
+     *  Falls back to inline base64 artifact if storage is unavailable or upload fails. */
     private async processFileOutput(
         fo: FileOutputRef,
         conversationDetailId: string,
         contextUser: UserInfo
     ): Promise<void> {
         try {
-            // fo.fileData! is safe: both detectFileOutput and parseStepFileOutput guarantee
-            // that at least one of fileData/fileId is truthy before returning a FileOutputRef,
-            // so if fileId is falsy here, fileData must be defined.
-            const fileId = fo.fileId ?? await this.uploadBase64ToStorage(
-                fo.fileData!,
-                fo.fileName,
-                fo.mimeType,
-                contextUser
-            );
+            if (fo.fileId) {
+                // File already in storage — create file-backed artifact
+                await this.createFileArtifact(fo.fileId, fo.mimeType, fo.fileName, fo.sizeBytes, conversationDetailId, contextUser);
+                return;
+            }
 
-            await this.createFileArtifact(fileId, fo.mimeType, fo.fileName, fo.sizeBytes, conversationDetailId, contextUser);
+            // Check if any storage accounts are configured
+            const hasStorage = FileStorageEngine.Instance.AccountsWithProviders.length > 0;
+
+            if (!hasStorage) {
+                // No storage configured — go straight to inline artifact
+                LogStatus(`ProcessFileArtifacts: no storage accounts configured for "${fo.fileName}", creating inline artifact`);
+                await this.createInlineFileArtifact(fo.fileData!, fo.mimeType, fo.fileName, fo.sizeBytes, conversationDetailId, contextUser);
+                return;
+            }
+
+            // Try to upload to storage
+            try {
+                const fileId = await this.uploadBase64ToStorage(
+                    fo.fileData!,
+                    fo.fileName,
+                    fo.mimeType,
+                    contextUser
+                );
+                await this.createFileArtifact(fileId, fo.mimeType, fo.fileName, fo.sizeBytes, conversationDetailId, contextUser);
+            } catch (storageError) {
+                // Upload failed — fall back to inline artifact
+                LogStatus(`ProcessFileArtifacts: storage upload failed for "${fo.fileName}", creating inline artifact: ${(storageError as Error).message}`);
+                await this.createInlineFileArtifact(fo.fileData!, fo.mimeType, fo.fileName, fo.sizeBytes, conversationDetailId, contextUser);
+            }
         } catch (error) {
             LogError(`ProcessFileArtifacts: failed for "${fo.fileName}": ${(error as Error).message}`);
         }
@@ -1379,6 +1399,73 @@ export class AgentRunner {
         }
 
         LogStatus(`Created file artifact: ${fileName} (${mimeType}) → artifact ${artifact.ID}, version ${version.ID}`);
+    }
+
+    /**
+     * Creates an artifact with file content stored inline as a base64 data URL.
+     * Used when MJStorage is not configured or upload fails.
+     * The ArtifactVersion stores the content directly rather than referencing a FileID.
+     */
+    private async createInlineFileArtifact(
+        base64Data: string,
+        mimeType: string,
+        fileName: string,
+        sizeBytes: number | undefined,
+        conversationDetailId: string,
+        contextUser: UserInfo
+    ): Promise<void> {
+        const md = new Metadata();
+
+        const JSON_ARTIFACT_TYPE_ID = 'ae674c7e-ea0d-49ea-89e4-0649f5eb20d4';
+        const artifactType = ArtifactMetadataEngine.Instance.GetArtifactTypeByMimeType(mimeType);
+        if (!artifactType) {
+            LogStatus(`ProcessFileArtifacts: no ArtifactType found for MIME ${mimeType}, using JSON fallback`);
+        }
+        const artifactTypeId = artifactType?.ID ?? JSON_ARTIFACT_TYPE_ID;
+
+        // Create the artifact header
+        const artifact = await md.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', contextUser);
+        artifact.Name = fileName;
+        artifact.TypeID = artifactTypeId;
+        artifact.UserID = contextUser.ID;
+        artifact.Visibility = 'Always';
+
+        if (!(await artifact.Save())) {
+            throw new Error(`Failed to save inline artifact for file: ${fileName}`);
+        }
+
+        // Create the artifact version with inline content (base64 data URL)
+        const dataUrl = `data:${mimeType};base64,${base64Data}`;
+        const version = await md.GetEntityObject<MJArtifactVersionEntity>('MJ: Artifact Versions', contextUser);
+        version.ArtifactID = artifact.ID;
+        version.VersionNumber = 1;
+        version.ContentMode = 'Text';
+        version.Content = dataUrl;
+        version.MimeType = mimeType;
+        version.FileName = fileName;
+        version.UserID = contextUser.ID;
+        if (sizeBytes !== undefined) {
+            version.ContentSizeBytes = sizeBytes;
+        }
+
+        if (!(await version.Save())) {
+            throw new Error(`Failed to save inline artifact version for file: ${fileName}`);
+        }
+
+        // Link the artifact version to the conversation detail
+        const junction = await md.GetEntityObject<MJConversationDetailArtifactEntity>(
+            'MJ: Conversation Detail Artifacts',
+            contextUser
+        );
+        junction.ConversationDetailID = conversationDetailId;
+        junction.ArtifactVersionID = version.ID;
+        junction.Direction = 'Output';
+
+        if (!(await junction.Save())) {
+            throw new Error(`Failed to link inline file artifact to conversation detail: ${conversationDetailId}`);
+        }
+
+        LogStatus(`Created inline file artifact: ${fileName} (${mimeType}) → artifact ${artifact.ID}, version ${version.ID} [no storage]`);
     }
 
     /**
