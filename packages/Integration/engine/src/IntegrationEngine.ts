@@ -1059,6 +1059,15 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         this.SetEntityFields(entity, record.MappedFields);
         this.SetStandardIntegrationFields(entity, record);
 
+        // Skip unchanged records — if no field values actually changed after setting,
+        // don't write to DB. Uses MJ's built-in dirty tracking (zero custom comparison logic).
+        // Critical for connectors without server-side date filtering (e.g., YM) where every
+        // sync re-fetches all records. Without this, 50k+ records get re-written every run.
+        if (!entity.Dirty) {
+            result.RecordsSkipped++;
+            return;
+        }
+
         // A5: Pre-write validation
         this.validateEntity(entity, record.MJEntityName);
 

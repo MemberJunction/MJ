@@ -2139,6 +2139,9 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
     private lastRequestTime = 0;
 
     public override get IntegrationName(): string { return 'YourMembership'; }
+    public override get SupportsCreate(): boolean { return true; }
+    public override get SupportsUpdate(): boolean { return true; }
+    public override get SupportsDelete(): boolean { return true; }
 
     public override GetIntegrationObjects(): IntegrationObjectInfo[] {
         return YM_ACTION_OBJECTS;
