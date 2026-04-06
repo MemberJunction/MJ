@@ -3,6 +3,8 @@
   "version": "5.23.0",
   "description": "MemberJunction: Model Context Protocol (MCP) - Server Implementation",
   "type": "module",
+  "main": "./dist/Server.js",
+  "types": "./dist/Server.d.ts",
   "bin": {
     "MemberJunction": "./dist/index.js"
   },
