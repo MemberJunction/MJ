@@ -143,6 +143,47 @@ The integration engine supports `SyncDirection: 'Pull' | 'Push' | 'Bidirectional
 - Push watermarks are tracked separately from pull watermarks.
 - For bidirectional sync, the engine runs pull first, then push. Changes made by the pull sync are excluded from the push (filtered by source user ID) to prevent echo loops.
 
+D6. Performance & Efficiency Requirements (Non-Negotiable)
+
+These are not "nice to have" — they must be implemented from the start, not deferred.
+
+**1. Token/Session Caching:**
+- Auth tokens MUST be cached and reused until expiry. Do NOT re-authenticate on every API call.
+- Cache strategy: store token + expiry timestamp, refresh proactively before expiry.
+- Check existing connectors: `YourMembershipConnector` caches sessions with TTL, `SalesforceConnector` caches JWT tokens.
+
+**2. Batch CRUD (if platform supports it):**
+- If the platform supports batch/bulk create/update/delete (e.g., Salesforce SObject Collections, HubSpot Batch API, QuickBooks Batch), implement batch methods alongside individual CRUD.
+- Name them `CreateRecordsBatch()`, `UpdateRecordsBatch()`, `DeleteRecordsBatch()`.
+- The engine's push sync will use these when available for dramatically better performance.
+
+**3. Change Data Capture / Webhooks:**
+- If the platform provides CDC endpoints (e.g., Salesforce CDC, QuickBooks CDC, HubSpot webhooks), implement support.
+- CDC is preferred over polling for incremental sync — single API call vs N queries.
+- If the platform supports webhooks, document the webhook payload format and how to register receivers.
+
+**4. Server-Side Date Filtering:**
+- If the platform's list/query endpoints support `modified_since`, `updated_after`, or similar date filters, YOU MUST USE THEM.
+- Pass the watermark value as a server-side filter parameter — do NOT fetch all records and filter client-side.
+- If the platform has NO server-side date filtering (e.g., YourMembership), document this limitation and ensure the engine's `entity.Dirty` skip-unchanged optimization handles it.
+
+**5. Pagination Efficiency:**
+- Use the largest page size the API allows to minimize round trips.
+- If the platform supports cursor-based pagination, prefer it over offset (avoids drift on large datasets).
+- If the platform has a batch/bulk query endpoint (e.g., Salesforce Bulk API 2.0 for >10K records), implement it for large datasets.
+
+**6. Response Caching for Metadata:**
+- Cache `DiscoverObjects()` and `DiscoverFields()` results in-memory for the duration of a sync run. Do NOT re-fetch metadata on every entity map.
+- The base class `GetCachedObject()`/`GetCachedFields()` handles this — use them.
+
+D7. Future-Proofing
+
+**When the platform adds new endpoints, the connector should pick them up automatically OR make it trivial to add them:**
+
+- **Live discovery connectors** (Salesforce, Sage Intacct, HubSpot CRM): New endpoints appear automatically via the discovery API. No code changes needed for new objects.
+- **Static list connectors** (QuickBooks, Wicket, YM, Rasa): New endpoints require adding to the static `PLATFORM_OBJECTS` array. Keep the array well-organized with section comments so additions are obvious.
+- **Non-CRM/secondary APIs** (HubSpot non-CRM, QuickBooks Payments/Payroll): These are separate API paths that won't be auto-discovered. Document which API categories exist and which are implemented. When adding a connector, enumerate ALL API categories the platform offers — even if you don't implement them all, document what's missing and why (e.g., "Payments API — separate product, requires separate OAuth scope").
+
 E. Error Handling
 Map platform-specific HTTP errors to MJ's error types:
 
@@ -219,6 +260,12 @@ Go through each item. If ANY check fails, fix it before presenting results.
  Parent-child endpoints use template variables or FetchChanges override
  IntegrationObject metadata fields set: APIPath, PaginationType, ResponseDataKey, DefaultPageSize
  IntegrationObjectField PKs and FKs correctly annotated
+ Auth tokens cached with TTL — NOT re-authenticating on every API call
+ Batch CRUD implemented if platform supports it (batch create/update/delete)
+ Server-side date filtering used in FetchChanges if API supports modified_since/updated_after
+ Largest supported page size configured in DefaultPageSize
+ All API categories documented (even unimplemented ones) with reasons for exclusion
+ CDC/webhook support implemented or documented as unavailable
 
 
 Common Mistakes to Avoid
