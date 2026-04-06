@@ -386,7 +386,7 @@ import {
     AutotagWebsite,
 } from '@memberjunction/content-autotagging';
 
-// @memberjunction/core-actions (110 classes)
+// @memberjunction/core-actions (107 classes)
 import {
     APIRateLimiterAction,
     AddDocumentContentAction,
@@ -422,7 +422,6 @@ import {
     DeleteRecordAction,
     DirectoryExistsAction,
     ExcelReaderAction,
-    ExcelWriterAction,
     ExecuteAIPromptAction,
     ExecuteCodeAction,
     ExecuteMCPToolAction,
@@ -465,7 +464,6 @@ import {
     OAuthFlowAction,
     ObjectExistsAction,
     PDFExtractorAction,
-    PDFGeneratorAction,
     ParallelExecuteAction,
     PasswordStrengthAction,
     PerplexitySearchAction,
@@ -496,7 +494,6 @@ import {
     VectorizeEntityAction,
     WebPageContentAction,
     WebSearchAction,
-    WordGeneratorAction,
     XMLParserAction,
 } from '@memberjunction/core-actions';
 
@@ -1170,7 +1167,6 @@ export const CLASS_REGISTRATIONS: any[] = [
     DeleteRecordAction,
     DirectoryExistsAction,
     ExcelReaderAction,
-    ExcelWriterAction,
     ExecuteAIPromptAction,
     ExecuteCodeAction,
     ExecuteMCPToolAction,
@@ -1213,7 +1209,6 @@ export const CLASS_REGISTRATIONS: any[] = [
     OAuthFlowAction,
     ObjectExistsAction,
     PDFExtractorAction,
-    PDFGeneratorAction,
     ParallelExecuteAction,
     PasswordStrengthAction,
     PerplexitySearchAction,
@@ -1244,7 +1239,6 @@ export const CLASS_REGISTRATIONS: any[] = [
     VectorizeEntityAction,
     WebPageContentAction,
     WebSearchAction,
-    WordGeneratorAction,
     XMLParserAction,
     MJAIActionEntity,
     MJAIAgentActionEntity,
@@ -1615,7 +1609,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 672;
+export const CLASS_REGISTRATIONS_COUNT = 669;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
