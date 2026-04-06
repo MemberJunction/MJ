@@ -3,7 +3,7 @@ import { UserInfo, LogError, LogStatus } from '@memberjunction/core';
 import { MJTagEntity, MJTaggedItemEntity } from '@memberjunction/core-entities';
 import { TagEngineBase, TagTreeNode } from '@memberjunction/tag-engine-base';
 import { SimpleVectorService, VectorEntry } from '@memberjunction/ai-vectors-memory';
-import { BaseEmbeddings, EmbedTextParams, EmbedTextResult, GetAIAPIKey } from '@memberjunction/ai';
+import { BaseEmbeddings, GetAIAPIKey } from '@memberjunction/ai';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIModelRunner } from '@memberjunction/ai-prompts';
 import type { EmbeddingRunResult } from '@memberjunction/ai-prompts';
@@ -52,6 +52,14 @@ export class TagEngine extends BaseSingleton<TagEngine> {
     private _loading = false;
     private _loadingPromise: Promise<void> | null = null;
     private _contextUser: UserInfo | undefined;
+
+    /**
+     * Mutex for ResolveTag — ensures only one tag resolution runs at a time.
+     * Without this, parallel batch processing (Promise.all) causes race conditions:
+     * multiple items return the same tag from LLM, all call ResolveTag concurrently,
+     * none finds the tag (not created yet), all create duplicates.
+     */
+    private _resolveTagQueue: Promise<MJTagEntity | null> = Promise.resolve(null);
 
     /** Access to the underlying TagEngineBase instance */
     protected get Base(): TagEngineBase {
@@ -176,17 +184,27 @@ export class TagEngine extends BaseSingleton<TagEngine> {
     /**
      * Build or rebuild the tag vector service by embedding each tag's name and description.
      * Gracefully degrades if no embedding model is available.
+     *
+     * Ensures AIEngine is loaded first since getSmallestEmbeddingModel() requires it.
      */
     private async refreshTagEmbeddings(contextUser?: UserInfo): Promise<void> {
-        const tags = this.Tags;
-        if (tags.length === 0) {
-            LogStatus('TagEngine: No tags to embed. Skipping embedding generation.');
-            return;
-        }
+        // AIEngine must be loaded before we can discover embedding models.
+        // This is an internal dependency — callers should not need to know about it.
+        await AIEngine.Instance.Config(false, contextUser);
 
         const modelInfo = this.getSmallestEmbeddingModel();
         if (!modelInfo) {
             LogStatus('TagEngine: No embedding model available. Semantic tag matching will be disabled; exact-name matching still works.');
+            return;
+        }
+
+        // Always initialize the vector service — even when empty — so new tags
+        // created during a pipeline run can be embedded and added on-the-fly.
+        this._tagVectorService = new SimpleVectorService<TagEmbeddingMetadata>();
+
+        const tags = this.Tags;
+        if (tags.length === 0) {
+            LogStatus('TagEngine: No existing tags. Vector service initialized empty (ready for new tags).');
             return;
         }
 
@@ -196,7 +214,6 @@ export class TagEngine extends BaseSingleton<TagEngine> {
             return;
         }
 
-        this._tagVectorService = new SimpleVectorService<TagEmbeddingMetadata>();
         this._tagVectorService.LoadVectors(entries);
         LogStatus(`TagEngine: Loaded ${entries.length} tag embeddings into vector service.`);
     }
@@ -354,8 +371,9 @@ export class TagEngine extends BaseSingleton<TagEngine> {
      *
      * Resolution strategy:
      * 1. Exact name match (fast path, no embedding needed)
-     * 2. Semantic similarity search using vector embeddings
-     * 3. Auto-creation based on mode if no match found
+     * 2. Fuzzy match (plurals, hyphens, whitespace normalization)
+     * 3. Semantic similarity search using vector embeddings
+     * 4. Auto-creation based on mode if no match found
      *
      * @param tagText - The free-text tag string to resolve
      * @param weight - The weight to assign if creating a new tag (0.0 to 1.0)
@@ -368,7 +386,7 @@ export class TagEngine extends BaseSingleton<TagEngine> {
      * @param contextUser - The user context for the operation
      * @returns The matched or newly created MJTagEntity, or null if no match in constrained mode
      */
-    public async ResolveTag(
+    public ResolveTag(
         tagText: string,
         weight: number,
         mode: 'constrained' | 'auto-grow' | 'free-flow',
@@ -376,19 +394,43 @@ export class TagEngine extends BaseSingleton<TagEngine> {
         threshold: number,
         contextUser: UserInfo
     ): Promise<MJTagEntity | null> {
-        // 1. Fast path: exact name match
+        // Serialize all tag resolutions through a queue to prevent race conditions.
+        // Without this, parallel Promise.all batches cause duplicate tag creation
+        // when multiple items return the same tag name from the LLM.
+        this._resolveTagQueue = this._resolveTagQueue.then(
+            () => this.resolveTagInner(tagText, weight, mode, rootID, threshold, contextUser),
+            () => this.resolveTagInner(tagText, weight, mode, rootID, threshold, contextUser)
+        );
+        return this._resolveTagQueue;
+    }
+
+    private async resolveTagInner(
+        tagText: string,
+        weight: number,
+        mode: 'constrained' | 'auto-grow' | 'free-flow',
+        rootID: string | null,
+        threshold: number,
+        contextUser: UserInfo
+    ): Promise<MJTagEntity | null> {
+        // 1. Fast path: exact name match (case-insensitive)
         const exactMatch = this.GetTagByName(tagText);
         if (exactMatch) {
             return this.filterBySubtree(exactMatch, rootID);
         }
 
-        // 2. Semantic search if vector service is available
+        // 2. Fuzzy match: normalize by stripping plurals, hyphens, extra spaces
+        const fuzzyMatch = this.findFuzzyMatch(tagText, rootID);
+        if (fuzzyMatch) {
+            return fuzzyMatch;
+        }
+
+        // 3. Semantic search if vector service is available
         const semanticMatch = await this.findSemanticMatch(tagText, rootID, threshold);
         if (semanticMatch) {
             return semanticMatch;
         }
 
-        // 3. No match found - behavior depends on mode
+        // 4. No match found - behavior depends on mode
         return this.handleNoMatch(tagText, mode, rootID, contextUser);
     }
 
@@ -411,6 +453,45 @@ export class TagEngine extends BaseSingleton<TagEngine> {
     }
 
     /**
+     * Attempt to find a fuzzy match by normalizing tag names.
+     * Strips plurals (trailing 's'/'es'/'ies'), hyphens, extra spaces,
+     * and compares normalized forms. Catches "AI Agent" vs "AI Agents",
+     * "machine-learning" vs "machine learning", etc.
+     */
+    private findFuzzyMatch(tagText: string, rootID: string | null): MJTagEntity | null {
+        const normalized = this.normalizeTagName(tagText);
+        for (const tag of this.Tags) {
+            if (tag.Status !== 'Active') continue;
+            if (this.normalizeTagName(tag.Name) === normalized) {
+                return this.filterBySubtree(tag, rootID);
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Normalize a tag name for fuzzy comparison.
+     * Lowercases, strips hyphens/underscores to spaces, collapses whitespace,
+     * and removes common plural suffixes.
+     */
+    private normalizeTagName(name: string): string {
+        let n = name.trim().toLowerCase();
+        // Replace hyphens/underscores with spaces
+        n = n.replace(/[-_]/g, ' ');
+        // Collapse multiple spaces
+        n = n.replace(/\s+/g, ' ');
+        // Strip trailing plural: "ies" → "y", "es" → "", "s" → ""
+        if (n.endsWith('ies') && n.length > 4) {
+            n = n.slice(0, -3) + 'y';
+        } else if (n.endsWith('ses') || n.endsWith('xes') || n.endsWith('zes') || n.endsWith('ches') || n.endsWith('shes')) {
+            n = n.slice(0, -2);
+        } else if (n.endsWith('s') && !n.endsWith('ss') && n.length > 2) {
+            n = n.slice(0, -1);
+        }
+        return n.trim();
+    }
+
+    /**
      * Attempt to find a semantically matching tag using the vector service.
      */
     private async findSemanticMatch(
@@ -419,6 +500,7 @@ export class TagEngine extends BaseSingleton<TagEngine> {
         threshold: number
     ): Promise<MJTagEntity | null> {
         if (!this._tagVectorService) {
+            LogError(`[TagEngine] Semantic matching disabled — tag vector service not initialized. All non-exact/fuzzy matches will create new tags.`);
             return null;
         }
 
@@ -463,11 +545,6 @@ export class TagEngine extends BaseSingleton<TagEngine> {
         }
 
         return (_metadata: TagEmbeddingMetadata) => {
-            // The key in the vector service is NormalizeUUID(tag.ID),
-            // but metadata filter gets the metadata, not the key.
-            // We need to check if this tag is in the subtree.
-            // Since we stored Name in metadata, look up the tag by name
-            // and check if it's in the subtree set.
             const tag = this.GetTagByName(_metadata.Name);
             if (!tag) return false;
             return subtreeIDs.has(NormalizeUUID(tag.ID));
@@ -588,6 +665,15 @@ export class TagEngine extends BaseSingleton<TagEngine> {
      */
     public async ReEmbedTag(tag: MJTagEntity): Promise<void> {
         await this.addTagToVectorService(tag);
+    }
+
+    /**
+     * Remove a tag's embedding from the vector service (e.g., after deletion).
+     * No-op if the vector service is not initialized.
+     */
+    public RemoveTagFromVectorService(tagID: string): void {
+        if (!this._tagVectorService) return;
+        this._tagVectorService.RemoveVector(NormalizeUUID(tagID));
     }
 
     // ========================================================================

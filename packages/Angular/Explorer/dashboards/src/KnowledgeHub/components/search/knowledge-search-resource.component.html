@@ -50,9 +50,12 @@
                             <span class="tag-presets-label">
                                 <i class="fa-solid fa-tags"></i> Popular tags:
                             </span>
-                            @for (tag of PopularTags; track tag) {
-                                <button class="tag-preset-btn" (click)="FilterByTag(tag)">
-                                    {{ tag }}
+                            @for (tag of PopularTags; track tag.Name) {
+                                <button class="tag-preset-btn"
+                                        [style.fontSize.rem]="tag.FontSize"
+                                        [title]="tag.Name + ' (' + tag.Count + ')'"
+                                        (click)="FilterByTag(tag.Name)">
+                                    {{ tag.Name }}
                                 </button>
                             }
                         </div>

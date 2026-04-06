@@ -35,21 +35,27 @@ Return ONLY valid JSON without any formatting or code blocks, strictly following
 
 ### Tag Guidelines
 
+{% if existingTaxonomy %}
+**CRITICAL: You MUST reuse existing tags whenever possible.** The taxonomy below shows all existing tags organized as a hierarchy. Before creating any new tag, carefully check if an existing tag already covers the concept — even if the wording is slightly different.
+
+- **ALWAYS use the exact tag name** from the existing taxonomy when a match exists.
+- Do NOT create variations like "AI Agent" when "AI Agents" already exists, or "Machine-Learning" when "Machine Learning" exists.
+- If an existing tag is a close match (synonym, plural/singular variant, abbreviation), use the existing tag — do NOT create a new one.
+- Only create a genuinely new tag when NO existing tag covers the concept.
+
+When returning a tag that exists in the taxonomy, use the tag's exact name as shown. For tags nested under a parent, set `parentTag` to the parent's exact name.
+
+## Existing Tag Taxonomy
+
+{{ existingTaxonomy }}
+
+{% else %}
 - The `tag` field should be a concise, descriptive keyword or short phrase.
-- The `parentTag` field is optional. If you believe a tag should be nested under an existing tag in the taxonomy (provided below), set `parentTag` to the exact name of that parent tag. Set to `null` if the tag stands on its own or no suitable parent exists.
+- The `parentTag` field is optional. If you believe a tag should be nested under another tag, set `parentTag` to that parent tag's name. Set to `null` if the tag stands on its own.
+{% endif %}
 
 {% if additionalAttributePrompts %}
 {{ additionalAttributePrompts }}
-{% endif %}
-
-{% if existingTaxonomy %}
-## Existing Tag Taxonomy
-
-Below is the current tag taxonomy. When possible, **prefer using existing tags** from this taxonomy rather than creating new ones. If an existing tag captures the concept well, use its exact name. Only create new tags when no existing tag adequately represents the concept.
-
-If you create a new tag that logically belongs under an existing tag, set its `parentTag` to that existing tag's name.
-
-{{ existingTaxonomy }}
 {% endif %}
 
 {% if previousResults %}

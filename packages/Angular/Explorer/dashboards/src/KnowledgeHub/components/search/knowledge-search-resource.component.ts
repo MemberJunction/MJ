@@ -61,8 +61,8 @@ export class KnowledgeSearchResourceComponent extends BaseResourceComponent impl
     public RecentSearches: RecentSearch[] = [];
     public SavedSearches: MJKnowledgeHubSavedSearchEntity[] = [];
 
-    /** Popular tags for "Filter by Tag" preset buttons (loaded from top content item tags) */
-    public PopularTags: string[] = [];
+    /** Popular tags for "Filter by Tag" preset buttons, sized by relative frequency */
+    public PopularTags: { Name: string; Count: number; FontSize: number }[] = [];
 
     // --- Save Search Dialog ---
     public ShowSaveDialog = false;
@@ -376,12 +376,11 @@ export class KnowledgeSearchResourceComponent extends BaseResourceComponent impl
     }
 
     /**
-     * Filter by a specific tag: set query to the tag name, apply a tag filter, and search.
-     * Provides a "show me all records tagged with X" experience.
+     * Search by a popular tag: sets the query text and runs a search.
+     * Does NOT add a sticky filter — just a simple text search.
      */
     public FilterByTag(tagName: string): void {
         this.Query = tagName;
-        this.ActiveFilters = { Tags: [tagName] };
         this.RunSearch();
     }
 
@@ -452,26 +451,63 @@ export class KnowledgeSearchResourceComponent extends BaseResourceComponent impl
     }
 
     /**
-     * Load the top 8 most-used tags for the "Filter by Tag" preset buttons.
-     * Uses the Tag entity sorted by usage count.
+     * Load the top 10 most-used tags for the "Filter by Tag" preset buttons.
+     * Loads TaggedItems (TagID only), aggregates counts client-side, resolves
+     * display names from Tags, then sizes each tag by relative frequency.
+     * Font sizes range from 0.8rem (least used in top 10) to 1.3rem (most used).
      */
     private async loadPopularTags(): Promise<void> {
         try {
             const rv = new RunView();
-            const result = await rv.RunView<{ DisplayName: string }>({
-                EntityName: 'MJ: Tags',
-                ExtraFilter: '',
-                OrderBy: 'UsageCount DESC',
-                MaxRows: 8,
-                Fields: ['DisplayName'],
-                ResultType: 'simple'
-            });
-            if (result.Success) {
-                this.PopularTags = result.Results
-                    .map(r => r.DisplayName)
-                    .filter(name => name != null && name.trim().length > 0);
-                this.cdr.detectChanges();
+            const [taggedResult, tagResult] = await rv.RunViews([
+                {
+                    EntityName: 'MJ: Tagged Items',
+                    Fields: ['TagID'],
+                    ResultType: 'simple'
+                },
+                {
+                    EntityName: 'MJ: Tags',
+                    Fields: ['ID', 'DisplayName'],
+                    ResultType: 'simple'
+                }
+            ]);
+
+            if (!taggedResult.Success || !tagResult.Success) return;
+
+            // Count occurrences per TagID
+            const counts = new Map<string, number>();
+            for (const row of taggedResult.Results as { TagID: string }[]) {
+                counts.set(row.TagID, (counts.get(row.TagID) ?? 0) + 1);
             }
+
+            // Build name lookup
+            const tagNames = new Map<string, string>();
+            for (const row of tagResult.Results as { ID: string; DisplayName: string }[]) {
+                tagNames.set(row.ID, row.DisplayName);
+            }
+
+            // Sort by count descending, take top 10
+            const sorted = [...counts.entries()]
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 10);
+
+            if (sorted.length === 0) return;
+
+            const maxCount = sorted[0][1];
+            const minCount = sorted[sorted.length - 1][1];
+            const range = maxCount - minCount || 1;
+            const minFont = 0.8;
+            const maxFont = 1.3;
+
+            this.PopularTags = sorted
+                .map(([tagID, count]) => ({
+                    Name: tagNames.get(tagID) ?? '',
+                    Count: count,
+                    FontSize: minFont + ((count - minCount) / range) * (maxFont - minFont)
+                }))
+                .filter(t => t.Name.length > 0);
+
+            this.cdr.detectChanges();
         } catch {
             // Non-critical — tags are a convenience, not a blocker
         }

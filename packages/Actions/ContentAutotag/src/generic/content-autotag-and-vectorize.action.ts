@@ -321,21 +321,17 @@ export class AutotagAndVectorizeContentAction extends BaseAction {
     }
 
     /**
-     * Resolve the ContentSourceTypeID for a given ContentSource by loading the source record.
+     * Resolve the ContentSourceTypeID for a given ContentSource using KH engine cached data.
      */
-    private async resolveSourceTypeID(
+    private resolveSourceTypeID(
         sourceID: string,
-        contextUser: UserInfo
-    ): Promise<string> {
-        const rv = new RunView();
-        const result = await rv.RunView<MJContentSourceEntity>({
-            EntityName: 'MJ: Content Sources',
-            ExtraFilter: `ID='${sourceID}'`,
-            ResultType: 'entity_object',
-            MaxRows: 1
-        }, contextUser);
-        if (result.Success && result.Results.length > 0) {
-            return result.Results[0].ContentSourceTypeID;
+        _contextUser: UserInfo
+    ): string {
+        const source = KnowledgeHubMetadataEngine.Instance.ContentSources.find(
+            s => UUIDsEqual(s.ID, sourceID)
+        );
+        if (source) {
+            return source.ContentSourceTypeID;
         }
         LogError(`[AutotagAction] Could not resolve ContentSourceTypeID for source ${sourceID}`);
         return '';

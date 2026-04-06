@@ -13,6 +13,7 @@ import { ResourceData, MJVectorDatabaseEntity, MJVectorIndexEntity, MJEntityDocu
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 
 /** Configuration section definition */
 interface ConfigSection {
@@ -337,7 +338,7 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
             const engine = KnowledgeHubMetadataEngine.Instance;
             await engine.Config(false);
 
-            this.loadVectorDBProvidersFromEngine(engine.VectorDatabases);
+            this.loadVectorDBProvidersFromEngine(AIEngineBase.Instance.VectorDatabases);
             this.loadVectorIndexesFromEngine(engine.VectorIndexes);
             this.loadEntityDocumentsAndThresholds(engine.GetActiveEntityDocuments());
 

@@ -886,21 +886,36 @@
                         <div class="at-tax-dup-list">
                             @for (pair of TaxDuplicates; track $index) {
                                 <div class="at-tax-dup-card" [class.at-tax-dup-high]="pair.SeverityClass === 'high'" [class.at-tax-dup-moderate]="pair.SeverityClass === 'moderate'">
-                                    <div class="at-tax-dup-tag">{{ pair.TagA }}</div>
-                                    <div class="at-tax-dup-arrow"><i class="fa-solid fa-arrows-left-right"></i></div>
-                                    <div class="at-tax-dup-similarity">
-                                        <div class="at-tax-sim-bar-bg">
-                                            <div class="at-tax-sim-bar-fill" [class]="pair.SeverityClass" [style.width.%]="pair.Similarity"></div>
+                                    @if (pair.IsExactDuplicate) {
+                                        <!-- Exact-name duplicates: show single tag name with count -->
+                                        <div class="at-tax-dup-tag">{{ pair.TagA }}</div>
+                                        <div class="at-tax-dup-similarity">
+                                            <span class="at-tax-sim-percent high">
+                                                <i class="fa-solid fa-clone"></i>&nbsp;{{ pair.ExactDuplicateCount }} identical records
+                                            </span>
                                         </div>
-                                        <span class="at-tax-sim-percent" [class]="pair.SeverityClass">{{ pair.Similarity }}%</span>
-                                    </div>
-                                    <div class="at-tax-dup-arrow"><i class="fa-solid fa-arrows-left-right"></i></div>
-                                    <div class="at-tax-dup-tag">{{ pair.TagB }}</div>
-                                    <div class="at-tax-dup-actions">
-                                        <button class="at-tax-dup-btn at-tax-dup-btn-primary" (click)="MergeTags(pair.TagAID, pair.TagBID, pair.TagA, pair.TagB)">Merge</button>
-                                        <button class="at-tax-dup-btn" (click)="MakeChildTag(pair.TagAID, pair.TagBID)">Make Child</button>
-                                        <button class="at-tax-dup-btn" (click)="DismissDuplicate(pair)">Dismiss</button>
-                                    </div>
+                                        <div class="at-tax-dup-actions">
+                                            <button class="at-tax-dup-btn at-tax-dup-btn-primary" (click)="MergeTags(pair.TagAID, pair.TagBID, pair.TagA, pair.TagB)">Merge</button>
+                                            <button class="at-tax-dup-btn" (click)="DismissDuplicate(pair)">Dismiss</button>
+                                        </div>
+                                    } @else {
+                                        <!-- Similar (non-exact) pairs: show both tags with similarity -->
+                                        <div class="at-tax-dup-tag">{{ pair.TagA }}</div>
+                                        <div class="at-tax-dup-arrow"><i class="fa-solid fa-arrows-left-right"></i></div>
+                                        <div class="at-tax-dup-similarity">
+                                            <div class="at-tax-sim-bar-bg">
+                                                <div class="at-tax-sim-bar-fill" [class]="pair.SeverityClass" [style.width.%]="pair.Similarity"></div>
+                                            </div>
+                                            <span class="at-tax-sim-percent" [class]="pair.SeverityClass">{{ pair.Similarity }}%</span>
+                                        </div>
+                                        <div class="at-tax-dup-arrow"><i class="fa-solid fa-arrows-left-right"></i></div>
+                                        <div class="at-tax-dup-tag">{{ pair.TagB }}</div>
+                                        <div class="at-tax-dup-actions">
+                                            <button class="at-tax-dup-btn at-tax-dup-btn-primary" (click)="MergeTags(pair.TagAID, pair.TagBID, pair.TagA, pair.TagB)">Merge</button>
+                                            <button class="at-tax-dup-btn" (click)="MakeChildTag(pair.TagAID, pair.TagBID)">Make Child</button>
+                                            <button class="at-tax-dup-btn" (click)="DismissDuplicate(pair)">Dismiss</button>
+                                        </div>
+                                    }
                                 </div>
                             }
                         </div>

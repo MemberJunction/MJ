@@ -203,6 +203,12 @@ interface TaxDuplicatePair {
     TagBID: string;
     Similarity: number;
     SeverityClass: 'high' | 'moderate';
+    /** True when multiple Tag records share the same name (case-insensitive) */
+    IsExactDuplicate: boolean;
+    /** How many Tag records share this exact name (only set when IsExactDuplicate) */
+    ExactDuplicateCount: number;
+    /** All Tag IDs sharing the exact name (only set when IsExactDuplicate) */
+    AllIDs: string[];
 }
 
 interface TaxOrphanCard {
@@ -3468,8 +3474,32 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
 
         const pairs: TaxDuplicatePair[] = [];
 
+        // 1. Group exact-name duplicates (case-insensitive) into single entries
+        const exactGroups = this.groupExactNameDuplicates(tags);
+        const consumedIDs = new Set<string>();
+
+        for (const [, group] of exactGroups) {
+            if (group.length < 2) continue;
+            // Emit one consolidated entry per group of exact-name duplicates
+            pairs.push({
+                TagA: group[0].Name,
+                TagB: group[0].Name,
+                TagAID: group[0].ID,
+                TagBID: group[1].ID,
+                Similarity: 100,
+                SeverityClass: 'high',
+                IsExactDuplicate: true,
+                ExactDuplicateCount: group.length,
+                AllIDs: group.map(t => t.ID)
+            });
+            for (const t of group) consumedIDs.add(t.ID);
+        }
+
+        // 2. Fuzzy/similar pairs — skip any tags already covered by exact-name groups
         for (let i = 0; i < tags.length; i++) {
+            if (consumedIDs.has(tags[i].ID)) continue;
             for (let j = i + 1; j < tags.length; j++) {
+                if (consumedIDs.has(tags[j].ID)) continue;
                 const sim = this.computeStringSimilarity(tags[i].Name, tags[j].Name);
                 if (sim >= 0.70) {
                     pairs.push({
@@ -3478,7 +3508,10 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
                         TagAID: tags[i].ID,
                         TagBID: tags[j].ID,
                         Similarity: Math.round(sim * 100),
-                        SeverityClass: sim >= 0.85 ? 'high' : 'moderate'
+                        SeverityClass: sim >= 0.85 ? 'high' : 'moderate',
+                        IsExactDuplicate: false,
+                        ExactDuplicateCount: 0,
+                        AllIDs: []
                     });
                 }
             }
@@ -3486,6 +3519,21 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
 
         pairs.sort((a, b) => b.Similarity - a.Similarity);
         this.TaxDuplicates = pairs;
+    }
+
+    /** Group tags by case-insensitive name, returning only groups with 2+ members */
+    private groupExactNameDuplicates(tags: { ID: string; Name: string }[]): Map<string, { ID: string; Name: string }[]> {
+        const groups = new Map<string, { ID: string; Name: string }[]>();
+        for (const tag of tags) {
+            const key = tag.Name.toLowerCase().trim();
+            const group = groups.get(key);
+            if (group) {
+                group.push(tag);
+            } else {
+                groups.set(key, [tag]);
+            }
+        }
+        return groups;
     }
 
     /**

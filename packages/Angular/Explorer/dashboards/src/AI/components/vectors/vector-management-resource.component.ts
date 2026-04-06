@@ -829,7 +829,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         await engine.Config(false);
 
         this.entityDocuments = engine.EntityDocuments;
-        this.vectorDatabases = engine.VectorDatabases;
+        this.vectorDatabases = AIEngineBase.Instance.VectorDatabases;
         this.vectorIndexes = engine.VectorIndexes;
 
         // Entity Record Documents and AI Models are not cached in the engine —

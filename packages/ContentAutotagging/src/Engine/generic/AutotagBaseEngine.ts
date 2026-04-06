@@ -29,6 +29,7 @@ import { TextChunker, ChunkTextParams } from '@memberjunction/ai-vectors'
 import { VectorDBBase, VectorRecord, BaseResponse } from '@memberjunction/ai-vectordb'
 import { TagEngine } from '@memberjunction/tag-engine'
 import { TagEngineBase } from '@memberjunction/tag-engine-base'
+import { KnowledgeHubMetadataEngine } from '@memberjunction/core-entities'
 
 /**
  * Resolved vector infrastructure for a specific (embeddingModel + vectorIndex) pair.
@@ -70,41 +71,30 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         return super.getInstance<AutotagBaseEngine>();
     }
 
-    // Cached metadata — loaded by BaseEngine.Config() via property configs
-    private _ContentTypes: MJContentTypeEntity[] = [];
-    private _ContentSourceTypes: MJContentSourceTypeEntity[] = [];
-    private _ContentFileTypes: MJContentFileTypeEntity[] = [];
+    // Cached metadata unique to this engine — loaded by BaseEngine.Config()
     private _ContentTypeAttributes: MJContentTypeAttributeEntity[] = [];
     private _ContentSourceTypeParams: MJContentSourceTypeParamEntity[] = [];
 
-    /** All content types, cached at startup */
-    public get ContentTypes(): MJContentTypeEntity[] { return this._ContentTypes; }
-    /** All content source types, cached at startup */
-    public get ContentSourceTypes(): MJContentSourceTypeEntity[] { return this._ContentSourceTypes; }
-    /** All content file types, cached at startup */
-    public get ContentFileTypes(): MJContentFileTypeEntity[] { return this._ContentFileTypes; }
+    /** Shortcut to KnowledgeHubMetadataEngine */
+    private get khEngine(): KnowledgeHubMetadataEngine { return KnowledgeHubMetadataEngine.Instance; }
+
+    /** All content types — delegated to KnowledgeHubMetadataEngine */
+    public get ContentTypes(): MJContentTypeEntity[] { return this.khEngine.ContentTypes; }
+    /** All content source types — delegated to KnowledgeHubMetadataEngine */
+    public get ContentSourceTypes(): MJContentSourceTypeEntity[] { return this.khEngine.ContentSourceTypes; }
+    /** All content file types — delegated to KnowledgeHubMetadataEngine */
+    public get ContentFileTypes(): MJContentFileTypeEntity[] { return this.khEngine.ContentFileTypes; }
     /** All content type attributes, cached at startup */
     public get ContentTypeAttributes(): MJContentTypeAttributeEntity[] { return this._ContentTypeAttributes; }
     /** All content source type params, cached at startup */
     public get ContentSourceTypeParams(): MJContentSourceTypeParamEntity[] { return this._ContentSourceTypeParams; }
 
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<unknown> {
+        // Content Types, Content Source Types, and Content File Types are delegated to
+        // KnowledgeHubMetadataEngine (avoid redundant loading). Only cache entities unique to this engine.
+        await KnowledgeHubMetadataEngine.Instance.Config(forceRefresh, contextUser);
+
         const configs: Partial<BaseEnginePropertyConfig>[] = [
-            {
-                Type: 'entity',
-                EntityName: 'MJ: Content Types',
-                PropertyName: '_ContentTypes',
-            },
-            {
-                Type: 'entity',
-                EntityName: 'MJ: Content Source Types',
-                PropertyName: '_ContentSourceTypes',
-            },
-            {
-                Type: 'entity',
-                EntityName: 'MJ: Content File Types',
-                PropertyName: '_ContentFileTypes',
-            },
             {
                 Type: 'entity',
                 EntityName: 'MJ: Content Type Attributes',
@@ -366,14 +356,17 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
      */
     public async InitializeTaxonomyBridge(contextUser: UserInfo): Promise<void> {
         try {
+            // TagEngine internally ensures AIEngine is loaded before building embeddings.
             await TagEngine.Instance.Config(false, contextUser);
             LogStatus(`[TaxonomyBridge] TagEngine initialized with ${TagEngine.Instance.Tags.length} existing tags`);
 
-            // Inject taxonomy into prompt context if tags exist
+            // Inject taxonomy into prompt context as markdown hierarchy
+            // Format: "# RootTag\n## ChildTag\n### GrandChild"
+            // LLM returns paths like "RootTag / ChildTag / GrandChild" for unambiguous matching
             if (TagEngine.Instance.Tags.length > 0) {
                 const tree = TagEngine.Instance.GetTaxonomyTree();
-                this.TaxonomyContext = JSON.stringify(tree, null, 2);
-                LogStatus(`[TaxonomyBridge] Taxonomy context injected (${tree.length} root nodes)`);
+                this.TaxonomyContext = this.buildTaxonomyMarkdown(tree);
+                LogStatus(`[TaxonomyBridge] Taxonomy context injected as markdown (${tree.length} root nodes, ${TagEngine.Instance.Tags.length} total tags)`);
             }
 
             // Set up the bridge callback — fires after each ContentItemTag is saved
@@ -400,6 +393,29 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     }
 
     /**
+     * Build a markdown-formatted taxonomy for LLM prompt injection.
+     * Uses heading levels for hierarchy depth (# for root, ## for child, etc.)
+     * so the LLM can return tag paths like "Root / Child / Grandchild".
+     */
+    private buildTaxonomyMarkdown(tree: Array<{ Name: string; Children: Array<unknown> }>): string {
+        const lines: string[] = [];
+        const renderNode = (node: { Name: string; Children: Array<unknown> }, depth: number, path: string): void => {
+            const prefix = '#'.repeat(Math.min(depth + 1, 6)); // Max 6 heading levels
+            const fullPath = path ? `${path} / ${node.Name}` : node.Name;
+            lines.push(`${prefix} ${node.Name}`);
+            if (node.Children && node.Children.length > 0) {
+                for (const child of node.Children) {
+                    renderNode(child as { Name: string; Children: Array<unknown> }, depth + 1, fullPath);
+                }
+            }
+        };
+        for (const root of tree) {
+            renderNode(root, 0, '');
+        }
+        return lines.join('\n');
+    }
+
+    /**
      * Bridge a ContentItemTag to the formal MJ Tag taxonomy.
      * Uses TagEngine.ResolveTag() in auto-grow mode by default.
      *
@@ -413,12 +429,12 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         contextUser: UserInfo
     ): Promise<void> {
         try {
-            // If parent tag is suggested by LLM, find/create it first
+            // If parent tag is suggested by LLM, resolve it through the mutex too
+            // to prevent duplicate parent tags from concurrent batch processing
             if (parentTagName) {
-                const parentTag = TagEngine.Instance.GetTagByName(parentTagName);
-                if (!parentTag) {
-                    await TagEngine.Instance.CreateTag(parentTagName, parentTagName, null, null, contextUser);
-                }
+                await TagEngine.Instance.ResolveTag(
+                    parentTagName, 0, 'auto-grow', null, 0.80, contextUser
+                );
             }
 
             // Resolve the tag using auto-grow mode (create if no match)
@@ -427,7 +443,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
                 contentItemTag.Weight,
                 'auto-grow',
                 null,   // no root constraint
-                0.9,    // similarity threshold
+                0.80,   // similarity threshold — lower to catch plurals/variants like "AI Agent" vs "AI Agents"
                 contextUser
             );
 
@@ -546,7 +562,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         const hasPreviousResults = Object.keys(previousResults).length > 0;
 
         // Check if this source type requires content type validation in the prompt
-        const sourceType = this._ContentSourceTypes.find(st => UUIDsEqual(st.ID, params.contentSourceTypeID));
+        const sourceType = this.ContentSourceTypes.find(st => UUIDsEqual(st.ID, params.contentSourceTypeID));
         const sourceConfig = sourceType?.ConfigurationObject;
         const requiresContentType = sourceConfig?.RequiresContentType !== false;
 
@@ -840,22 +856,12 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
      * Retrieves all content sources for a given content source type.
      * Returns an empty array (instead of throwing) when no sources are configured.
      */
-    public async GetAllContentSourcesSafe(contextUser: UserInfo, contentSourceTypeID: string): Promise<MJContentSourceEntity[]> {
-        const rv = new RunView();
-        const result = await rv.RunView<MJContentSourceEntity>({
-            EntityName: 'MJ: Content Sources',
-            ResultType: 'entity_object',
-            ExtraFilter: `ContentSourceTypeID='${contentSourceTypeID}'`
-        }, contextUser);
-
-        if (result.Success) {
-            return result.Results;
-        }
-        return [];
+    public async GetAllContentSourcesSafe(_contextUser: UserInfo, contentSourceTypeID: string): Promise<MJContentSourceEntity[]> {
+        return this.khEngine.ContentSources.filter(s => UUIDsEqual(s.ContentSourceTypeID, contentSourceTypeID));
     }
 
     public SetSubclassContentSourceType(subclass: string): string {
-        const sourceType = this._ContentSourceTypes.find(st => st.Name === subclass);
+        const sourceType = this.ContentSourceTypes.find(st => st.Name === subclass);
         if (!sourceType) {
             throw new Error(`Content Source Type with name '${subclass}' not found in cached metadata`);
         }
@@ -960,7 +966,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     }
 
     public GetContentItemParams(contentTypeID: string): { modelID: string; minTags: number; maxTags: number } {
-        const contentType = this._ContentTypes.find(ct => UUIDsEqual(ct.ID, contentTypeID));
+        const contentType = this.ContentTypes.find(ct => UUIDsEqual(ct.ID, contentTypeID));
         if (!contentType) {
             throw new Error(`Content Type with ID ${contentTypeID} not found in cached metadata`);
         }
@@ -972,7 +978,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     }
 
     public GetContentSourceTypeName(contentSourceTypeID: string): string {
-        const sourceType = this._ContentSourceTypes.find(st => UUIDsEqual(st.ID, contentSourceTypeID));
+        const sourceType = this.ContentSourceTypes.find(st => UUIDsEqual(st.ID, contentSourceTypeID));
         if (!sourceType) {
             throw new Error(`Content Source Type with ID ${contentSourceTypeID} not found in cached metadata`);
         }
@@ -980,7 +986,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     }
 
     public GetContentTypeName(contentTypeID: string): string {
-        const contentType = this._ContentTypes.find(ct => UUIDsEqual(ct.ID, contentTypeID));
+        const contentType = this.ContentTypes.find(ct => UUIDsEqual(ct.ID, contentTypeID));
         if (!contentType) {
             throw new Error(`Content Type with ID ${contentTypeID} not found in cached metadata`);
         }
@@ -988,7 +994,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     }
 
     public GetContentFileTypeName(contentFileTypeID: string): string {
-        const fileType = this._ContentFileTypes.find(ft => UUIDsEqual(ft.ID, contentFileTypeID));
+        const fileType = this.ContentFileTypes.find(ft => UUIDsEqual(ft.ID, contentFileTypeID));
         if (!fileType) {
             throw new Error(`Content File Type with ID ${contentFileTypeID} not found in cached metadata`);
         }
@@ -1406,41 +1412,26 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
      */
     private async loadContentSourceAndTypeMaps(
         items: MJContentItemEntity[],
-        contextUser: UserInfo
+        _contextUser: UserInfo
     ): Promise<{
         sourceMap: Map<string, Record<string, unknown>>;
         typeMap: Map<string, Record<string, unknown>>;
     }> {
-        const sourceIds = [...new Set(items.map(i => i.ContentSourceID))];
-        const typeIds = [...new Set(items.map(i => i.ContentTypeID))];
+        const sourceIdSet = new Set(items.map(i => NormalizeUUID(i.ContentSourceID)));
+        const typeIdSet = new Set(items.map(i => NormalizeUUID(i.ContentTypeID)));
 
-        const rv = new RunView();
-        const [sourceResult, typeResult] = await rv.RunViews([
-            {
-                EntityName: 'MJ: Content Sources',
-                ExtraFilter: `ID IN (${sourceIds.map(id => `'${id}'`).join(',')})`,
-                ResultType: 'simple'
-            },
-            {
-                EntityName: 'MJ: Content Types',
-                ExtraFilter: `ID IN (${typeIds.map(id => `'${id}'`).join(',')})`,
-                ResultType: 'simple'
-            }
-        ], contextUser);
-
+        // Use KH engine cached data instead of RunView calls
         const sourceMap = new Map<string, Record<string, unknown>>();
-        if (sourceResult.Success) {
-            for (const row of sourceResult.Results) {
-                const rec = row as Record<string, unknown>;
-                sourceMap.set(NormalizeUUID(rec['ID'] as string), rec);
+        for (const src of this.khEngine.ContentSources) {
+            if (sourceIdSet.has(NormalizeUUID(src.ID))) {
+                sourceMap.set(NormalizeUUID(src.ID), src.GetAll());
             }
         }
 
         const typeMap = new Map<string, Record<string, unknown>>();
-        if (typeResult.Success) {
-            for (const row of typeResult.Results) {
-                const rec = row as Record<string, unknown>;
-                typeMap.set(NormalizeUUID(rec['ID'] as string), rec);
+        for (const ct of this.ContentTypes) {
+            if (typeIdSet.has(NormalizeUUID(ct.ID))) {
+                typeMap.set(NormalizeUUID(ct.ID), ct.GetAll());
             }
         }
 
@@ -1532,67 +1523,42 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     private async buildVectorInfrastructure(
         embeddingModelID: string,
         vectorIndexID: string,
-        contextUser: UserInfo
+        _contextUser: UserInfo
     ): Promise<ResolvedVectorInfrastructure> {
-        const rv = new RunView();
-
-        const indexResult = await rv.RunView({
-            EntityName: 'MJ: Vector Indexes',
-            ExtraFilter: `ID='${vectorIndexID}'`,
-            ResultType: 'simple',
-            MaxRows: 1
-        }, contextUser);
-        if (!indexResult.Success || indexResult.Results.length === 0) {
-            throw new Error(`Vector index ${vectorIndexID} not found`);
+        const vectorIndex = this.khEngine.GetVectorIndexById(vectorIndexID);
+        if (!vectorIndex) {
+            throw new Error(`Vector index ${vectorIndexID} not found in KnowledgeHubMetadataEngine cache`);
         }
-        const vectorIndex = indexResult.Results[0] as Record<string, unknown>;
 
-        return this.createInfrastructureFromIndex(vectorIndex, embeddingModelID, contextUser);
+        return this.createInfrastructureFromIndex(vectorIndex.Name, vectorIndex.VectorDatabaseID, embeddingModelID);
     }
 
     /**
-     * Fallback: resolve infrastructure from the first active VectorIndex (original behavior).
+     * Fallback: resolve infrastructure from the first available VectorIndex (original behavior).
      */
-    private async getDefaultVectorInfrastructure(contextUser: UserInfo): Promise<ResolvedVectorInfrastructure> {
-        const rv = new RunView();
-
-        const indexResult = await rv.RunView({
-            EntityName: 'MJ: Vector Indexes',
-            ResultType: 'simple',
-            MaxRows: 1
-        }, contextUser);
-        if (!indexResult.Success || indexResult.Results.length === 0) {
+    private async getDefaultVectorInfrastructure(_contextUser: UserInfo): Promise<ResolvedVectorInfrastructure> {
+        const vectorIndexes = this.khEngine.VectorIndexes;
+        if (vectorIndexes.length === 0) {
             throw new Error('No vector indexes found — create one in the Configuration tab first');
         }
-        const vectorIndex = indexResult.Results[0] as Record<string, unknown>;
-        const embeddingModelID = vectorIndex['EmbeddingModelID'] as string;
-
-        return this.createInfrastructureFromIndex(vectorIndex, embeddingModelID, contextUser);
+        const vectorIndex = vectorIndexes[0];
+        return this.createInfrastructureFromIndex(vectorIndex.Name, vectorIndex.VectorDatabaseID, vectorIndex.EmbeddingModelID);
     }
 
     /**
-     * Shared helper: given a vector index record and embedding model ID, resolve all
-     * driver instances needed for embedding + upsert.
+     * Shared helper: given vector index details and embedding model ID, resolve all
+     * driver instances needed for embedding + upsert. Uses AIEngine for Vector Databases.
      */
     private async createInfrastructureFromIndex(
-        vectorIndex: Record<string, unknown>,
+        indexName: string,
+        vectorDatabaseID: string,
         embeddingModelID: string,
-        contextUser: UserInfo
     ): Promise<ResolvedVectorInfrastructure> {
-        const indexName = vectorIndex['Name'] as string;
-        const vectorDatabaseID = vectorIndex['VectorDatabaseID'] as string;
-
-        const rv = new RunView();
-        const dbResult = await rv.RunView({
-            EntityName: 'MJ: Vector Databases',
-            ExtraFilter: `ID='${vectorDatabaseID}'`,
-            ResultType: 'simple',
-            MaxRows: 1
-        }, contextUser);
-        if (!dbResult.Success || dbResult.Results.length === 0) {
-            throw new Error(`Vector database ${vectorDatabaseID} not found`);
+        const vectorDBEntity = AIEngine.Instance.VectorDatabases.find(db => UUIDsEqual(db.ID, vectorDatabaseID));
+        if (!vectorDBEntity || !vectorDBEntity.ClassKey) {
+            throw new Error(`Vector database ${vectorDatabaseID} not found in AIEngine cache`);
         }
-        const vectorDBClassKey = (dbResult.Results[0] as Record<string, unknown>)['ClassKey'] as string;
+        const vectorDBClassKey = vectorDBEntity.ClassKey;
 
         const aiModel = this.findEmbeddingModel(embeddingModelID);
         const driverClass = aiModel.DriverClass;
