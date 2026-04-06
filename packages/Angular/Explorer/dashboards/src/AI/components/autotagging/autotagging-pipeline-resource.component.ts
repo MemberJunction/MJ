@@ -500,6 +500,22 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     public TaxTreemapKPIs: { Label: string; Value: string }[] = [];
     public TaxIsEditing = false;
 
+    // ── Create Tag Dialog ──
+    public ShowCreateTagDialog = false;
+    public CreateTagName = '';
+    public CreateTagDescription = '';
+    public CreateTagParentID: string | null = null;
+    /** Label shown in the create dialog to indicate context (e.g., "under AI Agent") */
+    public CreateTagParentLabel = '';
+
+    // ── Multi-select for drag reparenting ──
+    public TaxMultiSelectMode = false;
+    public TaxSelectedIDs = new Set<string>();
+    /** The node currently being dragged over (drop target highlight) */
+    public TaxDragOverNodeID: string | null = null;
+    /** True while a drag-reparent operation is saving */
+    public TaxTreeSaving = false;
+
     /** Count of high-confidence duplicate pairs (>85% similarity) */
     public get TaxHighConfidenceDupeCount(): number {
         return this.TaxDuplicates.filter(d => d.SeverityClass === 'high').length;
@@ -3468,6 +3484,207 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         );
     }
 
+    // ── Create Tag ──
+
+    /** Open create tag dialog for a root-level tag */
+    public OpenCreateRootTag(): void {
+        this.CreateTagParentID = null;
+        this.CreateTagParentLabel = 'Root level';
+        this.CreateTagName = '';
+        this.CreateTagDescription = '';
+        this.ShowCreateTagDialog = true;
+        this.cdr.detectChanges();
+    }
+
+    /** Open create tag dialog as child of the selected node */
+    public OpenCreateChildTag(): void {
+        if (!this.TaxSelectedNode) return;
+        this.OpenCreateChildTagFor(this.TaxSelectedNode);
+    }
+
+    /** Open create tag dialog as child of a specific node */
+    public OpenCreateChildTagFor(node: TaxTreeNode): void {
+        this.CreateTagParentID = node.ID;
+        this.CreateTagParentLabel = `under "${node.Name}"`;
+        this.CreateTagName = '';
+        this.CreateTagDescription = '';
+        this.ShowCreateTagDialog = true;
+        this.cdr.detectChanges();
+    }
+
+    /** Close create tag dialog */
+    public CloseCreateTagDialog(): void {
+        this.ShowCreateTagDialog = false;
+        this.cdr.detectChanges();
+    }
+
+    /** Save the new tag */
+    public async SaveNewTag(): Promise<void> {
+        const name = this.CreateTagName.trim();
+        if (!name) return;
+
+        try {
+            const md = new Metadata();
+            const entity = await md.GetEntityObject<BaseEntity>('MJ: Tags');
+            entity.NewRecord();
+            entity.Set('Name', name);
+            entity.Set('DisplayName', name);
+            entity.Set('Description', this.CreateTagDescription.trim() || null);
+            entity.Set('ParentID', this.CreateTagParentID);
+            const saved = await entity.Save();
+            if (saved) {
+                this.addTaxAuditEntry('created', name);
+                MJNotificationService.Instance.CreateSimpleNotification(`Tag "${name}" created`, 'success', 2500);
+                this.ShowCreateTagDialog = false;
+                await this.RefreshTaxonomyData();
+            } else {
+                MJNotificationService.Instance.CreateSimpleNotification('Failed to save tag', 'error', 4000);
+            }
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            MJNotificationService.Instance.CreateSimpleNotification(`Error: ${msg}`, 'error', 4000);
+        }
+    }
+
+    // ── Multi-Select & Drag Reparent ──
+
+    /** Toggle multi-select mode on/off */
+    public ToggleMultiSelectMode(): void {
+        this.TaxMultiSelectMode = !this.TaxMultiSelectMode;
+        if (!this.TaxMultiSelectMode) {
+            this.TaxSelectedIDs.clear();
+        }
+        this.cdr.detectChanges();
+    }
+
+    /** Toggle a node's selection in multi-select mode */
+    public ToggleNodeSelection(node: TaxTreeNode, event: Event): void {
+        event.stopPropagation();
+        if (this.TaxSelectedIDs.has(node.ID)) {
+            this.TaxSelectedIDs.delete(node.ID);
+        } else {
+            this.TaxSelectedIDs.add(node.ID);
+        }
+        this.cdr.detectChanges();
+    }
+
+    /** Check if a node is selected in multi-select mode */
+    public IsNodeMultiSelected(nodeID: string): boolean {
+        return this.TaxSelectedIDs.has(nodeID);
+    }
+
+    /** Handle drag start on a tree node */
+    public OnTreeNodeDragStart(event: DragEvent, node: TaxTreeNode): void {
+        if (!event.dataTransfer) return;
+        // If dragging a multi-selected node, drag all selected; otherwise just this one
+        const dragIDs = this.TaxMultiSelectMode && this.TaxSelectedIDs.has(node.ID)
+            ? [...this.TaxSelectedIDs]
+            : [node.ID];
+        event.dataTransfer.setData('text/plain', JSON.stringify(dragIDs));
+        event.dataTransfer.effectAllowed = 'move';
+    }
+
+    /** Handle drag over a tree node (drop target) */
+    public OnTreeNodeDragOver(event: DragEvent, node: TaxTreeNode): void {
+        event.preventDefault();
+        if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+        this.TaxDragOverNodeID = node.ID;
+    }
+
+    /** Handle drag leave */
+    public OnTreeNodeDragLeave(): void {
+        this.TaxDragOverNodeID = null;
+    }
+
+    /** Handle drop — reparent dragged node(s) under the drop target */
+    public async OnTreeNodeDrop(event: DragEvent, targetNode: TaxTreeNode): Promise<void> {
+        event.preventDefault();
+        this.TaxDragOverNodeID = null;
+
+        const data = event.dataTransfer?.getData('text/plain');
+        if (!data) return;
+
+        let dragIDs: string[];
+        try { dragIDs = JSON.parse(data); } catch { return; }
+
+        // Prevent dropping onto itself or a descendant
+        const targetDescendants = this.collectDescendantIds(targetNode);
+        const validIDs = dragIDs.filter(id =>
+            !UUIDsEqual(id, targetNode.ID) && !targetDescendants.has(NormalizeUUID(id))
+        );
+
+        if (validIDs.length === 0) return;
+
+        this.TaxTreeSaving = true;
+        this.cdr.detectChanges();
+
+        const md = new Metadata();
+        let movedCount = 0;
+        for (const tagID of validIDs) {
+            try {
+                const entity = await md.GetEntityObject<BaseEntity>('MJ: Tags');
+                await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: tagID }]));
+                entity.Set('ParentID', targetNode.ID);
+                const saved = await entity.Save();
+                if (saved) movedCount++;
+            } catch {
+                // continue with remaining
+            }
+        }
+
+        if (movedCount > 0) {
+            const label = movedCount === 1 ? '1 tag' : `${movedCount} tags`;
+            MJNotificationService.Instance.CreateSimpleNotification(`Moved ${label} under "${targetNode.Name}"`, 'success', 2500);
+            this.addTaxAuditEntry('moved', `${movedCount} tag(s) → ${targetNode.Name}`);
+            this.TaxSelectedIDs.clear();
+            await this.RefreshTaxonomyData();
+        }
+
+        this.TaxTreeSaving = false;
+        this.cdr.detectChanges();
+    }
+
+    /** Handle drop on the "Root" drop zone (make root-level) */
+    public async OnDropToRoot(event: DragEvent): Promise<void> {
+        event.preventDefault();
+        this.TaxDragOverNodeID = null;
+
+        const data = event.dataTransfer?.getData('text/plain');
+        if (!data) return;
+
+        let dragIDs: string[];
+        try { dragIDs = JSON.parse(data); } catch { return; }
+
+        this.TaxTreeSaving = true;
+        this.cdr.detectChanges();
+
+        const md = new Metadata();
+        let movedCount = 0;
+        for (const tagID of dragIDs) {
+            try {
+                const entity = await md.GetEntityObject<BaseEntity>('MJ: Tags');
+                await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: tagID }]));
+                if (entity.Get('ParentID') != null) {
+                    entity.Set('ParentID', null);
+                    const saved = await entity.Save();
+                    if (saved) movedCount++;
+                }
+            } catch {
+                // continue
+            }
+        }
+
+        if (movedCount > 0) {
+            MJNotificationService.Instance.CreateSimpleNotification(`Moved ${movedCount} tag(s) to root`, 'success', 2500);
+            this.addTaxAuditEntry('moved', `${movedCount} tag(s) → root`);
+            this.TaxSelectedIDs.clear();
+            await this.RefreshTaxonomyData();
+        }
+
+        this.TaxTreeSaving = false;
+        this.cdr.detectChanges();
+    }
+
     public async MergeTags(sourceTagId: string, targetTagId: string, sourceName: string, targetName: string): Promise<void> {
         try {
             // Re-parent tagged items from source to target
@@ -3698,7 +3915,8 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     // ── Orphans ──
 
     /**
-     * Finds orphan tags: no parent, no children, and low usage (<=3 items).
+     * Finds orphan tags: no parent, no children, and zero usage.
+     * A tag with even 1 connection is not orphaned — it's just a leaf.
      * Uses NormalizeUUID for consistent cross-platform UUID comparisons.
      */
     private buildTaxOrphans(): void {
@@ -3715,8 +3933,8 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
                 const normalizedId = NormalizeUUID(t['ID'] as string);
                 const parentId = t['ParentID'] as string | null;
                 const itemCount = tagItemCounts.get(normalizedId) ?? 0;
-                // Orphan: no parent, no children, low usage
-                return !parentId && !hasChildren.has(normalizedId) && itemCount <= 3;
+                // Orphan: no parent, no children, and zero connections
+                return !parentId && !hasChildren.has(normalizedId) && itemCount === 0;
             })
             .map(t => {
                 const id = t['ID'] as string;

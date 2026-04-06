@@ -726,12 +726,21 @@
                     @if (TaxSubTab === 'tree') {
                         <div class="at-tax-split-view">
                             <!-- Tree panel -->
-                            <div class="at-tax-tree-panel">
-                                <div class="at-tax-tree-search">
-                                    <input type="text" class="at-search-input" style="width: 100%;" placeholder="Search tags..."
+                            <div class="at-tax-tree-panel" style="position: relative;">
+                                <div class="at-tax-tree-toolbar">
+                                    <input type="text" class="at-search-input" style="flex: 1;" placeholder="Search tags..."
                                            [(ngModel)]="TaxTreeSearch" (input)="FilterTaxTree()">
+                                    <button class="at-tax-toolbar-btn" title="Add root tag" (click)="OpenCreateRootTag()">
+                                        <i class="fa-solid fa-plus"></i>
+                                    </button>
+                                    <button class="at-tax-toolbar-btn" [class.active]="TaxMultiSelectMode"
+                                            title="Toggle multi-select for drag reparenting" (click)="ToggleMultiSelectMode()">
+                                        <i class="fa-solid fa-check-double"></i>
+                                    </button>
                                 </div>
-                                <div class="at-tax-tree-body">
+                                <div class="at-tax-tree-body"
+                                     (dragover)="$event.preventDefault()"
+                                     (drop)="OnDropToRoot($event)">
                                     @if (TaxFilteredNodes.length === 0) {
                                         <div class="at-empty-state">
                                             <i class="fa-solid fa-sitemap"></i>
@@ -739,9 +748,22 @@
                                         </div>
                                     }
                                     @for (node of TaxFilteredNodes; track node.ID) {
-                                        <div class="at-tax-tree-node" [class.at-tax-node-selected]="node.IsSelected"
+                                        <div class="at-tax-tree-node"
+                                             [class.at-tax-node-selected]="node.IsSelected"
+                                             [class.at-tax-node-drag-over]="TaxDragOverNodeID === node.ID"
+                                             [class.at-tax-node-multi-selected]="IsNodeMultiSelected(node.ID)"
                                              [style.padding-left.px]="16 + node.Depth * 20"
+                                             [attr.draggable]="true"
+                                             (dragstart)="OnTreeNodeDragStart($event, node)"
+                                             (dragover)="OnTreeNodeDragOver($event, node)"
+                                             (dragleave)="OnTreeNodeDragLeave()"
+                                             (drop)="OnTreeNodeDrop($event, node); $event.stopPropagation()"
                                              (click)="SelectTaxNode(node)">
+                                            @if (TaxMultiSelectMode) {
+                                                <input type="checkbox" class="at-tax-tree-checkbox"
+                                                       [checked]="IsNodeMultiSelected(node.ID)"
+                                                       (click)="ToggleNodeSelection(node, $event)">
+                                            }
                                             <span class="at-tax-tree-arrow"
                                                   [class.at-tax-arrow-expanded]="node.IsExpanded && node.Children.length > 0"
                                                   [class.at-tax-arrow-collapsed]="!node.IsExpanded && node.Children.length > 0"
@@ -750,9 +772,18 @@
                                             <span class="at-tax-health-dot" [class]="node.HealthColor"></span>
                                             <span class="at-tax-tree-label" [class.at-tax-tree-label-selected]="node.IsSelected">{{ node.Name }}</span>
                                             <span class="at-tax-tree-count">({{ node.ItemCount }})</span>
+                                            <span class="at-tax-tree-add-child" title="Add child tag"
+                                                  (click)="OpenCreateChildTagFor(node); $event.stopPropagation()">
+                                                <i class="fa-solid fa-plus"></i>
+                                            </span>
                                         </div>
                                     }
                                 </div>
+                                @if (TaxTreeSaving) {
+                                    <div class="at-tax-tree-saving-overlay">
+                                        <mj-loading text="Moving tags..." size="small"></mj-loading>
+                                    </div>
+                                }
                             </div>
 
                             <!-- Details panel -->
@@ -823,6 +854,7 @@
                                     <!-- Action toolbar -->
                                     @if (!TaxIsEditing) {
                                         <div class="at-tax-action-toolbar">
+                                            <button class="at-tax-action-btn" (click)="OpenCreateChildTag()"><i class="fa-solid fa-plus"></i> Add Child</button>
                                             <button class="at-tax-action-btn" (click)="StartEditTag()"><i class="fa-solid fa-pen"></i> Rename</button>
                                             <button class="at-tax-action-btn" (click)="OpenMoveDialog(TaxSelectedNode)"><i class="fa-solid fa-arrows-up-down"></i> Move</button>
                                             <button class="at-tax-action-btn" (click)="OpenSplitDialog(TaxSelectedNode)"><i class="fa-solid fa-code-branch"></i> Split</button>
@@ -1865,6 +1897,38 @@
     }
 
     <!-- ══════ MOVE DIALOG ══════ -->
+    @if (ShowCreateTagDialog) {
+        <div class="at-schedule-overlay" (click)="CloseCreateTagDialog()">
+            <div class="at-schedule-dialog" (click)="$event.stopPropagation()">
+                <div class="at-schedule-dialog-header">
+                    <h3><i class="fa-solid fa-plus"></i> Create Tag</h3>
+                    <button class="at-schedule-dialog-close" (click)="CloseCreateTagDialog()">
+                        <i class="fa-solid fa-times"></i>
+                    </button>
+                </div>
+                <div class="at-schedule-dialog-body">
+                    <div class="at-tax-create-context">{{ CreateTagParentLabel }}</div>
+                    <div class="at-schedule-field">
+                        <label>Name</label>
+                        <input type="text" class="mj-input" style="width: 100%;" [(ngModel)]="CreateTagName"
+                               placeholder="Tag name" (keydown.enter)="SaveNewTag()">
+                    </div>
+                    <div class="at-schedule-field">
+                        <label>Description (optional)</label>
+                        <textarea class="mj-textarea" rows="3" style="width: 100%;" [(ngModel)]="CreateTagDescription"
+                                  placeholder="Brief description of this tag"></textarea>
+                    </div>
+                </div>
+                <div class="at-schedule-dialog-footer">
+                    <button class="at-action-btn at-primary-btn" (click)="SaveNewTag()" [disabled]="!CreateTagName.trim()">
+                        <i class="fa-solid fa-check"></i> Create
+                    </button>
+                    <button class="at-action-btn at-secondary-btn" (click)="CloseCreateTagDialog()">Cancel</button>
+                </div>
+            </div>
+        </div>
+    }
+
     @if (ShowMoveDialog) {
         <div class="at-schedule-overlay" (click)="CloseMoveDialog()">
             <div class="at-schedule-dialog" (click)="$event.stopPropagation()">
