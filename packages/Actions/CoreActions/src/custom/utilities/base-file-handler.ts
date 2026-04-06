@@ -146,18 +146,29 @@ export abstract class BaseFileHandlerAction extends BaseAction {
     }
 
     /**
-     * Save file to MJ Storage. Uploads the content to the first active FileStorageAccount
+     * Save file to MJ Storage. Uploads the content to a FileStorageAccount
      * and creates the corresponding MJ: Files entity record.
+     *
+     * @param content - File content as string or Buffer
+     * @param fileName - Name for the file
+     * @param mimeType - MIME type of the file
+     * @param params - Action parameters (for contextUser)
+     * @param storageAccountName - Optional: name of the storage account to use (falls back to first active)
+     * @param storagePath - Optional: custom storage path prefix (falls back to `artifacts/{date}/{uuid}/`)
      * @returns The ID of the newly created MJ: Files record
      */
     protected async saveToMJStorage(
         content: string | Buffer,
         fileName: string,
         mimeType: string,
-        params: RunActionParams
+        params: RunActionParams,
+        storageAccountName?: string,
+        storagePath?: string
     ): Promise<string> {
         try {
-            const { accountEntity, providerEntity } = await this.loadDefaultStorageAccount(params);
+            const { accountEntity, providerEntity } = storageAccountName
+                ? await this.loadStorageAccountByName(storageAccountName, params)
+                : await this.loadDefaultStorageAccount(params);
             const driver = await initializeDriverWithAccountCredentials({
                 accountEntity,
                 providerEntity,
@@ -165,10 +176,12 @@ export abstract class BaseFileHandlerAction extends BaseAction {
             });
 
             const buffer = Buffer.isBuffer(content) ? content : Buffer.from(content);
-            const storagePath = `artifacts/${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}/${fileName}`;
-            const uploaded = await driver.PutObject(storagePath, buffer, mimeType);
+            const resolvedPath = storagePath
+                ? `${storagePath.replace(/\/+$/, '')}/${fileName}`
+                : `artifacts/${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}/${fileName}`;
+            const uploaded = await driver.PutObject(resolvedPath, buffer, mimeType);
             if (!uploaded) {
-                throw new Error(`PutObject returned false for path: ${storagePath}`);
+                throw new Error(`PutObject returned false for path: ${resolvedPath}`);
             }
 
             const md = new Metadata();
@@ -176,7 +189,7 @@ export abstract class BaseFileHandlerAction extends BaseAction {
             fileEntity.Name = fileName;
             fileEntity.ContentType = mimeType;
             fileEntity.ProviderID = providerEntity.ID;
-            fileEntity.ProviderKey = storagePath;
+            fileEntity.ProviderKey = resolvedPath;
             fileEntity.Status = 'Uploaded';
 
             const saved = await fileEntity.Save();
@@ -188,6 +201,38 @@ export abstract class BaseFileHandlerAction extends BaseAction {
         } catch (error) {
             throw new Error(`Failed to save file to storage: ${error instanceof Error ? error.message : String(error)}`);
         }
+    }
+
+    /**
+     * Loads a FileStorageAccount by name along with its provider entity.
+     */
+    private async loadStorageAccountByName(accountName: string, params: RunActionParams): Promise<{
+        accountEntity: MJFileStorageAccountEntity;
+        providerEntity: MJFileStorageProviderEntity;
+    }> {
+        const rv = new RunView();
+        const accountResult = await rv.RunView<MJFileStorageAccountEntity>({
+            EntityName: 'MJ: File Storage Accounts',
+            ExtraFilter: `Name = '${accountName.replace(/'/g, "''")}'`,
+            MaxRows: 1,
+            ResultType: 'entity_object'
+        }, params.ContextUser);
+
+        if (!accountResult.Success || accountResult.Results.length === 0) {
+            throw new Error(`FileStorageAccount "${accountName}" not found. Check account name or use default.`);
+        }
+
+        const accountEntity = accountResult.Results[0];
+        const md = new Metadata();
+        const providerEntity = await md.GetEntityObject<MJFileStorageProviderEntity>(
+            'MJ: File Storage Providers', params.ContextUser
+        );
+        const providerLoaded = await providerEntity.Load(accountEntity.ProviderID);
+        if (!providerLoaded) {
+            throw new Error(`FileStorageProvider ${accountEntity.ProviderID} not found for account "${accountName}"`);
+        }
+
+        return { accountEntity, providerEntity };
     }
 
     /**

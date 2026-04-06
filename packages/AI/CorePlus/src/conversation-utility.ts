@@ -21,7 +21,6 @@ import {
     createBase64DataUrl
 } from '@memberjunction/ai';
 import { UUIDsEqual } from '@memberjunction/global';
-import { FileContentExtractor } from './file-content-extractor';
 
 /**
  * Utility class for parsing and formatting special content in conversation messages
@@ -329,22 +328,8 @@ export class ConversationUtility {
       });
     }
 
-    // Add attachment content blocks, with text extraction for documents
+    // Add attachment content blocks
     for (const att of attachmentData) {
-      // For document attachments, extract text content for LLM context
-      if (att.type === 'Document' && FileContentExtractor.IsSupported(att.mimeType)) {
-        console.log(`[BuildChatMessageContent] Extracting: type=${att.type}, mime=${att.mimeType}, file=${att.fileName}, contentLen=${att.content?.length ?? 0}`);
-        const extractedText = await FileContentExtractor.Extract(att.content, att.mimeType, att.fileName);
-        console.log(`[BuildChatMessageContent] Extraction result: ${extractedText ? extractedText.length + ' chars' : 'EMPTY'}`);
-        if (extractedText) {
-          blocks.push({
-            type: 'text',
-            content: extractedText
-          });
-        }
-      }
-
-      // Always include the original content block (file_url, image_url, etc.)
       const block = this.attachmentToContentBlock(att);
       if (block) {
         blocks.push(block);
