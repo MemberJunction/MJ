@@ -87,6 +87,9 @@
       "Category": "navigation",
       "InputSchemaJSON": "{\"type\":\"object\",\"properties\":{\"URL\":{\"type\":\"string\",\"description\":\"The full URL to open (must start with http:// or https://)\"},\"Label\":{\"type\":\"string\",\"description\":\"Optional descriptive label for the tab\"}},\"required\":[\"URL\"]}",
       "DefaultTimeoutMs": 10000
+    },
+    "primaryKey": {
+      "ID": "2860B326-CA0E-49CF-BD10-071B9479B4D4"
     }
   }
 ]

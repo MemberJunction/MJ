@@ -375,71 +375,71 @@
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:MJ: Actions.Name=PDF Generator",
+            "ActionID": "@lookup:MJ: Actions.Name=Create Document",
             "Status": "Active"
           },
           "primaryKey": {
-            "ID": "988B4754-CF8E-4357-A6BB-515166B1945E"
+            "ID": "58871365-9771-41A3-883B-C5781C27C194"
           },
           "sync": {
-            "lastModified": "2026-03-27T05:12:38.463Z",
-            "checksum": "f3cb024f80d312aa178cefd8c21454e74f7d59b2665206d90f8213c65581b25e"
+            "lastModified": "2026-04-06T15:24:02.596Z",
+            "checksum": "c64953505f5d324047ea3eb3731b54be9905c69566e3b82925b9d43a168a8361"
           }
         },
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:MJ: Actions.Name=PDF Extractor",
+            "ActionID": "@lookup:MJ: Actions.Name=Add Document Content",
             "Status": "Active"
           },
           "primaryKey": {
-            "ID": "577EEC26-A9C9-49AB-A0DF-237335CAD95B"
+            "ID": "42C8CABF-9F1F-491F-A673-95997B8E6AA8"
           },
           "sync": {
-            "lastModified": "2026-03-27T05:12:38.473Z",
-            "checksum": "af7daae6dc6080f0feb4726c419041d92cdc680dd46cf1b818500dacc1f23eac"
+            "lastModified": "2026-04-06T15:24:02.733Z",
+            "checksum": "7697496d97e02cfc4e6234541546d2f019c2ea99d27c0dba3a4afcc54ce6820b"
           }
         },
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:MJ: Actions.Name=Excel Writer",
+            "ActionID": "@lookup:MJ: Actions.Name=Preview Document",
             "Status": "Active"
           },
           "primaryKey": {
-            "ID": "153B5601-F541-4659-9DED-234D18BFEC18"
+            "ID": "9CD06C62-6543-48D1-A6C6-FEA662AD4711"
           },
           "sync": {
-            "lastModified": "2026-03-27T05:12:38.483Z",
-            "checksum": "004aacf787b93272e2c5b7d15b96884ff9e5954e3060db44736c52a229fcc8a5"
+            "lastModified": "2026-04-06T15:24:02.745Z",
+            "checksum": "cf16b134d19d904bd54a9445b99452c23f4f268b2f8ca3581fbc6a4e0406718c"
           }
         },
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:MJ: Actions.Name=Excel Reader",
+            "ActionID": "@lookup:MJ: Actions.Name=Modify Document Section",
             "Status": "Active"
           },
           "primaryKey": {
-            "ID": "D38BFDA4-53A2-432E-AD28-12A9D548BB8D"
+            "ID": "F9D1DC37-BF52-41BC-8ABC-0991A8D910EF"
           },
           "sync": {
-            "lastModified": "2026-03-27T05:12:38.492Z",
-            "checksum": "2d22739d2c13d0ae8ba3fa6badd3825d759f35b03c2943e070924d33c523baae"
+            "lastModified": "2026-04-06T15:24:02.755Z",
+            "checksum": "d5c3106a16f5d325f6bf51e1c3bfac8bc3e871bd52c4fef5eeda964c515c5240"
           }
         },
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:MJ: Actions.Name=Word Document Generator",
+            "ActionID": "@lookup:MJ: Actions.Name=Finalize Document",
             "Status": "Active"
           },
           "primaryKey": {
-            "ID": "C9E4A370-2A39-46F7-8AFA-2FBF53B992DF"
+            "ID": "E2E65DF3-B003-4711-A2BA-3278305613DE"
           },
           "sync": {
-            "lastModified": "2026-03-27T05:12:38.501Z",
-            "checksum": "7d4bc1d9c891541ec0464dd19a899c1ea69977fd49fa506fbe6da55760edf3f0"
+            "lastModified": "2026-04-06T15:24:02.763Z",
+            "checksum": "f771348487b3ef029c984184fb097591e903ab745616272331914b6fb0d78c22"
           }
         }
       ],
@@ -535,6 +535,9 @@
             "ClientToolDefinitionID": "@lookup:MJ: AI Client Tool Definitions.Name=OpenBrowserTab",
             "IsRequired": false,
             "Priority": 3
+          },
+          "primaryKey": {
+            "ID": "F2431AD1-EE53-4004-AE86-BF263BEB4B2F"
           }
         }
       ]

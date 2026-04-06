@@ -224,8 +224,27 @@ export class XlsxArtifactViewerComponent extends BaseArtifactViewerPluginCompone
     }
 
     try {
-      this.downloadUrl = await this.fileService.getDownloadUrl(this.artifactVersion.ID);
-      const arrayBuffer = await this.fetchAsArrayBuffer(this.downloadUrl);
+      let arrayBuffer: ArrayBuffer;
+
+      if (this.artifactVersion.ContentMode === 'File') {
+        // File-backed: download from storage via pre-auth URL
+        this.downloadUrl = await this.fileService.getDownloadUrl(this.artifactVersion.ID);
+        arrayBuffer = await this.fetchAsArrayBuffer(this.downloadUrl);
+      } else {
+        // Inline: content is a base64 data URL stored in the artifact version
+        const content = this.artifactVersion.Content;
+        if (!content) {
+          this.showError('Artifact has no content.');
+          return;
+        }
+        arrayBuffer = this.fileService.dataUrlToArrayBuffer(content);
+        // Create an object URL for download support
+        this.downloadUrl = this.fileService.dataUrlToObjectUrl(
+          content,
+          this.artifactVersion.MimeType || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        );
+      }
+
       const XLSX = await import('xlsx') as unknown as XlsxModuleShim;
       const workbook = XLSX.read(arrayBuffer, { type: 'array' });
       this.sheets = this.parseWorkbook(workbook, XLSX);

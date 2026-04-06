@@ -169,15 +169,33 @@ export class PdfArtifactViewerComponent extends BaseArtifactViewerPluginComponen
     }
 
     try {
-      this.downloadUrl = await this.fileService.getDownloadUrl(this.artifactVersion.ID);
       await this.initPdfJs();
-      const pdfDoc = await this.loadPdfDocument(this.downloadUrl);
+      let pdfDoc: PdfDocumentProxy;
+
+      if (this.artifactVersion.ContentMode === 'File') {
+        // File-backed: download from storage via pre-auth URL
+        this.downloadUrl = await this.fileService.getDownloadUrl(this.artifactVersion.ID);
+        pdfDoc = await this.loadPdfDocument(this.downloadUrl);
+      } else {
+        // Inline: content is a base64 data URL stored in the artifact version
+        const content = this.artifactVersion.Content;
+        if (!content) {
+          this.showError('Artifact has no content.');
+          return;
+        }
+        const arrayBuffer = this.fileService.dataUrlToArrayBuffer(content);
+        pdfDoc = await this.loadPdfFromData(new Uint8Array(arrayBuffer));
+        // Create an object URL for download/print support
+        this.downloadUrl = this.fileService.dataUrlToObjectUrl(
+          content,
+          this.artifactVersion.MimeType || 'application/pdf'
+        );
+      }
+
       this.pdfDoc = pdfDoc;
       this.totalPages = pdfDoc.numPages;
       this.currentPage = 1;
       this.isLoading = false;
-      // detectChanges() forces a synchronous DOM update so the @if block switches
-      // and the canvas element exists before renderPage() tries to draw on it.
       this.cdr.detectChanges();
       await this.renderPage(1);
     } catch (err) {
@@ -197,6 +215,12 @@ export class PdfArtifactViewerComponent extends BaseArtifactViewerPluginComponen
   private async loadPdfDocument(url: string): Promise<PdfDocumentProxy> {
     const pdfjsLib = this._pdfjsLib!;
     const loadingTask = pdfjsLib.getDocument(url);
+    return loadingTask.promise;
+  }
+
+  private async loadPdfFromData(data: Uint8Array): Promise<PdfDocumentProxy> {
+    const pdfjsLib = this._pdfjsLib!;
+    const loadingTask = pdfjsLib.getDocument({ data });
     return loadingTask.promise;
   }
 
@@ -277,5 +301,5 @@ interface PdfRenderTask {
 
 interface PdfJsLib {
   GlobalWorkerOptions: { workerSrc: string };
-  getDocument(url: string): { promise: Promise<PdfDocumentProxy> };
+  getDocument(source: string | { data: Uint8Array }): { promise: Promise<PdfDocumentProxy> };
 }
