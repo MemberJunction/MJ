@@ -131,6 +131,16 @@
                     Sync Now
                   }
                 </button>
+                <button mjButton variant="outline"
+                        [disabled]="!!SyncingIntegrationID"
+                        (click)="RunSync(summary.Integration.ID, true)"
+                        title="Full sync: re-fetch all records (pull) and push all records to external system">
+                  @if (IsSyncing(summary.Integration.ID)) {
+                    <i class="fa-solid fa-spinner fa-spin"></i>
+                  } @else {
+                    Full Sync
+                  }
+                </button>
               }
               <button class="card-delete-btn" (click)="OnMenuAction('delete', summary)" title="Delete integration">
                 <i class="fa-solid fa-trash-can"></i>
@@ -205,6 +215,16 @@
                   <i class="fa-solid fa-spinner fa-spin"></i> Syncing...
                 } @else {
                   <i class="fa-solid fa-arrows-rotate"></i> Sync Now
+                }
+              </button>
+              <button mjButton variant="outline"
+                      [disabled]="!!SyncingIntegrationID"
+                      (click)="RunSync(SelectedSummary.Integration.ID, true)"
+                      title="Full sync: re-fetch all records and push all to external system">
+                @if (IsSyncing(SelectedSummary.Integration.ID)) {
+                  <i class="fa-solid fa-spinner fa-spin"></i>
+                } @else {
+                  Full Sync
                 }
               </button>
             }

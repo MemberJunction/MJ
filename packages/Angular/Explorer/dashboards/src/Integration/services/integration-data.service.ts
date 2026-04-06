@@ -788,7 +788,7 @@ export class IntegrationDataService {
   }
 
   /** Run an integration sync via the "Run Integration Sync" action */
-  async RunSync(companyIntegrationID: string): Promise<{ Success: boolean; Message: string }> {
+  async RunSync(companyIntegrationID: string, fullSync = false): Promise<{ Success: boolean; Message: string }> {
     const actionID = await this.lookupActionID('Run Integration Sync');
     if (!actionID) {
       return {
@@ -799,9 +799,11 @@ export class IntegrationDataService {
 
     const provider = Metadata.Provider as GraphQLDataProvider;
     const actionClient = new GraphQLActionClient(provider);
-    const result = await actionClient.RunAction(actionID, [
-      { Name: 'CompanyIntegrationID', Value: companyIntegrationID, Type: 'Input' }
-    ]);
+    const params = [
+      { Name: 'CompanyIntegrationID', Value: companyIntegrationID, Type: 'Input' as const },
+      { Name: 'FullSync', Value: fullSync ? 'true' : 'false', Type: 'Input' as const },
+    ];
+    const result = await actionClient.RunAction(actionID, params);
     return { Success: result.Success, Message: result.Message ?? '' };
   }
 

@@ -570,8 +570,10 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             return this.EmptyResult();
         }
 
-        // Find MJ records changed since last push via Record Changes
-        const changedRecords = await this.LoadChangedMJRecords(entityMap, lastPushAt, contextUser);
+        // Full push: load ALL records from the MJ entity. Incremental push: only changed records.
+        const changedRecords = config.fullSync
+            ? await this.LoadAllMJRecords(entityMap, config.companyIntegration, contextUser)
+            : await this.LoadChangedMJRecords(entityMap, lastPushAt, contextUser);
 
         if (changedRecords.length === 0) {
             console.log(`[IntegrationEngine] Push: no changes for ${entityMap.ExternalObjectName} since ${lastPushAt ?? 'beginning'}`);
@@ -680,6 +682,53 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         }
 
         return [...latestByRecord.values()];
+    }
+
+    /**
+     * Loads ALL records from an MJ entity for full push sync.
+     * For each record, checks the record map to determine if it's a Create (no external ID)
+     * or Update (has external ID) in the external system.
+     */
+    private async LoadAllMJRecords(
+        entityMap: ICompanyIntegrationEntityMap,
+        companyIntegration: MJCompanyIntegrationEntity,
+        contextUser: UserInfo
+    ): Promise<Array<{ RecordID: string; Type: string; ChangedAt: string; Fields: Record<string, unknown> }>> {
+        const rv = new RunView();
+
+        // Load all records from the MJ entity
+        const allResult = await rv.RunView<Record<string, unknown>>({
+            EntityName: entityMap.Entity,
+            ResultType: 'simple',
+        }, contextUser);
+
+        if (!allResult.Success || allResult.Results.length === 0) return [];
+
+        // Load existing record maps to know which records already exist externally
+        const mapResult = await rv.RunView<{ EntityRecordID: string; ExternalSystemRecordID: string }>({
+            EntityName: 'MJ: Company Integration Record Maps',
+            ExtraFilter: `CompanyIntegrationID='${companyIntegration.Get('ID')}' AND EntityID='${entityMap.EntityID}'`,
+            Fields: ['EntityRecordID', 'ExternalSystemRecordID'],
+            ResultType: 'simple',
+        }, contextUser);
+
+        const existingMaps = new Map<string, string>();
+        if (mapResult.Success) {
+            for (const m of mapResult.Results) {
+                existingMaps.set(m.EntityRecordID, m.ExternalSystemRecordID);
+            }
+        }
+
+        const now = new Date().toISOString();
+        return allResult.Results.map(record => {
+            const recordID = String(record['ID'] ?? '');
+            return {
+                RecordID: recordID,
+                Type: existingMaps.has(recordID) ? 'Update' : 'Create',
+                ChangedAt: now,
+                Fields: record,
+            };
+        });
     }
 
     /** Pushes a single changed MJ record to the external system. */

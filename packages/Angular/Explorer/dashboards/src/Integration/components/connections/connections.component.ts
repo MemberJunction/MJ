@@ -509,14 +509,14 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
     return UUIDsEqual(this.SyncingIntegrationID, integrationID);
   }
 
-  async RunSync(integrationID: string): Promise<void> {
+  async RunSync(integrationID: string, fullSync = false): Promise<void> {
     if (this.SyncingIntegrationID) return;
     this.SyncingIntegrationID = integrationID;
     this.SyncResult = null;
     this.cdr.detectChanges();
 
     try {
-      const result = await this.dataService.RunSync(integrationID);
+      const result = await this.dataService.RunSync(integrationID, fullSync);
       this.SyncResult = result;
       if (!result.Success) {
         console.error('[IntegrationConnections] Sync failed:', result.Message);
