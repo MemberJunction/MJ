@@ -181,8 +181,11 @@
 
 .at-page-body {
     flex: 1;
-    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
     padding: 16px 20px;
+    min-height: 0;
 }
 
 /* ══════ SHARED COMPONENTS ══════ */
@@ -327,6 +330,8 @@
 .at-pipeline-layout {
     display: flex;
     gap: 16px;
+    flex: 1;
+    min-height: 0;
 }
 
 .at-pipeline-center {
@@ -335,6 +340,7 @@
     flex-direction: column;
     gap: 12px;
     min-width: 0;
+    min-height: 0;
 }
 
 .at-pipeline-right {
@@ -1620,10 +1626,42 @@
 
 /* ══════ FEED SEARCH & PAGINATION ══════ */
 
+.at-feed-card {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.at-feed-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-left: auto;
+}
+
+.at-feed-sort-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border: 1px solid var(--mj-border-default);
+    border-radius: 5px;
+    background: var(--mj-bg-surface);
+    color: var(--mj-text-secondary);
+    font-size: 0.68rem;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+
+.at-feed-sort-btn:hover {
+    background: var(--mj-bg-surface-hover);
+    color: var(--mj-text-primary);
+}
+
 .at-feed-count {
     font-size: 0.7rem;
     color: var(--mj-text-muted);
-    margin-left: auto;
 }
 
 .at-feed-search-bar {
@@ -1679,7 +1717,6 @@
 
 .at-feed-scroll-body {
     overflow-y: auto;
-    max-height: 400px;
     min-height: 0;
     flex: 1;
 }

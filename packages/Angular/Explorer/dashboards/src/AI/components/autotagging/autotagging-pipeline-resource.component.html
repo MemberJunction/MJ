@@ -76,8 +76,8 @@
 
                     <div class="at-pipeline-layout">
                         <div class="at-pipeline-center">
-                            <!-- Pipeline stages visualization -->
-                            @if (PipelineStages.length > 0) {
+                            <!-- Pipeline stages visualization (only during active run) -->
+                            @if (PipelineStages.length > 0 && (IsRunning || IsPaused)) {
                                 <div class="at-pipeline-stages">
                                     @for (stage of PipelineStages; track stage.Name; let last = $last) {
                                         <div class="at-pipeline-stage"
@@ -179,10 +179,18 @@
                             }
 
                             <!-- Recent Processing Feed -->
-                            <div class="at-card" style="flex: 1; display: flex; flex-direction: column; min-height: 0;">
+                            <div class="at-card at-feed-card">
                                 <div class="at-card-header">
                                     <span class="at-card-title"><i class="fa-solid fa-bolt"></i> Recent Processing</span>
-                                    <span class="at-feed-count">{{ FilteredFeedItems.length }} items</span>
+                                    <div class="at-feed-header-actions">
+                                        <button class="at-feed-sort-btn" (click)="ToggleFeedSort()"
+                                                [title]="FeedSortOrder === 'newest' ? 'Showing newest first' : 'Showing oldest first'">
+                                            <i class="fa-solid" [class.fa-arrow-down-short-wide]="FeedSortOrder === 'newest'"
+                                               [class.fa-arrow-up-short-wide]="FeedSortOrder === 'oldest'"></i>
+                                            {{ FeedSortOrder === 'newest' ? 'Newest' : 'Oldest' }}
+                                        </button>
+                                        <span class="at-feed-count">{{ FilteredFeedItems.length }} items</span>
+                                    </div>
                                 </div>
                                 <!-- Feed search bar -->
                                 <div class="at-feed-search-bar">

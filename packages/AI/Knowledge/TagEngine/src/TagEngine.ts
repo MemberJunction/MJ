@@ -435,31 +435,25 @@ export class TagEngine extends BaseSingleton<TagEngine> {
         threshold: number,
         contextUser: UserInfo
     ): Promise<MJTagEntity | null> {
-        LogStatus(`[TagEngine:Mutex] ENTER resolveTagInner for "${tagText}" (mode=${mode}, rootID=${rootID ?? 'null'})`);
-
         // 1. Fast path: exact name match (case-insensitive)
         const exactMatch = this.GetTagByName(tagText);
         if (exactMatch) {
-            LogStatus(`[TagEngine:Mutex] EXIT resolveTagInner for "${tagText}" — exact match found: "${exactMatch.Name}" (${exactMatch.ID})`);
             return this.filterBySubtree(exactMatch, rootID);
         }
 
         // 2. Fuzzy match: normalize by stripping plurals, hyphens, extra spaces
         const fuzzyMatch = this.findFuzzyMatch(tagText, rootID);
         if (fuzzyMatch) {
-            LogStatus(`[TagEngine:Mutex] EXIT resolveTagInner for "${tagText}" — fuzzy match found: "${fuzzyMatch.Name}" (${fuzzyMatch.ID})`);
             return fuzzyMatch;
         }
 
         // 3. Semantic search if vector service is available
         const semanticMatch = await this.findSemanticMatch(tagText, rootID, threshold);
         if (semanticMatch) {
-            LogStatus(`[TagEngine:Mutex] EXIT resolveTagInner for "${tagText}" — semantic match found: "${semanticMatch.Name}" (${semanticMatch.ID})`);
             return semanticMatch;
         }
 
         // 4. No match found - behavior depends on mode
-        LogStatus(`[TagEngine:Mutex] EXIT resolveTagInner for "${tagText}" — no match, delegating to handleNoMatch (mode=${mode})`);
         return this.handleNoMatch(tagText, mode, rootID, contextUser);
     }
 

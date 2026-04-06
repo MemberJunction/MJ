@@ -346,16 +346,31 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     public FeedSearchQuery = '';
     public FeedPage = 0;
     public readonly FeedPageSize = 20;
+    /** Sort order for the feed: 'newest' (default) or 'oldest' */
+    public FeedSortOrder: 'newest' | 'oldest' = 'newest';
 
-    /** Feed items filtered by search query */
+    /** Feed items filtered by search query and sorted */
     public get FilteredFeedItems(): FeedItem[] {
-        if (!this.FeedSearchQuery.trim()) return this.FeedItems;
-        const q = this.FeedSearchQuery.toLowerCase();
-        return this.FeedItems.filter(item =>
-            item.Name.toLowerCase().includes(q) ||
-            item.SourceName.toLowerCase().includes(q) ||
-            item.Tags.some(t => t.toLowerCase().includes(q))
-        );
+        let items = this.FeedItems;
+        if (this.FeedSearchQuery.trim()) {
+            const q = this.FeedSearchQuery.toLowerCase();
+            items = items.filter(item =>
+                item.Name.toLowerCase().includes(q) ||
+                item.SourceName.toLowerCase().includes(q) ||
+                item.Tags.some(t => t.toLowerCase().includes(q))
+            );
+        }
+        if (this.FeedSortOrder === 'oldest') {
+            return [...items].reverse();
+        }
+        return items;
+    }
+
+    /** Toggle feed sort order */
+    public ToggleFeedSort(): void {
+        this.FeedSortOrder = this.FeedSortOrder === 'newest' ? 'oldest' : 'newest';
+        this.FeedPage = 0;
+        this.cdr.detectChanges();
     }
 
     /** Paginated feed items for the current page */
@@ -1154,7 +1169,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     private buildFeedItems(): void {
         const tagsByItem = this.countTagsByItem();
 
-        this.FeedItems = this.contentItemsRaw.slice(0, 50).map(item => {
+        this.FeedItems = this.contentItemsRaw.map(item => {
             const itemId = item['ID'] as string;
             const normalizedId = NormalizeUUID(itemId);
             const itemTags = this.getTopTagsForItem(itemId, 3);

@@ -814,11 +814,17 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         const contentItemID = LLMResults.contentItemID as string;
         const skipKeys = new Set(['keywords', 'processStartTime', 'processEndTime', 'contentItemID', 'isValidContent']);
 
-        // Update title and description on the content item
+        // Update title and description on the content item.
+        // For entity-sourced items (EntityRecordDocumentID is set), preserve the
+        // original entity record name — it's more meaningful to users than the
+        // AI-generated title. Only update description.
         if (LLMResults.title || LLMResults.description) {
             const contentItem = await md.GetEntityObject<MJContentItemEntity>('MJ: Content Items', contextUser);
             await contentItem.Load(contentItemID);
-            if (LLMResults.title) contentItem.Name = LLMResults.title as string;
+            const isEntitySourced = contentItem.EntityRecordDocumentID != null;
+            if (LLMResults.title && !isEntitySourced) {
+                contentItem.Name = LLMResults.title as string;
+            }
             if (LLMResults.description) contentItem.Description = LLMResults.description as string;
             await contentItem.Save();
         }
