@@ -5,7 +5,7 @@
   "scripts": {
     "build": "ngc -p tsconfig.json",
     "watch": "ngc -p tsconfig.json --watch",
-    "test": "echo \"Tests not yet implemented\"",
+    "test": "vitest run",
     "patchVersion": "npm version patch",
     "test:watch": "vitest"
   },
