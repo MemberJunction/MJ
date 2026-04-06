@@ -10,9 +10,9 @@
       "SelectionStrategy": "Specific",
       "PowerPreference": "Lowest",
       "ParallelizationMode": "None",
-      "MaxRetries": 2,
-      "RetryDelayMS": 500,
-      "RetryStrategy": "Fixed",
+      "MaxRetries": 5,
+      "RetryDelayMS": 5000,
+      "RetryStrategy": "Exponential",
       "PromptRole": "System",
       "PromptPosition": "First",
       "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System"
@@ -55,8 +55,8 @@
       "ID": "91C4178C-355C-49EA-9565-AEE8B7C630B2"
     },
     "sync": {
-      "lastModified": "2026-04-06T16:55:56.204Z",
-      "checksum": "807cc581c77f5a987991b15e22cc6ce9919cc6e1825650342fffb811b7ea0b65"
+      "lastModified": "2026-04-06T23:23:00.860Z",
+      "checksum": "8229a18dfd96c158122e73cb33088b517cedbb9b035214af2fa8612f839ab9a5"
     }
   }
 ]

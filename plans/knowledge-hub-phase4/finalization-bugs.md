@@ -107,6 +107,7 @@ telemetryManager.ts:1367
 
 # Pipeline UI
 - **UI staleness after batch completion**: Pipeline UI doesn't auto-refresh after batch 2 completes — items show blue "in progress" circles even though DB shows all 32 items as Complete. Requires manual page refresh. Investigate WebSocket/subscription notification gap
+- **No retry/backoff on LLM rate limit errors**: When multiple pipeline jobs run concurrently and hit rate limits (e.g., Gemini 429 RESOURCE_EXHAUSTED with "retry in 1.9s"), the pipeline doesn't back off and retry — it just fails the item. Need exponential backoff with retry (respect the `retryDelay` from the API response). The existing `RateLimiter` class handles pre-request throttling but doesn't handle post-failure retry. Also consider: should we prevent multiple concurrent pipeline runs entirely, or queue them?
 
 # Record Form / Tags
 - Should we allow users to manually add/remove tags? If so we need to think about how automated tagging interacts, overrides, respect, etc. let's think about this and discuss! 
