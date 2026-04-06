@@ -473,8 +473,7 @@ CREATE TABLE ${flyway:defaultSchema}.TagCoOccurrence (
         REFERENCES ${flyway:defaultSchema}.Tag(ID),
     CONSTRAINT FK_TagCoOccurrence_TagB FOREIGN KEY (TagBID)
         REFERENCES ${flyway:defaultSchema}.Tag(ID),
-    CONSTRAINT UQ_TagCoOccurrence_Pair UNIQUE (TagAID, TagBID),
-    CONSTRAINT CK_TagCoOccurrence_Order CHECK (TagAID < TagBID)
+    CONSTRAINT UQ_TagCoOccurrence_Pair UNIQUE (TagAID, TagBID)
 );
 GO
 
