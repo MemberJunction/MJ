@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { DialogService as KendoDialogService, DialogRef } from '@progress/kendo-angular-dialog';
+import { MJDialogService, MJDialogRef, MJDialogAction } from '@memberjunction/ng-ui-components';
 import { Observable } from 'rxjs';
 import { InputDialogComponent } from '../components/dialogs/input-dialog.component';
 
@@ -34,14 +34,14 @@ export interface ConfirmDialogOptions {
 }
 
 /**
- * Dialog service for displaying Kendo-based dialogs
- * Replaces browser alert() and confirm() with proper UI components
+ * Dialog service for displaying MJ dialogs.
+ * Replaces browser alert() and confirm() with proper UI components.
  */
 @Injectable({
   providedIn: 'root'
 })
 export class DialogService {
-  constructor(private kendoDialogService: KendoDialogService) {}
+  constructor(private mjDialogService: MJDialogService) {}
 
   /**
    * Show a confirmation dialog
@@ -49,7 +49,7 @@ export class DialogService {
    */
   confirm(options: ConfirmDialogOptions): Promise<boolean> {
     return new Promise((resolve) => {
-      const dialogRef = this.kendoDialogService.open({
+      const dialogRef = this.mjDialogService.open({
         title: options.title,
         content: options.message,
         actions: [
@@ -67,9 +67,10 @@ export class DialogService {
         minWidth: 250
       });
 
-      dialogRef.result.subscribe((result) => {
-        if (result instanceof Object && 'text' in result) {
-          resolve(result.text === (options.okText || 'OK'));
+      dialogRef.Result.subscribe((result) => {
+        const action = result as MJDialogAction | undefined;
+        if (action && 'text' in action) {
+          resolve(action.text === (options.okText || 'OK'));
         } else {
           resolve(false);
         }
@@ -82,7 +83,7 @@ export class DialogService {
    */
   alert(title: string, message: string, okText: string = 'OK'): Promise<void> {
     return new Promise((resolve) => {
-      const dialogRef = this.kendoDialogService.open({
+      const dialogRef = this.mjDialogService.open({
         title: title,
         content: message,
         actions: [
@@ -95,7 +96,7 @@ export class DialogService {
         minWidth: 250
       });
 
-      dialogRef.result.subscribe(() => {
+      dialogRef.Result.subscribe(() => {
         resolve();
       });
     });
@@ -110,7 +111,7 @@ export class DialogService {
    */
   input(options: InputDialogOptions): Promise<string | {value: string; secondValue?: string} | null> {
     return new Promise((resolve) => {
-      const dialogRef = this.kendoDialogService.open({
+      const dialogRef = this.mjDialogService.open({
         title: options.title,
         content: InputDialogComponent,
         actions: [
@@ -128,7 +129,7 @@ export class DialogService {
       });
 
       // Pass data to the component
-      const componentInstance = dialogRef.content.instance as InputDialogComponent;
+      const componentInstance = dialogRef.Content!.instance as unknown as InputDialogComponent;
       componentInstance.message = options.message;
       componentInstance.inputLabel = options.inputLabel;
       componentInstance.inputType = options.inputType || 'text';
@@ -142,15 +143,16 @@ export class DialogService {
 
       // Focus and select input after dialog opens
       setTimeout(() => {
-        const inputElement = document.querySelector('.k-dialog input, .k-dialog textarea') as HTMLInputElement | HTMLTextAreaElement;
+        const inputElement = document.querySelector('.mj-dialog-body input, .mj-dialog-body textarea') as HTMLInputElement | HTMLTextAreaElement;
         if (inputElement) {
           inputElement.focus();
           inputElement.select();
         }
       }, 100);
 
-      dialogRef.result.subscribe((result) => {
-        if (result instanceof Object && 'text' in result && result.text === (options.okText || 'OK')) {
+      dialogRef.Result.subscribe((result) => {
+        const action = result as MJDialogAction | undefined;
+        if (action && 'text' in action && action.text === (options.okText || 'OK')) {
           const value = componentInstance.getValue();
           if (options.required && !value) {
             resolve(null);
@@ -176,13 +178,13 @@ export class DialogService {
   /**
    * Show a custom dialog with custom content and actions
    */
-  custom(title: string, content: string, buttons: DialogButton[], width: number = 500): DialogRef {
+  custom(title: string, content: string, buttons: DialogButton[], width: number = 500): MJDialogRef {
     const actions = buttons.map(btn => ({
       text: btn.text,
       primary: btn.primary || false
     }));
 
-    const dialogRef = this.kendoDialogService.open({
+    const dialogRef = this.mjDialogService.open({
       title: title,
       content: content,
       actions: actions,
@@ -190,9 +192,10 @@ export class DialogService {
       minWidth: 300
     });
 
-    dialogRef.result.subscribe((result) => {
-      if (result instanceof Object && 'text' in result) {
-        const button = buttons.find(b => b.text === result.text);
+    dialogRef.Result.subscribe((result) => {
+      const action = result as MJDialogAction | undefined;
+      if (action && 'text' in action) {
+        const button = buttons.find(b => b.text === action.text);
         if (button && button.action) {
           button.action();
         }

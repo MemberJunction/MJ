@@ -10,15 +10,13 @@
       <div class="action-header">
         <h3 class="action-name" [title]="Action.Name">{{ Action.Name }}</h3>
         <div class="action-badges">
-          <kendo-chip
-            [themeColor]="getStatusColor()"
-            [size]="'small'">
+          <span class="status-chip" [attr.data-color]="getStatusColor()">
             {{ Action.Status }}
-          </kendo-chip>
+          </span>
           @if (Action.Type === 'Generated') {
-            <kendo-chip themeColor="info" [size]="'small'">
+            <span class="status-chip" data-color="info">
               <i class="fa-solid fa-robot"></i> AI
-            </kendo-chip>
+            </span>
           }
         </div>
       </div>
@@ -51,25 +49,24 @@
 
     <!-- Actions -->
     <div class="action-buttons">
-      <button kendoButton
-        [fillMode]="'flat'"
-        [size]="'small'"
+      <button mjButton
+        variant="flat"
+        size="sm"
         title="View Stats"
         (click)="toggleExpanded($event)">
         <i [class]="IsExpanded ? 'fa-solid fa-chevron-up' : 'fa-solid fa-chart-line'"></i>
       </button>
-      <button kendoButton
-        [fillMode]="'flat'"
-        [size]="'small'"
-        [themeColor]="'primary'"
+      <button mjButton
+        variant="primary"
+        size="sm"
         title="Run Action"
         [disabled]="Action.Status !== 'Active'"
         (click)="onRunClick($event)">
         <i class="fa-solid fa-play"></i>
       </button>
-      <button kendoButton
-        [fillMode]="'flat'"
-        [size]="'small'"
+      <button mjButton
+        variant="flat"
+        size="sm"
         title="Edit Action"
         (click)="onEditClick($event)">
         <i class="fa-solid fa-pen"></i>

@@ -1,5 +1,70 @@
 # @memberjunction/ai-agents
 
+## 5.23.0
+
+### Minor Changes
+
+- 513b20c: migration/metadata
+
+### Patch Changes
+
+- 247df16: Fix server-side RunView cache write asymmetry that caused repeated DB queries during metadata sync, add deterministic Nunjucks template parameter extraction via AST, support comma-delimited multi-value fields in validation, and redesign QueryPagingEngine to append paging directly instead of wrapping in CTEs (fixing ORDER BY on non-projected columns and apostrophe-in-comments bugs).
+- 1d1e02e: Knowledge Hub Phase 2: autotagging pipeline, duplicate detection dashboards, and client tool invocation system.
+
+  Autotagging: Run Pipeline button with real-time progress, direct vectorization of content items (bypasses entity documents), pipeline stage visualization, Gemini 3 Flash tagging.
+
+  Duplicate Detection: Run Detection button with entity document picker, progress via PubSub, Kanban approve/reject with persistence.
+
+  Client Tools: New 'ClientTools' step type in BaseAgent enabling browser-side tool invocation (navigation, UI display, tab switching) during agent execution. Includes ClientToolRequestManager server singleton, GraphQL subscription transport, runtime tool decoration, three-level timeout, loop agent integration, and 646-line documentation guide.
+
+- Updated dependencies [247df16]
+- Updated dependencies [9250070]
+- Updated dependencies [513b20c]
+- Updated dependencies [44bc22b]
+- Updated dependencies [1d1e02e]
+  - @memberjunction/core@5.23.0
+  - @memberjunction/global@5.23.0
+  - @memberjunction/ai-prompts@5.23.0
+  - @memberjunction/ai-vector-dupe@5.23.0
+  - @memberjunction/core-entities@5.23.0
+  - @memberjunction/ai-core-plus@5.23.0
+  - @memberjunction/ai-engine-base@5.23.0
+  - @memberjunction/aiengine@5.23.0
+  - @memberjunction/ai-reranker@5.23.0
+  - @memberjunction/actions-base@5.23.0
+  - @memberjunction/actions@5.23.0
+  - @memberjunction/ai@5.23.0
+
+## 5.22.0
+
+### Minor Changes
+
+- 21e0b69: Auto-inject current date/time into Loop Agent system prompt
+- a42aba6: metadata
+
+### Patch Changes
+
+- 0b23772: Ensure agents use an isolated per-request database provider instead of the shared global singleton.
+- cf91278: Fix NVARCHAR(MAX) mangling in SQL parser, resolve Invalid string length error in AI monitoring dashboard, add unit tests for AI agent components, and add replaceElements guidance for loop agent prompts
+- Updated dependencies [0b23772]
+- Updated dependencies [cf91278]
+- Updated dependencies [6a5093b]
+- Updated dependencies [e123e4b]
+- Updated dependencies [a42aba6]
+- Updated dependencies [f2a6bec]
+  - @memberjunction/ai-core-plus@5.22.0
+  - @memberjunction/ai-prompts@5.22.0
+  - @memberjunction/core@5.22.0
+  - @memberjunction/ai-vector-dupe@5.22.0
+  - @memberjunction/global@5.22.0
+  - @memberjunction/ai-engine-base@5.22.0
+  - @memberjunction/aiengine@5.22.0
+  - @memberjunction/ai-reranker@5.22.0
+  - @memberjunction/actions@5.22.0
+  - @memberjunction/actions-base@5.22.0
+  - @memberjunction/core-entities@5.22.0
+  - @memberjunction/ai@5.22.0
+
 ## 5.21.0
 
 ### Patch Changes

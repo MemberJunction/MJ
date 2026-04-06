@@ -1,5 +1,28 @@
 # Change Log - @memberjunction/core
 
+## 5.23.0
+
+### Minor Changes
+
+- 513b20c: migration/metadata
+- 44bc22b: JSONType strong typing system: adds JSONType, JSONTypeIsArray, and JSONTypeDefinition metadata.
+
+### Patch Changes
+
+- 247df16: Fix server-side RunView cache write asymmetry that caused repeated DB queries during metadata sync, add deterministic Nunjucks template parameter extraction via AST, support comma-delimited multi-value fields in validation, and redesign QueryPagingEngine to append paging directly instead of wrapping in CTEs (fixing ORDER BY on non-projected columns and apostrophe-in-comments bugs).
+- 9250070: Update default configs for local cache manager.
+- Updated dependencies [247df16]
+  - @memberjunction/global@5.23.0
+
+## 5.22.0
+
+### Patch Changes
+
+- 6a5093b: no migration
+- e123e4b: bug fixes for RunView cache, Data Explorer, and MCP OAuth scopes
+- Updated dependencies [f2a6bec]
+  - @memberjunction/global@5.22.0
+
 ## 5.21.0
 
 ### Patch Changes

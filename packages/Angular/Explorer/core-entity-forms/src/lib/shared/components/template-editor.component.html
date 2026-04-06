@@ -58,14 +58,14 @@
                 <i class="fa-solid fa-tag"></i> Content Type
               </label>
               @if (config.allowEdit) {
-                <kendo-dropdownlist [(ngModel)]="currentTemplateContent.TypeID"
+                <mj-dropdown [(ngModel)]="currentTemplateContent.TypeID"
                   name="contentType"
-                  [data]="getContentTypeOptionsForContent()"
-                  textField="text"
-                  valueField="value"
-                  [valuePrimitive]="true"
-                  (valueChange)="onContentTypeChange()">
-                </kendo-dropdownlist>
+                  [Data]="getContentTypeOptionsForContent()"
+                  TextField="text"
+                  ValueField="value"
+                  [ValuePrimitive]="true"
+                  (ValueChange)="onContentTypeChange()">
+                </mj-dropdown>
               } @else {
                 <div class="form-control-plaintext">
                   {{ getContentTypeDisplayText(currentTemplateContent.TypeID) }}
@@ -77,12 +77,12 @@
                 <i class="fa-solid fa-sort-numeric-up"></i> Priority
               </label>
               @if (config.allowEdit) {
-                <kendo-numerictextbox [(ngModel)]="currentTemplateContent.Priority"
+                <mj-numeric-input [(ngModel)]="currentTemplateContent.Priority"
                   name="priority"
-                  [min]="1"
-                  [step]="1"
-                  [format]="'n0'">
-                </kendo-numerictextbox>
+                  [Min]="1"
+                  [Step]="1"
+                  [Format]="'n0'">
+                </mj-numeric-input>
               } @else {
                 <div class="form-control-plaintext">
                   {{ currentTemplateContent.Priority || '-' }}

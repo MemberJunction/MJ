@@ -1,6 +1,5 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, Output, EventEmitter } from '@angular/core';
 import { FormControl } from '@angular/forms';
-import { WindowRef } from '@progress/kendo-angular-dialog';
 import { Subject, BehaviorSubject, combineLatest, debounceTime, distinctUntilChanged, takeUntil, startWith } from 'rxjs';
 import { RunView } from '@memberjunction/core';
 import { MJAIAgentTypeEntity } from '@memberjunction/core-entities';
@@ -68,8 +67,9 @@ export class SubAgentSelectorDialogComponent implements OnInit, OnDestroy {
     return this.filteredAgents$.value.length;
   }
 
+  @Output() DialogClose = new EventEmitter<void>();
+
   constructor(
-    private dialogRef: WindowRef,
     private cdr: ChangeDetectorRef
   ) {}
 
@@ -254,7 +254,7 @@ export class SubAgentSelectorDialogComponent implements OnInit, OnDestroy {
 
   cancel() {
     this.result.next(null);
-    this.dialogRef.close();
+    this.DialogClose.emit();
   }
 
   createNew() {
@@ -262,7 +262,7 @@ export class SubAgentSelectorDialogComponent implements OnInit, OnDestroy {
       selectedAgents: [],
       createNew: true
     });
-    this.dialogRef.close();
+    this.DialogClose.emit();
   }
 
   async addSelectedAgents() {
@@ -280,6 +280,6 @@ export class SubAgentSelectorDialogComponent implements OnInit, OnDestroy {
       selectedAgents,
       createNew: false
     });
-    this.dialogRef.close();
+    this.DialogClose.emit();
   }
 }

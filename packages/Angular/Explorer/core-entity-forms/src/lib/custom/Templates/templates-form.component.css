@@ -147,49 +147,31 @@
     gap: 4px;
 }
 
-/* Expansion Panel Styling */
-::ng-deep .configuration-sections kendo-expansionpanel {
-    border: 1px solid var(--mj-border-default) !important;
-    border-radius: 12px !important;
-    margin-bottom: 12px !important;
-    box-shadow: none !important;
-    background: var(--mj-bg-surface-card) !important;
-    overflow: hidden !important;
+/* Accordion Panel Styling */
+::ng-deep .configuration-sections mj-accordion-panel {
+    margin-bottom: 12px;
 }
 
-::ng-deep .configuration-sections .k-expander-header {
-    background: var(--mj-bg-surface-card) !important;
-    border: none !important;
-    padding: 16px 20px !important;
-    border-radius: 12px !important;
-    color: var(--mj-text-primary) !important;
-    font-weight: 600 !important;
-    font-size: 16px !important;
-    transition: all 0.2s ease !important;
+::ng-deep .configuration-sections .mj-accordion-panel {
+    border: 1px solid var(--mj-border-default);
+    border-radius: 12px;
+    overflow: hidden;
+    background: var(--mj-bg-surface-card);
 }
 
-::ng-deep .configuration-sections .k-expander-header:hover {
-    background: var(--mj-bg-surface-sunken) !important;
+::ng-deep .configuration-sections .mj-accordion-header {
+    padding: 16px 20px;
+    font-weight: 600;
+    font-size: 16px;
 }
 
-/* Expanded state header */
-::ng-deep .configuration-sections kendo-expansionpanel[aria-expanded="true"] .k-expander-header {
-    background: var(--mj-brand-primary) !important;
-    color: var(--mj-text-inverse) !important;
-    border-radius: 12px 12px 0 0 !important;
+::ng-deep .configuration-sections .mj-accordion-panel--expanded .mj-accordion-header {
+    background: var(--mj-brand-primary);
+    color: var(--mj-text-inverse);
 }
 
-/* Content area */
-::ng-deep .configuration-sections .k-expander-content {
-    padding: 0 !important;
-    border: none !important;
-    background: var(--mj-bg-surface-card) !important;
-    border-radius: 0 0 12px 12px !important;
-}
-
-/* Icon in header */
-::ng-deep .configuration-sections .k-expander-header .fa-solid {
-    transition: transform 0.2s ease !important;
+::ng-deep .configuration-sections .mj-accordion-body {
+    padding: 0;
 }
 
 /* Smooth transitions */

@@ -9,7 +9,7 @@
  * @module @memberjunction/ai-agents
  */
 
-import { LogStatus, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { LogStatus, LogError, Metadata, UserInfo } from '@memberjunction/core';
 import { DuplicateRecordDetector } from '@memberjunction/ai-vector-dupe';
 
 /**
@@ -226,9 +226,14 @@ export class KnowledgeAgent {
     // Private Tool Implementations
     // ================================================================
 
+    /**
+     * Execute search via the SearchKnowledge GraphQL mutation.
+     * This uses the same UnifiedSearchService (vector + FTS + RRF fusion) that
+     * the Angular search component uses, ensuring consistent results.
+     */
     private async executeSearchKnowledge(
         parameters: Record<string, unknown>,
-        contextUser: UserInfo
+        _contextUser: UserInfo
     ): Promise<{ Success: boolean; Data?: Record<string, unknown>; ErrorMessage?: string }> {
         try {
             const query = String(parameters['query'] || '');
@@ -236,99 +241,65 @@ export class KnowledgeAgent {
                 return { Success: false, ErrorMessage: 'Query cannot be empty' };
             }
 
-            const md = new Metadata();
-            const searchableEntities = this.findSearchableEntities(md);
-
             const maxResults = Number(parameters['maxResults']) || 20;
             const entityFilter = parameters['entityNames'] as string[] | undefined;
 
-            const entitiesToSearch = entityFilter?.length
-                ? searchableEntities.filter(e => entityFilter.includes(e.Name))
-                : searchableEntities.slice(0, 10); // Limit to top 10 by default
+            const provider = Metadata.Provider as { ExecuteGQL?: (query: string, variables: Record<string, unknown>) => Promise<Record<string, unknown>> };
+            if (!provider?.ExecuteGQL) {
+                return { Success: false, ErrorMessage: 'GraphQL provider not available for search' };
+            }
 
-            const allResults = await this.searchAcrossEntities(entitiesToSearch, query, maxResults, contextUser);
+            const mutation = `
+                mutation SearchKnowledge($query: String!, $maxResults: Float, $filters: SearchFiltersInput) {
+                    SearchKnowledge(query: $query, maxResults: $maxResults, filters: $filters) {
+                        Success
+                        TotalCount
+                        ElapsedMs
+                        ErrorMessage
+                        Results {
+                            ID
+                            EntityName
+                            RecordID
+                            SourceType
+                            Title
+                            Snippet
+                            Score
+                            Tags
+                        }
+                    }
+                }
+            `;
+
+            const filters = entityFilter?.length
+                ? { EntityNames: entityFilter }
+                : undefined;
+
+            const gqlResult = await provider.ExecuteGQL(mutation, {
+                query,
+                maxResults,
+                filters
+            });
+
+            const data = (gqlResult as Record<string, Record<string, unknown>>)['SearchKnowledge'];
+            if (!data?.['Success']) {
+                return {
+                    Success: false,
+                    ErrorMessage: String(data?.['ErrorMessage'] ?? 'Search failed')
+                };
+            }
 
             return {
                 Success: true,
                 Data: {
-                    Results: allResults.slice(0, maxResults),
-                    TotalCount: allResults.length,
+                    Results: data['Results'],
+                    TotalCount: data['TotalCount'],
+                    ElapsedMs: data['ElapsedMs'],
                 },
             };
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
             LogError(`KnowledgeAgent.search_knowledge failed: ${msg}`);
             return { Success: false, ErrorMessage: msg };
-        }
-    }
-
-    private findSearchableEntities(md: Metadata) {
-        return md.Entities.filter(e =>
-            e.Fields.some(f =>
-                !f.IsPrimaryKey &&
-                !f.Name.startsWith('__mj') &&
-                (f.Type.toLowerCase().includes('varchar') || f.Type.toLowerCase().includes('text'))
-            )
-        );
-    }
-
-    private async searchAcrossEntities(
-        entities: ReturnType<Metadata['Entities']['filter']>,
-        query: string,
-        maxResults: number,
-        contextUser: UserInfo
-    ): Promise<Array<{ EntityName: string; RecordID: string; Title: string; Snippet: string }>> {
-        const rv = new RunView();
-        const safeQuery = query.replace(/'/g, "''");
-        const allResults: Array<{ EntityName: string; RecordID: string; Title: string; Snippet: string }> = [];
-
-        for (const entity of entities) {
-            const entityResults = await this.searchSingleEntity(rv, entity, safeQuery, maxResults, entities.length, contextUser);
-            allResults.push(...entityResults);
-        }
-
-        return allResults;
-    }
-
-    private async searchSingleEntity(
-        rv: RunView,
-        entity: ReturnType<Metadata['Entities']['filter']>[number],
-        safeQuery: string,
-        maxResults: number,
-        entityCount: number,
-        contextUser: UserInfo
-    ): Promise<Array<{ EntityName: string; RecordID: string; Title: string; Snippet: string }>> {
-        try {
-            const nameField = entity.Fields.find(f => f.Name === 'Name');
-            const descField = entity.Fields.find(f => f.Name === 'Description');
-            if (!nameField) return [];
-
-            const fields = ['ID', 'Name'];
-            let filter = `[Name] LIKE '%${safeQuery}%'`;
-            if (descField) {
-                fields.push('Description');
-                filter += ` OR [Description] LIKE '%${safeQuery}%'`;
-            }
-
-            const result = await rv.RunView<Record<string, unknown>>({
-                EntityName: entity.Name,
-                ExtraFilter: filter,
-                ResultType: 'simple',
-                MaxRows: Math.ceil(maxResults / entityCount),
-                Fields: fields,
-            }, contextUser);
-
-            if (!result.Success) return [];
-
-            return result.Results.map(record => ({
-                EntityName: entity.Name,
-                RecordID: String(record['ID']),
-                Title: String(record['Name'] || 'Untitled'),
-                Snippet: String(record['Description'] || '').substring(0, 200),
-            }));
-        } catch {
-            // Skip entities that fail
-            return [];
         }
     }
 

@@ -1,5 +1,130 @@
 # @memberjunction/ng-dashboards
 
+## 5.23.0
+
+### Patch Changes
+
+- 247df16: Fix server-side RunView cache write asymmetry that caused repeated DB queries during metadata sync, add deterministic Nunjucks template parameter extraction via AST, support comma-delimited multi-value fields in validation, and redesign QueryPagingEngine to append paging directly instead of wrapping in CTEs (fixing ORDER BY on non-projected columns and apostrophe-in-comments bugs).
+- 1d1e02e: Knowledge Hub Phase 2: autotagging pipeline, duplicate detection dashboards, and client tool invocation system.
+
+  Autotagging: Run Pipeline button with real-time progress, direct vectorization of content items (bypasses entity documents), pipeline stage visualization, Gemini 3 Flash tagging.
+
+  Duplicate Detection: Run Detection button with entity document picker, progress via PubSub, Kanban approve/reject with persistence.
+
+  Client Tools: New 'ClientTools' step type in BaseAgent enabling browser-side tool invocation (navigation, UI display, tab switching) during agent execution. Includes ClientToolRequestManager server singleton, GraphQL subscription transport, runtime tool decoration, three-level timeout, loop agent integration, and 646-line documentation guide.
+
+- Updated dependencies [247df16]
+- Updated dependencies [9250070]
+- Updated dependencies [513b20c]
+- Updated dependencies [44bc22b]
+- Updated dependencies [58af481]
+- Updated dependencies [fb0c69f]
+- Updated dependencies [1d1e02e]
+- Updated dependencies [c17be20]
+  - @memberjunction/core@5.23.0
+  - @memberjunction/global@5.23.0
+  - @memberjunction/ng-base-application@5.23.0
+  - @memberjunction/ng-dashboard-viewer@5.23.0
+  - @memberjunction/graphql-dataprovider@5.23.0
+  - @memberjunction/core-entities@5.23.0
+  - @memberjunction/ng-ui-components@5.23.0
+  - @memberjunction/ai-core-plus@5.23.0
+  - @memberjunction/ng-react@5.23.0
+  - @memberjunction/ai-engine-base@5.23.0
+  - @memberjunction/api-keys-base@5.23.0
+  - @memberjunction/actions-base@5.23.0
+  - @memberjunction/ng-core-entity-forms@5.23.0
+  - @memberjunction/ng-explorer-settings@5.23.0
+  - @memberjunction/ng-shared@5.23.0
+  - @memberjunction/ng-testing@5.23.0
+  - @memberjunction/ng-action-gallery@5.23.0
+  - @memberjunction/ng-actions@5.23.0
+  - @memberjunction/ng-agent-requests@5.23.0
+  - @memberjunction/ng-agents@5.23.0
+  - @memberjunction/ng-ai-test-harness@5.23.0
+  - @memberjunction/ng-code-editor@5.23.0
+  - @memberjunction/ng-container-directives@5.23.0
+  - @memberjunction/ng-conversations@5.23.0
+  - @memberjunction/ng-credentials@5.23.0
+  - @memberjunction/ng-entity-relationship-diagram@5.23.0
+  - @memberjunction/ng-entity-viewer@5.23.0
+  - @memberjunction/ng-filter-builder@5.23.0
+  - @memberjunction/ng-list-management@5.23.0
+  - @memberjunction/ng-notifications@5.23.0
+  - @memberjunction/ng-query-viewer@5.23.0
+  - @memberjunction/ng-scheduling@5.23.0
+  - @memberjunction/ng-search@5.23.0
+  - @memberjunction/ng-shared-generic@5.23.0
+  - @memberjunction/ng-trees@5.23.0
+  - @memberjunction/ng-versions@5.23.0
+  - @memberjunction/integration-engine-base@5.23.0
+  - @memberjunction/interactive-component-types@5.23.0
+  - @memberjunction/skip-types@5.23.0
+  - @memberjunction/templates-base-types@5.23.0
+  - @memberjunction/testing-engine-base@5.23.0
+  - @memberjunction/ng-clustering@5.23.0
+  - @memberjunction/ng-export-service@5.23.0
+  - @memberjunction/ng-markdown@5.23.0
+  - @memberjunction/export-engine@5.23.0
+
+## 5.22.0
+
+### Patch Changes
+
+- cf91278: Fix NVARCHAR(MAX) mangling in SQL parser, resolve Invalid string length error in AI monitoring dashboard, add unit tests for AI agent components, and add replaceElements guidance for loop agent prompts
+- e123e4b: bug fixes for RunView cache, Data Explorer, and MCP OAuth scopes
+- e89c3bc: no migratiin
+- f2a6bec: Universal lazy loading via ClassFactory async API. Fixes HomeApplication being tree-shaken by moving lazy loading from consumer-specific retry patterns into ClassFactory itself with RegisterLazyLoader, CreateInstanceAsync, and GetRegistrationAsync. Lazy config now uses compound keys (BaseClassName::Key) to support any base class. Adds coverage audit to codegen to detect gaps.
+- Updated dependencies [0b23772]
+- Updated dependencies [cf91278]
+- Updated dependencies [6a5093b]
+- Updated dependencies [e123e4b]
+- Updated dependencies [a42aba6]
+- Updated dependencies [f2a6bec]
+  - @memberjunction/ai-core-plus@5.22.0
+  - @memberjunction/ng-conversations@5.22.0
+  - @memberjunction/core@5.22.0
+  - @memberjunction/ng-agent-requests@5.22.0
+  - @memberjunction/ng-agents@5.22.0
+  - @memberjunction/global@5.22.0
+  - @memberjunction/ng-base-application@5.22.0
+  - @memberjunction/ng-dashboard-viewer@5.22.0
+  - @memberjunction/ai-engine-base@5.22.0
+  - @memberjunction/ng-core-entity-forms@5.22.0
+  - @memberjunction/ng-ai-test-harness@5.22.0
+  - @memberjunction/graphql-dataprovider@5.22.0
+  - @memberjunction/skip-types@5.22.0
+  - @memberjunction/api-keys-base@5.22.0
+  - @memberjunction/actions-base@5.22.0
+  - @memberjunction/ng-explorer-settings@5.22.0
+  - @memberjunction/ng-shared@5.22.0
+  - @memberjunction/ng-testing@5.22.0
+  - @memberjunction/ng-action-gallery@5.22.0
+  - @memberjunction/ng-actions@5.22.0
+  - @memberjunction/ng-code-editor@5.22.0
+  - @memberjunction/ng-container-directives@5.22.0
+  - @memberjunction/ng-credentials@5.22.0
+  - @memberjunction/ng-entity-relationship-diagram@5.22.0
+  - @memberjunction/ng-entity-viewer@5.22.0
+  - @memberjunction/ng-filter-builder@5.22.0
+  - @memberjunction/ng-list-management@5.22.0
+  - @memberjunction/ng-notifications@5.22.0
+  - @memberjunction/ng-query-viewer@5.22.0
+  - @memberjunction/ng-react@5.22.0
+  - @memberjunction/ng-scheduling@5.22.0
+  - @memberjunction/ng-search@5.22.0
+  - @memberjunction/ng-shared-generic@5.22.0
+  - @memberjunction/ng-trees@5.22.0
+  - @memberjunction/ng-versions@5.22.0
+  - @memberjunction/integration-engine-base@5.22.0
+  - @memberjunction/interactive-component-types@5.22.0
+  - @memberjunction/core-entities@5.22.0
+  - @memberjunction/templates-base-types@5.22.0
+  - @memberjunction/testing-engine-base@5.22.0
+  - @memberjunction/ng-export-service@5.22.0
+  - @memberjunction/ng-markdown@5.22.0
+  - @memberjunction/export-engine@5.22.0
+
 ## 5.21.0
 
 ### Patch Changes

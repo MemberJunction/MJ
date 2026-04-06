@@ -1,5 +1,4 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
-import { DialogRef } from '@progress/kendo-angular-dialog';
+import { Component, OnInit, OnDestroy, Input, Output, EventEmitter } from '@angular/core';
 import { RunView, Metadata } from '@memberjunction/core';
 import {
   MJArtifactEntity,
@@ -28,6 +27,9 @@ export interface ArtifactLoadResult {
   styleUrl: './artifact-load-dialog.component.css'
 })
 export class ArtifactLoadDialogComponent implements OnInit, OnDestroy {
+  @Input() Visible = false;
+  @Output() Close = new EventEmitter<ArtifactLoadResult | undefined>();
+
   // Tab state
   activeTab = 0; // 0 = Artifacts, 1 = Collections
 
@@ -67,8 +69,6 @@ export class ArtifactLoadDialogComponent implements OnInit, OnDestroy {
   private metadata = new Metadata();
   private destroy$ = new Subject<void>();
   private searchSubject = new Subject<string>();
-
-  constructor(public dialog: DialogRef) {}
 
   async ngOnInit() {
     // Setup search debouncing
@@ -336,7 +336,7 @@ export class ArtifactLoadDialogComponent implements OnInit, OnDestroy {
   }
 
   cancel() {
-    this.dialog.close(undefined);
+    this.Close.emit(undefined);
   }
 
   load() {
@@ -350,7 +350,7 @@ export class ArtifactLoadDialogComponent implements OnInit, OnDestroy {
       artifactName: this.selectedArtifact!.Name
     };
 
-    this.dialog.close(result);
+    this.Close.emit(result);
   }
 
   onTabSelect(index: number) {

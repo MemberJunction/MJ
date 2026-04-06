@@ -713,18 +713,18 @@
     height: 100%;
 }
 
-/* Kendo Window Styling */
-:host ::ng-deep kendo-window {
+/* MJ Window Styling */
+:host ::ng-deep mj-window .mj-window {
     border-radius: 12px !important;
     overflow: hidden;
     box-shadow: var(--mj-shadow-2xl) !important;
 }
 
-:host ::ng-deep kendo-window .k-window-content {
+:host ::ng-deep mj-window .mj-window-content {
     padding: 0 !important;
 }
 
-:host ::ng-deep kendo-window-titlebar {
+:host ::ng-deep mj-window-titlebar {
     padding: 16px 20px !important;
     background: var(--mj-bg-page) !important;
     border-bottom: 1px solid var(--mj-border-default) !important;
