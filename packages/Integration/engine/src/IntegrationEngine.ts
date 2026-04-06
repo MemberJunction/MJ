@@ -96,6 +96,99 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     public MaxBatchSize: number = DEFAULT_BATCH_SIZE;
 
     /**
+     * Resumes any syncs that were orphaned by a process restart.
+     * Finds all CompanyIntegrationRun records with Status='In Progress',
+     * determines which entity maps already completed (have run details),
+     * and resumes from the remaining entity maps using existing watermarks.
+     *
+     * Call this once during MJAPI startup after metadata is loaded.
+     */
+    public async ResumeOrphanedSyncs(contextUser: UserInfo): Promise<void> {
+        await IntegrationEngineBase.Instance.Config(false, contextUser);
+
+        const rv = new RunView();
+        const orphanedRuns = await rv.RunView<MJCompanyIntegrationRunEntity>({
+            EntityName: 'MJ: Company Integration Runs',
+            ExtraFilter: `Status='In Progress'`,
+            ResultType: 'entity_object',
+        }, contextUser);
+
+        if (!orphanedRuns.Success || orphanedRuns.Results.length === 0) {
+            console.log('[IntegrationEngine] No orphaned syncs to resume');
+            return;
+        }
+
+        console.log(`[IntegrationEngine] Found ${orphanedRuns.Results.length} orphaned sync(s) to resume`);
+
+        for (const run of orphanedRuns.Results) {
+            const companyIntegrationID = run.CompanyIntegrationID;
+            const runID = run.Get('ID') as string;
+
+            try {
+                // Find which entity maps already completed in this run
+                const detailsResult = await rv.RunView<{ EntityID: string }>({
+                    EntityName: 'MJ: Company Integration Run Details',
+                    ExtraFilter: `CompanyIntegrationRunID='${runID}'`,
+                    Fields: ['EntityID'],
+                    ResultType: 'simple',
+                }, contextUser);
+
+                const completedEntityIDs = new Set<string>();
+                if (detailsResult.Success) {
+                    for (const d of detailsResult.Results) {
+                        completedEntityIDs.add(d.EntityID.toLowerCase());
+                    }
+                }
+
+                console.log(
+                    `[IntegrationEngine] Resuming run ${runID.substring(0, 8)}... ` +
+                    `for ${companyIntegrationID.substring(0, 8)}... ` +
+                    `(${completedEntityIDs.size} entity maps already completed)`
+                );
+
+                // Load config and filter to only remaining entity maps
+                const config = await this.LoadRunConfiguration(companyIntegrationID, contextUser);
+                const remainingMaps = config.entityMaps.filter(
+                    em => !completedEntityIDs.has((em.EntityID).toLowerCase())
+                );
+
+                if (remainingMaps.length === 0) {
+                    console.log(`[IntegrationEngine] All entity maps completed for run ${runID.substring(0, 8)}, marking as Success`);
+                    run.EndedAt = new Date();
+                    run.Status = 'Success';
+                    await run.Save();
+                    continue;
+                }
+
+                console.log(`[IntegrationEngine] Resuming ${remainingMaps.length} remaining entity maps (of ${config.entityMaps.length} total)`);
+
+                // Replace entityMaps with only the remaining ones
+                config.entityMaps = remainingMaps;
+
+                // Execute remaining maps using the existing run record
+                const result = await this.ExecuteEntityMaps(config, run, contextUser);
+                result.RunID = runID;
+                await this.FinalizeRun(run, result, contextUser);
+
+                console.log(
+                    `[IntegrationEngine] Resume complete for ${runID.substring(0, 8)}: ` +
+                    `${result.RecordsCreated} created, ${result.RecordsUpdated} updated, ` +
+                    `${result.RecordsErrored} errored`
+                );
+            } catch (err) {
+                const errMsg = err instanceof Error ? err.message : String(err);
+                console.error(`[IntegrationEngine] Failed to resume run ${runID.substring(0, 8)}: ${errMsg}`);
+
+                // Mark as failed so it doesn't get picked up again
+                run.EndedAt = new Date();
+                run.Status = 'Failed';
+                run.ErrorLog = JSON.stringify([{ ErrorMessage: `Resume failed: ${errMsg}` }]);
+                await run.Save();
+            }
+        }
+    }
+
+    /**
      * Executes a full sync run for a company integration.
      * If a sync is already running for the same integration, waits for it to finish
      * and returns the existing result (concurrency lock).

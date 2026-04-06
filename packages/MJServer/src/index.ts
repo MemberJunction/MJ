@@ -840,6 +840,13 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   // Process pending RSU work from pre-restart (entity maps, field maps, sync)
   processRSUPendingWork().catch(err => console.warn(`RSU pending work processing failed: ${err}`));
 
+  // Resume any integration syncs that were orphaned by the previous process restart
+  const resumeUser = UserCache.Instance.GetSystemUser();
+  if (resumeUser) {
+    IntegrationEngine.Instance.ResumeOrphanedSyncs(resumeUser)
+      .catch(err => console.warn(`[IntegrationEngine] Orphaned sync resume failed: ${err}`));
+  }
+
   // Set up graceful shutdown handlers
   const gracefulShutdown = async (signal: string) => {
     console.log(`\n${signal} received, shutting down gracefully...`);
