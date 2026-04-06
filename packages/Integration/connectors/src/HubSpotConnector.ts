@@ -504,6 +504,21 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
 
         // Communication Preferences
         { name: 'subscription_definitions', label: 'Subscription Definitions', description: 'Email subscription types', apiPath: '/communication-preferences/v4/definitions', write: true, incremental: false, pkField: 'id' },
+
+        // Conversations
+        { name: 'conversation_threads', label: 'Conversation Threads', description: 'Conversations inbox threads', apiPath: '/conversations/v3/conversations/threads', write: false, incremental: true, pkField: 'id' },
+        { name: 'conversation_messages', label: 'Conversation Messages', description: 'Messages within conversation threads', apiPath: '/conversations/v3/conversations/threads/{threadId}/messages', write: false, incremental: false, pkField: 'id' },
+        { name: 'conversation_channels', label: 'Conversation Channels', description: 'Communication channels for conversations', apiPath: '/conversations/v3/conversations/channels', write: false, incremental: false, pkField: 'id' },
+
+        // Form Submissions
+        { name: 'form_submissions', label: 'Form Submissions', description: 'Submitted form data across all forms', apiPath: '/form-integrations/v1/submissions/forms', write: false, incremental: true, pkField: 'submittedAt' },
+
+        // Marketing Events
+        { name: 'marketing_events', label: 'Marketing Events', description: 'Marketing events (webinars, conferences)', apiPath: '/marketing/v3/marketing-events', write: true, incremental: true, pkField: 'id' },
+
+        // Ads
+        { name: 'ad_campaigns', label: 'Ad Campaigns', description: 'Advertising campaigns across ad networks', apiPath: '/marketing/v3/ads/campaigns', write: false, incremental: true, pkField: 'id' },
+        { name: 'ad_accounts', label: 'Ad Accounts', description: 'Connected advertising accounts', apiPath: '/marketing/v3/ads/accounts', write: false, incremental: false, pkField: 'id' },
     ];
 
     /**

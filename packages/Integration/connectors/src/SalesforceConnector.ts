@@ -469,6 +469,19 @@ const SALESFORCE_OBJECTS: IntegrationObjectInfo[] = [
         ],
     },
 
+    {
+        Name: 'ContentDocumentLink', DisplayName: 'Content Document Link',
+        Description: 'Junction object linking files (ContentDocument) to records (Account, Contact, etc.)', SupportsWrite: true,
+        IncludeInActionGeneration: false,
+        Fields: [
+            { Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Record ID' },
+            { Name: 'ContentDocumentId', DisplayName: 'Content Document ID', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'The file being linked' },
+            { Name: 'LinkedEntityId', DisplayName: 'Linked Entity ID', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'The record the file is attached to' },
+            { Name: 'ShareType', DisplayName: 'Share Type', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Sharing permission (V=Viewer, C=Collaborator, I=Inferred)' },
+            { Name: 'Visibility', DisplayName: 'Visibility', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Visibility (AllUsers, InternalUsers, SharedUsers)' },
+        ],
+    },
+
     // ── Admin/Reference Objects (read-only) ──────────────────────────────
     {
         Name: 'UserRole', DisplayName: 'User Role',
@@ -770,6 +783,105 @@ export class SalesforceConnector extends BaseRESTIntegrationConnector {
         }
 
         return this.BuildCRUDError(response, 'DeleteRecord', ctx.ObjectName);
+    }
+
+    // ─── Batch CRUD (SObject Collections) ─────────────────────────────
+
+    /**
+     * Creates up to 200 records in a single API call using SObject Collections.
+     * POST /services/data/vXX/composite/sobjects with allOrNone=false.
+     */
+    public async CreateRecordsBatch(
+        companyIntegration: MJCompanyIntegrationEntity,
+        contextUser: UserInfo,
+        objectName: string,
+        records: Array<Record<string, unknown>>
+    ): Promise<CRUDResult[]> {
+        const auth = await this.Authenticate(companyIntegration, contextUser);
+        const headers = { ...this.BuildHeaders(auth), 'Content-Type': 'application/json' };
+        const url = `${auth.InstanceUrl}/services/data/v${auth.ApiVersion}/composite/sobjects`;
+
+        const body = {
+            allOrNone: false,
+            records: records.map(r => ({
+                attributes: { type: objectName },
+                ...this.StripReadOnlyFields(r),
+            })),
+        };
+
+        const response = await this.MakeHTTPRequest(auth, url, 'POST', headers, body);
+        if (response.Status >= 200 && response.Status < 300) {
+            const results = response.Body as Array<{ id?: string; success: boolean; errors: Array<{ message: string }> }>;
+            return results.map(r => ({
+                Success: r.success,
+                ExternalID: r.id ?? '',
+                StatusCode: r.success ? 201 : 400,
+                ErrorMessage: r.errors?.map(e => e.message).join('; '),
+            }));
+        }
+        return records.map(() => this.BuildCRUDError(response, 'CreateRecordsBatch', objectName));
+    }
+
+    /**
+     * Updates up to 200 records in a single API call using SObject Collections.
+     * PATCH /services/data/vXX/composite/sobjects with allOrNone=false.
+     */
+    public async UpdateRecordsBatch(
+        companyIntegration: MJCompanyIntegrationEntity,
+        contextUser: UserInfo,
+        objectName: string,
+        records: Array<{ Id: string } & Record<string, unknown>>
+    ): Promise<CRUDResult[]> {
+        const auth = await this.Authenticate(companyIntegration, contextUser);
+        const headers = { ...this.BuildHeaders(auth), 'Content-Type': 'application/json' };
+        const url = `${auth.InstanceUrl}/services/data/v${auth.ApiVersion}/composite/sobjects`;
+
+        const body = {
+            allOrNone: false,
+            records: records.map(r => ({
+                attributes: { type: objectName },
+                ...this.StripReadOnlyFields(r),
+            })),
+        };
+
+        const response = await this.MakeHTTPRequest(auth, url, 'PATCH', headers, body);
+        if (response.Status >= 200 && response.Status < 300) {
+            const results = response.Body as Array<{ id?: string; success: boolean; errors: Array<{ message: string }> }>;
+            return results.map((r, i) => ({
+                Success: r.success,
+                ExternalID: r.id ?? records[i].Id,
+                StatusCode: r.success ? 200 : 400,
+                ErrorMessage: r.errors?.map(e => e.message).join('; '),
+            }));
+        }
+        return records.map(() => this.BuildCRUDError(response, 'UpdateRecordsBatch', objectName));
+    }
+
+    /**
+     * Deletes up to 200 records in a single API call using SObject Collections.
+     * DELETE /services/data/vXX/composite/sobjects?ids=id1,id2,...&allOrNone=false
+     */
+    public async DeleteRecordsBatch(
+        companyIntegration: MJCompanyIntegrationEntity,
+        contextUser: UserInfo,
+        ids: string[]
+    ): Promise<CRUDResult[]> {
+        const auth = await this.Authenticate(companyIntegration, contextUser);
+        const headers = this.BuildHeaders(auth);
+        const idParam = ids.join(',');
+        const url = `${auth.InstanceUrl}/services/data/v${auth.ApiVersion}/composite/sobjects?ids=${idParam}&allOrNone=false`;
+
+        const response = await this.MakeHTTPRequest(auth, url, 'DELETE', headers);
+        if (response.Status >= 200 && response.Status < 300) {
+            const results = response.Body as Array<{ id?: string; success: boolean; errors: Array<{ message: string }> }>;
+            return results.map((r, i) => ({
+                Success: r.success,
+                ExternalID: r.id ?? ids[i],
+                StatusCode: r.success ? 200 : 400,
+                ErrorMessage: r.errors?.map(e => e.message).join('; '),
+            }));
+        }
+        return ids.map(() => ({ Success: false, ExternalID: '', StatusCode: response.Status, ErrorMessage: 'Batch delete failed' }));
     }
 
     /**
