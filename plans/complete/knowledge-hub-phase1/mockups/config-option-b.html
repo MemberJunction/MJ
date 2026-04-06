@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Configuration — Option B: Settings Page</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  :root {
+    --bg-page: #0f172a;
+    --bg-card: #1e293b;
+    --bg-card-hover: #253449;
+    --border: #334155;
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --accent: #3b82f6;
+    --success: #22c55e;
+    --warning: #f59e0b;
+    --error: #ef4444;
+    --purple: #a855f7;
+    --cyan: #06b6d4;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: var(--bg-page);
+    color: var(--text-primary);
+    min-height: 100vh;
+    padding: 2rem;
+  }
+  .back-link {
+    position: fixed; top: 1rem; left: 1rem;
+    color: var(--text-muted); font-size: 0.85rem; z-index: 100;
+    display: flex; align-items: center; gap: 0.5rem; text-decoration: none; transition: color 0.2s;
+  }
+  .back-link:hover { color: var(--text-primary); }
+
+  .layout {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    gap: 2rem;
+    max-width: 1100px;
+    margin: 2rem auto 0;
+  }
+
+  /* Sidebar nav */
+  .sidebar-nav {
+    position: sticky;
+    top: 2rem;
+    align-self: start;
+  }
+  .nav-title {
+    font-size: 0.7rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--text-muted); margin-bottom: 0.75rem;
+    padding: 0 0.75rem;
+  }
+  .nav-item {
+    display: flex; align-items: center; gap: 0.6rem;
+    padding: 0.6rem 0.75rem;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.15s;
+    margin-bottom: 0.15rem;
+  }
+  .nav-item:hover { background: var(--bg-card); color: var(--text-primary); }
+  .nav-item.active {
+    background: rgba(59,130,246,0.1);
+    color: var(--accent);
+    font-weight: 600;
+  }
+  .nav-item i { width: 16px; text-align: center; font-size: 0.8rem; }
+
+  /* Content area */
+  .content { min-width: 0; }
+  .page-header {
+    margin-bottom: 2rem;
+  }
+  .page-header h1 {
+    font-size: 1.5rem; font-weight: 700;
+    display: flex; align-items: center; gap: 0.75rem;
+    margin-bottom: 0.25rem;
+  }
+  .page-header p { font-size: 0.88rem; color: var(--text-secondary); }
+
+  /* Sections */
+  .section {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    margin-bottom: 1.5rem;
+    overflow: hidden;
+  }
+  .section-head {
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: space-between;
+    transition: background 0.15s;
+  }
+  .section-head:hover { background: var(--bg-card-hover); }
+  .section-head h3 {
+    font-size: 0.95rem; font-weight: 600;
+    display: flex; align-items: center; gap: 0.6rem;
+  }
+  .section-head .icon {
+    width: 30px; height: 30px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.8rem; flex-shrink: 0;
+  }
+  .section-head .status {
+    display: flex; align-items: center; gap: 0.5rem;
+    font-size: 0.78rem;
+  }
+  .status-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+  }
+  .chevron {
+    color: var(--text-muted); font-size: 0.8rem;
+    transition: transform 0.2s;
+  }
+  .section.open .chevron { transform: rotate(180deg); }
+
+  .section-body {
+    padding: 1.5rem;
+  }
+
+  /* Form elements */
+  .form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.25rem;
+    margin-bottom: 1.25rem;
+  }
+  .form-row.single { grid-template-columns: 1fr; }
+  .form-group { }
+  .form-label {
+    display: block;
+    font-size: 0.8rem; font-weight: 600;
+    margin-bottom: 0.4rem;
+    color: var(--text-secondary);
+  }
+  .form-input, .form-select {
+    width: 100%;
+    background: var(--bg-page);
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    padding: 0.6rem 0.85rem;
+    font-size: 0.85rem;
+    color: var(--text-primary);
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .form-input:focus, .form-select:focus { border-color: var(--accent); }
+  .form-input::placeholder { color: var(--text-muted); }
+  .form-select {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24'%3E%3Cpath fill='%2364748b' d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    padding-right: 2rem;
+  }
+  .form-help {
+    font-size: 0.7rem; color: var(--text-muted); margin-top: 0.3rem;
+  }
+
+  /* Toggle switch */
+  .toggle-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid rgba(51,65,85,0.5);
+  }
+  .toggle-row:last-child { border-bottom: none; }
+  .toggle-info h4 { font-size: 0.88rem; font-weight: 500; }
+  .toggle-info p { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.1rem; }
+  .toggle {
+    width: 40px; height: 22px;
+    background: var(--border);
+    border-radius: 11px;
+    position: relative;
+    cursor: pointer;
+    transition: background 0.2s;
+    flex-shrink: 0;
+  }
+  .toggle.on { background: var(--accent); }
+  .toggle::after {
+    content: '';
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: white;
+    position: absolute;
+    top: 2px; left: 2px;
+    transition: transform 0.2s;
+  }
+  .toggle.on::after { transform: translateX(18px); }
+
+  /* Inline status */
+  .status-inline {
+    display: inline-flex; align-items: center; gap: 0.35rem;
+    padding: 0.2rem 0.6rem;
+    border-radius: 12px;
+    font-size: 0.7rem; font-weight: 600;
+  }
+  .status-inline.ok { background: rgba(34,197,94,0.12); color: var(--success); }
+  .status-inline.warn { background: rgba(245,158,11,0.12); color: var(--warning); }
+  .status-inline.err { background: rgba(239,68,68,0.12); color: var(--error); }
+
+  .btn {
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    font-size: 0.8rem; font-weight: 600;
+    cursor: pointer; transition: all 0.2s;
+    display: inline-flex; align-items: center; gap: 0.4rem;
+    border: none;
+  }
+  .btn-sm { padding: 0.35rem 0.75rem; font-size: 0.75rem; }
+  .btn-primary { background: var(--accent); color: white; }
+  .btn-primary:hover { background: #2563eb; }
+  .btn-outline { background: transparent; color: var(--text-secondary); border: 1px solid var(--border); }
+  .btn-outline:hover { border-color: var(--accent); color: var(--text-primary); }
+
+  /* Saved bar */
+  .save-bar {
+    position: sticky;
+    bottom: 0;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 0.85rem 1.5rem;
+    display: flex; align-items: center; justify-content: space-between;
+    box-shadow: 0 -4px 20px rgba(0,0,0,0.3);
+    margin-top: 1rem;
+  }
+  .save-bar .unsaved {
+    font-size: 0.82rem;
+    color: var(--warning);
+    display: flex; align-items: center; gap: 0.4rem;
+  }
+
+  @media (max-width: 768px) {
+    .layout { grid-template-columns: 1fr; }
+    .sidebar-nav { position: static; display: flex; gap: 0.25rem; overflow-x: auto; }
+    .nav-title { display: none; }
+    .form-row { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<a href="index.html" class="back-link"><i class="fa-solid fa-arrow-left"></i> All Mockups</a>
+
+<div class="layout">
+  <div class="sidebar-nav">
+    <div class="nav-title">Settings</div>
+    <div class="nav-item active"><i class="fa-solid fa-database"></i> Vector DB</div>
+    <div class="nav-item"><i class="fa-solid fa-layer-group"></i> Shared Index</div>
+    <div class="nav-item"><i class="fa-solid fa-magnifying-glass"></i> Full-Text Index</div>
+    <div class="nav-item"><i class="fa-solid fa-file-code"></i> Entity Documents</div>
+    <div class="nav-item"><i class="fa-solid fa-microchip"></i> Embedding Models</div>
+    <div class="nav-item"><i class="fa-solid fa-sliders"></i> Thresholds</div>
+    <div class="nav-item"><i class="fa-solid fa-clock-rotate-left"></i> Sync Schedule</div>
+    <div class="nav-item"><i class="fa-solid fa-shield-halved"></i> Permissions</div>
+  </div>
+
+  <div class="content">
+    <div class="page-header">
+      <h1><i class="fa-solid fa-gear" style="color: var(--accent);"></i> Configuration</h1>
+      <p>Manage your Knowledge Hub settings and connections</p>
+    </div>
+
+    <!-- Vector DB Section -->
+    <div class="section open">
+      <div class="section-head">
+        <h3>
+          <span class="icon" style="background: rgba(59,130,246,0.15); color: var(--accent);"><i class="fa-solid fa-database"></i></span>
+          Vector Database Connection
+        </h3>
+        <div class="status">
+          <span class="status-inline ok"><i class="fa-solid fa-check"></i> Connected</span>
+          <i class="fa-solid fa-chevron-down chevron"></i>
+        </div>
+      </div>
+      <div class="section-body">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Provider</label>
+            <select class="form-input form-select">
+              <option selected>Pinecone</option>
+              <option>Qdrant</option>
+              <option>Weaviate</option>
+              <option>Milvus</option>
+              <option>ChromaDB</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Region</label>
+            <select class="form-input form-select">
+              <option selected>us-east-1</option>
+              <option>us-west-2</option>
+              <option>eu-west-1</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">API Key</label>
+            <input type="password" class="form-input" value="pcsk-****************************abcX">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Environment</label>
+            <input type="text" class="form-input" value="gcp-starter" placeholder="e.g. gcp-starter">
+          </div>
+        </div>
+        <div style="display: flex; gap: 0.5rem;">
+          <button class="btn btn-sm btn-outline"><i class="fa-solid fa-plug"></i> Test Connection</button>
+          <span class="status-inline ok" style="margin-left: 0.5rem;"><i class="fa-solid fa-check"></i> Last tested: 2 min ago (142ms)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Shared Index Section -->
+    <div class="section open">
+      <div class="section-head">
+        <h3>
+          <span class="icon" style="background: rgba(168,85,247,0.15); color: var(--purple);"><i class="fa-solid fa-layer-group"></i></span>
+          Shared Index Configuration
+        </h3>
+        <div class="status">
+          <span class="status-inline ok"><i class="fa-solid fa-check"></i> Active</span>
+          <i class="fa-solid fa-chevron-down chevron"></i>
+        </div>
+      </div>
+      <div class="section-body">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Index Name</label>
+            <input type="text" class="form-input" value="knowledge-hub-shared">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Dimensions</label>
+            <input type="number" class="form-input" value="3072">
+            <div class="form-help">Must match your embedding model output</div>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Metric</label>
+            <select class="form-input form-select">
+              <option selected>Cosine</option>
+              <option>Euclidean</option>
+              <option>Dot Product</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Max Capacity</label>
+            <input type="text" class="form-input" value="300,000" readonly>
+            <div class="form-help">82% utilized (246,832 / 300,000 vectors)</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Embedding Model Section -->
+    <div class="section open">
+      <div class="section-head">
+        <h3>
+          <span class="icon" style="background: rgba(6,182,212,0.15); color: var(--cyan);"><i class="fa-solid fa-microchip"></i></span>
+          Embedding Model
+        </h3>
+        <div class="status">
+          <i class="fa-solid fa-chevron-down chevron"></i>
+        </div>
+      </div>
+      <div class="section-body">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Model</label>
+            <select class="form-input form-select">
+              <option selected>OpenAI text-embedding-3-large (3072d)</option>
+              <option>OpenAI text-embedding-3-small (1536d)</option>
+              <option>Cohere embed-english-v3.0 (1024d)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Batch Size</label>
+            <input type="number" class="form-input" value="100">
+            <div class="form-help">Records processed per API call</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Thresholds Section -->
+    <div class="section open">
+      <div class="section-head">
+        <h3>
+          <span class="icon" style="background: rgba(245,158,11,0.15); color: var(--warning);"><i class="fa-solid fa-sliders"></i></span>
+          Search Thresholds
+        </h3>
+        <div class="status">
+          <i class="fa-solid fa-chevron-down chevron"></i>
+        </div>
+      </div>
+      <div class="section-body">
+        <div class="toggle-row">
+          <div class="toggle-info">
+            <h4>Vector Similarity Threshold</h4>
+            <p>Minimum similarity score for results (current: 0.75)</p>
+          </div>
+          <input type="range" style="width: 120px; accent-color: var(--accent);" min="0" max="100" value="75">
+        </div>
+        <div class="toggle-row">
+          <div class="toggle-info">
+            <h4>Max Results Per Query</h4>
+            <p>Maximum number of results returned (current: 50)</p>
+          </div>
+          <input type="number" class="form-input" style="width: 80px; text-align: center;" value="50">
+        </div>
+        <div class="toggle-row">
+          <div class="toggle-info">
+            <h4>Include Full-Text Results</h4>
+            <p>Hybrid search combining vector and full-text results</p>
+          </div>
+          <div class="toggle on"></div>
+        </div>
+        <div class="toggle-row">
+          <div class="toggle-info">
+            <h4>Auto-Sync on Record Change</h4>
+            <p>Automatically update vectors when entity records change</p>
+          </div>
+          <div class="toggle on"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Save Bar -->
+    <div class="save-bar">
+      <div class="unsaved"><i class="fa-solid fa-circle-exclamation"></i> You have unsaved changes</div>
+      <div style="display: flex; gap: 0.5rem;">
+        <button class="btn btn-outline">Discard</button>
+        <button class="btn btn-primary"><i class="fa-solid fa-save"></i> Save Changes</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

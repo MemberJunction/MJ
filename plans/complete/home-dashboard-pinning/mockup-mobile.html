@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mobile Responsive Views - Mockup</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+:root {
+  --bg-page: #f4f6f9; --bg-surface: #ffffff; --bg-surface-card: #f8f9fb;
+  --bg-surface-sunken: #f0f2f5; --bg-surface-hover: #eef1f5;
+  --text-primary: #1e293b; --text-secondary: #475569; --text-muted: #94a3b8;
+  --text-disabled: #cbd5e1; --text-inverse: #ffffff;
+  --border-default: #e2e8f0; --border-focus: #264FAF;
+  --brand-primary: #264FAF; --brand-primary-hover: #1e3f8f;
+  --status-warning: #f59e0b; --status-error: #ef4444; --status-success: #22c55e;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.05); --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+  --shadow-lg: 0 8px 24px rgba(0,0,0,0.12);
+  --radius-sm: 6px; --radius-md: 8px; --radius-lg: 12px; --radius-xl: 16px;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #e2e8f0; color: var(--text-primary); line-height: 1.5; }
+
+/* Layout: side-by-side phone frames */
+.mockup-page { padding: 32px; max-width: 1600px; margin: 0 auto; }
+.mockup-page > h1 { font-size: 24px; font-weight: 700; margin-bottom: 8px; }
+.mockup-page > p { font-size: 14px; color: var(--text-muted); margin-bottom: 32px; }
+.phone-row { display: flex; flex-wrap: wrap; gap: 32px; margin-bottom: 48px; align-items: flex-start; }
+
+/* Phone frame */
+.phone-frame { width: 375px; background: var(--bg-surface); border-radius: 24px; box-shadow: var(--shadow-lg), 0 0 0 8px #1e293b; overflow: hidden; flex-shrink: 0; }
+.phone-notch { height: 28px; background: #1e293b; display: flex; align-items: center; justify-content: center; }
+.phone-notch .notch { width: 80px; height: 6px; background: #334155; border-radius: 3px; }
+.phone-label { padding: 8px 16px; background: #fef3c7; font-size: 11px; font-weight: 700; color: #92400e; text-transform: uppercase; letter-spacing: 0.5px; text-align: center; border-bottom: 1px solid #fcd34d; }
+.phone-screen { max-height: 700px; overflow-y: auto; }
+
+/* Mini shell header */
+.m-header { height: 48px; background: var(--bg-surface); border-bottom: 1px solid var(--border-default); display: flex; align-items: center; padding: 0 12px; gap: 8px; position: sticky; top: 0; z-index: 10; }
+.m-header .logo { font-weight: 700; color: var(--brand-primary); font-size: 15px; }
+.m-header .app-badge { background: var(--brand-primary); color: var(--text-inverse); padding: 3px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+.m-header .spacer { flex: 1; }
+.m-header .avatar { width: 30px; height: 30px; border-radius: 50%; background: var(--bg-surface-sunken); display: flex; align-items: center; justify-content: center; color: var(--text-muted); font-size: 12px; border: 2px solid var(--border-default); }
+
+/* Mobile home content */
+.m-home { padding: 16px; }
+.m-greeting h1 { font-size: 22px; font-weight: 600; margin-bottom: 2px; }
+.m-greeting .date { font-size: 13px; color: var(--text-muted); margin-bottom: 20px; }
+
+/* Section header */
+.m-section-header { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+.m-section-header h2 { font-size: 15px; font-weight: 600; color: var(--text-secondary); display: flex; align-items: center; gap: 6px; }
+.m-section-header h2 i { font-size: 13px; color: var(--text-muted); }
+.m-section-header .actions { margin-left: auto; display: flex; gap: 6px; }
+.m-section-header .actions button { padding: 4px 10px; border-radius: var(--radius-sm); border: 1px solid var(--border-default); background: var(--bg-surface); color: var(--text-secondary); font-size: 11px; cursor: pointer; display: flex; align-items: center; gap: 4px; }
+.m-section-header .actions button.primary { background: var(--brand-primary); color: var(--text-inverse); border-color: var(--brand-primary); }
+.m-section-header .actions button.done { background: var(--status-success); color: var(--text-inverse); border-color: var(--status-success); }
+
+/* Mobile pin grid: 2 columns */
+.m-pin-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+.m-pin-card { background: var(--bg-surface); border-radius: var(--radius-md); border: 1px solid var(--border-default); overflow: hidden; }
+.m-pin-thumb { width: 100%; aspect-ratio: 16/10; overflow: hidden; }
+.m-pin-thumb.gradient { display: flex; align-items: center; justify-content: center; color: white; }
+.m-pin-thumb.gradient i { font-size: 22px; opacity: 0.9; }
+.m-pin-thumb.icon-mode { display: flex; align-items: center; justify-content: center; }
+.m-pin-thumb.icon-mode i { font-size: 26px; opacity: 0.6; }
+.m-pin-info { padding: 8px 10px; }
+.m-pin-name { font-size: 12px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 2px; }
+.m-pin-meta { display: flex; align-items: center; gap: 4px; font-size: 10px; color: var(--text-muted); }
+.m-pin-meta .app-badge { background: var(--bg-surface-card); padding: 1px 4px; border-radius: 3px; font-size: 9px; font-weight: 600; }
+
+/* Mobile group header */
+.m-group-header { grid-column: 1 / -1; display: flex; align-items: center; gap: 6px; padding: 6px 0 2px; margin-top: 4px; }
+.m-group-header .name { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.4px; }
+.m-group-header .line { flex: 1; height: 1px; background: var(--border-default); }
+
+/* Mobile app cards */
+.m-apps-grid { display: flex; flex-direction: column; gap: 10px; }
+.m-app-card { display: flex; align-items: center; gap: 12px; padding: 14px; background: var(--bg-surface-card); border-radius: var(--radius-md); border: 1px solid var(--border-default); }
+.m-app-icon { width: 40px; height: 40px; border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.m-app-icon i { font-size: 16px; }
+.m-app-info h3 { font-size: 14px; font-weight: 600; }
+.m-app-info p { font-size: 12px; color: var(--text-muted); }
+.m-app-arrow { margin-left: auto; color: var(--text-disabled); font-size: 12px; }
+
+/* Mobile recents: horizontal scroll */
+.m-recents-row { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+.m-recent-chip { flex-shrink: 0; display: flex; align-items: center; gap: 6px; padding: 8px 12px; background: var(--bg-surface); border-radius: var(--radius-md); border: 1px solid var(--border-default); white-space: nowrap; }
+.m-recent-chip i { font-size: 11px; color: var(--text-muted); }
+.m-recent-chip span { font-size: 12px; color: var(--text-primary); font-weight: 500; }
+
+/* Mobile FAB */
+.m-fab { position: absolute; bottom: 16px; right: 16px; width: 44px; height: 44px; border: none; border-radius: 50%; background: var(--brand-primary); color: var(--text-inverse); font-size: 16px; display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow-md); }
+.m-fab .badge { position: absolute; top: -3px; right: -3px; min-width: 16px; height: 16px; padding: 0 4px; background: var(--status-error); color: var(--text-inverse); font-size: 9px; font-weight: 700; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+
+/* Edit mode overlay controls */
+.m-edit-overlay { position: absolute; top: 4px; left: 4px; right: 4px; display: flex; justify-content: space-between; z-index: 5; }
+.m-drag-handle, .m-edit-btn { width: 24px; height: 24px; background: rgba(255,255,255,0.9); border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 11px; color: var(--text-muted); box-shadow: var(--shadow-sm); border: 1px solid var(--border-default); }
+.m-edit-btn.delete { color: var(--status-error); }
+.m-edit-btns { display: flex; gap: 3px; }
+
+/* Edit mode banner */
+.m-edit-banner { background: color-mix(in srgb, var(--brand-primary) 8%, var(--bg-surface)); border: 1px solid color-mix(in srgb, var(--brand-primary) 25%, var(--border-default)); border-radius: var(--radius-md); padding: 8px 12px; margin-bottom: 14px; font-size: 11px; color: var(--text-secondary); display: flex; align-items: center; gap: 8px; }
+.m-edit-banner i { color: var(--brand-primary); }
+
+/* Add pin card */
+.m-add-card { border: 2px dashed var(--border-default); display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 120px; color: var(--text-muted); gap: 4px; border-radius: var(--radius-md); background: var(--bg-surface); }
+.m-add-card i { font-size: 20px; }
+.m-add-card span { font-size: 11px; font-weight: 600; }
+
+/* Mobile slide panel (full width) */
+.m-slide-panel { position: absolute; top: 48px; left: 0; right: 0; bottom: 0; background: var(--bg-surface); z-index: 20; display: flex; flex-direction: column; }
+.m-panel-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid var(--border-default); background: var(--bg-surface-card); }
+.m-panel-header h3 { font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+.m-panel-header h3 i { color: var(--brand-primary); font-size: 14px; }
+.m-panel-close { width: 28px; height: 28px; border: none; border-radius: var(--radius-sm); background: transparent; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.m-search { padding: 12px 16px; border-bottom: 1px solid var(--border-default); }
+.m-search-input { display: flex; align-items: center; gap: 8px; background: var(--bg-surface-card); border: 1px solid var(--border-default); border-radius: var(--radius-md); padding: 8px 10px; }
+.m-search-input i { color: var(--text-muted); font-size: 13px; }
+.m-search-input input { border: none; outline: none; background: transparent; font-size: 13px; flex: 1; }
+.m-panel-results { flex: 1; overflow-y: auto; padding: 12px 16px; }
+.m-panel-section-title { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 8px; padding-bottom: 4px; border-bottom: 1px solid var(--border-default); display: flex; align-items: center; gap: 6px; }
+.m-panel-section-title i { font-size: 11px; }
+.m-panel-item { display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: var(--radius-md); margin-bottom: 4px; }
+.m-panel-item-icon { width: 32px; height: 32px; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.m-panel-item-icon i { font-size: 12px; }
+.m-panel-item-info { flex: 1; min-width: 0; }
+.m-panel-item-name { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.m-panel-item-sub { font-size: 11px; color: var(--text-muted); }
+.m-panel-item-action button { padding: 4px 10px; border-radius: var(--radius-sm); font-size: 11px; font-weight: 600; cursor: pointer; }
+.m-pin-btn { background: var(--brand-primary); color: var(--text-inverse); border: 1px solid var(--brand-primary); }
+.m-pinned-badge { background: transparent; color: var(--status-success); border: 1px solid var(--status-success); font-size: 11px; }
+
+/* Context menu on mobile */
+.m-context { position: absolute; background: var(--bg-surface); border: 1px solid var(--border-default); border-radius: var(--radius-md); box-shadow: var(--shadow-lg); min-width: 180px; z-index: 30; overflow: hidden; }
+.m-context-item { display: flex; align-items: center; gap: 8px; padding: 10px 12px; font-size: 13px; }
+.m-context-item i { width: 14px; text-align: center; color: var(--text-secondary); font-size: 12px; }
+.m-context-item.new i { color: var(--brand-primary); }
+.m-context-item.new { font-weight: 500; }
+.m-context-divider { height: 1px; background: var(--border-default); margin: 3px 0; }
+
+/* Toast */
+.m-toast { position: absolute; bottom: 72px; left: 50%; transform: translateX(-50%); background: var(--text-primary); color: var(--text-inverse); padding: 8px 16px; border-radius: var(--radius-md); font-size: 12px; font-weight: 500; display: flex; align-items: center; gap: 6px; box-shadow: var(--shadow-lg); white-space: nowrap; z-index: 40; }
+.m-toast i { color: var(--status-success); }
+
+.section-break { margin: 16px 0; border: none; border-top: 1px solid var(--border-default); }
+</style>
+</head>
+<body>
+
+<div class="mockup-page">
+  <h1>Mobile Responsive Views</h1>
+  <p>All views at 375px width (iPhone SE / standard mobile). Pins use a 2-column grid, apps stack vertically, recents scroll horizontally.</p>
+
+  <!-- ROW 1: Normal view + Edit mode -->
+  <div class="phone-row">
+
+    <!-- Phone 1: Normal Home with Pins -->
+    <div class="phone-frame">
+      <div class="phone-notch"><div class="notch"></div></div>
+      <div class="phone-label">Home Dashboard - Normal View</div>
+      <div class="phone-screen">
+        <div class="m-header">
+          <span class="logo">MJ</span>
+          <span class="app-badge"><i class="fa-solid fa-home" style="margin-right:3px"></i> Home</span>
+          <div class="spacer"></div>
+          <div class="avatar"><i class="fa-solid fa-user"></i></div>
+        </div>
+        <div class="m-home">
+          <div class="m-greeting">
+            <h1>Good morning, Sarah</h1>
+            <p class="date">Monday, March 31</p>
+          </div>
+
+          <div class="m-section-header">
+            <h2><i class="fa-solid fa-thumbtack"></i> Pinned</h2>
+            <div class="actions">
+              <button class="primary"><i class="fa-solid fa-plus"></i></button>
+              <button><i class="fa-solid fa-pen"></i></button>
+            </div>
+          </div>
+
+          <div class="m-pin-grid">
+            <div class="m-pin-card">
+              <div class="m-pin-thumb gradient" style="background:linear-gradient(135deg,#667eea,#764ba2)"><i class="fa-solid fa-chart-line"></i></div>
+              <div class="m-pin-info">
+                <div class="m-pin-name">Sales Dashboard</div>
+                <div class="m-pin-meta"><i class="fa-solid fa-gauge-high"></i> <span class="app-badge" style="color:#d32f2f">AI</span></div>
+              </div>
+            </div>
+            <div class="m-pin-card">
+              <div class="m-pin-thumb gradient" style="background:linear-gradient(135deg,#11998e,#38ef7d)"><i class="fa-solid fa-table"></i></div>
+              <div class="m-pin-info">
+                <div class="m-pin-name">Active Contacts</div>
+                <div class="m-pin-meta"><i class="fa-solid fa-table-list"></i> <span class="app-badge" style="color:#5c6bc0">Data Exp.</span></div>
+              </div>
+            </div>
+            <div class="m-pin-card">
+              <div class="m-pin-thumb icon-mode" style="background:color-mix(in srgb,#5c6bc0 10%,#f8f9fb)"><i class="fa-solid fa-database" style="color:#5c6bc0"></i></div>
+              <div class="m-pin-info">
+                <div class="m-pin-name">Top 10 Customers</div>
+                <div class="m-pin-meta"><i class="fa-solid fa-database"></i> <span class="app-badge" style="color:#5c6bc0">Data Exp.</span></div>
+              </div>
+            </div>
+            <div class="m-pin-card">
+              <div class="m-pin-thumb gradient" style="background:linear-gradient(135deg,#f093fb,#f5576c)"><i class="fa-solid fa-chart-bar"></i></div>
+              <div class="m-pin-info">
+                <div class="m-pin-name">Q1 Revenue</div>
+                <div class="m-pin-meta"><i class="fa-solid fa-chart-bar"></i> <span class="app-badge" style="color:#e65100">Finance</span></div>
+              </div>
+            </div>
+
+            <div class="m-group-header">
+              <span class="name">Analytics</span>
+              <div class="line"></div>
+            </div>
+            <div class="m-pin-card">
+              <div class="m-pin-thumb gradient" style="background:linear-gradient(135deg,#4facfe,#00f2fe)"><i class="fa-solid fa-chart-pie"></i></div>
+              <div class="m-pin-info">
+                <div class="m-pin-name">Monthly KPIs</div>
+                <div class="m-pin-meta"><i class="fa-solid fa-gauge-high"></i> <span class="app-badge" style="color:#264FAF">Admin</span></div>
+              </div>
+            </div>
+            <div class="m-pin-card">
+              <div class="m-pin-thumb gradient" style="background:linear-gradient(135deg,#fa709a,#fee140)"><i class="fa-solid fa-users"></i></div>
+              <div class="m-pin-info">
+                <div class="m-pin-name">Team Perf</div>
+                <div class="m-pin-meta"><i class="fa-solid fa-gauge-high"></i> <span class="app-badge" style="color:#264FAF">Admin</span></div>
+              </div>
+            </div>
+          </div>
+
+          <hr class="section-break">
+
+          <div class="m-section-header"><h2><i class="fa-solid fa-grid-2"></i> Apps</h2></div>
+          <div class="m-apps-grid">
+            <div class="m-app-card">
+              <div class="m-app-icon" style="background:color-mix(in srgb,#d32f2f 12%,transparent)"><i class="fa-solid fa-robot" style="color:#d32f2f"></i></div>
+              <div class="m-app-info"><h3>AI</h3><p>AI Administration</p></div>
+              <div class="m-app-arrow"><i class="fa-solid fa-chevron-right"></i></div>
+            </div>
+            <div class="m-app-card">
+              <div class="m-app-icon" style="background:color-mix(in srgb,#5c6bc0 12%,transparent)"><i class="fa-solid fa-compass" style="color:#5c6bc0"></i></div>
+              <div class="m-app-info"><h3>Data Explorer</h3><p>Explore data</p></div>
+              <div class="m-app-arrow"><i class="fa-solid fa-chevron-right"></i></div>
+            </div>
+          </div>
+
+          <hr class="section-break">
+
+          <div class="m-section-header"><h2><i class="fa-solid fa-clock-rotate-left"></i> Recent</h2></div>
+          <div class="m-recents-row">
+            <div class="m-recent-chip"><i class="fa-solid fa-gauge-high"></i><span>Sales Dash</span></div>
+            <div class="m-recent-chip"><i class="fa-solid fa-users"></i><span>Contacts</span></div>
+            <div class="m-recent-chip"><i class="fa-solid fa-chart-bar"></i><span>Q1 Report</span></div>
+            <div class="m-recent-chip"><i class="fa-solid fa-user-tie"></i><span>John A.</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Phone 2: Edit Mode -->
+    <div class="phone-frame">
+      <div class="phone-notch"><div class="notch"></div></div>
+      <div class="phone-label">Edit Mode - Drag to Reorder</div>
+      <div class="phone-screen">
+        <div class="m-header">
+          <span class="logo">MJ</span>
+          <span class="app-badge"><i class="fa-solid fa-home" style="margin-right:3px"></i> Home</span>
+          <div class="spacer"></div>
+          <div class="avatar"><i class="fa-solid fa-user"></i></div>
+        </div>
+        <div class="m-home">
+          <div class="m-greeting">
+            <h1>Good morning, Sarah</h1>
+            <p class="date">Monday, March 31</p>
+          </div>
+
+          <div class="m-section-header">
+            <h2><i class="fa-solid fa-thumbtack"></i> Pinned</h2>
+            <div class="actions"><button class="done"><i class="fa-solid fa-check"></i> Done</button></div>
+          </div>
+
+          <div class="m-edit-banner"><i class="fa-solid fa-arrows-up-down-left-right"></i> Drag to reorder. Tap names to rename.</div>
+
+          <div class="m-pin-grid">
+            <div class="m-pin-card" style="position:relative;">
+              <div class="m-edit-overlay">
+                <div class="m-drag-handle"><i class="fa-solid fa-grip-vertical"></i></div>
+                <div class="m-edit-btns">
+                  <div class="m-edit-btn"><i class="fa-solid fa-pen"></i></div>
+                  <div class="m-edit-btn delete"><i class="fa-solid fa-xmark"></i></div>
+                </div>
+              </div>
+              <div class="m-pin-thumb gradient" style="background:linear-gradient(135deg,#667eea,#764ba2)"><i class="fa-solid fa-chart-line"></i></div>
+              <div class="m-pin-info">
+                <div class="m-pin-name">Sales Dashboard</div>
+                <div class="m-pin-meta"><i class="fa-solid fa-gauge-high"></i> <span class="app-badge" style="color:#d32f2f">AI</span></div>
+              </div>
+            </div>
+
+            <div class="m-pin-card" style="position:relative; opacity:0.5; border-style:dashed; border-color:var(--brand-primary); transform:rotate(2deg);">
+              <div class="m-edit-overlay">
+                <div class="m-drag-handle"><i class="fa-solid fa-grip-vertical"></i></div>
+                <div class="m-edit-btns">
+                  <div class="m-edit-btn"><i class="fa-solid fa-pen"></i></div>
+                  <div class="m-edit-btn delete"><i class="fa-solid fa-xmark"></i></div>
+                </div>
+              </div>
+              <div class="m-pin-thumb gradient" style="background:linear-gradient(135deg,#11998e,#38ef7d)"><i class="fa-solid fa-table"></i></div>
+              <div class="m-pin-info">
+                <div class="m-pin-name">Active Contacts</div>
+                <div class="m-pin-meta"><i class="fa-solid fa-table-list"></i> <span class="app-badge">Data Exp.</span></div>
+              </div>
+            </div>
+
+            <!-- Drop target -->
+            <div style="border:2px dashed var(--brand-primary); border-radius:var(--radius-md); min-height:120px; background:color-mix(in srgb,var(--brand-primary) 6%,var(--bg-surface)); display:flex; align-items:center; justify-content:center;">
+              <span style="font-size:11px; color:var(--brand-primary); font-weight:600;">Drop here</span>
+            </div>
+
+            <div class="m-pin-card" style="position:relative;">
+              <div class="m-edit-overlay">
+                <div class="m-drag-handle"><i class="fa-solid fa-grip-vertical"></i></div>
+                <div class="m-edit-btns">
+                  <div class="m-edit-btn"><i class="fa-solid fa-pen"></i></div>
+                  <div class="m-edit-btn delete"><i class="fa-solid fa-xmark"></i></div>
+                </div>
+              </div>
+              <div class="m-pin-thumb icon-mode" style="background:color-mix(in srgb,#5c6bc0 10%,#f8f9fb)"><i class="fa-solid fa-database" style="color:#5c6bc0"></i></div>
+              <div class="m-pin-info">
+                <div class="m-pin-name">Top 10 Customers</div>
+                <div class="m-pin-meta"><i class="fa-solid fa-database"></i> <span class="app-badge">Data Exp.</span></div>
+              </div>
+            </div>
+
+            <div class="m-add-card">
+              <i class="fa-solid fa-plus"></i>
+              <span>Add Pin</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Phone 3: Add Pin Panel -->
+    <div class="phone-frame">
+      <div class="phone-notch"><div class="notch"></div></div>
+      <div class="phone-label">Add Pin Panel (Full Width)</div>
+      <div class="phone-screen" style="position:relative; height:660px;">
+        <div class="m-header">
+          <span class="logo">MJ</span>
+          <span class="app-badge"><i class="fa-solid fa-home" style="margin-right:3px"></i> Home</span>
+          <div class="spacer"></div>
+          <div class="avatar"><i class="fa-solid fa-user"></i></div>
+        </div>
+
+        <div class="m-slide-panel">
+          <div class="m-panel-header">
+            <h3><i class="fa-solid fa-thumbtack"></i> Add Pin</h3>
+            <button class="m-panel-close"><i class="fa-solid fa-xmark"></i></button>
+          </div>
+          <div class="m-search">
+            <div class="m-search-input">
+              <i class="fa-solid fa-magnifying-glass"></i>
+              <input placeholder="Search resources..." />
+            </div>
+          </div>
+          <div class="m-panel-results">
+            <div class="m-panel-section-title"><i class="fa-solid fa-gauge-high"></i> Dashboards</div>
+            <div class="m-panel-item">
+              <div class="m-panel-item-icon" style="background:color-mix(in srgb,#d32f2f 10%,#f8f9fb)"><i class="fa-solid fa-chart-line" style="color:#d32f2f"></i></div>
+              <div class="m-panel-item-info">
+                <div class="m-panel-item-name">Sales Dashboard</div>
+                <div class="m-panel-item-sub">AI App</div>
+              </div>
+              <div class="m-panel-item-action"><button class="m-pinned-badge"><i class="fa-solid fa-check"></i> Pinned</button></div>
+            </div>
+            <div class="m-panel-item">
+              <div class="m-panel-item-icon" style="background:color-mix(in srgb,#264FAF 10%,#f8f9fb)"><i class="fa-solid fa-chart-area" style="color:#264FAF"></i></div>
+              <div class="m-panel-item-info">
+                <div class="m-panel-item-name">Pipeline Overview</div>
+                <div class="m-panel-item-sub">CRM App</div>
+              </div>
+              <div class="m-panel-item-action"><button class="m-pin-btn"><i class="fa-solid fa-plus"></i> Pin</button></div>
+            </div>
+            <div class="m-panel-item">
+              <div class="m-panel-item-icon" style="background:color-mix(in srgb,#264FAF 10%,#f8f9fb)"><i class="fa-solid fa-gauge-high" style="color:#264FAF"></i></div>
+              <div class="m-panel-item-info">
+                <div class="m-panel-item-name">ERD</div>
+                <div class="m-panel-item-sub">Admin App</div>
+              </div>
+              <div class="m-panel-item-action"><button class="m-pin-btn"><i class="fa-solid fa-plus"></i> Pin</button></div>
+            </div>
+
+            <div style="margin-top:16px"></div>
+            <div class="m-panel-section-title"><i class="fa-solid fa-table-list"></i> Views</div>
+            <div class="m-panel-item">
+              <div class="m-panel-item-icon" style="background:color-mix(in srgb,#5c6bc0 10%,#f8f9fb)"><i class="fa-solid fa-users" style="color:#5c6bc0"></i></div>
+              <div class="m-panel-item-info">
+                <div class="m-panel-item-name">Active Contacts</div>
+                <div class="m-panel-item-sub">Data Explorer</div>
+              </div>
+              <div class="m-panel-item-action"><button class="m-pinned-badge"><i class="fa-solid fa-check"></i> Pinned</button></div>
+            </div>
+            <div class="m-panel-item">
+              <div class="m-panel-item-icon" style="background:color-mix(in srgb,#5c6bc0 10%,#f8f9fb)"><i class="fa-solid fa-handshake" style="color:#5c6bc0"></i></div>
+              <div class="m-panel-item-info">
+                <div class="m-panel-item-name">Open Deals</div>
+                <div class="m-panel-item-sub">Data Explorer</div>
+              </div>
+              <div class="m-panel-item-action"><button class="m-pin-btn"><i class="fa-solid fa-plus"></i> Pin</button></div>
+            </div>
+
+            <div style="margin-top:16px"></div>
+            <div class="m-panel-section-title"><i class="fa-solid fa-database"></i> Queries</div>
+            <div class="m-panel-item">
+              <div class="m-panel-item-icon" style="background:color-mix(in srgb,#5c6bc0 10%,#f8f9fb)"><i class="fa-solid fa-database" style="color:#5c6bc0"></i></div>
+              <div class="m-panel-item-info">
+                <div class="m-panel-item-name">Top 10 Customers</div>
+                <div class="m-panel-item-sub">Data Explorer</div>
+              </div>
+              <div class="m-panel-item-action"><button class="m-pinned-badge"><i class="fa-solid fa-check"></i> Pinned</button></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ROW 2: Avatar menu + toast on mobile -->
+  <div class="phone-row">
+
+    <!-- Phone 4: Avatar menu with Pin to Home -->
+    <div class="phone-frame">
+      <div class="phone-notch"><div class="notch"></div></div>
+      <div class="phone-label">Avatar Menu - Pin to Home</div>
+      <div class="phone-screen" style="position:relative; height:500px;">
+        <div class="m-header">
+          <span class="logo">MJ</span>
+          <span class="app-badge"><i class="fa-solid fa-robot" style="margin-right:3px"></i> AI</span>
+          <div class="spacer"></div>
+          <div class="avatar" style="border-color:var(--brand-primary)"><i class="fa-solid fa-user" style="color:var(--brand-primary)"></i></div>
+        </div>
+
+        <!-- Avatar dropdown -->
+        <div class="m-context" style="top:52px; right:8px; min-width:220px;">
+          <div style="padding:10px 12px; border-bottom:1px solid var(--border-default); background:var(--bg-surface-card);">
+            <div style="font-size:13px; font-weight:600;">Sarah Johnson</div>
+            <div style="font-size:11px; color:var(--text-muted);">sarah@company.com</div>
+          </div>
+          <div class="m-context-item"><i class="fa-solid fa-user"></i> My Profile</div>
+          <div class="m-context-item new"><i class="fa-solid fa-house-chimney"></i> Pin to Home</div>
+          <div class="m-context-divider"></div>
+          <div class="m-context-item"><i class="fa-solid fa-sun"></i> Theme</div>
+          <div class="m-context-item"><i class="fa-solid fa-rotate"></i> Reset Layout</div>
+          <div class="m-context-divider"></div>
+          <div class="m-context-item" style="color:var(--status-error)"><i class="fa-solid fa-right-from-bracket" style="color:var(--status-error)"></i> Sign Out</div>
+        </div>
+
+        <div style="flex:1; background:var(--bg-page); display:flex; align-items:center; justify-content:center; color:var(--text-disabled); font-size:13px; padding:40px; text-align:center;">
+          <div><i class="fa-solid fa-robot" style="font-size:36px; display:block; margin-bottom:8px;"></i>AI Monitor Content</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Phone 5: Success toast -->
+    <div class="phone-frame">
+      <div class="phone-notch"><div class="notch"></div></div>
+      <div class="phone-label">Pin Success Toast</div>
+      <div class="phone-screen" style="position:relative; height:500px;">
+        <div class="m-header">
+          <span class="logo">MJ</span>
+          <span class="app-badge"><i class="fa-solid fa-robot" style="margin-right:3px"></i> AI</span>
+          <div class="spacer"></div>
+          <div class="avatar"><i class="fa-solid fa-user"></i></div>
+        </div>
+
+        <div style="flex:1; background:var(--bg-page); display:flex; align-items:center; justify-content:center; color:var(--text-disabled); font-size:13px; padding:40px; text-align:center;">
+          <div><i class="fa-solid fa-robot" style="font-size:36px; display:block; margin-bottom:8px;"></i>AI Monitor Content</div>
+        </div>
+
+        <div class="m-toast">
+          <i class="fa-solid fa-check-circle"></i>
+          Pinned to Home
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+</body>
+</html>

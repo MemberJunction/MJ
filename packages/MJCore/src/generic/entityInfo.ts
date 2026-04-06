@@ -506,6 +506,24 @@ export class EntityFieldInfo extends BaseInfo {
      * Parsed from the RelatedEntityJoinFields column.
      */
     RelatedEntityJoinFields: string = null
+    /**
+     * The name of the TypeScript interface/type for this JSON field.
+     * When set, CodeGen will emit a strongly-typed getter/setter using this type
+     * instead of the default string getter/setter.
+     */
+    JSONType: string = null;
+    /**
+     * If true, the field holds a JSON array of JSONType items.
+     * The getter returns JSONType[] | null and the setter accepts JSONType[] | null.
+     */
+    JSONTypeIsArray: boolean = false;
+    /**
+     * Raw TypeScript code emitted by CodeGen above the entity class definition.
+     * Typically contains the interface/type definition referenced by JSONType.
+     * Can include imports, multiple types, or any valid TypeScript.
+     */
+    JSONTypeDefinition: string = null;
+
     RelatedEntityDisplayType: 'Search' | 'Dropdown' = null
     EntityIDFieldName: string = null
     __mj_CreatedAt: Date = null
@@ -1494,13 +1512,13 @@ export class EntityInfo extends BaseInfo {
     private _FieldCategories: Record<string, FieldCategoryInfo> | null = null
     private _OrganicKeys: EntityOrganicKeyInfo[] = []
     _hasIdField: boolean = false
-    _virtualCount: number = 0 
-    _manyToManyCount: number = 0 
+    _virtualCount: number = 0
+    _manyToManyCount: number = 0
     _oneToManyCount: number = 0
     _floatCount: number = 0
 
     /**
-     * Returns the primary key field for the entity. For entities with a composite primary key, use the PrimaryKeys property which returns all. 
+     * Returns the primary key field for the entity. For entities with a composite primary key, use the PrimaryKeys property which returns all.
      * In the case of a composite primary key, the PrimaryKey property will return the first field in the sequence of the primary key fields.
      */
     get FirstPrimaryKey(): EntityFieldInfo {

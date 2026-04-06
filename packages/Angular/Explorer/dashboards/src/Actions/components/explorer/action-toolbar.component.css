@@ -32,10 +32,6 @@
   flex: 1;
 }
 
-.search-container kendo-textbox {
-  width: 100%;
-}
-
 .search-container i.fa-search {
   font-size: 13px;
   color: var(--mj-text-muted);
@@ -227,10 +223,6 @@
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
-}
-
-.active-filters kendo-chip {
-  font-size: 12px;
 }
 
 /* Results Count */

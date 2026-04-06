@@ -13,7 +13,7 @@
 
 import { MJAIAgentTypeEntity,  MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity } from '@memberjunction/core-entities';
 import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptEntityExtended, MJAIAgentEntityExtended } from "@memberjunction/ai-core-plus";
-import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled } from '@memberjunction/core';
+import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider } from '@memberjunction/core';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
@@ -50,7 +50,10 @@ import {
     AgentResponseForm,
     AgentRequestAssignmentStrategy,
     parseAssignmentStrategy,
-    mergeAssignmentStrategies
+    mergeAssignmentStrategies,
+    AgentClientToolInvocation,
+    ClientToolResultSummary,
+    ClientToolMetadata
 } from '@memberjunction/ai-core-plus';
 import { MJActionEntityExtended, ActionResult, ActionParam, AIDirective } from '@memberjunction/actions-base';
 import { AgentRunner } from './AgentRunner';
@@ -58,6 +61,7 @@ import { PayloadManager, PayloadManagerResult, PayloadChangeResultSummary } from
 import { ScratchpadManager } from './ScratchpadManager';
 import { AgentPayloadChangeRequest } from '@memberjunction/ai-core-plus';
 import { AgentDataPreloader } from './AgentDataPreloader';
+import { ClientToolRequestManager } from './ClientToolRequestManager';
 import { ConversationMessageResolver } from './utils/ConversationMessageResolver';
 import { ForEachOperation, WhileOperation } from '@memberjunction/ai-core-plus';
 import _ from 'lodash';
@@ -195,6 +199,14 @@ export class BaseAgent {
      * @private
      */
     private _metadata: Metadata = new Metadata();
+
+    /**
+     * Active per-request metadata provider, set at the start of Execute().
+     * Defaults to the global Metadata.Provider; overridden when a per-request
+     * provider is passed through ExecuteAgentParams.provider for server isolation.
+     * @private
+     */
+    private _activeProvider: IMetadataProvider = Metadata.Provider;
 
     /**
      * This is state information that is specific to the agent type. BaseAgent doesn't know what
@@ -1047,6 +1059,9 @@ export class BaseAgent {
      * ```
      */
     public async Execute<C = any, R = any>(params: ExecuteAgentParams<C>): Promise<ExecuteAgentResult<R>> {
+        // Capture per-request provider for the duration of this execution so all entity
+        // saves go through the isolated provider, never the global singleton's transaction.
+        this._activeProvider = params.provider || Metadata.Provider;
         try {
             this.logStatus(`🤖 Starting execution of agent '${params.agent.Name}'`, true, params);
 
@@ -1982,6 +1997,9 @@ export class BaseAgent {
             this.logStatus(`🔑 Using ${params.apiKeys.length} API key(s) provided at runtime`, true, params);
         }
 
+        // Thread the per-request provider so prompt run records are saved through the isolated provider
+        promptParams.provider = params.provider || this._activeProvider;
+
         return promptParams;
     }
 
@@ -2060,6 +2078,9 @@ export class BaseAgent {
                 return nextStep;
             case 'While':
                 // While loops are valid - no additional validation needed
+                return nextStep;
+            case 'ClientTools' as typeof nextStep.step:
+                // Client tools are valid - execution handled by executeClientToolsStep
                 return nextStep;
             default:
                 // if we get here, the next step is not recognized, we can return a retry step
@@ -3174,9 +3195,9 @@ export class BaseAgent {
                     ? currentStepCount - (msg as AgentChatMessage).metadata!.turnAdded
                     : 0,
                 tokens: this.estimateTokens(msg.content),
-                isActionResult: (msg as AgentChatMessage).metadata?.messageType === 'action-result'
+                isToolResult: this.IsToolResultMessage(msg)
             }))
-            .filter(c => c.isActionResult && c.age >= minAge)
+            .filter(c => c.isToolResult && c.age >= minAge)
             .sort((a, b) => b.age - a.age); // Oldest first
 
         // Remove messages until we've saved enough
@@ -3243,10 +3264,10 @@ export class BaseAgent {
                     ? currentStepCount - (msg as AgentChatMessage).metadata!.turnAdded
                     : 0,
                 tokens: this.estimateTokens(msg.content),
-                isActionResult: (msg as AgentChatMessage).metadata?.messageType === 'action-result',
+                isToolResult: this.IsToolResultMessage(msg),
                 alreadyCompacted: (msg as AgentChatMessage).metadata?.wasCompacted === true
             }))
-            .filter(c => c.isActionResult && c.age >= minAge && !c.alreadyCompacted)
+            .filter(c => c.isToolResult && c.age >= minAge && !c.alreadyCompacted)
             .sort((a, b) => b.age - a.age); // Oldest first
 
         for (const candidate of candidates) {
@@ -3324,10 +3345,10 @@ export class BaseAgent {
                 message: msg,
                 index: index,
                 tokens: this.estimateTokens(msg.content),
-                isActionResult: (msg as AgentChatMessage).metadata?.messageType === 'action-result',
+                isToolResult: this.IsToolResultMessage(msg),
                 alreadyCompacted: (msg as AgentChatMessage).metadata?.wasCompacted === true
             }))
-            .filter(c => c.isActionResult && !c.alreadyCompacted && c.tokens > 200)
+            .filter(c => c.isToolResult && !c.alreadyCompacted && c.tokens > 200)
             .sort((a, b) => b.tokens - a.tokens); // Largest first
 
         for (const candidate of candidates) {
@@ -3714,6 +3735,12 @@ The context is now within limits. Please retry your request with the recovered c
                 runtimePromptParamOverrides
             );
 
+            // Build client tool details for the prompt
+            const clientToolDetails = this.buildClientToolPromptSection(agent, extraData);
+
+            // Build app context section if provided in extraData
+            const appContext = this.buildAppContextSection(extraData);
+
             const contextData: AgentContextData = {
                 agentName: agent.Name,
                 agentDescription: agent.Description,
@@ -3722,6 +3749,8 @@ The context is now within limits. Please retry your request with the recovered c
                 subAgentDetails: this.formatSubAgentDetails(uniqueActiveSubAgents),
                 actionCount: activeActions.length,
                 actionDetails: this.formatActionDetails(activeActions),
+                clientToolDetails: clientToolDetails,
+                appContext: appContext,
             };
 
             // Build the final result with __agentTypePromptParams injected
@@ -3735,7 +3764,11 @@ The context is now within limits. Please retry your request with the recovered c
             if (extraData) {
                 // Spread extraData but don't let it override __agentTypePromptParams
                 // (which was already built with runtime overrides included)
-                const { __agentTypePromptParams: _ignored, ...restExtraData } = extraData;
+                // Spread extraData into the result but exclude properties that were already
+                // processed into formatted prompt sections above. Without this exclusion,
+                // the raw objects from extraData would overwrite the formatted markdown strings
+                // in contextData (e.g., appContext object would replace the markdown string).
+                const { __agentTypePromptParams: _ignored, appContext: _ignoredAppContext, ...restExtraData } = extraData;
                 return {
                     ...result,
                     ...restExtraData
@@ -4102,8 +4135,8 @@ The context is now within limits. Please retry your request with the recovered c
         try {
             this.logStatus(`🤖 Executing sub-agent '${subAgentRequest.name}'`, true, params);
 
-            // Create a new AgentRunner instance
-            const runner = new AgentRunner();
+            // Create a new AgentRunner instance with the same isolated provider
+            const runner = new AgentRunner(params.provider || this._activeProvider);
 
             // Prepare messages for sub-agent using database-configured message mode
             const subAgentMessages = this.prepareSubAgentMessages(
@@ -4285,6 +4318,127 @@ The context is now within limits. Please retry your request with the recovered c
 
             return lines.join('\n');
         }).join('\n\n');
+    }
+
+    /**
+     * Build the client tool prompt section for system prompt injection.
+     *
+     * Tool sources (checked in order, all merged — first registration wins):
+     * 1. Metadata tools from AI Agent Client Tools junction table
+     * 2. Session-level enriched tools from ClientToolRequestManager (set by client SDK)
+     * 3. Tools provided directly in extraData.clientTools (runtime override)
+     */
+    private buildClientToolPromptSection(agent: MJAIAgentEntityExtended, extraData?: Record<string, unknown>): string {
+        const toolMap = new Map<string, ClientToolMetadata>();
+
+        // 1. Metadata tools from junction table (authoritative source)
+        const engine = AIEngine.Instance;
+        const metadataTools = engine.GetClientToolsForAgent(agent.ID);
+        for (const tool of metadataTools) {
+            toolMap.set(tool.Name, {
+                Name: tool.Name,
+                Description: tool.Description,
+                InputSchema: tool.InputSchemaJSON ? JSON.parse(tool.InputSchemaJSON) : {},
+                OutputSchema: tool.OutputSchemaJSON ? JSON.parse(tool.OutputSchemaJSON) : undefined,
+                Category: tool.Category || undefined,
+                DefaultTimeoutMs: tool.DefaultTimeoutMs || undefined
+            });
+        }
+
+        // 2. Session-level enriched tools (client SDK decorated tools)
+        const sessionID = extraData?.sessionID as string | undefined;
+        if (sessionID) {
+            for (const tool of ClientToolRequestManager.Instance.GetSessionTools(sessionID)) {
+                if (!toolMap.has(tool.Name)) {
+                    toolMap.set(tool.Name, tool);
+                }
+            }
+        }
+
+        // 3. Runtime extraData override
+        if (extraData?.clientTools) {
+            for (const tool of extraData.clientTools as ClientToolMetadata[]) {
+                if (!toolMap.has(tool.Name)) {
+                    toolMap.set(tool.Name, tool);
+                }
+            }
+        }
+
+        const tools = Array.from(toolMap.values());
+
+        if (tools.length === 0) {
+            return ''; // No client tools available
+        }
+
+        const lines: string[] = [];
+        lines.push('### Client Tools (execute in the user\'s browser)');
+        lines.push('Client tools run in the user\'s browser and interact with the UI. Use these when you need');
+        lines.push('to navigate the user somewhere, display a specific view, switch dashboard tabs, or show');
+        lines.push('records. When you choose client tools, set nextStep.type to "ClientTools".');
+        lines.push('');
+        lines.push('NOTE: Do NOT use client tools for asking the user questions or collecting input.');
+        lines.push('Use the "Chat" step for that. Client tools are for programmatic UI interaction only.');
+        lines.push('');
+
+        for (const tool of tools) {
+            const categoryTag = tool.Category ? ` [${tool.Category}]` : '';
+            lines.push(`- **${tool.Name}**${categoryTag}: ${tool.Description}`);
+
+            // Show input parameters from InputSchema
+            const props = (tool.InputSchema as Record<string, unknown>)?.properties as Record<string, Record<string, unknown>> | undefined;
+            const required = (tool.InputSchema as Record<string, unknown>)?.required as string[] | undefined;
+            if (props) {
+                const paramParts = Object.entries(props).map(([name, schema]) => {
+                    const req = required?.includes(name) ? '\\*' : '';
+                    const desc = schema.description ? ` — ${schema.description}` : '';
+                    return `\`${name}\`${req}${desc}`;
+                });
+                lines.push(`  Inputs: ${paramParts.join(', ')}`);
+            }
+        }
+
+        return lines.join('\n');
+    }
+
+    /**
+     * Build the app context section for system prompt injection.
+     * Reads the AppContextSnapshot from extraData.appContext and formats
+     * it as a concise markdown section the LLM can reference.
+     */
+    private buildAppContextSection(extraData?: Record<string, unknown>): string {
+        const ctx = extraData?.appContext as Record<string, unknown> | undefined;
+        if (!ctx) return '';
+
+        const app = ctx['App'] as { Name?: string; Description?: string } | undefined;
+        const activeNav = ctx['ActiveNavItem'] as { Name?: string; Description?: string; ResourceType?: string } | undefined;
+        const otherNavs = ctx['OtherNavItems'] as Array<{ Name?: string; Description?: string }> | undefined;
+        const user = ctx['User'] as { Name?: string; Roles?: string[] } | undefined;
+
+        if (!app?.Name) return '';
+
+        const lines: string[] = [];
+        lines.push('### Current Application Context');
+        lines.push(`The user is currently in the **${app.Name}** application${app.Description ? ` — ${app.Description}` : ''}.`);
+
+        if (activeNav?.Name) {
+            lines.push('');
+            lines.push(`**Active view:** ${activeNav.Name}${activeNav.Description ? ` — ${activeNav.Description}` : ''}${activeNav.ResourceType ? ` (${activeNav.ResourceType})` : ''}`);
+        }
+
+        if (otherNavs && otherNavs.length > 0) {
+            lines.push('');
+            lines.push('**Other views available in this app:**');
+            for (const nav of otherNavs) {
+                lines.push(`- ${nav.Name}${nav.Description ? ` — ${nav.Description}` : ''}`);
+            }
+        }
+
+        if (user?.Name) {
+            lines.push('');
+            lines.push(`**User:** ${user.Name}${user.Roles?.length ? ` (Roles: ${user.Roles.join(', ')})` : ''}`);
+        }
+
+        return lines.join('\n');
     }
 
     /**
@@ -4682,7 +4836,7 @@ The context is now within limits. Please retry your request with the recovered c
         this._promptTurnCount = 0;
 
         // Create MJAIAgentRunEntity
-        this._agentRun = await this._metadata.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', params.contextUser);
+        this._agentRun = await (params.provider || this._activeProvider).GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', params.contextUser);
         this._agentRun.AgentID = params.agent.ID;
         if (params.conversationDetailId) {
             this._agentRun.ConversationDetailID = params.conversationDetailId;
@@ -4877,7 +5031,7 @@ The context is now within limits. Please retry your request with the recovered c
         payloadAtEnd?: any;
         parentId?: string;
     }): Promise<MJAIAgentRunStepEntityExtended> {
-        const stepEntity = await this._metadata.GetEntityObject<MJAIAgentRunStepEntityExtended>('MJ: AI Agent Run Steps', params.contextUser);
+        const stepEntity = await this._activeProvider.GetEntityObject<MJAIAgentRunStepEntityExtended>('MJ: AI Agent Run Steps', params.contextUser);
 
         stepEntity.AgentRunID = this._agentRun!.ID;
         // Step number is based on current count of steps + 1
@@ -5156,6 +5310,10 @@ The context is now within limits. Please retry your request with the recovered c
                 return await this.processSubAgentStep<P, P>(params, previousDecision!, undefined, undefined, stepCount);
             case 'Actions':
                 return await this.executeActionsStep(params, previousDecision, undefined, true, stepCount);
+            // Type assertion required because 'ClientTools' is not yet in the DB StepType value list.
+            // The LoopAgentType.DetermineNextStep() emits this value when the LLM chooses client tools.
+            case 'ClientTools' as typeof previousDecision.step:
+                return await this.executeClientToolsStep(params, config, previousDecision, stepCount);
             case 'Chat':
                 return await this.executeChatStep(params, previousDecision);
             case 'Success':
@@ -5616,6 +5774,16 @@ The context is now within limits. Please retry your request with the recovered c
             }
             else if (updatedNextStep.step === 'Success' || updatedNextStep.step === 'Failed') {
                 return { ...updatedNextStep, terminate: true };
+            } else if (updatedNextStep.step === 'ClientTools' as string) {
+                // ClientTools must return terminate: false so the main loop continues
+                // to the next iteration where executeClientToolsStep actually dispatches
+                // and awaits the tool. The LLM's original terminate intent is preserved in
+                // terminateAfterExecution so executeClientToolsStep can honor it post-execution.
+                return {
+                    ...updatedNextStep,
+                    terminate: false,
+                    terminateAfterExecution: updatedNextStep.terminate
+                };
             } else {
                 return { ...updatedNextStep, terminate: false };
             }
@@ -7122,6 +7290,168 @@ The context is now within limits. Please retry your request with the recovered c
      *
      * @private
      */
+
+    // ================================================================
+    // Client Tools Step Execution
+    // ================================================================
+
+    /**
+     * Execute client-side tools requested by the agent.
+     * Sends each tool invocation via PubSub, awaits the client's response
+     * (or timeout), then adds results to the conversation and continues.
+     */
+    private async executeClientToolsStep(
+        params: ExecuteAgentParams,
+        config: AgentConfiguration,
+        previousDecision: BaseAgentNextStep,
+        stepCount: number = 0
+    ): Promise<BaseAgentNextStep> {
+        const clientTools: AgentClientToolInvocation[] = previousDecision.clientTools ?? [];
+        if (clientTools.length === 0) {
+            // No tools to execute — continue with next prompt
+            return await this.executePromptStep(params, config, previousDecision, stepCount);
+        }
+
+        if (!params.sessionID) {
+            // No session ID — can't communicate with client
+            const errorMsg = 'Cannot execute client tools: no sessionID provided in ExecuteAgentParams';
+            LogError(errorMsg);
+            params.conversationMessages.push({
+                role: 'user',
+                content: `Client tool execution skipped: ${errorMsg}`
+            });
+            return await this.executePromptStep(params, config, previousDecision, stepCount);
+        }
+
+        const currentPayload = previousDecision?.newPayload || previousDecision?.previousPayload || params.payload;
+
+        // Build assistant message describing the tool invocations
+        const toolMessage = clientTools.length === 1
+            ? `I'm invoking the **${clientTools[0].Name}** client tool${clientTools[0].Description ? ` — ${clientTools[0].Description}` : ''}.`
+            : `I'm invoking **${clientTools.length} client tools**:\n\n` +
+              clientTools.map((t, i) => `${i + 1}. **${t.Name}**${t.Description ? ` — ${t.Description}` : ''}`).join('\n');
+
+        params.conversationMessages.push({
+            role: 'assistant',
+            content: toolMessage
+        });
+
+        // Report progress
+        params.onProgress?.({
+            step: 'action_execution', // Reuse action_execution step type for progress reporting
+            message: this.formatHierarchicalMessage(toolMessage),
+            metadata: {
+                toolCount: clientTools.length,
+                toolNames: clientTools.map(t => t.Name),
+                stepCount: stepCount + 1,
+                hierarchicalStep: this.buildHierarchicalStep(stepCount + 1, this._parentStepCounts)
+            },
+            displayMode: 'live'
+        });
+
+        // Resolve default timeout: per-tool > params > agent config > 30s
+        const defaultTimeout = params.clientToolTimeoutMs ?? 30_000;
+
+        const results: ClientToolResultSummary[] = [];
+        const agentRunID = this._agentRun?.ID ?? 'unknown';
+
+        // Execute tools sequentially (client may not support parallel UI operations)
+        for (const tool of clientTools) {
+            const stepEntity = await this.createStepEntity({
+                // INTENTIONAL: We use 'Actions' as the DB step type because the MJ: AI Agent Run Steps
+                // entity's StepType value list does not yet include 'ClientTools'. A future database
+                // migration will add 'ClientTools' to the allowed values in the StepType CHECK constraint
+                // and CodeGen will regenerate the types. Until then, client tool steps are recorded under
+                // 'Actions' in the run history. The step name ("Client Tool: {name}") distinguishes them.
+                stepType: 'Actions' as MJAIAgentRunStepEntityExtended['StepType'],
+                stepName: `Client Tool: ${tool.Name}`,
+                inputData: { toolName: tool.Name, params: tool.Params },
+                contextUser: params.contextUser,
+                payloadAtStart: currentPayload,
+                payloadAtEnd: currentPayload
+            });
+
+            const timeoutMs = tool.TimeoutMs ?? defaultTimeout;
+
+            const response = await ClientToolRequestManager.Instance.RequestClientTool(
+                `ct_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+                tool.Name,
+                tool.Params,
+                params.sessionID,
+                agentRunID,
+                timeoutMs,
+                tool.Description
+            );
+
+            await this.finalizeStepEntity(
+                stepEntity,
+                response.Success,
+                response.ErrorMessage,
+                { result: response.Result }
+            );
+
+            results.push({
+                ToolName: tool.Name,
+                Success: response.Success,
+                Result: response.Result,
+                ErrorMessage: response.ErrorMessage
+            });
+        }
+
+        // Format results as conversation message
+        const resultsMarkdown = this.formatClientToolResultsAsMarkdown(results);
+        params.conversationMessages.push({
+            role: 'user',
+            content: resultsMarkdown,
+            metadata: {
+                turnAdded: this._promptTurnCount,
+                messageType: 'client-tool-result'
+            }
+        } as AgentChatMessage);
+
+        // If the LLM already declared taskComplete=true alongside the client tools,
+        // honor that intent now that tools have executed — no need for another LLM call.
+        if (previousDecision.terminateAfterExecution) {
+            return {
+                step: 'Success',
+                terminate: true,
+                message: previousDecision.message || 'Client tools executed successfully.',
+                payloadChangeRequest: previousDecision.payloadChangeRequest,
+                scratchpad: previousDecision.scratchpad,
+                responseForm: previousDecision.responseForm,
+                actionableCommands: previousDecision.actionableCommands,
+                automaticCommands: previousDecision.automaticCommands
+            };
+        }
+
+        return await this.executePromptStep(params, config, previousDecision, stepCount);
+    }
+
+    /**
+     * Format client tool results as a compact markdown summary for the conversation.
+     */
+    private formatClientToolResultsAsMarkdown(results: ClientToolResultSummary[]): string {
+        const failedCount = results.filter(r => !r.Success).length;
+        const header = failedCount > 0
+            ? `${failedCount} of ${results.length} client tool(s) failed:`
+            : 'Client tool results:';
+
+        const lines = results.map(r => {
+            const icon = r.Success ? '✓' : '✗';
+            let line = `${icon} **${r.ToolName}**: ${r.Success ? 'succeeded' : 'failed'}`;
+            if (r.ErrorMessage) line += ` — ${r.ErrorMessage}`;
+            if (r.Success && r.Result != null) {
+                const resultStr = typeof r.Result === 'string' ? r.Result : JSON.stringify(r.Result);
+                if (resultStr.length <= 500) {
+                    line += `\n  Result: ${resultStr}`;
+                }
+            }
+            return line;
+        });
+
+        return `${header}\n${lines.join('\n')}`;
+    }
+
     private async executeChatStep(
         params: ExecuteAgentParams,
         previousDecision: BaseAgentNextStep
@@ -7175,7 +7505,7 @@ The context is now within limits. Please retry your request with the recovered c
             const priority = resolvedStrategy?.priority ?? 50;
             const expirationMinutes = resolvedStrategy?.expirationMinutes;
 
-            const request = await this._metadata.GetEntityObject<MJAIAgentRequestEntity>(
+            const request = await (params.provider || this._activeProvider).GetEntityObject<MJAIAgentRequestEntity>(
                 'MJ: AI Agent Requests',
                 params.contextUser
             );
@@ -8700,8 +9030,7 @@ The context is now within limits. Please retry your request with the recovered c
             throw new Error('Cannot create compaction step: agent run not initialized');
         }
 
-        const md = new Metadata();
-        const step = await md.GetEntityObject<MJAIAgentRunStepEntityExtended>(
+        const step = await (params.provider || this._activeProvider).GetEntityObject<MJAIAgentRunStepEntityExtended>(
             'MJ: AI Agent Run Steps',
             params.contextUser
         );
@@ -8884,6 +9213,15 @@ The context is now within limits. Please retry your request with the recovered c
      * @param modelName - Optional model name for accurate tokenization
      * @protected
      */
+    /**
+     * Returns true if the message is a tool result (action or client tool).
+     * Used by recovery strategies to identify compactable result messages.
+     */
+    protected IsToolResultMessage(msg: ChatMessage): boolean {
+        const messageType = (msg as AgentChatMessage).metadata?.messageType;
+        return messageType === 'action-result' || messageType === 'client-tool-result';
+    }
+
     protected estimateTokens(content: ChatMessage['content'], modelName?: string): number {
         const text = typeof content === 'string'
             ? content

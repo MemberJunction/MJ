@@ -12,6 +12,7 @@ export * from './custom/MJComponentEntityServer.server';
 export * from './custom/MJArtifactVersionEntityServer.server';
 export * from './custom/MJAIAgentNoteEntityServer.server';
 export * from './custom/MJAIAgentExampleEntityServer.server';
+export * from './custom/MJVectorIndexEntityServer.server';
 export * from './custom/util';
 
 export * from './engines/QueryEngineServer';

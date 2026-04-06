@@ -952,6 +952,50 @@ DEBUG=mj:*
 NODE_ENV=development
 ```
 
+## Knowledge Hub Resolvers
+
+This package includes GraphQL resolvers for the Knowledge Hub:
+- **`SearchKnowledgeResolver`** — Unified search combining vector similarity (Pinecone) with full-text search via `Metadata.FullTextSearch()` and RRF fusion
+- **`VectorizeEntityResolver`** — Triggers entity vectorization via `EntityVectorSyncer`
+- **`PipelineProgressResolver`** — GraphQL subscription for real-time pipeline progress
+- **`FetchEntityVectorsResolver`** — Retrieves vectors and metadata from the vector database for a given entity document
+
+See the **[Full-Text Search Guide](../MJCore/docs/FULL_TEXT_SEARCH_GUIDE.md)** for the complete FTS architecture.
+
+### FetchEntityVectorsResolver
+
+Fetches vectors and their associated metadata from a vector database (e.g., Pinecone) for a specific entity document. Used by the clustering dashboard to obtain raw vectors for visualization.
+
+**How it works:** The resolver performs a zero-vector query against the vector index with an entity metadata filter (`Entity: { $eq: entityName }`). Since the query vector is all zeros, similarity scores are meaningless -- the purpose is purely to retrieve vectors matching the entity filter. This approach is used because Pinecone's list API does not support metadata filtering, but the query API does.
+
+```graphql
+query {
+  FetchEntityVectors(
+    entityDocumentID: "doc-uuid"
+    maxRecords: 500
+    filter: ""
+  ) {
+    Success
+    Results {
+      ID
+      Values
+      Metadata
+    }
+    TotalCount
+    ElapsedMs
+    ErrorMessage
+  }
+}
+```
+
+| Argument | Type | Default | Description |
+|---|---|---|---|
+| `entityDocumentID` | `String!` | -- | The entity document whose vector index to query |
+| `maxRecords` | `Int` | `1000` | Maximum number of vectors to return |
+| `filter` | `String` | -- | Reserved for future metadata filter extensions |
+
+The resolver resolves the vector index for the entity document using a fallback chain: explicit `VectorIndexID` on the document, then matching by `VectorDatabaseID` + `EmbeddingModelID`.
+
 ## Contributing
 
 See the [MemberJunction Contributing Guide](../../CONTRIBUTING.md) for development setup and guidelines.

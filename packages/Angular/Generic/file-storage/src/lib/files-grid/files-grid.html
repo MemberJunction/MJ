@@ -1,30 +1,18 @@
 <div class="container">
-  <kendo-grid [data]="files" [loading]="isLoading">
-    <kendo-grid-column field="ID" title="ID"> </kendo-grid-column>
-    <kendo-grid-column field="Category" title="Category"> </kendo-grid-column>
-    <kendo-grid-column field="Name" title="Name"> </kendo-grid-column>
-    <kendo-grid-column field="Description" title="Description"> </kendo-grid-column>
-    <kendo-grid-column field="Status" title="Status"> </kendo-grid-column>
-    <kendo-grid-column field="Actions">
-      <ng-template kendoGridCellTemplate let-dataItem>
-        <button kendoButton
-          [disabled]="dataItem.Status!=='Uploaded'"
-          (click)="downloadFile(dataItem)"
-          >
-          <span class="fa-solid fa-download"></span>
-        </button>
-        <button kendoButton [disabled]="!canBeDeleted(dataItem)" (click)="deleteFile(dataItem)">
-          <span class="fa-solid fa-trash-can"></span>
-        </button>
-        <button kendoButton
-          [disabled]="dataItem.Status!=='Uploaded'"
-          (click)="editFile = dataItem"
-          >
-          <span class="fa-solid fa-pen-to-square"></span>
-        </button>
-      </ng-template>
-    </kendo-grid-column>
-  </kendo-grid>
+  @if (isLoading) {
+    <div class="grid-loading-overlay">
+      <mj-loading text="Loading files..." size="medium"></mj-loading>
+    </div>
+  }
+  <ag-grid-angular
+    class="files-grid"
+    [theme]="GridTheme"
+    [rowData]="files"
+    [columnDefs]="ColumnDefs"
+    [defaultColDef]="DefaultColDef"
+    [loading]="isLoading"
+    (gridReady)="OnGridReady($event)">
+  </ag-grid-angular>
 
   <mj-files-file-upload
     [CategoryID]="CategoryID"
@@ -33,29 +21,38 @@
     (fileUpload)="handleFileUpload($event)"
   ></mj-files-file-upload>
 
-  @if (editFile) {
-    <kendo-dialog title="Edit file" (close)="resetEditFile()" [minWidth]="250" [width]="450">
-      <div class="container">
+  <mj-dialog
+    [Visible]="!!editFile"
+    Title="Edit file"
+    [Width]="450"
+    [MinWidth]="250"
+    (Close)="resetEditFile()">
+    @if (editFile) {
+      <div class="edit-form-container">
         <form #templateForm="ngForm">
-          <kendo-label class="k-form" text="Name">
-            <kendo-textbox
+          <label class="mj-form-field">
+            <span class="mj-form-label">Name</span>
+            <input
+              class="mj-input"
               name="name"
               [(ngModel)]="editFile.Name"
-              [showSuccessIcon]="editFile.Name.length > 0"
-              showErrorIcon="initial"
               required
-              [disabled]="isLoading"
-            ></kendo-textbox>
-          </kendo-label>
-          <kendo-label class="k-form" text="Description">
-            <kendo-textbox name="description" [(ngModel)]="editFile.Description" [disabled]="isLoading"></kendo-textbox>
-          </kendo-label>
+              [disabled]="isLoading" />
+          </label>
+          <label class="mj-form-field">
+            <span class="mj-form-label">Description</span>
+            <input
+              class="mj-input"
+              name="description"
+              [(ngModel)]="editFile.Description"
+              [disabled]="isLoading" />
+          </label>
         </form>
       </div>
-      <kendo-dialog-actions>
-        <button kendoButton (click)="resetEditFile()" [disabled]="isLoading">Cancel</button>
-        <button kendoButton (click)="saveEditFile()" [disabled]="isLoading || !editFile.Dirty" themeColor="primary">Save</button>
-      </kendo-dialog-actions>
-    </kendo-dialog>
-  }
+    }
+    <mj-dialog-actions>
+      <button mjButton variant="primary" (click)="saveEditFile()" [disabled]="isLoading || !editFile?.Dirty">Save</button>
+      <button mjButton (click)="resetEditFile()" [disabled]="isLoading">Cancel</button>
+    </mj-dialog-actions>
+  </mj-dialog>
 </div>

@@ -1,5 +1,5 @@
 import { Injectable, ViewContainerRef } from '@angular/core';
-import { DialogService, DialogRef, DialogSettings } from '@progress/kendo-angular-dialog';
+import { MJDialogService, MJDialogRef, MJDialogAction, MJDialogSettings } from '@memberjunction/ng-ui-components';
 import { ActionGalleryComponent, ActionGalleryConfig } from './action-gallery.component';
 import { MJActionEntity } from '@memberjunction/core-entities';
 import { Observable, Subject } from 'rxjs';
@@ -19,9 +19,9 @@ export interface ActionGalleryDialogConfig extends ActionGalleryConfig {
   providedIn: 'root'
 })
 export class ActionGalleryDialogService {
-  private dialogRef: DialogRef | null = null;
+  private dialogRef: MJDialogRef | null = null;
 
-  constructor(private dialogService: DialogService) {}
+  constructor(private dialogService: MJDialogService) {}
 
   /**
    * Opens the Action Gallery in a dialog for single selection
@@ -30,22 +30,23 @@ export class ActionGalleryDialogService {
    * @returns Observable that emits the selected action when confirmed
    */
   openForSingleSelection(
-    config: ActionGalleryDialogConfig = {}, 
+    config: ActionGalleryDialogConfig = {},
     viewContainerRef?: ViewContainerRef
   ): Observable<MJActionEntity | null> {
     const resultSubject = new Subject<MJActionEntity | null>();
-    
+
     // Configure for single selection
     const galleryConfig: ActionGalleryDialogConfig = {
       ...config,
       selectionMode: true,
       multiSelect: false
     };
-    
+
     this.openDialog(galleryConfig, viewContainerRef, (component) => {
       // Handle dialog result
-      this.dialogRef!.result.subscribe((result) => {
-        if (result && (result as any).action === 'submit') {
+      this.dialogRef!.Result.subscribe((result) => {
+        const action = result as MJDialogAction | undefined;
+        if (action && action.text === (config.submitButtonText || 'Select')) {
           const selectedActions = component.getSelectedActions();
           resultSubject.next(selectedActions[0] || null);
         } else {
@@ -55,7 +56,7 @@ export class ActionGalleryDialogService {
         this.dialogRef = null;
       });
     });
-    
+
     return resultSubject.asObservable();
   }
 
@@ -66,22 +67,23 @@ export class ActionGalleryDialogService {
    * @returns Observable that emits the selected actions when confirmed
    */
   openForMultiSelection(
-    config: ActionGalleryDialogConfig = {}, 
+    config: ActionGalleryDialogConfig = {},
     viewContainerRef?: ViewContainerRef
   ): Observable<MJActionEntity[]> {
     const resultSubject = new Subject<MJActionEntity[]>();
-    
+
     // Configure for multi selection
     const galleryConfig: ActionGalleryDialogConfig = {
       ...config,
       selectionMode: true,
       multiSelect: true
     };
-    
+
     this.openDialog(galleryConfig, viewContainerRef, (component) => {
       // Handle dialog result
-      this.dialogRef!.result.subscribe((result) => {
-        if (result && (result as any).action === 'submit') {
+      this.dialogRef!.Result.subscribe((result) => {
+        const action = result as MJDialogAction | undefined;
+        if (action && action.text === (config.submitButtonText || 'Select')) {
           const selectedActions = component.getSelectedActions();
           resultSubject.next(selectedActions);
         } else {
@@ -91,7 +93,7 @@ export class ActionGalleryDialogService {
         this.dialogRef = null;
       });
     });
-    
+
     return resultSubject.asObservable();
   }
 
@@ -101,7 +103,7 @@ export class ActionGalleryDialogService {
    * @param viewContainerRef Optional ViewContainerRef for proper positioning
    */
   openForBrowsing(
-    config: ActionGalleryDialogConfig = {}, 
+    config: ActionGalleryDialogConfig = {},
     viewContainerRef?: ViewContainerRef
   ): void {
     const galleryConfig: ActionGalleryDialogConfig = {
@@ -109,28 +111,26 @@ export class ActionGalleryDialogService {
       selectionMode: false,
       enableQuickTest: true
     };
-    
-    const dialogSettings: DialogSettings = {
+
+    const dialogSettings: MJDialogSettings = {
       title: config.title || 'Action Gallery',
       width: config.width || 1200,
       height: config.height || 800,
       minWidth: config.minWidth || 800,
-      minHeight: config.minHeight || 600,
       content: ActionGalleryComponent,
       actions: [
-        { text: 'Close', themeColor: 'base' }
-      ],
-      preventAction: () => false
+        { text: 'Close' }
+      ]
     };
 
     this.dialogRef = this.dialogService.open(dialogSettings);
-    
+
     // Configure the component
-    const component = this.dialogRef.content.instance as ActionGalleryComponent;
+    const component = this.dialogRef.Content!.instance as unknown as ActionGalleryComponent;
     component.config = galleryConfig;
-    
+
     // Handle dialog close
-    this.dialogRef.result.subscribe(() => {
+    this.dialogRef.Result.subscribe(() => {
       this.dialogRef = null;
     });
   }
@@ -140,7 +140,7 @@ export class ActionGalleryDialogService {
    */
   close(): void {
     if (this.dialogRef) {
-      this.dialogRef.close();
+      this.dialogRef.Close();
       this.dialogRef = null;
     }
   }
@@ -157,27 +157,25 @@ export class ActionGalleryDialogService {
     viewContainerRef: ViewContainerRef | undefined,
     resultHandler: (component: ActionGalleryComponent) => void
   ): void {
-    const dialogSettings: DialogSettings = {
+    const dialogSettings: MJDialogSettings = {
       title: config.title || 'Select Actions',
       width: config.width || 1200,
       height: config.height || 800,
       minWidth: config.minWidth || 800,
-      minHeight: config.minHeight || 600,
       content: ActionGalleryComponent,
       actions: [
         { text: config.cancelButtonText || 'Cancel' },
-        { text: config.submitButtonText || 'Select', themeColor: 'primary', action: 'submit' }
-      ],
-      preventAction: () => false
+        { text: config.submitButtonText || 'Select', primary: true }
+      ]
     };
 
     this.dialogRef = this.dialogService.open(dialogSettings);
-    
+
     // Configure the component
-    const component = this.dialogRef.content.instance as ActionGalleryComponent;
+    const component = this.dialogRef.Content!.instance as unknown as ActionGalleryComponent;
     component.config = config;
     component.preSelectedActions = config.preSelectedActions || [];
-    
+
     // Handle result
     resultHandler(component);
   }

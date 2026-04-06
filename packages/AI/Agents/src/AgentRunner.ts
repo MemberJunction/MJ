@@ -10,7 +10,8 @@
  * @since 2.49.0
  */
 
-import { LogError, LogStatusEx, IsVerboseLoggingEnabled, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { createHash } from 'crypto';
+import { LogError, LogStatusEx, IsVerboseLoggingEnabled, LogStatus, Metadata, RunView, UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ExecuteAgentResult, ExecuteAgentParams, MediaOutput, FileOutputRef } from '@memberjunction/ai-core-plus';
@@ -60,6 +61,12 @@ interface ActionStepSummary {
  * ```
  */
 export class AgentRunner {
+    private readonly _provider: IMetadataProvider;
+
+    constructor(provider?: IMetadataProvider) {
+        this._provider = provider || Metadata.Provider;
+    }
+
     /**
      * Runs an AI agent with the specified parameters.
      * 
@@ -109,8 +116,9 @@ export class AgentRunner {
                 throw new Error(`Failed to create agent instance for driver class: ${driverClass}`);
             }
             
-            // Execute the agent and return the result directly
-            return await agentInstance.Execute(params as ExecuteAgentParams<any>) as ExecuteAgentResult<R>;
+            // Execute the agent and return the result directly, threading the isolated provider.
+            // Favor provider already in params (caller-supplied) over the instance-level provider.
+            return await agentInstance.Execute({ ...params, provider: params.provider || this._provider } as ExecuteAgentParams<any>) as ExecuteAgentResult<R>;
             
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
@@ -184,7 +192,7 @@ export class AgentRunner {
             versionNumber: number;
         };
     }> {
-        const md = new Metadata();
+        const md = params.provider || this._provider;
         const contextUser = params.contextUser;
 
         if (!contextUser) {
@@ -240,7 +248,7 @@ export class AgentRunner {
 
                     if (!conversationName && options.userMessage) {
                         // Try to generate a name using the "Name Conversation" prompt (same as UI)
-                        const nameResult = await this.GenerateConversationName(options.userMessage, contextUser);
+                        const nameResult = await this.GenerateConversationName(options.userMessage, contextUser, md);
                         if (nameResult) {
                             conversationName = nameResult.name;
                             conversationDescription = nameResult.description;
@@ -410,7 +418,8 @@ export class AgentRunner {
                     agentResult,
                     agentResponseDetailId!,
                     options.sourceArtifactId,
-                    contextUser
+                    contextUser,
+                    md
                 );
             }
 
@@ -434,7 +443,8 @@ export class AgentRunner {
                 mediaIds = await this.SaveAgentRunMedia(
                     agentResult.agentRun.ID,
                     mediaToSave,  // Pass filtered array
-                    contextUser
+                    contextUser,
+                    md
                 );
 
                 // Create ConversationDetailAttachment records for UI display
@@ -443,7 +453,8 @@ export class AgentRunner {
                         agentResponseDetailId,
                         mediaToSave,  // Pass same filtered array to keep indices aligned
                         mediaIds,
-                        contextUser
+                        contextUser,
+                        md
                     );
                 }
             }
@@ -501,6 +512,85 @@ export class AgentRunner {
     }
 
     /**
+     * Checks whether the serialized content for a new artifact version is identical to the
+     * latest existing version of the same artifact, using SHA-256 content hashing.
+     *
+     * When the content is unchanged, creating a new version adds noise without value.
+     * This method computes the hash of the candidate content and compares it against
+     * the `ContentHash` stored on the most recent version (populated by
+     * `MJArtifactVersionEntityServer.Save()`).
+     *
+     * @param artifactId - The artifact whose latest version to compare against
+     * @param candidateContent - The serialized (JSON-stringified) content that would become the new version
+     * @param latestVersionNumber - The version number of the current latest version
+     * @param contextUser - User context for the RunView query
+     * @returns The existing version's ID if content is identical, or `null` if a new version should be created
+     */
+    protected async CheckForDuplicateVersion(
+        artifactId: string,
+        candidateContent: string,
+        latestVersionNumber: number,
+        contextUser: UserInfo
+    ): Promise<string | null> {
+        const candidateHash = createHash('sha256').update(candidateContent, 'utf8').digest('hex');
+
+        const rv = new RunView();
+        const result = await rv.RunView<{ ID: string; ContentHash: string }>({
+            EntityName: 'MJ: Artifact Versions',
+            ExtraFilter: `ArtifactID='${artifactId}' AND VersionNumber=${latestVersionNumber}`,
+            Fields: ['ID', 'ContentHash'],
+            MaxRows: 1,
+            ResultType: 'simple'
+        }, contextUser);
+
+        if (result.Success && result.Results.length > 0 && result.Results[0].ContentHash === candidateHash) {
+            return result.Results[0].ID;
+        }
+
+        return null;
+    }
+
+    /**
+     * Creates a `ConversationDetailArtifact` junction record linking an artifact version
+     * to a conversation detail, then returns the standard artifact result tuple.
+     *
+     * Extracted as a helper so both the normal version-creation path and the
+     * duplicate-skip path can share the same linking and return logic.
+     *
+     * @param versionId - The artifact version ID to link
+     * @param conversationDetailId - The conversation detail to link to
+     * @param artifactId - The parent artifact ID (passed through to the return value)
+     * @param versionNumber - The version number (passed through to the return value)
+     * @param contextUser - User context for the save operation
+     * @param provider - Metadata provider for entity creation
+     * @returns The standard artifact result tuple
+     */
+    protected async LinkArtifactToConversationDetail(
+        versionId: string,
+        conversationDetailId: string,
+        artifactId: string,
+        versionNumber: number,
+        contextUser: UserInfo,
+        provider: IMetadataProvider
+    ): Promise<{ artifactId: string; versionId: string; versionNumber: number }> {
+        const junction = await provider.GetEntityObject<MJConversationDetailArtifactEntity>(
+            'MJ: Conversation Detail Artifacts',
+            contextUser
+        );
+        junction.ConversationDetailID = conversationDetailId;
+        junction.ArtifactVersionID = versionId;
+        junction.Direction = 'Output';
+
+        if (!(await junction.Save())) {
+            throw new Error('Failed to create artifact-message association');
+        }
+
+        LogStatus(`Linked artifact to conversation detail ${conversationDetailId}`);
+
+        return { artifactId, versionId, versionNumber };
+    }
+
+    /**
      * Finds the most recent artifact for a conversation detail to determine versioning.
      * Queries the junction table to locate artifacts linked to a specific conversation message.
      *
@@ -519,7 +609,8 @@ export class AgentRunner {
      */
     public async FindPreviousArtifactForMessage(
         conversationDetailId: string,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<{ artifactId: string; versionNumber: number } | null> {
         try {
             const rv = new RunView();
@@ -536,7 +627,7 @@ export class AgentRunner {
             }
 
             const junction = result.Results[0];
-            const md = new Metadata();
+            const md = provider || this._provider;
             const version = await md.GetEntityObject<MJArtifactVersionEntity>(
                 'MJ: Artifact Versions',
                 contextUser
@@ -595,7 +686,8 @@ export class AgentRunner {
         agentResult: ExecuteAgentResult<R>,
         conversationDetailId: string,
         sourceArtifactId: string | undefined,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<{ artifactId: string; versionId: string; versionNumber: number } | undefined> {
         const payload = agentResult.payload;
         const agentRun = agentResult.agentRun;
@@ -616,7 +708,7 @@ export class AgentRunner {
         }
 
         try {
-            const md = new Metadata();
+            const md = provider || this._provider;
             const JSON_ARTIFACT_TYPE_ID = 'ae674c7e-ea0d-49ea-89e4-0649f5eb20d4';
 
             // Determine if creating new artifact or new version
@@ -635,7 +727,8 @@ export class AgentRunner {
             else {
                 const previousArtifact = await this.FindPreviousArtifactForMessage(
                     conversationDetailId,
-                    contextUser
+                    contextUser,
+                    md
                 );
 
                 if (previousArtifact) {
@@ -680,6 +773,20 @@ export class AgentRunner {
                 }
             }
 
+            // Serialize the payload once — used for both dedup check and version creation
+            const serializedContent = JSON.stringify(payload, null, 2);
+
+            // Skip version creation if content is identical to the latest version
+            if (!isNewArtifact && newVersionNumber > 1) {
+                const existingVersionId = await this.CheckForDuplicateVersion(
+                    artifactId, serializedContent, newVersionNumber - 1, contextUser
+                );
+                if (existingVersionId) {
+                    console.debug(`Skipping duplicate artifact version — content identical to version ${newVersionNumber - 1}`);
+                    return undefined;
+                }
+            }
+
             // Create artifact version with content
             const version = await md.GetEntityObject<MJArtifactVersionEntity>(
                 'MJ: Artifact Versions',
@@ -687,7 +794,7 @@ export class AgentRunner {
             );
             version.ArtifactID = artifactId;
             version.VersionNumber = newVersionNumber;
-            version.Content = JSON.stringify(payload, null, 2);
+            version.Content = serializedContent;
             version.UserID = contextUser.ID;
 
             if (!(await version.Save())) {
@@ -720,26 +827,10 @@ export class AgentRunner {
                 }
             }
 
-            // Create junction record linking artifact to conversation detail
-            const junction = await md.GetEntityObject<MJConversationDetailArtifactEntity>(
-                'MJ: Conversation Detail Artifacts',
-                contextUser
+            // Link the new version to this conversation detail and return
+            return this.LinkArtifactToConversationDetail(
+                version.ID, conversationDetailId, artifactId, newVersionNumber, contextUser, md
             );
-            junction.ConversationDetailID = conversationDetailId;
-            junction.ArtifactVersionID = version.ID;
-            junction.Direction = 'Output';
-
-            if (!(await junction.Save())) {
-                throw new Error('Failed to create artifact-message association');
-            }
-
-            LogStatus(`Linked artifact to conversation detail ${conversationDetailId}`);
-
-            return {
-                artifactId,
-                versionId: version.ID,
-                versionNumber: newVersionNumber
-            };
         } catch (error) {
             LogError(`Failed to process agent artifacts: ${(error as Error).message}`);
             return undefined;
@@ -758,7 +849,8 @@ export class AgentRunner {
      */
     private async GenerateConversationName(
         userMessage: string,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<{ name: string; description: string } | null> {
         try {
             // Import AIPromptRunner, AIPromptParams, and AIEngine
@@ -781,6 +873,7 @@ export class AgentRunner {
             promptParams.prompt = prompt;
             promptParams.contextUser = contextUser;
             promptParams.conversationMessages = [{ role: 'user', content: userMessage }];
+            promptParams.provider = provider || this._provider;
 
             const runner = new AIPromptRunner();
             const result = await runner.ExecutePrompt(promptParams);
@@ -835,7 +928,8 @@ export class AgentRunner {
     public async SaveAgentRunMedia(
         agentRunId: string,
         mediaOutputs: MediaOutput[] | undefined,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<string[]> {
         if (!mediaOutputs || mediaOutputs.length === 0) {
             return [];
@@ -854,7 +948,7 @@ export class AgentRunner {
         }
 
         const savedIds: string[] = [];
-        const md = new Metadata();
+        const md = provider || this._provider;
 
         try {
             // Use AIEngine's cached modalities instead of a fresh DB call
@@ -965,14 +1059,15 @@ export class AgentRunner {
         conversationDetailId: string,
         mediaOutputs: MediaOutput[],
         agentRunMediaIds: string[],
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<string[]> {
         if (!mediaOutputs || mediaOutputs.length === 0) {
             return [];
         }
 
         const attachmentIds: string[] = [];
-        const md = new Metadata();
+        const md = provider || this._provider;
 
         try {
             // Use AIEngine's cached modalities instead of a fresh DB call

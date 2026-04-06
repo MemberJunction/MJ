@@ -5,7 +5,7 @@
             <input type="checkbox" 
                    [(ngModel)]="showSystem" 
                    (ngModelChange)="onFilterChange()"
-                   kendoCheckBox />
+                   class="mj-checkbox" />
             <span class="filter-label">
                 <i class="fa-solid fa-cog" [style.color]="getRoleColor('system')"></i>
                 System
@@ -16,7 +16,7 @@
             <input type="checkbox" 
                    [(ngModel)]="showUser" 
                    (ngModelChange)="onFilterChange()"
-                   kendoCheckBox />
+                   class="mj-checkbox" />
             <span class="filter-label">
                 <i class="fa-solid fa-user" [style.color]="getRoleColor('user')"></i>
                 User
@@ -27,7 +27,7 @@
             <input type="checkbox" 
                    [(ngModel)]="showAssistant" 
                    (ngModelChange)="onFilterChange()"
-                   kendoCheckBox />
+                   class="mj-checkbox" />
             <span class="filter-label">
                 <i class="fa-solid fa-robot" [style.color]="getRoleColor('assistant')"></i>
                 Assistant

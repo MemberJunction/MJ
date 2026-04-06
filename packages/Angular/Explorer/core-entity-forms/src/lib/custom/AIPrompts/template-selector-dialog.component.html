@@ -5,8 +5,8 @@
     <h3>{{ config.title }}</h3>
     <div class="header-actions">
       <button
-        kendoButton
-        size="small"
+        mjButton
+        size="sm"
         (click)="toggleViewMode()"
       >
         <i [class]="viewMode === 'list' ? 'fa-solid fa-th' : 'fa-solid fa-list'"></i>
@@ -20,7 +20,8 @@
     <!-- Search Input -->
     <div class="search-container">
       <input
-        class="k-input k-textbox"
+        class="mj-input"
+        type="text"
         [formControl]="searchControl"
         placeholder="Search templates..."
       />
@@ -30,7 +31,7 @@
     <!-- Category Filter -->
     <div class="category-filter">
       <select
-        class="k-input k-dropdown"
+        class="mj-input"
         [value]="selectedCategory || ''"
         (change)="onCategoryChange($any($event.target).value || null)"
       >
@@ -135,8 +136,8 @@
     <div class="action-buttons">
       @if (config.showCreateNew) {
         <button
-          kendoButton
-          themeColor="secondary"
+          mjButton
+          variant="outline"
           (click)="createNew()"
         >
           <i class="fa-solid fa-plus"></i>
@@ -145,15 +146,15 @@
       }
       
       <button
-        kendoButton
+        mjButton
         (click)="cancel()"
       >
         Cancel
       </button>
       
       <button
-        kendoButton
-        themeColor="primary"
+        mjButton
+        variant="primary"
         (click)="selectTemplates()"
         [disabled]="selectedTemplates.size === 0"
       >

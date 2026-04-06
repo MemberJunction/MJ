@@ -1,23 +1,23 @@
 @if (DialogVisible) {
-    <kendo-dialog
-        [width]="DialogWidth"
-        [height]="DialogHeight"
-        [title]="DialogTitle"        
-        (close)="OnCancel()"
+    <mj-dialog
+        [Visible]="true"
+        [Width]="DialogWidth"
+        [Height]="DialogHeight"
+        [Title]="DialogTitle"
+        (Close)="OnCancel()"
     >
         <mj-record-selector
             [AvailableRecords]="AvailableRecords"
             [DisplayField]="DisplayField"
             [SelectedRecords]="SelectedRecords"
             [EntityName]="EntityName"
-            [ToolbarSettings]="ToolbarSettings"
             [DisplayIconField]="DisplayIconField"
             [UnselectedRecords]="UnselectedRecords"
         >
         </mj-record-selector>
-        <kendo-dialog-actions>
-            <button kendoButton (click)="OnOK()" themeColor="primary">OK</button>
-            <button kendoButton (click)="OnCancel()">Cancel</button>
-        </kendo-dialog-actions>    
-    </kendo-dialog>    
+        <mj-dialog-actions>
+            <button mjButton variant="primary" (click)="OnOK()">OK</button>
+            <button mjButton (click)="OnCancel()">Cancel</button>
+        </mj-dialog-actions>
+    </mj-dialog>
 }

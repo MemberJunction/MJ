@@ -10,7 +10,7 @@
             <i class="fas fa-table-columns"></i>
           </button>
         }
-        <div class="chat-title">{{ conversation.Name }}</div>
+        <div class="chat-title">{{ conversation.Name || '' }}</div>
         @if (conversation.ProjectID) {
           <button class="project-tag" (click)="openProjectSelector()" title="Assign to project">
             <i class="fas fa-folder"></i>
@@ -31,7 +31,7 @@
             <span class="pin-chip-count">{{ pinnedMessages.length }}</span>
           </button>
         }
-        @if (artifactCountDisplay > 0) {
+        @if (showArtifactIndicator && artifactCountDisplay > 0) {
           <button class="artifact-indicator" (click)="viewArtifacts()" title="View artifacts">
             <i class="fas fa-cube"></i>
             <span class="artifact-badge">{{ artifactCountDisplay }}</span>
@@ -43,17 +43,21 @@
             <span class="members-badge">{{ memberCount }}</span>
           </button>
         }
-        <button class="action-btn" (click)="exportConversation()" title="Export conversation">
-          <i class="fas fa-download"></i>
-          <span class="btn-label">Export</span>
-        </button>
-        <button class="action-btn share-btn"
-          [class.shared]="isShared"
-          (click)="shareConversation()"
-          [title]="isShared ? 'Manage sharing' : 'Share conversation'">
-          <i class="fas fa-share-nodes"></i>
-          <span class="btn-label">Share</span>
-        </button>
+        @if (showExportButton) {
+          <button mjButton variant="flat" size="sm" (click)="exportConversation()" title="Export conversation">
+            <i class="fas fa-download"></i>
+            <span class="btn-label">Export</span>
+          </button>
+        }
+        @if (showShareButton) {
+          <button mjButton variant="flat" size="sm"
+            [class.shared]="isShared"
+            (click)="shareConversation()"
+            [title]="isShared ? 'Manage sharing' : 'Share conversation'">
+            <i class="fas fa-share-nodes"></i>
+            <span class="btn-label">Share</span>
+          </button>
+        }
       </div>
     </div>
   }
@@ -64,12 +68,19 @@
     <div class="chat-messages-pane"
       [class.full-width]="!showArtifactPanel"
       [class.hidden]="isArtifactPaneMaximized">
-      @if (isNewConversation || !conversationId) {
+      @if (isLoadingConversation) {
+        <!-- Loading State - Show centered spinner while conversation loads (checked FIRST to prevent empty state flash) -->
+        <div class="conversation-loading-state">
+          <mj-loading text="Loading conversation..." size="large"></mj-loading>
+        </div>
+      } @else if (isNewConversation || !conversationId) {
         <!-- Empty State - No conversation selected OR new unsaved conversation -->
         <mj-conversation-empty-state
           [currentUser]="currentUser"
           [disabled]="isProcessing"
           [showSidebarToggle]="showSidebarToggle"
+          [overlayMode]="overlayMode"
+          [greeting]="emptyStateGreeting"
           [enableAttachments]="enableAttachments"
           [maxAttachments]="maxAttachments"
           [maxAttachmentSizeBytes]="maxAttachmentSizeBytes"
@@ -77,11 +88,6 @@
           (sidebarToggleClicked)="sidebarToggleClicked.emit()"
           (messageSent)="onEmptyStateMessageSent($event)">
         </mj-conversation-empty-state>
-      } @else if (isLoadingConversation) {
-        <!-- Loading State - Show centered spinner while conversation loads -->
-        <div class="conversation-loading-state">
-          <mj-loading text="Loading conversation..." size="large"></mj-loading>
-        </div>
       } @else {
         <!-- Normal Message View -->
         <div class="chat-messages-wrapper">
@@ -146,6 +152,7 @@
                     [artifactsByDetailId]="inputRef.conversationId === conversationId ? artifactsByDetailId : emptyArtifactsMap"
                     [systemArtifactsByDetailId]="inputRef.conversationId === conversationId ? systemArtifactsByDetailId : emptyArtifactsMap"
                     [agentRunsByDetailId]="inputRef.conversationId === conversationId ? agentRunsByDetailId : emptyAgentRunsMap"
+                    [appContext]="appContext"
                     [inProgressMessageIds]="inputRef.conversationId === conversationId ? inProgressMessageIds : emptyInProgressIds"
                     [disabled]="isProcessing"
                     [enableAttachments]="enableAttachments"

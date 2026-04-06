@@ -1309,7 +1309,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                         Success: true,
                         Results: parsed.results,
                         RowCount: parsed.results.length,
-                        TotalRowCount: parsed.results.length,
+                        TotalRowCount: parsed.totalRowCount ?? parsed.results.length,
                         ExecutionTime: 0,
                         ErrorMessage: '',
                         UserViewRunID: '',

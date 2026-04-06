@@ -33,10 +33,6 @@ vi.mock('@memberjunction/ng-explorer-settings', () => ({
   ExplorerSettingsModule: class {},
 }));
 
-vi.mock('@memberjunction/ng-kendo-modules', () => ({
-  MJKendoModule: class {},
-}));
-
 describe('MJExplorerModulesBundle', () => {
   it('should export the bundle module', async () => {
     const mod = await import('../lib/explorer-modules.module');

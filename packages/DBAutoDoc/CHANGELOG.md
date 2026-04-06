@@ -1,5 +1,32 @@
 # @memberjunction/db-auto-doc
 
+## 5.23.0
+
+### Patch Changes
+
+- Updated dependencies [247df16]
+- Updated dependencies [9250070]
+- Updated dependencies [513b20c]
+- Updated dependencies [44bc22b]
+- Updated dependencies [1d1e02e]
+  - @memberjunction/core@5.23.0
+  - @memberjunction/global@5.23.0
+  - @memberjunction/server-bootstrap@5.23.0
+  - @memberjunction/ai@5.23.0
+
+## 5.22.0
+
+### Patch Changes
+
+- Updated dependencies [6a5093b]
+- Updated dependencies [e123e4b]
+- Updated dependencies [a42aba6]
+- Updated dependencies [f2a6bec]
+  - @memberjunction/core@5.22.0
+  - @memberjunction/server-bootstrap@5.22.0
+  - @memberjunction/global@5.22.0
+  - @memberjunction/ai@5.22.0
+
 ## 5.21.0
 
 ### Patch Changes

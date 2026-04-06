@@ -482,13 +482,68 @@
             "checksum": "ecf58beba406f24f399133786f3d30eadb871c2f58e545e81f6ef2069758f368"
           }
         }
+      ],
+      "MJ: AI Agent Client Tools": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ClientToolDefinitionID": "@lookup:MJ: AI Client Tool Definitions.Name=NavigateToApp",
+            "IsRequired": false,
+            "Priority": 0
+          },
+          "primaryKey": {
+            "ID": "4163F9D8-EFA8-4EB4-8930-0640255D3E0E"
+          },
+          "sync": {
+            "lastModified": "2026-04-03T14:26:10.206Z",
+            "checksum": "faaaa230d507c8abc87148565417c12d779941c9f6db23c21b23655ea00a51b7"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ClientToolDefinitionID": "@lookup:MJ: AI Client Tool Definitions.Name=NavigateToRecord",
+            "IsRequired": false,
+            "Priority": 1
+          },
+          "primaryKey": {
+            "ID": "CE24F596-F478-4987-8577-543A9091127E"
+          },
+          "sync": {
+            "lastModified": "2026-04-03T14:26:10.216Z",
+            "checksum": "42d4921794b1ec9be3caefe697bfd7646b1032d4c39011739df9051e4d02f9d7"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ClientToolDefinitionID": "@lookup:MJ: AI Client Tool Definitions.Name=Sleep",
+            "IsRequired": false,
+            "Priority": 2
+          },
+          "primaryKey": {
+            "ID": "8C2E7348-78D3-4CBB-B916-EE625CC3A4AB"
+          },
+          "sync": {
+            "lastModified": "2026-04-03T15:46:00.461Z",
+            "checksum": "e1b61998442df340611bfb6f2748bc5b608a0978e0207d3b036eca2d556e673d"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ClientToolDefinitionID": "@lookup:MJ: AI Client Tool Definitions.Name=OpenBrowserTab",
+            "IsRequired": false,
+            "Priority": 3
+          }
+        }
       ]
     },
     "primaryKey": {
       "ID": "3AB78346-897F-4238-AA6A-F10A131CC691"
     },
     "sync": {
-      "lastModified": "2026-03-13T19:10:50.549Z",
+      "lastModified": "2026-04-03T14:26:09.871Z",
       "checksum": "a66219bfe659e82b1d183ae242d5375e0eb184b807f39076631920266344786a"
     }
   }
