@@ -18,11 +18,14 @@ import { DeletionReportGenerator } from '../lib/deletion-report-generator';
 import { SyncStateManager } from '../lib/sync-state-manager';
 import type { GenericDatabaseProvider, SqlLoggingSession } from '@memberjunction/generic-database-provider';
 
-// Configuration for parallel processing
-// Race conditions with shared mutable state (batchContext, deferredRecords, warnings) were
-// fixed by having processFlattenedRecord return side effects as data, which are then applied
-// sequentially after Promise.all() resolves. This makes parallel execution safe.
-const PARALLEL_BATCH_SIZE = 10; // Number of records to process in parallel at each dependency level
+// Configuration for parallel processing.
+// The side-effect-as-data pattern (processFlattenedRecord returns mutations instead of
+// mutating shared state) makes parallel execution safe from a sync-engine perspective.
+// However, entity Save() overrides (e.g., MJActionEntityServer, MJAIPromptEntityServer)
+// may start transactions, do check-then-create patterns, or interact with shared singletons
+// that assume sequential execution. Default stays at 1 for safety; users can opt in to
+// higher values via --parallel-batch-size after verifying their entity subclasses are safe.
+const PARALLEL_BATCH_SIZE = 1;
 
 export interface PushOptions {
   dir?: string;
