@@ -52,13 +52,42 @@ StateProvince
 - No separate table or file reference needed — keeps the model simple
 - When loading for choropleth, use `Fields` parameter with `ResultType: 'simple'` to select only the columns needed (don't load GeoJSON unless rendering boundaries)
 
-**Seed data via SQL migration, not mj-sync.** Rationale:
+**Seed data via mj-sync with per-country sub-folders.** Rationale:
 - ~250 countries + ~5,000 states/provinces with GeoJSON blobs
-- Static data that changes once per decade at most
-- GeoJSON strings are multi-KB each — awkward in JSON metadata files
-- mj-sync's pull/push workflow adds zero value for data this static
-- A single SQL file with INSERT statements is the natural format
+- Static data that changes once per decade at most — very rarely updated
+- mj-sync with `@file:` references is the right tool: GeoJSON blobs live in separate files, keeping metadata JSON clean and diffable
 - Data sources: ISO 3166-1/3166-2 (codes), Natural Earth Data 50m (centroids + boundaries), GeoNames (aliases) — all public domain / free
+
+**Directory structure for seed data:**
+```
+metadata/
+  countries/
+    .mj-sync.json                    # entity: "Countries", filePattern, etc.
+    .countries.json                   # All ~250 country records (fields only, no GeoJSON inline)
+    boundaries/
+      US.geojson                     # @file:boundaries/US.geojson referenced from .countries.json
+      CA.geojson
+      GB.geojson
+      ...                            # One file per country (~250 files, ~3MB total)
+  state-provinces/
+    .mj-sync.json                    # entity: "State Provinces", filePattern, etc.
+    by-country/
+      US/
+        .us-states.json              # All ~50 US state/territory records
+        boundaries/
+          US-CA.geojson              # @file:boundaries/US-CA.geojson
+          US-NY.geojson
+          ...
+      CA/
+        .ca-provinces.json           # All ~13 Canadian province/territory records
+        boundaries/
+          CA-ON.geojson
+          CA-BC.geojson
+          ...
+      ...                            # One sub-folder per country with states (~200 countries)
+```
+
+This structure keeps individual files small and reviewable, leverages mj-sync's `@file:` syntax for the large GeoJSON blobs, and organizes ~5,000 state/province records into manageable per-country chunks rather than one enormous file.
 
 **Resolution: ~50m (medium resolution) for boundaries.** Rationale:
 - Low-res (110m): ~500KB but visibly jagged at state level
@@ -74,15 +103,18 @@ StateProvince
 RecordGeoCode
   ID                UNIQUEIDENTIFIER  PK
   EntityID          UNIQUEIDENTIFIER  FK → Entity.ID
-  RecordID          NVARCHAR(750)     MJ composite key format string
+  RecordID          NVARCHAR(450)     MJ composite key format string (450 max for SQL Server index support)
   LocationType      NVARCHAR(50)      'Primary','Business','Home','Mailing','PO Box', etc. (default: 'Primary')
   Latitude          DECIMAL(10,6)     Geocoded latitude
   Longitude         DECIMAL(10,6)     Geocoded longitude
   Precision         NVARCHAR(20)      'exact','postal_code','city','county','state_province','country'
   CountryID         UNIQUEIDENTIFIER  FK → Country.ID (nullable) — for choropleth grouping
   StateProvinceID   UNIQUEIDENTIFIER  FK → StateProvince.ID (nullable) — for choropleth grouping
+  Status            NVARCHAR(20)      'success','failed','pending' (default: 'pending')
+  ErrorMessage      NVARCHAR(MAX)     Error details when Status='failed' (nullable)
+  RetryCount        INT               Number of geocoding attempts (default: 0)
   SourceFieldHash   NVARCHAR(64)      SHA-256 of input field values (to detect when re-geocoding needed)
-  GeocodedAt        DATETIMEOFFSET    When this geocoding was performed
+  GeocodedAt        DATETIMEOFFSET    When this geocoding was last attempted
   GeocodingSource   NVARCHAR(30)      'google','reference_data','manual','ip_geolocation'
   UNIQUE(EntityID, RecordID, LocationType)   One geocode result per record per location type
 ```
@@ -121,16 +153,25 @@ Many real-world entities have denormalized address data with multiple locations 
 
 ### Layer 3: Entity Metadata & Virtual Fields
 
-#### New Entity-Level Flag
+#### New Entity-Level Flags
 
 Add to the `Entity` metadata table:
 
 ```
-SupportsGeoCoding   BIT   DEFAULT 0
+SupportsGeoCoding         BIT   DEFAULT 0
+AutoUpdateSupportsGeoCoding   BIT   DEFAULT 1
 ```
 
-When `true`:
-- CodeGen generates geo-aware subclass code for this entity
+**CodeGen auto-detection**: During the LLM field categorization pass, CodeGen analyzes each entity's fields to determine if geo-relevant data exists (address fields, city/state/country fields, lat/lng coordinates, etc.). If the LLM determines the entity has geo-capable fields, **CodeGen automatically sets `SupportsGeoCoding = 1`**. This follows the same pattern as other `AutoUpdate*` flags — the `AutoUpdateSupportsGeoCoding` flag (default: 1) controls whether CodeGen is allowed to change this value. An admin can set `AutoUpdateSupportsGeoCoding = 0` to lock the value (either to force it on for an entity the LLM doesn't detect, or to force it off for an entity that has address-like fields but shouldn't be geocoded).
+
+**Examples of auto-detection**:
+- Entity with `Address`, `City`, `State`, `ZipCode` fields → CodeGen sets `SupportsGeoCoding = 1`
+- Entity with `Latitude`, `Longitude` fields → CodeGen sets `SupportsGeoCoding = 1`
+- Entity with `Country` field (alone) → CodeGen sets `SupportsGeoCoding = 1`
+- Entity with only `Name`, `Description`, `Status` fields → CodeGen leaves `SupportsGeoCoding = 0`
+
+When `SupportsGeoCoding = 1`:
+- CodeGen generates geo-aware subclass code for this entity (GeoFieldMappings + AfterSave hook)
 - CodeGen adds `__mj_Latitude` and `__mj_Longitude` virtual fields to the base view
 - UI shows map view toggle in EntityViewer
 - Scheduled geocoding job includes this entity
@@ -150,7 +191,7 @@ FROM
     ${flyway:defaultSchema}.MyEntity e
     LEFT JOIN ${flyway:defaultSchema}.vwRecordGeoCodes rgc
         ON rgc.EntityID = '<MyEntityID-UUID>'
-        AND rgc.RecordID = CAST(e.ID AS NVARCHAR(750))
+        AND rgc.RecordID = CAST(e.ID AS NVARCHAR(450))
 ```
 
 For entities where `SupportsGeoCoding = 1` AND the entity HAS native lat/lng fields:
@@ -168,6 +209,8 @@ FROM
 ```
 
 **Result**: Every geo-enabled entity has `__mj_Latitude` and `__mj_Longitude` in its view. The map component doesn't care where they came from.
+
+**Form visibility**: `__mj_Latitude` and `__mj_Longitude` are displayed in generated entity forms as **read-only fields** alongside the `__mj_CreatedAt`/`__mj_UpdatedAt` system fields. They are rendered as clickable Google Maps links (e.g., `https://www.google.com/maps?q={lat},{lng}`) so users can quickly view the geocoded location on a map. If either value is null (not yet geocoded), the link is hidden and a "Not geocoded" label is shown instead.
 
 #### How CodeGen Identifies Native Lat/Lng Fields
 
@@ -216,11 +259,16 @@ protected override get GeoFieldMappings(): GeoFieldMapping[] {
 //     ];
 // }
 
-// Hook into save lifecycle — single call to singleton service
+// Hook into save lifecycle — fire-and-forget geocoding (NOT in transaction scope)
+// Geocoding failures never block or roll back the user's save operation.
+// Errors are captured in RecordGeoCode.Status/ErrorMessage for retry by scheduled job.
 protected override async AfterSave(): Promise<boolean> {
     const result = await super.AfterSave();
     if (result) {
-        await GeoCodeSyncService.Instance.SyncIfChanged(this, this.GeoFieldMappings);
+        // Fire-and-forget: intentionally not awaited so the save completes immediately.
+        // SyncIfChanged handles its own error capture internally.
+        GeoCodeSyncService.Instance.SyncIfChanged(this, this.GeoFieldMappings)
+            .catch(e => LogError(`Geocoding failed for ${this.EntityInfo.Name} ${this.ID}: ${e.message}`));
     }
     return result;
 }
@@ -230,8 +278,10 @@ protected override async AfterSave(): Promise<boolean> {
 1. For each GeoFieldMapping, extracts field values from the entity instance
 2. Computes SHA-256 hash of the field values
 3. Checks existing RecordGeoCode row for matching hash
-4. If stale or missing: dispatches geocoding (Google Geocode Action, GeoResolver, or native lat/lng copy)
-5. Upserts RecordGeoCode row with lat/lng, CountryID, StateProvinceID, hash, LocationType
+4. If stale or missing: upserts RecordGeoCode row with `Status='pending'`, then dispatches geocoding
+5. On success: updates row with lat/lng, CountryID, StateProvinceID, hash, LocationType, `Status='success'`
+6. On failure: updates row with `Status='failed'`, `ErrorMessage`, increments `RetryCount`
+7. Never throws — all errors are captured in the RecordGeoCode row for the scheduled job to retry
 
 The generated code never contains geocoding logic, hash computation, or RecordGeoCode operations — just the field-to-location mapping that the LLM determines from analyzing the entity's schema.
 
@@ -297,15 +347,17 @@ export class GeoResolver extends BaseSingleton<GeoResolver> {
 An MJ Action (or scheduled task) that runs on a configurable schedule:
 
 1. Query all entities where `SupportsGeoCoding = 1`
-2. For each entity, find records that either:
-   - Have no RecordGeoCode entry at all (new records never geocoded)
-   - Have a stale SourceFieldHash (source fields changed but geocoding didn't fire on save — e.g., bulk import)
-3. Batch geocode with rate limiting (Google Geocoding API: 50 req/sec limit)
-4. Parallelize across entities (each entity gets its own geocoding stream)
-5. Log results: success count, failures, API quota usage
+2. For each entity, find records in three categories:
+   - **No RecordGeoCode row at all** — records that were never geocoded (e.g., bulk SQL imports that bypass the entity Save path entirely, or records that existed before geocoding was enabled). These have no hash because no AfterSave ever fired.
+   - **Status = 'pending'** — geocoding was triggered but hasn't completed yet (e.g., AfterSave fired but the async geocode hasn't returned)
+   - **Status = 'failed'** — previous geocoding attempt failed. Retry with exponential backoff based on `RetryCount` (skip if `RetryCount >= maxRetries`, configurable, default 3).
+   - **Stale SourceFieldHash** — source fields changed but geocoding didn't fire on save (e.g., direct SQL UPDATE bypassing the entity layer). Detected by recomputing the hash from current field values and comparing to stored hash.
+3. Batch geocode with rate limiting (Google Geocoding API: 50 req/sec — global pool shared across all entities, simpler than per-entity limits)
+4. Parallelize across entities (each entity gets its own geocoding stream, all sharing the global rate limiter)
+5. Log results: success count, failures by category, retry count, API quota usage
 
 **Schedule options**: Daily, weekly, monthly — configurable per deployment.
-**Purpose**: Catches gaps so that runtime map rendering almost never encounters un-geocoded records.
+**Purpose**: Catches all gaps — bulk imports, failed retries, bypassed Save paths — so that runtime map rendering almost never encounters un-geocoded records.
 
 ---
 
@@ -366,6 +418,18 @@ interface MJUserViewEntity_IMapDisplayState {
 | Angular wrapper | Raw Leaflet (thin MJ wrapper) | Avoids extra dependency, Leaflet JS API is clean enough to wrap directly |
 | Marker clustering | `leaflet.markercluster` | Standard Leaflet plugin |
 | Choropleth | Leaflet GeoJSON layer | Built-in Leaflet capability |
+
+#### Choropleth Boundary Data Loading Strategy
+
+BoundaryGeoJSON for all countries (~3MB) and all states (~15-20MB) could be expensive to load eagerly on every map render. The loading strategy uses MJ's existing multi-tier caching:
+
+1. **Lazy load on demand**: Boundary data is only fetched when the user switches to choropleth mode (not on initial point map render). Country boundaries load first (~3MB); state boundaries load only when the user drills into a specific country or selects state-level grouping.
+
+2. **Server-side RunView cache**: The boundary data RunView results are automatically cached by MJ's server-side cache (small result sets, unfiltered, auto-cached). Subsequent requests from any user are served from memory/Redis with zero DB queries.
+
+3. **Client-side caching**: The Angular map component uses BaseEngine-style caching backed by IndexedDB for the boundary GeoJSON. Once loaded, ~20MB of boundary data persists across browser sessions. Cache invalidation is timestamp-based (boundaries change once per decade at most).
+
+4. **Practical impact**: ~20MB in IndexedDB is negligible on modern browsers and even mobile devices. First load takes a few seconds; all subsequent loads are instant from local cache. This is comparable to a single high-res image download — not a concern for any modern device.
 
 ---
 
@@ -464,6 +528,167 @@ A user can Smart Filter "within 50 miles of Denver" while in grid view and never
 
 ---
 
+### Layer 9: Reusable React `SimpleMap` Component (metadata/components)
+
+MemberJunction's `metadata/components` system provides a library of reusable React components (SimpleChart, DataGrid, SimpleDrilldownChart, etc.) that are compiled and executed at runtime by the React runtime (`@memberjunction/react-runtime`). These components are used by Skip and other dynamic code generators to build dashboards and reports without Angular compilation. A `SimpleMap` component extends this library with geographic visualization.
+
+#### Why a Separate React Component (Not Just Angular)
+
+The Angular `ng-map-view` (Layer 7) is a compiled TypeScript component integrated into MJExplorer's entity viewer. The React `SimpleMap` serves a different purpose:
+- **Runtime-compiled**: Skip and other code generators can compose it dynamically without a build step
+- **Composable**: Other generated components can embed it (map + chart, map + grid drill-down)
+- **Portable**: Works anywhere the React runtime runs (Skip dashboards, embedded views, external apps)
+
+#### Code Sharing Between Angular and React: Independent Implementations
+
+The Angular and React map components are **independent implementations** that both use Leaflet directly. Rationale:
+- The shareable surface (Leaflet API calls) is ~100-150 lines — the easy part
+- The hard parts (state management, reactivity, lifecycle) are fundamentally framework-specific
+- Angular uses compiled TypeScript with ChangeDetectorRef/Observables; React components are runtime JS with hooks
+- Coupling their release cycles for marginal code reuse is net-negative
+- Both are self-contained (~25-30KB each), similar to SimpleChart (26KB)
+
+#### Component Specification
+
+**Name**: `SimpleMap`
+**Namespace**: `Generic/UI/Map`
+**Type**: `Map`
+**Libraries**: Leaflet 1.9.x (BSD, no API key, 42KB), leaflet.markercluster, leaflet-heat
+
+**Input Properties** (camelCase, following existing spec convention):
+
+| Prop | Type | Required | Default | Description |
+|------|------|----------|---------|-------------|
+| `data` | array | yes | — | Array of records (same contract as SimpleChart/DataGrid) |
+| `latitudeField` | string | no | `'__mj_Latitude'` | Field name for latitude |
+| `longitudeField` | string | no | `'__mj_Longitude'` | Field name for longitude |
+| `entityName` | string | no | — | Entity name for metadata-aware formatting + OpenEntityRecord |
+| `entityPrimaryKeys` | array | no | — | Key fields for record opening (same pattern as DataGrid) |
+| `renderMode` | string | no | `'point'` | `'point'`, `'choropleth'`, `'heatmap'` |
+| `choroplethGroupBy` | string | no | — | `'country'` or `'state_province'` |
+| `choroplethMetric` | string | no | `'count'` | `'count'` or field name for sum aggregation |
+| `clusterMarkers` | boolean | no | `true` | Enable marker clustering in point mode |
+| `height` | number | no | `400` | Map height in pixels (same default as SimpleChart) |
+| `title` | string | no | — | Map title |
+| `popupFields` | array | no | — | Fields to show in marker popup (auto-detect if omitted) |
+| `center` | object | no | — | `{ lat, lng }` initial center (auto-fit to data bounds if omitted) |
+| `zoom` | number | no | — | Initial zoom level (auto-fit if omitted) |
+| `colors` | array | no | — | Custom color palette for choropleth gradient |
+
+**Events** (following existing event pattern):
+
+| Event | Parameters | Description |
+|-------|-----------|-------------|
+| `onMarkerClick` | `{ record, lat, lng, entityName }` | User clicks a map marker. Same shape as SimpleChart's `onDataPointClick` for composability. |
+| `onRegionClick` | `{ region, records, groupBy, count, metric }` | User clicks a choropleth region. Emits all records in that country/state — enables drill-down to DataGrid or SimpleChart. |
+| `onMapRendered` | `{ renderMode, markerCount, bounds }` | Map finished rendering. |
+
+#### MJ Geo Integration (Zero-Config for Geo-Enabled Entities)
+
+- **Default fields**: `__mj_Latitude` / `__mj_Longitude` — the virtual fields from the geo plan. When `entityName` is provided for a geo-enabled entity, the map works with zero additional configuration.
+- **Choropleth boundaries**: Loaded via `utilities.rv.RunView()` against Country/StateProvince entities with `Fields: ['ID', 'Name', 'ISO2', 'BoundaryGeoJSON']` and `ResultType: 'simple'`. Benefits from the same RunView server cache → client cache pipeline.
+- **Record opening**: `callbacks.OpenEntityRecord(entityName, [{ FieldName: 'ID', Value: record.ID }])` on marker click — identical to DataGrid's pattern.
+- **Smart metadata formatting**: Uses `utilities.md.Entities` to auto-detect field types for popup content, same pattern as DataGrid's smart formatting.
+- **Overridable**: `latitudeField`/`longitudeField` props allow the component to work with any data that has coordinates, not just MJ geo-enabled entities.
+
+#### Composition Examples
+
+Skip and other generators can compose `SimpleMap` with existing components:
+
+```jsx
+// Map + drill-down grid (click marker → see details below)
+function MapDrilldown({ data, entityName, utilities, callbacks, components }) {
+    const [selected, setSelected] = useState(null);
+    const SimpleMap = components['SimpleMap'];
+    const DataGrid = components['DataGrid'];
+
+    return React.createElement('div', null,
+        React.createElement(SimpleMap, {
+            data, entityName,
+            onMarkerClick: (e) => setSelected([e.record])
+        }),
+        selected && React.createElement(DataGrid, {
+            data: selected, entityName
+        })
+    );
+}
+
+// Choropleth + chart (click region → see breakdown)
+function GeoBreakdown({ data, entityName, utilities, callbacks, components }) {
+    const [regionData, setRegionData] = useState(null);
+    const SimpleMap = components['SimpleMap'];
+    const SimpleChart = components['SimpleChart'];
+
+    return React.createElement('div', null,
+        React.createElement(SimpleMap, {
+            data, renderMode: 'choropleth', choroplethGroupBy: 'country',
+            onRegionClick: (e) => setRegionData(e.records)
+        }),
+        regionData && React.createElement(SimpleChart, {
+            data: regionData, groupBy: 'Status', chartType: 'pie'
+        })
+    );
+}
+```
+
+#### File Structure (Following Existing Convention)
+
+```
+metadata/components/
+  spec/generic/simple-map.spec.json         # Component specification
+  code/generic/simple-map.js                # Implementation (~25-30KB)
+  descriptions/generic/simple-map.md        # One-line summary + use cases
+  functional-requirements/generic/simple-map.md  # Feature list
+  technical-design/generic/simple-map.md    # Architecture + data pipeline
+```
+
+Registered in `.components.json` with `Namespace: "Generic/UI/Map"`, `Type: "Map"`.
+
+---
+
+### Layer 10: Recommended Future React Components
+
+Based on analysis of the existing component library (SimpleChart, DataGrid, SimpleDrilldownChart, EntityDataGrid, SingleRecordView, AIInsightsPanel, DataExportPanel, OpenRecordButton), these are the highest-value additions beyond SimpleMap:
+
+#### SimpleKPI — High Priority (Recommend: Phase 1 or Soon After)
+
+Every generated dashboard needs KPI tiles. Big number + label + trend indicator + optional sparkline. This is the most common dashboard primitive currently missing.
+
+```
+┌─────────────────────┐
+│  Revenue             │
+│  $1,247,832          │
+│  ▲ 12.3% vs last mo  │
+│  ▂▃▅▆▇█▇▅ (sparkline)│
+└─────────────────────┘
+```
+
+**Props**: `data`, `valueField`, `aggregateMethod` (count/sum/avg), `title`, `comparisonData` (for trend), `comparisonLabel`, `format` (currency/number/percent), `sparkline` (boolean), `sparklineField` (date for x-axis).
+
+Skip would use this constantly: "show me total revenue, active users, and open tickets" → three SimpleKPI instances. Small component (~10KB), high ROI.
+
+#### SimpleTimeline — Medium-High Priority
+
+Chronological event display for activity feeds, audit trails, status histories. MJ has timeline in Angular but nothing for Skip-generated views.
+
+**Props**: `data`, `dateField`, `titleField`, `descriptionField`, `statusField`, `entityName`, `groupBy` (day/week/month).
+
+#### SimpleFilterPanel — Medium Priority
+
+Visual filter builder that emits WHERE clauses. Currently Skip hardcodes filters; a reusable filter component enables interactive filtering across connected components (filter → chart + grid + map all update).
+
+**Props**: `entityName`, `fields`, `onChange` (emits ExtraFilter string).
+
+#### SimpleKanban — Lower Priority, High Impact
+
+Board view for status-based workflows. Columns = status values, cards = records.
+
+**Props**: `data`, `columnField`, `titleField`, `entityName`, `allowDrag`.
+
+**Recommended sequencing**: SimpleMap (this plan) → SimpleKPI (next) → SimpleTimeline → SimpleFilterPanel → SimpleKanban.
+
+---
+
 ## New Packages
 
 | Package | Purpose |
@@ -479,17 +704,19 @@ A user can Smart Filter "within 50 miles of Denver" while in grid view and never
 
 | Object | Type | Notes |
 |--------|------|-------|
-| `Country` | New table + entity | ~250 rows seeded, medium-res boundaries |
-| `StateProvince` | New table + entity | ~5,000 rows seeded, medium-res boundaries |
-| `RecordGeoCode` | New table + entity | Polymorphic, grows as records are geocoded |
+| `Country` | New table + entity | ~250 rows seeded via mj-sync, medium-res boundaries in `@file:` GeoJSON |
+| `StateProvince` | New table + entity | ~5,000 rows seeded via mj-sync (per-country sub-folders), medium-res boundaries |
+| `RecordGeoCode` | New table + entity | Polymorphic, grows as records are geocoded. Includes Status/ErrorMessage/RetryCount for error tracking |
 | `vwRecordGeoCodes` | New view | Wrapper view for the LEFT JOIN |
 | `fn_MJ_GeoDistance` | Scalar SQL function | Haversine distance calc, baseline infrastructure |
 | `fn_MJ_GeoRecordsNear` | Inline TVF | Bounding box + Haversine radius query, baseline infrastructure |
-| `Entity.SupportsGeoCoding` | New column | BIT, controls geo feature availability |
+| `Entity.SupportsGeoCoding` | New column | BIT, controls geo feature availability. **Auto-set by CodeGen** when LLM detects geo-capable fields |
+| `Entity.AutoUpdateSupportsGeoCoding` | New column | BIT DEFAULT 1, controls whether CodeGen can auto-update SupportsGeoCoding |
 | `EntityField.ExtendedType` | Existing column | Add recognized values: GeoLatitude, GeoLongitude, GeoCountry, GeoStateProvince, GeoCity, GeoPostalCode, GeoAddress |
 | `EntityField.AutoUpdateExtendedType` | New column | BIT DEFAULT 1, controls LLM auto-suggestion of ExtendedType |
 | Base views for geo entities | Modified by CodeGen | LEFT JOIN to vwRecordGeoCodes or native field alias |
 | AI prompts (Smart Filter, Query Builder, DB Research) | Updated | Geo-awareness via shared `@include` template |
+| `SimpleMap` React component | New metadata component | `metadata/components/code/generic/simple-map.js` — reusable map for Skip and other code generators |
 
 ---
 
@@ -499,15 +726,21 @@ A user can Smart Filter "within 50 miles of Denver" while in grid view and never
                                     WRITE PATH (infrequent)
                                     ========================
 Record Save (address changed)
-    → Generated subclass calls GeoCodeSyncService.Instance.SyncIfChanged(entity, fieldMappings)
+    → Generated subclass fires GeoCodeSyncService.Instance.SyncIfChanged() (fire-and-forget, NOT awaited)
     → Service computes hash per LocationType, compares to stored SourceFieldHash
-    → If stale: dispatches geocoding (Google Geocode Action, GeoResolver, or native lat/lng copy)
-    → Upserts RecordGeoCode row (lat, lng, CountryID, StateProvinceID, hash, LocationType)
+    → If stale: upserts RecordGeoCode row with Status='pending', dispatches geocoding
+    → On success: updates Status='success' with lat/lng, CountryID, StateProvinceID, hash
+    → On failure: updates Status='failed' with ErrorMessage, increments RetryCount
+    → Save ALWAYS succeeds regardless of geocoding outcome
 
 Scheduled Job (daily/weekly)
-    → Finds un-geocoded or stale records across all geo-enabled entities
-    → Batch geocodes with rate limiting
-    → Fills RecordGeoCode gaps
+    → Finds records across all geo-enabled entities that need geocoding:
+       • No RecordGeoCode row (bulk imports, pre-existing records)
+       • Status='pending' (in-flight but not completed)
+       • Status='failed' (retries with exponential backoff, up to maxRetries)
+       • Stale SourceFieldHash (direct SQL updates bypassing entity layer)
+    → Batch geocodes with global rate limiter (50 req/sec Google API limit)
+    → Fills all gaps
 
                                     READ PATH (fast, no API calls)
                                     ===============================
@@ -525,10 +758,10 @@ Map View loads entity data
 
 ### Phase 1: Foundation (Reference Data + Infrastructure)
 1. Create Country and StateProvince tables + migrations
-2. Seed ~250 countries + ~5,000 states/provinces with centroids, ISO codes, aliases, medium-res boundaries (GeoJSON format)
+2. Seed ~250 countries + ~5,000 states/provinces via mj-sync with per-country sub-folders and `@file:` GeoJSON references (centroids, ISO codes, aliases, medium-res boundaries)
 3. Create RecordGeoCode table (with LocationType discriminator) + vwRecordGeoCodes view
 4. Create `fn_MJ_GeoDistance` (scalar) and `fn_MJ_GeoRecordsNear` (inline TVF, takes Entity Name) SQL functions — baseline infrastructure, SQL Server + PostgreSQL
-5. Add `Entity.SupportsGeoCoding` column to Entity table
+5. Add `Entity.SupportsGeoCoding` and `Entity.AutoUpdateSupportsGeoCoding` columns to Entity table
 6. Add `EntityField.AutoUpdateExtendedType` BIT column (default: 1)
 7. Run CodeGen to generate entity classes for new tables
 8. Build `@memberjunction/geo-core` package: core types, interfaces, `GeoCodeSyncService` (BaseSingleton), hash utilities
@@ -537,8 +770,9 @@ Map View loads entity data
 ### Phase 2: CodeGen Integration
 1. Expand ExtendedType valid values: GeoLatitude, GeoLongitude, GeoCountry, GeoStateProvince, GeoCity, GeoPostalCode, GeoAddress
 2. Update CodeGen LLM field categorization to auto-suggest ExtendedType values (controlled by `AutoUpdateExtendedType` flag)
-3. Update CodeGen base view generation: when `SupportsGeoCoding = 1`, add LEFT JOIN to vwRecordGeoCodes (LocationType='Primary') or alias native lat/lng fields
-4. Update CodeGen entity subclass generation: LLM-based analysis of fields → generate `GeoFieldMappings` property + `AfterSave` hook calling `GeoCodeSyncService.Instance.SyncIfChanged()` (multi-location aware)
+3. **Update CodeGen to auto-detect geo-capable entities**: During the LLM field analysis pass, if geo-relevant fields are detected (address, city/state/country, lat/lng, etc.), CodeGen automatically sets `SupportsGeoCoding = 1` on the entity (controlled by `AutoUpdateSupportsGeoCoding` flag). This means admins don't need to manually enable geocoding — CodeGen discovers it.
+4. Update CodeGen base view generation: when `SupportsGeoCoding = 1`, add LEFT JOIN to vwRecordGeoCodes (LocationType='Primary') or alias native lat/lng fields
+5. Update CodeGen entity subclass generation: LLM-based analysis of fields → generate `GeoFieldMappings` property + `AfterSave` hook calling `GeoCodeSyncService.Instance.SyncIfChanged()` (multi-location aware)
 5. Add `__mj_Latitude` / `__mj_Longitude` as virtual fields in EntityField metadata for geo-enabled entities
 6. Create shared geo context template at `metadata/prompts/templates/_includes/geo-context.md`
 7. Update AI prompts via `{@include}` directive:
@@ -546,7 +780,9 @@ Map View loads entity data
    - **Query Builder Agent**: geographic WHERE clauses, reference table JOINs, proximity functions
    - **Database Research Agent**: RecordGeoCode structure, reference table relationships, spatial SQL functions
 
-### Phase 3: Map View UI
+### Phase 3: Map View UI (Angular + React)
+
+**Angular — MJExplorer Entity Viewer:**
 1. Create `@memberjunction/ng-map-view` package with Leaflet-based component
 2. Add `'map'` to `EntityViewMode` union type
 3. Wire map toggle into EntityViewerComponent (conditional on `SupportsGeoCoding`)
@@ -555,6 +791,17 @@ Map View loads entity data
 6. Implement heatmap mode
 7. Add map configuration to DisplayState persistence
 8. Add map settings to ViewConfigPanel
+
+**React — SimpleMap for Skip / Dynamic Code Generators:**
+9. Create `SimpleMap` component: spec, code, descriptions, functional-requirements, technical-design files
+10. Register in `.components.json` under `Generic/UI/Map`
+11. Implement point map with marker clustering (Leaflet + leaflet.markercluster)
+12. Implement choropleth mode (loads BoundaryGeoJSON via `utilities.rv.RunView()`)
+13. Implement heatmap mode (leaflet-heat)
+14. Wire `onMarkerClick` / `onRegionClick` events for drill-down composition with DataGrid/SimpleChart
+15. Test via `@memberjunction/react-test-harness` with geo-enabled entity data
+
+Both implementations use Leaflet independently — no shared code between Angular and React (see Layer 9 rationale).
 
 ### Phase 4: Scheduled Geocoding & Polish
 1. Build scheduled geocoding Action/job
@@ -588,10 +835,10 @@ Map View loads entity data
 
 4. **Sub-country granularity**: **Not Phase 1.** Data size estimate: ~40,000 admin-2 regions worldwide, ~200-500MB boundary data at 50m resolution (Natural Earth, public domain). US counties alone (~3,200) would be ~30-50MB. Feasible as a future optional add-on schema — just another reference table + RecordGeoCode gains a new FK column.
 
-5. **Multi-location entities**: **Supported in Phase 1 via LocationType discriminator.** `RecordGeoCode.LocationType` (NVARCHAR(50), default: 'Primary') with UNIQUE constraint on `(EntityID, RecordID, LocationType)`. The LLM in CodeGen detects address field groupings (e.g., HomeAddress/HomeCity vs WorkAddress/WorkCity) and emits separate `GeoFieldMapping` entries with appropriate LocationType values ('Home', 'Business', etc.). For normalized address tables, geo attaches to the Address record itself — no LocationType needed. The `__mj_Latitude`/`__mj_Longitude` virtual fields JOIN to LocationType = 'Primary' by default.
+5. **Rate limiting strategy**: **Global pool.** A single global rate limiter (50 req/sec for Google Geocoding API) shared across all entities is simpler and more predictable than per-entity limits. Entity-level parallelism is achieved by having each entity produce geocoding requests into the shared pool.
+
+6. **Multi-location entities**: **Supported in Phase 1 via LocationType discriminator.** `RecordGeoCode.LocationType` (NVARCHAR(50), default: 'Primary') with UNIQUE constraint on `(EntityID, RecordID, LocationType)`. The LLM in CodeGen detects address field groupings (e.g., HomeAddress/HomeCity vs WorkAddress/WorkCity) and emits separate `GeoFieldMapping` entries with appropriate LocationType values ('Home', 'Business', etc.). For normalized address tables, geo attaches to the Address record itself — no LocationType needed. The `__mj_Latitude`/`__mj_Longitude` virtual fields JOIN to LocationType = 'Primary' by default.
 
 ## Remaining Open Questions
 
 1. **County-level precision**: The `Precision` enum includes `'county'` but Phase 1 has no County reference table. Should Google Geocode results that resolve to county level store `Precision='county'` with null CountryID for the county-level FK? (Yes — store the precision, leave the FK null until a County table exists.)
-
-2. **Rate limiting strategy for scheduled job**: Per-entity parallelism with per-entity rate limits, or a global rate limit pool shared across all entities? Google's limit is 50 req/sec — probably a global pool is simpler.
