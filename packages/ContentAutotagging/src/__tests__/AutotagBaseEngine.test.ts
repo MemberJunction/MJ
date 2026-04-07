@@ -192,6 +192,7 @@ vi.mock('@memberjunction/aiengine', () => ({
         Config: vi.fn().mockResolvedValue(undefined),
         Models: mockModels,
         Prompts: mockPrompts,
+        VectorDatabases: [{ ID: 'vdb-1', Name: 'Pinecone', ClassKey: 'PineconeDB' }],
       };
     }
     Config = vi.fn().mockResolvedValue(undefined);
@@ -201,20 +202,41 @@ vi.mock('@memberjunction/aiengine', () => ({
     get Prompts() {
       return mockPrompts;
     }
+    get VectorDatabases() {
+      return [{ ID: 'vdb-1', Name: 'Pinecone', ClassKey: 'PineconeDB' }];
+    }
   },
 }));
 
-vi.mock('@memberjunction/core-entities', () => ({
-  MJContentSourceEntity: vi.fn(),
-  MJContentItemEntity: vi.fn(),
-  MJContentFileTypeEntity: vi.fn(),
-  MJContentProcessRunEntity: vi.fn(),
-  MJContentTypeEntity: vi.fn(),
-  MJContentSourceTypeEntity: vi.fn(),
-  MJContentTypeAttributeEntity: vi.fn(),
-  MJContentSourceParamEntity: vi.fn(),
-  MJContentItemAttributeEntity: vi.fn(),
-}));
+vi.mock('@memberjunction/core-entities', () => {
+  const mockVectorIndexes = [
+    { ID: 'idx-1', Name: 'test-index', VectorDatabaseID: 'vdb-1', EmbeddingModelID: 'embed-model-1' },
+  ];
+  const mockKHInstance = {
+    ContentSources: [],
+    ContentTypes: [],
+    ContentSourceTypes: [],
+    ContentFileTypes: [],
+    VectorIndexes: mockVectorIndexes,
+    GetVectorIndexById: vi.fn().mockImplementation((id: string) =>
+      mockVectorIndexes.find(v => v.ID === id)
+    ),
+  };
+  return {
+    MJContentSourceEntity: vi.fn(),
+    MJContentItemEntity: vi.fn(),
+    MJContentFileTypeEntity: vi.fn(),
+    MJContentProcessRunEntity: vi.fn(),
+    MJContentTypeEntity: vi.fn(),
+    MJContentSourceTypeEntity: vi.fn(),
+    MJContentTypeAttributeEntity: vi.fn(),
+    MJContentSourceParamEntity: vi.fn(),
+    MJContentItemAttributeEntity: vi.fn(),
+    KnowledgeHubMetadataEngine: {
+      get Instance() { return mockKHInstance; },
+    },
+  };
+});
 
 vi.mock('pdf-parse', () => ({
   default: vi.fn().mockResolvedValue({ text: 'PDF text content' }),

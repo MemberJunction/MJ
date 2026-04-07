@@ -401,14 +401,14 @@ export class RecordTagsComponent implements OnInit {
      * Returns an opacity value (0.3 - 1.0) based on the tag weight.
      */
     public GetTagOpacity(weight: number): number {
-        return Math.max(0.3, Number(weight) || 1);
+        return Math.max(0.3, Number(weight) ?? 1);
     }
 
     /**
      * Returns a font size multiplier (0.85 - 1.15) based on the tag weight.
      */
     public GetTagFontSize(weight: number): string {
-        const w = Number(weight) || 1;
+        const w = Number(weight) ?? 1;
         const size = 0.85 + (w * 0.3);
         return `${size}rem`;
     }
