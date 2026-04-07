@@ -7,6 +7,7 @@
  */
 import sql from 'mssql';
 import ora from 'ora-classic';
+import { createRequire } from 'node:module';
 import type { UserInfo } from '@memberjunction/core';
 import { setupSQLServerClient, SQLServerProviderConfigData, SQLServerDataProvider, UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { getValidatedConfig } from '../config.js';
@@ -203,6 +204,12 @@ interface OrchestratorContextShape {
     OnLog?: (message: string) => void;
   };
 }
+
+// createRequire is needed because getMJVersion uses require.resolve() to locate
+// package.json files. This package is ESM ("type": "module"), so the CommonJS
+// `require` global is not available at runtime on Node 22+. createRequire
+// provides a CJS-compatible resolver scoped to this file's URL.
+const require = createRequire(import.meta.url);
 
 /** Reads the current MJ version. Tries @memberjunction/core first, then local MJGlobal. */
 function getMJVersion(): string {

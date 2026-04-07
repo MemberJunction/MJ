@@ -114,6 +114,7 @@ export class LoopAgentType extends BaseAgentType {
                     message: response.message,
                     terminate: true, // Chat always terminates to return to user
                     payloadChangeRequest: response.payloadChangeRequest,
+                    scratchpad: response.scratchpad,
                     responseForm: response.responseForm,
                     actionableCommands: response.actionableCommands,
                     automaticCommands: response.automaticCommands,
@@ -133,6 +134,7 @@ export class LoopAgentType extends BaseAgentType {
                     reasoning: response.reasoning,
                     confidence: response.confidence,
                     payloadChangeRequest: response.payloadChangeRequest,
+                    scratchpad: response.scratchpad,
                     responseForm: response.responseForm,
                     actionableCommands: response.actionableCommands,
                     automaticCommands: response.automaticCommands
@@ -147,6 +149,7 @@ export class LoopAgentType extends BaseAgentType {
             // Determine next step based on type
             const retVal: Partial<BaseAgentNextStep<P>> = {
                 payloadChangeRequest: response.payloadChangeRequest,
+                scratchpad: response.scratchpad,
                 terminate: response.taskComplete,
                 responseForm: response.responseForm,
                 actionableCommands: response.actionableCommands,
@@ -204,6 +207,12 @@ export class LoopAgentType extends BaseAgentType {
                         retVal.step = 'While';
                         retVal.while = response.nextStep.while;
                     }
+                    break;
+                case 'Retry':
+                    // Message expansion: agent wants to see full content of a compacted message
+                    retVal.step = 'Retry';
+                    retVal.messageIndex = response.nextStep.messageIndex;
+                    retVal.expandReason = response.nextStep.reason;
                     break;
                 default:
                     retVal.step = 'Retry';
@@ -291,7 +300,7 @@ export class LoopAgentType extends BaseAgentType {
 
         // Validate nextStep structure if present
         if (response.nextStep) {
-            const validStepTypes = ['actions', 'sub-agent', 'chat', 'foreach', 'while'];
+            const validStepTypes = ['actions', 'sub-agent', 'chat', 'retry', 'foreach', 'while'];
             let lcaseType = response.nextStep.type?.toLowerCase().trim();
             // allow the AI to mess up the case, but we need to validate it
 

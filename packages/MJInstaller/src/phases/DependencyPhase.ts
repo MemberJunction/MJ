@@ -150,7 +150,7 @@ export class DependencyPhase {
       throw new InstallerError(
         'dependencies',
         'NPM_INSTALL_TIMEOUT',
-        'npm install timed out after 10 minutes.',
+        'npm install timed out after 15 minutes.',
         'Run "npm install" manually at the repo root. Check network connectivity.'
       );
     }
@@ -169,7 +169,7 @@ export class DependencyPhase {
         throw new InstallerError(
           'dependencies',
           'NPM_INSTALL_TIMEOUT',
-          'npm install --legacy-peer-deps timed out after 10 minutes.',
+          'npm install --legacy-peer-deps timed out after 15 minutes.',
           'Run "npm install --legacy-peer-deps" manually at the repo root.'
         );
       }
@@ -336,7 +336,7 @@ export class DependencyPhase {
     const args = ['install', ...extraArgs];
     return this.processRunner.Run('npm', args, {
       Cwd: dir,
-      TimeoutMs: 600_000, // 10 minutes
+      TimeoutMs: 900_000, // 15 minutes
       OnStdout: (line: string) => {
         emitter.Emit('step:progress', {
           Type: 'step:progress',
@@ -372,94 +372,38 @@ export class DependencyPhase {
   // ---------------------------------------------------------------------------
 
   /**
-   * Ensure `@memberjunction/cli` is in the root `package.json` devDependencies.
+   * Verify `@memberjunction/cli` is present in the root `package.json`.
    *
-   * The bootstrap distribution's scripts (`mj:migrate`, `mj:codegen`) and the
-   * apps' `prestart` scripts (`mj codegen manifest`) require the `mj` binary.
-   * Without an explicit dependency, `mj` resolves to whatever is on the system
-   * PATH (often a stale version or nothing at all in the distribution).
+   * In the monorepo layout, the CLI is a workspace package and should already
+   * be declared. This method just logs a warning if it's missing.
    */
   private async ensureCliDependency(
     dir: string,
-    tag: string,
+    _tag: string,
     emitter: InstallerEventEmitter
   ): Promise<void> {
     const pkgPath = path.join(dir, 'package.json');
     const pkg = await this.fileSystem.ReadJSON<Record<string, Record<string, string>>>(pkgPath);
 
-    const npmVersion = tag.startsWith('v') ? tag.slice(1) : tag;
-
-    if (!pkg['devDependencies']) {
-      pkg['devDependencies'] = {};
-    }
-
-    const existing = pkg['devDependencies']['@memberjunction/cli'];
-    if (existing === npmVersion) {
-      return;
-    }
-
-    pkg['devDependencies']['@memberjunction/cli'] = npmVersion;
-    await this.fileSystem.WriteJSON(pkgPath, pkg);
-
-    emitter.Emit('step:progress', {
-      Type: 'step:progress',
-      Phase: 'dependencies',
-      Message: `Added @memberjunction/cli@${npmVersion} to devDependencies`,
-    });
-  }
-
-  // ---------------------------------------------------------------------------
-  // Dependency hoisting
-  // ---------------------------------------------------------------------------
-
-  /**
-   * Packages that must be hoisted to the root `node_modules` to avoid duplicate-
-   * instance problems with Angular's DI system and MJ's ClassFactory.
-   */
-  private static readonly HOISTED_PACKAGES: ReadonlyArray<{
-    Name: string;
-    Section: 'dependencies' | 'devDependencies';
-  }> = [
-    { Name: '@memberjunction/ng-auth-services', Section: 'dependencies' },
-  ];
-
-  /**
-   * Ensure packages that require hoisting are listed in the root package.json
-   * so npm places a single copy at root `node_modules`.
-   */
-  private async ensureHoistedDependencies(
-    dir: string,
-    tag: string,
-    emitter: InstallerEventEmitter
-  ): Promise<void> {
-    const pkgPath = path.join(dir, 'package.json');
-    const pkg = await this.fileSystem.ReadJSON<Record<string, Record<string, string>>>(pkgPath);
-    const npmVersion = tag.startsWith('v') ? tag.slice(1) : tag;
-
-    let modified = false;
-
-    for (const { Name, Section } of DependencyPhase.HOISTED_PACKAGES) {
-      if (!pkg[Section]) {
-        pkg[Section] = {};
-      }
-
-      const existing = pkg[Section][Name];
-      if (existing === npmVersion) {
-        continue;
-      }
-
-      pkg[Section][Name] = npmVersion;
-      modified = true;
-
-      emitter.Emit('step:progress', {
-        Type: 'step:progress',
+    const hasCli = pkg['devDependencies']?.['@memberjunction/cli'] || pkg['dependencies']?.['@memberjunction/cli'];
+    if (!hasCli) {
+      emitter.Emit('warn', {
+        Type: 'warn',
         Phase: 'dependencies',
-        Message: `Added ${Name}@${npmVersion} to ${Section} (hoisting fix)`,
+        Message: '@memberjunction/cli not found in root package.json — mj commands may not work. Expected it as a workspace dependency.',
       });
     }
+  }
 
-    if (modified) {
-      await this.fileSystem.WriteJSON(pkgPath, pkg);
-    }
+  /**
+   * No-op in monorepo mode. Workspace resolution handles hoisting automatically.
+   * Retained for interface compatibility.
+   */
+  private async ensureHoistedDependencies(
+    _dir: string,
+    _tag: string,
+    _emitter: InstallerEventEmitter
+  ): Promise<void> {
+    // Monorepo workspace resolution handles hoisting via npm workspaces
   }
 }

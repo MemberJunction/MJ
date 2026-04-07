@@ -1,5 +1,117 @@
 # @memberjunction/metadata-sync
 
+## 5.22.0
+
+### Patch Changes
+
+- Updated dependencies [6a5093b]
+- Updated dependencies [e123e4b]
+- Updated dependencies [a42aba6]
+- Updated dependencies [f2a6bec]
+  - @memberjunction/core@5.22.0
+  - @memberjunction/server-bootstrap-lite@5.22.0
+  - @memberjunction/global@5.22.0
+  - @memberjunction/graphql-dataprovider@5.22.0
+  - @memberjunction/core-entities-server@5.22.0
+  - @memberjunction/generic-database-provider@5.22.0
+  - @memberjunction/core-entities@5.22.0
+  - @memberjunction/sqlserver-dataprovider@5.22.0
+  - @memberjunction/config@5.22.0
+
+## 5.21.0
+
+### Patch Changes
+
+- Updated dependencies [c7dfb20]
+  - @memberjunction/core@5.21.0
+  - @memberjunction/core-entities-server@5.21.0
+  - @memberjunction/server-bootstrap-lite@5.21.0
+  - @memberjunction/sqlserver-dataprovider@5.21.0
+  - @memberjunction/generic-database-provider@5.21.0
+  - @memberjunction/graphql-dataprovider@5.21.0
+  - @memberjunction/core-entities@5.21.0
+  - @memberjunction/config@5.21.0
+  - @memberjunction/global@5.21.0
+
+## 5.20.0
+
+### Patch Changes
+
+- Updated dependencies [cc954e1]
+- Updated dependencies [2298f8a]
+  - @memberjunction/generic-database-provider@5.20.0
+  - @memberjunction/core@5.20.0
+  - @memberjunction/core-entities-server@5.20.0
+  - @memberjunction/sqlserver-dataprovider@5.20.0
+  - @memberjunction/server-bootstrap-lite@5.20.0
+  - @memberjunction/graphql-dataprovider@5.20.0
+  - @memberjunction/core-entities@5.20.0
+  - @memberjunction/config@5.20.0
+  - @memberjunction/global@5.20.0
+
+## 5.19.0
+
+### Patch Changes
+
+- @memberjunction/server-bootstrap-lite@5.19.0
+- @memberjunction/config@5.19.0
+- @memberjunction/generic-database-provider@5.19.0
+- @memberjunction/graphql-dataprovider@5.19.0
+- @memberjunction/core@5.19.0
+- @memberjunction/core-entities@5.19.0
+- @memberjunction/core-entities-server@5.19.0
+- @memberjunction/global@5.19.0
+- @memberjunction/sqlserver-dataprovider@5.19.0
+
+## 5.18.0
+
+### Patch Changes
+
+- Updated dependencies [931740a]
+  - @memberjunction/core-entities-server@5.18.0
+  - @memberjunction/server-bootstrap-lite@5.18.0
+  - @memberjunction/graphql-dataprovider@5.18.0
+  - @memberjunction/generic-database-provider@5.18.0
+  - @memberjunction/sqlserver-dataprovider@5.18.0
+  - @memberjunction/config@5.18.0
+  - @memberjunction/core@5.18.0
+  - @memberjunction/core-entities@5.18.0
+  - @memberjunction/global@5.18.0
+
+## 5.17.0
+
+### Patch Changes
+
+- Updated dependencies [4b6fd2a]
+- Updated dependencies [bbfbf5e]
+- Updated dependencies [9881045]
+  - @memberjunction/generic-database-provider@5.17.0
+  - @memberjunction/core-entities-server@5.17.0
+  - @memberjunction/graphql-dataprovider@5.17.0
+  - @memberjunction/core@5.17.0
+  - @memberjunction/sqlserver-dataprovider@5.17.0
+  - @memberjunction/server-bootstrap-lite@5.17.0
+  - @memberjunction/core-entities@5.17.0
+  - @memberjunction/config@5.17.0
+  - @memberjunction/global@5.17.0
+
+## 5.16.0
+
+### Patch Changes
+
+- Updated dependencies [2387400]
+- Updated dependencies [179a4ce]
+- Updated dependencies [11dba07]
+  - @memberjunction/core@5.16.0
+  - @memberjunction/graphql-dataprovider@5.16.0
+  - @memberjunction/generic-database-provider@5.16.0
+  - @memberjunction/core-entities@5.16.0
+  - @memberjunction/core-entities-server@5.16.0
+  - @memberjunction/sqlserver-dataprovider@5.16.0
+  - @memberjunction/server-bootstrap-lite@5.16.0
+  - @memberjunction/config@5.16.0
+  - @memberjunction/global@5.16.0
+
 ## 5.15.0
 
 ### Patch Changes

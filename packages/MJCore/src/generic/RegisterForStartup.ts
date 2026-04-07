@@ -1,3 +1,4 @@
+import { BaseSingleton } from "@memberjunction/global";
 import { UserInfo } from "./securityInfo";
 import { IMetadataProvider } from "./interfaces";
 import { Metadata } from "./metadata";
@@ -133,10 +134,13 @@ export interface LoadAllResult {
     fatalError?: Error;
 }
 
-// Type for the class constructor that can be decorated
-type StartupClassConstructor = {
-    new(...args: unknown[]): IStartupSink;
+// Type for the class constructor that can be decorated.
+// The decorator never calls `new` — it only accesses the static `Instance` property.
+// Using Function + Instance instead of `new()` to accept both public and protected
+// constructors (e.g. BaseSingleton-derived classes with protected constructors).
+type StartupClassConstructor = Function & {
     Instance: IStartupSink;
+    name: string;
 };
 
 /**
@@ -213,7 +217,8 @@ export function RegisterForStartup<T extends StartupClassConstructor>(
     }
 
     // Called with options (or empty parentheses): @RegisterForStartup() or @RegisterForStartup({ ... })
-    const options = constructorOrOptions || {};
+    // The typeof check above guarantees this is not a constructor at this point
+    const options = (constructorOrOptions || {}) as RegisterForStartupOptions;
     return function(constructor: T): T {
         return registerStartupClass(constructor, options);
     };
@@ -226,25 +231,28 @@ export function RegisterForStartup<T extends StartupClassConstructor>(
 /**
  * Manages registration and loading of startup classes.
  * This is a singleton that handles the @RegisterForStartup decorator pattern.
+ *
+ * Uses BaseSingleton to guarantee a single instance across the entire process,
+ * even if bundlers duplicate this module across multiple execution paths.
  */
-export class StartupManager {
-    private static _instance: StartupManager;
-
+export class StartupManager extends BaseSingleton<StartupManager> {
     private _registrations: StartupRegistration[] = [];
     private _loadCompleted: boolean = false;
     private _loadPromise: Promise<LoadAllResult> | null = null;
     private _lastResult: LoadAllResult | null = null;
 
-    private constructor() {}
+    /**
+     * Use StartupManager.Instance to get the singleton instance.
+     */
+    public constructor() {
+        super();
+    }
 
     /**
      * Returns the singleton instance of StartupManager
      */
     public static get Instance(): StartupManager {
-        if (!StartupManager._instance) {
-            StartupManager._instance = new StartupManager();
-        }
-        return StartupManager._instance;
+        return StartupManager.getInstance<StartupManager>();
     }
 
     /**

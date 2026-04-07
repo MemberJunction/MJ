@@ -460,10 +460,14 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
 
   /**
    * Escapes ${...} patterns within SQL string literals to prevent Flyway from interpreting them as placeholders.
-   * Converts ${templateVariable} to $' + '{templateVariable} within string literals.
+   * Converts ${templateVariable} to $' + N'{templateVariable} within string literals.
+   *
+   * The N prefix on the continuation string is critical: without it, the second half of the split N'...' literal
+   * is treated as VARCHAR and implicitly promoted to NVARCHAR(4000) during concatenation, truncating any content
+   * beyond 4,000 chars. With N, both halves remain NVARCHAR and the full value is preserved.
    */
   private _escapeFlywaySyntaxInStrings(sql: string): string {
-    return sql.replaceAll(/\$\{/g, "$$'+'{");
+    return sql.replaceAll(/\$\{/g, "$$'+N'{");
   }
 
 }

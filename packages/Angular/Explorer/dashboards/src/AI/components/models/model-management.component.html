@@ -56,9 +56,9 @@
       </div>
     </div>
 
-    <kendo-splitter orientation="horizontal">
+    <as-split direction="horizontal">
       @if (showFilters) {
-        <kendo-splitter-pane size="320" min="250" max="400">
+        <as-split-area [size]="20" [minSize]="15" [maxSize]="25">
           <div class="filter-panel">
             <div class="filter-panel-header">
               <h3>Model Filters</h3>
@@ -179,10 +179,10 @@
               </div>
             </div>
           </div>
-        </kendo-splitter-pane>
+        </as-split-area>
       }
 
-      <kendo-splitter-pane>
+      <as-split-area>
         <div class="content-area">
           @if (filteredModels.length === 0) {
             <div class="empty-state">
@@ -407,8 +407,8 @@
             }
           }
         </div>
-      </kendo-splitter-pane>
-    </kendo-splitter>
+      </as-split-area>
+    </as-split>
 
     <!-- Detail Panel Overlay -->
     @if (detailPanelVisible) {

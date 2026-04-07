@@ -33,6 +33,7 @@ import { request as httpRequest } from 'http';
 import { request as httpsRequest } from 'https';
 import { gzip as gzipCompress, createGunzip } from 'zlib';
 import { configInfo, baseUrl, publicUrl, graphqlPort, graphqlRootPath, apiKey as callbackAPIKey } from '../config.js';
+import { getDbType } from '../index.js';
 import { GetAIAPIKey } from '@memberjunction/ai';
 import { AIEngine } from '@memberjunction/aiengine';
 import { CopyScalarsAndArrays, UUIDsEqual } from '@memberjunction/global';
@@ -293,8 +294,9 @@ export class SkipSDK {
             LogError(`[SkipSDK] Error calling Skip API: ${error}`);
 
             // Provide user-friendly error messages for common failures
-            let userFriendlyError = String(error);
-            const errorStr = String(error).toLowerCase();
+            const rawError = error instanceof Error ? error.message : String(error);
+            let userFriendlyError = rawError;
+            const errorStr = rawError.toLowerCase();
 
             if (errorStr.includes('stream error') || errorStr.includes('aborted') || errorStr.includes('econnreset')) {
                 userFriendlyError = 'The Skip analysis service became unavailable during processing. Please try again.';
@@ -371,7 +373,8 @@ export class SkipSDK {
             callingServerURL: baseRequest.callingServerURL,
             callingServerAPIKey: baseRequest.callingServerAPIKey,
             callingServerAccessToken: baseRequest.callingServerAccessToken,
-            externalReferenceID
+            externalReferenceID,
+            databasePlatform: getDbType()
         };
 
         return request;
@@ -776,6 +779,34 @@ export class SkipSDK {
                 };
 
                 const req = requestFn(options, (res) => {
+                    // Check for non-2xx HTTP status codes before attempting SSE parsing.
+                    // The Skip API returns JSON error bodies for auth/validation failures (401, 403, etc.)
+                    // which won't contain SSE `data:` lines, resulting in an empty events array
+                    // and the misleading "No response received from Skip API" error.
+                    if (res.statusCode && (res.statusCode < 200 || res.statusCode >= 300)) {
+                        let errorBody = '';
+                        res.on('data', (chunk: Buffer) => { errorBody += chunk.toString(); });
+                        res.on('end', () => {
+                            let errorMessage = `Skip API returned HTTP ${res.statusCode}`;
+                            try {
+                                const parsed = JSON.parse(errorBody);
+                                if (parsed.message) {
+                                    errorMessage = parsed.message;
+                                } else if (parsed.error) {
+                                    errorMessage = parsed.error;
+                                }
+                            } catch {
+                                // Non-JSON body — use raw text if available
+                                if (errorBody.trim()) {
+                                    errorMessage += `: ${errorBody.trim().substring(0, 200)}`;
+                                }
+                            }
+                            LogError(`[SkipSDK] HTTP ${res.statusCode} from ${url}: ${errorMessage}`);
+                            reject(new Error(errorMessage));
+                        });
+                        return;
+                    }
+
                     const gunzip = createGunzip();
                     const stream = res.headers['content-encoding'] === 'gzip' ? res.pipe(gunzip) : res;
 

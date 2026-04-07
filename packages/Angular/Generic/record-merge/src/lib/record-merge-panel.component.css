@@ -1,0 +1,319 @@
+/* Record Merge Panel */
+
+.merge-panel {
+    border: 1px solid var(--mj-border-default);
+    border-radius: 8px;
+    background: var(--mj-bg-surface);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.merge-panel-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 3rem 1rem;
+    gap: 0.75rem;
+    color: var(--mj-text-muted);
+}
+
+.merge-empty-icon {
+    font-size: 2.5rem;
+    margin-bottom: 0.5rem;
+}
+
+/* Header */
+.merge-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--mj-border-default);
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.merge-header-info {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.merge-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--mj-text-primary);
+    margin: 0;
+}
+
+.merge-entity-name {
+    font-size: 0.82rem;
+    color: var(--mj-text-secondary);
+    padding: 0.1rem 0.5rem;
+    background: var(--mj-bg-surface-sunken);
+    border-radius: 4px;
+}
+
+.merge-conflict-badge {
+    font-size: 0.78rem;
+    color: var(--mj-status-warning-text);
+    background: var(--mj-status-warning-bg);
+    padding: 0.15rem 0.5rem;
+    border-radius: 9999px;
+}
+
+.merge-toggle-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.75rem;
+    border: 1px solid var(--mj-border-default);
+    border-radius: 6px;
+    background: var(--mj-bg-surface);
+    color: var(--mj-text-secondary);
+    font-size: 0.78rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.merge-toggle-btn:hover {
+    background: var(--mj-bg-surface-hover);
+    color: var(--mj-text-primary);
+}
+
+/* Column Headers */
+.merge-columns {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    border-bottom: 2px solid var(--mj-border-default);
+}
+
+.merge-col-label {
+    padding: 0.5rem 0.75rem;
+    font-weight: 600;
+    font-size: 0.78rem;
+    color: var(--mj-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.merge-select-all-btn {
+    border: none;
+    background: none;
+    color: var(--mj-text-muted);
+    font-size: 0.72rem;
+    cursor: pointer;
+    padding: 0.2rem;
+    border-radius: 3px;
+}
+
+.merge-select-all-btn:hover {
+    color: var(--mj-brand-primary);
+    background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+}
+
+/* Field Rows */
+.merge-fields {
+    overflow-y: auto;
+    max-height: 60vh;
+}
+
+.merge-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    border-bottom: 1px solid var(--mj-border-subtle);
+    transition: background 0.1s ease;
+}
+
+.merge-row:hover {
+    background: var(--mj-bg-surface-hover);
+}
+
+.merge-row-conflict {
+    background: color-mix(in srgb, var(--mj-status-warning) 5%, var(--mj-bg-surface));
+}
+
+.merge-row-readonly {
+    opacity: 0.7;
+}
+
+.merge-cell {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.85rem;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-height: 2.5rem;
+}
+
+.merge-cell-field {
+    color: var(--mj-text-primary);
+    font-weight: 500;
+    border-right: 1px solid var(--mj-border-subtle);
+}
+
+.merge-field-name {
+    flex: 1;
+}
+
+.merge-readonly-icon {
+    font-size: 0.65rem;
+    color: var(--mj-text-muted);
+}
+
+.merge-cell-value {
+    position: relative;
+}
+
+.merge-cell-selectable {
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.merge-cell-selectable:hover {
+    background: color-mix(in srgb, var(--mj-brand-primary) 8%, transparent);
+}
+
+.merge-cell-selected {
+    background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+    border-left: 3px solid var(--mj-brand-primary);
+}
+
+.merge-value {
+    color: var(--mj-text-primary);
+    flex: 1;
+    word-break: break-word;
+}
+
+.merge-value-empty {
+    color: var(--mj-text-disabled);
+    font-style: italic;
+}
+
+.merge-check-icon {
+    color: var(--mj-brand-primary);
+    font-size: 0.75rem;
+    flex-shrink: 0;
+}
+
+/* Footer */
+.merge-footer {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    border-top: 1px solid var(--mj-border-default);
+}
+
+.merge-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    border: none;
+}
+
+.merge-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.merge-btn-primary {
+    background: var(--mj-brand-primary);
+    color: var(--mj-text-inverse);
+}
+
+.merge-btn-primary:hover:not(:disabled) {
+    background: var(--mj-brand-primary-hover);
+}
+
+.merge-btn-secondary {
+    background: var(--mj-bg-surface);
+    color: var(--mj-text-secondary);
+    border: 1px solid var(--mj-border-default);
+}
+
+.merge-btn-secondary:hover:not(:disabled) {
+    background: var(--mj-bg-surface-hover);
+}
+
+/* Confirmation Dialog */
+.merge-dialog-backdrop {
+    position: fixed;
+    inset: 0;
+    background: var(--mj-bg-overlay);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+}
+
+.merge-dialog {
+    background: var(--mj-bg-surface);
+    border: 1px solid var(--mj-border-default);
+    border-radius: 12px;
+    padding: 1.5rem;
+    max-width: 420px;
+    width: 100%;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.merge-dialog-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+}
+
+.merge-dialog-header h4 {
+    margin: 0;
+    font-size: 1.1rem;
+    color: var(--mj-text-primary);
+}
+
+.merge-dialog-warning-icon {
+    color: var(--mj-status-warning);
+    font-size: 1.2rem;
+}
+
+.merge-dialog-text {
+    color: var(--mj-text-secondary);
+    font-size: 0.9rem;
+    line-height: 1.5;
+    margin-bottom: 1.25rem;
+}
+
+.merge-dialog-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+    .merge-columns,
+    .merge-row {
+        grid-template-columns: 1fr;
+    }
+
+    .merge-cell-field {
+        border-right: none;
+        border-bottom: 1px solid var(--mj-border-subtle);
+        font-size: 0.78rem;
+    }
+
+    .merge-col-left,
+    .merge-col-right {
+        padding-left: 1.5rem;
+    }
+}

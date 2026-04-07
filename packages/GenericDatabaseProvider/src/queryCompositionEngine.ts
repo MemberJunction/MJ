@@ -527,23 +527,28 @@ export class QueryCompositionEngine {
      * - Pass-through values: renames {{paramName}} to {{outerParamName}} so
      *   the downstream Nunjucks processor can resolve it from the outer query's parameters.
      */
+    /**
+     * Substitutes resolved parameter values into a query's SQL using the SQLParser's
+     * MJLexer-based template manipulation methods.
+     *
+     * - Pass-through values: renames the inner variable to the outer variable name,
+     *   preserving any Nunjucks filter chain (e.g., `{{ lookbackDays | sqlNumber }}` → `{{ numDays | sqlNumber }}`)
+     * - Static values: replaces the entire template expression (including filters) with a literal value
+     */
     private substituteStaticParams(sql: string, params: Record<string, string>): string {
         let result = sql;
 
         for (const [name, value] of Object.entries(params)) {
-            const paramRegex = new RegExp(`\\{\\{\\s*${name}\\s*\\}\\}`, 'g');
-
             if (value.startsWith('{{') && value.endsWith('}}')) {
-                // Pass-through: rename the inner param token to the outer param name
-                // e.g., {{region}} → {{userRegion}} when the mapping is region=userRegion
-                result = result.replace(paramRegex, value);
-            } else if (/^-?\d+(\.\d+)?$/.test(value)) {
-                // Numeric value: substitute as bare literal (no quotes)
-                // so expressions like DATEADD(DAY, -{{lookbackDays}}, ...) work correctly
-                result = result.replace(paramRegex, value);
+                // Pass-through: rename the inner variable, preserving filter chain
+                const outerVarName = value.slice(2, -2).trim();
+                result = SQLParser.RenameTemplateVariable(result, name, outerVarName);
             } else {
-                // String value: substitute as a quoted literal
-                result = result.replace(paramRegex, `'${value.replace(/'/g, "''")}'`);
+                // Static value: replace entire template expression with literal
+                const literal = /^-?\d+(\.\d+)?$/.test(value)
+                    ? value // Numeric: bare literal
+                    : `'${value.replace(/'/g, "''")}'`; // String: quoted literal
+                result = SQLParser.SubstituteTemplateVariable(result, name, literal);
             }
         }
 
@@ -624,11 +629,14 @@ export class QueryCompositionEngine {
         const cteDefinitions: string[] = [];
         for (const entry of cteEntries) {
             const strippedSQL = this.stripTrailingOrderBy(entry.SQL, dialect);
-            const trimmedSQL = strippedSQL.trimStart();
+            // Strip SQL comments before checking for WITH, because dependency queries
+            // may have comment headers (-- or /* */) before the WITH clause.
+            const commentStrippedSQL = this.stripSQLComments(strippedSQL).trimStart();
 
-            if (/^WITH\s/i.test(trimmedSQL)) {
-                // Dependency SQL has its own WITH clause — hoist inner CTEs as siblings
-                const { innerCTEDefinitions, mainSelect } = this.hoistInnerCTEs(trimmedSQL, platform);
+            if (/^WITH\s/i.test(commentStrippedSQL)) {
+                // Dependency SQL has its own WITH clause — hoist inner CTEs as siblings.
+                // Pass the comment-stripped version so ExtractCTEs can detect the WITH prefix.
+                const { innerCTEDefinitions, mainSelect } = this.hoistInnerCTEs(commentStrippedSQL, platform);
                 cteDefinitions.push(...innerCTEDefinitions);
                 cteDefinitions.push(`${entry.CTEName} AS (\n${mainSelect}\n)`);
             } else {

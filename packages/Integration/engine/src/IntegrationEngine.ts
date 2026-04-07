@@ -29,6 +29,7 @@ import type {
     WatermarkType,
     IntegrationSyncOptions,
     EntityMapSyncResult,
+    SyncProgressSnapshot,
 } from './types.js';
 import { ClassifyError } from './types.js';
 import { ConnectorFactory } from './ConnectorFactory.js';
@@ -63,6 +64,34 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     /** In-process lock map to prevent concurrent syncs for the same CompanyIntegration */
     private static readonly activeSyncs = new Map<string, Promise<SyncResult>>();
 
+    /** Abort controllers for cancelling running syncs */
+    private static readonly _abortControllers = new Map<string, AbortController>();
+
+    /** Live sync progress — updated on every batch for ALL syncs regardless of caller */
+    private static readonly _syncProgress = new Map<string, SyncProgressSnapshot>();
+
+    /** Read current sync progress for a connector. Returns undefined if no sync is running. */
+    public static GetSyncProgress(companyIntegrationID: string): SyncProgressSnapshot | undefined {
+        return IntegrationEngine._syncProgress.get(companyIntegrationID.toLowerCase());
+    }
+
+    /** Cancel a running sync for a connector. Returns true if a sync was found and signalled. */
+    public static CancelSync(companyIntegrationID: string): boolean {
+        const key = companyIntegrationID.toLowerCase();
+        const controller = IntegrationEngine._abortControllers.get(key);
+        if (controller) {
+            console.log(`[IntegrationEngine] Cancelling sync for ${companyIntegrationID}`);
+            controller.abort();
+            return true;
+        }
+        return false;
+    }
+
+    /** Get all active sync progress entries */
+    public static GetAllSyncProgress(): Map<string, SyncProgressSnapshot> {
+        return new Map(IntegrationEngine._syncProgress);
+    }
+
     /** Configurable maximum batch size. Connector batches exceeding this are truncated. */
     public MaxBatchSize: number = DEFAULT_BATCH_SIZE;
 
@@ -93,14 +122,42 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             return existing;
         }
 
+        // Initialize abort controller and progress tracking
+        const abortController = new AbortController();
+        IntegrationEngine._abortControllers.set(lockKey, abortController);
+        IntegrationEngine._syncProgress.set(lockKey, {
+            StartedAt: new Date(),
+            CurrentEntity: '',
+            EntityMapsTotal: 0,
+            EntityMapsCompleted: 0,
+            RecordsProcessed: 0,
+            RecordsCreated: 0,
+            RecordsUpdated: 0,
+            RecordsErrored: 0,
+            TriggerType: triggerType,
+        });
+
+        // Wrap caller's onProgress with internal tracking
+        const wrappedProgress: OnProgressCallback = (progress) => {
+            const entry = IntegrationEngine._syncProgress.get(lockKey);
+            if (entry) {
+                entry.EntityMapsTotal = progress.TotalEntityMaps;
+                entry.EntityMapsCompleted = progress.EntityMapIndex;
+                entry.RecordsProcessed = progress.RecordsProcessedInCurrentMap;
+            }
+            if (onProgress) onProgress(progress);
+        };
+
         const syncPromise = this.executeSyncInternal(
-            companyIntegrationID, contextUser, triggerType, onProgress, onNotification, options
+            companyIntegrationID, contextUser, triggerType, wrappedProgress, onNotification, options, abortController.signal
         );
         IntegrationEngine.activeSyncs.set(lockKey, syncPromise);
         try {
             return await syncPromise;
         } finally {
             IntegrationEngine.activeSyncs.delete(lockKey);
+            IntegrationEngine._abortControllers.delete(lockKey);
+            IntegrationEngine._syncProgress.delete(lockKey);
         }
     }
 
@@ -113,14 +170,15 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         triggerType: SyncTriggerType,
         onProgress?: OnProgressCallback,
         onNotification?: OnNotificationCallback,
-        options?: IntegrationSyncOptions
+        options?: IntegrationSyncOptions,
+        abortSignal?: AbortSignal
     ): Promise<SyncResult> {
         const startTime = Date.now();
         const config = await this.LoadRunConfiguration(companyIntegrationID, contextUser, options);
         const run = await this.CreateRunRecord(config.companyIntegration, triggerType, contextUser, options?.ScheduledJobRunID);
 
         try {
-            const result = await this.ExecuteEntityMaps(config, run, contextUser, onProgress);
+            const result = await this.ExecuteEntityMaps(config, run, contextUser, onProgress, abortSignal);
             result.RunID = run.Get('ID') as string;
             result.Duration = Date.now() - startTime;
             if (result.RecordsErrored > 0) {
@@ -237,7 +295,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         config: RunConfiguration,
         run: MJCompanyIntegrationRunEntity,
         contextUser: UserInfo,
-        onProgress?: OnProgressCallback
+        onProgress?: OnProgressCallback,
+        abortSignal?: AbortSignal
     ): Promise<SyncResult> {
         const aggregate: SyncResult = {
             Success: true,
@@ -254,11 +313,17 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         const totalMaps = config.entityMaps.length;
 
         for (let i = 0; i < totalMaps; i++) {
+            if (abortSignal?.aborted) {
+                console.log(`[IntegrationEngine] Sync cancelled before entity map ${i + 1}/${totalMaps}`);
+                aggregate.Success = false;
+                aggregate.ErrorMessage = 'Sync cancelled by user';
+                break;
+            }
             const entityMap = config.entityMaps[i];
             const mapStartTime = Date.now();
             try {
                 const mapResult = await this.ProcessSingleEntityMap(
-                    config, entityMap, run, contextUser, i, totalMaps, onProgress
+                    config, entityMap, run, contextUser, i, totalMaps, onProgress, abortSignal
                 );
                 this.MergeResult(aggregate, mapResult);
                 aggregate.EntityMapResults!.push(this.buildEntityMapResult(entityMap, mapResult, Date.now() - mapStartTime));
@@ -304,7 +369,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         contextUser: UserInfo,
         entityMapIndex: number,
         totalEntityMaps: number,
-        onProgress?: OnProgressCallback
+        onProgress?: OnProgressCallback,
+        abortSignal?: AbortSignal
     ): Promise<SyncResult> {
         const entityMapID = entityMap.Get('ID') as string;
         const fieldMaps = await this.LoadFieldMaps(entityMapID, contextUser);
@@ -344,6 +410,10 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         const MAX_BATCHES_PER_MAP = 5000;
 
         while (hasMore) {
+            if (abortSignal?.aborted) {
+                console.log(`[IntegrationEngine] Sync cancelled for ${entityMap.ExternalObjectName} after ${recordsInMap} records — saving watermark`);
+                break;
+            }
             batchCount++;
             if (batchCount > MAX_BATCHES_PER_MAP) {
                 console.error(

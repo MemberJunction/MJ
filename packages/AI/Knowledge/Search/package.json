@@ -1,0 +1,36 @@
+{
+  "name": "@memberjunction/ai-knowledge-search",
+  "type": "module",
+  "version": "5.22.0",
+  "description": "MemberJunction: Unified Search Service - vector + full-text + RRF fusion",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "build": "tsc && tsc-alias -f",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "author": "MemberJunction.com",
+  "license": "ISC",
+  "dependencies": {
+    "@memberjunction/ai": "5.22.0",
+    "@memberjunction/ai-vectordb": "5.22.0",
+    "@memberjunction/ai-vectors": "5.22.0",
+    "@memberjunction/ai-vector-dupe": "5.22.0",
+    "@memberjunction/aiengine": "5.22.0",
+    "@memberjunction/core": "5.22.0",
+    "@memberjunction/core-entities": "5.22.0",
+    "@memberjunction/global": "5.22.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.11",
+    "typescript": "^5.9.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

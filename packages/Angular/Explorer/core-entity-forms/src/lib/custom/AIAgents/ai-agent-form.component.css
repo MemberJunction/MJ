@@ -1830,10 +1830,6 @@
     padding: 0 4px;
 }
 
-.execution-search-bar kendo-textbox {
-    width: 100%;
-}
-
 .execution-search-bar .fa-search {
     color: var(--mj-text-secondary);
     margin-right: 8px;
@@ -2505,35 +2501,8 @@
     min-width: 250px;
 }
 
-/* Fix numeric textbox cutoff issue */
-.config-card-content ::ng-deep kendo-numerictextbox {
-    width: 100% !important;
-}
-
-.config-card-content ::ng-deep kendo-numerictextbox .k-numerictextbox {
-    width: 100% !important;
-}
-
-.config-card-content ::ng-deep kendo-numerictextbox .k-input {
-    width: 100% !important;
-    min-width: 200px !important;
-}
-
 .config-card-content ::ng-deep mj-form-field {
     width: 100% !important;
-}
-
-.config-card-content ::ng-deep mj-form-field kendo-numerictextbox {
-    width: 100% !important;
-}
-
-.config-card-content ::ng-deep mj-form-field kendo-numerictextbox .k-numerictextbox {
-    width: 100% !important;
-}
-
-.config-card-content ::ng-deep mj-form-field kendo-numerictextbox .k-input {
-    width: 100% !important;
-    min-width: 200px !important;
 }
 
 .config-field-display {
@@ -2675,10 +2644,6 @@
     display: flex;
     align-items: center;
     gap: 12px;
-}
-
-.filter-controls kendo-buttongroup {
-    flex: 0 0 auto;
 }
 
 /* Sub-Agent Type Badge */

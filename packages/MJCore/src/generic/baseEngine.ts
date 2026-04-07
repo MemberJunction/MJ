@@ -305,7 +305,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * @returns
      */
     protected async Load(configs: Partial<BaseEnginePropertyConfig>[], provider: IMetadataProvider, forceRefresh: boolean = false, contextUser?: UserInfo): Promise<void> {
-        if (this.ProviderToUse.ProviderType === ProviderType.Database && !contextUser)
+        if (this.ProviderToUse?.ProviderType === ProviderType.Database && !contextUser)
             throw new Error('For server-side use of all engine classes, you must provide the contextUser parameter')
         if (this._loadingSubject.value) {
             return new Promise<void>((resolve) => {
@@ -1309,7 +1309,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                         Success: true,
                         Results: parsed.results,
                         RowCount: parsed.results.length,
-                        TotalRowCount: parsed.results.length,
+                        TotalRowCount: parsed.totalRowCount ?? parsed.results.length,
                         ExecutionTime: 0,
                         ErrorMessage: '',
                         UserViewRunID: '',

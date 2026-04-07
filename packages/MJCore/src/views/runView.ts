@@ -390,7 +390,7 @@ export class RunView  {
             return params.EntityName;
         else if (params.ViewEntity) {
             const entityID = params.ViewEntity.Get('EntityID'); // using weak typing because this is MJCore and we don't want to use the sub-classes from core-entities as that would create a circular dependency
-            const entity = p.Entities.find(e => UUIDsEqual(e.ID, entityID));
+            const entity = p.EntityByID(entityID);
             if (entity)
                 return entity.Name
         }

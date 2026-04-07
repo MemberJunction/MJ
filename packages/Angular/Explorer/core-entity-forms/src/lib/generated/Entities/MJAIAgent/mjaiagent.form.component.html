@@ -616,31 +616,6 @@
          RELATED ENTITY PANELS
          ======================================== -->
 
-    <!-- AIAgent Models Section -->
-    <mj-collapsible-panel
-        SectionKey="mJAIAgentModels"
-        SectionName="AIAgent Models"
-        Icon="fa fa-robot"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJAIAgentModels')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Models','AgentID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Agent Models')"
-                [AllowLoad]="IsSectionExpanded('mJAIAgentModels')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJAIAgentModels', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
     <!-- AIAgent Actions Section -->
     <mj-collapsible-panel
         SectionKey="mJAIAgentActions"
@@ -660,6 +635,31 @@
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentActions', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- AIAgent Models Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAIAgentModels"
+        SectionName="AIAgent Models"
+        Icon="fa fa-robot"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentModels')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Models','AgentID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Models')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentModels')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentModels', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

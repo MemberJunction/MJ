@@ -23,6 +23,7 @@ export type {
     SyncErrorCode,
     ErrorSeverity,
     SyncProgress,
+    SyncProgressSnapshot,
     OnProgressCallback,
     SyncNotificationEvent,
     SyncNotificationSeverity,

@@ -1,5 +1,119 @@
 # @memberjunction/react-test-harness
 
+## 5.22.0
+
+### Patch Changes
+
+- Updated dependencies [0b23772]
+- Updated dependencies [cf91278]
+- Updated dependencies [6a5093b]
+- Updated dependencies [e123e4b]
+- Updated dependencies [a42aba6]
+- Updated dependencies [f2a6bec]
+  - @memberjunction/ai-core-plus@5.22.0
+  - @memberjunction/sql-parser@5.22.0
+  - @memberjunction/core@5.22.0
+  - @memberjunction/ai-vectors-memory@5.22.0
+  - @memberjunction/global@5.22.0
+  - @memberjunction/aiengine@5.22.0
+  - @memberjunction/interactive-component-types@5.22.0
+  - @memberjunction/core-entities@5.22.0
+  - @memberjunction/react-runtime@5.22.0
+
+## 5.21.0
+
+### Patch Changes
+
+- 2585d4d: Skip required-queries-not-called lint rule for child-delegated queries in test harness
+- Updated dependencies [c7dfb20]
+- Updated dependencies [76cd2bc]
+  - @memberjunction/ai-vectors-memory@5.21.0
+  - @memberjunction/core@5.21.0
+  - @memberjunction/ai-core-plus@5.21.0
+  - @memberjunction/aiengine@5.21.0
+  - @memberjunction/interactive-component-types@5.21.0
+  - @memberjunction/core-entities@5.21.0
+  - @memberjunction/react-runtime@5.21.0
+  - @memberjunction/global@5.21.0
+  - @memberjunction/sql-parser@5.21.0
+
+## 5.20.0
+
+### Patch Changes
+
+- Updated dependencies [2298f8a]
+  - @memberjunction/core@5.20.0
+  - @memberjunction/ai-core-plus@5.20.0
+  - @memberjunction/aiengine@5.20.0
+  - @memberjunction/ai-vectors-memory@5.20.0
+  - @memberjunction/interactive-component-types@5.20.0
+  - @memberjunction/core-entities@5.20.0
+  - @memberjunction/react-runtime@5.20.0
+  - @memberjunction/global@5.20.0
+  - @memberjunction/sql-parser@5.20.0
+
+## 5.19.0
+
+### Patch Changes
+
+- @memberjunction/ai-core-plus@5.19.0
+- @memberjunction/aiengine@5.19.0
+- @memberjunction/ai-vectors-memory@5.19.0
+- @memberjunction/interactive-component-types@5.19.0
+- @memberjunction/core@5.19.0
+- @memberjunction/core-entities@5.19.0
+- @memberjunction/global@5.19.0
+- @memberjunction/react-runtime@5.19.0
+- @memberjunction/sql-parser@5.19.0
+
+## 5.18.0
+
+### Patch Changes
+
+- Updated dependencies [322dac6]
+- Updated dependencies [931740a]
+  - @memberjunction/ai-core-plus@5.18.0
+  - @memberjunction/sql-parser@5.18.0
+  - @memberjunction/aiengine@5.18.0
+  - @memberjunction/react-runtime@5.18.0
+  - @memberjunction/ai-vectors-memory@5.18.0
+  - @memberjunction/interactive-component-types@5.18.0
+  - @memberjunction/core@5.18.0
+  - @memberjunction/core-entities@5.18.0
+  - @memberjunction/global@5.18.0
+
+## 5.17.0
+
+### Patch Changes
+
+- Updated dependencies [4b6fd2a]
+- Updated dependencies [9881045]
+  - @memberjunction/sql-parser@5.17.0
+  - @memberjunction/core@5.17.0
+  - @memberjunction/react-runtime@5.17.0
+  - @memberjunction/ai-core-plus@5.17.0
+  - @memberjunction/aiengine@5.17.0
+  - @memberjunction/ai-vectors-memory@5.17.0
+  - @memberjunction/interactive-component-types@5.17.0
+  - @memberjunction/core-entities@5.17.0
+  - @memberjunction/global@5.17.0
+
+## 5.16.0
+
+### Patch Changes
+
+- Updated dependencies [2387400]
+- Updated dependencies [11dba07]
+  - @memberjunction/core@5.16.0
+  - @memberjunction/ai-core-plus@5.16.0
+  - @memberjunction/aiengine@5.16.0
+  - @memberjunction/ai-vectors-memory@5.16.0
+  - @memberjunction/interactive-component-types@5.16.0
+  - @memberjunction/core-entities@5.16.0
+  - @memberjunction/react-runtime@5.16.0
+  - @memberjunction/global@5.16.0
+  - @memberjunction/sql-parser@5.16.0
+
 ## 5.15.0
 
 ### Patch Changes

@@ -1,5 +1,58 @@
 # Change Log - @memberjunction/core
 
+## 5.22.0
+
+### Patch Changes
+
+- 6a5093b: no migration
+- e123e4b: bug fixes for RunView cache, Data Explorer, and MCP OAuth scopes
+- Updated dependencies [f2a6bec]
+  - @memberjunction/global@5.22.0
+
+## 5.21.0
+
+### Patch Changes
+
+- c7dfb20: no migration/metadata changes (yet)
+  - @memberjunction/global@5.21.0
+
+## 5.20.0
+
+### Minor Changes
+
+- 2298f8a: Metadata Migration for v5.20.0
+
+### Patch Changes
+
+- @memberjunction/global@5.20.0
+
+## 5.19.0
+
+### Patch Changes
+
+- @memberjunction/global@5.19.0
+
+## 5.18.0
+
+### Patch Changes
+
+- @memberjunction/global@5.18.0
+
+## 5.17.0
+
+### Patch Changes
+
+- 9881045: no metadata or migration files, patch release
+  - @memberjunction/global@5.17.0
+
+## 5.16.0
+
+### Patch Changes
+
+- 2387400: Migrated singleton classes to BaseSingleton pattern and extracted auth providers into standalone package
+- 11dba07: no migration
+  - @memberjunction/global@5.16.0
+
 ## 5.15.0
 
 ### Minor Changes

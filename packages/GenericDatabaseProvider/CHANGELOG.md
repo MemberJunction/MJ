@@ -1,5 +1,131 @@
 # @memberjunction/generic-database-provider
 
+## 5.22.0
+
+### Patch Changes
+
+- Updated dependencies [cf91278]
+- Updated dependencies [6a5093b]
+- Updated dependencies [e123e4b]
+- Updated dependencies [f2a6bec]
+  - @memberjunction/sql-parser@5.22.0
+  - @memberjunction/core@5.22.0
+  - @memberjunction/global@5.22.0
+  - @memberjunction/aiengine@5.22.0
+  - @memberjunction/actions@5.22.0
+  - @memberjunction/actions-base@5.22.0
+  - @memberjunction/encryption@5.22.0
+  - @memberjunction/core-entities@5.22.0
+  - @memberjunction/queue@5.22.0
+  - @memberjunction/query-processor@5.22.0
+  - @memberjunction/sql-dialect@5.22.0
+
+## 5.21.0
+
+### Patch Changes
+
+- Updated dependencies [c7dfb20]
+- Updated dependencies [72fc93b]
+  - @memberjunction/core@5.21.0
+  - @memberjunction/query-processor@5.21.0
+  - @memberjunction/aiengine@5.21.0
+  - @memberjunction/actions-base@5.21.0
+  - @memberjunction/actions@5.21.0
+  - @memberjunction/encryption@5.21.0
+  - @memberjunction/core-entities@5.21.0
+  - @memberjunction/queue@5.21.0
+  - @memberjunction/global@5.21.0
+  - @memberjunction/sql-dialect@5.21.0
+  - @memberjunction/sql-parser@5.21.0
+
+## 5.20.0
+
+### Patch Changes
+
+- cc954e1: fix: prevent NVARCHAR truncation when escaping Flyway placeholders in long string literals
+- Updated dependencies [2298f8a]
+  - @memberjunction/core@5.20.0
+  - @memberjunction/aiengine@5.20.0
+  - @memberjunction/actions-base@5.20.0
+  - @memberjunction/actions@5.20.0
+  - @memberjunction/encryption@5.20.0
+  - @memberjunction/core-entities@5.20.0
+  - @memberjunction/queue@5.20.0
+  - @memberjunction/query-processor@5.20.0
+  - @memberjunction/global@5.20.0
+  - @memberjunction/sql-dialect@5.20.0
+  - @memberjunction/sql-parser@5.20.0
+
+## 5.19.0
+
+### Patch Changes
+
+- @memberjunction/aiengine@5.19.0
+- @memberjunction/actions-base@5.19.0
+- @memberjunction/actions@5.19.0
+- @memberjunction/encryption@5.19.0
+- @memberjunction/core@5.19.0
+- @memberjunction/core-entities@5.19.0
+- @memberjunction/global@5.19.0
+- @memberjunction/queue@5.19.0
+- @memberjunction/query-processor@5.19.0
+- @memberjunction/sql-dialect@5.19.0
+- @memberjunction/sql-parser@5.19.0
+
+## 5.18.0
+
+### Patch Changes
+
+- Updated dependencies [931740a]
+  - @memberjunction/sql-parser@5.18.0
+  - @memberjunction/aiengine@5.18.0
+  - @memberjunction/actions@5.18.0
+  - @memberjunction/queue@5.18.0
+  - @memberjunction/actions-base@5.18.0
+  - @memberjunction/encryption@5.18.0
+  - @memberjunction/core@5.18.0
+  - @memberjunction/core-entities@5.18.0
+  - @memberjunction/global@5.18.0
+  - @memberjunction/query-processor@5.18.0
+  - @memberjunction/sql-dialect@5.18.0
+
+## 5.17.0
+
+### Patch Changes
+
+- 4b6fd2a: Add composable query passthrough parameter bubbling, deterministic field type resolution from dependency queries and entity metadata, MJLexer-based template variable manipulation, and refactor MJQueryEntityServer into a 5-stage extraction pipeline
+- Updated dependencies [4b6fd2a]
+- Updated dependencies [9881045]
+  - @memberjunction/sql-parser@5.17.0
+  - @memberjunction/core@5.17.0
+  - @memberjunction/aiengine@5.17.0
+  - @memberjunction/actions-base@5.17.0
+  - @memberjunction/actions@5.17.0
+  - @memberjunction/encryption@5.17.0
+  - @memberjunction/core-entities@5.17.0
+  - @memberjunction/queue@5.17.0
+  - @memberjunction/query-processor@5.17.0
+  - @memberjunction/global@5.17.0
+  - @memberjunction/sql-dialect@5.17.0
+
+## 5.16.0
+
+### Patch Changes
+
+- Updated dependencies [2387400]
+- Updated dependencies [11dba07]
+  - @memberjunction/core@5.16.0
+  - @memberjunction/aiengine@5.16.0
+  - @memberjunction/actions-base@5.16.0
+  - @memberjunction/actions@5.16.0
+  - @memberjunction/encryption@5.16.0
+  - @memberjunction/core-entities@5.16.0
+  - @memberjunction/queue@5.16.0
+  - @memberjunction/query-processor@5.16.0
+  - @memberjunction/global@5.16.0
+  - @memberjunction/sql-dialect@5.16.0
+  - @memberjunction/sql-parser@5.16.0
+
 ## 5.15.0
 
 ### Patch Changes

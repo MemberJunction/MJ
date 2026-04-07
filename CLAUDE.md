@@ -171,6 +171,13 @@ The `/guides/` folder contains comprehensive best practices guides for specific 
   - User preferences and local caching
   - Layout patterns, permission checking, and more
 
+- **[Lazy Loading Guide](guides/LAZY_LOADING_GUIDE.md)**: How MJExplorer's code-split lazy loading works:
+  - Adding new dashboard components (zero config — just `@RegisterClass` + feature module)
+  - Making a package lazy-loadable (add subpath exports to `package.json`)
+  - Adding new feature modules with subpath exports
+  - How the auto-generated lazy config is produced by `mj codegen manifest --lazy-config`
+  - Troubleshooting lazy loading issues
+
 When building dashboards, creating new Angular applications, comparing UUIDs, or implementing complex UI features, **read the relevant guide first** to ensure consistency with established patterns.
 
 ---
@@ -1390,12 +1397,14 @@ When encountering `ExpressionChangedAfterItHasBeenCheckedError` in Angular compo
 - Replace `setTimeout` with `Promise.resolve().then()` for microtask timing
 - Common scenarios: clearing inputs, focus management, dynamic content updates
 
-### Kendo UI Component Usage
-- **Deprecated Syntax**: Replace `<kendo-button>` with `<button kendoButton>`
-- **Window/Dialog Positioning**: 
-  - Use `kendoWindowContainer` directive on parent containers
-  - For dynamic windows, inject `ViewContainerRef` in WindowService.open()
-  - Set explicit `top` and `left` values for center positioning
+### MJ UI Components (`@memberjunction/ng-ui-components`)
+- **All UI components** should use the MJ UI components package — NOT Kendo, PrimeNG, or Angular Material
+- Available components: `mjButton`, `mj-dialog`, `MJDialogService`, `mj-window`, `mj-dropdown`, `mj-combobox`, `mj-switch`, `mj-numeric-input`, `mj-datepicker`, `mj-progress-bar`, `mj-accordion-panel` (with `mjAccordionTitle` for rich HTML titles)
+- Splitters: Use `angular-split` (`as-split` + `as-split-area`)
+- Grids: Use AG Grid (`ag-grid-angular`)
+- CSS classes: `.mj-input`, `.mj-textarea`, `.mj-checkbox` for styled native form elements
+- All components are standalone with `inject()` DI, PascalCase inputs/outputs, and `--mj-*` design tokens
+- Import from: `import { MJButtonDirective, MJDialogComponent, ... } from '@memberjunction/ng-ui-components'`
 
 ### GraphQL Parameter Types
 - **Numeric Types**: Pay attention to GraphQL scalar types

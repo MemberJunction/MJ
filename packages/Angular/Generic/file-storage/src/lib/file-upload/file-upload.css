@@ -1,0 +1,34 @@
+.mj-file-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  margin: 8px 0;
+  border: 1px dashed var(--mj-border-default);
+  border-radius: 6px;
+  background: var(--mj-bg-surface-card);
+  color: var(--mj-text-secondary);
+  cursor: pointer;
+  transition: border-color 0.15s, background-color 0.15s;
+}
+
+.mj-file-select:hover:not(.disabled) {
+  border-color: var(--mj-brand-primary);
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-primary);
+}
+
+.mj-file-select.disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.mj-file-input {
+  display: none;
+}
+
+.confirm-message {
+  margin: 30px;
+  text-align: center;
+  color: var(--mj-text-primary);
+}

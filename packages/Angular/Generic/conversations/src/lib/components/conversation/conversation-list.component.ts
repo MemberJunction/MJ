@@ -13,7 +13,7 @@ import { UUIDsEqual } from '@memberjunction/global';
   standalone: false,
   selector: 'mj-conversation-list',
   template: `
-    <div class="conversation-list" kendoDialogContainer>
+    <div class="conversation-list">
       <div class="list-header">
         <div class="header-top">
           <input
@@ -775,6 +775,16 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     // Load conversations on init
     this.conversationData.loadConversations(this.environmentId, this.currentUser);
 
+    // Re-run change detection whenever the conversations list changes (pin, archive, rename, etc.).
+    // filteredConversations/pinnedConversations/unpinnedConversations are pure getters that read
+    // conversationData.conversations directly, so Angular doesn't know to re-evaluate them unless
+    // we explicitly trigger a check here.
+    this.conversationData.conversations$.pipe(
+      takeUntil(this.destroy$)
+    ).subscribe(() => {
+      this.cdr.detectChanges();
+    });
+
     // Subscribe to conversation IDs with active tasks (hot set)
     this.activeTasksService.conversationIdsWithTasks$.pipe(
       takeUntil(this.destroy$)
@@ -945,9 +955,9 @@ export class ConversationListComponent implements OnInit, OnDestroy {
 
   async togglePin(conversation: MJConversationEntity, event?: Event): Promise<void> {
     if (event) event.stopPropagation();
+    this.closeMenu(); // Close immediately on user action — don't wait for the async op
     try {
       await this.conversationData.togglePin(conversation.ID, this.currentUser);
-      this.closeMenu();
     } catch (error) {
       console.error('Error toggling pin:', error);
       await this.dialogService.alert('Error', 'Failed to pin/unpin conversation. Please try again.');

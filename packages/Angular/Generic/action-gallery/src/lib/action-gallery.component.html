@@ -4,26 +4,22 @@
     <div class="gallery-header">
       <div class="header-content">
         <div class="search-section">
-        <kendo-textbox 
-          #searchInput
-          [formControl]="searchControl" 
-          placeholder="Search actions by name, description, or category..."
-          class="search-input"
-          [clearButton]="true">
-          <ng-template kendoTextBoxPrefixTemplate>
-            <i class="fa-solid fa-search"></i>
-          </ng-template>
-        </kendo-textbox>
+        <div class="search-input-wrapper">
+          <i class="fa-solid fa-search"></i>
+          <input
+            #searchInput
+            class="mj-input search-input"
+            [formControl]="searchControl"
+            placeholder="Search actions by name, description, or category..."
+          />
+        </div>
       </div>
       
       <div class="header-actions">
         <div class="view-toggle">
-          <button kendoButton 
-                  [toggleable]="true" 
-                  [selected]="(viewMode$ | async) === 'grid'"
+          <button mjButton
+                  size="sm"
                   (click)="toggleViewMode()"
-                  size="small"
-                  kendoTooltip
                   [title]="(viewMode$ | async) === 'grid' ? 'Switch to list view' : 'Switch to grid view'">
             <i class="fa-solid" [class.fa-th]="(viewMode$ | async) === 'grid'" [class.fa-list]="(viewMode$ | async) === 'list'"></i>
           </button>
@@ -99,7 +95,7 @@
           <i class="fa-solid fa-search-minus"></i>
           <h3>No actions found</h3>
           <p>Try adjusting your search criteria or selecting a different category</p>
-          <button kendoButton (click)="clearSearch()">Clear Search</button>
+          <button mjButton (click)="clearSearch()">Clear Search</button>
         </div>
       }
 
@@ -136,13 +132,12 @@
             </div>
             <div class="card-actions">
               @if (config.enableQuickTest) {
-                <button kendoButton 
-                        look="flat" 
-                        size="small"
-                        icon="play"
+                <button mjButton
+                        variant="flat"
+                        size="sm"
                         (click)="testAction(action, $event)"
-                        kendoTooltip
                         title="Test this action">
+                  <i class="fa-solid fa-play"></i>
                 </button>
               }
               <i class="fa-solid expand-indicator"
@@ -259,13 +254,12 @@
           <span class="col-params">{{ action.parameters?.length || 0 }}</span>
           <span class="col-actions">
             @if (config.enableQuickTest) {
-              <button kendoButton 
-                      look="flat" 
-                      size="small"
-                      icon="play"
+              <button mjButton
+                      variant="flat"
+                      size="sm"
                       (click)="testAction(action, $event)"
-                      kendoTooltip
                       title="Test this action">
+                <i class="fa-solid fa-play"></i>
               </button>
             }
           </span>

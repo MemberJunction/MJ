@@ -40,7 +40,7 @@
  * @module @memberjunction/encryption
  */
 
-import { EncryptionKeySourceConfig } from './interfaces';
+import { EncryptionKeySourceConfig, KeyValidationResult } from './interfaces';
 
 /**
  * Abstract base class for encryption key source providers.
@@ -178,6 +178,43 @@ export abstract class EncryptionKeySourceBase {
      * ```
      */
     abstract KeyExists(lookupValue: string): Promise<boolean>;
+
+    /**
+     * Validates that a specific key is accessible and usable from this source.
+     *
+     * Each provider implements source-specific validation logic and returns
+     * actionable remediation messages on failure. This keeps key-source-specific
+     * knowledge encapsulated within the provider rather than in the engine.
+     *
+     * ## Contract
+     *
+     * - **MUST NOT** expose key material to the caller — key bytes stay inside the provider
+     * - **MUST** return `{ IsAccessible: true }` only if key material can be retrieved
+     *   and passes all validation (exists, valid format, correct length if expectedKeyLengthBytes provided)
+     * - **MUST** return a human-readable `Error` string with remediation steps on failure
+     * - **SHOULD** catch all exceptions internally and return them as Error strings
+     *
+     * @param lookupValue - Identifier for the key in this source
+     * @param keyVersion - Optional version for versioned key stores
+     * @param expectedKeyLengthBytes - Optional expected key length in bytes for validation.
+     *   When provided, the provider should retrieve the key and verify its length matches.
+     * @returns Promise resolving to a validation result
+     *
+     * @example
+     * ```typescript
+     * const result = await source.ValidateKeyAccessibility('MJ_BASE_ENCRYPTION_KEY', '1', 32);
+     * if (!result.IsAccessible) {
+     *   console.error(result.Error);
+     *   // "Environment variable "MJ_BASE_ENCRYPTION_KEY" is not set.
+     *   //  Set it with: export MJ_BASE_ENCRYPTION_KEY=$(openssl rand -base64 32)"
+     * }
+     * ```
+     */
+    abstract ValidateKeyAccessibility(
+        lookupValue: string,
+        keyVersion?: string,
+        expectedKeyLengthBytes?: number
+    ): Promise<KeyValidationResult>;
 
     /**
      * Optional async initialization for sources that need setup.

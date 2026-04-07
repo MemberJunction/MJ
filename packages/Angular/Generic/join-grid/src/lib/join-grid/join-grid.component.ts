@@ -529,6 +529,10 @@ export class JoinGridComponent implements AfterViewInit {
     return cell?.data !== undefined;
   }
 
+  public OnDropdownValueChange(row: JoinGridRow, colIndex: number, newValue: unknown): void {
+    this.UpdateCellValueDirect(row, colIndex, String(newValue));
+  }
+
   public async UpdateCellValueDirect(row: JoinGridRow, colIndex: number, newValue: string) {
     // find the associated baseEntity object and update the value and then refresh the grid state from it
     if (this.ColumnsMode !== 'Fields')

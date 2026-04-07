@@ -5809,7 +5809,7 @@ export const MJAIPromptSchema = z.object({
         * * Description: When true, the agent context must match for a cache hit. When false, agent-specific and non-agent results can be used interchangeably.`),
     CacheMustMatchConfig: z.boolean().describe(`
         * * Field Name: CacheMustMatchConfig
-        * * Display Name: Cache Must Match Configuration
+        * * Display Name: Cache Must Match Config
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: When true, the configuration must match for a cache hit. When false, results from any configuration can be used.`),
@@ -5910,7 +5910,7 @@ export const MJAIPromptSchema = z.object({
         * * Description: Maximum number of failover attempts before giving up`),
     FailoverDelaySeconds: z.number().nullable().describe(`
         * * Field Name: FailoverDelaySeconds
-        * * Display Name: Failover Delay (seconds)
+        * * Display Name: Failover Delay (Seconds)
         * * SQL Data Type: int
         * * Default Value: 5
         * * Description: Initial delay in seconds between failover attempts`),
@@ -5965,6 +5965,12 @@ export const MJAIPromptSchema = z.object({
     *   * None
     *   * SystemInstruction
         * * Description: Controls behavior when the selected provider does not support native assistant prefill. Ignore = silently skip prefill, SystemInstruction = inject a system message instructing the model to start its response with the prefill text (uses fallback text from AI Model Vendor or AI Model Type), None = no fallback (prefill only works with supported providers).`),
+    RequireSpecificModels: z.boolean().describe(`
+        * * Field Name: RequireSpecificModels
+        * * Display Name: Require Specific Models
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Only applies when SelectionStrategy is Specific. When 0 (default), if none of the explicitly configured AIPromptModel entries have valid API credentials the system automatically falls back to Default/ByPower model selection across all active models matching the prompt AIModelTypeID. When 1, the system will hard-fail with an error instead of falling back, ensuring only the explicitly configured models are ever used.`),
     Template: z.string().describe(`
         * * Field Name: Template
         * * Display Name: Template Text
@@ -13317,17 +13323,17 @@ export const MJEntityDocumentSchema = z.object({
         * * SQL Data Type: nvarchar(250)`),
     TypeID: z.string().describe(`
         * * Field Name: TypeID
-        * * Display Name: Type ID
+        * * Display Name: Type
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entity Document Types (vwEntityDocumentTypes.ID)`),
     EntityID: z.string().describe(`
         * * Field Name: EntityID
-        * * Display Name: Entity ID
+        * * Display Name: Entity
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)`),
     VectorDatabaseID: z.string().describe(`
         * * Field Name: VectorDatabaseID
-        * * Display Name: Vector Database ID
+        * * Display Name: Vector Database
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Vector Databases (vwVectorDatabases.ID)`),
     Status: z.union([z.literal('Active'), z.literal('Inactive')]).describe(`
@@ -13341,12 +13347,12 @@ export const MJEntityDocumentSchema = z.object({
     *   * Inactive`),
     TemplateID: z.string().describe(`
         * * Field Name: TemplateID
-        * * Display Name: Template ID
+        * * Display Name: Template
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Templates (vwTemplates.ID)`),
     AIModelID: z.string().describe(`
         * * Field Name: AIModelID
-        * * Display Name: AIModel ID
+        * * Display Name: AI Model
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)`),
     PotentialMatchThreshold: z.number().describe(`
@@ -13363,34 +13369,49 @@ export const MJEntityDocumentSchema = z.object({
         * * Description: Value between 0 and 1 that determines what is considered an absolute matching record. Value must be >= PotentialMatchThreshold. This is primarily used for duplicate detection but can be used for other applications as well where matching is relevant.`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
-        * * Display Name: __mj _Created At
+        * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
     __mj_UpdatedAt: z.date().describe(`
         * * Field Name: __mj_UpdatedAt
-        * * Display Name: __mj _Updated At
+        * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    VectorIndexID: z.string().nullable().describe(`
+        * * Field Name: VectorIndexID
+        * * Display Name: Vector Index
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Vector Indexes (vwVectorIndexes.ID)
+        * * Description: Optional foreign key to the specific Vector Index where this entity document's embeddings should be stored. When specified, the vectorization pipeline will upsert vectors directly to this index rather than auto-creating or looking up an index based on VectorDatabaseID + AIModelID. This enables explicit control over which Pinecone/Weaviate/etc. index is used per entity document, supporting multi-index architectures and shared indexes across entity types.`),
+    Configuration: z.string().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON configuration settings for this entity document. Controls vector metadata field inclusion (which fields get stored in the vector index for search result display), large field truncation limits, and future settings like sync scheduling and threshold overrides. NULL means use system defaults.`),
     Type: z.string().describe(`
         * * Field Name: Type
-        * * Display Name: Type
+        * * Display Name: Type Name
         * * SQL Data Type: nvarchar(100)`),
     Entity: z.string().describe(`
         * * Field Name: Entity
-        * * Display Name: Entity
+        * * Display Name: Entity Name
         * * SQL Data Type: nvarchar(255)`),
     VectorDatabase: z.string().describe(`
         * * Field Name: VectorDatabase
-        * * Display Name: Vector Database
+        * * Display Name: Vector Database Name
         * * SQL Data Type: nvarchar(100)`),
     Template: z.string().describe(`
         * * Field Name: Template
-        * * Display Name: Template
+        * * Display Name: Template Name
         * * SQL Data Type: nvarchar(255)`),
     AIModel: z.string().describe(`
         * * Field Name: AIModel
-        * * Display Name: AIModel
+        * * Display Name: AI Model Name
         * * SQL Data Type: nvarchar(50)`),
+    VectorIndex: z.string().nullable().describe(`
+        * * Field Name: VectorIndex
+        * * Display Name: Vector Index Name
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type MJEntityDocumentEntityType = z.infer<typeof MJEntityDocumentSchema>;
@@ -22861,6 +22882,11 @@ export const MJVectorDatabaseSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Configuration: z.string().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON configuration settings for this vector database provider. Stores provider-specific connection settings like custom host URLs, authentication configuration, timeouts, retry policies, and batch size limits. NULL means use defaults from environment variables or provider defaults.`),
 });
 
 export type MJVectorDatabaseEntityType = z.infer<typeof MJVectorDatabaseSchema>;
@@ -22884,12 +22910,12 @@ export const MJVectorIndexSchema = z.object({
         * * SQL Data Type: nvarchar(MAX)`),
     VectorDatabaseID: z.string().describe(`
         * * Field Name: VectorDatabaseID
-        * * Display Name: Vector Database ID
+        * * Display Name: Vector Database
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Vector Databases (vwVectorDatabases.ID)`),
     EmbeddingModelID: z.string().describe(`
         * * Field Name: EmbeddingModelID
-        * * Display Name: Embedding Model ID
+        * * Display Name: Embedding Model
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)`),
     __mj_CreatedAt: z.date().describe(`
@@ -22902,13 +22928,33 @@ export const MJVectorIndexSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    ExternalID: z.string().nullable().describe(`
+        * * Field Name: ExternalID
+        * * Display Name: External ID
+        * * SQL Data Type: nvarchar(500)
+        * * Description: The provider's native identifier for this index. For Pinecone this is the index name; for other providers it may be a separate UUID or identifier. Used for syncing operations between MJ metadata and the remote vector database.`),
+    Dimensions: z.number().nullable().describe(`
+        * * Field Name: Dimensions
+        * * Display Name: Dimensions
+        * * SQL Data Type: int
+        * * Description: The number of dimensions for vectors stored in this index. Determined by the embedding model (e.g., 1536 for text-embedding-3-small, 768 for all-mpnet-base-v2). Set automatically when the index is created via the vector database provider.`),
+    Metric: z.string().nullable().describe(`
+        * * Field Name: Metric
+        * * Display Name: Distance Metric
+        * * SQL Data Type: nvarchar(50)
+        * * Description: The distance metric used for similarity calculations in this index. Common values: cosine (default, measures angular similarity), euclidean (L2 distance), dotproduct (inner product). Must match what the vector database provider was configured with.`),
+    ProviderConfig: z.string().nullable().describe(`
+        * * Field Name: ProviderConfig
+        * * Display Name: Provider Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON object containing provider-specific configuration for this index. For Pinecone serverless: {"cloud":"aws","region":"us-east-1"}. For pod-based: {"environment":"us-east1-gcp","podType":"p1.x1","replicas":1}. Stored as a flexible JSON bag to support any provider without schema changes.`),
     VectorDatabase: z.string().describe(`
         * * Field Name: VectorDatabase
-        * * Display Name: Vector Database
+        * * Display Name: Vector Database Name
         * * SQL Data Type: nvarchar(100)`),
     EmbeddingModel: z.string().describe(`
         * * Field Name: EmbeddingModel
-        * * Display Name: Embedding Model
+        * * Display Name: Embedding Model Name
         * * SQL Data Type: nvarchar(50)`),
 });
 
@@ -39297,7 +39343,7 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
 
     /**
     * * Field Name: CacheMustMatchConfig
-    * * Display Name: Cache Must Match Configuration
+    * * Display Name: Cache Must Match Config
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: When true, the configuration must match for a cache hit. When false, results from any configuration can be used.
@@ -39518,7 +39564,7 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
 
     /**
     * * Field Name: FailoverDelaySeconds
-    * * Display Name: Failover Delay (seconds)
+    * * Display Name: Failover Delay (Seconds)
     * * SQL Data Type: int
     * * Default Value: 5
     * * Description: Initial delay in seconds between failover attempts
@@ -39619,6 +39665,20 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
     }
     set PrefillFallbackMode(value: 'Ignore' | 'None' | 'SystemInstruction') {
         this.Set('PrefillFallbackMode', value);
+    }
+
+    /**
+    * * Field Name: RequireSpecificModels
+    * * Display Name: Require Specific Models
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Only applies when SelectionStrategy is Specific. When 0 (default), if none of the explicitly configured AIPromptModel entries have valid API credentials the system automatically falls back to Default/ByPower model selection across all active models matching the prompt AIModelTypeID. When 1, the system will hard-fail with an error instead of falling back, ensuring only the explicitly configured models are ever used.
+    */
+    get RequireSpecificModels(): boolean {
+        return this.Get('RequireSpecificModels');
+    }
+    set RequireSpecificModels(value: boolean) {
+        this.Set('RequireSpecificModels', value);
     }
 
     /**
@@ -58524,7 +58584,7 @@ export class MJEntityDocumentEntity extends BaseEntity<MJEntityDocumentEntityTyp
 
     /**
     * * Field Name: TypeID
-    * * Display Name: Type ID
+    * * Display Name: Type
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Entity Document Types (vwEntityDocumentTypes.ID)
     */
@@ -58537,7 +58597,7 @@ export class MJEntityDocumentEntity extends BaseEntity<MJEntityDocumentEntityTyp
 
     /**
     * * Field Name: EntityID
-    * * Display Name: Entity ID
+    * * Display Name: Entity
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
     */
@@ -58550,7 +58610,7 @@ export class MJEntityDocumentEntity extends BaseEntity<MJEntityDocumentEntityTyp
 
     /**
     * * Field Name: VectorDatabaseID
-    * * Display Name: Vector Database ID
+    * * Display Name: Vector Database
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Vector Databases (vwVectorDatabases.ID)
     */
@@ -58580,7 +58640,7 @@ export class MJEntityDocumentEntity extends BaseEntity<MJEntityDocumentEntityTyp
 
     /**
     * * Field Name: TemplateID
-    * * Display Name: Template ID
+    * * Display Name: Template
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Templates (vwTemplates.ID)
     */
@@ -58593,7 +58653,7 @@ export class MJEntityDocumentEntity extends BaseEntity<MJEntityDocumentEntityTyp
 
     /**
     * * Field Name: AIModelID
-    * * Display Name: AIModel ID
+    * * Display Name: AI Model
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
     */
@@ -58634,7 +58694,7 @@ export class MJEntityDocumentEntity extends BaseEntity<MJEntityDocumentEntityTyp
 
     /**
     * * Field Name: __mj_CreatedAt
-    * * Display Name: __mj _Created At
+    * * Display Name: Created At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
@@ -58644,7 +58704,7 @@ export class MJEntityDocumentEntity extends BaseEntity<MJEntityDocumentEntityTyp
 
     /**
     * * Field Name: __mj_UpdatedAt
-    * * Display Name: __mj _Updated At
+    * * Display Name: Updated At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
@@ -58653,8 +58713,35 @@ export class MJEntityDocumentEntity extends BaseEntity<MJEntityDocumentEntityTyp
     }
 
     /**
+    * * Field Name: VectorIndexID
+    * * Display Name: Vector Index
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Vector Indexes (vwVectorIndexes.ID)
+    * * Description: Optional foreign key to the specific Vector Index where this entity document's embeddings should be stored. When specified, the vectorization pipeline will upsert vectors directly to this index rather than auto-creating or looking up an index based on VectorDatabaseID + AIModelID. This enables explicit control over which Pinecone/Weaviate/etc. index is used per entity document, supporting multi-index architectures and shared indexes across entity types.
+    */
+    get VectorIndexID(): string | null {
+        return this.Get('VectorIndexID');
+    }
+    set VectorIndexID(value: string | null) {
+        this.Set('VectorIndexID', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON configuration settings for this entity document. Controls vector metadata field inclusion (which fields get stored in the vector index for search result display), large field truncation limits, and future settings like sync scheduling and threshold overrides. NULL means use system defaults.
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    /**
     * * Field Name: Type
-    * * Display Name: Type
+    * * Display Name: Type Name
     * * SQL Data Type: nvarchar(100)
     */
     get Type(): string {
@@ -58663,7 +58750,7 @@ export class MJEntityDocumentEntity extends BaseEntity<MJEntityDocumentEntityTyp
 
     /**
     * * Field Name: Entity
-    * * Display Name: Entity
+    * * Display Name: Entity Name
     * * SQL Data Type: nvarchar(255)
     */
     get Entity(): string {
@@ -58672,7 +58759,7 @@ export class MJEntityDocumentEntity extends BaseEntity<MJEntityDocumentEntityTyp
 
     /**
     * * Field Name: VectorDatabase
-    * * Display Name: Vector Database
+    * * Display Name: Vector Database Name
     * * SQL Data Type: nvarchar(100)
     */
     get VectorDatabase(): string {
@@ -58681,7 +58768,7 @@ export class MJEntityDocumentEntity extends BaseEntity<MJEntityDocumentEntityTyp
 
     /**
     * * Field Name: Template
-    * * Display Name: Template
+    * * Display Name: Template Name
     * * SQL Data Type: nvarchar(255)
     */
     get Template(): string {
@@ -58690,11 +58777,20 @@ export class MJEntityDocumentEntity extends BaseEntity<MJEntityDocumentEntityTyp
 
     /**
     * * Field Name: AIModel
-    * * Display Name: AIModel
+    * * Display Name: AI Model Name
     * * SQL Data Type: nvarchar(50)
     */
     get AIModel(): string {
         return this.Get('AIModel');
+    }
+
+    /**
+    * * Field Name: VectorIndex
+    * * Display Name: Vector Index Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get VectorIndex(): string | null {
+        return this.Get('VectorIndex');
     }
 }
 
@@ -83258,6 +83354,19 @@ export class MJVectorDatabaseEntity extends BaseEntity<MJVectorDatabaseEntityTyp
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON configuration settings for this vector database provider. Stores provider-specific connection settings like custom host URLs, authentication configuration, timeouts, retry policies, and batch size limits. NULL means use defaults from environment variables or provider defaults.
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
 }
 
 
@@ -83330,7 +83439,7 @@ export class MJVectorIndexEntity extends BaseEntity<MJVectorIndexEntityType> {
 
     /**
     * * Field Name: VectorDatabaseID
-    * * Display Name: Vector Database ID
+    * * Display Name: Vector Database
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Vector Databases (vwVectorDatabases.ID)
     */
@@ -83343,7 +83452,7 @@ export class MJVectorIndexEntity extends BaseEntity<MJVectorIndexEntityType> {
 
     /**
     * * Field Name: EmbeddingModelID
-    * * Display Name: Embedding Model ID
+    * * Display Name: Embedding Model
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
     */
@@ -83375,8 +83484,60 @@ export class MJVectorIndexEntity extends BaseEntity<MJVectorIndexEntityType> {
     }
 
     /**
+    * * Field Name: ExternalID
+    * * Display Name: External ID
+    * * SQL Data Type: nvarchar(500)
+    * * Description: The provider's native identifier for this index. For Pinecone this is the index name; for other providers it may be a separate UUID or identifier. Used for syncing operations between MJ metadata and the remote vector database.
+    */
+    get ExternalID(): string | null {
+        return this.Get('ExternalID');
+    }
+    set ExternalID(value: string | null) {
+        this.Set('ExternalID', value);
+    }
+
+    /**
+    * * Field Name: Dimensions
+    * * Display Name: Dimensions
+    * * SQL Data Type: int
+    * * Description: The number of dimensions for vectors stored in this index. Determined by the embedding model (e.g., 1536 for text-embedding-3-small, 768 for all-mpnet-base-v2). Set automatically when the index is created via the vector database provider.
+    */
+    get Dimensions(): number | null {
+        return this.Get('Dimensions');
+    }
+    set Dimensions(value: number | null) {
+        this.Set('Dimensions', value);
+    }
+
+    /**
+    * * Field Name: Metric
+    * * Display Name: Distance Metric
+    * * SQL Data Type: nvarchar(50)
+    * * Description: The distance metric used for similarity calculations in this index. Common values: cosine (default, measures angular similarity), euclidean (L2 distance), dotproduct (inner product). Must match what the vector database provider was configured with.
+    */
+    get Metric(): string | null {
+        return this.Get('Metric');
+    }
+    set Metric(value: string | null) {
+        this.Set('Metric', value);
+    }
+
+    /**
+    * * Field Name: ProviderConfig
+    * * Display Name: Provider Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON object containing provider-specific configuration for this index. For Pinecone serverless: {"cloud":"aws","region":"us-east-1"}. For pod-based: {"environment":"us-east1-gcp","podType":"p1.x1","replicas":1}. Stored as a flexible JSON bag to support any provider without schema changes.
+    */
+    get ProviderConfig(): string | null {
+        return this.Get('ProviderConfig');
+    }
+    set ProviderConfig(value: string | null) {
+        this.Set('ProviderConfig', value);
+    }
+
+    /**
     * * Field Name: VectorDatabase
-    * * Display Name: Vector Database
+    * * Display Name: Vector Database Name
     * * SQL Data Type: nvarchar(100)
     */
     get VectorDatabase(): string {
@@ -83385,7 +83546,7 @@ export class MJVectorIndexEntity extends BaseEntity<MJVectorIndexEntityType> {
 
     /**
     * * Field Name: EmbeddingModel
-    * * Display Name: Embedding Model
+    * * Display Name: Embedding Model Name
     * * SQL Data Type: nvarchar(50)
     */
     get EmbeddingModel(): string {

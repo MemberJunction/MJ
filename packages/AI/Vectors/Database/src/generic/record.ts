@@ -99,12 +99,14 @@ export type VectorRecord<T extends RecordMetadata = RecordMetadata> = {
 
 export type BaseRequestParams = {
     id: string;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Provider-specific data
     data?: any
 }
 
-export type CreateIndexParams= BaseRequestParams & {
+export type CreateIndexParams = BaseRequestParams & {
     dimension: number;
     metric: IndexModelMetricEnum,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Provider-specific params
     additionalParams?: any
 }
 
@@ -134,5 +136,8 @@ export type UpdateOptions<T extends RecordMetadata = RecordMetadata> = {
 export type BaseResponse = {
     success: boolean;
     message: string;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Used by provider implementations
+    // (Pinecone, etc.) to store provider-specific objects. Requires a coordinated
+    // migration across all providers to properly type with generics.
     data: any
 }
