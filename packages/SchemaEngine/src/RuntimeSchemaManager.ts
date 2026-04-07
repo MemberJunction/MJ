@@ -572,6 +572,12 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
 
     await this.runStep('WriteAdditionalSchemaInfo', () => this.writeAdditionalSchemaInfo(successfulItems.map((r) => r.Input)), sharedSteps);
 
+    // Optional: Run DBAutoDoc to discover missing soft PKs/FKs/descriptions for integration tables.
+    // Runs AFTER migration (tables exist in DB) and AFTER WriteAdditionalSchemaInfo (known constraints written),
+    // but BEFORE CodeGen (so CodeGen reads the complete additionalSchemaInfo with discoveries merged in).
+    // Gated by DBAUTODOC_INTEGRATION_ENABLED=true — if not set, this step is skipped silently.
+    await this.runStep('RunDocEnhancement', () => this.runDocEnhancement(successfulItems.map((r) => r.Input)), sharedSteps);
+
     const codegenOk = await this.runStep('RunCodeGen', () => this.runCodeGen(), sharedSteps);
     if (codegenOk) {
       const compileOk = await this.runStep('CompileTypeScript', () => this.compileTypeScript(), sharedSteps);
@@ -874,6 +880,75 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
    * Write/merge AdditionalSchemaInfo (soft PK/FK config) to disk so CodeGen can find it.
    * Path comes from RSU_ADDITIONAL_SCHEMA_INFO_PATH config, resolved relative to WorkDir.
    */
+  /**
+   * Optional: Run DBAutoDoc to discover missing soft PKs/FKs/descriptions for integration tables.
+   * Env-var gated — only runs when DBAUTODOC_INTEGRATION_ENABLED=true.
+   * Dynamic import — the enhancer package is optional; if not installed, returns true (skip).
+   *
+   * Reads existing additionalSchemaInfo.json (written by WriteAdditionalSchemaInfo step),
+   * discovers gaps via statistical analysis + LLM, then merges discoveries back into the file.
+   * CodeGen (next step) then reads the enriched file.
+   */
+  private async runDocEnhancement(_inputs: RSUPipelineInput[]): Promise<boolean> {
+    if (process.env.DBAUTODOC_INTEGRATION_ENABLED !== 'true') {
+      this.rsuLog('DBAutoDoc integration enhancement skipped (DBAUTODOC_INTEGRATION_ENABLED not set)');
+      return true;
+    }
+
+    try {
+      // Dynamic import — avoids hard dependency on integration-engine from schema-engine
+      const packageName = '@memberjunction/integration-engine';
+      const mod = await (Function('specifier', 'return import(specifier)')(packageName)) as {
+        LoadDocEnhancer?: () => Promise<{ EnhanceSchema: Function; HasGaps: Function } | null>;
+      };
+
+      if (!mod.LoadDocEnhancer) {
+        this.rsuLog('DBAutoDoc: LoadDocEnhancer not available, skipping');
+        return true;
+      }
+
+      const enhancer = await mod.LoadDocEnhancer();
+      if (!enhancer) {
+        this.rsuLog('DBAutoDoc: enhancer package not installed, skipping');
+        return true;
+      }
+
+      // Build a minimal context from inputs — the enhancer reads additionalSchemaInfo.json
+      // and integration metadata files for the full picture
+      const affectedSchemas = [...new Set(_inputs.flatMap(i => i.AffectedTables.map(t => t.split('.')[0])))];
+      this.rsuLog(`DBAutoDoc: running enhancement for schemas: ${affectedSchemas.join(', ')}`);
+
+      for (const schemaName of affectedSchemas) {
+        const tables = _inputs.flatMap(i => i.AffectedTables.filter(t => t.startsWith(schemaName + '.')).map(t => t.split('.')[1]));
+        if (tables.length === 0) continue;
+
+        const context = {
+          IntegrationName: schemaName,
+          SchemaName: schemaName,
+          ObjectNames: tables,
+          KnownPrimaryKeys: [] as Array<{ Table: string; Columns: string[]; Source: string }>,
+          KnownForeignKeys: [] as Array<{ Table: string; Column: string; TargetTable: string; TargetColumn: string; Source: string }>,
+          KnownDescriptions: {} as Record<string, string>,
+        };
+
+        if (enhancer.HasGaps(context)) {
+          const result = await enhancer.EnhanceSchema(context);
+          const summary = result as { Summary?: { PKsDiscovered?: number; FKsDiscovered?: number; DescriptionsGenerated?: number } };
+          this.rsuLog(`DBAutoDoc [${schemaName}]: ${summary.Summary?.PKsDiscovered ?? 0} PKs, ${summary.Summary?.FKsDiscovered ?? 0} FKs, ${summary.Summary?.DescriptionsGenerated ?? 0} descriptions discovered`);
+        } else {
+          this.rsuLog(`DBAutoDoc [${schemaName}]: no gaps found, skipping`);
+        }
+      }
+
+      return true;
+    } catch (err) {
+      // Non-fatal — enhancement is optional, don't block the pipeline
+      const msg = err instanceof Error ? err.message : String(err);
+      this.rsuLog(`DBAutoDoc enhancement failed (non-fatal): ${msg}`);
+      return true; // Return true so pipeline continues to CodeGen
+    }
+  }
+
   private async writeAdditionalSchemaInfo(inputs: RSUPipelineInput[]): Promise<boolean> {
     const contents = inputs.map((i) => i.AdditionalSchemaInfo).filter((c): c is string => !!c);
 
