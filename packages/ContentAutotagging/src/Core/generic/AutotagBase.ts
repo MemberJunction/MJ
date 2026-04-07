@@ -6,5 +6,11 @@ export type AutotagProgressCallback = (processed: number, total: number, current
 
 export abstract class AutotagBase {
     public abstract SetContentItemsToProcess(contentSources: MJContentSourceEntity[]): Promise<MJContentItemEntity[]>;
-    public abstract Autotag(contextUser: UserInfo, onProgress?: AutotagProgressCallback): Promise<void>;
+    /**
+     * Run autotagging for this source type.
+     * @param contextUser - The user context for server-side operations
+     * @param onProgress - Optional progress callback
+     * @param contentSourceIDs - Optional filter: only process these specific source IDs. If omitted, processes all sources for this type.
+     */
+    public abstract Autotag(contextUser: UserInfo, onProgress?: AutotagProgressCallback, contentSourceIDs?: string[]): Promise<void>;
 }

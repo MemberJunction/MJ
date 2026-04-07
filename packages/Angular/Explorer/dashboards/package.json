@@ -93,6 +93,7 @@
     "@codemirror/state": "^6.5.4",
     "@codemirror/view": "^6.39.12",
     "@memberjunction/ng-clustering": "5.23.0",
+    "@memberjunction/ng-word-cloud": "5.23.0",
     "@memberjunction/actions-base": "5.23.0",
     "@memberjunction/ai-core-plus": "5.23.0",
     "@memberjunction/ai-engine-base": "5.23.0",

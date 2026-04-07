@@ -18,7 +18,7 @@ import { MJAuthBase, StandardUserInfo, AuthErrorType } from '@memberjunction/ng-
 import { WorkspaceInitializerService } from '@memberjunction/ng-workspace-initializer';
 import { MJEnvironmentConfig, MJ_ENVIRONMENT } from '@memberjunction/ng-bootstrap';
 import { SystemValidationService } from '@memberjunction/ng-explorer-core';
-import { NavigationService } from '@memberjunction/ng-shared';
+import { NavigationService, AgentContextUpdate } from '@memberjunction/ng-shared';
 import { AgentClientService } from '@memberjunction/ng-agent-client';
 import { ClientToolResultEvent } from '@memberjunction/ai-agent-client';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -242,6 +242,11 @@ export class MJExplorerAppComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe(() => this.updateAppContext());
 
+    // Track agent context updates from resource components
+    this.navigationService.AgentContextUpdated$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((update) => this.handleAgentContextUpdate(update));
+
     // Apply saved or OS-preferred theme for the login page
     this.applyLoginTheme();
 
@@ -333,6 +338,8 @@ export class MJExplorerAppComponent implements OnInit, OnDestroy {
         Roles: currentUser?.UserRoles?.map(r => r.Role) || []
       }
     };
+    this.cdr.detectChanges();
+
     // Keep the bridge in sync with workspace visibility.
     // When the user is in the Chat app viewing Conversations, the workspace is "active"
     // for toast suppression. When they switch to any other app/tab, it's not.
@@ -345,6 +352,51 @@ export class MJExplorerAppComponent implements OnInit, OnDestroy {
       this.bridge.SetActiveFromWorkspace(null);
     }
   }
+
+  /**
+   * Handle agent context/tools updates from resource components.
+   * Updates the AppContextSnapshot.DashboardContext so the next agent message
+   * includes the dashboard's current state. Also manages tool registration.
+   */
+  private handleAgentContextUpdate(update: AgentContextUpdate): void {
+    const callerName = update.Caller?.constructor?.name ?? 'unknown';
+
+    // Update AdditionalContext in the current snapshot
+    if (update.AgentContext !== undefined && this.AppContextSnapshot) {
+      console.log(`[AgentContext] Context update from ${callerName}:`, Object.keys(update.AgentContext));
+      this.AppContextSnapshot = {
+        ...this.AppContextSnapshot,
+        AdditionalContext: update.AgentContext,
+      };
+      this.cdr.detectChanges();
+    }
+
+    // Register/update client tools
+    if (update.AgentClientTools !== undefined) {
+      // Unregister any previously registered dashboard tools
+      if (this.activeDashboardToolNames.length > 0) {
+        console.log(`[AgentContext] Unregistering ${this.activeDashboardToolNames.length} tools from previous dashboard:`, this.activeDashboardToolNames);
+        for (const toolName of this.activeDashboardToolNames) {
+          this.agentClient.UnregisterTool(toolName);
+        }
+      }
+
+      // Register the new tools
+      this.activeDashboardToolNames = update.AgentClientTools.map(t => t.Name);
+      console.log(`[AgentContext] Registering ${update.AgentClientTools.length} tools from ${callerName}:`, this.activeDashboardToolNames);
+      for (const tool of update.AgentClientTools) {
+        this.agentClient.RegisterTool({
+          Name: tool.Name,
+          Description: tool.Description,
+          ParameterSchema: tool.ParameterSchema,
+          Handler: tool.Handler as (params: Record<string, unknown>) => Promise<{ Success: boolean; Data?: Record<string, unknown>; ErrorMessage?: string }>,
+        });
+      }
+    }
+  }
+
+  /** Names of currently registered dashboard-specific tools (for cleanup on switch) */
+  private activeDashboardToolNames: string[] = [];
 
   /** Register Explorer-specific client tool handlers with the AgentClientService */
   private registerClientTools(): void {

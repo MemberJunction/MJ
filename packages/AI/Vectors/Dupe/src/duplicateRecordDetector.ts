@@ -41,6 +41,7 @@ import {
     MJEntityDocumentEntity,
     MJListDetailEntity,
     MJListEntity,
+    KnowledgeHubMetadataEngine,
 } from "@memberjunction/core-entities";
 import { VectorBase } from "@memberjunction/ai-vectors";
 import { EntityDocumentTemplateParser, EntityVectorSyncer, VectorizeEntityParams } from "@memberjunction/ai-vector-sync";
@@ -56,6 +57,12 @@ const DEFAULT_QUERY_CONCURRENCY = 10;
 
 /** Default batch size for loading records and parallel database saves */
 const DEFAULT_BATCH_SIZE = 500;
+
+/**
+ * Maximum number of records to embed and query in a single vector similarity sub-batch.
+ * Keeps memory and API payload sizes bounded within each outer processing batch.
+ */
+const VECTOR_QUERY_BATCH_SIZE = 100;
 
 /** Default batch size for parallel database saves */
 const SAVE_BATCH_SIZE = 20;
@@ -113,8 +120,27 @@ export class DuplicateRecordDetector extends VectorBase {
      * Run duplicate detection for records identified by ListID, ViewID, ExtraFilter,
      * or all records in the entity (vector-first approach).
      *
-     * Flow: validate -> vectorize -> init providers -> load/create run ->
-     *       load record IDs -> batch(embed -> query -> persist) -> complete run -> auto-merge
+     * **Batching strategy:**
+     * - Records are loaded as lightweight IDs first, then processed in outer batches of
+     *   {@link DEFAULT_BATCH_SIZE} (500) records.
+     * - Within each outer batch, embedding and vector similarity queries are further
+     *   sub-batched into chunks of {@link VECTOR_QUERY_BATCH_SIZE} (100) records to keep
+     *   API payloads and memory bounded.
+     * - Vector queries within each sub-batch run with configurable concurrency
+     *   (default {@link DEFAULT_QUERY_CONCURRENCY} = 10).
+     *
+     * **Resume support:**
+     * - {@link MJDuplicateRunEntity.ProcessedItemCount} and
+     *   {@link MJDuplicateRunEntity.LastProcessedOffset} are persisted after each outer batch.
+     * - On restart, processing resumes from {@link MJDuplicateRunEntity.LastProcessedOffset}.
+     *
+     * **Cancellation:**
+     * - {@link MJDuplicateRunEntity.CancellationRequested} is re-loaded from the database
+     *   between outer batches. If set to `true`, processing stops and the run can be resumed later.
+     *
+     * @param params - The detection request specifying entity, document, list/view/filter, and options
+     * @param contextUser - The user context for entity operations and security
+     * @returns A response containing all potential duplicate results and an overall status
      */
     public async GetDuplicateRecords(params: PotentialDuplicateRequest, contextUser?: UserInfo): Promise<PotentialDuplicateResponse> {
         this.CurrentUser = contextUser;
@@ -161,14 +187,36 @@ export class DuplicateRecordDetector extends VectorBase {
             return response;
         }
 
-        // Step 6: Process in batches
+        // Step 6: Process in batches with resume support
         const batchSize = DEFAULT_BATCH_SIZE;
         const concurrency = this.GetQueryConcurrency(entityDocument);
         const topK = options.TopK ?? DEFAULT_TOP_K;
         const templateParser = EntityDocumentTemplateParser.CreateInstance();
         let totalMatchesFound = 0;
 
-        for (let offset = 0; offset < recordIDs.length; offset += batchSize) {
+        // Update run with total count for progress tracking
+        duplicateRun.TotalItemCount = recordIDs.length;
+        duplicateRun.BatchSize = batchSize;
+        await this.SaveEntity(duplicateRun);
+
+        // Resume from last processed offset if available
+        const resumeOffset = duplicateRun.LastProcessedOffset ?? 0;
+        if (resumeOffset > 0) {
+            LogStatus(`Duplicate detection: resuming from offset ${resumeOffset}`);
+        }
+
+        for (let offset = resumeOffset; offset < recordIDs.length; offset += batchSize) {
+            // Check for cancellation between batches
+            await duplicateRun.Load(duplicateRun.ID);
+            if (duplicateRun.CancellationRequested) {
+                LogStatus(`Duplicate detection: cancellation requested at offset ${offset}`);
+                duplicateRun.ProcessingStatus = 'In Progress'; // Will be resumed later
+                duplicateRun.EndedAt = new Date();
+                await this.SaveEntity(duplicateRun);
+                response.Status = 'Success'; // Partial success — can be resumed
+                return response;
+            }
+
             const batchIDs = recordIDs.slice(offset, offset + batchSize);
             const batchResults = await this.ProcessBatch(
                 batchIDs, entityInfo, entityDocument, templateParser, duplicateRun.ID,
@@ -176,6 +224,11 @@ export class DuplicateRecordDetector extends VectorBase {
             );
             response.PotentialDuplicateResult.push(...batchResults.Results);
             totalMatchesFound += batchResults.MatchesFound;
+
+            // Update cursor for resume support
+            duplicateRun.ProcessedItemCount = offset + batchIDs.length;
+            duplicateRun.LastProcessedOffset = offset + batchSize;
+            await this.SaveEntity(duplicateRun);
         }
 
         // Step 7: Complete the duplicate run
@@ -250,7 +303,30 @@ export class DuplicateRecordDetector extends VectorBase {
     // ─────────────────────────────────────────────
 
     /**
-     * Result from processing a single batch of records.
+     * Process a single outer batch of record IDs through the full duplicate detection pipeline.
+     *
+     * Steps:
+     * 1. Load full record data for template rendering
+     * 2. Build source metadata for rich UI display
+     * 3. Create DuplicateRunDetail records
+     * 4. Sub-batch records into chunks of {@link VECTOR_QUERY_BATCH_SIZE} (default 100)
+     *    for embedding + vector similarity querying, keeping memory and API payloads bounded
+     * 5. Persist match results and update run details
+     *
+     * @param batchIDs - Primary key values for records in this batch
+     * @param entityInfo - Entity metadata
+     * @param entityDocument - The entity document driving vectorization
+     * @param templateParser - Reusable template parser instance
+     * @param duplicateRunID - ID of the parent DuplicateRun record
+     * @param topK - Number of nearest neighbors to retrieve per record
+     * @param concurrency - Max parallel vector queries within each sub-batch
+     * @param options - Detection options (thresholds, callbacks, etc.)
+     * @param startTime - Epoch ms for elapsed-time progress reporting
+     * @param totalRecords - Total records across all batches (for progress reporting)
+     * @param processedSoFar - Records processed before this batch (for progress reporting)
+     * @param matchesSoFar - Matches found before this batch (for progress reporting)
+     * @param contextUser - The user context for entity operations
+     * @returns Combined results and match count for this batch
      */
     private async ProcessBatch(
         batchIDs: string[],
@@ -284,21 +360,31 @@ export class DuplicateRecordDetector extends VectorBase {
         // 6c: Create DuplicateRunDetail records for this batch
         const duplicateRunDetails = await this.CreateRunDetailRecords(batchIDs, duplicateRunID, entityInfo, sourceMetadataMap);
 
-        // 6c: Generate template texts and embed
-        this.reportProgress(options, 'Embedding', totalRecords, processedSoFar, matchesSoFar, startTime);
-        const templateTexts = await this.GenerateTemplateTexts(templateParser, entityDocument, records, contextUser);
-        const embedResult = await this.embedding.EmbedTexts({ texts: templateTexts, model: null });
+        // 6d: Sub-batch embedding + vector queries in chunks of VECTOR_QUERY_BATCH_SIZE
+        //     to keep API payload sizes and memory bounded
+        const allQueryResults: RecordQueryResult[] = [];
+        const subBatches = chunkArray(records, VECTOR_QUERY_BATCH_SIZE);
 
-        // 6d: Query vector DB for each record with concurrency control
-        this.reportProgress(options, 'Querying', totalRecords, processedSoFar, matchesSoFar, startTime);
-        const queryResults = await this.QueryDuplicatesForRecords(
-            records, embedResult.vectors, templateTexts, entityDocument, topK, options, concurrency
-        );
+        for (let i = 0; i < subBatches.length; i++) {
+            const subRecords = subBatches[i];
+
+            // Embed this sub-batch
+            this.reportProgress(options, 'Embedding', totalRecords, processedSoFar, matchesSoFar, startTime);
+            const subTemplateTexts = await this.GenerateTemplateTexts(templateParser, entityDocument, subRecords, contextUser);
+            const subEmbedResult = await this.embedding.EmbedTexts({ texts: subTemplateTexts, model: null });
+
+            // Query vector DB for each record in the sub-batch with concurrency control
+            this.reportProgress(options, 'Querying', totalRecords, processedSoFar, matchesSoFar, startTime);
+            const subQueryResults = await this.QueryDuplicatesForRecords(
+                subRecords, subEmbedResult.vectors, subTemplateTexts, entityDocument, topK, options, concurrency
+            );
+            allQueryResults.push(...subQueryResults);
+        }
 
         // 6e: Persist match results and update run details
         this.reportProgress(options, 'Matching', totalRecords, processedSoFar + records.length, matchesSoFar, startTime);
         const results = await this.PersistMatchResults(
-            queryResults, duplicateRunDetails, entityDocument, options, startTime
+            allQueryResults, duplicateRunDetails, entityDocument, options, startTime
         );
 
         const batchMatches = results.reduce((sum, r) => sum + r.Duplicates.length, 0);
@@ -396,16 +482,28 @@ export class DuplicateRecordDetector extends VectorBase {
     /**
      * Validate and return an entity document, or null if not found.
      */
+    /**
+     * Validates that an entity document exists and is usable. Uses the
+     * KnowledgeHubMetadataEngine cache for instant lookups without database queries.
+     */
     protected async ValidateEntityDocument(entityDocumentID: string): Promise<MJEntityDocumentEntity | null> {
-        const vectorizer = new EntityVectorSyncer();
-        vectorizer.CurrentUser = this.CurrentUser;
-        return vectorizer.GetEntityDocument(entityDocumentID);
+        // Ensure KH engine is initialized (no-op if already loaded)
+        await KnowledgeHubMetadataEngine.Instance.Config(false, this.CurrentUser);
+        const doc = KnowledgeHubMetadataEngine.Instance.GetEntityDocumentById(entityDocumentID);
+        return doc ?? null;
     }
 
     /**
-     * Initialize embedding and vector DB providers via ClassFactory.
+     * Initializes embedding model, vector DB, and index name providers.
+     * Called once per detection run rather than per-record. Uses AIEngine
+     * and KnowledgeHubMetadataEngine caches to avoid redundant database queries.
      */
     protected async InitializeProviders(entityDocument: MJEntityDocumentEntity): Promise<void> {
+        // Skip re-initialization if providers are already set for this entity document
+        if (this.embedding && this.vectorDB && this.indexName) {
+            return;
+        }
+
         const aiModel = this.GetAIModel(entityDocument.AIModelID);
         const vectorDB = this.GetVectorDatabase(entityDocument.VectorDatabaseID);
 
@@ -434,22 +532,19 @@ export class DuplicateRecordDetector extends VectorBase {
         }
 
         // Resolve the vector index name from the entity document's VectorIndexID
-        // This is the actual Pinecone/pgvector/Qdrant index name needed for QueryIndex calls
+        // Uses KnowledgeHubMetadataEngine cache instead of a RunView query
         if (entityDocument.VectorIndexID) {
-            const rv = new RunView();
-            const indexResult = await rv.RunView<{ Name: string }>({
-                EntityName: 'MJ: Vector Indexes',
-                ExtraFilter: `ID='${entityDocument.VectorIndexID}'`,
-                Fields: ['Name'],
-                ResultType: 'simple',
-                MaxRows: 1
-            }, this.CurrentUser);
-            if (indexResult.Success && indexResult.Results.length > 0) {
-                this.indexName = indexResult.Results[0].Name;
+            const vectorIndex = KnowledgeHubMetadataEngine.Instance.GetVectorIndexById(entityDocument.VectorIndexID);
+            if (vectorIndex) {
+                this.indexName = vectorIndex.Name;
             }
         }
         if (!this.indexName) {
-            throw new Error(`No vector index found for entity document "${entityDocument.Name}". Ensure VectorIndexID is set on the entity document.`);
+            throw new Error(
+                `No vector index found for entity document "${entityDocument.Name}" (ID: ${entityDocument.ID}). ` +
+                `Ensure VectorIndexID is set on the entity document. You can create and assign a Vector Index ` +
+                `in the Knowledge Hub > Vector Indexes section.`
+            );
         }
 
         LogStatus(`Providers initialized: AI Model=${aiModel.DriverClass}, VectorDB=${vectorDB.ClassKey}, Index=${this.indexName}`);
@@ -688,7 +783,27 @@ export class DuplicateRecordDetector extends VectorBase {
 
     /**
      * Query the vector DB for duplicates of each record, with concurrency control.
-     * Supports hybrid search and RRF fusion when the vector DB supports it.
+     *
+     * Creates one async task per record, then executes them via {@link RunWithConcurrency}
+     * with the specified concurrency limit. Each task embeds and queries a single record
+     * against the vector index.
+     *
+     * Supports hybrid search (vector + keyword) with RRF fusion when the vector DB provider
+     * supports it (checked via `SupportsHybridSearch`).
+     *
+     * Post-query, results are:
+     * 1. Parsed from raw vector matches into typed {@link PotentialDuplicate} objects
+     * 2. Filtered to remove self-matches (same record as source)
+     * 3. Filtered by the potential match threshold (from options or entity document)
+     *
+     * @param records - The source records to find duplicates for
+     * @param vectors - Pre-computed embedding vectors, one per record (same index order)
+     * @param templateTexts - Rendered template texts for hybrid keyword search
+     * @param entityDocument - The entity document providing thresholds and configuration
+     * @param topK - Number of nearest neighbors to retrieve per record
+     * @param options - Detection options including threshold overrides
+     * @param concurrency - Max parallel vector queries
+     * @returns One {@link RecordQueryResult} per input record
      */
     protected async QueryDuplicatesForRecords(
         records: BaseEntity[],
@@ -796,10 +911,22 @@ export class DuplicateRecordDetector extends VectorBase {
      */
     protected buildSourceMetadataMap(records: BaseEntity[], entityInfo: EntityInfo): Map<string, string> {
         const metadataMap = new Map<string, string>();
-        const nameField = entityInfo.NameField;
-        // Collect a small set of useful display fields
-        const displayFieldNames = ['Name', 'Title', 'Description', 'Status', 'Type']
-            .filter(fn => entityInfo.Fields.find(f => f.Name === fn));
+
+        // Combine all IsNameField fields in Sequence order for the display name
+        const nameFields = entityInfo.Fields
+            .filter(f => f.IsNameField)
+            .sort((a, b) => (a.Sequence ?? 9999) - (b.Sequence ?? 9999));
+
+        // Fall back to singular NameField if no IsNameField flags
+        if (nameFields.length === 0 && entityInfo.NameField) {
+            nameFields.push(entityInfo.NameField);
+        }
+
+        // Use DefaultInView fields for display, plus IsNameField fields
+        const internalNames = new Set(['ID', '__mj_CreatedAt', '__mj_UpdatedAt']);
+        const displayFields = entityInfo.Fields
+            .filter(f => f.DefaultInView && !f.IsPrimaryKey && !internalNames.has(f.Name))
+            .sort((a, b) => (a.Sequence ?? 9999) - (b.Sequence ?? 9999));
 
         for (const record of records) {
             const pk = record.PrimaryKey;
@@ -810,19 +937,33 @@ export class DuplicateRecordDetector extends VectorBase {
             if (entityInfo.Icon) {
                 meta['EntityIcon'] = entityInfo.Icon;
             }
-            if (nameField) {
-                const nameVal = record.Get(nameField.Name);
-                if (nameVal != null) meta['Name'] = String(nameVal);
+
+            // Store combined name from all IsNameField fields
+            const nameParts = nameFields
+                .map(f => record.Get(f.Name))
+                .filter(v => v != null && String(v).trim() !== '')
+                .map(v => String(v));
+            if (nameParts.length > 0) {
+                meta['Name'] = nameParts.join(' ');
             }
-            for (const fn of displayFieldNames) {
-                if (fn !== nameField?.Name) {
-                    const val = record.Get(fn);
+
+            // Store all IsNameField values individually for downstream resolution
+            for (const nf of nameFields) {
+                const val = record.Get(nf.Name);
+                if (val != null) meta[nf.Name] = String(val);
+            }
+
+            // Store DefaultInView fields for rich display
+            for (const field of displayFields) {
+                if (!meta[field.Name]) { // Don't overwrite name fields
+                    const val = record.Get(field.Name);
                     if (val != null) {
                         const str = String(val);
-                        meta[fn] = str.length > 200 ? str.substring(0, 197) + '...' : str;
+                        meta[field.Name] = str.length > 200 ? str.substring(0, 197) + '...' : str;
                     }
                 }
             }
+
             metadataMap.set(id, JSON.stringify(meta));
         }
         return metadataMap;

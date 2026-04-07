@@ -10,9 +10,9 @@
       "SelectionStrategy": "Specific",
       "PowerPreference": "Lowest",
       "ParallelizationMode": "None",
-      "MaxRetries": 2,
-      "RetryDelayMS": 500,
-      "RetryStrategy": "Fixed",
+      "MaxRetries": 5,
+      "RetryDelayMS": 5000,
+      "RetryStrategy": "Exponential",
       "PromptRole": "System",
       "PromptPosition": "First",
       "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System"
@@ -30,7 +30,7 @@
             "ID": "B8AF58CA-88C6-4117-A358-1CC9ECB5BA01"
           },
           "sync": {
-            "lastModified": "2026-04-03T19:37:04.491Z",
+            "lastModified": "2026-04-04T01:09:46.975Z",
             "checksum": "71ee991d8e0ab07b2e4ea296274c871739fbb9068ae94df729251a82c42f9641"
           }
         },
@@ -45,7 +45,7 @@
             "ID": "FC7EDB2A-9E3C-41BF-A138-8BB4EFCF729D"
           },
           "sync": {
-            "lastModified": "2026-04-03T19:37:04.503Z",
+            "lastModified": "2026-04-04T01:09:46.987Z",
             "checksum": "095fd3e315f3b21003c644d5708f6734db90f565786423ebadb395b7fa53105f"
           }
         }
@@ -55,8 +55,8 @@
       "ID": "91C4178C-355C-49EA-9565-AEE8B7C630B2"
     },
     "sync": {
-      "lastModified": "2026-04-03T20:30:41.449Z",
-      "checksum": "8ce6168cfc7d33b211aae7fb24fe8776363b5def20475b38bca47592c3379c97"
+      "lastModified": "2026-04-06T23:23:00.860Z",
+      "checksum": "8229a18dfd96c158122e73cb33088b517cedbb9b035214af2fa8612f839ab9a5"
     }
   }
 ]

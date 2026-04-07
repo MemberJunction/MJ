@@ -63,6 +63,7 @@ import { MJTestRunFeedbackFormComponentExtended } from "./Tests/test-run-feedbac
 import { MJTestRubricFormComponentExtended } from "./Tests/test-rubric-form.component";
 import { EntityLinkPillComponent } from "./Tests/entity-link-pill.component";
 import { MJListFormComponentExtended } from "./Lists/list-form.component";
+import { MJContentSourceFormComponentExtended } from "./ContentSources/content-source-form.component";
 
 @NgModule({
     declarations: [
@@ -105,6 +106,7 @@ import { MJListFormComponentExtended } from "./Lists/list-form.component";
         MJTestRubricFormComponentExtended,
         EntityLinkPillComponent,
         MJListFormComponentExtended,
+        MJContentSourceFormComponentExtended,
     ],
     imports: [
         CommonModule,
@@ -169,6 +171,7 @@ import { MJListFormComponentExtended } from "./Lists/list-form.component";
         MJTestRubricFormComponentExtended,
         EntityLinkPillComponent,
         MJListFormComponentExtended,
+        MJContentSourceFormComponentExtended,
         ActionsModule
     ],
     providers: [

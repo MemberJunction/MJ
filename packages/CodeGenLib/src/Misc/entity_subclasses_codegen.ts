@@ -282,7 +282,7 @@ export const loadModule = () => {
     * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get ${objName}(): ${ft} {
-        const raw = this.Get('${e.Name}');
+        const raw = this.${safeName};
         if (raw !== this.${lastRawField}) {
             this.${cachedField} = raw ? JSON.parse(raw) : null;
             this.${lastRawField} = raw;
@@ -291,7 +291,7 @@ export const loadModule = () => {
     }
     set ${objName}(value: ${ft}) {
         const raw = value ? JSON.stringify(value) : null;
-        this.Set('${e.Name}', raw);
+        this.${safeName} = raw;
         this.${cachedField} = value;
         this.${lastRawField} = raw;
     }`;

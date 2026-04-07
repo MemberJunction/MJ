@@ -445,7 +445,6 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
     // Get the container element
     const container = this.directContentContainer?.nativeElement;
     if (!container) {
-      console.warn('Direct content container not available yet, retrying...');
       // Retry after view is updated
       setTimeout(() => this.loadSingleResourceContent(), 50);
       return;

@@ -162,6 +162,43 @@
     background: color-mix(in srgb, var(--mj-brand-primary) 5%, var(--mj-bg-surface));
 }
 
+/* Tag Preset Buttons */
+.search-tag-presets {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-top: 0.5rem;
+}
+
+.tag-presets-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.78rem;
+    color: var(--mj-text-muted);
+    margin-right: 0.25rem;
+}
+
+.tag-preset-btn {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.65rem;
+    border-radius: 9999px;
+    border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 25%, var(--mj-border-default));
+    background: color-mix(in srgb, var(--mj-brand-primary) 6%, var(--mj-bg-surface));
+    color: var(--mj-text-secondary);
+    font-size: 0.78rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.tag-preset-btn:hover {
+    border-color: var(--mj-brand-primary);
+    color: var(--mj-brand-primary);
+    background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+}
+
 /* Results Layout */
 .search-results-layout {
     display: flex;
@@ -181,16 +218,19 @@
 .search-results-main {
     flex: 1;
     min-width: 0;
-    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
     max-height: calc(100vh - 220px);
+    overflow: hidden;
 }
 
 /* Results Header */
 .search-results-header {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    gap: 0.75rem;
     margin-bottom: 0.75rem;
+    flex-shrink: 0;
 }
 
 .search-results-count {
@@ -202,7 +242,8 @@
     color: var(--mj-text-muted);
 }
 
-.toggle-filters-btn {
+/* Show Filters button — appears on left when panel is hidden */
+.show-filters-btn {
     display: inline-flex;
     align-items: center;
     gap: 0.4rem;
@@ -213,10 +254,28 @@
     color: var(--mj-text-secondary);
     font-size: 0.82rem;
     cursor: pointer;
+    transition: all 0.15s;
+    flex-shrink: 0;
 }
 
-.toggle-filters-btn:hover {
+.show-filters-btn:hover {
     background: var(--mj-bg-surface-hover);
+    border-color: var(--mj-brand-primary);
+    color: var(--mj-brand-primary);
+}
+
+.filter-active-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 9px;
+    background: var(--mj-brand-primary);
+    color: var(--mj-text-inverse);
+    font-size: 0.65rem;
+    font-weight: 700;
 }
 
 /* Agent CTA */
@@ -383,6 +442,189 @@
     font-size: 0.72rem;
     color: var(--mj-text-muted);
     margin-top: 0.25rem;
+}
+
+.threshold-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    margin-top: 0.6rem;
+    padding: 0.45rem 0.6rem;
+    border-radius: 6px;
+    background: var(--mj-bg-surface-sunken);
+    border: 1px solid var(--mj-border-subtle);
+}
+
+.threshold-stats-shown {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--mj-text-secondary);
+}
+
+.threshold-stats-range {
+    font-size: 0.7rem;
+    color: var(--mj-text-muted);
+}
+
+/* Save Search Button (in results header) */
+.save-search-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.3rem 0.65rem;
+    border: 1px solid var(--mj-border-default);
+    border-radius: 6px;
+    background: var(--mj-bg-surface);
+    color: var(--mj-text-secondary);
+    font-size: 0.78rem;
+    cursor: pointer;
+    transition: all 0.15s;
+    margin-left: auto;
+}
+
+.save-search-btn:hover {
+    border-color: var(--mj-brand-primary);
+    color: var(--mj-brand-primary);
+    background: color-mix(in srgb, var(--mj-brand-primary) 5%, var(--mj-bg-surface));
+}
+
+/* Saved search items in empty state */
+.saved-icon {
+    color: var(--mj-brand-primary);
+    font-size: 0.82rem;
+}
+
+.saved-item {
+    position: relative;
+}
+
+.saved-query-text {
+    color: var(--mj-text-muted);
+    font-size: 0.78rem;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.saved-delete-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--mj-text-muted);
+    font-size: 0.7rem;
+    cursor: pointer;
+    opacity: 0;
+    transition: all 0.15s;
+    flex-shrink: 0;
+}
+
+.saved-item:hover .saved-delete-btn {
+    opacity: 1;
+}
+
+.saved-delete-btn:hover {
+    color: var(--mj-status-error);
+    background: var(--mj-status-error-bg);
+}
+
+/* Save Dialog Overlay */
+.save-dialog-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--mj-bg-overlay);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.save-dialog {
+    background: var(--mj-bg-surface);
+    border-radius: 12px;
+    padding: 1.5rem;
+    width: 400px;
+    max-width: 90vw;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+}
+
+.save-dialog-title {
+    margin: 0 0 0.25rem;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--mj-text-primary);
+}
+
+.save-dialog-subtitle {
+    margin: 0 0 1rem;
+    font-size: 0.82rem;
+    color: var(--mj-text-muted);
+}
+
+.save-dialog-label {
+    display: block;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--mj-text-secondary);
+    margin-bottom: 0.35rem;
+}
+
+.save-dialog-input {
+    width: 100%;
+    box-sizing: border-box;
+    margin-bottom: 1rem;
+}
+
+.save-dialog-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.save-dialog-confirm {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: 6px;
+    background: var(--mj-brand-primary);
+    color: var(--mj-text-inverse);
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.save-dialog-confirm:hover:not(:disabled) {
+    background: var(--mj-brand-primary-hover);
+}
+
+.save-dialog-confirm:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.save-dialog-cancel {
+    padding: 0.5rem 1rem;
+    border: 1px solid var(--mj-border-default);
+    border-radius: 6px;
+    background: var(--mj-bg-surface);
+    color: var(--mj-text-secondary);
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.save-dialog-cancel:hover {
+    background: var(--mj-bg-surface-hover);
 }
 
 /* Mobile responsive */
