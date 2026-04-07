@@ -400,12 +400,24 @@ export class AIEngine extends BaseSingleton<AIEngine> {
         // Load actions from the Action system
         await this.RefreshActions(contextUser);
 
-        // Load all embeddings in parallel since they are independent
+        // Embedding generation is deferred to first use (FindSimilar* calls).
+        // This avoids loading the ~50MB local embedding model during Config(),
+        // which is expensive in short-lived CLI processes that never need search.
+        this._embeddingsGenerated = false;
+    }
+
+    /**
+     * Ensures embeddings are generated, loading the model if needed.
+     * Called lazily from FindSimilar* methods on first use.
+     */
+    private async ensureEmbeddingsGenerated(): Promise<void> {
+        if (this._embeddingsGenerated) return;
+
         await Promise.all([
             this.RefreshAgentEmbeddings(),
             this.RefreshActionEmbeddings(),
-            this.RefreshNoteEmbeddings(contextUser),
-            this.RefreshExampleEmbeddings(contextUser)
+            this.RefreshNoteEmbeddings(this._contextUser),
+            this.RefreshExampleEmbeddings(this._contextUser)
         ]);
 
         this._embeddingsGenerated = true;
@@ -905,6 +917,7 @@ export class AIEngine extends BaseSingleton<AIEngine> {
         topK: number = 5,
         minSimilarity: number = 0.5
     ): Promise<AgentMatchResult[]> {
+        await this.ensureEmbeddingsGenerated();
         if (!this._agentVectorService) {
             throw new Error('Agent embeddings not loaded. Ensure AIEngine.Config() has completed.');
         }
@@ -926,6 +939,7 @@ export class AIEngine extends BaseSingleton<AIEngine> {
         topK: number = 10,
         minSimilarity: number = 0.5
     ): Promise<ActionMatchResult[]> {
+        await this.ensureEmbeddingsGenerated();
         if (!this._actionVectorService) {
             throw new Error('Action embeddings not loaded. Ensure AIEngine.Config() has completed.');
         }
@@ -952,8 +966,8 @@ export class AIEngine extends BaseSingleton<AIEngine> {
         minSimilarity: number = 0.5,
         additionalFilter?: (metadata: NoteEmbeddingMetadata) => boolean
     ): Promise<NoteMatchResult[]> {
+        await this.ensureEmbeddingsGenerated();
         if (!this._noteVectorService) {
-            // Vector service not available - fall back to returning notes from cache filtered by scope
             LogError('FindSimilarAgentNotes: Note vector service not initialized. Falling back to cached notes without semantic ranking.');
             return this.fallbackGetNotesFromCache(agentId, userId, companyId, topK, additionalFilter);
         }
@@ -1056,8 +1070,8 @@ export class AIEngine extends BaseSingleton<AIEngine> {
         minSimilarity: number = 0.5,
         additionalFilter?: (metadata: ExampleEmbeddingMetadata) => boolean
     ): Promise<ExampleMatchResult[]> {
+        await this.ensureEmbeddingsGenerated();
         if (!this._exampleVectorService) {
-            // Vector service not available - fall back to returning examples from cache filtered by scope
             LogError('FindSimilarAgentExamples: Example vector service not initialized. Falling back to cached examples without semantic ranking.');
             return this.fallbackGetExamplesFromCache(agentId, userId, companyId, topK, additionalFilter);
         }

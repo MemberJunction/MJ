@@ -3124,6 +3124,7 @@ export abstract class BaseEntity<T = unknown> {
      */
     protected async GenerateEmbedding(field: EntityField, vectorField: EntityField, modelField: EntityField): Promise<boolean> {
         try {
+            if (this._skipEmbeddings) return true;
             if (!this.IsSaved || field.Dirty) {
                 if (field.Value?.trim().length > 0) {
                     // recalc vector
@@ -3174,7 +3175,17 @@ export abstract class BaseEntity<T = unknown> {
      * however it is possible for the string in the map to be any unique key relative to the object so you could have vectors
      * that embed multiple fields if desired.
      */
-    private _vectors: Map<string, number[]> = new Map<string, number[]>();  
+    private _vectors: Map<string, number[]> = new Map<string, number[]>();
+
+    /**
+     * When true, GenerateEmbedding() returns immediately without computing vectors.
+     * Set this before calling Save() in batch/sync contexts where embedding computation
+     * should be deferred (e.g., CLI sync operations where loading the embedding model
+     * per-process is expensive and vectors can be computed later by the API server).
+     */
+    private _skipEmbeddings: boolean = false;
+    public get SkipEmbeddings(): boolean { return this._skipEmbeddings; }
+    public set SkipEmbeddings(value: boolean) { this._skipEmbeddings = value; }
 
     /**
      * Utility storage for vector embeddings that represent the active record. Each string in the Map can be any unique key relative to the object so you can

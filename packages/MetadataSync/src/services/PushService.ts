@@ -1103,6 +1103,9 @@ export class PushService {
     
     let saveResult;
     try {
+      // Skip embedding generation during sync — vectors can be computed later by the
+      // API server. This avoids loading the ~50MB Xenova model in short-lived CLI processes.
+      entity.SkipEmbeddings = true;
       // Pass IgnoreDirtyState option when alwaysPush is enabled
       const saveOptions = alwaysPush ? { IgnoreDirtyState: true } : undefined;
       saveResult = await entity.Save(saveOptions);

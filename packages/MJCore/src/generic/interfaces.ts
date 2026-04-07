@@ -291,6 +291,14 @@ export class EntitySaveOptions {
      * Only set when IsParentEntitySave is true.
      */
     ISAActiveChildEntityName?: string;
+
+    /**
+     * When true, embedding generation (GenerateEmbedding / GenerateEmbeddingsByFieldName)
+     * is skipped during this save. Useful for batch/sync operations where vectors can be
+     * computed later by the API server or a background job, avoiding the cost of loading
+     * the embedding model in short-lived CLI processes.
+     */
+    SkipEmbeddings?: boolean = false;
 }
 
 /**
