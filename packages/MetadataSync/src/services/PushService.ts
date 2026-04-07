@@ -2,7 +2,8 @@ import fs from 'fs-extra';
 import path from 'path';
 import fastGlob from 'fast-glob';
 import { BaseEntity, Metadata, UserInfo, EntitySaveOptions } from '@memberjunction/core';
-import { SyncEngine, RecordData, DeferrableLookupError, SyncResolutionCollector } from '../lib/sync-engine';
+import { SyncEngine, RecordData, DeferrableLookupError, SyncResolutionCollector, BatchContext } from '../lib/sync-engine';
+import { BatchContextIndex } from '../lib/batch-context-index';
 import { loadEntityConfig, loadSyncConfig, EntityConfig, SyncConfig } from '../config';
 import { FileBackupManager } from '../lib/file-backup-manager';
 import { configManager } from '../lib/config-manager';
@@ -14,11 +15,14 @@ import { JsonPreprocessor } from '../lib/json-preprocessor';
 import { findEntityDirectories } from '../lib/provider-utils';
 import { DeletionAuditor, DeletionAudit } from '../lib/deletion-auditor';
 import { DeletionReportGenerator } from '../lib/deletion-report-generator';
+import { SyncStateManager } from '../lib/sync-state-manager';
 import type { GenericDatabaseProvider, SqlLoggingSession } from '@memberjunction/generic-database-provider';
 
 // Configuration for parallel processing
-const PARALLEL_BATCH_SIZE = 1; // Number of records to process in parallel at each dependency level
-/// TEMPORARILY DISABLED PARALLEL BY SETTING TO 1 as we were having some issues
+// Race conditions with shared mutable state (batchContext, deferredRecords, warnings) were
+// fixed by having processFlattenedRecord return side effects as data, which are then applied
+// sequentially after Promise.all() resolves. This makes parallel execution safe.
+const PARALLEL_BATCH_SIZE = 10; // Number of records to process in parallel at each dependency level
 
 export interface PushOptions {
   dir?: string;
@@ -29,6 +33,7 @@ export interface PushOptions {
   include?: string[]; // Only process these directories (whitelist, supports patterns)
   exclude?: string[]; // Skip these directories (blacklist, supports patterns)
   deleteDbOnly?: boolean; // Delete database-only records that reference records being deleted
+  incremental?: boolean;  // Skip files whose checksum hasn't changed since last push
 }
 
 export interface PushCallbacks {
@@ -85,6 +90,24 @@ interface DeferredRecord {
   entityConfig: EntityConfig;
 }
 
+/**
+ * Result from processFlattenedRecord that includes side effects as data.
+ * Side effects (batchContext writes, deferred records, warnings) are returned
+ * here instead of being mutated directly, so they can be applied sequentially
+ * after Promise.all() resolves — eliminating race conditions in parallel batches.
+ */
+interface ProcessRecordResult {
+  status: 'created' | 'updated' | 'unchanged' | 'error' | 'deleted' | 'skipped' | 'deferred';
+  isDuplicate?: boolean;
+  isDeletedRecord?: boolean;
+  /** Entry to add to batchContext after the batch completes */
+  batchContextEntry?: { key: string; entity: BaseEntity };
+  /** Record to queue for deferred processing (circular dependency handling) */
+  deferredRecord?: DeferredRecord;
+  /** Warnings accumulated during processing */
+  warnings?: string[];
+}
+
 export class PushService {
   private syncEngine: SyncEngine;
   private contextUser: UserInfo;
@@ -92,10 +115,17 @@ export class PushService {
   private syncConfig: SyncConfig | null = null;
   private deferredFileWrites: Map<string, DeferredFileWrite> = new Map();
   private deferredRecords: DeferredRecord[] = [];
+  private stateManager: SyncStateManager | undefined;
 
-  constructor(syncEngine: SyncEngine, contextUser: UserInfo) {
+  constructor(syncEngine: SyncEngine, contextUser: UserInfo, stateManager?: SyncStateManager) {
     this.syncEngine = syncEngine;
     this.contextUser = contextUser;
+    this.stateManager = stateManager;
+  }
+
+  /** Set or replace the state manager after construction. */
+  setStateManager(stateManager: SyncStateManager): void {
+    this.stateManager = stateManager;
   }
 
   /**
@@ -327,7 +357,8 @@ export class PushService {
             entityConfig,
             options,
             fileBackupManager,
-            callbacks
+            callbacks,
+            configDir
           );
           
           // Stop the spinner if we were using onProgress
@@ -464,7 +495,8 @@ export class PushService {
     entityConfig: any,
     options: PushOptions,
     fileBackupManager: FileBackupManager,
-    callbacks?: PushCallbacks
+    callbacks?: PushCallbacks,
+    syncRootDir?: string
   ): Promise<EntityPushResult> {
     let created = 0;
     let updated = 0;
@@ -503,16 +535,32 @@ export class PushService {
         const unprocessedRecords = Array.isArray(rawFileData) ? rawFileData : [rawFileData];
         const isArray = Array.isArray(rawFileData);
 
-        // Only preprocess if there are @include directives
+        // Preprocess @include directives before checksumming, so changes to
+        // included files are detected by the incremental skip check.
         let fileData = rawFileData;
         const jsonString = JSON.stringify(rawFileData);
         const hasIncludes = jsonString.includes('"@include"') || jsonString.includes('"@include.');
 
         if (hasIncludes) {
-          // Preprocess the JSON file to handle @include directives
-          // Create a new preprocessor instance for each file to ensure clean state
           const jsonPreprocessor = new JsonPreprocessor();
           fileData = await jsonPreprocessor.processFile(filePath);
+        }
+
+        // Compute checksum on the RESOLVED content (after @include preprocessing)
+        // so that changes to included files are properly detected.
+        let cachedChecksum: string | undefined;
+
+        if (options.incremental && this.stateManager && syncRootDir) {
+          const relativePath = path.relative(syncRootDir, filePath);
+          cachedChecksum = this.syncEngine.calculateChecksum(fileData);
+          if (!this.stateManager.hasFileChanged(relativePath, cachedChecksum)) {
+            const recordCount = Array.isArray(rawFileData) ? rawFileData.length : 1;
+            if (options.verbose) {
+              callbacks?.onLog?.(`   Skipping unchanged file: ${path.basename(filePath)}`);
+            }
+            unchanged += recordCount;
+            continue;
+          }
         }
 
         const records = Array.isArray(fileData) ? fileData : [fileData];
@@ -536,8 +584,8 @@ export class PushService {
         // Note: While JavaScript is single-threaded, async operations can interleave.
         // Map operations themselves are atomic, but we ensure records are added to
         // the context AFTER successful save to maintain consistency.
-        const batchContext = new Map<string, BaseEntity>();
-        
+        const batchContext = new BatchContextIndex();
+
         // Process records using dependency levels for parallel processing
         if (analysisResult.dependencyLevels && analysisResult.dependencyLevels.length > 0) {
           // Use parallel processing with dependency levels
@@ -573,7 +621,8 @@ export class PushService {
                 })
               );
               
-              // Process results and check for errors
+              // Apply side effects sequentially after Promise.all() resolves.
+              // This eliminates race conditions from concurrent writes to shared state.
               for (const batchResult of batchResults) {
                 if (!batchResult.success) {
                   // Fail fast on first error with detailed logging
@@ -587,9 +636,21 @@ export class PushService {
                   // Throw concise error to trigger rollback
                   throw err;
                 }
-                
-                // Update stats for successful results
+
                 const result = batchResult.result!;
+
+                // Apply side effects from the result
+                if (result.batchContextEntry) {
+                  batchContext.set(result.batchContextEntry.key, result.batchContextEntry.entity);
+                }
+                if (result.deferredRecord) {
+                  this.deferredRecords.push(result.deferredRecord);
+                }
+                if (result.warnings) {
+                  this.warnings.push(...result.warnings);
+                }
+
+                // Update stats for successful results
                 // Don't count deletion records - they're counted in Phase 2
                 if (result.isDeletedRecord) {
                   continue; // Skip entirely
@@ -622,7 +683,18 @@ export class PushService {
                 callbacks,
                 entityConfig
               );
-              
+
+              // Apply side effects (already sequential, but consistent with parallel path)
+              if (result.batchContextEntry) {
+                batchContext.set(result.batchContextEntry.key, result.batchContextEntry.entity);
+              }
+              if (result.deferredRecord) {
+                this.deferredRecords.push(result.deferredRecord);
+              }
+              if (result.warnings) {
+                this.warnings.push(...result.warnings);
+              }
+
               // Update stats
               // Don't count deletion records - they're counted in Phase 2
               if (!result.isDeletedRecord) {
@@ -672,12 +744,27 @@ export class PushService {
             }
           }
         }
+
+        // Update stored checksum after successful processing (reuse cached value if available)
+        // Uses resolved content (after @include) so included-file changes are tracked.
+        if (this.stateManager && syncRootDir) {
+          const relativePath = path.relative(syncRootDir, filePath);
+          const checksum = cachedChecksum ?? this.syncEngine.calculateChecksum(fileData);
+          this.stateManager.setFileChecksum(relativePath, checksum);
+        }
       } catch (fileError) {
         // Error details already logged by lower-level handlers, just re-throw
         throw fileError;
       }
     }
-    
+
+    // Persist push timestamp for this entity directory after all files processed
+    if (this.stateManager && syncRootDir) {
+      const relativeEntityDir = path.relative(syncRootDir, entityDir);
+      this.stateManager.setLastPushTimestamp(relativeEntityDir, new Date().toISOString());
+      await this.stateManager.save();
+    }
+
     return { created, updated, unchanged, deleted, skipped, deferred, errors };
   }
 
@@ -685,13 +772,17 @@ export class PushService {
     flattenedRecord: FlattenedRecord,
     entityDir: string,
     options: PushOptions,
-    batchContext: Map<string, BaseEntity>,
+    batchContext: BatchContext,
     callbacks?: PushCallbacks,
     entityConfig?: EntityConfig,
     allowDefer: boolean = true
-  ): Promise<{ status: 'created' | 'updated' | 'unchanged' | 'error' | 'deleted' | 'skipped' | 'deferred'; isDuplicate?: boolean; isDeletedRecord?: boolean }> {
+  ): Promise<ProcessRecordResult> {
     const metadata = new Metadata();
     const { record, entityName, parentContext, id: recordId } = flattenedRecord;
+
+    // Accumulate warnings locally instead of mutating this.warnings directly.
+    // These are returned in the result and applied sequentially after Promise.all().
+    const localWarnings: string[] = [];
 
     // Skip deletion records - they're handled in Phase 2
     // File writing is deferred for files containing deletions
@@ -699,7 +790,7 @@ export class PushService {
     if (record.deleteRecord && record.deleteRecord.delete === true) {
       return { status: 'unchanged', isDuplicate: false, isDeletedRecord: true };
     }
-    
+
     // Use the unique record ID from the flattened record for batch context
     // This ensures we can properly find parent entities even when they're new
     const lookupKey = recordId;
@@ -710,7 +801,32 @@ export class PushService {
       // Already processed
       return { status: 'unchanged', isDuplicate: true };
     }
-    
+
+    // Record-level skip: if the record has a stored checksum and it matches
+    // the current fields, nothing changed — skip without touching the DB.
+    // The checksum is embedded in the JSON (record.sync.checksum) and was
+    // stored after the last successful save, so a match means fields are identical.
+    // We still add a lightweight stub to the batch context so child records at
+    // later dependency levels can resolve @parent:ID references.
+    if (record.sync?.checksum && record.fields && record.primaryKey && !record.deleteRecord) {
+      // Use calculateChecksumWithFileContent so @file: reference changes are detected.
+      // This reads local files (fast) rather than hitting the DB (slow). The stored
+      // checksum was also computed with file content, so the comparison is apples-to-apples.
+      const currentChecksum = await this.syncEngine.calculateChecksumWithFileContent(record.fields, entityDir);
+      if (currentChecksum === record.sync.checksum) {
+        // Lightweight stub — just enough for @parent:ID and @lookup resolution.
+        // No DB call, no entity framework overhead.
+        const allFields = { ...record.primaryKey, ...record.fields };
+        const stub = {
+          EntityInfo: { Name: entityName, PrimaryKeys: Object.keys(record.primaryKey).map(k => ({ Name: k })), Fields: Object.keys(allFields).map(k => ({ Name: k })) },
+          Get: (field: string) => allFields[field],
+          GetAll: () => allFields,
+        } as unknown as BaseEntity;
+        const batchContextEntry = { key: lookupKey, entity: stub };
+        return { status: 'unchanged', isDuplicate: false, batchContextEntry };
+      }
+    }
+
     // Get or create entity instance
     entity = await metadata.GetEntityObject(entityName, this.contextUser);
     if (!entity) {
@@ -780,9 +896,9 @@ export class PushService {
 
         if (!autoCreate) {
           const warning = `Record not found: ${entityName} with primaryKey {${pkDisplay}}. To auto-create missing records, set push.autoCreateMissingRecords=true in .mj-sync.json`;
-          this.warnings.push(warning);
+          localWarnings.push(warning);
           callbacks?.onWarn?.(warning);
-          return { status: 'error', isDuplicate: false }; // This will be counted as error, not skipped
+          return { status: 'error', isDuplicate: false, warnings: localWarnings }; // This will be counted as error, not skipped
         } else {
           // Log that we're creating the missing record
           if (options.verbose) {
@@ -934,12 +1050,16 @@ export class PushService {
     }
     
     if (options.dryRun) {
+      // Still add to batch context so child records at later dependency levels
+      // can resolve @parent references. Without this, dry-run fails on any
+      // metadata with parent-child nesting (e.g. Actions → Action Params).
+      const batchContextEntry = { key: lookupKey, entity };
       if (exists) {
         callbacks?.onLog?.(`[DRY RUN] Would update ${entityName} record`);
-        return { status: 'updated' };
+        return { status: 'updated', batchContextEntry };
       } else {
         callbacks?.onLog?.(`[DRY RUN] Would create ${entityName} record`);
-        return { status: 'created' };
+        return { status: 'created', batchContextEntry };
       }
     }
     
@@ -1109,19 +1229,22 @@ export class PushService {
       throw new Error(`Failed to save ${entityName} record at ${flattenedRecord.path}: ${errorMessage}`);
     }
     
-    // Add to batch context AFTER save so it has an ID for child @parent:ID references
-    // Use the recordId (lookupKey) as the key so child records can find this parent
-    batchContext.set(lookupKey, entity);
+    // Return batch context entry as a side effect instead of mutating directly.
+    // The caller applies this sequentially after Promise.all() resolves, avoiding
+    // race conditions where concurrent tasks read stale batchContext state.
+    const batchContextEntry = { key: lookupKey, entity };
 
-    // If we had deferred lookup errors, queue the entire record for re-processing
+    // If we had deferred lookup errors, return the deferred record as a side effect
+    // instead of pushing to this.deferredRecords directly (avoids concurrent pushes).
     // The record has been saved (without the deferred fields), so it exists in the DB.
     // In Phase 2.5, we'll re-run processFlattenedRecord with allowDefer=false to fill in the gaps.
+    let deferredRecord: DeferredRecord | undefined;
     if (hasDeferrableLookupError && allowDefer && entityConfig) {
-      this.deferredRecords.push({
+      deferredRecord = {
         flattenedRecord,
         entityDir,
         entityConfig
-      });
+      };
 
       if (options.verbose) {
         callbacks?.onLog?.(`   📋 Queued ${entityName} for deferred processing (record saved, some fields pending)`);
@@ -1180,19 +1303,27 @@ export class PushService {
       delete recordWithNotes.__mj_sync_notes;
     }
 
+    // Build result with side effects as data
+    const resultBase = {
+      isDuplicate: false,
+      batchContextEntry,
+      deferredRecord,
+      warnings: localWarnings.length > 0 ? localWarnings : undefined,
+    };
+
     // Return appropriate status
     // If we had deferred lookups, return 'deferred' to indicate partial save
     // The record is saved but will be re-processed in Phase 2.5
     if (hasDeferrableLookupError && allowDefer) {
       return {
+        ...resultBase,
         status: 'deferred',
-        isDuplicate: false
       };
     }
 
     return {
+      ...resultBase,
       status: isNew ? 'created' : (isDirty ? 'updated' : 'unchanged'),
-      isDuplicate: false
     };
   }
 
@@ -1719,7 +1850,7 @@ export class PushService {
 
     // Create a fresh batch context for deferred processing
     // Records are in DB now, so this is mainly for tracking within this phase
-    const batchContext = new Map<string, BaseEntity>();
+    const batchContext = new BatchContextIndex();
 
     for (const deferred of this.deferredRecords) {
       const { flattenedRecord, entityDir, entityConfig } = deferred;
@@ -1740,6 +1871,15 @@ export class PushService {
           entityConfig,
           false // allowDefer=false - must succeed or fail, no re-deferring
         );
+
+        // Apply side effects (sequential here, but consistent with parallel path)
+        if (result.batchContextEntry) {
+          batchContext.set(result.batchContextEntry.key, result.batchContextEntry.entity);
+        }
+        if (result.warnings) {
+          this.warnings.push(...result.warnings);
+        }
+        // Note: result.deferredRecord should never be set here since allowDefer=false
 
         if (result.status === 'created') {
           created++;
