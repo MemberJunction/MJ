@@ -38,17 +38,22 @@ vi.mock('@memberjunction/actions', () => ({
     }
 }));
 
-vi.mock('@memberjunction/global', () => ({
-    RegisterClass: () => (target: unknown) => target,
-    UUIDsEqual: (a: string, b: string) => a?.toLowerCase() === b?.toLowerCase(),
-    MJGlobal: {
-        Instance: {
-            ClassFactory: { CreateInstance: mockCreateInstance }
+vi.mock('@memberjunction/global', async (importOriginal) => {
+    const actual = await importOriginal<Record<string, unknown>>();
+    return {
+        ...actual,
+        RegisterClass: () => (target: unknown) => target,
+        UUIDsEqual: (a: string, b: string) => a?.toLowerCase() === b?.toLowerCase(),
+        MJGlobal: {
+            Instance: {
+                ClassFactory: { CreateInstance: mockCreateInstance }
+            }
         }
-    }
-}));
+    };
+});
 
-vi.mock('@memberjunction/core', () => {
+vi.mock('@memberjunction/core', async (importOriginal) => {
+    const actual = await importOriginal<Record<string, unknown>>();
     class MockRunView {
         async RunView() { return { Success: true, Results: [] }; }
     }
@@ -57,6 +62,7 @@ vi.mock('@memberjunction/core', () => {
     }
     class MockUserInfo {}
     return {
+        ...actual,
         LogError: vi.fn(),
         LogStatus: vi.fn(),
         RunView: MockRunView,
@@ -65,12 +71,28 @@ vi.mock('@memberjunction/core', () => {
     };
 });
 
-vi.mock('@memberjunction/core-entities', () => ({
-    MJContentItemEntity: class {},
-    MJContentSourceEntity: class {},
-    MJContentProcessRunDetailEntity: class {},
-    MJContentProcessRunPromptRunEntity: class {},
-}));
+vi.mock('@memberjunction/core-entities', async (importOriginal) => {
+    const actual = await importOriginal<Record<string, unknown>>();
+    const mockKHInstance = {
+        Config: vi.fn().mockResolvedValue(undefined),
+        ContentSources: [],
+        ContentTypes: [],
+        ContentSourceTypes: [],
+        ContentFileTypes: [],
+        VectorIndexes: [],
+        GetVectorIndexById: vi.fn().mockReturnValue(undefined),
+    };
+    return {
+        ...actual,
+        MJContentItemEntity: class {},
+        MJContentSourceEntity: class {},
+        MJContentProcessRunDetailEntity: class {},
+        MJContentProcessRunPromptRunEntity: class {},
+        KnowledgeHubMetadataEngine: {
+            get Instance() { return mockKHInstance; },
+        },
+    };
+});
 
 vi.mock('@memberjunction/content-autotagging', () => {
     return {
