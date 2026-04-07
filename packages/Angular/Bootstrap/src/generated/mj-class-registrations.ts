@@ -369,9 +369,10 @@ import {
     SvgArtifactViewerComponent,
 } from '@memberjunction/ng-artifacts';
 
-// @memberjunction/ng-auth-services (3 classes)
+// @memberjunction/ng-auth-services (4 classes)
 import {
     MJAuth0Provider,
+    MJCognitoProvider,
     MJMSALProvider,
     MJOktaProvider,
 } from '@memberjunction/ng-auth-services';
@@ -844,6 +845,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MarkdownArtifactViewerComponent,
     SvgArtifactViewerComponent,
     MJAuth0Provider,
+    MJCognitoProvider,
     MJMSALProvider,
     MJOktaProvider,
     FlowAgentFormSectionComponent,
@@ -959,7 +961,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 440;
+export const CLASS_REGISTRATIONS_COUNT = 441;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
