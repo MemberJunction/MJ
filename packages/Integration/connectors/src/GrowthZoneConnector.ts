@@ -608,6 +608,84 @@ export class GrowthZoneConnector extends BaseRESTIntegrationConnector {
         return { HasMore: fetched < total, NextOffset: fetched };
     }
 
+    // ─── API Path Mapping ─────────────────────────────────────────────
+    // GrowthZone uses controller-based URLs (verified from documentation.growthzoneapp.com).
+    // Object names map to API controller paths. When testing against a live instance,
+    // update any incorrect paths here — this is the single source of truth for URL routing.
+    private static readonly API_PATHS: Record<string, string> = {
+        // Verified controller names from GZ docs
+        'contacts':              '/api/contactoverview',
+        'contactactivities':     '/api/contactoverview',        // sub-path: /{id}/activitiestablewidget
+        'contactaddresses':      '/api/address',
+        'contactemails':         '/api/contactinformation',     // email sub-resources
+        'contactphones':         '/api/contactinformation',     // phone sub-resources
+        'organizations':         '/api/contactoverview',        // orgs are contacts with org type
+        'groups':                '/api/group/contacts',
+        'branches':              '/api/branches',               // VERIFIED exact match
+        'engagement':            '/api/analytics',
+        'purchases':             '/api/purchase',
+        'membershiptypes':       '/api/membershiptypes',        // VERIFIED exact match
+        'membershiplevels':      '/api/membershiptypes',        // levels are sub-resource of types
+        'membershipapplications':'/api/applications',
+        'membershiprenewals':    '/api/membershiptypes',
+        'events':                '/api/public/events',
+        'eventregistrations':    '/api/public/events',          // registration sub-path
+        'eventsessions':         '/api/public/events',
+        'eventspeakers':         '/api/public/events',
+        'invoices':              '/api/account',
+        'payments':              '/api/paymentgateway',
+        'committees':            '/api/chapter',                // committees modeled as chapters
+        'committeemembers':      '/api/chapter',
+        'donations':             '/api/public/fundraisingcampaigns',
+        'pledges':               '/api/public/fundraisingcampaigns',
+        'certificationprograms': '/api/contactoverview',        // certifications under contact
+        'cecredits':             '/api/contactoverview',
+        'jobpostings':           '/api/content',
+        'emailblasts':           '/api/cmscommunication',
+        'products':              '/api/store/storeitems',
+        'tags':                  '/api/tag',                    // singular controller name
+        'tasks':                 '/api/task',                   // singular controller name
+        'customfielddefinitions':'/api/customfield',
+        'auditlog':              '/api/audit',
+        'contactnotes':          '/api/contactoverview',        // notes under contact
+        'directorylistings':     '/api/directory',
+        'contactsocialmedia':    '/api/social',
+        'contactdemographics':   '/api/contactoverview',
+        'contactcustomfields':   '/api/customfield',
+        'contactcertifications': '/api/contactoverview',        // /{id}/certifications
+        'contacteducation':      '/api/contactoverview',        // /{id}/contactexperiences
+        'contactemployment':     '/api/contactoverview',
+        'contactrelationships':  '/api/contactrelationshiptypes',
+        'contactvolunteerinterests': '/api/contactoverview',
+        'contactcommunications': '/api/cmscommunication',
+        // Additional verified controllers
+        'eventcategories':       '/api/category',
+        'eventsessionregistrations': '/api/public/events',
+        'eventsponsors':         '/api/sponsorship',
+        'eventexhibitors':       '/api/public/events',
+        'eventfees':             '/api/public/events',
+        'invoicelineitems':      '/api/account',
+        'credits':               '/api/account',
+        'donationcampaigns':     '/api/public/fundraisingcampaigns',
+        'committeepositions':    '/api/chapter',
+        'membershipstatuschanges':'/api/membershiptypes',
+        'memberbenefits':        '/api/benefitassignment',
+        'emailblastrecipients':  '/api/cmscommunication',
+        'emailtemplates':        '/api/messagetemplate',
+        'cerequirements':        '/api/contactoverview',
+        'directorycategories':   '/api/category',
+        'jobcategories':         '/api/category',
+        'jobapplications':       '/api/applications',
+        'productcategories':     '/api/category',
+        'systemlookups':         '/api/metadata',
+        'billingprofiles':       '/api/paymentprofile',
+    };
+
+    /** Resolve the API path for a given object name */
+    private ResolveApiPath(objectName: string): string {
+        return GrowthZoneConnector.API_PATHS[objectName.toLowerCase()] ?? `/api/${objectName.toLowerCase()}`;
+    }
+
     // ─── FetchChanges ──────────────────────────────────────────────────
 
     public override async FetchChanges(ctx: FetchContext): Promise<FetchBatchResult> {
@@ -615,16 +693,16 @@ export class GrowthZoneConnector extends BaseRESTIntegrationConnector {
 
         switch (objectLower) {
             case 'contacts':          return this.FetchContacts(ctx);
-            case 'contactactivities': return this.FetchContactChildren(ctx, 'activities', 'ContactActivities');
+            case 'contactactivities': return this.FetchContactChildren(ctx, 'activitiestablewidget', 'ContactActivities');
             case 'contactaddresses':  return this.FetchContactChildren(ctx, 'addresses', 'ContactAddresses');
             case 'contactemails':     return this.FetchContactChildren(ctx, 'emails', 'ContactEmails');
             case 'contactphones':     return this.FetchContactChildren(ctx, 'phones', 'ContactPhones');
             case 'organizations':     return this.FetchOrganizations(ctx);
-            case 'groups':            return this.FetchSimpleList(ctx, '/api/groups', 'Groups');
+            case 'groups':            return this.FetchSimpleList(ctx, '/api/group/contacts', 'Groups');
             case 'branches':          return this.FetchSimpleList(ctx, '/api/branches', 'Branches');
             case 'engagement':        return this.FetchEngagement(ctx);
             case 'purchases':         return this.FetchPurchases(ctx);
-            default:                  return this.FetchSimpleList(ctx, `/api/${ctx.ObjectName.replace(/([a-z])([A-Z])/g, '$1/$2').toLowerCase()}`, ctx.ObjectName);
+            default:                  return this.FetchSimpleList(ctx, this.ResolveApiPath(ctx.ObjectName), ctx.ObjectName);
         }
     }
 
@@ -655,7 +733,7 @@ export class GrowthZoneConnector extends BaseRESTIntegrationConnector {
         const auth = await this.Authenticate(ctx.CompanyIntegration, ctx.ContextUser) as GZAuthContext;
         const headers = this.BuildHeaders(auth);
         const offset = ctx.CurrentOffset ?? 0;
-        let url = `${auth.Config.BaseURL}/api/organizations?skip=${offset}&take=${GZ_DEFAULT_TAKE}`;
+        let url = `${auth.Config.BaseURL}${this.ResolveApiPath('Organizations')}?skip=${offset}&take=${GZ_DEFAULT_TAKE}`;
         if (ctx.WatermarkValue) {
             url += `&modifiedSince=${encodeURIComponent(ctx.WatermarkValue)}`;
         }
