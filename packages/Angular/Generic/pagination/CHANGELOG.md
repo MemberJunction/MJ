@@ -1,5 +1,9 @@
 # @memberjunction/ng-pagination
 
+## 5.24.0
+
+## 5.23.0
+
 ## 5.22.0
 
 ## 5.21.0

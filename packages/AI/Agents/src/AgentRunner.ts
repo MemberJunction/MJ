@@ -10,6 +10,7 @@
  * @since 2.49.0
  */
 
+import { createHash } from 'crypto';
 import { LogError, LogStatusEx, IsVerboseLoggingEnabled, LogStatus, Metadata, RunView, UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
@@ -185,20 +186,45 @@ export class AgentRunner {
             if (options.conversationDetailId) {
                 agentResponseDetailId = options.conversationDetailId;
 
-                // Load the conversation detail to get the conversation ID AND keep reference for final status update
-                // This ensures backend can update Status/Message even if frontend disconnects (browser refresh)
+                // LATENCY OPTIMIZATION (Opt #2): When conversationId is pre-resolved by the caller
+                // (e.g., the resolver already loaded the ConversationDetail to build history), we
+                // skip the redundant DB load that was ONLY needed to extract ConversationID.
+                //
+                // We still must load the ConversationDetail entity object because it serves double
+                // duty: (a) progress callback updates its Message field during execution, and
+                // (b) step 5 sets the final Status/Message/ResponseForm after the agent completes.
+                // What we save here is the serial dependency: previously we had to wait for the
+                // Load to complete before we even knew conversationId. Now we know conversationId
+                // immediately and can resolve the entity object's load in parallel with other setup.
+                if (options.conversationId) {
+                    conversationId = options.conversationId;
+                    LogStatus(`Using pre-resolved conversation ${conversationId} and agent response detail ${agentResponseDetailId}`);
+                } else {
+                    // Fallback for callers that don't provide conversationId (backward compatibility).
+                    // This path still works but incurs the extra DB round-trip to extract conversationId.
+                    const tempDetail = await md.GetEntityObject<MJConversationDetailEntity>(
+                        'MJ: Conversation Details',
+                        contextUser
+                    );
+                    if (await tempDetail.Load(agentResponseDetailId)) {
+                        conversationId = tempDetail.ConversationID;
+                        LogStatus(`Using existing conversation ${conversationId} and agent response detail ${agentResponseDetailId}`);
+                    } else {
+                        throw new Error(`Failed to load conversation detail ${agentResponseDetailId}`);
+                    }
+                }
+
+                // Load the entity object for progress updates and final status Save at step 5.
+                // This is needed regardless of whether conversationId was pre-resolved.
                 agentResponseDetail = await md.GetEntityObject<MJConversationDetailEntity>(
                     'MJ: Conversation Details',
                     contextUser
                 );
-                if (await agentResponseDetail.Load(agentResponseDetailId)) {
-                    conversationId = agentResponseDetail.ConversationID;
-                    LogStatus(`Using existing conversation ${conversationId} and agent response detail ${agentResponseDetailId}`);
-                    // Note: In this case, we don't know the user message detail ID
-                    userMessageDetailId = agentResponseDetailId; // For backward compatibility
-                } else {
-                    throw new Error(`Failed to load conversation detail ${agentResponseDetailId}`);
+                if (!await agentResponseDetail.Load(agentResponseDetailId)) {
+                    throw new Error(`Failed to load conversation detail entity for status updates: ${agentResponseDetailId}`);
                 }
+
+                userMessageDetailId = agentResponseDetailId; // For backward compatibility
             } else {
                 // Server creates BOTH user message and agent response details
                 if (!options.userMessage) {
@@ -351,80 +377,111 @@ export class AgentRunner {
             // Mark execution as completed to stop progress saves
             agentExecutionCompleted = true;
 
-            // Step 5: Update agent response detail with final result
-            // ALWAYS update status - don't rely on frontend (browser may refresh during execution)
-            if (agentResponseDetail && agentResponseDetailId) {
-                // Wait for any in-flight progress save to complete
-                // EnsureSaveComplete() resolves immediately if no save in progress
-                await agentResponseDetail.EnsureSaveComplete();
+            // LATENCY OPTIMIZATION (Opt #5): Steps 5, 6, and 7 are now parallelized.
+            //
+            // Previously these ran sequentially: save final status → process artifacts → save media.
+            // This added their individual latencies together (~130ms for steps 6+7, plus ~80ms for
+            // step 5's EnsureSaveComplete + Load + Save cycle).
+            //
+            // These operations are safe to parallelize because:
+            // - Step 5 (status update) writes to the ConversationDetail record (Status, Message fields)
+            // - Step 6 (artifacts) creates new Artifact/ArtifactVersion records and a junction record
+            //   linking to the ConversationDetail — it only needs the agentResponseDetailId (string),
+            //   not the entity object, and doesn't read/write the same fields as step 5
+            // - Step 7 (media) creates new AIAgentRunMedia and ConversationDetailAttachment records —
+            //   entirely separate from steps 5 and 6
+            //
+            // IMPORTANT: All three MUST complete before the resolver publishes the 'complete' event,
+            // because the client reloads all conversation data from the DB when it receives that event.
+            // If any write hasn't flushed yet, the client would see stale data. Promise.all guarantees
+            // all three finish before we return.
 
-                LogStatus('Updating agent response detail with final result');
+            // Step 5: Update agent response detail with final result (async)
+            const updateDetailPromise = (async () => {
+                if (agentResponseDetail && agentResponseDetailId) {
+                    // Wait for any in-flight progress save to complete
+                    // EnsureSaveComplete() resolves immediately if no save in progress
+                    await agentResponseDetail.EnsureSaveComplete();
 
-                // Reload to get any updates from agent execution
-                await agentResponseDetail.Load(agentResponseDetailId);
+                    LogStatus('Updating agent response detail with final result');
 
-                agentResponseDetail.Message = agentResult.agentRun?.Message ||
-                                             (agentResult.success
-                                                 ? '✅ Completed'
-                                                 : agentResult.agentRun?.ErrorMessage || '❌ Failed');
-                agentResponseDetail.Status = agentResult.success ? 'Complete' : 'Error';
+                    // Reload to get any updates from agent execution
+                    await agentResponseDetail.Load(agentResponseDetailId);
 
-                // Set response form and command fields
-                if (agentResult.responseForm) {
-                    agentResponseDetail.ResponseForm = JSON.stringify(agentResult.responseForm);
+                    agentResponseDetail.Message = agentResult.agentRun?.Message ||
+                                                 (agentResult.success
+                                                     ? '✅ Completed'
+                                                     : agentResult.agentRun?.ErrorMessage || '❌ Failed');
+                    agentResponseDetail.Status = agentResult.success ? 'Complete' : 'Error';
+
+                    // Set response form and command fields
+                    if (agentResult.responseForm) {
+                        agentResponseDetail.ResponseForm = JSON.stringify(agentResult.responseForm);
+                    }
+                    if (agentResult.actionableCommands && agentResult.actionableCommands.length > 0) {
+                        agentResponseDetail.ActionableCommands = JSON.stringify(agentResult.actionableCommands);
+                    }
+                    if (agentResult.automaticCommands && agentResult.automaticCommands.length > 0) {
+                        agentResponseDetail.AutomaticCommands = JSON.stringify(agentResult.automaticCommands);
+                    }
+
+                    await agentResponseDetail.Save();
+                    LogStatus(`Updated agent response detail ${agentResponseDetailId} with final status: ${agentResponseDetail.Status}`);
                 }
-                if (agentResult.actionableCommands && agentResult.actionableCommands.length > 0) {
-                    agentResponseDetail.ActionableCommands = JSON.stringify(agentResult.actionableCommands);
-                }
-                if (agentResult.automaticCommands && agentResult.automaticCommands.length > 0) {
-                    agentResponseDetail.AutomaticCommands = JSON.stringify(agentResult.automaticCommands);
-                }
+            })();
 
-                await agentResponseDetail.Save();
-                LogStatus(`Updated agent response detail ${agentResponseDetailId} with final status: ${agentResponseDetail.Status}`);
-            }
-
-            // Step 6: Process artifacts if requested and agent succeeded
-            let artifactInfo: { artifactId: string; versionId: string; versionNumber: number } | undefined;
-
-            const shouldCreateArtifacts = options.createArtifacts !== false; // Default true
-            if (shouldCreateArtifacts && agentResult.success && agentResult.payload) {
-                // Artifacts link to agent response detail ID
-                artifactInfo = await this.ProcessAgentArtifacts(
-                    agentResult,
-                    agentResponseDetailId!,
-                    options.sourceArtifactId,
-                    contextUser,
-                    md
-                );
-            }
-
-            // Step 7: Save media outputs to AIAgentRunMedia and create conversation attachments
-            let mediaIds: string[] = [];
-            if (agentResult.mediaOutputs && agentResult.mediaOutputs.length > 0) {
-                // Filter to only media that should be persisted (persist !== false)
-                const mediaToSave = agentResult.mediaOutputs.filter(m => m.persist !== false);
-                LogStatus(`Processing ${mediaToSave.length} of ${agentResult.mediaOutputs.length} media outputs (filtered by persist flag)`);
-
-                // Save to AIAgentRunMedia for permanent storage
-                mediaIds = await this.SaveAgentRunMedia(
-                    agentResult.agentRun.ID,
-                    mediaToSave,  // Pass filtered array
-                    contextUser,
-                    md
-                );
-
-                // Create ConversationDetailAttachment records for UI display
-                if (agentResponseDetailId && mediaIds.length > 0) {
-                    await this.CreateConversationMediaAttachments(
-                        agentResponseDetailId,
-                        mediaToSave,  // Pass same filtered array to keep indices aligned
-                        mediaIds,
+            // Step 6: Process artifacts if requested and agent succeeded (async)
+            const processArtifactsPromise = (async () => {
+                const shouldCreateArtifacts = options.createArtifacts !== false; // Default true
+                if (shouldCreateArtifacts && agentResult.success && agentResult.payload) {
+                    return this.ProcessAgentArtifacts(
+                        agentResult,
+                        agentResponseDetailId!,
+                        options.sourceArtifactId,
                         contextUser,
                         md
                     );
                 }
-            }
+                return undefined;
+            })();
+
+            // Step 7: Save media outputs to AIAgentRunMedia and create conversation attachments (async)
+            const saveMediaPromise = (async () => {
+                if (agentResult.mediaOutputs && agentResult.mediaOutputs.length > 0) {
+                    const mediaToSave = agentResult.mediaOutputs.filter(m => m.persist !== false);
+                    LogStatus(`Processing ${mediaToSave.length} of ${agentResult.mediaOutputs.length} media outputs (filtered by persist flag)`);
+
+                    // Save to AIAgentRunMedia for permanent storage
+                    const ids = await this.SaveAgentRunMedia(
+                        agentResult.agentRun.ID,
+                        mediaToSave,
+                        contextUser,
+                        md
+                    );
+
+                    // Create ConversationDetailAttachment records for UI display
+                    if (agentResponseDetailId && ids.length > 0) {
+                        await this.CreateConversationMediaAttachments(
+                            agentResponseDetailId,
+                            mediaToSave,
+                            ids,
+                            contextUser,
+                            md
+                        );
+                    }
+                    return ids;
+                }
+                return [];
+            })();
+
+            // Wait for all three post-execution operations to complete before returning.
+            // The resolver publishes the 'complete' event after this returns, so the client
+            // is guaranteed to see all DB writes when it reloads.
+            const [, artifactInfo] = await Promise.all([
+                updateDetailPromise,
+                processArtifactsPromise,
+                saveMediaPromise
+            ]);
 
             return {
                 agentResult,
@@ -476,6 +533,85 @@ export class AgentRunner {
             LogError(`Error getting max version for artifact: ${(error as Error).message}`);
             return 0;
         }
+    }
+
+    /**
+     * Checks whether the serialized content for a new artifact version is identical to the
+     * latest existing version of the same artifact, using SHA-256 content hashing.
+     *
+     * When the content is unchanged, creating a new version adds noise without value.
+     * This method computes the hash of the candidate content and compares it against
+     * the `ContentHash` stored on the most recent version (populated by
+     * `MJArtifactVersionEntityServer.Save()`).
+     *
+     * @param artifactId - The artifact whose latest version to compare against
+     * @param candidateContent - The serialized (JSON-stringified) content that would become the new version
+     * @param latestVersionNumber - The version number of the current latest version
+     * @param contextUser - User context for the RunView query
+     * @returns The existing version's ID if content is identical, or `null` if a new version should be created
+     */
+    protected async CheckForDuplicateVersion(
+        artifactId: string,
+        candidateContent: string,
+        latestVersionNumber: number,
+        contextUser: UserInfo
+    ): Promise<string | null> {
+        const candidateHash = createHash('sha256').update(candidateContent, 'utf8').digest('hex');
+
+        const rv = new RunView();
+        const result = await rv.RunView<{ ID: string; ContentHash: string }>({
+            EntityName: 'MJ: Artifact Versions',
+            ExtraFilter: `ArtifactID='${artifactId}' AND VersionNumber=${latestVersionNumber}`,
+            Fields: ['ID', 'ContentHash'],
+            MaxRows: 1,
+            ResultType: 'simple'
+        }, contextUser);
+
+        if (result.Success && result.Results.length > 0 && result.Results[0].ContentHash === candidateHash) {
+            return result.Results[0].ID;
+        }
+
+        return null;
+    }
+
+    /**
+     * Creates a `ConversationDetailArtifact` junction record linking an artifact version
+     * to a conversation detail, then returns the standard artifact result tuple.
+     *
+     * Extracted as a helper so both the normal version-creation path and the
+     * duplicate-skip path can share the same linking and return logic.
+     *
+     * @param versionId - The artifact version ID to link
+     * @param conversationDetailId - The conversation detail to link to
+     * @param artifactId - The parent artifact ID (passed through to the return value)
+     * @param versionNumber - The version number (passed through to the return value)
+     * @param contextUser - User context for the save operation
+     * @param provider - Metadata provider for entity creation
+     * @returns The standard artifact result tuple
+     */
+    protected async LinkArtifactToConversationDetail(
+        versionId: string,
+        conversationDetailId: string,
+        artifactId: string,
+        versionNumber: number,
+        contextUser: UserInfo,
+        provider: IMetadataProvider
+    ): Promise<{ artifactId: string; versionId: string; versionNumber: number }> {
+        const junction = await provider.GetEntityObject<MJConversationDetailArtifactEntity>(
+            'MJ: Conversation Detail Artifacts',
+            contextUser
+        );
+        junction.ConversationDetailID = conversationDetailId;
+        junction.ArtifactVersionID = versionId;
+        junction.Direction = 'Output';
+
+        if (!(await junction.Save())) {
+            throw new Error('Failed to create artifact-message association');
+        }
+
+        LogStatus(`Linked artifact to conversation detail ${conversationDetailId}`);
+
+        return { artifactId, versionId, versionNumber };
     }
 
     /**
@@ -661,6 +797,20 @@ export class AgentRunner {
                 }
             }
 
+            // Serialize the payload once — used for both dedup check and version creation
+            const serializedContent = JSON.stringify(payload, null, 2);
+
+            // Skip version creation if content is identical to the latest version
+            if (!isNewArtifact && newVersionNumber > 1) {
+                const existingVersionId = await this.CheckForDuplicateVersion(
+                    artifactId, serializedContent, newVersionNumber - 1, contextUser
+                );
+                if (existingVersionId) {
+                    console.debug(`Skipping duplicate artifact version — content identical to version ${newVersionNumber - 1}`);
+                    return undefined;
+                }
+            }
+
             // Create artifact version with content
             const version = await md.GetEntityObject<MJArtifactVersionEntity>(
                 'MJ: Artifact Versions',
@@ -668,7 +818,7 @@ export class AgentRunner {
             );
             version.ArtifactID = artifactId;
             version.VersionNumber = newVersionNumber;
-            version.Content = JSON.stringify(payload, null, 2);
+            version.Content = serializedContent;
             version.UserID = contextUser.ID;
 
             if (!(await version.Save())) {
@@ -701,26 +851,10 @@ export class AgentRunner {
                 }
             }
 
-            // Create junction record linking artifact to conversation detail
-            const junction = await md.GetEntityObject<MJConversationDetailArtifactEntity>(
-                'MJ: Conversation Detail Artifacts',
-                contextUser
+            // Link the new version to this conversation detail and return
+            return this.LinkArtifactToConversationDetail(
+                version.ID, conversationDetailId, artifactId, newVersionNumber, contextUser, md
             );
-            junction.ConversationDetailID = conversationDetailId;
-            junction.ArtifactVersionID = version.ID;
-            junction.Direction = 'Output';
-
-            if (!(await junction.Save())) {
-                throw new Error('Failed to create artifact-message association');
-            }
-
-            LogStatus(`Linked artifact to conversation detail ${conversationDetailId}`);
-
-            return {
-                artifactId,
-                versionId: version.ID,
-                versionNumber: newVersionNumber
-            };
         } catch (error) {
             LogError(`Failed to process agent artifacts: ${(error as Error).message}`);
             return undefined;

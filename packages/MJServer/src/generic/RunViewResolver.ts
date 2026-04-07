@@ -765,6 +765,7 @@ export class RunViewResolver extends ResolverBase {
       for (const [index, data] of rawData.entries()) {
         // EntityName is backfilled by RunViewsGeneric when ViewID/ViewName was used
         const entity = input[index].EntityName ? provider.Entities.find((e) => e.Name === input[index].EntityName) : null;
+
         const returnData: any[] = this.processRawData(data.Results, entity ? entity.ID : null, entity);
 
         results.push({

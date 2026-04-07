@@ -66,6 +66,38 @@ export class LibraryLoader {
   public static enableProgressiveDelay: boolean = false;
 
   /**
+   * Inject `<link rel="preload" as="script">` tags for core runtime libraries
+   * (React, ReactDOM, Babel) so the browser starts downloading them immediately.
+   * Call this as early as possible (e.g., in index.html or APP_INITIALIZER).
+   *
+   * This is purely a hint — if the scripts are already cached or loaded,
+   * the browser ignores the hint. The actual `loadAllLibraries()` call still
+   * creates `<script>` tags and waits for execution; preload just ensures the
+   * bytes are in the HTTP cache by the time that happens.
+   *
+   * @param debug Whether to preload development builds (default: false = production)
+   */
+  static preloadCoreScripts(debug: boolean = false): void {
+    if (typeof document === 'undefined') return; // SSR guard
+
+    const coreLibraries = getCoreRuntimeLibraries(debug);
+    for (const lib of coreLibraries) {
+      // Skip if already preloaded or loaded
+      if (document.querySelector(`link[href="${lib.cdnUrl}"]`) ||
+          document.querySelector(`script[src="${lib.cdnUrl}"]`)) {
+        continue;
+      }
+      const link = document.createElement('link');
+      link.rel = 'preload';
+      link.as = 'script';
+      link.href = lib.cdnUrl;
+      // crossorigin is intentionally omitted to match the <script> tags
+      // which also omit crossOrigin (see loadScriptFromUrl comment)
+      document.head.appendChild(link);
+    }
+  }
+
+  /**
    * Load all standard libraries (core + UI + CSS)
    * This is the main method that should be used by test harness and Angular wrapper
    * @param config Optional full library configuration to replace the default
@@ -117,16 +149,16 @@ export class LibraryLoader {
     if (typeof window !== 'undefined') {
       if (React && !(window as any).React) {
         (window as any).React = React;
-        console.log('✓ Exposed React as window.React for UMD compatibility');
+        //console.log('✓ Exposed React as window.React for UMD compatibility');
       }
       if (ReactDOM && !(window as any).ReactDOM) {
         (window as any).ReactDOM = ReactDOM;
-        console.log('✓ Exposed ReactDOM as window.ReactDOM for UMD compatibility');
+        //console.log('✓ Exposed ReactDOM as window.ReactDOM for UMD compatibility');
       }
       // Also expose PropTypes as empty object if not present (for older libraries)
       if (!(window as any).PropTypes) {
         (window as any).PropTypes = {};
-        console.log('✓ Exposed empty PropTypes as window.PropTypes for UMD compatibility');
+        //console.log('✓ Exposed empty PropTypes as window.PropTypes for UMD compatibility');
       }
     }
     

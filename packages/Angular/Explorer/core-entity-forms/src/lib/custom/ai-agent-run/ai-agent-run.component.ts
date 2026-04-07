@@ -91,6 +91,7 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
       const agent = await md.GetEntityObject<MJAIAgentEntityExtended>('MJ: AI Agents');
       if (agent && await agent.Load(this.record.AgentID)) {
         this.agent = agent;
+        this.cdr.detectChanges();
       }
     } catch (error) {
       console.error('Error loading agent:', error);

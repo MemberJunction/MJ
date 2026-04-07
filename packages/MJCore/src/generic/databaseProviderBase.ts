@@ -1019,10 +1019,20 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         const e = this.EntityByName(entityName);
         if (!e) throw new Error('Entity ' + entityName + ' not found');
 
-        const f = e.NameField;
-        if (!f) {
-            LogError('Entity ' + entityName + ' does not have a NameField, returning null');
-            return null;
+        // Collect ALL IsNameField fields in Sequence order for multi-field name support
+        // (e.g., FirstName + LastName → "Elizabeth Rodriguez")
+        const nameFields = e.Fields
+            .filter(f => f.IsNameField)
+            .sort((a, b) => (a.Sequence ?? 9999) - (b.Sequence ?? 9999));
+
+        // Fall back to the single NameField if no IsNameField flags are set
+        if (nameFields.length === 0) {
+            const f = e.NameField;
+            if (!f) {
+                LogError('Entity ' + entityName + ' does not have a NameField, returning null');
+                return null;
+            }
+            nameFields.push(f);
         }
 
         let where = '';
@@ -1032,7 +1042,10 @@ export abstract class DatabaseProviderBase extends ProviderBase {
             if (where.length > 0) where += ' AND ';
             where += this.QuoteIdentifier(pkv.FieldName) + '=' + quotes + pkv.Value + quotes;
         }
-        return 'SELECT ' + this.QuoteIdentifier(f.Name) + ' FROM ' + this.QuoteSchemaAndView(e.SchemaName, e.BaseView) + ' WHERE ' + where;
+
+        // SELECT all name fields so InternalGetEntityRecordName can concatenate them
+        const selectFields = nameFields.map(f => this.QuoteIdentifier(f.Name)).join(', ');
+        return 'SELECT ' + selectFields + ' FROM ' + this.QuoteSchemaAndView(e.SchemaName, e.BaseView) + ' WHERE ' + where;
     }
 
     /**
@@ -1049,8 +1062,11 @@ export abstract class DatabaseProviderBase extends ProviderBase {
             if (sql) {
                 const data = await this.ExecuteSQL<Record<string, unknown>>(sql, undefined, undefined, contextUser);
                 if (data && data.length === 1) {
-                    const fields = Object.keys(data[0]);
-                    return String(data[0][fields[0]] ?? '');
+                    // Concatenate all returned fields with spaces (supports multi-name entities)
+                    const values = Object.values(data[0])
+                        .filter(v => v != null && String(v).trim() !== '')
+                        .map(v => String(v));
+                    return values.join(' ');
                 } else {
                     LogError('Entity ' + entityName + ' record ' + compositeKey.ToString() + ' not found');
                     return '';

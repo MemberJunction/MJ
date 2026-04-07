@@ -2975,6 +2975,31 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * Call this after the provider is configured and WebSocket URL is available.
      * Safe to call multiple times — subsequent calls are no-ops if already subscribed.
      */
+    /**
+     * Subscribe to client tool requests for a specific agent session.
+     * The returned Observable emits ClientToolRequestNotification objects
+     * when the server-side agent wants to invoke a browser-side tool.
+     *
+     * @param sessionId - The agent session ID to filter requests for
+     * @returns Observable that emits tool request notifications
+     */
+    public ClientToolRequests(sessionId: string): Observable<Record<string, unknown>> {
+        const query = `
+            subscription ClientToolRequest($sessionID: String!) {
+                ClientToolRequest(sessionID: $sessionID) {
+                    AgentRunID
+                    SessionID
+                    RequestID
+                    ToolName
+                    Params
+                    TimeoutMs
+                    Description
+                }
+            }
+        `;
+        return this.subscribe(query, { sessionID: sessionId });
+    }
+
     public SubscribeToCacheInvalidation(): void {
         if (this._cacheInvalidationSubscription) {
             return; // Already subscribed

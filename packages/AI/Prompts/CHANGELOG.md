@@ -1,5 +1,47 @@
 # @memberjunction/ai-prompts
 
+## 5.24.0
+
+### Minor Changes
+
+- c318a0c: metadata + migrations in this PR == minor
+
+### Patch Changes
+
+- Updated dependencies [c318a0c]
+- Updated dependencies [1912726]
+  - @memberjunction/ai-core-plus@5.24.0
+  - @memberjunction/core@5.24.0
+  - @memberjunction/core-entities@5.24.0
+  - @memberjunction/ai-engine-base@5.24.0
+  - @memberjunction/aiengine@5.24.0
+  - @memberjunction/templates@5.24.0
+  - @memberjunction/credentials@5.24.0
+  - @memberjunction/templates-base-types@5.24.0
+  - @memberjunction/ai@5.24.0
+  - @memberjunction/global@5.24.0
+
+## 5.23.0
+
+### Patch Changes
+
+- 247df16: Fix server-side RunView cache write asymmetry that caused repeated DB queries during metadata sync, add deterministic Nunjucks template parameter extraction via AST, support comma-delimited multi-value fields in validation, and redesign QueryPagingEngine to append paging directly instead of wrapping in CTEs (fixing ORDER BY on non-projected columns and apostrophe-in-comments bugs).
+- Updated dependencies [247df16]
+- Updated dependencies [9250070]
+- Updated dependencies [513b20c]
+- Updated dependencies [44bc22b]
+- Updated dependencies [1d1e02e]
+  - @memberjunction/core@5.23.0
+  - @memberjunction/global@5.23.0
+  - @memberjunction/core-entities@5.23.0
+  - @memberjunction/ai-core-plus@5.23.0
+  - @memberjunction/ai-engine-base@5.23.0
+  - @memberjunction/aiengine@5.23.0
+  - @memberjunction/credentials@5.23.0
+  - @memberjunction/templates-base-types@5.23.0
+  - @memberjunction/templates@5.23.0
+  - @memberjunction/ai@5.23.0
+
 ## 5.22.0
 
 ### Patch Changes

@@ -141,3 +141,31 @@ export type BaseResponse = {
     // migration across all providers to properly type with generics.
     data: any
 }
+
+/**
+ * Parameters for listing vector IDs in an index.
+ */
+export type ListVectorIDsParams = {
+    /** Index name to list vectors from */
+    IndexName: string;
+    /** Optional metadata filter to narrow results (e.g., { Entity: 'Members' }) */
+    MetadataFilter?: Record<string, string>;
+    /** Optional ID prefix filter (Pinecone-specific: only return IDs starting with this prefix) */
+    Prefix?: string;
+    /** Maximum number of IDs to return per page (default: 100) */
+    Limit?: number;
+    /** Pagination token from a previous response */
+    PaginationToken?: string;
+    /** Optional namespace within the index */
+    Namespace?: string;
+}
+
+/**
+ * Result from listing vector IDs.
+ */
+export type ListVectorIDsResult = {
+    /** The vector IDs in this page */
+    IDs: string[];
+    /** Token to pass to get the next page, or undefined if no more pages */
+    NextPaginationToken?: string;
+}
