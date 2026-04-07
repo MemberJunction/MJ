@@ -135,8 +135,6 @@ export class DocxArtifactViewerComponent extends BaseArtifactViewerPluginCompone
   }
 
   public override get hasDisplayContent(): boolean { return true; }
-  public override get parentShouldShowRawContent(): boolean { return false; }
-  public override GetStandardTabRemovals(): string[] { return ['JSON']; }
 
   async ngOnInit(): Promise<void> {
     await this.loadDocument();

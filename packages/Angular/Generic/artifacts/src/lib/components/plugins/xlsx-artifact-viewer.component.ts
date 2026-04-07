@@ -175,8 +175,6 @@ export class XlsxArtifactViewerComponent extends BaseArtifactViewerPluginCompone
   }
 
   public override get hasDisplayContent(): boolean { return true; }
-  public override get parentShouldShowRawContent(): boolean { return false; }
-  public override GetStandardTabRemovals(): string[] { return ['JSON']; }
 
   public get activeSheet(): SheetData | null {
     return this.sheets[this.activeSheetIndex] ?? null;

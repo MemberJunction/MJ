@@ -11,9 +11,9 @@ import { ArtifactFileService } from '../../services/artifact-file.service';
  * (including a direct page-jump input), zoom in/out, download, and print.
  *
  * Aspect-ratio preservation: the canvas backing buffer is sized at full HiDPI
- * resolution while the CSS size uses `aspect-ratio` + `height: auto` so that
- * `max-width: 100%` scales both dimensions proportionally when the container
- * is narrower than the natural page width.
+ * resolution while the CSS size uses `aspect-ratio` + `height: auto` so both
+ * dimensions scale proportionally. Pages wider than the panel scroll horizontally
+ * inside the body — no max-width clamping, which is required for zoom to work.
  */
 @Component({
   standalone: false,
@@ -138,8 +138,6 @@ export class PdfArtifactViewerComponent extends BaseArtifactViewerPluginComponen
   }
 
   public override get hasDisplayContent(): boolean { return true; }
-  public override get parentShouldShowRawContent(): boolean { return false; }
-  public override GetStandardTabRemovals(): string[] { return ['JSON']; }
 
   /** Current zoom as an integer percentage for toolbar display. */
   public get zoomPercent(): number { return Math.round(this.zoomLevel * 100); }
@@ -348,10 +346,9 @@ export class PdfArtifactViewerComponent extends BaseArtifactViewerPluginComponen
     const cssHeight = viewport.height / pixelRatio;
 
     canvas.style.width = `${cssWidth}px`;
-    // Use aspect-ratio + height:auto instead of an explicit height so that
-    // CSS max-width:100% can constrain the width without squishing the page.
-    // When the scroll-area is narrower than cssWidth, both dimensions shrink
-    // in proportion and the page aspect ratio is preserved.
+    // aspect-ratio + height:auto: when cssWidth is set explicitly and the page
+    // renders at its natural size, the browser derives height proportionally.
+    // Pages wider than the panel scroll horizontally — the body handles overflow.
     canvas.style.aspectRatio = `${cssWidth} / ${cssHeight}`;
     canvas.style.height = 'auto';
 
