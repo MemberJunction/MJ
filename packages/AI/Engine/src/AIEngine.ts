@@ -410,17 +410,23 @@ export class AIEngine extends BaseSingleton<AIEngine> {
      * Ensures embeddings are generated, loading the model if needed.
      * Called lazily from FindSimilar* methods on first use.
      */
+    private _embeddingsPromise: Promise<void> | null = null;
+
     private async ensureEmbeddingsGenerated(): Promise<void> {
         if (this._embeddingsGenerated) return;
-
-        await Promise.all([
-            this.RefreshAgentEmbeddings(),
-            this.RefreshActionEmbeddings(),
-            this.RefreshNoteEmbeddings(this._contextUser),
-            this.RefreshExampleEmbeddings(this._contextUser)
-        ]);
-
-        this._embeddingsGenerated = true;
+        if (!this._embeddingsPromise) {
+            this._embeddingsPromise = (async () => {
+                await Promise.all([
+                    this.RefreshAgentEmbeddings(),
+                    this.RefreshActionEmbeddings(),
+                    this.RefreshNoteEmbeddings(this._contextUser),
+                    this.RefreshExampleEmbeddings(this._contextUser)
+                ]);
+                this._embeddingsGenerated = true;
+                this._embeddingsPromise = null;
+            })();
+        }
+        await this._embeddingsPromise;
     }
 
     // ========================================================================
