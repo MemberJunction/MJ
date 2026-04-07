@@ -1,0 +1,18 @@
+[
+  {
+    "fields": {
+      "Name": "MJ-to-MJ",
+      "Description": "MemberJunction instance-to-instance GraphQL sync. ALL entities discovered dynamically via EntitiesBySchemas query.",
+      "ClassName": "MJToMJConnector",
+      "ImportPath": "@memberjunction/integration-connectors",
+      "NavigationBaseURL": null,
+      "BatchMaxRequestCount": -1,
+      "BatchRequestWaitTime": -1,
+      "Icon": "fa-solid fa-link",
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key"
+    },
+    "relatedEntities": {
+      "MJ: Integration Objects": []
+    }
+  }
+]

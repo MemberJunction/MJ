@@ -1,0 +1,3099 @@
+[
+  {
+    "fields": {
+      "Name": "Mailchimp",
+      "Description": "Mailchimp integration connector for MemberJunction",
+      "ClassName": "MailChimpConnector",
+      "ImportPath": "@memberjunction/integration-connectors",
+      "NavigationBaseURL": null,
+      "BatchMaxRequestCount": -1,
+      "BatchRequestWaitTime": -1,
+      "Icon": "fa-brands fa-mailchimp",
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key"
+    },
+    "relatedEntities": {
+      "MJ: Integration Objects": [
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Lists",
+            "DisplayName": "Audience (List)",
+            "Description": "Mailchimp audiences (lists) — the top-level subscriber groupings",
+            "Category": "Core",
+            "APIPath": "/lists",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 1,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "date_created",
+                  "DisplayName": "date_created",
+                  "Type": "datetime",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "ListMembers",
+            "DisplayName": "List Member",
+            "Description": "Subscribers/contacts within an audience (parent-child under Lists)",
+            "Category": "Core",
+            "APIPath": "/listMembers",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 2,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "timestamp_signup",
+                  "DisplayName": "timestamp_signup",
+                  "Type": "datetime",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "timestamp_opt",
+                  "DisplayName": "timestamp_opt",
+                  "Type": "datetime",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "last_changed",
+                  "DisplayName": "last_changed",
+                  "Type": "datetime",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 4,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "ListSegments",
+            "DisplayName": "Audience Segment",
+            "Description": "Segments (saved filters) within an audience",
+            "Category": "Core",
+            "APIPath": "/listSegments",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 3,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "id",
+                  "Type": "int",
+                  "Length": null,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "created_at",
+                  "DisplayName": "created_at",
+                  "Type": "datetime",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "updated_at",
+                  "DisplayName": "updated_at",
+                  "Type": "datetime",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Campaigns",
+            "DisplayName": "Campaign",
+            "Description": "Email campaigns (regular, automated, A/B, RSS, etc.)",
+            "Category": "Core",
+            "APIPath": "/campaigns",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 4,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "create_time",
+                  "DisplayName": "create_time",
+                  "Type": "datetime",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "send_time",
+                  "DisplayName": "send_time",
+                  "Type": "datetime",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Automations",
+            "DisplayName": "Automation",
+            "Description": "Automated email workflows (classic automations)",
+            "Category": "Core",
+            "APIPath": "/automations",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "Sequence": 5,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "start_time",
+                  "DisplayName": "start_time",
+                  "Type": "datetime",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "create_time",
+                  "DisplayName": "create_time",
+                  "Type": "datetime",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Reports",
+            "DisplayName": "Campaign Report",
+            "Description": "Campaign performance reports (read-only)",
+            "Category": "Core",
+            "APIPath": "/reports",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "Sequence": 6,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "send_time",
+                  "DisplayName": "send_time",
+                  "Type": "datetime",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "EcommerceStores",
+            "DisplayName": "E-commerce Store",
+            "Description": "E-commerce stores connected to Mailchimp",
+            "Category": "Core",
+            "APIPath": "/ecommerceStores",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 7,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "created_at",
+                  "DisplayName": "created_at",
+                  "Type": "datetime",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "updated_at",
+                  "DisplayName": "updated_at",
+                  "Type": "datetime",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "EcommerceProducts",
+            "DisplayName": "E-commerce Product",
+            "Description": "Products in a connected e-commerce store (parent-child under EcommerceStores)",
+            "Category": "Core",
+            "APIPath": "/ecommerceProducts",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 8,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "published_at_foreign",
+                  "DisplayName": "published_at_foreign",
+                  "Type": "datetime",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "EcommerceOrders",
+            "DisplayName": "E-commerce Order",
+            "Description": "Orders in a connected e-commerce store (parent-child under EcommerceStores)",
+            "Category": "Core",
+            "APIPath": "/ecommerceOrders",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 9,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "processed_at_foreign",
+                  "DisplayName": "processed_at_foreign",
+                  "Type": "datetime",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "updated_at_foreign",
+                  "DisplayName": "updated_at_foreign",
+                  "Type": "datetime",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "BatchOperations",
+            "DisplayName": "Batch Operation",
+            "Description": "Async batch job status records — POST /batches creates jobs (read status here)",
+            "Category": "Core",
+            "APIPath": "/batchOperations",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "Sequence": 10,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "submitted_at",
+                  "DisplayName": "submitted_at",
+                  "Type": "datetime",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "completed_at",
+                  "DisplayName": "completed_at",
+                  "Type": "datetime",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "InterestCategories",
+            "DisplayName": "Interest Category",
+            "Description": "Interest groupings within lists",
+            "Category": "Core",
+            "APIPath": "/interestCategories",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 11,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "list_id",
+                  "DisplayName": "list_id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": true,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Interests",
+            "DisplayName": "Interest",
+            "Description": "Individual interests within categories",
+            "Category": "Core",
+            "APIPath": "/interests",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 12,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "category_id",
+                  "DisplayName": "category_id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": true,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "ListMergeFields",
+            "DisplayName": "Merge Field",
+            "Description": "Merge field definitions per list (FNAME, LNAME, etc.)",
+            "Category": "Core",
+            "APIPath": "/listMergeFields",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 13,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "merge_id",
+                  "DisplayName": "merge_id",
+                  "Type": "int",
+                  "Length": null,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "list_id",
+                  "DisplayName": "list_id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": true,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "ListMemberNotes",
+            "DisplayName": "Member Note",
+            "Description": "Notes on list members (child of ListMembers)",
+            "Category": "Core",
+            "APIPath": "/listMemberNotes",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 14,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "note_id",
+                  "DisplayName": "note_id",
+                  "Type": "int",
+                  "Length": null,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "list_id",
+                  "DisplayName": "list_id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": true,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "ListWebhooks",
+            "DisplayName": "List Webhook",
+            "Description": "Webhook subscriptions per list",
+            "Category": "Core",
+            "APIPath": "/listWebhooks",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 15,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "list_id",
+                  "DisplayName": "list_id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": true,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Tags",
+            "DisplayName": "Tag",
+            "Description": "Global tags for organizing contacts",
+            "Category": "Core",
+            "APIPath": "/tags",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 16,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "id",
+                  "Type": "int",
+                  "Length": null,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "created_at",
+                  "DisplayName": "created_at",
+                  "Type": "datetime",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "updated_at",
+                  "DisplayName": "updated_at",
+                  "Type": "datetime",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Templates",
+            "DisplayName": "Template",
+            "Description": "Email templates",
+            "Category": "Core",
+            "APIPath": "/templates",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 17,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "id",
+                  "Type": "int",
+                  "Length": null,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "date_created",
+                  "DisplayName": "date_created",
+                  "Type": "datetime",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "LandingPages",
+            "DisplayName": "Landing Page",
+            "Description": "Landing pages for lead capture",
+            "Category": "Core",
+            "APIPath": "/landingPages",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 18,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "created_at",
+                  "DisplayName": "created_at",
+                  "Type": "datetime",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Surveys",
+            "DisplayName": "Survey",
+            "Description": "Survey definitions",
+            "Category": "Core",
+            "APIPath": "/surveys",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "Sequence": 19,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "created_at",
+                  "DisplayName": "created_at",
+                  "Type": "datetime",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "CustomerJourneys",
+            "DisplayName": "Customer Journey",
+            "Description": "Automation customer journeys",
+            "Category": "Core",
+            "APIPath": "/customerJourneys",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "Sequence": 20,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "id",
+                  "Type": "int",
+                  "Length": null,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Files",
+            "DisplayName": "File",
+            "Description": "File manager files",
+            "Category": "Core",
+            "APIPath": "/files",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 21,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "id",
+                  "Type": "int",
+                  "Length": null,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "created_at",
+                  "DisplayName": "created_at",
+                  "Type": "datetime",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Folders",
+            "DisplayName": "Folder",
+            "Description": "File manager folders",
+            "Category": "Core",
+            "APIPath": "/folders",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 22,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "id",
+                  "Type": "int",
+                  "Length": null,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "ConnectedSites",
+            "DisplayName": "Connected Site",
+            "Description": "Websites connected to Mailchimp",
+            "Category": "Core",
+            "APIPath": "/connectedSites",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 23,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "foreign_id",
+                  "DisplayName": "foreign_id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Conversations",
+            "DisplayName": "Conversation",
+            "Description": "Inbox conversations",
+            "Category": "Core",
+            "APIPath": "/conversations",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "Sequence": 24,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "EcommerceCarts",
+            "DisplayName": "E-commerce Cart",
+            "Description": "Shopping carts (child of EcommerceStores)",
+            "Category": "Core",
+            "APIPath": "/ecommerceCarts",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 25,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "store_id",
+                  "DisplayName": "store_id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": true,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "EcommerceCustomers",
+            "DisplayName": "E-commerce Customer",
+            "Description": "Store customers (child of EcommerceStores)",
+            "Category": "Core",
+            "APIPath": "/ecommerceCustomers",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 26,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "store_id",
+                  "DisplayName": "store_id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": true,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "EcommercePromoRules",
+            "DisplayName": "Promo Rule",
+            "Description": "Promo/discount rules (child of EcommerceStores)",
+            "Category": "Core",
+            "APIPath": "/ecommercePromoRules",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 27,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "store_id",
+                  "DisplayName": "store_id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": true,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "FacebookAds",
+            "DisplayName": "Facebook Ad",
+            "Description": "Facebook ad campaigns",
+            "Category": "Core",
+            "APIPath": "/facebookAds",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "Sequence": 28,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "VerifiedDomains",
+            "DisplayName": "Verified Domain",
+            "Description": "Verified sending domains",
+            "Category": "Core",
+            "APIPath": "/verifiedDomains",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 29,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "domain",
+                  "DisplayName": "domain",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "ListAbuseReports",
+            "DisplayName": "List Abuse Report",
+            "Description": "Abuse reports per list",
+            "Category": "Core",
+            "APIPath": "/listAbuseReports",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "Sequence": 30,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "id",
+                  "Type": "int",
+                  "Length": null,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "list_id",
+                  "DisplayName": "list_id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": true,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "ListGrowthHistory",
+            "DisplayName": "List Growth History",
+            "Description": "Monthly growth stats per list",
+            "Category": "Core",
+            "APIPath": "/listGrowthHistory",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "Sequence": 31,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "month",
+                  "DisplayName": "month",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "list_id",
+                  "DisplayName": "list_id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": true,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "ListSignupForms",
+            "DisplayName": "Signup Form",
+            "Description": "List signup form config",
+            "Category": "Core",
+            "APIPath": "/listSignupForms",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 32,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "list_id",
+                  "DisplayName": "list_id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "ListMemberTags",
+            "DisplayName": "Member Tag",
+            "Description": "Tags on individual members (child of ListMembers)",
+            "Category": "Core",
+            "APIPath": "/listMemberTags",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 33,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "id",
+                  "Type": "int",
+                  "Length": null,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "list_id",
+                  "DisplayName": "list_id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": true,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "ListMemberNotes2",
+            "DisplayName": "Member Note",
+            "Description": "Notes on members",
+            "Category": "Core",
+            "APIPath": "/listMemberNotes2",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 34,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "note_id",
+                  "DisplayName": "note_id",
+                  "Type": "int",
+                  "Length": null,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "list_id",
+                  "DisplayName": "list_id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": true,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "ListMemberActivity",
+            "DisplayName": "Member Activity",
+            "Description": "Email activity per member",
+            "Category": "Core",
+            "APIPath": "/listMemberActivity",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "Sequence": 35,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "email_id",
+                  "DisplayName": "email_id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "list_id",
+                  "DisplayName": "list_id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": true,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "ListMemberEvents",
+            "DisplayName": "Member Event",
+            "Description": "Custom events per member",
+            "Category": "Core",
+            "APIPath": "/listMemberEvents",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "Sequence": 36,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "list_id",
+                  "DisplayName": "list_id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": true,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "ListMemberGoals",
+            "DisplayName": "Member Goal",
+            "Description": "Goal tracking per member",
+            "Category": "Core",
+            "APIPath": "/listMemberGoals",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "Sequence": 37,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "goal_id",
+                  "DisplayName": "goal_id",
+                  "Type": "int",
+                  "Length": null,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "list_id",
+                  "DisplayName": "list_id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": true,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "ListLocations",
+            "DisplayName": "List Location",
+            "Description": "Geographic distribution of list members",
+            "Category": "Core",
+            "APIPath": "/listLocations",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "Sequence": 38,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "country",
+                  "DisplayName": "country",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "list_id",
+                  "DisplayName": "list_id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": true,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "ListClients",
+            "DisplayName": "List Client",
+            "Description": "Email client usage stats per list",
+            "Category": "Core",
+            "APIPath": "/listClients",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "Sequence": 39,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "client",
+                  "DisplayName": "client",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "list_id",
+                  "DisplayName": "list_id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": true,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "CampaignContent",
+            "DisplayName": "Campaign Content",
+            "Description": "HTML/text content of campaign",
+            "Category": "Core",
+            "APIPath": "/campaignContent",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 40,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "campaign_id",
+                  "DisplayName": "campaign_id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "CampaignFeedback",
+            "DisplayName": "Campaign Feedback",
+            "Description": "Internal feedback/comments on campaigns",
+            "Category": "Core",
+            "APIPath": "/campaignFeedback",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 41,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "feedback_id",
+                  "DisplayName": "feedback_id",
+                  "Type": "int",
+                  "Length": null,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "campaign_id",
+                  "DisplayName": "campaign_id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": true,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "ReportClickDetails",
+            "DisplayName": "Report Click Detail",
+            "Description": "Click details per campaign report",
+            "Category": "Core",
+            "APIPath": "/reportClickDetails",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "Sequence": 42,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "campaign_id",
+                  "DisplayName": "campaign_id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": true,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "ReportOpenDetails",
+            "DisplayName": "Report Open Detail",
+            "Description": "Open details per campaign report",
+            "Category": "Core",
+            "APIPath": "/reportOpenDetails",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "Sequence": 43,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "campaign_id",
+                  "DisplayName": "campaign_id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": true,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "ReportEmailActivity",
+            "DisplayName": "Report Email Activity",
+            "Description": "Per-subscriber email activity",
+            "Category": "Core",
+            "APIPath": "/reportEmailActivity",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "Sequence": 44,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "email_id",
+                  "DisplayName": "email_id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "campaign_id",
+                  "DisplayName": "campaign_id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": true,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "ReportSentTo",
+            "DisplayName": "Report Sent To",
+            "Description": "Recipients of a campaign",
+            "Category": "Core",
+            "APIPath": "/reportSentTo",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "Sequence": 45,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "email_id",
+                  "DisplayName": "email_id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "campaign_id",
+                  "DisplayName": "campaign_id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": true,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "ReportUnsubscribes",
+            "DisplayName": "Report Unsubscribes",
+            "Description": "Unsubscribers per campaign",
+            "Category": "Core",
+            "APIPath": "/reportUnsubscribes",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "Sequence": 46,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "email_id",
+                  "DisplayName": "email_id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "campaign_id",
+                  "DisplayName": "campaign_id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": true,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "ReportDomainPerformance",
+            "DisplayName": "Report Domain Stats",
+            "Description": "Performance by email domain",
+            "Category": "Core",
+            "APIPath": "/reportDomainPerformance",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "Sequence": 47,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "domain",
+                  "DisplayName": "domain",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "campaign_id",
+                  "DisplayName": "campaign_id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": true,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "AutomationEmails",
+            "DisplayName": "Automation Email",
+            "Description": "Emails within an automation workflow",
+            "Category": "Core",
+            "APIPath": "/automationEmails",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "Sequence": 48,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "workflow_id",
+                  "DisplayName": "workflow_id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": true,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "EcommerceProductVariants",
+            "DisplayName": "Product Variant",
+            "Description": "Product variant/SKU (child of EcommerceProducts)",
+            "Category": "Core",
+            "APIPath": "/ecommerceProductVariants",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "product_id",
+                  "DisplayName": "product_id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": true,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "EcommerceOrderLines",
+            "DisplayName": "Order Line",
+            "Description": "Line items on orders (child of EcommerceOrders)",
+            "Category": "Core",
+            "APIPath": "/ecommerceOrderLines",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 50,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "order_id",
+                  "DisplayName": "order_id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": true,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "EcommerceCartLines",
+            "DisplayName": "Cart Line",
+            "Description": "Line items in carts (child of EcommerceCarts)",
+            "Category": "Core",
+            "APIPath": "/ecommerceCartLines",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 51,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "cart_id",
+                  "DisplayName": "cart_id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": true,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "EcommercePromoCodes",
+            "DisplayName": "Promo Code",
+            "Description": "Promo codes under rules (child of EcommercePromoRules)",
+            "Category": "Core",
+            "APIPath": "/ecommercePromoCodes",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 52,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "promo_rule_id",
+                  "DisplayName": "promo_rule_id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": true,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "SurveyQuestions",
+            "DisplayName": "Survey Question",
+            "Description": "Questions within surveys",
+            "Category": "Core",
+            "APIPath": "/surveyQuestions",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "Sequence": 53,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "survey_id",
+                  "DisplayName": "survey_id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": true,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "SurveyResponses",
+            "DisplayName": "Survey Response",
+            "Description": "Responses to surveys",
+            "Category": "Core",
+            "APIPath": "/surveyResponses",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "Sequence": 54,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "survey_id",
+                  "DisplayName": "survey_id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": true,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "AuthorizedApps",
+            "DisplayName": "Authorized App",
+            "Description": "OAuth authorized applications",
+            "Category": "Core",
+            "APIPath": "/authorizedApps",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "Sequence": 55,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "id",
+                  "Type": "int",
+                  "Length": null,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+]

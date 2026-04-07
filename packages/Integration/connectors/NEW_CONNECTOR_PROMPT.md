@@ -60,16 +60,78 @@ What the base class already handles (don't duplicate it)
 What hooks/callbacks are available
 
 MethodPurposeKey GotchasAuthenticate()Return RESTAuthContextMust handle token refresh. Use MJ Credentials entity — never hardcode secrets. Check how other connectors cache tokens.DiscoverObjects()Return IntegrationObjectInfo[] for all API resourcesIf platform has a metadata endpoint, use it. Otherwise build a complete static PLATFORM_OBJECTS array. Every GET-able resource = one object.DiscoverFields(objectName)Return field metadata per objectMap API field types to MJ types accurately. Set PK, FK, IsRequired, IsReadOnly. Use describe/schema endpoints if available.FetchChanges()Incremental data retrievalMust respect watermarks. Must handle pagination to completion (don't stop at page 1). Prefer server-side updated_at>= filtering over client-side comparison.CreateRecord()POST new recordSet SupportsCreate getter to true. Return the created record's ID.UpdateRecord()PUT/PATCH existing recordSet SupportsUpdate getter to true. Use PATCH if platform supports partial updates.DeleteRecord()DELETE recordSet SupportsDelete getter to true. Handle soft-delete platforms gracefully.ExtractPaginationInfo()Parse pagination metadata from responseMatch the platform's exact pagination pattern.BuildPaginatedURL()Construct URL for next pageMust work for all objects, not just one.ExtractRecords()Unwrap response envelopeHandle { data: [...] } vs { results: [...] } vs raw array vs JSON:API etc.
-D. API Coverage Completeness
-This is critical. Do not implement a partial connector with 5-10 "common" endpoints. You must:
+D. API Coverage Completeness — EVERY ENDPOINT, NO EXCEPTIONS
+This is the single most important requirement. A connector that covers 10 out of 50 endpoints is NOT a connector — it is a demo. You must cover the platform's ENTIRE API surface.
 
-Fetch and parse the platform's API documentation
-Enumerate EVERY resource that supports GET (list)
-Create an IntegrationObjectInfo entry for each one
-For each resource, check POST/PUT/DELETE support and set the corresponding flags
-If the API has 50+ endpoints, implement them ALL — do not cherry-pick
+**The mandate:**
+1. Fetch and parse the platform's API documentation (fetch the URL, read it)
+2. Enumerate **EVERY** resource/endpoint that supports GET (list)
+3. For each resource, check POST/PUT/PATCH/DELETE support
+4. **EVERY** endpoint must be reachable for sync — no cherry-picking "common" ones
+5. **EVERY** writable endpoint must support bidirectional sync (Create/Update/Delete where the API allows)
+6. **EVERY** endpoint with date filtering must support incremental sync via watermarks
 
-If the platform has a live discovery endpoint (like Salesforce /sobjects or HubSpot /crm/v3/schemas), use it instead of hardcoding. This makes the connector self-updating.
+**Two-tier strategy for coverage — Dynamic + Static:**
+
+| Tier | When to use | How it works |
+|---|---|---|
+| **Dynamic discovery** (preferred) | Platform has a metadata/describe/schema API (e.g., NetSuite `/record/v1/metadata-catalog`, Salesforce `/sobjects`, HubSpot `/crm/v3/schemas`) | `DiscoverObjects()` calls the metadata API at runtime to enumerate ALL available record types. `DiscoverFields()` calls the field-describe endpoint per record type. New endpoints added to the platform are automatically picked up — zero code changes needed. |
+| **Static metadata** (fallback) | Platform has NO metadata API (most platforms) | Define ALL objects and fields in the connector's `PLATFORM_OBJECTS` array AND in metadata JSON files at `metadata/integrations/.platform-name.json`. These populate the `IntegrationObject` and `IntegrationObjectField` database tables via `mj-sync push`. |
+| **Hybrid** | Platform has partial metadata (e.g., field names but not types, or objects but not all fields) | `DiscoverObjects()` uses live API + static overlay. `DiscoverFields()` fetches live schema and merges with static PK/FK/description annotations. |
+
+**For platforms with 50+ endpoints (e.g., NetSuite ~100+ record types, Blackbaud ~70+ resources):**
+- You MUST use dynamic discovery — hardcoding 100 static objects with field definitions is unmaintainable
+- Implement `DiscoverObjects()` to hit the platform's metadata API and return the full catalog
+- Implement `DiscoverFields(objectName)` to fetch field metadata from the describe endpoint
+- Add a static overlay ONLY for MJ-specific metadata that the API can't provide (PaginationType, ResponseDataKey, Category, parent-child FK annotations)
+
+**For platforms with <50 endpoints (e.g., Wild Apricot ~22, Constant Contact ~19):**
+- Static `PLATFORM_OBJECTS` array is acceptable, but it MUST cover ALL endpoints
+- Cross-reference against the live API docs — if the docs list an endpoint and you don't have it, that's a gap
+
+**What "every endpoint" means in practice:**
+- If the API has `/contacts`, `/events`, `/invoices`, `/payments`, `/refunds`, `/donations`, `/orders`, `/membergroups`, `/emailmessages`, `/auditlog` — you implement ALL of them, not just contacts and events
+- If `/events/{id}/sessions` and `/events/{id}/registrations` exist as sub-resources — those are separate IntegrationObjects with parent-child relationships
+- Lookup/reference tables (membership types, payment methods, categories) — include them as read-only objects
+- Utility/action endpoints (void invoice, clone event, send email) — document in header comment but don't model as sync objects
+
+**The core principle: Dynamic Discovery + Static Metadata Overlay**
+
+Every connector MUST maximize what it learns from the API at runtime. The pattern is:
+
+1. **`DiscoverObjects()`** — Call the platform's metadata/describe/schema endpoint to enumerate ALL available record types. Extract as much as the API provides: names, labels, write support, field lists, constraints. If the platform has no metadata endpoint, fall back to a complete static list — but the static list must cover EVERY endpoint.
+
+2. **`DiscoverFields(objectName)`** — Call the platform's field-describe endpoint (or fetch one sample record) to learn field names, types, required flags, read-only flags, constraints. Extract everything the API provides.
+
+3. **Static metadata overlay** — For information the API *cannot* self-describe, define it in the connector's `PLATFORM_OBJECTS` array and/or in `metadata/integrations/.platform-name.json` files. The engine merges static metadata ON TOP of live discovery. Common overlay fields:
+   - `PaginationType` — the API won't tell you this; you must know it
+   - `ResponseDataKey` — the JSON envelope key (e.g., `value`, `items`, `data`)
+   - `DefaultPageSize` — optimal page size for the platform
+   - Parent-child FK annotations (`IsForeignKey`, `RelatedIntegrationObjectID`)
+   - `Category` — grouping for UI display (e.g., `CRM`, `Marketing`, `Finance`)
+   - Field descriptions — if the API doesn't provide them
+   - `DefaultQueryParams` — any required default filters
+
+The goal: if the platform adds a new record type or field tomorrow, the connector picks it up automatically via discovery. Static overlay is only for what the API structurally cannot provide.
+
+**Important: Metadata is stored in the database, not just TypeScript.**
+The `PLATFORM_OBJECTS` array in TypeScript is NOT the final resting place for this metadata. When `IntegrationApplyAll` or `IntegrationApplySchema` runs, the engine calls `DiscoverObjects()` + `DiscoverFields()` and writes the results into `IntegrationObject` and `IntegrationObjectField` DB rows. These DB rows are the runtime source of truth. This means:
+- Users/admins can add **custom objects** beyond what the connector discovers (e.g., a custom API endpoint specific to their tenant)
+- Users can override field metadata (mark additional fields as required, add descriptions, set FK relationships)
+- The static TypeScript array is a **seed** — it populates the DB on first run, and subsequent discovery calls update/merge
+- Don't try to cram every field detail into the TypeScript array — define objects with essential metadata (Name, APIPath, PaginationType, SupportsWrite, PK field, key fields), and let `DiscoverFields()` populate the full field inventory from the API at runtime
+- For platforms without field-level discovery, include enough fields in the static definition for the engine to create meaningful DB tables (PK + all commonly-used fields)
+
+**Bidirectional sync — non-negotiable for every writable endpoint:**
+- Every object with POST support → `SupportsWrite: true` + `CreateRecord()` handles it
+- Every object with PUT/PATCH support → `UpdateRecord()` handles it
+- Every object with DELETE support → `DeleteRecord()` handles it
+- `SupportsCreate`, `SupportsUpdate`, `SupportsDelete` getters must return `true`
+
+**Incremental sync — non-negotiable where the API supports date filtering:**
+- If the API supports `modified_since`, `updated_after`, `lastModifiedDate`, `$filter`, or similar → you MUST use it as a server-side filter in `FetchChanges()`
+- Do NOT full-sync and filter client-side when server-side filtering is available
+- Pass the watermark value as a query/filter parameter to reduce data transfer
 
 D2. IntegrationObject & IntegrationObjectField Metadata (Critical)
 
@@ -230,11 +292,62 @@ Step 3: Implementation
 Write the connector following everything above. For each method you implement, add a brief code comment explaining any platform-specific quirk.
 Step 4: Integration
 Update packages/Integration/connectors/src/index.ts to export the new connector. Follow the exact pattern used for existing exports.
-Step 5: Build Verification
-bashcd packages/Integration/connectors
+Step 5: Create Metadata JSON File (MANDATORY — not optional)
+Create `metadata/integrations/.{platform-name}.json` following the exact structure of existing files (e.g., `.rasa.json`, `.wild-apricot.json`). This file is what actually populates the `IntegrationObject` and `IntegrationObjectField` database tables via `mj-sync push`.
+
+Structure:
+```json
+[{
+  "fields": {
+    "Name": "Platform Name",
+    "ClassName": "PlatformConnector",
+    "ImportPath": "@memberjunction/integration-connectors",
+    "Icon": "fa-solid fa-icon-name"
+  },
+  "relatedEntities": {
+    "MJ: Integration Objects": [
+      {
+        "fields": {
+          "IntegrationID": "@parent:ID",
+          "Name": "ObjectName",
+          "DisplayName": "Object Display Name",
+          "APIPath": "/api/path",
+          "PaginationType": "Offset|Cursor|PageNumber|None",
+          "DefaultPageSize": 200,
+          "ResponseDataKey": "items",
+          "SupportsWrite": true,
+          "SupportsIncrementalSync": true,
+          "Status": "Active"
+        },
+        "relatedEntities": {
+          "MJ: Integration Object Fields": [
+            // ONLY overlay fields: PK, FKs, and incremental date field.
+            // All other fields are discovered at runtime via DiscoverFields().
+          ]
+        }
+      }
+    ]
+  }
+}]
+```
+
+**Requirements:**
+- EVERY endpoint must have an IntegrationObject entry — not just the "primary" ones
+- For each object, include ONLY overlay fields that cannot be discovered dynamically:
+  - PK field (IsPrimaryKey: true)
+  - FK fields (IsForeignKey: true — for parent-child relationships)
+  - Incremental date field (the field used for watermark-based date filtering)
+- Do NOT include every column — `DiscoverFields()` handles the full field inventory at runtime
+- New records must NOT include `primaryKey` or `sync` objects — these are auto-populated by `mj-sync push`
+- For dynamic discovery connectors (e.g., NetSuite, MJ-to-MJ), the relatedEntities array can be empty — objects are discovered at runtime
+
+Step 6: Build Verification
+```bash
+cd packages/Integration/connectors
 npm run build
+```
 Fix any errors. Re-run until clean.
-Step 6: Self-Review Checklist
+Step 7: Self-Review Checklist
 Go through each item. If ANY check fails, fix it before presenting results.
 
  Read the base class files before writing code (not after)
@@ -266,6 +379,13 @@ Go through each item. If ANY check fails, fix it before presenting results.
  Largest supported page size configured in DefaultPageSize
  All API categories documented (even unimplemented ones) with reasons for exclusion
  CDC/webhook support implemented or documented as unavailable
+ Metadata JSON file created at metadata/integrations/.{platform}.json with ALL objects
+ Metadata file follows .rasa.json structure (Integration → Objects → overlay Fields)
+ Every API endpoint has an IntegrationObject entry in the metadata file
+ IntegrationObject fields include PK, FK, and incremental date fields ONLY (not every column)
+ Dynamic connectors have empty IntegrationObjects array (objects discovered at runtime)
+ Every writable endpoint has SupportsWrite: true AND bidirectional CRUD methods
+ Every endpoint with date filtering has SupportsIncrementalSync: true AND server-side watermark filtering in FetchChanges()
 
 
 Common Mistakes to Avoid

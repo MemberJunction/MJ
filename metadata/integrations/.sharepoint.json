@@ -1,0 +1,1380 @@
+[
+  {
+    "fields": {
+      "Name": "SharePoint",
+      "Description": "SharePoint integration connector for MemberJunction",
+      "ClassName": "SharePointConnector",
+      "ImportPath": "@memberjunction/integration-connectors",
+      "NavigationBaseURL": null,
+      "BatchMaxRequestCount": -1,
+      "BatchRequestWaitTime": -1,
+      "Icon": "fa-brands fa-microsoft",
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=Azure Service Principal"
+    },
+    "relatedEntities": {
+      "MJ: Integration Objects": [
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Site",
+            "DisplayName": "Site",
+            "Description": "SharePoint site metadata (singleton, read-only)",
+            "Category": "Core",
+            "APIPath": "/site",
+            "ResponseDataKey": "value",
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "Sequence": 1,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "createdDateTime",
+                  "DisplayName": "createdDateTime",
+                  "Type": "datetime",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "lastModifiedDateTime",
+                  "DisplayName": "lastModifiedDateTime",
+                  "Type": "datetime",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Lists",
+            "DisplayName": "List",
+            "Description": "SharePoint lists on the site",
+            "Category": "Core",
+            "APIPath": "/lists",
+            "ResponseDataKey": "value",
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 2,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "createdDateTime",
+                  "DisplayName": "createdDateTime",
+                  "Type": "datetime",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "lastModifiedDateTime",
+                  "DisplayName": "lastModifiedDateTime",
+                  "Type": "datetime",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "ListItems",
+            "DisplayName": "List Item",
+            "Description": "Items within SharePoint lists (parent-child under Lists). Includes expanded field values.",
+            "Category": "Core",
+            "APIPath": "/listItems",
+            "ResponseDataKey": "value",
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 3,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "createdDateTime",
+                  "DisplayName": "createdDateTime",
+                  "Type": "datetime",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "lastModifiedDateTime",
+                  "DisplayName": "lastModifiedDateTime",
+                  "Type": "datetime",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Drives",
+            "DisplayName": "Document Library",
+            "Description": "Document libraries (OneDrive-style drives) on the site",
+            "Category": "Core",
+            "APIPath": "/drives",
+            "ResponseDataKey": "value",
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "Sequence": 4,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "createdDateTime",
+                  "DisplayName": "createdDateTime",
+                  "Type": "datetime",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "lastModifiedDateTime",
+                  "DisplayName": "lastModifiedDateTime",
+                  "Type": "datetime",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "DriveItems",
+            "DisplayName": "Drive Item (File/Folder)",
+            "Description": "Files and folders within document libraries (parent-child under Drives). Metadata only — no binary content.",
+            "Category": "Core",
+            "APIPath": "/driveItems",
+            "ResponseDataKey": "value",
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "Sequence": 5,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "createdDateTime",
+                  "DisplayName": "createdDateTime",
+                  "Type": "datetime",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "lastModifiedDateTime",
+                  "DisplayName": "lastModifiedDateTime",
+                  "Type": "datetime",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Columns",
+            "DisplayName": "Site Column",
+            "Description": "Column definitions on the site (read-only schema metadata)",
+            "Category": "Core",
+            "APIPath": "/columns",
+            "ResponseDataKey": "value",
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "Sequence": 6,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "ContentTypes",
+            "DisplayName": "Content Type",
+            "Description": "Site content type definitions",
+            "Category": "Core",
+            "APIPath": "/contentTypes",
+            "ResponseDataKey": "value",
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 7,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Pages",
+            "DisplayName": "Site Page",
+            "Description": "SharePoint site pages",
+            "Category": "Core",
+            "APIPath": "/pages",
+            "ResponseDataKey": "value",
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 8,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "lastModifiedDateTime",
+                  "DisplayName": "lastModifiedDateTime",
+                  "Type": "datetime",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Subsites",
+            "DisplayName": "Subsite",
+            "Description": "Child sites under this site",
+            "Category": "Core",
+            "APIPath": "/subsites",
+            "ResponseDataKey": "value",
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "Sequence": 9,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "lastModifiedDateTime",
+                  "DisplayName": "lastModifiedDateTime",
+                  "Type": "datetime",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "SitePermissions",
+            "DisplayName": "Site Permission",
+            "Description": "App-level site permissions",
+            "Category": "Core",
+            "APIPath": "/sitePermissions",
+            "ResponseDataKey": "value",
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 10,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "DriveItemVersions",
+            "DisplayName": "File Version",
+            "Description": "File version history (child of DriveItems)",
+            "Category": "Core",
+            "APIPath": "/driveItemVersions",
+            "ResponseDataKey": "value",
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "Sequence": 11,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "driveItemId",
+                  "DisplayName": "driveItemId",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": true,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "lastModifiedDateTime",
+                  "DisplayName": "lastModifiedDateTime",
+                  "Type": "datetime",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "DriveItemPermissions",
+            "DisplayName": "File Permission",
+            "Description": "Sharing permissions on files (child of DriveItems)",
+            "Category": "Core",
+            "APIPath": "/driveItemPermissions",
+            "ResponseDataKey": "value",
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 12,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "driveItemId",
+                  "DisplayName": "driveItemId",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": true,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "ListItemVersions",
+            "DisplayName": "List Item Version",
+            "Description": "Item version history (child of ListItems)",
+            "Category": "Core",
+            "APIPath": "/listItemVersions",
+            "ResponseDataKey": "value",
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "Sequence": 13,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "listItemId",
+                  "DisplayName": "listItemId",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": true,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "TermStoreGroups",
+            "DisplayName": "Term Store Group",
+            "Description": "Managed metadata taxonomy groups",
+            "Category": "Core",
+            "APIPath": "/termStoreGroups",
+            "ResponseDataKey": "value",
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 14,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "TermStoreSets",
+            "DisplayName": "Term Set",
+            "Description": "Term sets within taxonomy groups",
+            "Category": "Core",
+            "APIPath": "/termStoreSets",
+            "ResponseDataKey": "value",
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 15,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "groupId",
+                  "DisplayName": "groupId",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": true,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "RecycleBinItems",
+            "DisplayName": "Recycle Bin Item",
+            "Description": "Deleted items in recycle bin",
+            "Category": "Core",
+            "APIPath": "/recycleBinItems",
+            "ResponseDataKey": "value",
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "Sequence": 16,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "deletedDateTime",
+                  "DisplayName": "deletedDateTime",
+                  "Type": "datetime",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "ContentTypeColumns",
+            "DisplayName": "CT Column",
+            "Description": "Field definitions on content types",
+            "Category": "Core",
+            "APIPath": "/contentTypeColumns",
+            "ResponseDataKey": "value",
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 17,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "contentTypeId",
+                  "DisplayName": "contentTypeId",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": true,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "PageWebParts",
+            "DisplayName": "Page Web Part",
+            "Description": "Web parts embedded in pages",
+            "Category": "Core",
+            "APIPath": "/pageWebParts",
+            "ResponseDataKey": "value",
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 18,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "pageId",
+                  "DisplayName": "pageId",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": true,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "ListContentTypes",
+            "DisplayName": "List Content Type",
+            "Description": "Content types scoped to a list",
+            "Category": "Core",
+            "APIPath": "/listContentTypes",
+            "ResponseDataKey": "value",
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 19,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "listId",
+                  "DisplayName": "listId",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": true,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "ListItemActivities",
+            "DisplayName": "Item Activity",
+            "Description": "Activity feed on list items",
+            "Category": "Core",
+            "APIPath": "/listItemActivities",
+            "ResponseDataKey": "value",
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "Sequence": 20,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "listItemId",
+                  "DisplayName": "listItemId",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": true,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Terms",
+            "DisplayName": "Term",
+            "Description": "Individual taxonomy terms within term sets",
+            "Category": "Core",
+            "APIPath": "/terms",
+            "ResponseDataKey": "value",
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 21,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "setId",
+                  "DisplayName": "setId",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": true,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Subscriptions",
+            "DisplayName": "Webhook Subscription",
+            "Description": "Graph change notification subscriptions",
+            "Category": "Core",
+            "APIPath": "/subscriptions",
+            "ResponseDataKey": "value",
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 22,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "expirationDateTime",
+                  "DisplayName": "expirationDateTime",
+                  "Type": "datetime",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "SiteOperations",
+            "DisplayName": "Site Operation",
+            "Description": "Long-running operation status",
+            "Category": "Core",
+            "APIPath": "/siteOperations",
+            "ResponseDataKey": "value",
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "Sequence": 23,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "createdDateTime",
+                  "DisplayName": "createdDateTime",
+                  "Type": "datetime",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "ListItemActivities2",
+            "DisplayName": "Item Activity",
+            "Description": "Activity feed on list items",
+            "Category": "Core",
+            "APIPath": "/listItemActivities2",
+            "ResponseDataKey": "value",
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "Sequence": 24,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+]
