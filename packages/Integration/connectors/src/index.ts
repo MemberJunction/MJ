@@ -7,3 +7,7 @@ export { RasaConnector, type RasaConnectionConfig } from './RasaConnector.js';
 export { WicketConnector, type WicketCRUDResult, type WicketSearchOptions, type WicketSearchResult } from './WicketConnector.js';
 export { SageIntacctConnector, type SageIntacctConnectionConfig } from './SageIntacctConnector.js';
 export { QuickBooksConnector, type QuickBooksConnectionConfig } from './QuickBooksConnector.js';
+export { NimbleAMSConnector, type NimbleAMSConnectionConfig } from './NimbleAMSConnector.js';
+export { AptifyConnector, type AptifyConnectionConfig } from './AptifyConnector.js';
+export { Reach360Connector, type Reach360ConnectionConfig } from './Reach360Connector.js';
+export { NetForumConnector, type NetForumConnectionConfig } from './NetForumConnector.js';
