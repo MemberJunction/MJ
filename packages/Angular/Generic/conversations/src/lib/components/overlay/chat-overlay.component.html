@@ -1,0 +1,91 @@
+@if (IsVisible) {
+    <!-- Floating Button (collapsed state) -->
+    @if (State === 'collapsed') {
+        <div class="chat-overlay-bubble" (click)="Toggle()" title="Open Chat">
+            <i class="fa-solid fa-comments chat-overlay-bubble-icon"></i>
+            @if (UnreadCount > 0) {
+                <span class="chat-overlay-badge">{{ UnreadCount > 9 ? '9+' : UnreadCount }}</span>
+            }
+        </div>
+    }
+
+    <!-- Expanded / Maximized Chat Panel -->
+    @if (State === 'expanded' || State === 'maximized') {
+        <div class="chat-overlay-panel"
+             [class.maximized]="State === 'maximized'"
+             [style.width.px]="State === 'maximized' ? null : PanelWidth"
+             [style.height.px]="State === 'maximized' ? null : PanelHeight">
+
+            <!-- Resize handles (only in expanded, not maximized) -->
+            @if (State === 'expanded') {
+                <div class="resize-handle resize-left"
+                     (mousedown)="OnResizeStart($event, 'left')"></div>
+                <div class="resize-handle resize-top"
+                     (mousedown)="OnResizeStart($event, 'top')"></div>
+                <div class="resize-handle resize-top-left"
+                     (mousedown)="OnResizeStart($event, 'top-left')"></div>
+            }
+
+            <!-- Panel Header -->
+            <div class="chat-overlay-header">
+                <div class="chat-overlay-title">
+                    <i class="fa-solid fa-robot"></i>
+                    <span>AI Assistant</span>
+                </div>
+                <div class="chat-overlay-header-actions">
+                    <button
+                        class="chat-overlay-header-btn"
+                        title="New conversation"
+                        (click)="StartNewConversation()">
+                        <i class="fa-solid fa-plus"></i>
+                    </button>
+                    @if (ConversationId) {
+                        <button
+                            class="chat-overlay-header-btn"
+                            title="Open in full chat workspace"
+                            (click)="OnOpenFullChatWorkspace()">
+                            <i class="fa-solid fa-up-right-from-square"></i>
+                        </button>
+                    }
+                    <button
+                        class="chat-overlay-header-btn"
+                        [title]="State === 'maximized' ? 'Restore size' : 'Maximize'"
+                        (click)="ToggleMaximize()">
+                        <i class="fa-solid" [class.fa-expand]="State !== 'maximized'" [class.fa-compress]="State === 'maximized'"></i>
+                    </button>
+                    <button
+                        class="chat-overlay-header-btn"
+                        title="Minimize"
+                        (click)="Collapse()">
+                        <i class="fa-solid fa-minus"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Chat Content — wraps conversation-chat-area -->
+            <div class="chat-overlay-body">
+                <mj-conversation-chat-area
+                    [environmentId]="EnvironmentId"
+                    [currentUser]="CurrentUser"
+                    [conversationId]="ConversationId"
+                    [conversation]="Conversation"
+                    [isNewConversation]="IsNewConversation"
+                    [pendingMessage]="PendingMessage"
+                    [pendingAttachments]="PendingAttachments"
+                    [overlayMode]="true"
+                    [showExportButton]="false"
+                    [showShareButton]="false"
+                    [showArtifactIndicator]="false"
+                    [appContext]="AppContext"
+                    [emptyStateGreeting]="EmptyStateGreeting"
+                    (conversationCreated)="OnConversationCreated($event)"
+                    (conversationRenamed)="OnConversationRenamed($event)"
+                    (pendingMessageConsumed)="OnPendingMessageConsumed()"
+                    (openEntityRecord)="OnOpenEntityRecord($event)"
+                    (navigationRequest)="OnNavigationRequest($event)"
+                    (taskClicked)="OnTaskClicked($event)"
+                ></mj-conversation-chat-area>
+            </div>
+        </div>
+    }
+}

@@ -48,6 +48,7 @@ export class MjSlidePanelComponent implements OnInit, OnDestroy {
     }
 
     @Output() Closed = new EventEmitter<void>();
+    @Output() WidthChanged = new EventEmitter<number>();
 
     public IsVisible = false;
     private _widthPx = 0;
@@ -134,5 +135,6 @@ export class MjSlidePanelComponent implements OnInit, OnDestroy {
         document.body.style.userSelect = '';
         document.removeEventListener('mousemove', this.boundOnResizeMove);
         document.removeEventListener('mouseup', this.boundOnResizeEnd);
+        this.WidthChanged.emit(this._widthPx);
     }
 }

@@ -151,18 +151,20 @@ export class FullTextSearchProvider {
 
     /**
      * Build SQL Server FREETEXT filter.
+     * Field names are wrapped in [brackets] to prevent SQL injection via crafted field names.
      */
     private buildSqlServerFilter(fields: string[], query: string): string {
-        const fieldList = fields.join(', ');
+        const fieldList = fields.map(f => `[${f.replace(/[\[\]]/g, '')}]`).join(', ');
         return `FREETEXT((${fieldList}), '${query}')`;
     }
 
     /**
      * Build PostgreSQL tsvector filter.
+     * Field names are wrapped in double quotes to prevent SQL injection via crafted field names.
      */
     private buildPostgresFilter(fields: string[], query: string): string {
         const tsvectorExpr = fields
-            .map(f => `COALESCE(${f}, '')`)
+            .map(f => `COALESCE("${f.replace(/"/g, '')}", '')`)
             .join(" || ' ' || ");
         return `to_tsvector('english', ${tsvectorExpr}) @@ plainto_tsquery('english', '${query}')`;
     }

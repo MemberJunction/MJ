@@ -8,11 +8,12 @@
 
 import { Component, ChangeDetectorRef, OnDestroy, AfterViewInit, inject } from '@angular/core';
 import { Subject } from 'rxjs';
-import { BaseEntity, Metadata, RunView } from '@memberjunction/core';
-import { ResourceData, MJVectorDatabaseEntity, MJVectorIndexEntity } from '@memberjunction/core-entities';
+import { Metadata, RunView } from '@memberjunction/core';
+import { ResourceData, MJVectorDatabaseEntity, MJVectorIndexEntity, MJEntityDocumentEntity, KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
-import { BaseResourceComponent } from '@memberjunction/ng-shared';
+import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 
 /** Configuration section definition */
 interface ConfigSection {
@@ -80,6 +81,7 @@ interface FTSEntityRecord {
 })
 export class KnowledgeConfigResourceComponent extends BaseResourceComponent implements AfterViewInit, OnDestroy {
     private cdr = inject(ChangeDetectorRef);
+    private navigationService = inject(NavigationService);
     private destroy$ = new Subject<void>();
 
     async GetResourceDisplayName(_data: ResourceData): Promise<string> {
@@ -97,6 +99,7 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
         { ID: 'fulltext', Label: 'Full-Text Indexes', Icon: 'fa-solid fa-text-width', Description: 'Configure SQL full-text search indexes' },
         { ID: 'embedding', Label: 'Embedding Models', Icon: 'fa-solid fa-microchip', Description: 'Select and configure embedding models' },
         { ID: 'thresholds', Label: 'Thresholds', Icon: 'fa-solid fa-sliders', Description: 'Set scoring thresholds for search and deduplication' },
+        { ID: 'scheduling', Label: 'Scheduling', Icon: 'fa-solid fa-clock', Description: 'Manage automated pipeline schedules' },
     ];
 
     public ActiveSection = 'pipeline';
@@ -132,6 +135,9 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
     public EmbeddingModels: EmbeddingModelRecord[] = [];
     public get HasEmbeddingModel(): boolean { return this.EmbeddingModels.length > 0; }
     public get EmbeddingModelName(): string { return this.EmbeddingModels.length > 0 ? this.EmbeddingModels[0].Name : ''; }
+
+    // --- Entity Documents (for persisting thresholds) ---
+    private entityDocuments: MJEntityDocumentEntity[] = [];
 
     // --- Setup Progress ---
     public get SetupStepsCompleted(): number {
@@ -169,6 +175,10 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
 
     ngAfterViewInit(): void {
         this.loadConfiguration();
+        this.navigationService.SetAgentContext(this, {
+            ActiveSection: this.ActiveSection,
+        });
+        this.NotifyLoadComplete();
     }
 
     ngOnDestroy(): void {
@@ -194,9 +204,13 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
         this.IsSaving = true;
         this.cdr.detectChanges();
         try {
-            await new Promise(resolve => setTimeout(resolve, 500));
+            await this.persistThresholdsToEntityDocuments();
             this.HasUnsavedChanges = false;
             MJNotificationService.Instance.CreateSimpleNotification('Configuration saved', 'success', 2000);
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            console.error('[KnowledgeConfig] Save failed:', msg);
+            MJNotificationService.Instance.CreateSimpleNotification(`Save failed: ${msg}`, 'error', 5000);
         } finally {
             this.IsSaving = false;
             this.cdr.detectChanges();
@@ -320,25 +334,21 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
         this.cdr.detectChanges();
 
         try {
-            const rv = new RunView();
-            const [vdbResult, modelsResult, indexResult] = await rv.RunViews([
-                {
-                    EntityName: 'MJ: Vector Databases',
-                    ResultType: 'simple'
-                },
-                {
-                    EntityName: 'MJ: AI Models',
-                    ResultType: 'simple'
-                },
-                {
-                    EntityName: 'MJ: Vector Indexes',
-                    ResultType: 'simple'
-                }
-            ]);
+            // Use KnowledgeHubMetadataEngine for cached vector DBs, indexes, and entity docs
+            const engine = KnowledgeHubMetadataEngine.Instance;
+            await engine.Config(false);
 
-            this.loadVectorDBProviders(vdbResult.Success ? vdbResult.Results : []);
+            this.loadVectorDBProvidersFromEngine(AIEngineBase.Instance.VectorDatabases);
+            this.loadVectorIndexesFromEngine(engine.VectorIndexes);
+            this.loadEntityDocumentsAndThresholds(engine.GetActiveEntityDocuments());
+
+            // AI Models come from a different domain — fetch via RunView
+            const rv = new RunView();
+            const modelsResult = await rv.RunView({
+                EntityName: 'MJ: AI Models',
+                ResultType: 'simple'
+            });
             this.loadEmbeddingModels(modelsResult.Success ? modelsResult.Results : []);
-            this.loadVectorIndexes(indexResult.Success ? indexResult.Results : []);
         } catch (error) {
             console.error('[KnowledgeConfig] Error loading configuration:', error);
         } finally {
@@ -400,24 +410,52 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
         }
     }
 
-    private loadVectorDBProviders(records: Record<string, unknown>[]): void {
-        this.VectorDBProviders = records.map(r => ({
-            ID: String(r['ID'] || ''),
-            Name: String(r['Name'] || ''),
-            ClassKey: String(r['ClassKey'] || ''),
-            Description: String(r['Description'] || '')
+    private loadVectorDBProvidersFromEngine(dbs: MJVectorDatabaseEntity[]): void {
+        this.VectorDBProviders = dbs.map(db => ({
+            ID: db.ID,
+            Name: db.Name,
+            ClassKey: db.ClassKey || '',
+            Description: db.Description || ''
         }));
     }
 
-    private loadVectorIndexes(records: Record<string, unknown>[]): void {
-        this.VectorIndexes = records.map(r => ({
-            ID: String(r['ID'] || ''),
-            Name: String(r['Name'] || 'Unnamed Index'),
-            EmbeddingModel: String(r['EmbeddingModel'] || ''),
-            EmbeddingModelID: String(r['EmbeddingModelID'] || ''),
-            VectorDatabase: String(r['VectorDatabase'] || ''),
-            VectorDatabaseID: String(r['VectorDatabaseID'] || '')
+    private loadVectorIndexesFromEngine(indexes: MJVectorIndexEntity[]): void {
+        this.VectorIndexes = indexes.map(vi => ({
+            ID: vi.ID,
+            Name: vi.Name || 'Unnamed Index',
+            EmbeddingModel: vi.EmbeddingModel || '',
+            EmbeddingModelID: vi.EmbeddingModelID || '',
+            VectorDatabase: vi.VectorDatabase || '',
+            VectorDatabaseID: vi.VectorDatabaseID || ''
         }));
+    }
+
+    /** Load entity documents and seed threshold settings from the first document's values */
+    private loadEntityDocumentsAndThresholds(docs: MJEntityDocumentEntity[]): void {
+        this.entityDocuments = docs;
+        if (docs.length > 0) {
+            // Use the first entity document's thresholds as the canonical values
+            const doc = docs[0];
+            this.ThresholdSettings.DuplicatePotential = doc.PotentialMatchThreshold;
+            this.ThresholdSettings.DuplicateAbsolute = doc.AbsoluteMatchThreshold;
+        }
+    }
+
+    /** Persist threshold settings back to all active entity documents */
+    private async persistThresholdsToEntityDocuments(): Promise<void> {
+        if (this.entityDocuments.length === 0) {
+            return; // No entity documents to update
+        }
+
+        for (const doc of this.entityDocuments) {
+            doc.PotentialMatchThreshold = this.ThresholdSettings.DuplicatePotential;
+            doc.AbsoluteMatchThreshold = this.ThresholdSettings.DuplicateAbsolute;
+            const saved = await doc.Save();
+            if (!saved) {
+                const msg = doc.LatestResult?.CompleteMessage || 'Unknown error';
+                throw new Error(`Failed to save entity document "${doc.Name}": ${msg}`);
+            }
+        }
     }
 
     private loadEmbeddingModels(records: Record<string, unknown>[]): void {

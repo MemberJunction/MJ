@@ -86,10 +86,36 @@ export interface ToolFilterOptions {
 }
 
 /**
+ * A custom tool provider that can register additional tools with the MCP server.
+ * Use this to extend the MJMCP server with application-specific tools.
+ */
+export interface CustomToolProvider {
+    /** Display name for this provider (used in log messages) */
+    name: string;
+    /**
+     * Register tools with the MCP server. Called once per authenticated connection.
+     * @param addTool - Function to register a tool (applies filtering and authorization)
+     * @param sessionContext - The authenticated session context with user info
+     * @param systemUser - The system user for server-level operations
+     */
+    registerTools: (addTool: AddToolFn, sessionContext: MCPSessionContext, systemUser: UserInfo) => void | Promise<void>;
+}
+
+/**
+ * Options for initializing the MCP server.
+ */
+export interface MCPServerOptions {
+    /** Tool filtering configuration to limit which tools are exposed */
+    filterOptions?: ToolFilterOptions;
+    /** Custom tool providers to register additional tools */
+    customToolProviders?: CustomToolProvider[];
+}
+
+/**
  * Session context stored for each authenticated MCP connection.
  * Extended to support both API key and OAuth authentication.
  */
-interface MCPSessionContext {
+export interface MCPSessionContext {
     /** The raw API key used for authentication (present when authMethod='apiKey') */
     apiKey?: string;
     /** The database ID of the API key record (present when authMethod='apiKey') */
@@ -126,6 +152,17 @@ const registeredToolNames: string[] = [];
 
 /** Currently active filter options for tool registration */
 let activeFilterOptions: ToolFilterOptions = {};
+
+/** Custom tool providers registered via MCPServerOptions */
+let activeCustomToolProviders: CustomToolProvider[] = [];
+
+/**
+ * Type guard to distinguish ToolFilterOptions from MCPServerOptions.
+ * ToolFilterOptions has includePatterns/excludePatterns, while MCPServerOptions has filterOptions/customToolProviders.
+ */
+function isToolFilterOptions(obj: MCPServerOptions | ToolFilterOptions): obj is ToolFilterOptions {
+    return 'includePatterns' in obj || 'excludePatterns' in obj;
+}
 
 /** Configuration loaded from initConfig() - populated in initializeServer()
  * Uses definite assignment assertion (!) because it's assigned before use in initializeServer() */
@@ -376,7 +413,7 @@ async function authenticateRequestWithResult(
 /**
  * Scope information for a tool call
  */
-interface ToolScopeInfo {
+export interface ToolScopeInfo {
     /** The scope path (e.g., 'action:execute', 'entity:read') */
     scopePath: string;
     /** The specific resource being accessed (e.g., action name, entity name) */
@@ -649,7 +686,7 @@ function shouldIncludeTool(toolName: string, filterOptions: ToolFilterOptions): 
  * truncateText("Hello World", 5) // { value: "Hel...[4 chars]...ld", truncated: true }
  * truncateText("Hi", 100) // { value: "Hi", truncated: false }
  */
-function truncateText(text: string | null | undefined, maxChars: number): { value: string; truncated: boolean } {
+export function truncateText(text: string | null | undefined, maxChars: number): { value: string; truncated: boolean } {
     if (!text) {
         return { value: '', truncated: false };
     }
@@ -677,7 +714,7 @@ function truncateText(text: string | null | undefined, maxChars: number): { valu
 /**
  * Helper type for tool configuration used during registration
  */
-interface ToolConfig {
+export interface ToolConfig {
     name: string;
     description: string;
     parameters: z.ZodObject<z.ZodRawShape>;
@@ -690,6 +727,11 @@ interface ToolConfig {
      */
     scopeInfo?: ToolScopeInfo | ((props: Record<string, unknown>) => ToolScopeInfo);
 }
+
+/**
+ * Function type for registering a tool with filtering and authorization support.
+ */
+export type AddToolFn = (config: ToolConfig) => void;
 
 /**
  * Registers all tools with the MCP server for a specific authenticated session.
@@ -801,6 +843,12 @@ async function registerAllTools(
     loadQueryTools(addToolWithFilter, sessionContext);
     await loadPromptTools(addToolWithFilter, systemUser, sessionContext);
     loadCommunicationTools(addToolWithFilter, sessionContext);
+
+    // Register custom tool providers
+    for (const provider of activeCustomToolProviders) {
+        console.log(`[MCP] Registering custom tools from provider: ${provider.name}`);
+        await provider.registerTools(addToolWithFilter, sessionContext, systemUser);
+    }
 }
 
 /*******************************************************************************
@@ -820,7 +868,7 @@ async function registerAllTools(
  * The server uses API key authentication. Each authenticated request gets a session
  * with the user context from the API key, which is used for all tool executions.
  *
- * @param filterOptions - Optional tool filtering configuration to limit which tools are exposed
+ * @param optionsOrFilterOptions - Either MCPServerOptions or ToolFilterOptions (backward compatible)
  * @throws Error if MCP server is disabled in configuration or database connection fails
  *
  * @example
@@ -833,15 +881,27 @@ async function registerAllTools(
  *   includePatterns: ['Get_*', 'Run_Agent'],
  *   excludePatterns: ['*_AuditLog_*']
  * });
+ *
+ * @example
+ * // Start with custom tool providers
+ * await initializeServer({
+ *   customToolProviders: [myCustomProvider]
+ * });
  */
-export async function initializeServer(filterOptions: ToolFilterOptions = {}): Promise<void> {
+export async function initializeServer(optionsOrFilterOptions: MCPServerOptions | ToolFilterOptions = {}): Promise<void> {
     try {
+        // Support both MCPServerOptions and legacy ToolFilterOptions parameter
+        const options: MCPServerOptions = isToolFilterOptions(optionsOrFilterOptions)
+            ? { filterOptions: optionsOrFilterOptions }
+            : optionsOrFilterOptions;
+
         // Initialize configuration (loads .env and mj.config.cjs)
         _config = await initConfig();
         mcpServerPort = _config.mcpServerSettings?.port || 3100;
 
-        // Store filter options for use by tool registration
-        activeFilterOptions = filterOptions;
+        // Store filter options and custom providers for use by tool registration
+        activeFilterOptions = options.filterOptions || {};
+        activeCustomToolProviders = options.customToolProviders || [];
 
         if (!_config.mcpServerSettings?.enableMCPServer) {
             console.log("MCP Server is disabled in the configuration.");
@@ -1390,8 +1450,6 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
 /*******************************************************************************
  * TOOL LOADERS
  ******************************************************************************/
-
-type AddToolFn = (config: ToolConfig) => void;
 
 /**
  * Loads and registers action tools based on configuration.

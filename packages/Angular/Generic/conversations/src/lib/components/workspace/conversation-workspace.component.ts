@@ -30,10 +30,9 @@ import {
   ChangeDetectorRef,
   HostListener
 } from '@angular/core';
-import { MJConversationEntity, MJArtifactEntity, MJTaskEntity, ArtifactMetadataEngine, MJUserSettingEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { MJConversationEntity, MJArtifactEntity, MJTaskEntity, ArtifactMetadataEngine, MJUserSettingEntity, UserInfoEngine, ConversationEngine } from '@memberjunction/core-entities';
 import { UserInfo, CompositeKey, KeyValuePair, Metadata } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { ConversationDataService } from '../../services/conversation-data.service';
 import { ArtifactStateService } from '../../services/artifact-state.service';
 import { CollectionStateService } from '../../services/collection-state.service';
 import { ArtifactPermissionService } from '../../services/artifact-permission.service';
@@ -193,8 +192,9 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   public pendingArtifactId: string | null = null;
   public pendingArtifactVersionNumber: number | null = null;
 
+  private engine = ConversationEngine.Instance;
+
   constructor(
-    public conversationData: ConversationDataService,
     public artifactState: ArtifactStateService,
     public collectionState: CollectionStateService,
     private artifactPermissionService: ArtifactPermissionService,
@@ -219,7 +219,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   setActiveConversation(id: string | null): void {
     console.log('🎯 Setting active conversation:', id);
     this.selectedConversationId = id;
-    this.selectedConversation = id ? this.conversationData.getConversationById(id) : null;
+    this.selectedConversation = id ? (this.engine.GetConversation(id) ?? null) : null;
     // Clear unsaved state when switching to an existing conversation
     if (id) {
       this.isNewUnsavedConversation = false;
@@ -296,7 +296,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
       this.selectedConversationId = event.conversation.ID;
       this.selectedConversation = event.conversation;
       this.isNewUnsavedConversation = false;
-      // The conversation is already added to conversationData by the chat area
+      // The conversation is already added to ConversationEngine by the chat area
     } catch (error) {
       console.error('onConversationCreated ERROR:', error);
     }

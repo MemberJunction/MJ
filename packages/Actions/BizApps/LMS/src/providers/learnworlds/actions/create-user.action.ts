@@ -79,6 +79,10 @@ export class CreateUserAction extends LearnWorldsBaseAction {
     // Create user
     const newUser = await this.makeLearnWorldsRequest<LWCreateUserResponse>('users', 'POST', userData, contextUser);
 
+    if (!newUser.id) {
+      throw new Error('User creation response missing expected user ID');
+    }
+
     // Format user details
     const userDetails = this.buildUserDetails(newUser);
 

@@ -18,6 +18,7 @@ import { FileStorageModule } from '@memberjunction/ng-file-storage';
 import { QueryViewerModule } from '@memberjunction/ng-query-viewer';
 import { BaseFormsModule } from '@memberjunction/ng-base-forms';
 import { RecordChangesModule } from '@memberjunction/ng-record-changes';
+// RecordTagsModule removed — now imported by @memberjunction/ng-base-forms
 import { EntityFormDialogModule } from '@memberjunction/ng-entity-form-dialog';
 import { RecordSelectorModule } from '@memberjunction/ng-record-selector';
 import { ResourcePermissionsModule } from '@memberjunction/ng-resource-permissions';
@@ -33,7 +34,6 @@ import { AITestHarnessModule } from '@memberjunction/ng-ai-test-harness';
 import { ArtifactsModule } from '@memberjunction/ng-artifacts';
 import { MemberJunctionSharedModule } from '@memberjunction/ng-shared';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
-import { FormToolbarComponent } from './lib/generic/form-toolbar';
 import { ResourceContainerComponent } from './lib/generic/resource-container-component';
 import { DashboardPreferencesDialogComponent } from './lib/dashboard-preferences-dialog/dashboard-preferences-dialog.component';
 import { DashboardResource } from './lib/resource-wrappers/dashboard-resource.component';
@@ -63,7 +63,6 @@ import { OAuthCallbackComponent } from './lib/oauth/oauth-callback.component';
 
 @NgModule({
   declarations: [
-    FormToolbarComponent,
     OAuthCallbackComponent,
     ResourceContainerComponent,
     DashboardResource,
@@ -126,7 +125,6 @@ import { OAuthCallbackComponent } from './lib/oauth/oauth-callback.component';
     MJWindowTitlebarComponent
   ],
   exports: [
-    FormToolbarComponent,
     ResourceContainerComponent,
     DashboardResource,
     EntityRecordResource,

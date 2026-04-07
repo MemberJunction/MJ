@@ -142,16 +142,20 @@ Options are passed via the `Options` property on `PotentialDuplicateRequest`, or
 | `DuplicateRunID` | `string` | -- | Resume an existing duplicate run (batch mode only) |
 | `KeywordSearchWeight` | `number` | `0.3` | Weight for keyword search in hybrid mode (0.0 = vector only, 1.0 = keyword only). Vector weight is `1.0 - KeywordSearchWeight`. |
 | `FusionMethod` | `string` | `'rrf'` | Fusion method for hybrid search. Currently supports `'rrf'` (Reciprocal Rank Fusion). |
+| `PotentialMatchThreshold` | `number` | -- | Override the EntityDocument's PotentialMatchThreshold for this run |
+| `AbsoluteMatchThreshold` | `number` | -- | Override the EntityDocument's AbsoluteMatchThreshold for this run |
 | `OnProgress` | `(progress: DuplicateDetectionProgress) => void` | -- | Callback for real-time progress reporting |
 
-### Thresholds (Configured on Entity Document)
+### Thresholds
 
-Thresholds are not part of `DuplicateDetectionOptions` -- they are configured on the `EntityDocument` record itself:
+Thresholds can be configured at two levels -- on the `EntityDocument` record (default) or overridden per-run via `DuplicateDetectionOptions`. When threshold overrides are provided in the options, they take precedence over the EntityDocument values.
 
 | Threshold | Purpose |
 |---|---|
 | `PotentialMatchThreshold` | Minimum similarity score to report a candidate as a potential duplicate |
 | `AbsoluteMatchThreshold` | Minimum similarity score to trigger automatic record merge |
+
+A server hook normalizes `1.0` thresholds to sensible defaults (`0.70` for potential, `0.95` for absolute) to prevent degenerate behavior when thresholds are left at the maximum.
 
 ---
 
@@ -290,6 +294,15 @@ interface ScoredCandidate {
 
 ---
 
+## Inverse Match Deduplication
+
+The detector maintains a `_seenPairs` set across the entire run to suppress inverse duplicates. If record A is identified as a duplicate of record B (A->B), the reverse match (B->A) is automatically suppressed. Pair keys use canonical ordering (`smallerID::largerID`) for consistent deduplication regardless of query direction.
+
+## RecordID Format and Metadata
+
+- **RecordID and MatchRecordID** are stored in MJ URL segment format (e.g., `ID|uuid`), making them compatible with `CompositeKey` for entities with composite primary keys.
+- **RecordMetadata** is stored on both `DuplicateRunDetail` and `DuplicateRunDetailMatch` entities, capturing the vector database metadata snapshot at detection time. This preserves the context used for matching even if the source record changes later.
+
 ## Database Entities
 
 The package reads from and writes to these MJ entities:
@@ -299,8 +312,8 @@ The package reads from and writes to these MJ entities:
 | `MJ: Entity Documents` | Configuration: template, AI model, vector DB, thresholds |
 | `MJ: Lists` / `MJ: List Details` | Source records to check for duplicates |
 | `MJ: Duplicate Runs` | Tracks each detection run (status, timing) |
-| `MJ: Duplicate Run Details` | Per-record tracking within a run |
-| `MJ: Duplicate Run Detail Matches` | Individual match results with probability scores |
+| `MJ: Duplicate Run Details` | Per-record tracking within a run; includes `RecordMetadata` (vector DB metadata snapshot) |
+| `MJ: Duplicate Run Detail Matches` | Individual match results with probability scores; includes `RecordMetadata` for the matched record |
 
 ---
 

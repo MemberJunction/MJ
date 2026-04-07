@@ -16,6 +16,7 @@ import { PassThrough, Transform, TransformCallback } from 'node:stream';
 import { AIEngine } from '@memberjunction/aiengine';
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { TemplateRenderResult } from '@memberjunction/templates-base-types';
+import { KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
 
 /**
  * Class that specializes in vectorizing entities using embedding models and upserting them into Vector Databases 
@@ -37,6 +38,7 @@ export class EntityVectorSyncer extends VectorBase {
     super.CurrentUser;
     await EntityDocumentCache.Instance.Refresh(forceRefresh, contextUser);
     await AIEngine.Instance.Config(forceRefresh, contextUser);
+    await KnowledgeHubMetadataEngine.Instance.Config(forceRefresh, contextUser);
     await TemplateEngineServer.Instance.Config(forceRefresh, contextUser);
   }
 
@@ -50,7 +52,7 @@ export class EntityVectorSyncer extends VectorBase {
     await TemplateEngineServer.Instance.Config(false, contextUser);
 
     const entityDocument: MJEntityDocumentEntity = await this.GetEntityDocument(params.entityDocumentID);
-    const vectorIndexEntity: MJVectorIndexEntity = await this.GetOrCreateVectorIndex(entityDocument);
+    const vectorIndexEntity: MJVectorIndexEntity = this.GetVectorIndexForEntityDocument(entityDocument);
     const obj: VectorEmeddingData = await this.GetVectorDatabaseAndEmbeddingClassByEntityDocumentID(params.entityDocumentID);
 
     // Parse configuration for pipeline tuning
@@ -697,37 +699,29 @@ export class EntityVectorSyncer extends VectorBase {
     return entityDocuments;
   }
 
-  private async GetOrCreateVectorIndex(entityDocument: MJEntityDocumentEntity): Promise<MJVectorIndexEntity> {
-    let vectorIndexEntity: MJVectorIndexEntity = await super.RunViewForSingleValue(
-      'MJ: Vector Indexes',
-      `VectorDatabaseID = '${entityDocument.VectorDatabaseID}' AND EmbeddingModelID = '${entityDocument.AIModelID}'`
-    );
-
-    if (vectorIndexEntity) {
-      return vectorIndexEntity;
+  /**
+   * Resolves the VectorIndex for the given EntityDocument by looking up its VectorIndexID
+   * using the cached KnowledgeHubMetadataEngine. If VectorIndexID is not set on the
+   * EntityDocument, throws a descriptive error instructing the user to configure it.
+   */
+  private GetVectorIndexForEntityDocument(entityDocument: MJEntityDocumentEntity): MJVectorIndexEntity {
+    if (!entityDocument.VectorIndexID) {
+      throw new Error(
+        `Entity Document "${entityDocument.Name}" (ID: ${entityDocument.ID}) does not have a VectorIndexID configured. ` +
+        `Please edit the Entity Document and select a Vector Index before running vectorization. ` +
+        `You can create a Vector Index in the Knowledge Hub > Vector Indexes section.`
+      );
     }
 
-    LogStatus(`No Vector Index found for entityDocument ${entityDocument.ID}, creating one`);
-    try {
-      vectorIndexEntity = await super.Metadata.GetEntityObject<MJVectorIndexEntity>('MJ: Vector Indexes');
-      vectorIndexEntity.NewRecord();
-      vectorIndexEntity.VectorDatabaseID = entityDocument.VectorDatabaseID;
-      vectorIndexEntity.EmbeddingModelID = entityDocument.AIModelID;
-      vectorIndexEntity.Name = `Vector Index for entityDocument ${entityDocument.EntityID}`;
-      vectorIndexEntity.Description = `Vector Index that uses the Vector database ${entityDocument.VectorDatabaseID} and ${entityDocument.AIModelID} as the embedding model`;
-      const saveResult = await super.SaveEntity(vectorIndexEntity);
-      if (saveResult) {
-        LogStatus(`Successfully created new Vector Index Entity`);
-        return vectorIndexEntity;
-      } else {
-        LogError('Error saving Vector Index Entity');
-        return null;
-      }
-    } catch (err) {
-      console.error(JSON.stringify(err));
-      LogError(err);
-      return null;
+    const vectorIndex = KnowledgeHubMetadataEngine.Instance.GetVectorIndexById(entityDocument.VectorIndexID);
+    if (!vectorIndex) {
+      throw new Error(
+        `Vector Index with ID "${entityDocument.VectorIndexID}" not found for Entity Document "${entityDocument.Name}". ` +
+        `The configured VectorIndexID may refer to a deleted index. Please update the Entity Document's Vector Index setting.`
+      );
     }
+
+    return vectorIndex;
   }
 
   protected async CreateTemplateForEntityDocument(entityDocument: MJEntityDocumentEntity): Promise<MJTemplateEntity> {
@@ -903,10 +897,9 @@ export class EntityVectorSyncer extends VectorBase {
     const rv: RunView = super.RunView;
 
     const vectorIndexID: string = String(embeddingData.VectorIndexID);
-    const vectorIndex: MJVectorIndexEntity = await md.GetEntityObject<MJVectorIndexEntity>('MJ: Vector Indexes', contextUser);
-    const loadResult = await vectorIndex.Load(vectorIndexID);
-    if (!loadResult) {
-      LogError(`Vector Index with ID ${vectorIndexID} not found`);
+    const vectorIndex = KnowledgeHubMetadataEngine.Instance.GetVectorIndexById(vectorIndexID);
+    if (!vectorIndex) {
+      LogError(`Vector Index with ID ${vectorIndexID} not found in KnowledgeHubMetadataEngine cache`);
       return;
     }
 

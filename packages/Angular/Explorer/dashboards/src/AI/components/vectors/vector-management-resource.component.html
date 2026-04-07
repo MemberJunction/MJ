@@ -94,6 +94,12 @@
                         }
                       </button>
                       <button
+                        class="schedule-btn"
+                        (click)="OpenScheduleSyncDialog(row.EntityDocumentID)"
+                        title="Schedule recurring sync">
+                        <i class="fa-regular fa-clock"></i>
+                      </button>
+                      <button
                         class="edit-btn"
                         (click)="OpenEditPanel(row.EntityDocumentID)"
                         title="Edit entity document">
@@ -235,6 +241,59 @@
                   <i class="fa-solid fa-trash-can"></i> Delete
                 </button>
                 <button class="suggest-close-action" (click)="CloseEditPanel()">
+                  Cancel
+                </button>
+              }
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- Schedule Sync Dialog -->
+  @if (ShowScheduleSyncDialog) {
+    <div class="slide-panel-overlay" (click)="CloseScheduleSyncDialog()">
+      <div class="schedule-dialog" (click)="$event.stopPropagation()">
+        <div class="suggest-dialog-header">
+          <h3 class="suggest-dialog-title">
+            <i class="fa-regular fa-clock"></i>
+            Schedule Vector Sync
+          </h3>
+          <button class="suggest-close-btn" (click)="CloseScheduleSyncDialog()">
+            <i class="fa-solid fa-times"></i>
+          </button>
+        </div>
+        <div class="suggest-dialog-body">
+          <div class="suggest-form">
+            <div class="suggest-field">
+              <label class="suggest-label">Entity Document</label>
+              <span class="edit-readonly-value">{{ ScheduleSyncDocName }}</span>
+            </div>
+            <div class="suggest-field">
+              <label class="suggest-label">Action</label>
+              <span class="edit-readonly-value">__VectorizeEntity</span>
+            </div>
+            <div class="suggest-field">
+              <label class="suggest-label">Cron Expression</label>
+              <input class="suggest-input" type="text" [(ngModel)]="ScheduleSyncCron" placeholder="0 2 * * *" />
+              <div class="schedule-cron-preview">
+                <i class="fa-solid fa-info-circle"></i>
+                {{ GetScheduleCronPreview(ScheduleSyncCron) }}
+              </div>
+            </div>
+            <div class="suggest-field schedule-toggle-row">
+              <label class="suggest-label">Enabled</label>
+              <input type="checkbox" class="mj-checkbox" [(ngModel)]="ScheduleSyncEnabled" />
+            </div>
+            <div class="result-actions" style="margin-top: 1rem">
+              @if (ScheduleSyncSaving) {
+                <mj-loading text="Saving..." size="small"></mj-loading>
+              } @else {
+                <button class="suggest-submit-btn" (click)="SaveScheduleSync()">
+                  <i class="fa-solid fa-check"></i> Create Schedule
+                </button>
+                <button class="suggest-close-action" (click)="CloseScheduleSyncDialog()">
                   Cancel
                 </button>
               }

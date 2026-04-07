@@ -1,5 +1,6 @@
 import { CompositeKey, Metadata, UserInfo } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
+import { TemplateEngineServer } from '@memberjunction/templates';
 
 /**
  * This is an abstract base class, use the EntityDocumentTemplateParser class or a sub-class thereof.
@@ -37,11 +38,22 @@ export abstract class EntityDocumentTemplateParserBase {
       throw new Error(`Entity with ID ${EntityID} not found.`);
     }
 
+    // If template uses Nunjucks {{ }} syntax, pre-render with the MJ TemplateEngine first.
+    // This handles conditionals, filters, and expressions that ${} syntax can't express.
+    let processedTemplate = Template;
+    if (/\{\{.*\}\}/.test(Template)) {
+      await TemplateEngineServer.Instance.Config(false, ContextUser);
+      const renderResult = await TemplateEngineServer.Instance.RenderTemplateSimple(Template, EntityRecord);
+      if (renderResult.Success && renderResult.Output) {
+        processedTemplate = renderResult.Output;
+      }
+    }
+
     let compositeKey: CompositeKey = new CompositeKey();
     compositeKey.LoadFromEntityInfoAndRecord(entityInfo, EntityRecord);
 
     const regex = /\$\{([^{}]+)\}/g;
-    const matches = Template.matchAll(regex);
+    const matches = processedTemplate.matchAll(regex);
 
     // Convert matches to an array to handle them asynchronously
     const replacements = Array.from(matches).map(async (match) => {
@@ -64,7 +76,7 @@ export abstract class EntityDocumentTemplateParserBase {
     const resolvedReplacements = await Promise.all(replacements);
 
     // Replace each placeholder in the template with its resolved value
-    let resolvedTemplate = Template;
+    let resolvedTemplate = processedTemplate;
     resolvedReplacements.forEach((replacement) => {
       resolvedTemplate = resolvedTemplate.replace(replacement.old, replacement.new);
     });
