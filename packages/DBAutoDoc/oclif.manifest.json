@@ -1,0 +1,578 @@
+{
+  "commands": {
+    "analyze-integrations": {
+      "aliases": [],
+      "args": {},
+      "description": "Analyze integration schemas to discover missing PKs, FKs, and descriptions. Seeds known constraints as immutable ground truth, discovers only gaps.",
+      "examples": [
+        "$ db-auto-doc analyze-integrations --config ./config.json",
+        "$ db-auto-doc analyze-integrations --config ./config.json --platform hubspot",
+        "$ db-auto-doc analyze-integrations --config ./config.json --platform hubspot --dry-run",
+        "$ db-auto-doc analyze-integrations --metadata-dir ./metadata/integrations --config ./config.json"
+      ],
+      "flags": {
+        "config": {
+          "char": "c",
+          "description": "Path to DBAutoDoc config file (DB connection + AI settings)",
+          "name": "config",
+          "default": "./config.json",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "platform": {
+          "char": "p",
+          "description": "Specific platform to analyze (e.g., hubspot, mailchimp). Omit for all platforms.",
+          "name": "platform",
+          "required": false,
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "metadata-dir": {
+          "char": "m",
+          "description": "Path to integration metadata directory",
+          "name": "metadata-dir",
+          "default": "./metadata/integrations",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "dry-run": {
+          "description": "Show gaps that would be filled without running discovery or writing results",
+          "name": "dry-run",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "min-confidence": {
+          "description": "Minimum confidence (0-100) for discovered PKs/FKs to be written back",
+          "name": "min-confidence",
+          "default": 80,
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "resume": {
+          "char": "r",
+          "description": "Resume from existing DBAutoDoc state file",
+          "name": "resume",
+          "required": false,
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        }
+      },
+      "hasDynamicHelp": false,
+      "hiddenAliases": [],
+      "id": "analyze-integrations",
+      "pluginAlias": "@memberjunction/db-auto-doc",
+      "pluginName": "@memberjunction/db-auto-doc",
+      "pluginType": "core",
+      "strict": true,
+      "enableJsonFlag": false,
+      "isESM": true,
+      "relativePath": [
+        "dist",
+        "commands",
+        "analyze-integrations.js"
+      ]
+    },
+    "analyze": {
+      "aliases": [],
+      "args": {},
+      "description": "Analyze database and generate documentation",
+      "examples": [
+        "$ db-auto-doc analyze",
+        "$ db-auto-doc analyze --config ./my-config.json",
+        "$ db-auto-doc analyze --resume ./output/run-6/run-1/state.json",
+        "$ db-auto-doc analyze --resume ./output/run-6/run-1/state.json --max-iterations 3",
+        "$ db-auto-doc analyze --resume ./output/run-6/run-1/state.json --reanalyze-below 0.7",
+        "$ db-auto-doc analyze --resume ./output/run-6/run-1/state.json --pruning-only"
+      ],
+      "flags": {
+        "resume": {
+          "char": "r",
+          "description": "Resume from an existing state file. Skips schema introspection and discovery if state already has data.",
+          "name": "resume",
+          "required": false,
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "config": {
+          "char": "c",
+          "description": "Path to config file",
+          "name": "config",
+          "default": "./config.json",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "max-iterations": {
+          "char": "n",
+          "description": "Override max iterations from config for this run",
+          "name": "max-iterations",
+          "required": false,
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "reanalyze-below": {
+          "description": "Only re-analyze tables with confidence below this threshold (0-1). Use with --resume to refine low-confidence results.",
+          "name": "reanalyze-below",
+          "required": false,
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "pruning-only": {
+          "description": "Skip discovery and analysis iterations. Only run the FK pruning pass on an existing state file. Requires --resume.",
+          "name": "pruning-only",
+          "allowNo": false,
+          "type": "boolean"
+        }
+      },
+      "hasDynamicHelp": false,
+      "hiddenAliases": [],
+      "id": "analyze",
+      "pluginAlias": "@memberjunction/db-auto-doc",
+      "pluginName": "@memberjunction/db-auto-doc",
+      "pluginType": "core",
+      "strict": true,
+      "enableJsonFlag": false,
+      "isESM": true,
+      "relativePath": [
+        "dist",
+        "commands",
+        "analyze.js"
+      ]
+    },
+    "export-sample-queries": {
+      "aliases": [],
+      "args": {},
+      "description": "Export sample queries to MemberJunction metadata format",
+      "examples": [
+        "$ db-auto-doc export-sample-queries --from-state ./output/run-1/state.json --output ./metadata/queries/.queries.json",
+        "$ db-auto-doc export-sample-queries --from-state ./state.json --output ./metadata/queries/.queries.json --separate-sql-files",
+        "$ db-auto-doc export-sample-queries --from-state ./state.json --output ./queries/.queries.json --category \"Database Documentation\"",
+        "$ db-auto-doc export-sample-queries --from-state ./state.json --output ./queries/.queries.json --status Pending --min-confidence 0.8"
+      ],
+      "flags": {
+        "from-state": {
+          "char": "s",
+          "description": "Path to state.json file containing sample queries",
+          "name": "from-state",
+          "required": true,
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "output": {
+          "char": "o",
+          "description": "Output path for the .queries.json metadata file",
+          "name": "output",
+          "required": true,
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "separate-sql-files": {
+          "description": "Write SQL to separate files and use @file: references",
+          "name": "separate-sql-files",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "sql-dir": {
+          "description": "Directory for SQL files when using --separate-sql-files (relative to output file)",
+          "name": "sql-dir",
+          "default": "SQL",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "category": {
+          "description": "Category name for @lookup reference (e.g., \"Database Documentation\")",
+          "name": "category",
+          "required": false,
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "status": {
+          "description": "Status to assign to exported queries",
+          "name": "status",
+          "default": "Pending",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "options": [
+            "Approved",
+            "Pending",
+            "Rejected",
+            "Expired"
+          ],
+          "type": "option"
+        },
+        "min-confidence": {
+          "description": "Minimum confidence threshold to export (0-1)",
+          "name": "min-confidence",
+          "default": "0",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "validated-only": {
+          "description": "Only export queries that were successfully validated",
+          "name": "validated-only",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "append": {
+          "description": "Append to existing metadata file instead of overwriting",
+          "name": "append",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "include-primary-key": {
+          "description": "Include primaryKey and sync fields (for updating existing records)",
+          "name": "include-primary-key",
+          "allowNo": false,
+          "type": "boolean"
+        }
+      },
+      "hasDynamicHelp": false,
+      "hiddenAliases": [],
+      "id": "export-sample-queries",
+      "pluginAlias": "@memberjunction/db-auto-doc",
+      "pluginName": "@memberjunction/db-auto-doc",
+      "pluginType": "core",
+      "strict": true,
+      "enableJsonFlag": false,
+      "isESM": true,
+      "relativePath": [
+        "dist",
+        "commands",
+        "export-sample-queries.js"
+      ]
+    },
+    "export": {
+      "aliases": [],
+      "args": {},
+      "description": "Export documentation in multiple formats (SQL, Markdown, HTML, CSV, Mermaid)",
+      "examples": [
+        "$ db-auto-doc export --state-file=./db-doc-state.json",
+        "$ db-auto-doc export --sql",
+        "$ db-auto-doc export --markdown",
+        "$ db-auto-doc export --html",
+        "$ db-auto-doc export --csv",
+        "$ db-auto-doc export --mermaid",
+        "$ db-auto-doc export --sql --markdown --html --csv --mermaid --apply"
+      ],
+      "flags": {
+        "state-file": {
+          "char": "s",
+          "description": "Path to state JSON file",
+          "name": "state-file",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "output-dir": {
+          "char": "o",
+          "description": "Output directory for generated files",
+          "name": "output-dir",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "sql": {
+          "description": "Generate SQL script",
+          "name": "sql",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "markdown": {
+          "description": "Generate Markdown documentation",
+          "name": "markdown",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "html": {
+          "description": "Generate interactive HTML documentation",
+          "name": "html",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "csv": {
+          "description": "Generate CSV exports (tables and columns)",
+          "name": "csv",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "mermaid": {
+          "description": "Generate Mermaid ERD diagram files",
+          "name": "mermaid",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "report": {
+          "description": "Generate analysis report",
+          "name": "report",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "schema-info": {
+          "description": "Generate additionalSchemaInfo.json for CodeGen soft FK/PK support",
+          "name": "schema-info",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "schema-info-discovered-only": {
+          "description": "Only include AI-discovered keys in schema info (exclude hard DB constraints)",
+          "name": "schema-info-discovered-only",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "schema-info-confirmed-only": {
+          "description": "Only include confirmed candidates in schema info",
+          "name": "schema-info-confirmed-only",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "apply": {
+          "description": "Apply SQL to database",
+          "name": "apply",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "approved-only": {
+          "description": "Only export approved items",
+          "name": "approved-only",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "confidence-threshold": {
+          "description": "Minimum confidence threshold",
+          "name": "confidence-threshold",
+          "default": "0",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        }
+      },
+      "hasDynamicHelp": false,
+      "hiddenAliases": [],
+      "id": "export",
+      "pluginAlias": "@memberjunction/db-auto-doc",
+      "pluginName": "@memberjunction/db-auto-doc",
+      "pluginType": "core",
+      "strict": true,
+      "enableJsonFlag": false,
+      "isESM": true,
+      "relativePath": [
+        "dist",
+        "commands",
+        "export.js"
+      ]
+    },
+    "generate-queries": {
+      "aliases": [],
+      "args": {},
+      "description": "Generate sample SQL queries from existing analysis state",
+      "examples": [
+        "$ db-auto-doc generate-queries --from-state ./output/run-1/state.json",
+        "$ db-auto-doc generate-queries --from-state ./output/run-1/state.json --queries-per-table 10",
+        "$ db-auto-doc generate-queries --from-state ./output/run-1/state.json --max-execution-time 60000"
+      ],
+      "flags": {
+        "from-state": {
+          "description": "Path to existing state.json file from previous analysis",
+          "name": "from-state",
+          "required": true,
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "config": {
+          "char": "c",
+          "description": "Path to config file (for database connection and AI settings)",
+          "name": "config",
+          "default": "./config.json",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "queries-per-table": {
+          "description": "Number of queries to generate per table",
+          "name": "queries-per-table",
+          "required": false,
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "max-execution-time": {
+          "description": "Maximum execution time for query validation (ms)",
+          "name": "max-execution-time",
+          "required": false,
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        }
+      },
+      "hasDynamicHelp": false,
+      "hiddenAliases": [],
+      "id": "generate-queries",
+      "pluginAlias": "@memberjunction/db-auto-doc",
+      "pluginName": "@memberjunction/db-auto-doc",
+      "pluginType": "core",
+      "strict": true,
+      "enableJsonFlag": false,
+      "isESM": true,
+      "relativePath": [
+        "dist",
+        "commands",
+        "generate-queries.js"
+      ]
+    },
+    "init": {
+      "aliases": [],
+      "args": {},
+      "description": "Initialize a new DBAutoDoc project",
+      "examples": [
+        "$ db-auto-doc init"
+      ],
+      "flags": {},
+      "hasDynamicHelp": false,
+      "hiddenAliases": [],
+      "id": "init",
+      "pluginAlias": "@memberjunction/db-auto-doc",
+      "pluginName": "@memberjunction/db-auto-doc",
+      "pluginType": "core",
+      "strict": true,
+      "enableJsonFlag": false,
+      "isESM": true,
+      "relativePath": [
+        "dist",
+        "commands",
+        "init.js"
+      ]
+    },
+    "prune": {
+      "aliases": [],
+      "args": {},
+      "description": "Run PK/FK pruning on an existing state file without re-running analysis",
+      "examples": [
+        "$ db-auto-doc prune --state ./output/run-1/state.json --config ./config.json",
+        "$ db-auto-doc prune --state ./output/run-1/state.json --config ./config.json --pk-only",
+        "$ db-auto-doc prune --state ./output/run-1/state.json --config ./config.json --fk-only",
+        "$ db-auto-doc prune --state ./output/run-1/state.json --config ./config.json --silent"
+      ],
+      "flags": {
+        "state": {
+          "char": "s",
+          "description": "Path to existing state.json file",
+          "name": "state",
+          "required": true,
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "config": {
+          "char": "c",
+          "description": "Path to config file",
+          "name": "config",
+          "default": "./config.json",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "silent": {
+          "description": "Skip interactive confirmation, apply all pruning proposals automatically",
+          "name": "silent",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "pk-only": {
+          "description": "Only prune primary keys",
+          "name": "pk-only",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "fk-only": {
+          "description": "Only prune foreign keys",
+          "name": "fk-only",
+          "allowNo": false,
+          "type": "boolean"
+        }
+      },
+      "hasDynamicHelp": false,
+      "hiddenAliases": [],
+      "id": "prune",
+      "pluginAlias": "@memberjunction/db-auto-doc",
+      "pluginName": "@memberjunction/db-auto-doc",
+      "pluginType": "core",
+      "strict": true,
+      "enableJsonFlag": false,
+      "isESM": true,
+      "relativePath": [
+        "dist",
+        "commands",
+        "prune.js"
+      ]
+    },
+    "reset": {
+      "aliases": [],
+      "args": {},
+      "description": "Reset state and start fresh analysis",
+      "examples": [
+        "$ db-auto-doc reset"
+      ],
+      "flags": {
+        "force": {
+          "char": "f",
+          "description": "Skip confirmation prompt",
+          "name": "force",
+          "allowNo": false,
+          "type": "boolean"
+        }
+      },
+      "hasDynamicHelp": false,
+      "hiddenAliases": [],
+      "id": "reset",
+      "pluginAlias": "@memberjunction/db-auto-doc",
+      "pluginName": "@memberjunction/db-auto-doc",
+      "pluginType": "core",
+      "strict": true,
+      "enableJsonFlag": false,
+      "isESM": true,
+      "relativePath": [
+        "dist",
+        "commands",
+        "reset.js"
+      ]
+    },
+    "status": {
+      "aliases": [],
+      "args": {},
+      "description": "Show current analysis status",
+      "examples": [
+        "$ db-auto-doc status"
+      ],
+      "flags": {},
+      "hasDynamicHelp": false,
+      "hiddenAliases": [],
+      "id": "status",
+      "pluginAlias": "@memberjunction/db-auto-doc",
+      "pluginName": "@memberjunction/db-auto-doc",
+      "pluginType": "core",
+      "strict": true,
+      "enableJsonFlag": false,
+      "isESM": true,
+      "relativePath": [
+        "dist",
+        "commands",
+        "status.js"
+      ]
+    }
+  },
+  "version": "5.23.0"
+}

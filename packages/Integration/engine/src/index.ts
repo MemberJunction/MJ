@@ -119,3 +119,15 @@ export type {
 // Integration Engine (server-side, wraps IntegrationEngineBase via composition)
 // NOTE: For IntegrationEngineBase (client-safe metadata), import from @memberjunction/integration-engine-base
 export { IntegrationEngine } from './IntegrationEngine.js';
+
+// Doc Enhancer — pluggable interface for DBAutoDoc integration (optional, env-var gated)
+export { LoadDocEnhancer } from './IntegrationDocEnhancer.js';
+export type {
+    IntegrationDocEnhancer,
+    EnhancerContext,
+    EnhancementResult,
+    KnownPrimaryKey,
+    KnownForeignKey,
+    DiscoveredPrimaryKey,
+    DiscoveredForeignKey,
+} from './IntegrationDocEnhancer.js';

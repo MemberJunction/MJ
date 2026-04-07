@@ -26,6 +26,16 @@ export interface DiscoveryEngineOptions {
   schemas: SchemaDefinition[];
   onProgress?: (message: string, data?: any) => void;
   onCheckpoint?: (phase: RelationshipDiscoveryPhase) => Promise<void>;
+  /**
+   * Pre-seeded discoveries from external sources (e.g., integration metadata overlay).
+   * These are injected as `status: 'confirmed'` with `confidence: 100` before the first iteration.
+   * The discovery engine skips PK/FK detection for tables/columns that already have confirmed entries.
+   * This is the integration point for the pluggable DBAutoDoc enhancement pipeline.
+   */
+  preSeededDiscoveries?: {
+    primaryKeys: PKCandidate[];
+    foreignKeys: FKCandidate[];
+  };
 }
 
 export interface DiscoveryResult {
@@ -47,6 +57,7 @@ export class DiscoveryEngine {
   private fkDetector: FKDetector;
   private llmValidator?: LLMDiscoveryValidator;
   private sanityChecker?: LLMSanityChecker;
+  private preSeededDiscoveries?: { primaryKeys: PKCandidate[]; foreignKeys: FKCandidate[] };
 
   constructor(options: DiscoveryEngineOptions) {
     this.driver = options.driver;
@@ -55,6 +66,7 @@ export class DiscoveryEngine {
     this.schemas = options.schemas;
     this.onProgress = options.onProgress || (() => {});
     this.onCheckpoint = options.onCheckpoint || (async () => {});
+    this.preSeededDiscoveries = options.preSeededDiscoveries;
 
     // Create stats cache and detectors
     this.statsCache = new ColumnStatsCache();
@@ -157,6 +169,19 @@ export class DiscoveryEngine {
   ): Promise<DiscoveryResult> {
     // Resume from existing phase if provided, otherwise start fresh
     const phase: RelationshipDiscoveryPhase = existingPhase || this.initializePhase(maxTokens, triggerAnalysis);
+
+    // Inject pre-seeded discoveries from integration metadata (if provided)
+    if (this.preSeededDiscoveries && !existingPhase) {
+      const { primaryKeys, foreignKeys } = this.preSeededDiscoveries;
+      if (primaryKeys.length > 0) {
+        phase.discovered.primaryKeys.push(...primaryKeys);
+        this.onProgress(`Pre-seeded ${primaryKeys.length} confirmed PKs from integration metadata`);
+      }
+      if (foreignKeys.length > 0) {
+        phase.discovered.foreignKeys.push(...foreignKeys);
+        this.onProgress(`Pre-seeded ${foreignKeys.length} confirmed FKs from integration metadata`);
+      }
+    }
 
     if (existingPhase) {
       this.onProgress('Resuming relationship discovery', {

@@ -1,0 +1,42 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "ClientID": {
+      "type": "string",
+      "title": "Client ID",
+      "description": "Blackbaud OAuth2 application client ID",
+      "isSecret": false,
+      "order": 0
+    },
+    "ClientSecret": {
+      "type": "string",
+      "title": "Client Secret",
+      "description": "Blackbaud OAuth2 application client secret",
+      "isSecret": true,
+      "order": 1
+    },
+    "SubscriptionKey": {
+      "type": "string",
+      "title": "Subscription Key",
+      "description": "Blackbaud SKY API subscription key (bb-api-subscription-key header)",
+      "isSecret": true,
+      "order": 2
+    },
+    "AccessToken": {
+      "type": "string",
+      "title": "Access Token",
+      "description": "Current OAuth2 access token",
+      "isSecret": true,
+      "order": 3
+    },
+    "RefreshToken": {
+      "type": "string",
+      "title": "Refresh Token",
+      "description": "OAuth2 refresh token for automatic token renewal",
+      "isSecret": true,
+      "order": 4
+    }
+  },
+  "required": ["ClientID", "ClientSecret", "SubscriptionKey"]
+}

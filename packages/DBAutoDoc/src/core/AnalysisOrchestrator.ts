@@ -33,6 +33,12 @@ export interface AnalysisOptions {
   reanalyzeBelowConfidence?: number;
   /** Override max iterations from config for this run */
   maxIterations?: number;
+  /** Pre-seeded confirmed PKs/FKs from integration metadata — passed through to DiscoveryEngine.
+   *  Each entry has status: 'confirmed' and confidence: 100, locking them as immutable ground truth. */
+  preSeededDiscoveries?: {
+    primaryKeys: import('../types/discovery.js').PKCandidate[];
+    foreignKeys: import('../types/discovery.js').FKCandidate[];
+  };
 }
 
 export interface OrchestratorResult {
@@ -45,12 +51,14 @@ export interface OrchestratorResult {
 
 export class AnalysisOrchestrator {
   private config: DBAutoDocConfig;
+  private options: AnalysisOptions;
   private resumeFromState?: string;
   private onProgress: (message: string, data?: any) => void;
   private reanalyzeBelowConfidence?: number;
   private maxIterationsOverride?: number;
 
   constructor(options: AnalysisOptions) {
+    this.options = options;
     this.config = options.config;
     this.resumeFromState = options.resumeFromState;
     this.onProgress = options.onProgress || (() => {});
@@ -212,6 +220,7 @@ export class AnalysisOrchestrator {
             config: this.config.analysis.relationshipDiscovery,
             aiConfig: this.config.ai,
             schemas: state.schemas,
+            preSeededDiscoveries: this.options.preSeededDiscoveries,
             onProgress: this.onProgress,
             onCheckpoint: async (phase) => {
               state.phases.keyDetection = phase;
