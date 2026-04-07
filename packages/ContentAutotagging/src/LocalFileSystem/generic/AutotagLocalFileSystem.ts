@@ -35,7 +35,7 @@ export class AutotagLocalFileSystem extends AutotagBase {
         this.contentSourceTypeID = this.engine.SetSubclassContentSourceType('Local File System');
         const contentSources: MJContentSourceEntity[] = await this.engine.getAllContentSources(this.contextUser, this.contentSourceTypeID) || [];
         const contentItemsToProcess: MJContentItemEntity[] = await this.SetContentItemsToProcess(contentSources)
-        await this.engine.ExtractTextAndProcessWithLLM(contentItemsToProcess, this.contextUser, undefined, onProgress);
+        await this.engine.ExtractTextAndProcessWithLLM(contentItemsToProcess, this.contextUser, undefined, undefined, onProgress);
     }
 
     /**

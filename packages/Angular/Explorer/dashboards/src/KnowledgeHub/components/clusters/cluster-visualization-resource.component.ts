@@ -12,7 +12,7 @@
 
 import { Component, ChangeDetectorRef, OnDestroy, AfterViewInit, inject, ViewChild } from '@angular/core';
 import { Subject } from 'rxjs';
-import { CompositeKey, Metadata } from '@memberjunction/core';
+import { CompositeKey, Metadata, EntityFieldInfo } from '@memberjunction/core';
 import { ResourceData, UserInfoEngine, MJUserSettingEntity, KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
@@ -29,10 +29,29 @@ import {
     ClusterLabel,
     SavedClusterVisualization,
     DefaultClusterConfig,
+    ViewportTransform,
 } from '@memberjunction/ng-clustering';
 import { ClusteringService, ClusterScatterComponent } from '@memberjunction/ng-clustering';
 
-const SAVED_CLUSTERS_KEY = 'KnowledgeHub_SavedClusters';
+/**
+ * Build an environment-scoped storage key so cluster data does not bleed
+ * across different database environments that share the same browser.
+ * Uses the GraphQL endpoint origin as the environment fingerprint.
+ */
+function buildEnvScopedKey(base: string): string {
+    try {
+        const origin = (Metadata.Provider as GraphQLDataProvider).ConfigData?.URL;
+        if (origin) {
+            // Use just the origin portion (protocol + host) so path differences don't fragment keys
+            const url = new URL(origin);
+            return `${base}_${url.origin}`;
+        }
+    } catch { /* fall through */ }
+    return base;
+}
+
+const SAVED_CLUSTERS_BASE_KEY = 'KnowledgeHub_SavedClusters';
+const LAST_SESSION_BASE_KEY = 'KnowledgeHub_LastClusterSession';
 
 @RegisterClass(BaseResourceComponent, 'ClusterVisualizationResource')
 @Component({
@@ -80,6 +99,10 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
     public EntityOptions: ClusterConfigPanelEntityOption[] = [];
     /** Entity document options for the selected entity (shown when 2+) */
     public EntityDocOptions: ClusterConfigPanelEntityDocOption[] = [];
+    /** Ordered field keys for prioritized display in scatter tooltip/detail */
+    public FieldPriority: string[] = [];
+    /** Map of field names to human-readable display names */
+    public FieldDisplayNames: Record<string, string> = {};
 
     // Saved visualizations
     public SavedVisualizations: SavedClusterVisualization[] = [];
@@ -95,6 +118,14 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
     async ngAfterViewInit(): Promise<void> {
         await this.loadEntityOptions();
         this.loadSavedVisualizations();
+        this.restoreLastSession();
+        this.navigationService.SetAgentContext(this, {
+            IsVisualizationLoaded: !!this.Result,
+            VisualizationTitle: this.VisualizationTitle || null,
+            ClusterCount: this.Result?.Clusters?.length ?? 0,
+            TotalPoints: this.Result?.Points?.length ?? 0,
+        });
+        this.NotifyLoadComplete();
     }
 
     ngOnDestroy(): void {
@@ -137,6 +168,9 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
         this.ActiveConfig = config;
         this.ClusterLabels = [];
 
+        // Auto-hide detail panel from previous visualization
+        this.scatterPlot?.CloseDetailPanel();
+
         // Update entity doc options if entity changed
         this.updateEntityDocOptions(config.EntityName);
 
@@ -149,12 +183,15 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
             // Run clustering (client-side UMAP + K-Means/DBSCAN)
             this.Result = await this.clusteringService.RunClustering(vectors, config);
             this.VisualizationTitle = `${config.EntityName} — ${config.Algorithm === 'kmeans' ? 'K-Means' : 'DBSCAN'}`;
+            this.FieldPriority = this.ComputeFieldPriority(config.EntityName);
 
             // Fire LLM cluster naming in the background (non-blocking).
             // Clusters render immediately; labels appear when LLM responds.
             this.requestClusterLabelsFromLLM().catch(err =>
                 console.warn('[ClusterVisualization] Background naming failed:', err)
             );
+            // Auto-save session state so it can be restored after navigation
+            this.saveLastSession();
         } catch (error) {
             console.error('[ClusterVisualization] Pipeline error:', error);
             this.Result = null;
@@ -210,6 +247,7 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
 
     /** Select a saved visualization — restore from cache if available, otherwise re-run */
     public async OnSelectSaved(saved: SavedClusterVisualization): Promise<void> {
+        this.scatterPlot?.CloseDetailPanel();
         this.ActiveSavedId = saved.Id;
         this.VisualizationTitle = saved.Name;
 
@@ -256,6 +294,7 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
 
     /** Start a new analysis (clear current) */
     public OnNewAnalysis(): void {
+        this.scatterPlot?.CloseDetailPanel();
         this.ActiveSavedId = null;
         this.Result = null;
         this.ClusterLabels = [];
@@ -389,10 +428,36 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
         }
     }
 
-    /** Build a human-readable label from vector metadata (prefers Name field, falls back to RecordID) */
+    /**
+     * Build a human-readable label from vector metadata using entity field metadata.
+     * Combines all IsNameField fields in Sequence order (e.g., "Sarah Chen" from FirstName + LastName).
+     * Falls back to heuristic field detection when entity metadata isn't available.
+     */
     private buildLabel(metadata: Record<string, string>): string {
-        // The vector sync process stores display fields directly in metadata.
-        // Prefer Name, then Title, then Description, then fall back to RecordID.
+        const entityName = metadata['Entity'];
+        if (entityName) {
+            try {
+                const md = new Metadata();
+                const entityInfo = md.Entities.find(e => e.Name === entityName);
+                if (entityInfo) {
+                    // Combine all IsNameField fields in Sequence order
+                    const nameFields = entityInfo.Fields
+                        .filter(f => f.IsNameField)
+                        .sort((a, b) => (a.Sequence ?? 9999) - (b.Sequence ?? 9999));
+                    if (nameFields.length > 0) {
+                        const parts = nameFields
+                            .map(f => metadata[f.Name])
+                            .filter(v => v != null && v.trim() !== '');
+                        if (parts.length > 0) return parts.join(' ');
+                    }
+                    // Single NameField fallback
+                    if (entityInfo.NameField && metadata[entityInfo.NameField.Name]) {
+                        return metadata[entityInfo.NameField.Name];
+                    }
+                }
+            } catch { /* metadata not available, fall through */ }
+        }
+        // Heuristic fallbacks
         return metadata['Name']
             || metadata['Title']
             || metadata['Description']?.substring(0, 60)
@@ -471,6 +536,62 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
         return lines.join('\n');
     }
 
+    /**
+     * Handle inline label edits from the scatter component legend.
+     * Updates the ClusterLabels cache and marks the label as user-edited.
+     */
+    public OnLabelEdited(event: { ClusterId: number; OldLabel: string; NewLabel: string }): void {
+        const existing = this.ClusterLabels.find(l => l.ClusterId === event.ClusterId);
+        if (existing) {
+            existing.Label = event.NewLabel;
+            existing.IsUserEdited = true;
+        } else {
+            this.ClusterLabels.push({
+                ClusterId: event.ClusterId,
+                Label: event.NewLabel,
+                IsUserEdited: true,
+            });
+        }
+        this.cdr.detectChanges();
+    }
+
+    /**
+     * Compute the prioritized field order and display names from entity metadata.
+     * Sets both FieldPriority and FieldDisplayNames.
+     * Returns field names sorted: IsNameField first, then DefaultInView by Sequence,
+     * then remaining fields by Sequence.
+     */
+    private ComputeFieldPriority(entityName: string): string[] {
+        try {
+            const md = new Metadata();
+            const entityInfo = md.Entities.find(e => e.Name === entityName);
+            if (!entityInfo) return [];
+
+            const internalKeys = new Set([
+                'ID', 'Entity', 'EntityIcon', 'RecordID', 'TemplateID',
+                '__mj_UpdatedAt', '__mj_CreatedAt',
+            ]);
+
+            // Build display names map
+            const displayNames: Record<string, string> = {};
+            for (const f of entityInfo.Fields) {
+                displayNames[f.Name] = f.DisplayNameOrName;
+            }
+            this.FieldDisplayNames = displayNames;
+
+            return entityInfo.Fields
+                .filter(f => !internalKeys.has(f.Name) && !f.IsVirtual && !f.IsPrimaryKey)
+                .sort((a, b) => {
+                    if (a.IsNameField !== b.IsNameField) return a.IsNameField ? -1 : 1;
+                    if (a.DefaultInView !== b.DefaultInView) return a.DefaultInView ? -1 : 1;
+                    return (a.Sequence ?? 9999) - (b.Sequence ?? 9999);
+                })
+                .map(f => f.Name);
+        } catch {
+            return [];
+        }
+    }
+
     /** Apply cluster labels to the result's Clusters array (sets the Label property) */
     private applyLabelsToResult(): void {
         if (!this.Result || this.ClusterLabels.length === 0) return;
@@ -500,8 +621,9 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
     /** Load saved visualizations from UserInfoEngine settings */
     private loadSavedVisualizations(): void {
         try {
+            const key = buildEnvScopedKey(SAVED_CLUSTERS_BASE_KEY);
             const engine = UserInfoEngine.Instance;
-            const setting = engine.UserSettings.find(s => s.Setting === SAVED_CLUSTERS_KEY);
+            const setting = engine.UserSettings.find(s => s.Setting === key);
             if (setting?.Value) {
                 this.userSettingEntity = setting;
                 this.SavedVisualizations = JSON.parse(setting.Value) as SavedClusterVisualization[];
@@ -513,6 +635,61 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
         this.cdr.detectChanges();
     }
 
+    /**
+     * Auto-save the current session to localStorage so it can be restored
+     * when the user navigates away and comes back.
+     */
+    private saveLastSession(): void {
+        if (!this.Result) return;
+        try {
+            const session = {
+                Result: this.stripVectorsFromResult(this.Result),
+                ClusterLabels: this.ClusterLabels,
+                Config: this.ActiveConfig,
+                Title: this.VisualizationTitle,
+                Viewport: this.scatterPlot?.GetViewportTransform() ?? null,
+            };
+            localStorage.setItem(buildEnvScopedKey(LAST_SESSION_BASE_KEY), JSON.stringify(session));
+        } catch {
+            // localStorage quota exceeded or not available — non-critical
+        }
+    }
+
+    /**
+     * Restore the last session from localStorage if no saved visualization is active.
+     * This handles the "navigate away and come back" case.
+     */
+    private restoreLastSession(): void {
+        if (this.Result || this.ActiveSavedId) return; // Already showing something
+        try {
+            const raw = localStorage.getItem(buildEnvScopedKey(LAST_SESSION_BASE_KEY));
+            if (!raw) return;
+            const session = JSON.parse(raw) as {
+                Result: ClusterVisualizationResult;
+                ClusterLabels: ClusterLabel[];
+                Config: ClusterConfig;
+                Title: string;
+                Viewport: ViewportTransform | null;
+            };
+            this.Result = session.Result;
+            this.ClusterLabels = session.ClusterLabels ?? [];
+            this.ActiveConfig = session.Config;
+            this.VisualizationTitle = session.Title ?? 'Restored Session';
+            this.FieldPriority = this.ComputeFieldPriority(session.Config.EntityName);
+            this.applyLabelsToResult();
+            this.cdr.detectChanges();
+
+            // Restore viewport after a tick to let the scatter component render
+            if (session.Viewport) {
+                setTimeout(() => {
+                    this.scatterPlot?.SetViewportTransform(session.Viewport!);
+                }, 50);
+            }
+        } catch {
+            localStorage.removeItem(buildEnvScopedKey(LAST_SESSION_BASE_KEY));
+        }
+    }
+
     /** Persist saved visualizations to UserInfoEngine settings */
     private async persistSavedVisualizations(): Promise<void> {
         try {
@@ -521,14 +698,15 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
             if (!userId) return;
 
             if (!this.userSettingEntity) {
+                const key = buildEnvScopedKey(SAVED_CLUSTERS_BASE_KEY);
                 const engine = UserInfoEngine.Instance;
-                const existing = engine.UserSettings.find(s => s.Setting === SAVED_CLUSTERS_KEY);
+                const existing = engine.UserSettings.find(s => s.Setting === key);
                 if (existing) {
                     this.userSettingEntity = existing;
                 } else {
                     this.userSettingEntity = await md.GetEntityObject<MJUserSettingEntity>('MJ: User Settings');
                     this.userSettingEntity.UserID = userId;
-                    this.userSettingEntity.Setting = SAVED_CLUSTERS_KEY;
+                    this.userSettingEntity.Setting = buildEnvScopedKey(SAVED_CLUSTERS_BASE_KEY);
                 }
             }
 

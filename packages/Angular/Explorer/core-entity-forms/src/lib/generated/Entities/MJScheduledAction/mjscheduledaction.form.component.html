@@ -198,5 +198,30 @@
         </div>
         }
     </mj-collapsible-panel>
+
+    <!-- Content Sources Section -->
+    <mj-collapsible-panel
+        SectionKey="mJContentSources"
+        SectionName="Content Sources"
+        Icon="fa fa-plug"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJContentSources')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Content Sources','ScheduledActionID')"
+                [NewRecordValues]="NewRecordValues('MJ: Content Sources')"
+                [AllowLoad]="IsSectionExpanded('mJContentSources')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJContentSources', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
 </mj-record-form-container>
         

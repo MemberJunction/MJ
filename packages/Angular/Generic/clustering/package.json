@@ -33,6 +33,7 @@
   },
   "dependencies": {
     "@memberjunction/ai-vectors-memory": "5.23.0",
+    "@memberjunction/ng-entity-card": "5.23.0",
     "tslib": "^2.8.1",
     "umap-js": "^1.4.0"
   },

@@ -63,7 +63,6 @@ export class MJInitializationService {
     // This enables real-time data refresh when other servers modify entities
     if (GraphQLDataProvider.Instance) {
         GraphQLDataProvider.Instance.SubscribeToCacheInvalidation();
-        console.log('✓ Cache invalidation subscription active');
     }
   }
 

@@ -911,11 +911,14 @@ export class GraphQLAIClient {
      * Trigger the autotagging pipeline (fire-and-forget).
      * Returns a PipelineRunID that can be used to subscribe to PipelineProgress.
      */
-    public async RunAutotagPipeline(): Promise<AutotagPipelineResult> {
+    public async RunAutotagPipeline(options?: {
+        contentSourceIDs?: string[];
+        forceReprocess?: boolean;
+    }): Promise<AutotagPipelineResult> {
         try {
             const mutation = gql`
-                mutation RunAutotagPipeline {
-                    RunAutotagPipeline {
+                mutation RunAutotagPipeline($contentSourceIDs: [String!], $forceReprocess: Boolean) {
+                    RunAutotagPipeline(contentSourceIDs: $contentSourceIDs, forceReprocess: $forceReprocess) {
                         Success
                         Status
                         ErrorMessage
@@ -924,7 +927,15 @@ export class GraphQLAIClient {
                 }
             `;
 
-            const result = await this._dataProvider.ExecuteGQL(mutation, {});
+            const variables: Record<string, unknown> = {};
+            if (options?.contentSourceIDs?.length) {
+                variables['contentSourceIDs'] = options.contentSourceIDs;
+            }
+            if (options?.forceReprocess) {
+                variables['forceReprocess'] = true;
+            }
+
+            const result = await this._dataProvider.ExecuteGQL(mutation, variables);
 
             if (!result?.RunAutotagPipeline) {
                 throw new Error('Invalid response from server');
@@ -939,6 +950,63 @@ export class GraphQLAIClient {
                 Status: 'Error',
                 ErrorMessage: e.message || 'Unknown error'
             };
+        }
+    }
+
+    /**
+     * Pause a running classification pipeline.
+     * Sets CancellationRequested on the process run so the engine pauses after the current batch.
+     */
+    public async PauseClassificationPipeline(processRunID: string): Promise<AutotagPipelineResult> {
+        try {
+            const mutation = gql`
+                mutation PauseClassificationPipeline($processRunID: String!) {
+                    PauseClassificationPipeline(processRunID: $processRunID) {
+                        Success
+                        Status
+                        ErrorMessage
+                        PipelineRunID
+                    }
+                }
+            `;
+
+            const result = await this._dataProvider.ExecuteGQL(mutation, { processRunID });
+            if (!result?.PauseClassificationPipeline) {
+                throw new Error('Invalid response from server');
+            }
+            return result.PauseClassificationPipeline as AutotagPipelineResult;
+        } catch (error: unknown) {
+            const e = error as Error;
+            LogError('GraphQLAIClient.PauseClassificationPipeline failed', undefined, e);
+            return { Success: false, Status: 'Error', ErrorMessage: e.message || 'Unknown error' };
+        }
+    }
+
+    /**
+     * Resume a paused classification pipeline from its last completed offset.
+     */
+    public async ResumeClassificationPipeline(processRunID: string): Promise<AutotagPipelineResult> {
+        try {
+            const mutation = gql`
+                mutation ResumeClassificationPipeline($processRunID: String!) {
+                    ResumeClassificationPipeline(processRunID: $processRunID) {
+                        Success
+                        Status
+                        ErrorMessage
+                        PipelineRunID
+                    }
+                }
+            `;
+
+            const result = await this._dataProvider.ExecuteGQL(mutation, { processRunID });
+            if (!result?.ResumeClassificationPipeline) {
+                throw new Error('Invalid response from server');
+            }
+            return result.ResumeClassificationPipeline as AutotagPipelineResult;
+        } catch (error: unknown) {
+            const e = error as Error;
+            LogError('GraphQLAIClient.ResumeClassificationPipeline failed', undefined, e);
+            return { Success: false, Status: 'Error', ErrorMessage: e.message || 'Unknown error' };
         }
     }
 

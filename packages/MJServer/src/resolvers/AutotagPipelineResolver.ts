@@ -1,6 +1,7 @@
-import { Resolver, Mutation, Ctx, ObjectType, Field } from 'type-graphql';
+import { Resolver, Mutation, Ctx, Arg, ObjectType, Field } from 'type-graphql';
 import { AppContext } from '../types.js';
-import { LogError, LogStatus } from '@memberjunction/core';
+import { LogError, LogStatus, Metadata } from '@memberjunction/core';
+import { MJContentProcessRunEntity } from '@memberjunction/core-entities';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { PubSubManager } from '../generic/PubSubManager.js';
@@ -28,6 +29,8 @@ export class AutotagPipelineResult {
 export class AutotagPipelineResolver extends ResolverBase {
     @Mutation(() => AutotagPipelineResult)
     async RunAutotagPipeline(
+        @Arg('contentSourceIDs', () => [String], { nullable: true }) contentSourceIDs: string[] | undefined,
+        @Arg('forceReprocess', { nullable: true }) forceReprocess: boolean | undefined,
         @Ctx() { userPayload }: AppContext = {} as AppContext
     ): Promise<AutotagPipelineResult> {
         try {
@@ -40,7 +43,7 @@ export class AutotagPipelineResolver extends ResolverBase {
             LogStatus(`RunAutotagPipeline: starting pipeline ${pipelineRunID}`);
 
             // Fire-and-forget: start the pipeline in the background and return immediately
-            this.runPipelineInBackground(pipelineRunID, currentUser);
+            this.runPipelineInBackground(pipelineRunID, currentUser, contentSourceIDs, forceReprocess);
 
             return {
                 Success: true,
@@ -64,7 +67,9 @@ export class AutotagPipelineResolver extends ResolverBase {
      */
     private async runPipelineInBackground(
         pipelineRunID: string,
-        currentUser: import('@memberjunction/core').UserInfo
+        currentUser: import('@memberjunction/core').UserInfo,
+        contentSourceIDs?: string[],
+        forceReprocess?: boolean
     ): Promise<void> {
         const startTime = Date.now();
         try {
@@ -89,16 +94,24 @@ export class AutotagPipelineResolver extends ResolverBase {
                 this.publishProgress(pipelineRunID, 'autotag', total, pct, startTime, currentItem || `${processed}/${total} items`);
             };
 
-            // Run with both Autotag=1 and Vectorize=1: the action will tag and embed in parallel
+            // Build action params
+            const actionParams: Array<{ Name: string; Value: unknown; Type: 'Input' | 'Output' | 'Both' }> = [
+                { Name: 'Autotag', Value: 1, Type: 'Input' },
+                { Name: 'Vectorize', Value: 1, Type: 'Input' },
+                { Name: '__progressCallback', Value: progressCallback, Type: 'Input' }
+            ];
+            if (contentSourceIDs && contentSourceIDs.length > 0) {
+                actionParams.push({ Name: 'ContentSourceIDs', Value: contentSourceIDs, Type: 'Input' });
+            }
+            if (forceReprocess) {
+                actionParams.push({ Name: 'ForceReprocess', Value: 1, Type: 'Input' });
+            }
+
             const result = await ActionEngineServer.Instance.RunAction({
                 Action: action,
                 ContextUser: currentUser,
                 Filters: [],
-                Params: [
-                    { Name: 'Autotag', Value: 1, Type: 'Input' },
-                    { Name: 'Vectorize', Value: 1, Type: 'Input' },
-                    { Name: '__progressCallback', Value: progressCallback, Type: 'Input' }
-                ]
+                Params: actionParams
             });
 
             // Stage: vectorize complete
@@ -115,6 +128,82 @@ export class AutotagPipelineResolver extends ResolverBase {
             const msg = error instanceof Error ? error.message : String(error);
             LogError(`RunAutotagPipeline pipeline ${pipelineRunID} failed: ${msg}`);
             this.publishProgress(pipelineRunID, 'error', 0, 0, startTime, msg);
+        }
+    }
+
+    /**
+     * Pause a running classification pipeline by setting CancellationRequested on the process run.
+     * The engine checks this flag between batches and pauses gracefully.
+     */
+    @Mutation(() => AutotagPipelineResult)
+    async PauseClassificationPipeline(
+        @Arg('processRunID') processRunID: string,
+        @Ctx() { userPayload }: AppContext = {} as AppContext
+    ): Promise<AutotagPipelineResult> {
+        try {
+            const currentUser = this.GetUserFromPayload(userPayload);
+            if (!currentUser) {
+                return { Success: false, Status: 'Error', ErrorMessage: 'Unable to determine current user' };
+            }
+
+            const md = new Metadata();
+            const run = await md.GetEntityObject<MJContentProcessRunEntity>('MJ: Content Process Runs', currentUser);
+            const loaded = await run.Load(processRunID);
+            if (!loaded) {
+                return { Success: false, Status: 'Error', ErrorMessage: `Process run ${processRunID} not found` };
+            }
+
+            run.CancellationRequested = true;
+            await run.Save();
+
+            LogStatus(`PauseClassificationPipeline: Pause requested for run ${processRunID}`);
+            return { Success: true, Status: 'PauseRequested' };
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            return { Success: false, Status: 'Error', ErrorMessage: msg };
+        }
+    }
+
+    /**
+     * Resume a paused classification pipeline from its last completed offset.
+     */
+    @Mutation(() => AutotagPipelineResult)
+    async ResumeClassificationPipeline(
+        @Arg('processRunID') processRunID: string,
+        @Ctx() { userPayload }: AppContext = {} as AppContext
+    ): Promise<AutotagPipelineResult> {
+        try {
+            const currentUser = this.GetUserFromPayload(userPayload);
+            if (!currentUser) {
+                return { Success: false, Status: 'Error', ErrorMessage: 'Unable to determine current user' };
+            }
+
+            const md = new Metadata();
+            const run = await md.GetEntityObject<MJContentProcessRunEntity>('MJ: Content Process Runs', currentUser);
+            const loaded = await run.Load(processRunID);
+            if (!loaded) {
+                return { Success: false, Status: 'Error', ErrorMessage: `Process run ${processRunID} not found` };
+            }
+
+            if (run.Status !== 'Paused') {
+                return { Success: false, Status: 'Error', ErrorMessage: `Run is not paused (Status: ${run.Status})` };
+            }
+
+            // Reset cancellation flag and set status back to Running
+            run.CancellationRequested = false;
+            run.Status = 'Running';
+            await run.Save();
+
+            // Fire-and-forget: resume pipeline in background from the last offset
+            const pipelineRunID = uuidv4();
+            LogStatus(`ResumeClassificationPipeline: Resuming run ${processRunID} from offset ${run.LastProcessedOffset}`);
+
+            this.runPipelineInBackground(pipelineRunID, currentUser, undefined, undefined);
+
+            return { Success: true, Status: 'Resumed', PipelineRunID: pipelineRunID };
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            return { Success: false, Status: 'Error', ErrorMessage: msg };
         }
     }
 

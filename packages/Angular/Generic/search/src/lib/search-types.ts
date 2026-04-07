@@ -33,6 +33,8 @@ export interface SearchResultItem {
     RecordName?: string;
     /** When this result was matched */
     MatchedAt: Date;
+    /** Raw vector metadata JSON — contains all entity fields stored in the vector DB */
+    RawMetadata?: string;
 }
 
 /** Breakdown of score contribution from each search source */

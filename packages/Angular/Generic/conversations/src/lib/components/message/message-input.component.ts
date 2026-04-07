@@ -651,7 +651,23 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
   }
 
   /**
-   * Handles routing when there's a previous agent - checks intent first
+   * Handles routing when there's a previous non-Sage agent in the conversation.
+   *
+   * LATENCY OPTIMIZATION (PR #2309 / plans/agent-latency-optimization.md — Opt #1):
+   * Previously, this method made a separate LLM call via checkContinuityIntent() to decide
+   * whether the user's new message was still directed at the previous agent or should be
+   * routed to Sage. That call added ~300ms of latency on every message in a conversation
+   * with an active agent — the single largest source of non-inference overhead on the client.
+   *
+   * The heuristic replacement is simple: if a previous non-Sage agent exists, always continue
+   * with it. The user can @mention a different agent (or Sage) to explicitly switch. This is
+   * more predictable and eliminates a common source of confusion where the intent check
+   * incorrectly rerouted messages away from the active agent.
+   *
+   * The checkContinuityIntent() method and the underlying checkAgentContinuityIntent() service
+   * method are preserved (not deleted) so we can reintroduce intent checking in the future
+   * when browser-local inference is fast enough (~20-50ms) to do this without blocking the
+   * user. See PR #2309 for the full discussion.
    */
   private async handleAgentContinuity(
     messageDetail: MJConversationDetailEntity,
@@ -659,26 +675,39 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     mentionResult: MentionParseResult,
     isFirstMessage: boolean
   ): Promise<void> {
-    const intentResult = await this.checkContinuityIntent(lastAgentId, messageDetail.Message);
+    // COMMENTED OUT — LLM intent check removed for latency optimization (see JSDoc above).
+    // const intentResult = await this.checkContinuityIntent(lastAgentId, messageDetail.Message);
+    //
+    // if (intentResult.decision === 'YES') {
+    //   await this.executeRouteWithNaming(
+    //     () => this.continueWithAgent(
+    //       messageDetail,
+    //       lastAgentId,
+    //       this.conversationId,
+    //       intentResult.targetArtifactVersionId
+    //     ),
+    //     messageDetail.Message,
+    //     isFirstMessage
+    //   );
+    // } else {
+    //   await this.executeRouteWithNaming(
+    //     () => this.processMessageThroughAgent(messageDetail, mentionResult),
+    //     messageDetail.Message,
+    //     isFirstMessage
+    //   );
+    // }
 
-    if (intentResult.decision === 'YES') {
-      await this.executeRouteWithNaming(
-        () => this.continueWithAgent(
-          messageDetail,
-          lastAgentId,
-          this.conversationId,
-          intentResult.targetArtifactVersionId
-        ),
-        messageDetail.Message,
-        isFirstMessage
-      );
-    } else {
-      await this.executeRouteWithNaming(
-        () => this.processMessageThroughAgent(messageDetail, mentionResult),
-        messageDetail.Message,
-        isFirstMessage
-      );
-    }
+    // Always continue with the previous agent — user can @mention another agent to switch.
+    await this.executeRouteWithNaming(
+      () => this.continueWithAgent(
+        messageDetail,
+        lastAgentId,
+        this.conversationId,
+        undefined // artifact version targeting unavailable without intent check
+      ),
+      messageDetail.Message,
+      isFirstMessage
+    );
   }
 
   /**

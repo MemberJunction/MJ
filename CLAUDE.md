@@ -1480,6 +1480,33 @@ When encountering `ExpressionChangedAfterItHasBeenCheckedError` in Angular compo
 - Size presets: `'small'` (40x22px), `'medium'` (80x45px), `'large'` (120x67px), `'auto'` (fills container)
 - The component displays the animated MJ logo with optional text below
 
+### 🚨 CRITICAL: BaseResourceComponent Subclasses MUST Call NotifyLoadComplete() 🚨
+
+Every class that extends `BaseResourceComponent` (including `BaseDashboard` subclasses) **MUST** call `this.NotifyLoadComplete()` when its initial load is finished. Without this call, the app loading screen will hang indefinitely when navigating directly to a URL that targets that resource.
+
+- **`BaseDashboard` subclasses**: Handled automatically — `BaseDashboard.ngOnInit()` calls `NotifyLoadComplete()` after `loadData()` completes
+- **Direct `BaseResourceComponent` subclasses**: You MUST call `this.NotifyLoadComplete()` yourself, typically at the end of `ngOnInit()` or `ngAfterViewInit()`
+
+```typescript
+// ✅ CORRECT — NotifyLoadComplete called after initialization
+export class MyResourceComponent extends BaseResourceComponent implements OnInit {
+    async ngOnInit(): Promise<void> {
+        await this.loadMyData();
+        this.NotifyLoadComplete(); // REQUIRED — signals the loading screen to clear
+    }
+}
+
+// ❌ WRONG — missing NotifyLoadComplete causes permanent loading screen
+export class MyResourceComponent extends BaseResourceComponent implements OnInit {
+    async ngOnInit(): Promise<void> {
+        await this.loadMyData();
+        // Loading screen will hang forever on direct URL navigation!
+    }
+}
+```
+
+**Why this matters**: The shell's loading screen waits for the first resource component to signal completion via `LoadCompleteEvent`, which is wired to `NotifyLoadComplete()`. If the component never calls it, the loading animation plays indefinitely.
+
 ### Creating Custom Entity Forms
 
 MemberJunction uses `@RegisterClass` to allow custom forms to override generated forms. **To ensure your custom form takes priority, you MUST extend the generated form class** (not `BaseFormComponent` directly).

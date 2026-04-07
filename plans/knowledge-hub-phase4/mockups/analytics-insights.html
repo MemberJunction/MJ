@@ -1,0 +1,2179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Knowledge Hub - Analytics &amp; Insights Dashboard</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  :root {
+    --mj-bg-page: #f8f9fa;
+    --mj-bg-surface: white;
+    --mj-bg-surface-card: #f5f7fa;
+    --mj-bg-surface-sunken: #f0f2f5;
+    --mj-text-primary: #334155;
+    --mj-text-secondary: #64748b;
+    --mj-text-muted: #94a3b8;
+    --mj-brand-primary: #264FAF;
+    --mj-brand-primary-hover: #1e3f8c;
+    --mj-border-default: #e2e8f0;
+    --mj-border-subtle: #f1f5f9;
+    --mj-status-success: #16a34a;
+    --mj-status-warning: #ea580c;
+    --mj-status-error: #dc2626;
+    --mj-status-info: #0284c7;
+    --sidebar-width: 220px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--mj-bg-page);
+    color: var(--mj-text-primary);
+    line-height: 1.5;
+    display: flex;
+    min-height: 100vh;
+  }
+
+  /* ===== LEFT SIDEBAR ===== */
+  .sidebar {
+    width: var(--sidebar-width);
+    min-width: var(--sidebar-width);
+    background: var(--mj-bg-surface);
+    border-right: 1px solid var(--mj-border-default);
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 10;
+    overflow-y: auto;
+  }
+
+  .sidebar-header {
+    padding: 20px 16px 12px;
+    border-bottom: 1px solid var(--mj-border-default);
+  }
+  .sidebar-header h2 {
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--mj-text-muted);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .sidebar-header h2 i { font-size: 14px; color: var(--mj-brand-primary); }
+
+  .sidebar-nav { padding: 8px 0; flex: 1; }
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    font-size: 13.5px;
+    font-weight: 500;
+    color: var(--mj-text-secondary);
+    cursor: pointer;
+    border-left: 3px solid transparent;
+    transition: all 0.15s ease;
+    text-decoration: none;
+  }
+  .nav-item:hover {
+    background: var(--mj-bg-surface-card);
+    color: var(--mj-text-primary);
+  }
+  .nav-item.active {
+    border-left-color: var(--mj-brand-primary);
+    color: var(--mj-brand-primary);
+    background: color-mix(in srgb, var(--mj-brand-primary) 6%, var(--mj-bg-surface));
+    font-weight: 600;
+  }
+  .nav-item i { width: 16px; text-align: center; font-size: 13px; }
+
+  .sidebar-divider {
+    height: 1px;
+    background: var(--mj-border-default);
+    margin: 8px 16px;
+  }
+
+  .trending-section {
+    padding: 12px 16px 16px;
+  }
+  .trending-section h3 {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--mj-text-muted);
+    margin-bottom: 10px;
+  }
+  .tag-cloud {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 6px;
+    line-height: 1.7;
+  }
+  .tag-cloud span {
+    color: var(--mj-brand-primary);
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  .tag-cloud span:hover { opacity: 0.7; }
+
+  .pipeline-status {
+    padding: 12px 16px;
+    border-top: 1px solid var(--mj-border-default);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11.5px;
+    color: var(--mj-text-muted);
+  }
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--mj-status-success);
+    flex-shrink: 0;
+  }
+
+  /* ===== MAIN CONTENT ===== */
+  .main {
+    margin-left: var(--sidebar-width);
+    flex: 1;
+    padding: 0;
+    min-width: 0;
+  }
+
+  .tab-section {
+    padding: 28px 32px 40px;
+    border-bottom: 3px solid var(--mj-border-default);
+  }
+  .tab-section:last-child { border-bottom: none; }
+
+  .tab-section-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid var(--mj-brand-primary);
+  }
+  .tab-section-header i {
+    font-size: 18px;
+    color: var(--mj-brand-primary);
+  }
+  .tab-section-header h1 {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--mj-text-primary);
+  }
+  .tab-section-header .tab-badge {
+    margin-left: auto;
+    font-size: 11px;
+    font-weight: 600;
+    background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+    color: var(--mj-brand-primary);
+    padding: 3px 10px;
+    border-radius: 12px;
+  }
+
+  /* ===== FILTER BAR ===== */
+  .filter-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+  .date-chips {
+    display: flex;
+    gap: 0;
+    border: 1px solid var(--mj-border-default);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .date-chip {
+    padding: 6px 14px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--mj-text-secondary);
+    background: var(--mj-bg-surface);
+    cursor: pointer;
+    border-right: 1px solid var(--mj-border-default);
+    transition: all 0.15s;
+  }
+  .date-chip:last-child { border-right: none; }
+  .date-chip:hover { background: var(--mj-bg-surface-card); }
+  .date-chip.active {
+    background: var(--mj-brand-primary);
+    color: white;
+  }
+  .filter-dropdown {
+    padding: 6px 12px;
+    font-size: 12px;
+    border: 1px solid var(--mj-border-default);
+    border-radius: 6px;
+    background: var(--mj-bg-surface);
+    color: var(--mj-text-secondary);
+    cursor: pointer;
+  }
+
+  /* ===== KPI CARDS ===== */
+  .kpi-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+  .kpi-card {
+    background: var(--mj-bg-surface);
+    border: 1px solid var(--mj-border-default);
+    border-radius: 8px;
+    padding: 16px 18px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    transition: transform 0.15s, box-shadow 0.15s;
+  }
+  .kpi-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  }
+  .kpi-label {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--mj-text-muted);
+    margin-bottom: 4px;
+  }
+  .kpi-value {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--mj-text-primary);
+    line-height: 1.1;
+  }
+  .kpi-delta {
+    font-size: 11px;
+    font-weight: 500;
+    margin-top: 4px;
+  }
+  .kpi-delta.up { color: var(--mj-status-success); }
+  .kpi-delta.down { color: var(--mj-status-error); }
+  .kpi-sparkline { flex-shrink: 0; margin-left: 12px; margin-top: 6px; }
+
+  /* ===== CARDS GRID ===== */
+  .cards-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+  .widget-card {
+    background: var(--mj-bg-surface);
+    border: 1px solid var(--mj-border-default);
+    border-radius: 8px;
+    padding: 18px 20px;
+    transition: transform 0.15s, box-shadow 0.15s;
+  }
+  .widget-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  }
+  .widget-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--mj-text-secondary);
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .widget-title i { color: var(--mj-brand-primary); font-size: 12px; }
+
+  /* ===== TAG GROWTH BARS ===== */
+  .bar-chart {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    height: 120px;
+    padding-top: 10px;
+  }
+  .bar-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    height: 100%;
+    justify-content: flex-end;
+  }
+  .bar {
+    width: 100%;
+    border-radius: 4px 4px 0 0;
+    transition: height 0.3s;
+    position: relative;
+  }
+  .bar-label {
+    font-size: 10px;
+    color: var(--mj-text-muted);
+    margin-top: 6px;
+  }
+  .bar-value {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--mj-text-secondary);
+    margin-bottom: 4px;
+  }
+
+  /* ===== PROGRESS RINGS ===== */
+  .rings-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+  .ring-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 0;
+  }
+  .ring-label { font-size: 12px; color: var(--mj-text-primary); font-weight: 500; }
+  .ring-stat { font-size: 11px; color: var(--mj-text-muted); }
+  .ring-pct { font-size: 11px; font-weight: 700; }
+
+  /* ===== HORIZONTAL BARS ===== */
+  .h-bar-list { display: flex; flex-direction: column; gap: 10px; }
+  .h-bar-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .h-bar-name {
+    font-size: 12px;
+    color: var(--mj-text-secondary);
+    width: 100px;
+    flex-shrink: 0;
+    text-align: right;
+  }
+  .h-bar-track {
+    flex: 1;
+    height: 20px;
+    background: var(--mj-bg-surface-card);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .h-bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    padding-left: 8px;
+    font-size: 11px;
+    font-weight: 600;
+    color: white;
+    min-width: 36px;
+  }
+
+  /* ===== DAILY THROUGHPUT ===== */
+  .throughput-bars {
+    display: flex;
+    align-items: flex-end;
+    gap: 4px;
+    height: 110px;
+  }
+  .tp-bar {
+    flex: 1;
+    border-radius: 3px 3px 0 0;
+    position: relative;
+  }
+  .tp-bar-label {
+    position: absolute;
+    bottom: -18px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 8px;
+    color: var(--mj-text-muted);
+    white-space: nowrap;
+  }
+
+  /* ===== TAXONOMY HEALTH ===== */
+  .taxonomy-stats {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+  }
+  .tax-stat {
+    flex: 1;
+    text-align: center;
+    padding: 8px 4px;
+    border-radius: 6px;
+    font-size: 20px;
+    font-weight: 700;
+  }
+  .tax-stat small {
+    display: block;
+    font-size: 10px;
+    font-weight: 500;
+    margin-top: 2px;
+  }
+
+  /* ===== TABLES ===== */
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12.5px;
+  }
+  .data-table thead th {
+    text-align: left;
+    padding: 10px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--mj-text-muted);
+    border-bottom: 2px solid var(--mj-border-default);
+    background: var(--mj-bg-surface-card);
+    white-space: nowrap;
+  }
+  .data-table tbody td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--mj-border-subtle);
+    color: var(--mj-text-primary);
+    vertical-align: middle;
+  }
+  .data-table tbody tr:hover { background: var(--mj-bg-surface-card); }
+  .data-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+
+  .weight-bar {
+    display: inline-block;
+    height: 6px;
+    border-radius: 3px;
+    vertical-align: middle;
+    margin-right: 6px;
+  }
+
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 10.5px;
+    font-weight: 600;
+  }
+  .badge-success { background: color-mix(in srgb, var(--mj-status-success) 12%, white); color: var(--mj-status-success); }
+  .badge-warning { background: color-mix(in srgb, var(--mj-status-warning) 12%, white); color: var(--mj-status-warning); }
+  .badge-error { background: color-mix(in srgb, var(--mj-status-error) 12%, white); color: var(--mj-status-error); }
+  .badge-info { background: color-mix(in srgb, var(--mj-status-info) 12%, white); color: var(--mj-status-info); }
+
+  /* ===== SUB-SECTION ===== */
+  .sub-section {
+    margin-top: 24px;
+  }
+  .sub-section h3 {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--mj-text-primary);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .sub-section h3 i { font-size: 13px; color: var(--mj-brand-primary); }
+
+  /* ===== STACKED BAR CHART ===== */
+  .stacked-bar-chart { display: flex; flex-direction: column; gap: 8px; }
+  .stacked-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .stacked-label {
+    width: 90px;
+    font-size: 12px;
+    color: var(--mj-text-secondary);
+    text-align: right;
+    flex-shrink: 0;
+  }
+  .stacked-track {
+    flex: 1;
+    height: 22px;
+    display: flex;
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .stacked-seg {
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 9px;
+    font-weight: 600;
+    color: white;
+    min-width: 20px;
+  }
+
+  /* ===== VERTICAL BAR CHART ===== */
+  .v-bar-chart {
+    display: flex;
+    align-items: flex-end;
+    gap: 24px;
+    height: 140px;
+    padding-top: 10px;
+    justify-content: center;
+  }
+  .v-bar-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    height: 100%;
+    justify-content: flex-end;
+    min-width: 60px;
+  }
+  .v-bar {
+    width: 48px;
+    border-radius: 4px 4px 0 0;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    color: white;
+  }
+  .v-bar-label {
+    font-size: 11px;
+    color: var(--mj-text-muted);
+    margin-top: 8px;
+    text-align: center;
+  }
+
+  /* ===== PIPELINE STAGES ===== */
+  .stage-bars { display: flex; flex-direction: column; gap: 10px; }
+  .stage-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .stage-name {
+    width: 80px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--mj-text-secondary);
+    text-align: right;
+    flex-shrink: 0;
+  }
+  .stage-track {
+    flex: 1;
+    height: 24px;
+    background: var(--mj-bg-surface-card);
+    border-radius: 4px;
+    overflow: hidden;
+    position: relative;
+  }
+  .stage-fill {
+    height: 100%;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-right: 8px;
+    font-size: 11px;
+    font-weight: 600;
+    color: white;
+  }
+  .stage-time {
+    width: 50px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--mj-text-primary);
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  /* ===== CONFIDENCE HISTOGRAM ===== */
+  .histogram {
+    display: flex;
+    align-items: flex-end;
+    gap: 6px;
+    height: 130px;
+    padding-bottom: 24px;
+    position: relative;
+  }
+  .hist-bar-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    height: 100%;
+    justify-content: flex-end;
+  }
+  .hist-bar {
+    width: 100%;
+    border-radius: 3px 3px 0 0;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: 3px;
+    font-size: 10px;
+    font-weight: 600;
+    color: white;
+    min-height: 2px;
+  }
+  .hist-label {
+    font-size: 9px;
+    color: var(--mj-text-muted);
+    margin-top: 6px;
+    text-align: center;
+  }
+
+  /* ===== ERROR LOG ===== */
+  .error-log {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .error-entry {
+    display: flex;
+    gap: 12px;
+    padding: 10px 14px;
+    background: color-mix(in srgb, var(--mj-status-error) 4%, var(--mj-bg-surface));
+    border-left: 3px solid var(--mj-status-error);
+    border-radius: 0 6px 6px 0;
+    font-size: 12px;
+  }
+  .error-time {
+    color: var(--mj-text-muted);
+    font-size: 11px;
+    white-space: nowrap;
+    flex-shrink: 0;
+    width: 130px;
+  }
+  .error-source {
+    color: var(--mj-brand-primary);
+    font-weight: 600;
+    flex-shrink: 0;
+    width: 120px;
+  }
+  .error-msg { color: var(--mj-text-secondary); }
+
+  /* ===== PROGRESS BAR ===== */
+  .progress-track {
+    width: 80px;
+    height: 6px;
+    background: var(--mj-bg-surface-sunken);
+    border-radius: 3px;
+    overflow: hidden;
+    display: inline-block;
+    vertical-align: middle;
+    margin-right: 6px;
+  }
+  .progress-fill {
+    height: 100%;
+    border-radius: 3px;
+  }
+
+  /* ===== LINE CHART (CSS) ===== */
+  .line-chart-area {
+    position: relative;
+    height: 120px;
+    border-bottom: 1px solid var(--mj-border-default);
+    border-left: 1px solid var(--mj-border-default);
+    margin-top: 8px;
+  }
+
+  /* ===== MODEL COMPARISON ===== */
+  .model-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+  }
+  .model-card {
+    background: var(--mj-bg-surface-card);
+    border-radius: 8px;
+    padding: 14px;
+    text-align: center;
+    border: 1px solid var(--mj-border-default);
+  }
+  .model-name {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--mj-text-primary);
+    margin-bottom: 8px;
+  }
+  .model-score {
+    font-size: 28px;
+    font-weight: 700;
+    line-height: 1;
+  }
+  .model-detail {
+    font-size: 11px;
+    color: var(--mj-text-muted);
+    margin-top: 4px;
+  }
+
+  /* ===== TWO COLUMN ===== */
+  .two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+
+  .legend {
+    display: flex;
+    gap: 16px;
+    margin-top: 10px;
+    flex-wrap: wrap;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    color: var(--mj-text-muted);
+  }
+  .legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+
+  .grouped-bar-chart {
+    display: flex;
+    align-items: flex-end;
+    gap: 20px;
+    height: 140px;
+    justify-content: center;
+  }
+  .grouped-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    height: 100%;
+    justify-content: flex-end;
+  }
+  .grouped-bars {
+    display: flex;
+    gap: 3px;
+    align-items: flex-end;
+    height: 100%;
+  }
+  .g-bar {
+    width: 18px;
+    border-radius: 3px 3px 0 0;
+  }
+  .grouped-label {
+    font-size: 10px;
+    color: var(--mj-text-muted);
+    margin-top: 6px;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<!-- ==================== LEFT SIDEBAR ==================== -->
+<aside class="sidebar">
+  <div class="sidebar-header">
+    <h2><i class="fa-solid fa-chart-line"></i> Analytics</h2>
+  </div>
+
+  <nav class="sidebar-nav">
+    <a class="nav-item active" href="#overview">
+      <i class="fa-solid fa-grip"></i> Overview
+    </a>
+    <a class="nav-item" href="#tags">
+      <i class="fa-solid fa-tags"></i> Tags
+    </a>
+    <a class="nav-item" href="#sources">
+      <i class="fa-solid fa-database"></i> Sources
+    </a>
+    <a class="nav-item" href="#pipeline">
+      <i class="fa-solid fa-gears"></i> Pipeline
+    </a>
+    <a class="nav-item" href="#quality">
+      <i class="fa-solid fa-circle-check"></i> Quality
+    </a>
+  </nav>
+
+  <div class="sidebar-divider"></div>
+
+  <div class="trending-section">
+    <h3><i class="fa-solid fa-arrow-trend-up" style="margin-right:4px"></i> Trending Tags</h3>
+    <div class="tag-cloud">
+      <span style="font-size:16px;font-weight:700">Machine Learning</span>
+      <span style="font-size:13px;font-weight:500">Healthcare</span>
+      <span style="font-size:15px;font-weight:600">Cloud Computing</span>
+      <span style="font-size:11px;font-weight:400">DevOps</span>
+      <span style="font-size:14px;font-weight:600">Data Analytics</span>
+      <span style="font-size:12px;font-weight:500">Cybersecurity</span>
+      <span style="font-size:10px;font-weight:400">Blockchain</span>
+      <span style="font-size:13px;font-weight:500">AI Ethics</span>
+      <span style="font-size:11px;font-weight:400">Edge Computing</span>
+      <span style="font-size:14px;font-weight:600">Automation</span>
+    </div>
+  </div>
+
+  <div class="pipeline-status">
+    <span class="status-dot"></span>
+    All systems operational
+  </div>
+</aside>
+
+<!-- ==================== MAIN CONTENT ==================== -->
+<div class="main">
+
+  <!-- ====================================================== -->
+  <!-- TAB 1: OVERVIEW                                        -->
+  <!-- ====================================================== -->
+  <section class="tab-section" id="overview">
+    <div class="tab-section-header">
+      <i class="fa-solid fa-grip"></i>
+      <h1>Overview</h1>
+      <span class="tab-badge">TAB 1</span>
+    </div>
+
+    <!-- Filter Bar -->
+    <div class="filter-bar">
+      <div class="date-chips">
+        <span class="date-chip">7D</span>
+        <span class="date-chip active">30D</span>
+        <span class="date-chip">90D</span>
+        <span class="date-chip">YTD</span>
+        <span class="date-chip">All</span>
+      </div>
+      <select class="filter-dropdown">
+        <option>All Entities</option>
+        <option>Contacts</option>
+        <option>Companies</option>
+        <option>Products</option>
+        <option>Documents</option>
+      </select>
+    </div>
+
+    <!-- KPI Cards Row -->
+    <div class="kpi-row">
+      <!-- Total Tags -->
+      <div class="kpi-card">
+        <div>
+          <div class="kpi-label">Total Tags</div>
+          <div class="kpi-value">342</div>
+          <div class="kpi-delta up"><i class="fa-solid fa-arrow-up" style="font-size:9px"></i> +18 this week</div>
+        </div>
+        <div class="kpi-sparkline">
+          <svg width="64" height="28" viewBox="0 0 64 28">
+            <polyline points="2,24 10,22 18,20 26,18 34,14 42,12 50,8 62,4" fill="none" stroke="#264FAF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <polyline points="2,24 10,22 18,20 26,18 34,14 42,12 50,8 62,4 62,28 2,28" fill="url(#sparkGrad1)" stroke="none"/>
+            <defs><linearGradient id="sparkGrad1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#264FAF" stop-opacity="0.2"/><stop offset="1" stop-color="#264FAF" stop-opacity="0"/></linearGradient></defs>
+          </svg>
+        </div>
+      </div>
+
+      <!-- Items Processed -->
+      <div class="kpi-card">
+        <div>
+          <div class="kpi-label">Items Processed</div>
+          <div class="kpi-value">4,821</div>
+          <div class="kpi-delta up"><i class="fa-solid fa-arrow-up" style="font-size:9px"></i> +312 today</div>
+        </div>
+        <div class="kpi-sparkline">
+          <svg width="64" height="28" viewBox="0 0 64 28">
+            <polyline points="2,18 8,12 14,16 20,10 26,14 32,8 38,12 44,6 50,10 56,4 62,8" fill="none" stroke="#16a34a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <polyline points="2,18 8,12 14,16 20,10 26,14 32,8 38,12 44,6 50,10 56,4 62,8 62,28 2,28" fill="url(#sparkGrad2)" stroke="none"/>
+            <defs><linearGradient id="sparkGrad2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#16a34a" stop-opacity="0.2"/><stop offset="1" stop-color="#16a34a" stop-opacity="0"/></linearGradient></defs>
+          </svg>
+        </div>
+      </div>
+
+      <!-- Avg Confidence -->
+      <div class="kpi-card">
+        <div>
+          <div class="kpi-label">Avg Confidence</div>
+          <div class="kpi-value">0.78</div>
+          <div class="kpi-delta up"><i class="fa-solid fa-arrow-up" style="font-size:9px"></i> +0.03 vs last week</div>
+        </div>
+        <div class="kpi-sparkline">
+          <svg width="64" height="28" viewBox="0 0 64 28">
+            <polyline points="2,20 10,18 18,16 26,18 34,14 42,12 50,14 62,10" fill="none" stroke="#ea580c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <polyline points="2,20 10,18 18,16 26,18 34,14 42,12 50,14 62,10 62,28 2,28" fill="url(#sparkGrad3)" stroke="none"/>
+            <defs><linearGradient id="sparkGrad3" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ea580c" stop-opacity="0.2"/><stop offset="1" stop-color="#ea580c" stop-opacity="0"/></linearGradient></defs>
+          </svg>
+        </div>
+      </div>
+
+      <!-- Coverage -->
+      <div class="kpi-card">
+        <div>
+          <div class="kpi-label">Coverage</div>
+          <div class="kpi-value">68%</div>
+          <div class="kpi-delta up"><i class="fa-solid fa-arrow-up" style="font-size:9px"></i> +5% this month</div>
+        </div>
+        <div class="kpi-sparkline">
+          <svg width="64" height="28" viewBox="0 0 64 28">
+            <polyline points="2,24 10,22 18,20 26,18 34,16 42,14 50,12 62,10" fill="none" stroke="#7c3aed" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <polyline points="2,24 10,22 18,20 26,18 34,16 42,14 50,12 62,10 62,28 2,28" fill="url(#sparkGrad4)" stroke="none"/>
+            <defs><linearGradient id="sparkGrad4" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7c3aed" stop-opacity="0.2"/><stop offset="1" stop-color="#7c3aed" stop-opacity="0"/></linearGradient></defs>
+          </svg>
+        </div>
+      </div>
+    </div>
+
+    <!-- Widget Cards Grid (2x3) -->
+    <div class="cards-grid">
+
+      <!-- Card 1: Tag Growth -->
+      <div class="widget-card">
+        <div class="widget-title"><i class="fa-solid fa-chart-line"></i> Tag Growth</div>
+        <div class="bar-chart">
+          <div class="bar-col">
+            <div class="bar-value">52</div>
+            <div class="bar" style="height:15%;background:var(--mj-brand-primary);opacity:0.5"></div>
+            <div class="bar-label">Jan</div>
+          </div>
+          <div class="bar-col">
+            <div class="bar-value">89</div>
+            <div class="bar" style="height:26%;background:var(--mj-brand-primary);opacity:0.6"></div>
+            <div class="bar-label">Feb</div>
+          </div>
+          <div class="bar-col">
+            <div class="bar-value">134</div>
+            <div class="bar" style="height:39%;background:var(--mj-brand-primary);opacity:0.7"></div>
+            <div class="bar-label">Mar</div>
+          </div>
+          <div class="bar-col">
+            <div class="bar-value">198</div>
+            <div class="bar" style="height:58%;background:var(--mj-brand-primary);opacity:0.8"></div>
+            <div class="bar-label">Apr</div>
+          </div>
+          <div class="bar-col">
+            <div class="bar-value">267</div>
+            <div class="bar" style="height:78%;background:var(--mj-brand-primary);opacity:0.9"></div>
+            <div class="bar-label">May</div>
+          </div>
+          <div class="bar-col">
+            <div class="bar-value">342</div>
+            <div class="bar" style="height:100%;background:var(--mj-brand-primary)"></div>
+            <div class="bar-label">Jun</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 2: Content Coverage -->
+      <div class="widget-card">
+        <div class="widget-title"><i class="fa-solid fa-bullseye"></i> Content Coverage</div>
+        <div class="rings-grid">
+          <!-- Contacts 35% -->
+          <div class="ring-item">
+            <svg width="48" height="48" viewBox="0 0 48 48">
+              <circle cx="24" cy="24" r="20" fill="none" stroke="#e2e8f0" stroke-width="5"/>
+              <circle cx="24" cy="24" r="20" fill="none" stroke="#ea580c" stroke-width="5"
+                stroke-dasharray="44 126" stroke-dashoffset="31.4" stroke-linecap="round"
+                transform="rotate(-90 24 24)"/>
+              <text x="24" y="26" text-anchor="middle" font-size="11" font-weight="700" fill="#334155">35%</text>
+            </svg>
+            <div>
+              <div class="ring-label">Contacts</div>
+              <div class="ring-stat">1,240 / 3,500</div>
+            </div>
+          </div>
+          <!-- Companies 74% -->
+          <div class="ring-item">
+            <svg width="48" height="48" viewBox="0 0 48 48">
+              <circle cx="24" cy="24" r="20" fill="none" stroke="#e2e8f0" stroke-width="5"/>
+              <circle cx="24" cy="24" r="20" fill="none" stroke="#16a34a" stroke-width="5"
+                stroke-dasharray="93 126" stroke-dashoffset="31.4" stroke-linecap="round"
+                transform="rotate(-90 24 24)"/>
+              <text x="24" y="26" text-anchor="middle" font-size="11" font-weight="700" fill="#334155">74%</text>
+            </svg>
+            <div>
+              <div class="ring-label">Companies</div>
+              <div class="ring-stat">890 / 1,200</div>
+            </div>
+          </div>
+          <!-- Products 40% -->
+          <div class="ring-item">
+            <svg width="48" height="48" viewBox="0 0 48 48">
+              <circle cx="24" cy="24" r="20" fill="none" stroke="#e2e8f0" stroke-width="5"/>
+              <circle cx="24" cy="24" r="20" fill="none" stroke="#0284c7" stroke-width="5"
+                stroke-dasharray="50 126" stroke-dashoffset="31.4" stroke-linecap="round"
+                transform="rotate(-90 24 24)"/>
+              <text x="24" y="26" text-anchor="middle" font-size="11" font-weight="700" fill="#334155">40%</text>
+            </svg>
+            <div>
+              <div class="ring-label">Products</div>
+              <div class="ring-stat">320 / 800</div>
+            </div>
+          </div>
+          <!-- Documents 95% -->
+          <div class="ring-item">
+            <svg width="48" height="48" viewBox="0 0 48 48">
+              <circle cx="24" cy="24" r="20" fill="none" stroke="#e2e8f0" stroke-width="5"/>
+              <circle cx="24" cy="24" r="20" fill="none" stroke="#264FAF" stroke-width="5"
+                stroke-dasharray="119 126" stroke-dashoffset="31.4" stroke-linecap="round"
+                transform="rotate(-90 24 24)"/>
+              <text x="24" y="26" text-anchor="middle" font-size="11" font-weight="700" fill="#334155">95%</text>
+            </svg>
+            <div>
+              <div class="ring-label">Documents</div>
+              <div class="ring-stat">2,371 / 2,500</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 3: Quality Score Gauge -->
+      <div class="widget-card">
+        <div class="widget-title"><i class="fa-solid fa-gauge-high"></i> Quality Score</div>
+        <div style="display:flex;justify-content:center;margin-bottom:8px">
+          <svg width="180" height="110" viewBox="0 0 180 110">
+            <!-- Background arc -->
+            <path d="M 20 95 A 70 70 0 0 1 160 95" fill="none" stroke="#e2e8f0" stroke-width="14" stroke-linecap="round"/>
+            <!-- Red zone 0-40 (0-72deg) -->
+            <path d="M 20 95 A 70 70 0 0 1 48.6 35.2" fill="none" stroke="#dc2626" stroke-width="14" stroke-linecap="round" opacity="0.3"/>
+            <!-- Yellow zone 40-70 (72-126deg) -->
+            <path d="M 48.6 35.2 A 70 70 0 0 1 118 28" fill="none" stroke="#ea580c" stroke-width="14" opacity="0.3"/>
+            <!-- Green zone 70-100 (126-180deg) -->
+            <path d="M 118 28 A 70 70 0 0 1 160 95" fill="none" stroke="#16a34a" stroke-width="14" stroke-linecap="round" opacity="0.3"/>
+            <!-- Active arc (78%) -->
+            <path d="M 20 95 A 70 70 0 0 1 133 32" fill="none" stroke="url(#gaugeGrad)" stroke-width="14" stroke-linecap="round"/>
+            <defs>
+              <linearGradient id="gaugeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#dc2626"/>
+                <stop offset="50%" stop-color="#ea580c"/>
+                <stop offset="100%" stop-color="#16a34a"/>
+              </linearGradient>
+            </defs>
+            <!-- Needle -->
+            <line x1="90" y1="95" x2="128" y2="38" stroke="#334155" stroke-width="2.5" stroke-linecap="round"/>
+            <circle cx="90" cy="95" r="5" fill="#334155"/>
+            <!-- Score text -->
+            <text x="90" y="88" text-anchor="middle" font-size="26" font-weight="800" fill="#334155">78</text>
+            <text x="90" y="105" text-anchor="middle" font-size="10" fill="#94a3b8">out of 100</text>
+            <!-- Zone labels -->
+            <text x="28" y="108" font-size="8" fill="#94a3b8">0</text>
+            <text x="86" y="18" font-size="8" fill="#94a3b8">50</text>
+            <text x="155" y="108" font-size="8" fill="#94a3b8">100</text>
+          </svg>
+        </div>
+        <!-- Mini confidence histogram -->
+        <div style="display:flex;align-items:flex-end;gap:3px;height:32px;justify-content:center">
+          <div style="width:14px;height:4px;background:#e2e8f0;border-radius:2px" title="0.0-0.2: 12"></div>
+          <div style="width:14px;height:8px;background:#e2e8f0;border-radius:2px" title="0.2-0.4: 28"></div>
+          <div style="width:14px;height:14px;background:#ea580c;border-radius:2px;opacity:0.6" title="0.4-0.6: 45"></div>
+          <div style="width:14px;height:24px;background:#264FAF;border-radius:2px;opacity:0.7" title="0.6-0.8: 89"></div>
+          <div style="width:14px;height:32px;background:#264FAF;border-radius:2px" title="0.8-1.0: 168"></div>
+        </div>
+        <div style="text-align:center;font-size:10px;color:var(--mj-text-muted);margin-top:4px">Confidence Distribution</div>
+      </div>
+
+      <!-- Card 4: Source Performance -->
+      <div class="widget-card">
+        <div class="widget-title"><i class="fa-solid fa-ranking-star"></i> Source Performance</div>
+        <div class="h-bar-list">
+          <div class="h-bar-row">
+            <div class="h-bar-name">RSS Feeds</div>
+            <div class="h-bar-track">
+              <div class="h-bar-fill" style="width:82%;background:var(--mj-brand-primary)">8.2</div>
+            </div>
+          </div>
+          <div class="h-bar-row">
+            <div class="h-bar-name">Websites</div>
+            <div class="h-bar-track">
+              <div class="h-bar-fill" style="width:67%;background:#7c3aed">6.7</div>
+            </div>
+          </div>
+          <div class="h-bar-row">
+            <div class="h-bar-name">Entity Records</div>
+            <div class="h-bar-track">
+              <div class="h-bar-fill" style="width:51%;background:#0284c7">5.1</div>
+            </div>
+          </div>
+          <div class="h-bar-row">
+            <div class="h-bar-name">Cloud Storage</div>
+            <div class="h-bar-track">
+              <div class="h-bar-fill" style="width:43%;background:#16a34a">4.3</div>
+            </div>
+          </div>
+        </div>
+        <div style="text-align:center;font-size:10px;color:var(--mj-text-muted);margin-top:10px">Average tags per item</div>
+      </div>
+
+      <!-- Card 5: Daily Throughput -->
+      <div class="widget-card">
+        <div class="widget-title"><i class="fa-solid fa-bolt"></i> Daily Throughput</div>
+        <div class="throughput-bars" style="margin-bottom:22px">
+          <div class="tp-bar" style="height:60%;background:var(--mj-status-success)"><span class="tp-bar-label">21</span></div>
+          <div class="tp-bar" style="height:72%;background:var(--mj-status-success)"><span class="tp-bar-label">22</span></div>
+          <div class="tp-bar" style="height:55%;background:var(--mj-status-success)"><span class="tp-bar-label">23</span></div>
+          <div class="tp-bar" style="height:85%;background:var(--mj-status-success)"><span class="tp-bar-label">24</span></div>
+          <div class="tp-bar" style="height:90%;background:var(--mj-status-success)"><span class="tp-bar-label">25</span></div>
+          <div class="tp-bar" style="height:45%;background:var(--mj-status-error)"><span class="tp-bar-label">26</span></div>
+          <div class="tp-bar" style="height:78%;background:var(--mj-status-success)"><span class="tp-bar-label">27</span></div>
+          <div class="tp-bar" style="height:82%;background:var(--mj-status-success)"><span class="tp-bar-label">28</span></div>
+          <div class="tp-bar" style="height:68%;background:var(--mj-status-success)"><span class="tp-bar-label">29</span></div>
+          <div class="tp-bar" style="height:95%;background:var(--mj-status-success)"><span class="tp-bar-label">30</span></div>
+          <div class="tp-bar" style="height:100%;background:var(--mj-status-success)"><span class="tp-bar-label">31</span></div>
+          <div class="tp-bar" style="height:38%;background:var(--mj-status-error)"><span class="tp-bar-label">1</span></div>
+          <div class="tp-bar" style="height:88%;background:var(--mj-status-success)"><span class="tp-bar-label">2</span></div>
+          <div class="tp-bar" style="height:75%;background:var(--mj-status-success)"><span class="tp-bar-label">3</span></div>
+        </div>
+        <div class="legend" style="justify-content:center">
+          <div class="legend-item"><div class="legend-dot" style="background:var(--mj-status-success)"></div> Success</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--mj-status-error)"></div> Failures</div>
+        </div>
+      </div>
+
+      <!-- Card 6: Taxonomy Health -->
+      <div class="widget-card">
+        <div class="widget-title"><i class="fa-solid fa-sitemap"></i> Taxonomy Health</div>
+        <div style="display:flex;justify-content:center">
+          <svg width="140" height="140" viewBox="0 0 140 140">
+            <!-- Healthy: 82/105 = 78% -->
+            <circle cx="70" cy="70" r="54" fill="none" stroke="#e2e8f0" stroke-width="18"/>
+            <!-- Healthy segment (green) 78% = 281deg -->
+            <circle cx="70" cy="70" r="54" fill="none" stroke="#16a34a" stroke-width="18"
+              stroke-dasharray="265 339" stroke-dashoffset="85"
+              transform="rotate(-90 70 70)"/>
+            <!-- Attention segment (orange) 10.5% = 38deg -->
+            <circle cx="70" cy="70" r="54" fill="none" stroke="#ea580c" stroke-width="18"
+              stroke-dasharray="36 339" stroke-dashoffset="-180"
+              transform="rotate(-90 70 70)"/>
+            <!-- Orphaned segment (red) 11.4% = 41deg -->
+            <circle cx="70" cy="70" r="54" fill="none" stroke="#dc2626" stroke-width="18"
+              stroke-dasharray="38 339" stroke-dashoffset="-216"
+              transform="rotate(-90 70 70)"/>
+            <text x="70" y="66" text-anchor="middle" font-size="22" font-weight="800" fill="#334155">105</text>
+            <text x="70" y="82" text-anchor="middle" font-size="10" fill="#94a3b8">total tags</text>
+          </svg>
+        </div>
+        <div class="taxonomy-stats">
+          <div class="tax-stat" style="background:color-mix(in srgb, #16a34a 10%, white);color:#16a34a">
+            82<small>Healthy</small>
+          </div>
+          <div class="tax-stat" style="background:color-mix(in srgb, #ea580c 10%, white);color:#ea580c">
+            11<small>Attention</small>
+          </div>
+          <div class="tax-stat" style="background:color-mix(in srgb, #dc2626 10%, white);color:#dc2626">
+            12<small>Orphaned</small>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /cards-grid -->
+  </section>
+
+
+  <!-- ====================================================== -->
+  <!-- TAB 2: TAGS                                            -->
+  <!-- ====================================================== -->
+  <section class="tab-section" id="tags">
+    <div class="tab-section-header">
+      <i class="fa-solid fa-tags"></i>
+      <h1>Tags</h1>
+      <span class="tab-badge">TAB 2</span>
+    </div>
+
+    <!-- Top 20 Tags Table -->
+    <div class="sub-section" style="margin-top:0">
+      <h3><i class="fa-solid fa-trophy"></i> Top 20 Tags</h3>
+      <div style="overflow-x:auto">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Tag Name</th>
+              <th class="num">Usage Count</th>
+              <th>Avg Weight</th>
+              <th>Trend</th>
+              <th>Top Entity</th>
+              <th>First Seen</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>1</td>
+              <td><strong>Machine Learning</strong></td>
+              <td class="num">284</td>
+              <td><span class="weight-bar" style="width:76px;background:var(--mj-status-success)"></span>0.89</td>
+              <td><svg width="48" height="16"><polyline points="2,12 10,10 18,8 26,6 34,5 46,3" fill="none" stroke="#16a34a" stroke-width="1.5" stroke-linecap="round"/></svg></td>
+              <td>Documents</td>
+              <td style="color:var(--mj-text-muted)">2024-01-15</td>
+            </tr>
+            <tr>
+              <td>2</td>
+              <td><strong>Data Analytics</strong></td>
+              <td class="num">231</td>
+              <td><span class="weight-bar" style="width:68px;background:var(--mj-status-success)"></span>0.85</td>
+              <td><svg width="48" height="16"><polyline points="2,10 10,8 18,9 26,6 34,4 46,3" fill="none" stroke="#16a34a" stroke-width="1.5" stroke-linecap="round"/></svg></td>
+              <td>Companies</td>
+              <td style="color:var(--mj-text-muted)">2024-01-22</td>
+            </tr>
+            <tr>
+              <td>3</td>
+              <td><strong>Cloud Computing</strong></td>
+              <td class="num">198</td>
+              <td><span class="weight-bar" style="width:66px;background:var(--mj-status-success)"></span>0.82</td>
+              <td><svg width="48" height="16"><polyline points="2,8 10,9 18,7 26,5 34,6 46,4" fill="none" stroke="#16a34a" stroke-width="1.5" stroke-linecap="round"/></svg></td>
+              <td>Products</td>
+              <td style="color:var(--mj-text-muted)">2024-02-03</td>
+            </tr>
+            <tr>
+              <td>4</td>
+              <td><strong>Healthcare</strong></td>
+              <td class="num">176</td>
+              <td><span class="weight-bar" style="width:62px;background:var(--mj-status-success)"></span>0.79</td>
+              <td><svg width="48" height="16"><polyline points="2,10 10,8 18,6 26,7 34,5 46,4" fill="none" stroke="#16a34a" stroke-width="1.5" stroke-linecap="round"/></svg></td>
+              <td>Contacts</td>
+              <td style="color:var(--mj-text-muted)">2024-01-18</td>
+            </tr>
+            <tr>
+              <td>5</td>
+              <td><strong>Cybersecurity</strong></td>
+              <td class="num">152</td>
+              <td><span class="weight-bar" style="width:60px;background:var(--mj-status-success)"></span>0.77</td>
+              <td><svg width="48" height="16"><polyline points="2,12 10,10 18,8 26,9 34,6 46,5" fill="none" stroke="#16a34a" stroke-width="1.5" stroke-linecap="round"/></svg></td>
+              <td>Documents</td>
+              <td style="color:var(--mj-text-muted)">2024-02-10</td>
+            </tr>
+            <tr>
+              <td>6</td>
+              <td><strong>Automation</strong></td>
+              <td class="num">141</td>
+              <td><span class="weight-bar" style="width:58px;background:var(--mj-brand-primary)"></span>0.75</td>
+              <td><svg width="48" height="16"><polyline points="2,10 10,9 18,10 26,7 34,5 46,4" fill="none" stroke="#16a34a" stroke-width="1.5" stroke-linecap="round"/></svg></td>
+              <td>Companies</td>
+              <td style="color:var(--mj-text-muted)">2024-02-15</td>
+            </tr>
+            <tr>
+              <td>7</td>
+              <td><strong>AI Ethics</strong></td>
+              <td class="num">128</td>
+              <td><span class="weight-bar" style="width:56px;background:var(--mj-brand-primary)"></span>0.73</td>
+              <td><svg width="48" height="16"><polyline points="2,8 10,10 18,8 26,6 34,7 46,5" fill="none" stroke="#264FAF" stroke-width="1.5" stroke-linecap="round"/></svg></td>
+              <td>Documents</td>
+              <td style="color:var(--mj-text-muted)">2024-03-01</td>
+            </tr>
+            <tr>
+              <td>8</td>
+              <td><strong>DevOps</strong></td>
+              <td class="num">119</td>
+              <td><span class="weight-bar" style="width:54px;background:var(--mj-brand-primary)"></span>0.71</td>
+              <td><svg width="48" height="16"><polyline points="2,10 10,8 18,10 26,8 34,6 46,5" fill="none" stroke="#264FAF" stroke-width="1.5" stroke-linecap="round"/></svg></td>
+              <td>Products</td>
+              <td style="color:var(--mj-text-muted)">2024-02-20</td>
+            </tr>
+            <tr>
+              <td>9</td>
+              <td><strong>Edge Computing</strong></td>
+              <td class="num">104</td>
+              <td><span class="weight-bar" style="width:52px;background:var(--mj-brand-primary)"></span>0.68</td>
+              <td><svg width="48" height="16"><polyline points="2,12 10,10 18,12 26,8 34,9 46,6" fill="none" stroke="#264FAF" stroke-width="1.5" stroke-linecap="round"/></svg></td>
+              <td>Companies</td>
+              <td style="color:var(--mj-text-muted)">2024-03-05</td>
+            </tr>
+            <tr>
+              <td>10</td>
+              <td><strong>Blockchain</strong></td>
+              <td class="num">97</td>
+              <td><span class="weight-bar" style="width:50px;background:var(--mj-brand-primary)"></span>0.66</td>
+              <td><svg width="48" height="16"><polyline points="2,6 10,8 18,7 26,9 34,8 46,7" fill="none" stroke="#ea580c" stroke-width="1.5" stroke-linecap="round"/></svg></td>
+              <td>Documents</td>
+              <td style="color:var(--mj-text-muted)">2024-03-12</td>
+            </tr>
+            <tr>
+              <td>11</td>
+              <td><strong>Natural Language Processing</strong></td>
+              <td class="num">89</td>
+              <td><span class="weight-bar" style="width:48px;background:var(--mj-brand-primary)"></span>0.64</td>
+              <td><svg width="48" height="16"><polyline points="2,10 10,8 18,6 26,7 34,5 46,4" fill="none" stroke="#16a34a" stroke-width="1.5" stroke-linecap="round"/></svg></td>
+              <td>Documents</td>
+              <td style="color:var(--mj-text-muted)">2024-03-18</td>
+            </tr>
+            <tr>
+              <td>12</td>
+              <td><strong>IoT</strong></td>
+              <td class="num">82</td>
+              <td><span class="weight-bar" style="width:46px;background:var(--mj-brand-primary)"></span>0.62</td>
+              <td><svg width="48" height="16"><polyline points="2,8 10,9 18,7 26,8 34,6 46,5" fill="none" stroke="#264FAF" stroke-width="1.5" stroke-linecap="round"/></svg></td>
+              <td>Products</td>
+              <td style="color:var(--mj-text-muted)">2024-02-28</td>
+            </tr>
+            <tr>
+              <td>13</td>
+              <td><strong>SaaS</strong></td>
+              <td class="num">76</td>
+              <td><span class="weight-bar" style="width:44px;background:var(--mj-status-warning)"></span>0.60</td>
+              <td><svg width="48" height="16"><polyline points="2,8 10,6 18,8 26,7 34,8 46,6" fill="none" stroke="#264FAF" stroke-width="1.5" stroke-linecap="round"/></svg></td>
+              <td>Companies</td>
+              <td style="color:var(--mj-text-muted)">2024-04-01</td>
+            </tr>
+            <tr>
+              <td>14</td>
+              <td><strong>Fintech</strong></td>
+              <td class="num">71</td>
+              <td><span class="weight-bar" style="width:42px;background:var(--mj-status-warning)"></span>0.58</td>
+              <td><svg width="48" height="16"><polyline points="2,10 10,8 18,10 26,6 34,8 46,5" fill="none" stroke="#16a34a" stroke-width="1.5" stroke-linecap="round"/></svg></td>
+              <td>Contacts</td>
+              <td style="color:var(--mj-text-muted)">2024-04-08</td>
+            </tr>
+            <tr>
+              <td>15</td>
+              <td><strong>5G Networks</strong></td>
+              <td class="num">64</td>
+              <td><span class="weight-bar" style="width:40px;background:var(--mj-status-warning)"></span>0.55</td>
+              <td><svg width="48" height="16"><polyline points="2,6 10,8 18,6 26,8 34,7 46,6" fill="none" stroke="#ea580c" stroke-width="1.5" stroke-linecap="round"/></svg></td>
+              <td>Products</td>
+              <td style="color:var(--mj-text-muted)">2024-04-15</td>
+            </tr>
+            <tr>
+              <td>16</td>
+              <td><strong>Quantum Computing</strong></td>
+              <td class="num">58</td>
+              <td><span class="weight-bar" style="width:38px;background:var(--mj-status-warning)"></span>0.52</td>
+              <td><svg width="48" height="16"><polyline points="2,10 10,8 18,9 26,7 34,6 46,5" fill="none" stroke="#16a34a" stroke-width="1.5" stroke-linecap="round"/></svg></td>
+              <td>Documents</td>
+              <td style="color:var(--mj-text-muted)">2024-05-01</td>
+            </tr>
+            <tr>
+              <td>17</td>
+              <td><strong>Digital Twins</strong></td>
+              <td class="num">45</td>
+              <td><span class="weight-bar" style="width:34px;background:var(--mj-status-warning)"></span>0.48</td>
+              <td><svg width="48" height="16"><polyline points="2,8 10,10 18,8 26,10 34,8 46,6" fill="none" stroke="#264FAF" stroke-width="1.5" stroke-linecap="round"/></svg></td>
+              <td>Products</td>
+              <td style="color:var(--mj-text-muted)">2024-05-10</td>
+            </tr>
+            <tr>
+              <td>18</td>
+              <td><strong>Green Tech</strong></td>
+              <td class="num">39</td>
+              <td><span class="weight-bar" style="width:32px;background:var(--mj-status-warning)"></span>0.45</td>
+              <td><svg width="48" height="16"><polyline points="2,10 10,8 18,6 26,8 34,5 46,4" fill="none" stroke="#16a34a" stroke-width="1.5" stroke-linecap="round"/></svg></td>
+              <td>Companies</td>
+              <td style="color:var(--mj-text-muted)">2024-05-18</td>
+            </tr>
+            <tr>
+              <td>19</td>
+              <td><strong>AR/VR</strong></td>
+              <td class="num">34</td>
+              <td><span class="weight-bar" style="width:28px;background:var(--mj-status-error)"></span>0.41</td>
+              <td><svg width="48" height="16"><polyline points="2,6 10,8 18,6 26,8 34,10 46,8" fill="none" stroke="#ea580c" stroke-width="1.5" stroke-linecap="round"/></svg></td>
+              <td>Products</td>
+              <td style="color:var(--mj-text-muted)">2024-05-22</td>
+            </tr>
+            <tr>
+              <td>20</td>
+              <td><strong>Robotics</strong></td>
+              <td class="num">28</td>
+              <td><span class="weight-bar" style="width:26px;background:var(--mj-status-error)"></span>0.38</td>
+              <td><svg width="48" height="16"><polyline points="2,8 10,6 18,8 26,6 34,8 46,6" fill="none" stroke="#264FAF" stroke-width="1.5" stroke-linecap="round"/></svg></td>
+              <td>Documents</td>
+              <td style="color:var(--mj-text-muted)">2024-06-01</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Tag Distribution by Entity -->
+    <div class="sub-section">
+      <h3><i class="fa-solid fa-chart-bar"></i> Tag Distribution by Entity</h3>
+      <div class="stacked-bar-chart">
+        <div class="stacked-row">
+          <div class="stacked-label">Contacts</div>
+          <div class="stacked-track">
+            <div class="stacked-seg" style="width:30%;background:#264FAF" title="ML: 30%">ML</div>
+            <div class="stacked-seg" style="width:25%;background:#0284c7" title="Healthcare: 25%">Health</div>
+            <div class="stacked-seg" style="width:20%;background:#7c3aed" title="Fintech: 20%">Fin</div>
+            <div class="stacked-seg" style="width:15%;background:#16a34a" title="Analytics: 15%">Data</div>
+            <div class="stacked-seg" style="width:10%;background:#ea580c" title="Other: 10%">...</div>
+          </div>
+        </div>
+        <div class="stacked-row">
+          <div class="stacked-label">Companies</div>
+          <div class="stacked-track">
+            <div class="stacked-seg" style="width:35%;background:#264FAF">Cloud</div>
+            <div class="stacked-seg" style="width:20%;background:#0284c7">SaaS</div>
+            <div class="stacked-seg" style="width:18%;background:#7c3aed">Auto</div>
+            <div class="stacked-seg" style="width:15%;background:#16a34a">Data</div>
+            <div class="stacked-seg" style="width:12%;background:#ea580c">...</div>
+          </div>
+        </div>
+        <div class="stacked-row">
+          <div class="stacked-label">Products</div>
+          <div class="stacked-track">
+            <div class="stacked-seg" style="width:28%;background:#264FAF">IoT</div>
+            <div class="stacked-seg" style="width:22%;background:#0284c7">5G</div>
+            <div class="stacked-seg" style="width:20%;background:#7c3aed">Edge</div>
+            <div class="stacked-seg" style="width:18%;background:#16a34a">DevOps</div>
+            <div class="stacked-seg" style="width:12%;background:#ea580c">...</div>
+          </div>
+        </div>
+        <div class="stacked-row">
+          <div class="stacked-label">Documents</div>
+          <div class="stacked-track">
+            <div class="stacked-seg" style="width:32%;background:#264FAF">ML</div>
+            <div class="stacked-seg" style="width:24%;background:#0284c7">Cyber</div>
+            <div class="stacked-seg" style="width:18%;background:#7c3aed">NLP</div>
+            <div class="stacked-seg" style="width:14%;background:#16a34a">Ethics</div>
+            <div class="stacked-seg" style="width:12%;background:#ea580c">...</div>
+          </div>
+        </div>
+      </div>
+      <div class="legend" style="margin-top:12px">
+        <div class="legend-item"><div class="legend-dot" style="background:#264FAF"></div> Primary</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#0284c7"></div> Secondary</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#7c3aed"></div> Tertiary</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#16a34a"></div> Quaternary</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#ea580c"></div> Other</div>
+      </div>
+    </div>
+
+    <!-- Tag Depth Distribution -->
+    <div class="sub-section">
+      <h3><i class="fa-solid fa-layer-group"></i> Tag Depth Distribution</h3>
+      <div class="v-bar-chart">
+        <div class="v-bar-col">
+          <div class="v-bar" style="height:36%;background:#264FAF;opacity:0.6">15</div>
+          <div class="v-bar-label">Depth 1</div>
+        </div>
+        <div class="v-bar-col">
+          <div class="v-bar" style="height:100%;background:#264FAF;opacity:0.7">42</div>
+          <div class="v-bar-label">Depth 2</div>
+        </div>
+        <div class="v-bar-col">
+          <div class="v-bar" style="height:74%;background:#264FAF;opacity:0.8">31</div>
+          <div class="v-bar-label">Depth 3</div>
+        </div>
+        <div class="v-bar-col">
+          <div class="v-bar" style="height:29%;background:#264FAF;opacity:0.9">12</div>
+          <div class="v-bar-label">Depth 4</div>
+        </div>
+        <div class="v-bar-col">
+          <div class="v-bar" style="height:7%;background:#264FAF;min-height:24px">3</div>
+          <div class="v-bar-label">Depth 5</div>
+        </div>
+      </div>
+      <div style="text-align:center;font-size:11px;color:var(--mj-text-muted);margin-top:14px">
+        Taxonomy hierarchy depth &mdash; Most tags at depth 2-3 indicating a healthy mid-level structure
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ====================================================== -->
+  <!-- TAB 3: SOURCES                                         -->
+  <!-- ====================================================== -->
+  <section class="tab-section" id="sources">
+    <div class="tab-section-header">
+      <i class="fa-solid fa-database"></i>
+      <h1>Sources</h1>
+      <span class="tab-badge">TAB 3</span>
+    </div>
+
+    <!-- Source Comparison Table -->
+    <div class="sub-section" style="margin-top:0">
+      <h3><i class="fa-solid fa-table"></i> Source Comparison</h3>
+      <div style="overflow-x:auto">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Source Name</th>
+              <th>Type</th>
+              <th class="num">Items</th>
+              <th class="num">Tags Generated</th>
+              <th class="num">Avg Tags/Item</th>
+              <th class="num">Avg Weight</th>
+              <th>Last Run</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>TechCrunch RSS</strong></td>
+              <td><i class="fa-solid fa-rss" style="color:#ea580c;margin-right:4px"></i> RSS Feed</td>
+              <td class="num">1,842</td>
+              <td class="num">15,104</td>
+              <td class="num">8.2</td>
+              <td class="num">0.84</td>
+              <td style="color:var(--mj-text-muted)">2 hours ago</td>
+              <td><span class="badge badge-success"><i class="fa-solid fa-circle" style="font-size:6px;margin-right:3px"></i> Active</span></td>
+            </tr>
+            <tr>
+              <td><strong>CRM Contacts</strong></td>
+              <td><i class="fa-solid fa-address-book" style="color:#264FAF;margin-right:4px"></i> Entity Records</td>
+              <td class="num">3,500</td>
+              <td class="num">17,850</td>
+              <td class="num">5.1</td>
+              <td class="num">0.76</td>
+              <td style="color:var(--mj-text-muted)">6 hours ago</td>
+              <td><span class="badge badge-success"><i class="fa-solid fa-circle" style="font-size:6px;margin-right:3px"></i> Active</span></td>
+            </tr>
+            <tr>
+              <td><strong>docs.company.com</strong></td>
+              <td><i class="fa-solid fa-globe" style="color:#7c3aed;margin-right:4px"></i> Website</td>
+              <td class="num">892</td>
+              <td class="num">5,976</td>
+              <td class="num">6.7</td>
+              <td class="num">0.81</td>
+              <td style="color:var(--mj-text-muted)">12 hours ago</td>
+              <td><span class="badge badge-success"><i class="fa-solid fa-circle" style="font-size:6px;margin-right:3px"></i> Active</span></td>
+            </tr>
+            <tr>
+              <td><strong>Google Drive Archive</strong></td>
+              <td><i class="fa-solid fa-cloud" style="color:#0284c7;margin-right:4px"></i> Cloud Storage</td>
+              <td class="num">2,156</td>
+              <td class="num">9,271</td>
+              <td class="num">4.3</td>
+              <td class="num">0.69</td>
+              <td style="color:var(--mj-text-muted)">1 day ago</td>
+              <td><span class="badge badge-warning"><i class="fa-solid fa-circle" style="font-size:6px;margin-right:3px"></i> Slow</span></td>
+            </tr>
+            <tr>
+              <td><strong>HackerNews Feed</strong></td>
+              <td><i class="fa-solid fa-rss" style="color:#ea580c;margin-right:4px"></i> RSS Feed</td>
+              <td class="num">431</td>
+              <td class="num">3,189</td>
+              <td class="num">7.4</td>
+              <td class="num">0.72</td>
+              <td style="color:var(--mj-text-muted)">3 hours ago</td>
+              <td><span class="badge badge-error"><i class="fa-solid fa-circle" style="font-size:6px;margin-right:3px"></i> Error</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Per-Source Detail -->
+    <div class="sub-section">
+      <h3><i class="fa-solid fa-chart-area"></i> Source Detail: TechCrunch RSS</h3>
+      <div class="two-col">
+        <!-- Items Processed Over Time -->
+        <div class="widget-card">
+          <div class="widget-title"><i class="fa-solid fa-chart-bar"></i> Items Processed (Last 8 Weeks)</div>
+          <div class="bar-chart" style="height:100px">
+            <div class="bar-col">
+              <div class="bar-value" style="font-size:9px">145</div>
+              <div class="bar" style="height:48%;background:#264FAF;opacity:0.5"></div>
+              <div class="bar-label">W1</div>
+            </div>
+            <div class="bar-col">
+              <div class="bar-value" style="font-size:9px">198</div>
+              <div class="bar" style="height:66%;background:#264FAF;opacity:0.6"></div>
+              <div class="bar-label">W2</div>
+            </div>
+            <div class="bar-col">
+              <div class="bar-value" style="font-size:9px">176</div>
+              <div class="bar" style="height:59%;background:#264FAF;opacity:0.6"></div>
+              <div class="bar-label">W3</div>
+            </div>
+            <div class="bar-col">
+              <div class="bar-value" style="font-size:9px">223</div>
+              <div class="bar" style="height:74%;background:#264FAF;opacity:0.7"></div>
+              <div class="bar-label">W4</div>
+            </div>
+            <div class="bar-col">
+              <div class="bar-value" style="font-size:9px">256</div>
+              <div class="bar" style="height:85%;background:#264FAF;opacity:0.8"></div>
+              <div class="bar-label">W5</div>
+            </div>
+            <div class="bar-col">
+              <div class="bar-value" style="font-size:9px">234</div>
+              <div class="bar" style="height:78%;background:#264FAF;opacity:0.8"></div>
+              <div class="bar-label">W6</div>
+            </div>
+            <div class="bar-col">
+              <div class="bar-value" style="font-size:9px">289</div>
+              <div class="bar" style="height:96%;background:#264FAF;opacity:0.9"></div>
+              <div class="bar-label">W7</div>
+            </div>
+            <div class="bar-col">
+              <div class="bar-value" style="font-size:9px">301</div>
+              <div class="bar" style="height:100%;background:#264FAF"></div>
+              <div class="bar-label">W8</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tag Quality Distribution -->
+        <div class="widget-card">
+          <div class="widget-title"><i class="fa-solid fa-star-half-stroke"></i> Tag Quality Distribution</div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="font-size:11px;color:var(--mj-text-muted);width:65px;text-align:right">High (>0.8)</span>
+              <div style="flex:1;height:18px;background:var(--mj-bg-surface-card);border-radius:4px;overflow:hidden">
+                <div style="width:62%;height:100%;background:var(--mj-status-success);border-radius:4px;display:flex;align-items:center;padding-left:8px;font-size:10px;font-weight:600;color:white">62%</div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="font-size:11px;color:var(--mj-text-muted);width:65px;text-align:right">Med (0.5-0.8)</span>
+              <div style="flex:1;height:18px;background:var(--mj-bg-surface-card);border-radius:4px;overflow:hidden">
+                <div style="width:28%;height:100%;background:var(--mj-status-warning);border-radius:4px;display:flex;align-items:center;padding-left:8px;font-size:10px;font-weight:600;color:white">28%</div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="font-size:11px;color:var(--mj-text-muted);width:65px;text-align:right">Low (<0.5)</span>
+              <div style="flex:1;height:18px;background:var(--mj-bg-surface-card);border-radius:4px;overflow:hidden">
+                <div style="width:10%;height:100%;background:var(--mj-status-error);border-radius:4px;display:flex;align-items:center;padding-left:8px;font-size:10px;font-weight:600;color:white">10%</div>
+              </div>
+            </div>
+          </div>
+          <div style="margin-top:14px;padding:10px;background:var(--mj-bg-surface-card);border-radius:6px;font-size:11px;color:var(--mj-text-secondary)">
+            <i class="fa-solid fa-circle-info" style="color:var(--mj-status-info);margin-right:4px"></i>
+            TechCrunch RSS has the highest quality distribution among all sources, with 62% of tags scoring above 0.8 confidence.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Source Health -->
+    <div class="sub-section">
+      <h3><i class="fa-solid fa-heart-pulse"></i> Source Health Summary</h3>
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px">
+        <div style="background:var(--mj-bg-surface);border:1px solid var(--mj-border-default);border-radius:8px;padding:14px;text-align:center;border-top:3px solid var(--mj-status-success)">
+          <div style="font-size:11px;color:var(--mj-text-muted);margin-bottom:4px">TechCrunch RSS</div>
+          <div style="font-size:22px;font-weight:700;color:var(--mj-status-success)">98%</div>
+          <div style="font-size:10px;color:var(--mj-text-muted)">uptime</div>
+        </div>
+        <div style="background:var(--mj-bg-surface);border:1px solid var(--mj-border-default);border-radius:8px;padding:14px;text-align:center;border-top:3px solid var(--mj-status-success)">
+          <div style="font-size:11px;color:var(--mj-text-muted);margin-bottom:4px">CRM Contacts</div>
+          <div style="font-size:22px;font-weight:700;color:var(--mj-status-success)">100%</div>
+          <div style="font-size:10px;color:var(--mj-text-muted)">uptime</div>
+        </div>
+        <div style="background:var(--mj-bg-surface);border:1px solid var(--mj-border-default);border-radius:8px;padding:14px;text-align:center;border-top:3px solid var(--mj-status-success)">
+          <div style="font-size:11px;color:var(--mj-text-muted);margin-bottom:4px">docs.company.com</div>
+          <div style="font-size:22px;font-weight:700;color:var(--mj-status-success)">96%</div>
+          <div style="font-size:10px;color:var(--mj-text-muted)">uptime</div>
+        </div>
+        <div style="background:var(--mj-bg-surface);border:1px solid var(--mj-border-default);border-radius:8px;padding:14px;text-align:center;border-top:3px solid var(--mj-status-warning)">
+          <div style="font-size:11px;color:var(--mj-text-muted);margin-bottom:4px">Google Drive</div>
+          <div style="font-size:22px;font-weight:700;color:var(--mj-status-warning)">87%</div>
+          <div style="font-size:10px;color:var(--mj-text-muted)">uptime</div>
+        </div>
+        <div style="background:var(--mj-bg-surface);border:1px solid var(--mj-border-default);border-radius:8px;padding:14px;text-align:center;border-top:3px solid var(--mj-status-error)">
+          <div style="font-size:11px;color:var(--mj-text-muted);margin-bottom:4px">HackerNews</div>
+          <div style="font-size:22px;font-weight:700;color:var(--mj-status-error)">72%</div>
+          <div style="font-size:10px;color:var(--mj-text-muted)">uptime</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ====================================================== -->
+  <!-- TAB 4: PIPELINE                                        -->
+  <!-- ====================================================== -->
+  <section class="tab-section" id="pipeline">
+    <div class="tab-section-header">
+      <i class="fa-solid fa-gears"></i>
+      <h1>Pipeline</h1>
+      <span class="tab-badge">TAB 4</span>
+    </div>
+
+    <!-- Pipeline Throughput Chart -->
+    <div class="sub-section" style="margin-top:0">
+      <h3><i class="fa-solid fa-chart-bar"></i> Pipeline Throughput (Last 30 Days)</h3>
+      <div class="widget-card">
+        <div style="display:flex;align-items:flex-end;gap:3px;height:110px">
+          <!-- 30 bars with varying heights -->
+          <div style="flex:1;height:45%;background:var(--mj-brand-primary);border-radius:2px 2px 0 0;opacity:0.6"></div>
+          <div style="flex:1;height:52%;background:var(--mj-brand-primary);border-radius:2px 2px 0 0;opacity:0.6"></div>
+          <div style="flex:1;height:60%;background:var(--mj-brand-primary);border-radius:2px 2px 0 0;opacity:0.65"></div>
+          <div style="flex:1;height:48%;background:var(--mj-brand-primary);border-radius:2px 2px 0 0;opacity:0.6"></div>
+          <div style="flex:1;height:72%;background:var(--mj-brand-primary);border-radius:2px 2px 0 0;opacity:0.7"></div>
+          <div style="flex:1;height:65%;background:var(--mj-brand-primary);border-radius:2px 2px 0 0;opacity:0.7"></div>
+          <div style="flex:1;height:55%;background:var(--mj-brand-primary);border-radius:2px 2px 0 0;opacity:0.65"></div>
+          <div style="flex:1;height:80%;background:var(--mj-brand-primary);border-radius:2px 2px 0 0;opacity:0.75"></div>
+          <div style="flex:1;height:75%;background:var(--mj-brand-primary);border-radius:2px 2px 0 0;opacity:0.7"></div>
+          <div style="flex:1;height:68%;background:var(--mj-brand-primary);border-radius:2px 2px 0 0;opacity:0.7"></div>
+          <div style="flex:1;height:85%;background:var(--mj-brand-primary);border-radius:2px 2px 0 0;opacity:0.8"></div>
+          <div style="flex:1;height:78%;background:var(--mj-brand-primary);border-radius:2px 2px 0 0;opacity:0.75"></div>
+          <div style="flex:1;height:30%;background:var(--mj-status-error);border-radius:2px 2px 0 0;opacity:0.7"></div>
+          <div style="flex:1;height:62%;background:var(--mj-brand-primary);border-radius:2px 2px 0 0;opacity:0.65"></div>
+          <div style="flex:1;height:88%;background:var(--mj-brand-primary);border-radius:2px 2px 0 0;opacity:0.8"></div>
+          <div style="flex:1;height:92%;background:var(--mj-brand-primary);border-radius:2px 2px 0 0;opacity:0.85"></div>
+          <div style="flex:1;height:70%;background:var(--mj-brand-primary);border-radius:2px 2px 0 0;opacity:0.7"></div>
+          <div style="flex:1;height:82%;background:var(--mj-brand-primary);border-radius:2px 2px 0 0;opacity:0.75"></div>
+          <div style="flex:1;height:95%;background:var(--mj-brand-primary);border-radius:2px 2px 0 0;opacity:0.9"></div>
+          <div style="flex:1;height:88%;background:var(--mj-brand-primary);border-radius:2px 2px 0 0;opacity:0.8"></div>
+          <div style="flex:1;height:35%;background:var(--mj-status-error);border-radius:2px 2px 0 0;opacity:0.7"></div>
+          <div style="flex:1;height:72%;background:var(--mj-brand-primary);border-radius:2px 2px 0 0;opacity:0.7"></div>
+          <div style="flex:1;height:90%;background:var(--mj-brand-primary);border-radius:2px 2px 0 0;opacity:0.85"></div>
+          <div style="flex:1;height:100%;background:var(--mj-brand-primary);border-radius:2px 2px 0 0;opacity:0.95"></div>
+          <div style="flex:1;height:85%;background:var(--mj-brand-primary);border-radius:2px 2px 0 0;opacity:0.8"></div>
+          <div style="flex:1;height:78%;background:var(--mj-brand-primary);border-radius:2px 2px 0 0;opacity:0.75"></div>
+          <div style="flex:1;height:92%;background:var(--mj-brand-primary);border-radius:2px 2px 0 0;opacity:0.85"></div>
+          <div style="flex:1;height:88%;background:var(--mj-brand-primary);border-radius:2px 2px 0 0;opacity:0.8"></div>
+          <div style="flex:1;height:95%;background:var(--mj-brand-primary);border-radius:2px 2px 0 0;opacity:0.9"></div>
+          <div style="flex:1;height:82%;background:var(--mj-brand-primary);border-radius:2px 2px 0 0;opacity:0.8"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:10px;color:var(--mj-text-muted)">
+          <span>Mar 5</span><span>Mar 12</span><span>Mar 19</span><span>Mar 26</span><span>Apr 3</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Processing Time Breakdown -->
+    <div class="sub-section">
+      <h3><i class="fa-solid fa-stopwatch"></i> Processing Time Breakdown (Avg per Item)</h3>
+      <div class="widget-card">
+        <div class="stage-bars">
+          <div class="stage-row">
+            <div class="stage-name">Ingest</div>
+            <div class="stage-track">
+              <div class="stage-fill" style="width:10%;background:var(--mj-status-success)">2.1s</div>
+            </div>
+            <div class="stage-time">2.1s</div>
+          </div>
+          <div class="stage-row">
+            <div class="stage-name">Extract</div>
+            <div class="stage-track">
+              <div class="stage-fill" style="width:25%;background:var(--mj-brand-primary)">5.3s</div>
+            </div>
+            <div class="stage-time">5.3s</div>
+          </div>
+          <div class="stage-row">
+            <div class="stage-name">Chunk</div>
+            <div class="stage-track">
+              <div class="stage-fill" style="width:6%;background:var(--mj-status-success)"></div>
+            </div>
+            <div class="stage-time">1.2s</div>
+          </div>
+          <div class="stage-row">
+            <div class="stage-name">Tag</div>
+            <div class="stage-track">
+              <div class="stage-fill" style="width:42%;background:var(--mj-status-warning)">8.7s</div>
+            </div>
+            <div class="stage-time">8.7s</div>
+          </div>
+          <div class="stage-row">
+            <div class="stage-name">Vectorize</div>
+            <div class="stage-track">
+              <div class="stage-fill" style="width:16%;background:#7c3aed">3.4s</div>
+            </div>
+            <div class="stage-time">3.4s</div>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-top:14px;padding-top:10px;border-top:1px solid var(--mj-border-default)">
+          <span style="font-size:12px;color:var(--mj-text-secondary)"><strong>Total avg:</strong> 20.7s per item</span>
+          <span style="font-size:12px;color:var(--mj-text-muted)"><i class="fa-solid fa-triangle-exclamation" style="color:var(--mj-status-warning);margin-right:4px"></i> Tagging stage is the bottleneck (42% of total time)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Success/Failure Rate -->
+    <div class="sub-section">
+      <h3><i class="fa-solid fa-chart-line"></i> Success Rate Over Time</h3>
+      <div class="widget-card">
+        <div style="position:relative;height:100px;border-left:1px solid var(--mj-border-default);border-bottom:1px solid var(--mj-border-default);margin:0 10px">
+          <!-- Y-axis labels -->
+          <div style="position:absolute;left:-30px;top:0;font-size:9px;color:var(--mj-text-muted)">100%</div>
+          <div style="position:absolute;left:-26px;top:48px;font-size:9px;color:var(--mj-text-muted)">50%</div>
+          <div style="position:absolute;left:-22px;top:92px;font-size:9px;color:var(--mj-text-muted)">0%</div>
+          <!-- Grid lines -->
+          <div style="position:absolute;top:50%;left:0;right:0;border-top:1px dashed var(--mj-border-subtle)"></div>
+          <!-- Success line (SVG) -->
+          <svg width="100%" height="100" viewBox="0 0 400 100" preserveAspectRatio="none" style="position:absolute;top:0;left:0">
+            <polyline points="0,8 40,5 80,7 120,4 160,6 200,3 240,8 280,5 320,4 360,6 400,3"
+              fill="none" stroke="#16a34a" stroke-width="2" vector-effect="non-scaling-stroke"/>
+            <polyline points="0,8 40,5 80,7 120,4 160,6 200,3 240,8 280,5 320,4 360,6 400,3 400,100 0,100"
+              fill="url(#successFill)" stroke="none"/>
+            <defs><linearGradient id="successFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#16a34a" stop-opacity="0.15"/><stop offset="1" stop-color="#16a34a" stop-opacity="0"/></linearGradient></defs>
+          </svg>
+          <!-- Failure line -->
+          <svg width="100%" height="100" viewBox="0 0 400 100" preserveAspectRatio="none" style="position:absolute;top:0;left:0">
+            <polyline points="0,92 40,95 80,90 120,96 160,88 200,93 240,70 280,92 320,94 360,91 400,95"
+              fill="none" stroke="#dc2626" stroke-width="2" stroke-dasharray="4 3" vector-effect="non-scaling-stroke"/>
+          </svg>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-top:8px;padding:0 10px;font-size:10px;color:var(--mj-text-muted)">
+          <span>Week 1</span><span>Week 5</span><span>Week 10</span>
+        </div>
+        <div class="legend" style="justify-content:center;margin-top:10px">
+          <div class="legend-item"><div class="legend-dot" style="background:var(--mj-status-success)"></div> Success Rate (avg 96.2%)</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--mj-status-error)"></div> Failure Rate (avg 3.8%)</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Active Runs Table -->
+    <div class="sub-section">
+      <h3><i class="fa-solid fa-spinner"></i> Active Runs</h3>
+      <div style="overflow-x:auto">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Run ID</th>
+              <th>Source</th>
+              <th>Started</th>
+              <th>Progress</th>
+              <th>Stage</th>
+              <th class="num">Items</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="font-family:monospace;font-size:11px;color:var(--mj-brand-primary)">RUN-2024-0891</td>
+              <td>TechCrunch RSS</td>
+              <td style="color:var(--mj-text-muted)">12 min ago</td>
+              <td>
+                <div class="progress-track" style="width:100px"><div class="progress-fill" style="width:72%;background:var(--mj-brand-primary)"></div></div>
+                <span style="font-size:11px;font-weight:600">72%</span>
+              </td>
+              <td><span class="badge badge-info">Tagging</span></td>
+              <td class="num">156</td>
+            </tr>
+            <tr>
+              <td style="font-family:monospace;font-size:11px;color:var(--mj-brand-primary)">RUN-2024-0892</td>
+              <td>CRM Contacts</td>
+              <td style="color:var(--mj-text-muted)">8 min ago</td>
+              <td>
+                <div class="progress-track" style="width:100px"><div class="progress-fill" style="width:45%;background:var(--mj-brand-primary)"></div></div>
+                <span style="font-size:11px;font-weight:600">45%</span>
+              </td>
+              <td><span class="badge badge-info">Extracting</span></td>
+              <td class="num">340</td>
+            </tr>
+            <tr>
+              <td style="font-family:monospace;font-size:11px;color:var(--mj-brand-primary)">RUN-2024-0893</td>
+              <td>docs.company.com</td>
+              <td style="color:var(--mj-text-muted)">3 min ago</td>
+              <td>
+                <div class="progress-track" style="width:100px"><div class="progress-fill" style="width:15%;background:var(--mj-status-success)"></div></div>
+                <span style="font-size:11px;font-weight:600">15%</span>
+              </td>
+              <td><span class="badge badge-success">Ingesting</span></td>
+              <td class="num">89</td>
+            </tr>
+            <tr>
+              <td style="font-family:monospace;font-size:11px;color:var(--mj-brand-primary)">RUN-2024-0894</td>
+              <td>Google Drive</td>
+              <td style="color:var(--mj-text-muted)">25 min ago</td>
+              <td>
+                <div class="progress-track" style="width:100px"><div class="progress-fill" style="width:90%;background:#7c3aed"></div></div>
+                <span style="font-size:11px;font-weight:600">90%</span>
+              </td>
+              <td><span class="badge" style="background:color-mix(in srgb, #7c3aed 12%, white);color:#7c3aed">Vectorizing</span></td>
+              <td class="num">212</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Error Log -->
+    <div class="sub-section">
+      <h3><i class="fa-solid fa-triangle-exclamation"></i> Recent Errors</h3>
+      <div class="error-log">
+        <div class="error-entry">
+          <div class="error-time">Apr 3, 14:32:18</div>
+          <div class="error-source">HackerNews</div>
+          <div class="error-msg">HTTP 429 Too Many Requests - Rate limit exceeded. Retry after 60s.</div>
+        </div>
+        <div class="error-entry">
+          <div class="error-time">Apr 3, 11:15:44</div>
+          <div class="error-source">Google Drive</div>
+          <div class="error-msg">Timeout after 30s - File "Q3_Report_2024.pdf" (42MB) exceeded extraction limit.</div>
+        </div>
+        <div class="error-entry">
+          <div class="error-time">Apr 2, 22:08:31</div>
+          <div class="error-source">HackerNews</div>
+          <div class="error-msg">HTTP 429 Too Many Requests - Rate limit exceeded. Retry after 120s.</div>
+        </div>
+        <div class="error-entry">
+          <div class="error-time">Apr 2, 16:45:09</div>
+          <div class="error-source">CRM Contacts</div>
+          <div class="error-msg">LLM API error: model "gpt-4o" returned empty response for chunk #847. Retried 3x, skipped.</div>
+        </div>
+        <div class="error-entry">
+          <div class="error-time">Apr 1, 09:22:55</div>
+          <div class="error-source">TechCrunch RSS</div>
+          <div class="error-msg">XML parse error: malformed feed entry at position 12,481. Entry skipped, feed continued.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ====================================================== -->
+  <!-- TAB 5: QUALITY                                         -->
+  <!-- ====================================================== -->
+  <section class="tab-section" id="quality">
+    <div class="tab-section-header">
+      <i class="fa-solid fa-circle-check"></i>
+      <h1>Quality</h1>
+      <span class="tab-badge">TAB 5</span>
+    </div>
+
+    <!-- Confidence Distribution Histogram -->
+    <div class="sub-section" style="margin-top:0">
+      <h3><i class="fa-solid fa-chart-column"></i> Confidence Distribution</h3>
+      <div class="widget-card">
+        <div class="histogram">
+          <div class="hist-bar-col">
+            <div class="hist-bar" style="height:5%;background:var(--mj-status-error)">8</div>
+            <div class="hist-label">0.0-0.1</div>
+          </div>
+          <div class="hist-bar-col">
+            <div class="hist-bar" style="height:7%;background:var(--mj-status-error);opacity:0.8">12</div>
+            <div class="hist-label">0.1-0.2</div>
+          </div>
+          <div class="hist-bar-col">
+            <div class="hist-bar" style="height:10%;background:var(--mj-status-error);opacity:0.6">18</div>
+            <div class="hist-label">0.2-0.3</div>
+          </div>
+          <div class="hist-bar-col">
+            <div class="hist-bar" style="height:15%;background:var(--mj-status-warning);opacity:0.7">28</div>
+            <div class="hist-label">0.3-0.4</div>
+          </div>
+          <div class="hist-bar-col">
+            <div class="hist-bar" style="height:22%;background:var(--mj-status-warning);opacity:0.8">42</div>
+            <div class="hist-label">0.4-0.5</div>
+          </div>
+          <div class="hist-bar-col">
+            <div class="hist-bar" style="height:35%;background:var(--mj-status-warning)">65</div>
+            <div class="hist-label">0.5-0.6</div>
+          </div>
+          <div class="hist-bar-col">
+            <div class="hist-bar" style="height:55%;background:var(--mj-brand-primary);opacity:0.7">102</div>
+            <div class="hist-label">0.6-0.7</div>
+          </div>
+          <div class="hist-bar-col">
+            <div class="hist-bar" style="height:80%;background:var(--mj-brand-primary);opacity:0.8">148</div>
+            <div class="hist-label">0.7-0.8</div>
+          </div>
+          <div class="hist-bar-col">
+            <div class="hist-bar" style="height:100%;background:var(--mj-brand-primary);opacity:0.9">186</div>
+            <div class="hist-label">0.8-0.9</div>
+          </div>
+          <div class="hist-bar-col">
+            <div class="hist-bar" style="height:70%;background:var(--mj-status-success)">132</div>
+            <div class="hist-label">0.9-1.0</div>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-top:8px;padding:10px;background:var(--mj-bg-surface-card);border-radius:6px">
+          <span style="font-size:11px;color:var(--mj-text-muted)"><strong>Median:</strong> 0.76</span>
+          <span style="font-size:11px;color:var(--mj-text-muted)"><strong>Mean:</strong> 0.72</span>
+          <span style="font-size:11px;color:var(--mj-text-muted)"><strong>Std Dev:</strong> 0.18</span>
+          <span style="font-size:11px;color:var(--mj-text-muted)"><strong>P90:</strong> 0.91</span>
+          <span style="font-size:11px;color:var(--mj-text-muted)"><strong>Total:</strong> 741 tags</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Weight Distribution by Entity -->
+    <div class="sub-section">
+      <h3><i class="fa-solid fa-weight-scale"></i> Weight Distribution by Entity</h3>
+      <div class="widget-card">
+        <div class="grouped-bar-chart">
+          <div class="grouped-col">
+            <div class="grouped-bars">
+              <div class="g-bar" style="height:75%;background:#264FAF" title="Contacts High: 0.72"></div>
+              <div class="g-bar" style="height:55%;background:#0284c7" title="Contacts Med: 0.54"></div>
+              <div class="g-bar" style="height:25%;background:#94a3b8" title="Contacts Low: 0.22"></div>
+            </div>
+            <div class="grouped-label">Contacts</div>
+          </div>
+          <div class="grouped-col">
+            <div class="grouped-bars">
+              <div class="g-bar" style="height:88%;background:#264FAF" title="Companies High: 0.84"></div>
+              <div class="g-bar" style="height:48%;background:#0284c7" title="Companies Med: 0.46"></div>
+              <div class="g-bar" style="height:15%;background:#94a3b8" title="Companies Low: 0.12"></div>
+            </div>
+            <div class="grouped-label">Companies</div>
+          </div>
+          <div class="grouped-col">
+            <div class="grouped-bars">
+              <div class="g-bar" style="height:65%;background:#264FAF" title="Products High: 0.62"></div>
+              <div class="g-bar" style="height:60%;background:#0284c7" title="Products Med: 0.58"></div>
+              <div class="g-bar" style="height:30%;background:#94a3b8" title="Products Low: 0.28"></div>
+            </div>
+            <div class="grouped-label">Products</div>
+          </div>
+          <div class="grouped-col">
+            <div class="grouped-bars">
+              <div class="g-bar" style="height:95%;background:#264FAF" title="Documents High: 0.91"></div>
+              <div class="g-bar" style="height:40%;background:#0284c7" title="Documents Med: 0.38"></div>
+              <div class="g-bar" style="height:10%;background:#94a3b8" title="Documents Low: 0.08"></div>
+            </div>
+            <div class="grouped-label">Documents</div>
+          </div>
+        </div>
+        <div class="legend" style="justify-content:center;margin-top:14px">
+          <div class="legend-item"><div class="legend-dot" style="background:#264FAF"></div> High (>0.7)</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#0284c7"></div> Medium (0.4-0.7)</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#94a3b8"></div> Low (<0.4)</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tag Accuracy Over Time -->
+    <div class="sub-section">
+      <h3><i class="fa-solid fa-chart-line"></i> Tag Accuracy Over Time (Weekly Avg Confidence)</h3>
+      <div class="widget-card">
+        <div style="position:relative;height:110px;border-left:1px solid var(--mj-border-default);border-bottom:1px solid var(--mj-border-default);margin:0 10px">
+          <!-- Y-axis labels -->
+          <div style="position:absolute;left:-28px;top:-2px;font-size:9px;color:var(--mj-text-muted)">1.0</div>
+          <div style="position:absolute;left:-28px;top:32px;font-size:9px;color:var(--mj-text-muted)">0.75</div>
+          <div style="position:absolute;left:-28px;top:66px;font-size:9px;color:var(--mj-text-muted)">0.50</div>
+          <div style="position:absolute;left:-28px;top:100px;font-size:9px;color:var(--mj-text-muted)">0.25</div>
+          <!-- Grid lines -->
+          <div style="position:absolute;top:33%;left:0;right:0;border-top:1px dashed var(--mj-border-subtle)"></div>
+          <div style="position:absolute;top:66%;left:0;right:0;border-top:1px dashed var(--mj-border-subtle)"></div>
+          <!-- Line chart SVG -->
+          <svg width="100%" height="110" viewBox="0 0 400 110" preserveAspectRatio="none" style="position:absolute;top:0;left:0">
+            <!-- Confidence line -->
+            <polyline points="0,62 33,58 66,52 100,48 133,44 166,40 200,38 233,35 266,32 300,30 333,28 366,26 400,24"
+              fill="none" stroke="#264FAF" stroke-width="2.5" vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round"/>
+            <!-- Fill area -->
+            <polyline points="0,62 33,58 66,52 100,48 133,44 166,40 200,38 233,35 266,32 300,30 333,28 366,26 400,24 400,110 0,110"
+              fill="url(#accFill)" stroke="none"/>
+            <defs><linearGradient id="accFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#264FAF" stop-opacity="0.12"/><stop offset="1" stop-color="#264FAF" stop-opacity="0"/></linearGradient></defs>
+            <!-- Data points -->
+            <circle cx="0" cy="62" r="3" fill="#264FAF"/>
+            <circle cx="66" cy="52" r="3" fill="#264FAF"/>
+            <circle cx="133" cy="44" r="3" fill="#264FAF"/>
+            <circle cx="200" cy="38" r="3" fill="#264FAF"/>
+            <circle cx="266" cy="32" r="3" fill="#264FAF"/>
+            <circle cx="333" cy="28" r="3" fill="#264FAF"/>
+            <circle cx="400" cy="24" r="3" fill="#264FAF"/>
+          </svg>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-top:8px;padding:0 10px;font-size:10px;color:var(--mj-text-muted)">
+          <span>Jan</span><span>Feb</span><span>Mar</span><span>Apr</span><span>May</span><span>Jun</span><span>Jul</span>
+        </div>
+        <div style="text-align:center;margin-top:10px;font-size:12px;color:var(--mj-status-success)">
+          <i class="fa-solid fa-arrow-trend-up" style="margin-right:4px"></i>
+          Confidence trending upward: 0.65 &rarr; 0.78 (+20% over 6 months)
+        </div>
+      </div>
+    </div>
+
+    <!-- Low-Confidence Tags Table -->
+    <div class="sub-section">
+      <h3><i class="fa-solid fa-exclamation-triangle"></i> Low-Confidence Tags (Avg Weight &lt; 0.4)</h3>
+      <div style="overflow-x:auto">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Tag Name</th>
+              <th class="num">Avg Weight</th>
+              <th class="num">Usage Count</th>
+              <th>Top Entity</th>
+              <th>Suggested Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Robotics</strong></td>
+              <td class="num">0.38</td>
+              <td class="num">28</td>
+              <td>Documents</td>
+              <td><span class="badge badge-warning">Review taxonomy placement</span></td>
+            </tr>
+            <tr>
+              <td><strong>Web3</strong></td>
+              <td class="num">0.35</td>
+              <td class="num">19</td>
+              <td>Companies</td>
+              <td><span class="badge badge-error">Consider merging with Blockchain</span></td>
+            </tr>
+            <tr>
+              <td><strong>Metaverse</strong></td>
+              <td class="num">0.32</td>
+              <td class="num">14</td>
+              <td>Products</td>
+              <td><span class="badge badge-error">Consider merging with AR/VR</span></td>
+            </tr>
+            <tr>
+              <td><strong>Low-Code</strong></td>
+              <td class="num">0.29</td>
+              <td class="num">11</td>
+              <td>Products</td>
+              <td><span class="badge badge-warning">Needs better training data</span></td>
+            </tr>
+            <tr>
+              <td><strong>No-Code</strong></td>
+              <td class="num">0.26</td>
+              <td class="num">8</td>
+              <td>Products</td>
+              <td><span class="badge badge-error">Merge with Low-Code</span></td>
+            </tr>
+            <tr>
+              <td><strong>Serverless</strong></td>
+              <td class="num">0.24</td>
+              <td class="num">6</td>
+              <td>Documents</td>
+              <td><span class="badge badge-warning">Reclassify under Cloud Computing</span></td>
+            </tr>
+            <tr>
+              <td><strong>NFT</strong></td>
+              <td class="num">0.21</td>
+              <td class="num">4</td>
+              <td>Companies</td>
+              <td><span class="badge badge-error">Archive (low relevance)</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Model Performance Comparison -->
+    <div class="sub-section">
+      <h3><i class="fa-solid fa-robot"></i> Model Performance Comparison</h3>
+      <div class="model-grid">
+        <div class="model-card">
+          <div class="model-name"><i class="fa-solid fa-microchip" style="color:var(--mj-brand-primary);margin-right:4px"></i> GPT-4o</div>
+          <svg width="80" height="80" viewBox="0 0 80 80" style="margin:4px 0">
+            <circle cx="40" cy="40" r="32" fill="none" stroke="#e2e8f0" stroke-width="8"/>
+            <circle cx="40" cy="40" r="32" fill="none" stroke="var(--mj-status-success)" stroke-width="8"
+              stroke-dasharray="169 201" stroke-dashoffset="50"
+              transform="rotate(-90 40 40)" stroke-linecap="round"/>
+          </svg>
+          <div class="model-score" style="color:var(--mj-status-success)">84%</div>
+          <div class="model-detail">Avg confidence: 0.84</div>
+          <div class="model-detail">4,210 tags generated</div>
+          <div class="model-detail" style="color:var(--mj-status-success);font-weight:600">Primary model</div>
+        </div>
+        <div class="model-card">
+          <div class="model-name"><i class="fa-solid fa-brain" style="color:#7c3aed;margin-right:4px"></i> Claude 3.5 Sonnet</div>
+          <svg width="80" height="80" viewBox="0 0 80 80" style="margin:4px 0">
+            <circle cx="40" cy="40" r="32" fill="none" stroke="#e2e8f0" stroke-width="8"/>
+            <circle cx="40" cy="40" r="32" fill="none" stroke="#7c3aed" stroke-width="8"
+              stroke-dasharray="157 201" stroke-dashoffset="50"
+              transform="rotate(-90 40 40)" stroke-linecap="round"/>
+          </svg>
+          <div class="model-score" style="color:#7c3aed">78%</div>
+          <div class="model-detail">Avg confidence: 0.78</div>
+          <div class="model-detail">1,842 tags generated</div>
+          <div class="model-detail" style="color:#7c3aed;font-weight:600">Fallback model</div>
+        </div>
+        <div class="model-card">
+          <div class="model-name"><i class="fa-solid fa-bolt" style="color:var(--mj-status-warning);margin-right:4px"></i> Gemini 1.5 Pro</div>
+          <svg width="80" height="80" viewBox="0 0 80 80" style="margin:4px 0">
+            <circle cx="40" cy="40" r="32" fill="none" stroke="#e2e8f0" stroke-width="8"/>
+            <circle cx="40" cy="40" r="32" fill="none" stroke="var(--mj-status-warning)" stroke-width="8"
+              stroke-dasharray="141 201" stroke-dashoffset="50"
+              transform="rotate(-90 40 40)" stroke-linecap="round"/>
+          </svg>
+          <div class="model-score" style="color:var(--mj-status-warning)">70%</div>
+          <div class="model-detail">Avg confidence: 0.70</div>
+          <div class="model-detail">769 tags generated</div>
+          <div class="model-detail" style="color:var(--mj-text-muted)">Testing</div>
+        </div>
+      </div>
+      <div style="margin-top:14px;padding:12px 16px;background:var(--mj-bg-surface-card);border-radius:8px;font-size:12px;color:var(--mj-text-secondary);display:flex;align-items:center;gap:8px">
+        <i class="fa-solid fa-lightbulb" style="color:var(--mj-status-warning)"></i>
+        <div>
+          <strong>Recommendation:</strong> GPT-4o delivers the highest accuracy at 84% avg confidence. Claude 3.5 Sonnet is a strong fallback at 78%.
+          Consider promoting Claude for cost-sensitive workloads where 6% accuracy difference is acceptable.
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div><!-- /main -->
+
+</body>
+</html>
