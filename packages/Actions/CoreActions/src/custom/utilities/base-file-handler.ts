@@ -1,7 +1,7 @@
 import { BaseAction } from "@memberjunction/actions";
 import { RunActionParams } from "@memberjunction/actions-base";
 import { Metadata, RunView } from "@memberjunction/core";
-import { MJFileEntity, MJFileStorageAccountEntity, MJFileStorageProviderEntity } from "@memberjunction/core-entities";
+import { MJFileEntity, MJFileStorageAccountEntity, MJFileStorageProviderEntity, FileStorageEngine } from "@memberjunction/core-entities";
 import { initializeDriverWithAccountCredentials } from "@memberjunction/storage";
 
 /**
@@ -168,7 +168,7 @@ export abstract class BaseFileHandlerAction extends BaseAction {
         try {
             const { accountEntity, providerEntity } = storageAccountName
                 ? await this.loadStorageAccountByName(storageAccountName, params)
-                : await this.loadDefaultStorageAccount(params);
+                : await this.loadResolvedOrDefaultStorageAccount(params);
             const driver = await initializeDriverWithAccountCredentials({
                 accountEntity,
                 providerEntity,
@@ -236,36 +236,35 @@ export abstract class BaseFileHandlerAction extends BaseAction {
     }
 
     /**
-     * Loads the first active FileStorageAccount along with its provider entity.
-     * Used by saveToMJStorage to determine where to upload files.
+     * Resolves the storage account from the agent's resolution chain (via Context)
+     * or falls back to priority-based selection.
      */
-    private async loadDefaultStorageAccount(params: RunActionParams): Promise<{
+    private async loadResolvedOrDefaultStorageAccount(params: RunActionParams): Promise<{
         accountEntity: MJFileStorageAccountEntity;
         providerEntity: MJFileStorageProviderEntity;
     }> {
-        const rv = new RunView();
-        const accountResult = await rv.RunView<MJFileStorageAccountEntity>({
-            EntityName: 'MJ: File Storage Accounts',
-            OrderBy: '__mj_CreatedAt ASC',
-            MaxRows: 1,
-            ResultType: 'entity_object'
-        }, params.ContextUser);
+        await FileStorageEngine.Instance.Config(false, params.ContextUser);
 
-        if (!accountResult.Success || accountResult.Results.length === 0) {
+        // Check for agent-resolved storage account ID (passed via Context by BaseAgent)
+        const context = params.Context as Record<string, unknown> | undefined;
+        const resolvedId = context?.__resolvedStorageAccountId;
+        if (resolvedId) {
+            const resolved = FileStorageEngine.Instance.GetAccountWithProvider(resolvedId.toString());
+            if (resolved) {
+                return { accountEntity: resolved.account, providerEntity: resolved.provider };
+            }
+        }
+
+        // Fallback: pick by provider priority
+        const activeAccounts = FileStorageEngine.Instance.AccountsWithProviders
+            .filter(a => a.provider.IsActive);
+
+        if (activeAccounts.length === 0) {
             throw new Error('No active FileStorageAccount found. Configure at least one storage account.');
         }
 
-        const accountEntity = accountResult.Results[0];
-        const md = new Metadata();
-        const providerEntity = await md.GetEntityObject<MJFileStorageProviderEntity>(
-            'MJ: File Storage Providers', params.ContextUser
-        );
-        const providerLoaded = await providerEntity.Load(accountEntity.ProviderID);
-        if (!providerLoaded) {
-            throw new Error(`FileStorageProvider ${accountEntity.ProviderID} not found for account "${accountEntity.Name}"`);
-        }
-
-        return { accountEntity, providerEntity };
+        const sorted = [...activeAccounts].sort((a, b) => a.provider.Priority - b.provider.Priority);
+        return { accountEntity: sorted[0].account, providerEntity: sorted[0].provider };
     }
 
     /**

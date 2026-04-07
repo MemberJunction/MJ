@@ -586,6 +586,17 @@ export type ExecuteAgentResult<P = any> = {
      * @since 5.12.0
      */
     feedbackRequestId?: string;
+
+    /**
+     * The resolved FileStorageAccount ID for file artifact storage, determined during
+     * agent execution via the hierarchical resolution chain:
+     * Runtime → Agent → Category tree → Type → system fallback.
+     *
+     * Used by AgentRunner to route file artifact uploads to the correct storage account.
+     * Null when no storage account could be resolved (e.g., no accounts configured).
+     * @since 5.24.0
+     */
+    resolvedStorageAccountId?: string;
 }
 
 /**
@@ -794,6 +805,13 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
     override?: {
         modelId?: string;
         vendorId?: string;
+        /**
+         * Runtime override for the file storage account used when creating file artifacts.
+         * Highest priority in the resolution chain: Runtime → Agent → Category tree → Type → system fallback.
+         * Resolves to a FileStorageAccount record which carries both the provider driver
+         * (via ProviderID) and credentials (via CredentialID).
+         */
+        storageAccountId?: string;
     };
     /** 
      * Optional flag to enable verbose logging during agent execution.

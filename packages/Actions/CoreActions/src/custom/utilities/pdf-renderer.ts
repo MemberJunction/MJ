@@ -1,6 +1,6 @@
 /**
  * PDF rendering engine extracted from PDFGeneratorAction.
- * Used by both the single-shot PDF Generator action and the incremental DocumentBuilderService.
+ * Used by both the single-shot PDF Generator action and the incremental ArtifactBuilderService.
  */
 import PDFDocument from "pdfkit";
 import { Parser } from 'htmlparser2';

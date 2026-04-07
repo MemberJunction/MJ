@@ -2,7 +2,7 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from '@memberjunction/actions';
 import { BaseFileHandlerAction } from "../utilities/base-file-handler";
-import { DocumentBuilderService } from "../utilities/document-builder-service";
+import { ArtifactBuilderService } from "../utilities/artifact-builder-service";
 
 /**
  * Returns a summary of the current state of an in-progress document.
@@ -25,7 +25,7 @@ export class PreviewDocumentAction extends BaseFileHandlerAction {
                 return { Success: false, Message: "Handle parameter is required", ResultCode: "MISSING_HANDLE" };
             }
 
-            const service = DocumentBuilderService.Instance;
+            const service = ArtifactBuilderService.Instance;
             const preview = service.GetPreview(handle.toString());
 
             return {

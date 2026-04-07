@@ -20,7 +20,8 @@ import {
     MJAIAgentEntity,
     MJAIModelEntity,
     MJConversationDetailAttachmentEntity,
-    MJAIModalityEntity
+    MJAIModalityEntity,
+    FileStorageEngine
 } from '@memberjunction/core-entities';
 import { MJGlobal } from '@memberjunction/global';
 import { FileStorageBase, initializeDriverWithAccountCredentials } from '@memberjunction/storage';
@@ -522,7 +523,14 @@ export class ConversationAttachmentService {
     }
 
     /**
-     * Upload data to MJStorage
+     * Upload data to MJStorage.
+     *
+     * Resolves the storage account using:
+     * 1. Agent's `DefaultStorageAccountID` (account-based, with credentials)
+     * 2. Fallback: Agent's `AttachmentStorageProviderID` (legacy provider-based)
+     *
+     * When an account is resolved, uses `initializeDriverWithAccountCredentials()`
+     * for proper OAuth credential handling.
      */
     private async uploadToStorage(
         base64Data: string,
@@ -531,45 +539,50 @@ export class ConversationAttachmentService {
         agent: MJAIAgentEntity | null,
         contextUser: UserInfo
     ): Promise<{ success: boolean; fileId?: string; error?: string }> {
-        // Get storage provider from agent config or use default
-        const providerId = agent?.AttachmentStorageProviderID ?? null;
-        if (!providerId) {
-            return {
-                success: false,
-                error: 'No storage provider configured for attachments'
-            };
+        let driver: FileStorageBase;
+        let providerId: string;
+
+        // Prefer account-based resolution (new path with proper credentials)
+        const storageAccountId = agent?.DefaultStorageAccountID ?? null;
+        if (storageAccountId) {
+            await FileStorageEngine.Instance.Config(false, contextUser);
+            const resolved = FileStorageEngine.Instance.GetAccountWithProvider(storageAccountId);
+            if (!resolved) {
+                return { success: false, error: `Storage account ${storageAccountId} not found` };
+            }
+            driver = await initializeDriverWithAccountCredentials({
+                accountEntity: resolved.account,
+                providerEntity: resolved.provider,
+                contextUser
+            });
+            providerId = resolved.provider.ID;
+        } else {
+            // Legacy fallback: provider-based resolution (no account credentials)
+            const legacyProviderId = agent?.AttachmentStorageProviderID ?? null;
+            if (!legacyProviderId) {
+                return { success: false, error: 'No storage provider configured for attachments' };
+            }
+            const provider = await this.md.GetEntityObject<MJFileStorageProviderEntity>('MJ: File Storage Providers', contextUser);
+            if (!await provider.Load(legacyProviderId)) {
+                return { success: false, error: 'Failed to load storage provider' };
+            }
+            driver = MJGlobal.Instance.ClassFactory.CreateInstance<FileStorageBase>(
+                FileStorageBase,
+                provider.ServerDriverKey
+            );
+            providerId = legacyProviderId;
         }
 
-        // Load provider
-        const provider = await this.md.GetEntityObject<MJFileStorageProviderEntity>('MJ: File Storage Providers', contextUser);
-        if (!await provider.Load(providerId)) {
-            return {
-                success: false,
-                error: 'Failed to load storage provider'
-            };
-        }
-
-        // Get driver
-        const driver = MJGlobal.Instance.ClassFactory.CreateInstance<FileStorageBase>(
-            FileStorageBase,
-            provider.ServerDriverKey
-        );
-
-        // Determine storage path - use a default if agent doesn't have one
+        // Determine storage path
         const basePath = 'conversation-attachments';
         const timestamp = Date.now();
         const objectName = `${basePath}/${timestamp}_${fileName}`;
 
-        // Convert base64 to buffer
+        // Convert base64 to buffer and upload
         const buffer = Buffer.from(base64Data, 'base64');
-
-        // Upload
         const uploaded = await driver.PutObject(objectName, buffer, mimeType);
         if (!uploaded) {
-            return {
-                success: false,
-                error: 'Failed to upload file to storage'
-            };
+            return { success: false, error: 'Failed to upload file to storage' };
         }
 
         // Create File entity record
@@ -581,18 +594,11 @@ export class ConversationAttachmentService {
         file.Status = 'Uploaded';
 
         if (!await file.Save()) {
-            // Try to clean up uploaded file
             await driver.DeleteObject(objectName);
-            return {
-                success: false,
-                error: 'Failed to create file record'
-            };
+            return { success: false, error: 'Failed to create file record' };
         }
 
-        return {
-            success: true,
-            fileId: file.ID
-        };
+        return { success: true, fileId: file.ID };
     }
 
     /**

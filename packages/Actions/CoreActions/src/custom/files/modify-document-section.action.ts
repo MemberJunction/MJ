@@ -2,7 +2,7 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from '@memberjunction/actions';
 import { BaseFileHandlerAction } from "../utilities/base-file-handler";
-import { DocumentBuilderService, DocumentOperation } from "../utilities/document-builder-service";
+import { ArtifactBuilderService, DocumentOperation } from "../utilities/artifact-builder-service";
 import { JSONParamHelper } from "../utilities/json-param-helper";
 
 /**
@@ -38,7 +38,7 @@ export class ModifyDocumentSectionAction extends BaseFileHandlerAction {
                 return { Success: false, Message: "Action must be 'replace' or 'remove'", ResultCode: "INVALID_ACTION" };
             }
 
-            const service = DocumentBuilderService.Instance;
+            const service = ArtifactBuilderService.Instance;
 
             if (action === 'remove') {
                 service.RemoveSection(handle.toString(), sectionId.toString());

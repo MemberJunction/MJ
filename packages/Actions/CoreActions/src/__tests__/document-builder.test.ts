@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { DocumentBuilderService, DocumentOperation } from '../custom/utilities/document-builder-service';
+import { ArtifactBuilderService, DocumentOperation } from '../custom/utilities/artifact-builder-service';
 
-describe('DocumentBuilderService', () => {
-    let service: DocumentBuilderService;
+describe('ArtifactBuilderService', () => {
+    let service: ArtifactBuilderService;
 
     beforeEach(() => {
-        service = DocumentBuilderService.Instance;
+        service = ArtifactBuilderService.Instance;
     });
 
     describe('CreateDocument', () => {
