@@ -518,6 +518,11 @@ async function authorizeApiKeyToolCall(
  * @returns true if the granted scope satisfies the requirement
  */
 function scopeMatchesHierarchically(grantedScope: string, requiredScope: string): boolean {
+    // full_access is a wildcard that grants all permissions
+    if (grantedScope === 'full_access') {
+        return true;
+    }
+
     // Exact match
     if (grantedScope === requiredScope) {
         return true;
