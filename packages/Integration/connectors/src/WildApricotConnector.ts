@@ -255,14 +255,49 @@ export class WildApricotConnector extends BaseRESTIntegrationConnector {
     }
 
     public override async DiscoverFields(
-        _companyIntegration: MJCompanyIntegrationEntity, objectName: string, _contextUser: UserInfo
+        companyIntegration: MJCompanyIntegrationEntity, objectName: string, contextUser: UserInfo
     ): Promise<ExternalFieldSchema[]> {
+        // Dynamic: fetch one sample record to discover ALL fields from the API
+        try {
+            const auth = await this.Authenticate(companyIntegration, contextUser) as WAAuthContext;
+            const headers = this.BuildHeaders(auth);
+            const url = `${WA_API_BASE}/accounts/${auth.AccountID}/${objectName}?$top=1`;
+            const response = await this.MakeHTTPRequest(auth, url, 'GET', headers);
+            if (response.Status === 200) {
+                const records = this.NormalizeResponse(response.Body, null);
+                if (records.length > 0) return this.InferFieldsWithOverlay(records[0], objectName, WA_OBJECTS);
+            }
+        } catch { /* fall through to static */ }
         const staticObj = WA_OBJECTS.find(o => o.Name.toLowerCase() === objectName.toLowerCase());
         if (!staticObj) return [];
         return staticObj.Fields.map(f => ({
             Name: f.Name, Label: f.DisplayName, Description: f.Description,
             DataType: f.Type, IsRequired: f.IsRequired, IsUniqueKey: f.IsPrimaryKey, IsReadOnly: f.IsReadOnly,
         }));
+    }
+
+    private InferFieldsWithOverlay(sample: Record<string, unknown>, objectName: string, allObjects: IntegrationObjectInfo[]): ExternalFieldSchema[] {
+        const staticObj = allObjects.find(o => o.Name.toLowerCase() === objectName.toLowerCase());
+        const staticMap = new Map((staticObj?.Fields ?? []).map(f => [f.Name.toLowerCase(), f]));
+        const fields: ExternalFieldSchema[] = [];
+        for (const [key, value] of Object.entries(sample)) {
+            if (key === 'links' || key === '_links') continue;
+            const sf = staticMap.get(key.toLowerCase());
+            fields.push({
+                Name: key, Label: sf?.DisplayName ?? key, Description: sf?.Description ?? '',
+                DataType: sf?.Type ?? this.InferTypeFromValue(value),
+                IsRequired: sf?.IsRequired ?? false, IsUniqueKey: sf?.IsPrimaryKey ?? false, IsReadOnly: sf?.IsReadOnly ?? false,
+            });
+        }
+        return fields;
+    }
+
+    private InferTypeFromValue(v: unknown): string {
+        if (v === null || v === undefined) return 'string';
+        if (typeof v === 'number') return Number.isInteger(v) ? 'number' : 'decimal';
+        if (typeof v === 'boolean') return 'boolean';
+        if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}/.test(v)) return 'datetime';
+        return 'string';
     }
 
     // ─── Auth ───────────────────────────────────────────────────────

@@ -59,7 +59,73 @@ The exact method signature (parameter types + return type)
 What the base class already handles (don't duplicate it)
 What hooks/callbacks are available
 
-MethodPurposeKey GotchasAuthenticate()Return RESTAuthContextMust handle token refresh. Use MJ Credentials entity — never hardcode secrets. Check how other connectors cache tokens.DiscoverObjects()Return IntegrationObjectInfo[] for all API resourcesIf platform has a metadata endpoint, use it. Otherwise build a complete static PLATFORM_OBJECTS array. Every GET-able resource = one object.DiscoverFields(objectName)Return field metadata per objectMap API field types to MJ types accurately. Set PK, FK, IsRequired, IsReadOnly. Use describe/schema endpoints if available.FetchChanges()Incremental data retrievalMust respect watermarks. Must handle pagination to completion (don't stop at page 1). Prefer server-side updated_at>= filtering over client-side comparison.CreateRecord()POST new recordSet SupportsCreate getter to true. Return the created record's ID.UpdateRecord()PUT/PATCH existing recordSet SupportsUpdate getter to true. Use PATCH if platform supports partial updates.DeleteRecord()DELETE recordSet SupportsDelete getter to true. Handle soft-delete platforms gracefully.ExtractPaginationInfo()Parse pagination metadata from responseMatch the platform's exact pagination pattern.BuildPaginatedURL()Construct URL for next pageMust work for all objects, not just one.ExtractRecords()Unwrap response envelopeHandle { data: [...] } vs { results: [...] } vs raw array vs JSON:API etc.
+MethodPurposeKey GotchasAuthenticate()Return RESTAuthContextMust handle token refresh. Use MJ Credentials entity — never hardcode secrets. Check how other connectors cache tokens.DiscoverObjects()Return IntegrationObjectInfo[] for all API resourcesIf platform has a metadata endpoint, use it. Otherwise build a complete static PLATFORM_OBJECTS array. Every GET-able resource = one object.DiscoverFields(objectName)Return field metadata per objectSee CRITICAL section below — MUST use dynamic discovery first.FetchChanges()Incremental data retrievalMust respect watermarks. Must handle pagination to completion (don't stop at page 1). Prefer server-side updated_at>= filtering over client-side comparison.CreateRecord()POST new recordSet SupportsCreate getter to true. Return the created record's ID.UpdateRecord()PUT/PATCH existing recordSet SupportsUpdate getter to true. Use PATCH if platform supports partial updates.DeleteRecord()DELETE recordSet SupportsDelete getter to true. Handle soft-delete platforms gracefully.ExtractPaginationInfo()Parse pagination metadata from responseMatch the platform's exact pagination pattern.BuildPaginatedURL()Construct URL for next pageMust work for all objects, not just one.ExtractRecords()Unwrap response envelopeHandle { data: [...] } vs { results: [...] } vs raw array vs JSON:API etc.
+
+### 🚨 CRITICAL: DiscoverFields() MUST Be Dynamic — NEVER Static-Only
+
+`DiscoverFields()` is the most important method for ensuring CodeGen doesn't skip integration tables. If it returns only the 2-3 static overlay fields, CodeGen has nothing to work with.
+
+**Required pattern for EVERY connector:**
+
+```typescript
+public override async DiscoverFields(
+    companyIntegration: MJCompanyIntegrationEntity, objectName: string, contextUser: UserInfo
+): Promise<ExternalFieldSchema[]> {
+    // 1. DYNAMIC FIRST: Try to fetch one sample record from the API
+    try {
+        const auth = await this.Authenticate(companyIntegration, contextUser);
+        const headers = this.BuildHeaders(auth);
+        const response = await this.MakeHTTPRequest(auth, `${baseURL}/${objectName}?limit=1`, 'GET', headers);
+        if (response.Status === 200) {
+            const records = this.NormalizeResponse(response.Body, null);
+            if (records.length > 0) {
+                return this.InferFieldsWithOverlay(records[0], objectName, PLATFORM_OBJECTS);
+            }
+        }
+    } catch { /* fall through to static */ }
+
+    // 2. STATIC FALLBACK: Only if API call fails (auth not configured, endpoint down, etc.)
+    const staticObj = PLATFORM_OBJECTS.find(o => o.Name.toLowerCase() === objectName.toLowerCase());
+    if (!staticObj) return [];
+    return staticObj.Fields.map(f => ({ ... }));
+}
+
+// 3. MERGE: Infer ALL fields from sample, overlay static PK/FK metadata on top
+private InferFieldsWithOverlay(
+    sample: Record<string, unknown>, objectName: string, allObjects: IntegrationObjectInfo[]
+): ExternalFieldSchema[] {
+    const staticObj = allObjects.find(o => o.Name.toLowerCase() === objectName.toLowerCase());
+    const staticMap = new Map((staticObj?.Fields ?? []).map(f => [f.Name.toLowerCase(), f]));
+    const fields: ExternalFieldSchema[] = [];
+    for (const [key, value] of Object.entries(sample)) {
+        if (key === '_links' || key === 'links') continue; // skip HATEOAS
+        const sf = staticMap.get(key.toLowerCase());
+        fields.push({
+            Name: key,
+            Label: sf?.DisplayName ?? key,
+            Description: sf?.Description ?? '',
+            DataType: sf?.Type ?? this.InferType(value), // infer from value if no static type
+            IsRequired: sf?.IsRequired ?? false,
+            IsUniqueKey: sf?.IsPrimaryKey ?? false,
+            IsReadOnly: sf?.IsReadOnly ?? false,
+        });
+    }
+    return fields;
+}
+```
+
+**Why this matters:**
+- Without dynamic field discovery, CodeGen only sees the 2-3 overlay fields (PK, FK, date) and skips the table
+- With dynamic discovery, CodeGen sees ALL fields the API returns and creates proper typed entities
+- The static overlay adds the metadata the API can't provide (PK/FK flags, descriptions)
+- If auth isn't configured yet (first-time setup), the static fallback still works
+
+**Platforms with native describe/metadata APIs should use those instead of sample records:**
+- Salesforce: `/sobjects/{objectName}/describe` → full field metadata with types, required flags, picklist values
+- NetSuite: `/metadata-catalog/nstype/{recordType}` → JSON Schema with properties, required array
+- HubSpot: `/crm/v3/properties/{objectType}` → property definitions with type, readOnly, hasUniqueValue
+
+**Every connector in the codebase follows this pattern. Do NOT deviate.**
 D. API Coverage Completeness — EVERY ENDPOINT, NO EXCEPTIONS
 This is the single most important requirement. A connector that covers 10 out of 50 endpoints is NOT a connector — it is a demo. You must cover the platform's ENTIRE API surface.
 
