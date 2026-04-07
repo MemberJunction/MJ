@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T11 - Run a Saved Query",
+    "Description": "Navigates to the Query Browser, finds and executes a saved query, and verifies results are displayed in a grid.",
+    "InputDefinition": {
+      "goal": "Log in to MJ Explorer. After login, the application will show a loading screen for up to 60 seconds — this is normal. IMPORTANT: Do NOT click any 'Reset' button during loading. Just wait patiently. If you see an 'Authorize App' consent screen, click 'Accept'. Once loaded, navigate to Data Explorer and look for the Queries section or Query Browser. Find any available saved query and execute it. Verify that query results are displayed in a table or grid with data rows.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 30,
+      "judgeValidationCriteria": [
+        "Query browser or query list is visible",
+        "A query was selected and executed",
+        "Query results are displayed in a table/grid with data rows"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 30,
+      "maxExecutionTime": 300000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 30
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression"
+  },
+  "primaryKey": {
+    "ID": "A5174558-E08A-4A33-982C-2ADCACC01100"
+  },
+  "sync": {
+    "lastModified": "2026-04-06T06:00:26.817Z",
+    "checksum": "107b68e067eafff0c188674c8a9f5af96b62863c2169f27f45714284a265e4fb"
+  }
+}

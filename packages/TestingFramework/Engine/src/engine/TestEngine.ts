@@ -331,6 +331,12 @@ export class TestEngine extends BaseSingleton<TestEngine> {
             const testResults: TestRunResult[] = [];
             let testSequence = 1; // Track suite execution order (1-based)
             for (const test of tests) {
+                // Delay between tests to avoid rate limits (e.g., Auth0 brute-force protection)
+                if (testSequence > 1 && options.delayBetweenTests && options.delayBetweenTests > 0) {
+                    this.log(`Waiting ${options.delayBetweenTests}ms before next test...`, options.verbose);
+                    await new Promise(resolve => setTimeout(resolve, options.delayBetweenTests));
+                }
+
                 try {
                     const result = await this.runTestWithSuiteVariables(test.ID, options, contextUser, suiteRun.ID, testSequence, suiteVariablesJson);
 

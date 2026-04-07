@@ -313,10 +313,13 @@ export class ComputerUseTestDriver extends BaseTestDriver {
         }
 
         // Browser config
-        if (config.viewportWidth || config.viewportHeight) {
+        if (config.viewportWidth || config.viewportHeight || config.browserArgs) {
             const browserConfig = new BrowserConfig();
             browserConfig.ViewportWidth = config.viewportWidth ?? 1280;
             browserConfig.ViewportHeight = config.viewportHeight ?? 720;
+            if (config.browserArgs) {
+                browserConfig.Args = config.browserArgs;
+            }
             params.BrowserConfig = browserConfig;
         }
 

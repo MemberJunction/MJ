@@ -137,6 +137,8 @@ export class BrowserConfig {
     public ActionTimeoutMs: number = 10000;
     /** Slow down actions by this many milliseconds (useful for debugging) */
     public SlowMo?: number;
+    /** Additional Chromium launch arguments (e.g., --unsafely-treat-insecure-origin-as-secure) */
+    public Args?: string[];
 
     /**
      * Pre-populate localStorage for specific origins before any page loads.

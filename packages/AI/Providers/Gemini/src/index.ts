@@ -771,22 +771,34 @@ export class GeminiLLM extends BaseLLM {
                 }
                 else {
                     // use the inlineData property which expects a Blob property which consists of data and mimeType
-                    const blob: Blob = {
-                        data: part.content
+                    // Strip data URL prefix if present (e.g., "data:image/png;base64,iVBOR..." → "iVBOR...")
+                    let rawData = part.content;
+                    let detectedMime: string | undefined;
+                    const dataUrlMatch = rawData.match(/^data:([^;]+);base64,(.*)$/s);
+                    if (dataUrlMatch) {
+                        detectedMime = dataUrlMatch[1];
+                        rawData = dataUrlMatch[2];
                     }
-                    switch (part.type) {
-                        case 'image_url':
-                            blob.mimeType = 'image/jpeg';
-                            break;
-                        case 'audio_url':
-                            blob.mimeType = 'audio/mpeg';
-                            break;
-                        case 'video_url':
-                            blob.mimeType = 'video/mp4';
-                            break;
-                        case 'file_url':
-                            blob.mimeType = 'application/octet-stream';
-                            break;
+                    const blob: Blob = {
+                        data: rawData
+                    }
+                    // Use mimeType from: part.mimeType > detected from data URL > default per type
+                    blob.mimeType = part.mimeType ?? detectedMime;
+                    if (!blob.mimeType) {
+                        switch (part.type) {
+                            case 'image_url':
+                                blob.mimeType = 'image/jpeg';
+                                break;
+                            case 'audio_url':
+                                blob.mimeType = 'audio/mpeg';
+                                break;
+                            case 'video_url':
+                                blob.mimeType = 'video/mp4';
+                                break;
+                            case 'file_url':
+                                blob.mimeType = 'application/octet-stream';
+                                break;
+                        }
                     }
                     parts.push({inlineData: blob});
                 }

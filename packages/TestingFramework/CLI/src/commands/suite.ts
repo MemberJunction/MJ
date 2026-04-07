@@ -85,7 +85,8 @@ export class SuiteCommand {
             // We only pass the standard TestRunOptions
             const result = await engine.RunSuite(suite.ID, {
                 verbose: flags.verbose,
-                variables
+                variables,
+                delayBetweenTests: flags.delay
             }, contextUser);
 
             this.spinner.stop();

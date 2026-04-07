@@ -58,6 +58,7 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
         this.browser = await chromium.launch({
             headless: config.Headless,
             slowMo: config.SlowMo,
+            args: config.Args,
         });
 
         // Build storageState if InitialLocalStorage is configured.

@@ -1,0 +1,90 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T01 - Login Smoke",
+    "Description": "Navigates to MJ Explorer, authenticates via Auth0 FormLogin, and verifies the application loads after login. This is the most fundamental regression test — if login fails, nothing else can run.",
+    "InputDefinition": {
+      "goal": "Navigate to the MJ Explorer login page. You will see an Auth0 login form. Enter the provided username and password credentials to log in. After login, the application will show a loading screen for up to 60 seconds — this is normal. IMPORTANT: Do NOT click any 'Reset' button during loading. Just wait patiently by using Wait actions. If you see an 'Authorize App' consent screen, click 'Accept'. After loading completes, verify the MJ Explorer dashboard or home screen has loaded successfully with navigation elements visible.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "finalUrlPattern": "^http://localhost:4200(?!/login|/callback)",
+      "minConfidence": 0.7,
+      "maxSteps": 30,
+      "judgeValidationCriteria": [
+        "User is logged in and past the Auth0 login screen",
+        "MJ Explorer application is visible with navigation elements",
+        "No error messages or blank screens"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 30,
+      "maxExecutionTime": 300000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.5,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "url-match",
+          "weight": 0.3,
+          "config": {
+            "pattern": "^http://localhost:4200(?!/login|/callback)"
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.2,
+          "config": {
+            "maxSteps": 30
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.5,
+        "url-match": 0.3,
+        "step-count": 0.2
+      }
+    },
+    "Status": "Active",
+    "Tags": "P0,regression,smoke"
+  },
+  "primaryKey": {
+    "ID": "2F4CAED9-0916-433E-8A63-70C4B71B337B"
+  },
+  "sync": {
+    "lastModified": "2026-04-06T06:00:26.557Z",
+    "checksum": "ef3c11ac3e97ae69cea36d660016dc2c41b2459a9132668d474b04138cddcb81"
+  }
+}

@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T24 - Session Persistence Reload Page",
+    "Description": "Logs in, navigates to Data Explorer, opens a record, reloads the browser page, and verifies the session is maintained.",
+    "InputDefinition": {
+      "goal": "Log in to MJ Explorer. After login, the application will show a loading screen for up to 60 seconds — this is normal. IMPORTANT: Do NOT click any 'Reset' button during loading. Just wait patiently. If you see an 'Authorize App' consent screen, click 'Accept'. Once loaded, navigate to Data Explorer and open any entity (e.g., Members). Then reload the browser page (press F5 or use the Refresh action). After the page reloads, verify that the user is still logged in (not redirected to the login page) and the application is functional. Note: after reload, the app may show the loading screen again briefly — this is normal, wait for it to finish.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 30,
+      "judgeValidationCriteria": [
+        "User was logged in and navigated to content",
+        "Page was reloaded",
+        "After reload, user is still logged in (not redirected to login)",
+        "Application is functional after reload"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 30,
+      "maxExecutionTime": 300000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.7,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.3,
+          "config": {
+            "maxSteps": 30
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.7,
+        "step-count": 0.3
+      }
+    },
+    "Status": "Active",
+    "Tags": "P3,regression"
+  },
+  "primaryKey": {
+    "ID": "C2496941-0035-4B09-9E5C-C4D53822F940"
+  },
+  "sync": {
+    "lastModified": "2026-04-06T06:00:27.016Z",
+    "checksum": "b124b1d121c0478b1729d9de553d1f91aec4273822dc5430995d1770ff825f32"
+  }
+}

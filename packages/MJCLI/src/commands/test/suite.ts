@@ -37,6 +37,11 @@ export default class TestSuite extends Command {
       description: 'Show detailed execution information',
       default: false,
     }),
+    delay: Flags.integer({
+      char: 'd',
+      description: 'Delay in milliseconds between test executions (avoids Auth0 rate limits)',
+      default: 0,
+    }),
   };
 
   async run(): Promise<void> {
@@ -53,6 +58,7 @@ export default class TestSuite extends Command {
         format: flags.format as 'console' | 'json' | 'markdown',
         output: flags.output,
         verbose: flags.verbose,
+        delay: flags.delay,
       });
 
     } catch (error) {

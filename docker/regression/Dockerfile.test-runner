@@ -1,0 +1,44 @@
+# MemberJunction Test Runner — Regression Testing
+# Runs the MJ Testing Framework with ComputerUseTestDriver against MJExplorer.
+#
+# Based on Playwright's official image (includes Chromium).
+# Copies the full monorepo since the test driver depends on many packages:
+#   TestingFramework, ComputerUse, MJComputerUse, AI packages, Core, etc.
+#
+# Usage: the docker-compose test stack starts this after mjexplorer is healthy.
+
+FROM mcr.microsoft.com/playwright:v1.58.1-noble
+
+# socat forwards localhost:4200 → mjexplorer:4200 so the browser sees a secure origin
+RUN apt-get update && apt-get install -y --no-install-recommends socat && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy package manifests for workspace install
+COPY package.json package-lock.json turbo.json tsconfig.angular.json tsconfig.server.json ./
+
+# Copy all packages and metadata (metadata needed at build time for prompt sync)
+COPY packages/ ./packages/
+COPY metadata/ ./metadata/
+
+# Install dependencies
+RUN npm install
+
+# Build all packages (turbo handles dependency order)
+# --concurrency=2 limits parallel tsc processes to avoid OOM in Docker's memory-constrained environment
+RUN npx turbo build --concurrency=2 --filter="@memberjunction*"
+
+# Copy MJ config
+COPY docker/MJAPI/docker.config.cjs ./mj.config.cjs
+
+# Bootstrap: imports ComputerUseTestDriver so @RegisterClass fires before CLI runs
+RUN echo "import '@memberjunction/computer-use-engine';" > /app/bootstrap.mjs
+
+# Create results directory
+RUN mkdir -p /app/test-results
+
+VOLUME ["/app/test-results"]
+
+# Default: run the regression suite
+# Use the workspace-local CLI (not global) to ensure correct module resolution
+CMD ["npx", "mj", "test", "suite", "--name", "MJ Explorer Regression Suite", "--format", "json", "--output", "/app/test-results/results.json"]

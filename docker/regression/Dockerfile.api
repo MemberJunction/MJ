@@ -1,0 +1,45 @@
+# MemberJunction API Server — Test Environment
+# Runs the GraphQL server only. Database setup (migrations, AssociationDB, CodeGen)
+# is handled by the db-setup container which must complete before this starts.
+#
+# Health endpoint: /healthcheck (exposed by MJServer)
+
+FROM node:24-slim AS builder
+
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential python3 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY package.json package-lock.json turbo.json tsconfig.angular.json tsconfig.server.json ./
+COPY packages/ ./packages/
+COPY metadata/ ./metadata/
+COPY migrations/ ./migrations/
+
+RUN npm install
+
+RUN npm run build:api
+
+# ─── Runtime ───────────────────────────────────────────────────────────────
+FROM node:24-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY --from=builder /app ./
+COPY docker/MJAPI/docker.config.cjs ./mj.config.cjs
+
+# Patch: fix autoCreateNewUsers (production config has === 1 bug with string env vars)
+# and force it on for the test environment so the test user gets created on first login
+RUN sed -i 's/autoCreateNewUsers: process.env.AUTO_CREATE_NEW_USERS ? process.env.AUTO_CREATE_NEW_USERS === 1 : false/autoCreateNewUsers: true/' mj.config.cjs
+
+EXPOSE 4000
+
+HEALTHCHECK --interval=10s --timeout=5s --retries=15 --start-period=30s \
+    CMD curl -f http://localhost:4000/healthcheck || exit 1
+
+# Database setup (migrations, CodeGen, AssociationDB) is handled by the db-setup container.
+# MJAPI just starts the GraphQL server.
+CMD ["node", "--experimental-specifier-resolution=node", "packages/MJAPI/dist/index.js"]

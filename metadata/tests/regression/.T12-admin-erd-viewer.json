@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T12 - Admin Dashboard ERD Viewer",
+    "Description": "Navigates to the Admin application, opens the ERD (Entity Relationship Diagram) viewer, and verifies it renders entities and relationships.",
+    "InputDefinition": {
+      "goal": "Log in to MJ Explorer. After login, the application will show a loading screen for up to 60 seconds — this is normal. IMPORTANT: Do NOT click any 'Reset' button during loading. Just wait patiently. If you see an 'Authorize App' consent screen, click 'Accept'. Once loaded, use the application switcher to navigate to the Admin application. Find and open the ERD (Entity Relationship Diagram) viewer. Verify that entity boxes or nodes are visible in the diagram.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 30,
+      "judgeValidationCriteria": [
+        "Admin application is active",
+        "ERD viewer is displayed",
+        "Entity boxes or nodes are visible in the diagram"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 30,
+      "maxExecutionTime": 300000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 30
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression"
+  },
+  "primaryKey": {
+    "ID": "9E9BED5F-AEF5-42FE-A892-2CF09EF44952"
+  },
+  "sync": {
+    "lastModified": "2026-04-06T06:00:26.833Z",
+    "checksum": "c0b8fb5874ff2aee9b065c0e845fe904a574707a2138007ed85980042920c8c9"
+  }
+}

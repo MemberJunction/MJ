@@ -107,6 +107,9 @@ export interface ComputerUseTestConfig {
 
     /** MJ Actions to expose as tools to the controller LLM (resolved by MJComputerUseEngine) */
     actions?: Array<{ actionName?: string; actionId?: string }>;
+
+    /** Additional Chromium launch arguments (e.g., ["--unsafely-treat-insecure-origin-as-secure=http://example:4200"]) */
+    browserArgs?: string[];
 }
 
 // ─── Input Definition (TestEntity.InputDefinition JSON) ───────────

@@ -69,6 +69,11 @@ export interface SuiteFlags extends CommonFlags {
      * Can be specified multiple times for multiple variables
      */
     var?: string[];
+    /**
+     * Delay in milliseconds between test executions.
+     * Useful for avoiding rate limits (e.g., Auth0 brute-force protection).
+     */
+    delay?: number;
 }
 
 /**
@@ -123,4 +128,6 @@ export interface CompareFlags extends CommonFlags {
     version?: string[];
     commit?: string[];
     diffOnly?: boolean;
+    /** Compare the two most recent completed suite runs */
+    latest?: boolean;
 }

@@ -36,6 +36,11 @@ export default class TestCompare extends Command {
       description: 'Show only differences',
       default: false,
     }),
+    latest: Flags.boolean({
+      char: 'l',
+      description: 'Compare the two most recent completed suite runs',
+      default: false,
+    }),
     format: Flags.string({
       char: 'f',
       description: 'Output format',
@@ -65,6 +70,7 @@ export default class TestCompare extends Command {
         version: flags.version,
         commit: flags.commit,
         diffOnly: flags['diff-only'],
+        latest: flags.latest,
         format: flags.format as 'console' | 'json' | 'markdown',
         output: flags.output,
         verbose: flags.verbose,
