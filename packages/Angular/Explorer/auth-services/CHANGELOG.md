@@ -1,5 +1,15 @@
 # Change Log - @memberjunction/ng-auth-services
 
+## 5.24.0
+
+### Patch Changes
+
+- 3a35955: Add support for AWS Cognito auth
+- Updated dependencies [c318a0c]
+- Updated dependencies [1912726]
+  - @memberjunction/core@5.24.0
+  - @memberjunction/global@5.24.0
+
 ## 5.23.0
 
 ### Patch Changes

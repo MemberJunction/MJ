@@ -1,5 +1,16 @@
 # Change Log - @memberjunction/core
 
+## 5.24.0
+
+### Minor Changes
+
+- c318a0c: metadata + migrations in this PR == minor
+
+### Patch Changes
+
+- 1912726: Add sqlLikeContains, sqlLikeBegins, and sqlLikeEnds template filters for platform-aware LIKE pattern matching
+  - @memberjunction/global@5.24.0
+
 ## 5.23.0
 
 ### Minor Changes
