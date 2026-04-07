@@ -23,7 +23,7 @@
         <svg #svgElement
              class="scatter-svg"
              [class.no-transitions]="!AnimateTransitions"
-             [attr.viewBox]="GetViewBoxString()"
+             [attr.viewBox]="ViewBoxString"
              preserveAspectRatio="xMidYMid meet"
              (wheel)="OnWheel($event)"
              (mousedown)="OnMouseDown($event)">
@@ -119,7 +119,21 @@
             @for (cluster of Clusters; track TrackClusterBy($index, cluster)) {
                 <div class="legend-item" (click)="OnClusterLegendClick(cluster)">
                     <div class="legend-dot" [style.background]="cluster.Color"></div>
-                    <span class="legend-label">{{ cluster.Label }}</span>
+                    @if (EditingClusterId === cluster.Id) {
+                        <input class="legend-label-input"
+                               [(ngModel)]="EditingLabelDraft"
+                               (keydown)="OnLabelEditKeydown($event, cluster)"
+                               (blur)="CommitLabelEdit(cluster)"
+                               (click)="$event.stopPropagation()"
+                               autofocus />
+                    } @else {
+                        <span class="legend-label">{{ cluster.Label }}</span>
+                        <button class="legend-edit-btn"
+                                title="Edit label"
+                                (click)="StartLabelEdit(cluster, $event)">
+                            <i class="fa-solid fa-pencil"></i>
+                        </button>
+                    }
                     <span class="legend-count">{{ cluster.MemberCount }}</span>
                 </div>
             }
@@ -131,32 +145,15 @@
         <div class="tooltip"
              [style.left.px]="TooltipX"
              [style.top.px]="TooltipY">
-            <div class="tt-header">
-                @if (HoveredPoint.Metadata?.['EntityIcon']) {
-                    <div class="tt-icon">
-                        <i [class]="HoveredPoint.Metadata['EntityIcon']"></i>
-                    </div>
-                }
-                <div class="tt-header-text">
-                    <div class="tt-name">{{ HoveredPoint.Label }}</div>
-                    @if (HoveredPoint.Metadata?.['Entity']) {
-                        <div class="tt-entity">{{ HoveredPoint.Metadata['Entity'] }}</div>
-                    }
-                </div>
-            </div>
+            <mj-entity-card
+                [EntityName]="EntityName"
+                [Record]="HoveredPoint.Metadata"
+                Variant="compact">
+            </mj-entity-card>
             <div class="tt-cluster">
                 <i class="fa-solid fa-circle" style="font-size: 7px; vertical-align: middle"></i>
                 {{ GetClusterLabel(HoveredPoint) }}
             </div>
-            @if (TooltipEntries.length > 0) {
-                <div class="tt-fields">
-                    @for (entry of TooltipEntries; track entry.Key) {
-                        @if (entry.Key !== 'Entity' && entry.Key !== 'EntityIcon' && entry.Key !== 'RecordID' && entry.Key !== 'Name' && entry.Key !== 'TemplateID' && entry.Key !== '__mj_UpdatedAt') {
-                            <div class="tt-field-row">{{ entry.Value }}</div>
-                        }
-                    }
-                </div>
-            }
             <div class="tt-action">
                 <i class="fa-solid fa-arrow-up-right-from-square"></i> Click to view details
             </div>
@@ -193,17 +190,13 @@
                 {{ GetClusterLabel(SelectedPoint) }}
             </div>
 
-            <!-- Metadata fields -->
-            @if (DetailEntries.length > 0) {
-                <div class="detail-fields">
-                    @for (entry of DetailEntries; track entry.Key) {
-                        <div class="detail-field">
-                            <div class="detail-field-key">{{ entry.Key }}</div>
-                            <div class="detail-field-value">{{ entry.Value }}</div>
-                        </div>
-                    }
-                </div>
-            }
+            <!-- Metadata fields via entity card -->
+            <mj-entity-card
+                [EntityName]="EntityName"
+                [Record]="SelectedPoint.Metadata"
+                Variant="detail"
+                CssClass="detail-entity-card">
+            </mj-entity-card>
 
             <!-- Cluster Members -->
             <div class="detail-members-section">

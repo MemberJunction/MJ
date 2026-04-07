@@ -161,8 +161,20 @@
         }
     </div>
 
+    <!-- Merge Warning Banner (non-blocking, shown when entity lacks AllowRecordMerge) -->
+    @if (ShowMergeWarningBanner) {
+        <div class="merge-warning-banner">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            Merging is not available for this entity. Detection results are read-only.
+        </div>
+    }
+
     <!-- Content -->
     @if (IsLoading) {
+        <div class="loading-container">
+            <mj-loading text="Loading duplicate detection results..."></mj-loading>
+        </div>
+    } @else if (IsLoadingResults) {
         <div class="loading-container">
             <mj-loading text="Loading duplicate detection results..."></mj-loading>
         </div>
@@ -579,15 +591,31 @@
                                     }
                                 }
                             </div>
-                            @if (match.Match.ApprovalStatus !== 'Pending') {
-                                <span class="match-status-badge"
-                                      [class.status-approved]="match.Match.ApprovalStatus === 'Approved'"
-                                      [class.status-rejected]="match.Match.ApprovalStatus === 'Rejected'">
-                                    <i class="fa-solid" [class.fa-check]="match.Match.ApprovalStatus === 'Approved'"
-                                       [class.fa-times]="match.Match.ApprovalStatus === 'Rejected'"></i>
-                                    {{ match.Match.ApprovalStatus }}
-                                </span>
-                            }
+                            <!-- Per-match approval actions -->
+                            <div class="match-approval-actions">
+                                @if (match.Match.ApprovalStatus === 'Pending') {
+                                    <button class="match-action-btn match-skip-btn"
+                                            title="Skip this match (exclude from merge)"
+                                            (click)="RejectIndividualMatch(match)">
+                                        <i class="fa-solid fa-ban"></i> Skip
+                                    </button>
+                                } @else {
+                                    <span class="match-status-badge"
+                                          [class.status-approved]="match.Match.ApprovalStatus === 'Approved'"
+                                          [class.status-rejected]="match.Match.ApprovalStatus === 'Rejected'">
+                                        <i class="fa-solid" [class.fa-check]="match.Match.ApprovalStatus === 'Approved'"
+                                           [class.fa-times]="match.Match.ApprovalStatus === 'Rejected'"></i>
+                                        {{ match.Match.ApprovalStatus === 'Rejected' ? 'Skipped' : match.Match.ApprovalStatus }}
+                                    </span>
+                                    @if (match.Match.ApprovalStatus === 'Rejected') {
+                                        <button class="match-action-btn match-undo-btn"
+                                                title="Undo skip"
+                                                (click)="UndoRejectIndividualMatch(match)">
+                                            <i class="fa-solid fa-undo"></i> Undo
+                                        </button>
+                                    }
+                                }
+                            </div>
                         </div>
                     }
 
@@ -659,10 +687,14 @@
                             (click)="RejectMatch(ComparisonGroup!); CloseComparison()">
                         <i class="fa-solid fa-times"></i> Reject All
                     </button>
-                    <button class="action-btn merge-btn" [disabled]="IsSaving"
-                            (click)="OpenMergeConfirm()">
+                    <button class="action-btn merge-btn" [disabled]="IsSaving || !HasMergeableMatches || !MergeEnabled"
+                            (click)="OpenMergeConfirm()"
+                            [title]="!MergeEnabled ? 'Merging is not enabled for this entity' : HasMergeableMatches ? 'Merge non-skipped records' : 'All matches have been skipped'">
                         <i class="fa-solid fa-code-merge"></i> Merge Records
                     </button>
+                    @if (!MergeEnabled) {
+                        <span class="merge-disabled-hint"><i class="fa-solid fa-info-circle"></i> Merging disabled for this entity</span>
+                    }
                 </div>
             </div>
         </div>
@@ -758,4 +790,5 @@
             </div>
         </div>
     }
+
 </div>

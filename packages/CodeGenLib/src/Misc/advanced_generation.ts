@@ -10,8 +10,14 @@ export type EntityDescriptionResult = { entityDescription: string, tableName: st
 export type CheckConstraintParserResult = { Description: string, Code: string, MethodName: string, ModelID: string }
 
 export type SmartFieldIdentificationResult = {
-    nameField: string;
-    nameFieldReason: string;
+    /**
+     * One or more fields that together form the human-readable record name.
+     * For person entities: ["FirstName", "LastName"]
+     * For simple entities: ["Name"]
+     * Displayed concatenated with spaces in card titles, tooltips, etc.
+     */
+    nameFields: string[];
+    nameFieldsReason: string;
     defaultInView: string[];
     defaultInViewReason: string;
     searchableFields: string[];
@@ -165,12 +171,17 @@ export class AdvancedGeneration {
                 fields: entity.Fields.map((f: any) => ({
                     Name: f.Name,
                     Type: f.Type,
+                    MaxLength: f.MaxLength ?? null,
                     IsNullable: f.AllowsNull,
                     IsPrimaryKey: f.IsPrimaryKey,
                     IsUnique: f.IsUnique,
                     IsForeignKey: f.EntityIDFieldName != null || (f.RelatedEntityID && f.RelatedEntityID.length > 0),
                     RelatedEntity: f.RelatedEntity || null,
-                    Description: f.Description
+                    Description: f.Description,
+                    ExtendedType: f.ExtendedType || null,
+                    ValueListType: f.ValueListType || null,
+                    DefaultValue: f.DefaultValue || null,
+                    Sequence: f.Sequence ?? null,
                 })),
                 relationships: entity.RelatedEntities?.map((r: any) => ({
                     Name: r.Name,

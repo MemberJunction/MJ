@@ -10,7 +10,7 @@ import { RegisterClass } from '@memberjunction/global';
 })
 export class NotificationsResource extends BaseResourceComponent implements OnInit {
     ngOnInit(): void {
-
+        this.NotifyLoadComplete();
     }
     async GetResourceDisplayName(data: ResourceData): Promise<string> {
         return 'Notifications';

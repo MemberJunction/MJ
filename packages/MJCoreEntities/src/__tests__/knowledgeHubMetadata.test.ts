@@ -62,11 +62,6 @@ interface MockVectorIndex {
     Name: string;
 }
 
-interface MockVectorDatabase {
-    ID: string;
-    Name: string;
-    ClassKey: string;
-}
 
 function createMockEntityDocument(overrides: Partial<MockEntityDocument> = {}): MockEntityDocument {
     return {
@@ -87,14 +82,6 @@ function createMockVectorIndex(overrides: Partial<MockVectorIndex> = {}): MockVe
     };
 }
 
-function createMockVectorDatabase(overrides: Partial<MockVectorDatabase> = {}): MockVectorDatabase {
-    return {
-        ID: 'VD-0001-0000-0000-000000000001',
-        Name: 'Pinecone Production',
-        ClassKey: 'PineconeVDB',
-        ...overrides,
-    };
-}
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -117,10 +104,6 @@ describe('KnowledgeHubMetadataEngine', () => {
         (engine as unknown as Record<string, unknown[]>)['_vectorIndexes'] = [
             createMockVectorIndex({ ID: 'VI-AAA', Name: 'contacts-idx' }),
             createMockVectorIndex({ ID: 'VI-BBB', Name: 'accounts-idx' }),
-        ];
-        (engine as unknown as Record<string, unknown[]>)['_vectorDatabases'] = [
-            createMockVectorDatabase({ ID: 'VD-AAA', Name: 'Pinecone Prod' }),
-            createMockVectorDatabase({ ID: 'VD-BBB', Name: 'pgvector Dev' }),
         ];
     });
 
@@ -277,34 +260,6 @@ describe('KnowledgeHubMetadataEngine', () => {
     });
 
     // ================================================================
-    // GetVectorDatabaseById
-    // ================================================================
-
-    describe('GetVectorDatabaseById', () => {
-        it('should find a vector database by ID', () => {
-            const result = engine.GetVectorDatabaseById('VD-AAA');
-            expect(result).toBeDefined();
-            expect(result!.Name).toBe('Pinecone Prod');
-        });
-
-        it('should be case-insensitive via UUIDsEqual', () => {
-            const result = engine.GetVectorDatabaseById('vd-bbb');
-            expect(result).toBeDefined();
-            expect(result!.Name).toBe('pgvector Dev');
-        });
-
-        it('should return undefined for non-existent ID', () => {
-            const result = engine.GetVectorDatabaseById('no-such-db');
-            expect(result).toBeUndefined();
-        });
-
-        it('should return undefined for empty string', () => {
-            const result = engine.GetVectorDatabaseById('');
-            expect(result).toBeUndefined();
-        });
-    });
-
-    // ================================================================
     // GetActiveEntityDocuments
     // ================================================================
 
@@ -349,10 +304,6 @@ describe('KnowledgeHubMetadataEngine', () => {
 
         it('VectorIndexes should return all vector indexes', () => {
             expect(engine.VectorIndexes).toHaveLength(2);
-        });
-
-        it('VectorDatabases should return all vector databases', () => {
-            expect(engine.VectorDatabases).toHaveLength(2);
         });
     });
 });

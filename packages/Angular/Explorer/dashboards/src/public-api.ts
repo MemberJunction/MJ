@@ -44,6 +44,10 @@ export {
   ClusterVisualizationResourceComponent,
   LoadClusterVisualizationResource
 } from './KnowledgeHub/components/clusters/cluster-visualization-resource.component';
+export {
+  AnalyticsResourceComponent,
+  LoadAnalyticsResource
+} from './KnowledgeHub/components/analytics/analytics-resource.component';
 
 // Export Actions components as resources (BaseResourceComponent-based)
 export {

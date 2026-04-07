@@ -3,7 +3,6 @@ import { UUIDsEqual } from "@memberjunction/global";
 import {
     MJEntityDocumentEntity,
     MJVectorIndexEntity,
-    MJVectorDatabaseEntity,
     MJContentSourceEntity,
     MJContentTypeEntity,
     MJContentSourceTypeEntity,
@@ -28,7 +27,6 @@ export class KnowledgeHubMetadataEngine extends BaseEngine<KnowledgeHubMetadataE
 
     private _entityDocuments: MJEntityDocumentEntity[] = [];
     private _vectorIndexes: MJVectorIndexEntity[] = [];
-    private _vectorDatabases: MJVectorDatabaseEntity[] = [];
     private _contentSources: MJContentSourceEntity[] = [];
     private _contentTypes: MJContentTypeEntity[] = [];
     private _contentSourceTypes: MJContentSourceTypeEntity[] = [];
@@ -46,12 +44,6 @@ export class KnowledgeHubMetadataEngine extends BaseEngine<KnowledgeHubMetadataE
                 Type: 'entity',
                 EntityName: 'MJ: Vector Indexes',
                 PropertyName: '_vectorIndexes',
-                CacheLocal: true
-            },
-            {
-                Type: 'entity',
-                EntityName: 'MJ: Vector Databases',
-                PropertyName: '_vectorDatabases',
                 CacheLocal: true
             },
             {
@@ -94,11 +86,6 @@ export class KnowledgeHubMetadataEngine extends BaseEngine<KnowledgeHubMetadataE
     /** All vector indexes in the system */
     public get VectorIndexes(): MJVectorIndexEntity[] {
         return this._vectorIndexes;
-    }
-
-    /** All vector databases in the system */
-    public get VectorDatabases(): MJVectorDatabaseEntity[] {
-        return this._vectorDatabases;
     }
 
     /** All content sources */
@@ -147,12 +134,6 @@ export class KnowledgeHubMetadataEngine extends BaseEngine<KnowledgeHubMetadataE
     public GetVectorIndexById(id: string): MJVectorIndexEntity | undefined {
         if (!id) return undefined;
         return this._vectorIndexes.find(v => UUIDsEqual(v.ID, id));
-    }
-
-    /** Find a vector database by ID (case-insensitive UUID comparison) */
-    public GetVectorDatabaseById(id: string): MJVectorDatabaseEntity | undefined {
-        if (!id) return undefined;
-        return this._vectorDatabases.find(v => UUIDsEqual(v.ID, id));
     }
 
     /**

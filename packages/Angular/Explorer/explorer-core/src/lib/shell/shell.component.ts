@@ -199,9 +199,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           }
         }
       });
-      
+
     } catch (error) {
-      console.error('Failed to initialize shell:', error);
       this.loading = false;
     }
   }
@@ -213,7 +212,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     // Initialize application manager (subscribes to LoggedIn event)
     this.appManager.Initialize();
 
-    await StartupManager.Instance.Startup();          
+    await StartupManager.Instance.Startup();
 
     // Get current user
     const md = new Metadata();

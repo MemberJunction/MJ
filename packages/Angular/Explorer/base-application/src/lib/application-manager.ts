@@ -33,6 +33,18 @@ export class ApplicationManager {
   private loading$ = new BehaviorSubject<boolean>(false);
   private initialized = false;
 
+  /** Resolves when loadApplications() has completed successfully */
+  private _readyResolve!: () => void;
+  private _readyPromise = new Promise<void>(resolve => { this._readyResolve = resolve; });
+
+  /**
+   * Returns a promise that resolves when applications have been loaded and the manager is ready.
+   * Safe to call multiple times — returns the same promise.
+   */
+  WhenReady(): Promise<void> {
+    return this._readyPromise;
+  }
+
   /**
    * Observable of user's active applications (filtered and ordered by UserApplication)
    */
@@ -251,8 +263,11 @@ export class ApplicationManager {
       await this.loadUserApplicationConfig();
 
       this.initialized = true;
+      this._readyResolve();
 
     } catch (error) {
+      // Resolve even on failure so waiters don't hang forever — they'll see initialized=false
+      this._readyResolve();
       LogError('Failed to load applications:', undefined, error instanceof Error ? error.message : String(error));
       throw error;
     } finally {

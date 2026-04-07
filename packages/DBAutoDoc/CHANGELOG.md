@@ -1,5 +1,16 @@
 # @memberjunction/db-auto-doc
 
+## 5.24.0
+
+### Patch Changes
+
+- Updated dependencies [c318a0c]
+- Updated dependencies [1912726]
+  - @memberjunction/core@5.24.0
+  - @memberjunction/server-bootstrap@5.24.0
+  - @memberjunction/ai@5.24.0
+  - @memberjunction/global@5.24.0
+
 ## 5.23.0
 
 ### Patch Changes

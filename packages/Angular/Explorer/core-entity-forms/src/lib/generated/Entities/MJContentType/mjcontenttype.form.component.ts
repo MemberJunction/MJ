@@ -19,6 +19,7 @@ export class MJContentTypeFormComponent extends BaseFormComponent {
             { sectionKey: 'contentTypeDetails', sectionName: 'Content Type Details', isExpanded: true },
             { sectionKey: 'aIModelSettings', sectionName: 'AI Model Settings', isExpanded: true },
             { sectionKey: 'taggingRules', sectionName: 'Tagging Rules', isExpanded: false },
+            { sectionKey: 'advancedConfiguration', sectionName: 'Advanced Configuration', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJContentSources', sectionName: 'Content Sources', isExpanded: false },
             { sectionKey: 'mJContentItems', sectionName: 'Content Items', isExpanded: false }

@@ -199,6 +199,7 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
     this.documentClickHandler = (e: Event) => this.onDocumentClick(e);
     document.addEventListener('click', this.documentClickHandler);
     await this.LoadData();
+    this.NotifyLoadComplete();
   }
 
   ngOnDestroy(): void {

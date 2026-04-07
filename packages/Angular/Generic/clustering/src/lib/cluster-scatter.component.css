@@ -157,6 +157,42 @@
     flex: 1;
 }
 
+.legend-edit-btn {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--mj-text-muted);
+    cursor: pointer;
+    font-size: 0.6rem;
+    border-radius: 4px;
+    transition: color 0.15s ease;
+}
+
+.legend-item:hover .legend-edit-btn {
+    display: inline-flex;
+}
+
+.legend-edit-btn:hover {
+    color: var(--mj-brand-primary);
+}
+
+.legend-label-input {
+    flex: 1;
+    padding: 2px 4px;
+    border: 1px solid var(--mj-border-focus);
+    border-radius: 4px;
+    background: var(--mj-bg-surface);
+    color: var(--mj-text-primary);
+    font-size: 0.75rem;
+    outline: none;
+    min-width: 60px;
+}
+
 .legend-count {
     color: var(--mj-text-muted);
     font-size: 0.7rem;

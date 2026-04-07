@@ -49,6 +49,7 @@ export abstract class BaseDashboard extends BaseResourceComponent implements OnI
   async ngOnInit() {
     this.initDashboard();
     await this.loadData();
+    this.NotifyLoadComplete();
   }
 
   ngOnDestroy(): void {}
