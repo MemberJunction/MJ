@@ -475,7 +475,7 @@ import { UUIDsEqual } from '@memberjunction/global';
     <mj-collection-form-modal
       [isOpen]="isFormModalOpen"
       [collection]="editingCollection"
-      [parentCollection]="currentCollection || undefined"
+      [parentCollection]="editingCollection ? undefined : (currentCollection || undefined)"
       [environmentId]="environmentId"
       [currentUser]="currentUser"
       (saved)="onCollectionSaved($event)"
@@ -1332,6 +1332,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
   public showNewDropdown: boolean = false;
   public showSortDropdown: boolean = false;
   public activeArtifactId: string | null = null; // Track which artifact is currently being viewed
+  private itemCountMap: Map<string, number> = new Map();
   public isSelectMode: boolean = false; // Toggle for selection mode
 
   IsArtifactActive(item: CollectionViewItem): boolean {
@@ -1488,11 +1489,60 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
 
       if (result.Success) {
         this.collections = result.Results || [];
-        await this.loadUserPermissions();
+        await Promise.all([
+          this.loadUserPermissions(),
+          this.loadItemCounts()
+        ]);
         this.filteredCollections = [...this.collections];
       }
     } catch (error) {
       console.error('Failed to load collections:', error);
+    }
+  }
+
+  /**
+   * Load item counts (child collections + artifacts) for all visible collections
+   */
+  private async loadItemCounts(): Promise<void> {
+    this.itemCountMap.clear();
+    if (this.collections.length === 0) return;
+
+    const collectionIds = this.collections.map(c => c.ID);
+    const inClause = collectionIds.map(id => `'${id}'`).join(',');
+
+    const rv = new RunView();
+    const [childResult, artifactResult] = await rv.RunViews(
+      [
+        {
+          EntityName: 'MJ: Collections',
+          ExtraFilter: `ParentID IN (${inClause})`,
+          Fields: ['ID', 'ParentID'],
+          ResultType: 'simple'
+        },
+        {
+          EntityName: 'MJ: Collection Artifacts',
+          ExtraFilter: `CollectionID IN (${inClause})`,
+          Fields: ['ID', 'CollectionID'],
+          ResultType: 'simple'
+        }
+      ],
+      this.currentUser
+    );
+
+    // Count children per parent
+    if (childResult.Success && childResult.Results) {
+      for (const child of childResult.Results) {
+        const parentId = (child as Record<string, string>).ParentID;
+        this.itemCountMap.set(parentId, (this.itemCountMap.get(parentId) || 0) + 1);
+      }
+    }
+
+    // Count artifacts per collection
+    if (artifactResult.Success && artifactResult.Results) {
+      for (const ca of artifactResult.Results) {
+        const collId = (ca as Record<string, string>).CollectionID;
+        this.itemCountMap.set(collId, (this.itemCountMap.get(collId) || 0) + 1);
+      }
     }
   }
 
@@ -1615,6 +1665,16 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
       });
     } finally {
       this.isNavigatingProgrammatically = false;
+    }
+  }
+
+  /**
+   * Update a breadcrumb entry's name in place (e.g., after rename)
+   */
+  private updateBreadcrumbName(collectionId: string, newName: string): void {
+    const crumb = this.breadcrumbs.find(b => UUIDsEqual(b.id, collectionId));
+    if (crumb) {
+      crumb.name = newName;
     }
   }
 
@@ -1800,6 +1860,13 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     await this.loadCollections();
     // Reload current collection permission (it was cleared by loadUserPermissions)
     await this.loadCurrentCollectionPermission();
+
+    // Update breadcrumb and currentCollection if the saved collection is in the trail
+    this.updateBreadcrumbName(collection.ID, collection.Name);
+    if (this.currentCollection && UUIDsEqual(this.currentCollection.ID, collection.ID)) {
+      this.currentCollection = collection;
+    }
+
     // Rebuild unified list to show new collection
     this.buildUnifiedItemList();
     this.cdr.detectChanges();
@@ -2036,7 +2103,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
         name: collection.Name,
         description: collection.Description || undefined,
         icon: 'fa-folder',
-        itemCount: 0, // TODO: calculate actual count
+        itemCount: this.itemCountMap.get(collection.ID) || 0,
         owner: collection.Owner || undefined,
         isShared: this.isShared(collection),
         selected: this.selectedItems.has(collection.ID),
@@ -2281,8 +2348,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
    * Get count of items in folder (Phase 1)
    */
   private async getCollectionItemCount(collectionId: string): Promise<number> {
-    // TODO: Query for actual count
-    return 0;
+    return this.itemCountMap.get(collectionId) || 0;
   }
 
   /**
