@@ -369,11 +369,7 @@ const BB_OBJECTS: IntegrationObjectInfo[] = [
         { Name: 'id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Custom field ID' },
         { Name: 'parent_id', DisplayName: 'Appeal ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: false, Description: 'FK → Appeals' },
     ]},
-    // Recurring gift sub-resources
-    { Name: 'RecurringGiftSchedules', DisplayName: 'Recurring Schedule', Description: 'Recurring gift payment schedules', SupportsWrite: false, Fields: [
-        { Name: 'id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Schedule ID' },
-        { Name: 'recurring_gift_id', DisplayName: 'Gift ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: false, Description: 'FK → RecurringGifts' },
-    ]},
+    // RecurringGiftSchedules REMOVED — schedules are a sub-object property of recurring gifts, not a separate endpoint (verified)
     // Event sub-resources
     { Name: 'EventCategories', DisplayName: 'Event Category', Description: 'Event category definitions', SupportsWrite: false, Fields: [
         { Name: 'id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Category ID' },
@@ -427,9 +423,7 @@ const BB_OBJECTS: IntegrationObjectInfo[] = [
     { Name: 'CommunicationPreferences', DisplayName: 'Comm Preference', Description: 'Communication preferences per constituent', SupportsWrite: true, Fields: [
         { Name: 'constituent_id', DisplayName: 'Constituent ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'FK → Constituents' },
     ]},
-    { Name: 'ConsentChannels', DisplayName: 'Consent Channel', Description: 'Communication consent channel definitions', SupportsWrite: false, Fields: [
-        { Name: 'id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Channel ID' },
-    ]},
+    // ConsentChannels REMOVED — not a standalone endpoint, embedded in communication preferences model (verified)
     // Remaining lookups
     { Name: 'ConstituentCodeTypes', DisplayName: 'Code Type', Description: 'Constituent code type definitions', SupportsWrite: false, Fields: [
         { Name: 'id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Type ID' },
@@ -473,9 +467,7 @@ const BB_OBJECTS: IntegrationObjectInfo[] = [
     { Name: 'OpportunityStatus', DisplayName: 'Opportunity Status', Description: 'Opportunity status lookup', SupportsWrite: false, Fields: [
         { Name: 'id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Status ID' },
     ]},
-    { Name: 'ConsentCategories', DisplayName: 'Consent Category', Description: 'GDPR consent category definitions', SupportsWrite: false, Fields: [
-        { Name: 'id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Category ID' },
-    ]},
+    // ConsentCategories REMOVED — not a standalone endpoint, embedded in communication preferences model (verified)
     { Name: 'EventParticipantDonations', DisplayName: 'Participant Donation', Description: 'Donations from event participants', SupportsWrite: false, Fields: [
         { Name: 'id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Donation ID' },
         { Name: 'participant_id', DisplayName: 'Participant ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: false, Description: 'FK → EventParticipants' },

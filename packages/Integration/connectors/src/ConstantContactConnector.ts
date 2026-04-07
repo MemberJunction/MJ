@@ -227,16 +227,11 @@ const CC_OBJECTS: IntegrationObjectInfo[] = [
         { Name: 'segment_id', DisplayName: 'Segment ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Segment UUID' },
         { Name: 'updated_at', DisplayName: 'Updated At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Incremental date' },
     ]},
-    { Name: 'SegmentMembers', DisplayName: 'Segment Member', Description: 'Contacts within a segment (child of Segments)', SupportsWrite: false, Fields: [
-        { Name: 'contact_id', DisplayName: 'Contact ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Contact UUID' },
-        { Name: 'segment_id', DisplayName: 'Segment ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: false, Description: 'FK → Segments' },
-    ]},
-    { Name: 'LandingPages', DisplayName: 'Landing Page', Description: 'Landing page campaigns', SupportsWrite: true, Fields: [
-        { Name: 'landing_page_id', DisplayName: 'Page ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Landing page UUID' },
-        { Name: 'updated_at', DisplayName: 'Updated At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Incremental date' },
-    ]},
-    { Name: 'SmsCampaigns', DisplayName: 'SMS Campaign', Description: 'SMS text message campaigns', SupportsWrite: true, Fields: [
-        { Name: 'sms_campaign_id', DisplayName: 'Campaign ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'SMS campaign UUID' },
+    // SegmentMembers REMOVED — no endpoint to list members of a segment (verified against OpenAPI spec)
+    // LandingPages REMOVED — no CRUD endpoints, only reporting at /reports/landing_pages/ (verified)
+    // SmsCampaigns REMOVED — no CRUD endpoints, only summary report (verified)
+    { Name: 'Events', DisplayName: 'Event', Description: 'Events (verified: /events endpoint)', SupportsWrite: true, Fields: [
+        { Name: 'event_id', DisplayName: 'Event ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Event UUID' },
         { Name: 'updated_at', DisplayName: 'Updated At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Incremental date' },
     ]},
     { Name: 'EmailSendHistory', DisplayName: 'Email Send History', Description: 'Historical email send records per campaign', SupportsWrite: false, Fields: [
@@ -258,7 +253,7 @@ const CC_OBJECTS: IntegrationObjectInfo[] = [
         { Name: 'campaign_activity_id', DisplayName: 'Activity ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'FK → CampaignActivities' },
         { Name: 'created_time', DisplayName: 'Bounce Time', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Incremental date' },
     ]},
-    { Name: 'CampaignTrackingUnsubscribes', DisplayName: 'Email Unsubscribes', Description: 'Per-contact unsubscribe tracking', SupportsWrite: false, Fields: [
+    { Name: 'CampaignTrackingOptouts', DisplayName: 'Email Unsubscribes', Description: 'Per-contact unsubscribe tracking', SupportsWrite: false, Fields: [
         { Name: 'contact_id', DisplayName: 'Contact ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Contact UUID' },
         { Name: 'campaign_activity_id', DisplayName: 'Activity ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'FK → CampaignActivities' },
     ]},

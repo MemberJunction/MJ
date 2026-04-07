@@ -20,7 +20,7 @@
             "DisplayName": "Contact",
             "Description": "Members, contacts, and prospects in Wild Apricot",
             "Category": "Core",
-            "APIPath": "/contacts",
+            "APIPath": "/Contacts",
             "ResponseDataKey": null,
             "DefaultPageSize": 100,
             "SupportsPagination": true,
@@ -93,7 +93,7 @@
             "DisplayName": "Event",
             "Description": "Events including conferences, meetings, and webinars",
             "Category": "Core",
-            "APIPath": "/events",
+            "APIPath": "/Events",
             "ResponseDataKey": null,
             "DefaultPageSize": 100,
             "SupportsPagination": true,
@@ -166,7 +166,7 @@
             "DisplayName": "Event Registration",
             "Description": "Event registration records with attendee details",
             "Category": "Core",
-            "APIPath": "/eventRegistrations",
+            "APIPath": "/EventRegistrations",
             "ResponseDataKey": null,
             "DefaultPageSize": 100,
             "SupportsPagination": true,
@@ -222,7 +222,7 @@
             "DisplayName": "Invoice",
             "Description": "Invoices for dues, event fees, and other charges",
             "Category": "Core",
-            "APIPath": "/invoices",
+            "APIPath": "/Invoices",
             "ResponseDataKey": null,
             "DefaultPageSize": 100,
             "SupportsPagination": true,
@@ -278,7 +278,7 @@
             "DisplayName": "Payment",
             "Description": "Payment records against invoices",
             "Category": "Core",
-            "APIPath": "/payments",
+            "APIPath": "/Payments",
             "ResponseDataKey": null,
             "DefaultPageSize": 100,
             "SupportsPagination": true,
@@ -334,7 +334,7 @@
             "DisplayName": "Refund",
             "Description": "Refund records against payments",
             "Category": "Core",
-            "APIPath": "/refunds",
+            "APIPath": "/Refunds",
             "ResponseDataKey": null,
             "DefaultPageSize": 100,
             "SupportsPagination": true,
@@ -390,7 +390,7 @@
             "DisplayName": "Membership Level",
             "Description": "Membership level/tier definitions (read-only)",
             "Category": "Core",
-            "APIPath": "/membershipLevels",
+            "APIPath": "/MembershipLevels",
             "ResponseDataKey": null,
             "DefaultPageSize": 100,
             "SupportsPagination": true,
@@ -429,7 +429,7 @@
             "DisplayName": "Account",
             "Description": "Wild Apricot account info (singleton, read-only)",
             "Category": "Core",
-            "APIPath": "/account",
+            "APIPath": "/Account",
             "ResponseDataKey": null,
             "DefaultPageSize": 100,
             "SupportsPagination": true,
@@ -468,7 +468,7 @@
             "DisplayName": "Contact Field",
             "Description": "Custom/system field definitions (schema)",
             "Category": "Core",
-            "APIPath": "/contactFields",
+            "APIPath": "/ContactFields",
             "ResponseDataKey": null,
             "DefaultPageSize": 100,
             "SupportsPagination": true,
@@ -507,7 +507,7 @@
             "DisplayName": "Member Group",
             "Description": "Groups for organizing contacts",
             "Category": "Core",
-            "APIPath": "/memberGroups",
+            "APIPath": "/MemberGroups",
             "ResponseDataKey": null,
             "DefaultPageSize": 100,
             "SupportsPagination": true,
@@ -542,11 +542,11 @@
         {
           "fields": {
             "IntegrationID": "@parent:ID",
-            "Name": "EventSessions",
-            "DisplayName": "Event Session",
-            "Description": "Sessions within events (child of Events)",
+            "Name": "Donations",
+            "DisplayName": "Donation",
+            "Description": "Donation records",
             "Category": "Core",
-            "APIPath": "/eventSessions",
+            "APIPath": "/Donations",
             "ResponseDataKey": null,
             "DefaultPageSize": 100,
             "SupportsPagination": true,
@@ -554,62 +554,6 @@
             "SupportsIncrementalSync": true,
             "SupportsWrite": false,
             "Sequence": 11,
-            "Status": "Active"
-          },
-          "relatedEntities": {
-            "MJ: Integration Object Fields": [
-              {
-                "fields": {
-                  "IntegrationObjectID": "@parent:ID",
-                  "Name": "Id",
-                  "DisplayName": "Id",
-                  "Type": "int",
-                  "Length": null,
-                  "IsPrimaryKey": true,
-                  "IsForeignKey": false,
-                  "IsRequired": true,
-                  "IsReadOnly": true,
-                  "IsUniqueKey": true,
-                  "AllowsNull": false,
-                  "Sequence": 1,
-                  "Status": "Active"
-                }
-              },
-              {
-                "fields": {
-                  "IntegrationObjectID": "@parent:ID",
-                  "Name": "EventId",
-                  "DisplayName": "EventId",
-                  "Type": "int",
-                  "Length": null,
-                  "IsPrimaryKey": false,
-                  "IsForeignKey": true,
-                  "IsRequired": false,
-                  "IsReadOnly": false,
-                  "IsUniqueKey": false,
-                  "AllowsNull": true,
-                  "Sequence": 2,
-                  "Status": "Active"
-                }
-              }
-            ]
-          }
-        },
-        {
-          "fields": {
-            "IntegrationID": "@parent:ID",
-            "Name": "Donations",
-            "DisplayName": "Donation",
-            "Description": "Donation records",
-            "Category": "Core",
-            "APIPath": "/donations",
-            "ResponseDataKey": null,
-            "DefaultPageSize": 100,
-            "SupportsPagination": true,
-            "PaginationType": "Offset",
-            "SupportsIncrementalSync": true,
-            "SupportsWrite": false,
-            "Sequence": 12,
             "Status": "Active"
           },
           "relatedEntities": {
@@ -671,57 +615,18 @@
         {
           "fields": {
             "IntegrationID": "@parent:ID",
-            "Name": "DonationCampaigns",
-            "DisplayName": "Donation Campaign",
-            "Description": "Fundraising campaigns",
-            "Category": "Core",
-            "APIPath": "/donationCampaigns",
-            "ResponseDataKey": null,
-            "DefaultPageSize": 100,
-            "SupportsPagination": true,
-            "PaginationType": "Offset",
-            "SupportsIncrementalSync": true,
-            "SupportsWrite": false,
-            "Sequence": 13,
-            "Status": "Active"
-          },
-          "relatedEntities": {
-            "MJ: Integration Object Fields": [
-              {
-                "fields": {
-                  "IntegrationObjectID": "@parent:ID",
-                  "Name": "Id",
-                  "DisplayName": "Id",
-                  "Type": "int",
-                  "Length": null,
-                  "IsPrimaryKey": true,
-                  "IsForeignKey": false,
-                  "IsRequired": true,
-                  "IsReadOnly": true,
-                  "IsUniqueKey": true,
-                  "AllowsNull": false,
-                  "Sequence": 1,
-                  "Status": "Active"
-                }
-              }
-            ]
-          }
-        },
-        {
-          "fields": {
-            "IntegrationID": "@parent:ID",
             "Name": "Tenders",
             "DisplayName": "Tender",
             "Description": "Payment tender/method lookup",
             "Category": "Core",
-            "APIPath": "/tenders",
+            "APIPath": "/Tenders",
             "ResponseDataKey": null,
             "DefaultPageSize": 100,
             "SupportsPagination": true,
             "PaginationType": "Offset",
             "SupportsIncrementalSync": true,
             "SupportsWrite": false,
-            "Sequence": 14,
+            "Sequence": 12,
             "Status": "Active"
           },
           "relatedEntities": {
@@ -753,14 +658,14 @@
             "DisplayName": "Audit Log",
             "Description": "Account activity audit trail",
             "Category": "Core",
-            "APIPath": "/auditLogItems",
+            "APIPath": "/AuditLogItems",
             "ResponseDataKey": null,
             "DefaultPageSize": 100,
             "SupportsPagination": true,
             "PaginationType": "Offset",
             "SupportsIncrementalSync": true,
             "SupportsWrite": false,
-            "Sequence": 15,
+            "Sequence": 13,
             "Status": "Active"
           },
           "relatedEntities": {
@@ -805,74 +710,18 @@
         {
           "fields": {
             "IntegrationID": "@parent:ID",
-            "Name": "RecurringPaymentContracts",
-            "DisplayName": "Recurring Payment",
-            "Description": "Auto-renewal contracts",
-            "Category": "Core",
-            "APIPath": "/recurringPaymentContracts",
-            "ResponseDataKey": null,
-            "DefaultPageSize": 100,
-            "SupportsPagination": true,
-            "PaginationType": "Offset",
-            "SupportsIncrementalSync": true,
-            "SupportsWrite": false,
-            "Sequence": 16,
-            "Status": "Active"
-          },
-          "relatedEntities": {
-            "MJ: Integration Object Fields": [
-              {
-                "fields": {
-                  "IntegrationObjectID": "@parent:ID",
-                  "Name": "Id",
-                  "DisplayName": "Id",
-                  "Type": "int",
-                  "Length": null,
-                  "IsPrimaryKey": true,
-                  "IsForeignKey": false,
-                  "IsRequired": true,
-                  "IsReadOnly": true,
-                  "IsUniqueKey": true,
-                  "AllowsNull": false,
-                  "Sequence": 1,
-                  "Status": "Active"
-                }
-              },
-              {
-                "fields": {
-                  "IntegrationObjectID": "@parent:ID",
-                  "Name": "ContactId",
-                  "DisplayName": "ContactId",
-                  "Type": "int",
-                  "Length": null,
-                  "IsPrimaryKey": false,
-                  "IsForeignKey": true,
-                  "IsRequired": false,
-                  "IsReadOnly": false,
-                  "IsUniqueKey": false,
-                  "AllowsNull": true,
-                  "Sequence": 2,
-                  "Status": "Active"
-                }
-              }
-            ]
-          }
-        },
-        {
-          "fields": {
-            "IntegrationID": "@parent:ID",
             "Name": "SavedSearches",
             "DisplayName": "Saved Search",
             "Description": "Saved contact filters",
             "Category": "Core",
-            "APIPath": "/savedSearches",
+            "APIPath": "/SavedSearches",
             "ResponseDataKey": null,
             "DefaultPageSize": 100,
             "SupportsPagination": true,
             "PaginationType": "Offset",
             "SupportsIncrementalSync": true,
             "SupportsWrite": true,
-            "Sequence": 17,
+            "Sequence": 14,
             "Status": "Active"
           },
           "relatedEntities": {
@@ -900,18 +749,18 @@
         {
           "fields": {
             "IntegrationID": "@parent:ID",
-            "Name": "EmailMessages",
-            "DisplayName": "Email Message",
-            "Description": "Sent email messages/campaigns",
+            "Name": "SentEmails",
+            "DisplayName": "Sent Email",
+            "Description": "Sent email messages (verified: /SentEmails)",
             "Category": "Core",
-            "APIPath": "/emailMessages",
+            "APIPath": "/SentEmails",
             "ResponseDataKey": null,
             "DefaultPageSize": 100,
             "SupportsPagination": true,
             "PaginationType": "Offset",
             "SupportsIncrementalSync": true,
             "SupportsWrite": false,
-            "Sequence": 18,
+            "Sequence": 15,
             "Status": "Active"
           },
           "relatedEntities": {
@@ -956,18 +805,96 @@
         {
           "fields": {
             "IntegrationID": "@parent:ID",
-            "Name": "Orders",
-            "DisplayName": "Online Store Order",
-            "Description": "Store purchase orders",
+            "Name": "SentEmailRecipients",
+            "DisplayName": "Email Recipient",
+            "Description": "Recipients of sent emails",
             "Category": "Core",
-            "APIPath": "/orders",
+            "APIPath": "/SentEmailRecipients",
             "ResponseDataKey": null,
             "DefaultPageSize": 100,
             "SupportsPagination": true,
             "PaginationType": "Offset",
             "SupportsIncrementalSync": true,
             "SupportsWrite": false,
-            "Sequence": 19,
+            "Sequence": 16,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Id",
+                  "DisplayName": "Id",
+                  "Type": "int",
+                  "Length": null,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "EmailDrafts",
+            "DisplayName": "Email Draft",
+            "Description": "Draft email messages (verified: /EmailDrafts)",
+            "Category": "Core",
+            "APIPath": "/EmailDrafts",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 100,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 17,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Id",
+                  "DisplayName": "Id",
+                  "Type": "int",
+                  "Length": null,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Orders",
+            "DisplayName": "Online Store Order",
+            "Description": "Store purchase orders (verified: /store/orders)",
+            "Category": "Core",
+            "APIPath": "/Orders",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 100,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "Sequence": 18,
             "Status": "Active"
           },
           "relatedEntities": {
@@ -1029,11 +956,50 @@
         {
           "fields": {
             "IntegrationID": "@parent:ID",
-            "Name": "OnlineStoreCatalogItems",
+            "Name": "StoreProducts",
             "DisplayName": "Store Product",
-            "Description": "Product catalog items",
+            "Description": "Product catalog items (verified: /store/products)",
             "Category": "Core",
-            "APIPath": "/onlineStoreCatalogItems",
+            "APIPath": "/StoreProducts",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 100,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "Sequence": 19,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Id",
+                  "DisplayName": "Id",
+                  "Type": "int",
+                  "Length": null,
+                  "IsPrimaryKey": true,
+                  "IsForeignKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "EventRegistrationTypes",
+            "DisplayName": "Event Registration Type",
+            "Description": "Registration types per event (verified: /EventRegistrationTypes)",
+            "Category": "Core",
+            "APIPath": "/EventRegistrationTypes",
             "ResponseDataKey": null,
             "DefaultPageSize": 100,
             "SupportsPagination": true,
@@ -1061,6 +1027,23 @@
                   "Sequence": 1,
                   "Status": "Active"
                 }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "EventId",
+                  "DisplayName": "EventId",
+                  "Type": "int",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsForeignKey": true,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
               }
             ]
           }
@@ -1068,11 +1051,11 @@
         {
           "fields": {
             "IntegrationID": "@parent:ID",
-            "Name": "EventSessionRegistrations",
-            "DisplayName": "Session Registration",
-            "Description": "Registrations for event sessions (child of EventSessions)",
+            "Name": "DonationFields",
+            "DisplayName": "Donation Field",
+            "Description": "Custom donation field definitions (verified: /donationfields)",
             "Category": "Core",
-            "APIPath": "/eventSessionRegistrations",
+            "APIPath": "/DonationFields",
             "ResponseDataKey": null,
             "DefaultPageSize": 100,
             "SupportsPagination": true,
@@ -1100,23 +1083,6 @@
                   "Sequence": 1,
                   "Status": "Active"
                 }
-              },
-              {
-                "fields": {
-                  "IntegrationObjectID": "@parent:ID",
-                  "Name": "EventSessionId",
-                  "DisplayName": "EventSessionId",
-                  "Type": "int",
-                  "Length": null,
-                  "IsPrimaryKey": false,
-                  "IsForeignKey": true,
-                  "IsRequired": false,
-                  "IsReadOnly": false,
-                  "IsUniqueKey": false,
-                  "AllowsNull": true,
-                  "Sequence": 2,
-                  "Status": "Active"
-                }
               }
             ]
           }
@@ -1124,11 +1090,11 @@
         {
           "fields": {
             "IntegrationID": "@parent:ID",
-            "Name": "SentEmailLog",
-            "DisplayName": "Sent Email Log",
-            "Description": "Detailed sent email delivery log",
+            "Name": "Bundles",
+            "DisplayName": "Bundle",
+            "Description": "Product/membership bundles (verified: /bundles)",
             "Category": "Core",
-            "APIPath": "/sentEmailLog",
+            "APIPath": "/Bundles",
             "ResponseDataKey": null,
             "DefaultPageSize": 100,
             "SupportsPagination": true,
@@ -1154,23 +1120,6 @@
                   "IsUniqueKey": true,
                   "AllowsNull": false,
                   "Sequence": 1,
-                  "Status": "Active"
-                }
-              },
-              {
-                "fields": {
-                  "IntegrationObjectID": "@parent:ID",
-                  "Name": "SentDate",
-                  "DisplayName": "SentDate",
-                  "Type": "datetime",
-                  "Length": null,
-                  "IsPrimaryKey": false,
-                  "IsForeignKey": false,
-                  "IsRequired": false,
-                  "IsReadOnly": true,
-                  "IsUniqueKey": false,
-                  "AllowsNull": true,
-                  "Sequence": 2,
                   "Status": "Active"
                 }
               }

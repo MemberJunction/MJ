@@ -160,7 +160,7 @@ const WA_OBJECTS: IntegrationObjectInfo[] = [
             { Name: 'PrimaryDomainName', DisplayName: 'Domain', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Primary domain' },
         ],
     },
-    // ─── Additional WA API v2.2 endpoints — lean overlay (PK + key FKs + date fields only) ──
+    // ─── Additional WA API v2.2 endpoints — VERIFIED against SwaggerHub spec v7.24.0 ──
     // Full field inventory is discovered at runtime via sample record fetch in DiscoverFields()
     { Name: 'ContactFields', DisplayName: 'Contact Field', Description: 'Custom/system field definitions (schema)', SupportsWrite: true, Fields: [
         { Name: 'Id', DisplayName: 'ID', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Field definition ID' },
@@ -168,17 +168,10 @@ const WA_OBJECTS: IntegrationObjectInfo[] = [
     { Name: 'MemberGroups', DisplayName: 'Member Group', Description: 'Groups for organizing contacts', SupportsWrite: true, Fields: [
         { Name: 'Id', DisplayName: 'ID', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Group ID' },
     ]},
-    { Name: 'EventSessions', DisplayName: 'Event Session', Description: 'Sessions within events (child of Events)', SupportsWrite: false, Fields: [
-        { Name: 'Id', DisplayName: 'ID', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Session ID' },
-        { Name: 'EventId', DisplayName: 'Event ID', Type: 'number', IsRequired: true, IsReadOnly: true, IsPrimaryKey: false, Description: 'FK → Events' },
-    ]},
     { Name: 'Donations', DisplayName: 'Donation', Description: 'Donation records', SupportsWrite: false, Fields: [
         { Name: 'Id', DisplayName: 'ID', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Donation ID' },
         { Name: 'ContactId', DisplayName: 'Contact ID', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'FK → Contacts' },
         { Name: 'DonationDate', DisplayName: 'Date', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Incremental date field' },
-    ]},
-    { Name: 'DonationCampaigns', DisplayName: 'Donation Campaign', Description: 'Fundraising campaigns', SupportsWrite: false, Fields: [
-        { Name: 'Id', DisplayName: 'ID', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Campaign ID' },
     ]},
     { Name: 'Tenders', DisplayName: 'Tender', Description: 'Payment tender/method lookup', SupportsWrite: false, Fields: [
         { Name: 'Id', DisplayName: 'ID', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Tender ID' },
@@ -187,32 +180,36 @@ const WA_OBJECTS: IntegrationObjectInfo[] = [
         { Name: 'Id', DisplayName: 'ID', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Log entry ID' },
         { Name: 'Timestamp', DisplayName: 'Timestamp', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Incremental date field' },
     ]},
-    { Name: 'RecurringPaymentContracts', DisplayName: 'Recurring Payment', Description: 'Auto-renewal contracts', SupportsWrite: false, Fields: [
-        { Name: 'Id', DisplayName: 'ID', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Contract ID' },
-        { Name: 'ContactId', DisplayName: 'Contact ID', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'FK → Contacts' },
-    ]},
     { Name: 'SavedSearches', DisplayName: 'Saved Search', Description: 'Saved contact filters', SupportsWrite: true, Fields: [
         { Name: 'Id', DisplayName: 'ID', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Search ID' },
     ]},
-    { Name: 'EmailMessages', DisplayName: 'Email Message', Description: 'Sent email messages/campaigns', SupportsWrite: false, Fields: [
-        { Name: 'Id', DisplayName: 'ID', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Message ID' },
+    { Name: 'SentEmails', DisplayName: 'Sent Email', Description: 'Sent email messages (verified: /SentEmails)', SupportsWrite: false, Fields: [
+        { Name: 'Id', DisplayName: 'ID', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Email ID' },
         { Name: 'SentDate', DisplayName: 'Sent Date', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Incremental date field' },
     ]},
-    { Name: 'Orders', DisplayName: 'Online Store Order', Description: 'Store purchase orders', SupportsWrite: false, Fields: [
+    { Name: 'SentEmailRecipients', DisplayName: 'Email Recipient', Description: 'Recipients of sent emails', SupportsWrite: false, Fields: [
+        { Name: 'Id', DisplayName: 'ID', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Recipient record ID' },
+    ]},
+    { Name: 'EmailDrafts', DisplayName: 'Email Draft', Description: 'Draft email messages (verified: /EmailDrafts)', SupportsWrite: true, Fields: [
+        { Name: 'Id', DisplayName: 'ID', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Draft ID' },
+    ]},
+    { Name: 'Orders', DisplayName: 'Online Store Order', Description: 'Store purchase orders (verified: /store/orders)', SupportsWrite: false, Fields: [
         { Name: 'Id', DisplayName: 'ID', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Order ID' },
         { Name: 'ContactId', DisplayName: 'Contact ID', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'FK → Contacts' },
         { Name: 'OrderDate', DisplayName: 'Order Date', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Incremental date field' },
     ]},
-    { Name: 'OnlineStoreCatalogItems', DisplayName: 'Store Product', Description: 'Product catalog items', SupportsWrite: false, Fields: [
+    { Name: 'StoreProducts', DisplayName: 'Store Product', Description: 'Product catalog items (verified: /store/products)', SupportsWrite: false, Fields: [
         { Name: 'Id', DisplayName: 'ID', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Product ID' },
     ]},
-    { Name: 'EventSessionRegistrations', DisplayName: 'Session Registration', Description: 'Registrations for event sessions (child of EventSessions)', SupportsWrite: false, Fields: [
-        { Name: 'Id', DisplayName: 'ID', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Registration ID' },
-        { Name: 'EventSessionId', DisplayName: 'Session ID', Type: 'number', IsRequired: true, IsReadOnly: true, IsPrimaryKey: false, Description: 'FK → EventSessions' },
+    { Name: 'EventRegistrationTypes', DisplayName: 'Event Registration Type', Description: 'Registration types per event (verified: /EventRegistrationTypes)', SupportsWrite: false, Fields: [
+        { Name: 'Id', DisplayName: 'ID', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Type ID' },
+        { Name: 'EventId', DisplayName: 'Event ID', Type: 'number', IsRequired: true, IsReadOnly: true, IsPrimaryKey: false, Description: 'FK → Events' },
     ]},
-    { Name: 'SentEmailLog', DisplayName: 'Sent Email Log', Description: 'Detailed sent email delivery log', SupportsWrite: false, Fields: [
-        { Name: 'Id', DisplayName: 'ID', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Log entry ID' },
-        { Name: 'SentDate', DisplayName: 'Sent Date', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Incremental date' },
+    { Name: 'DonationFields', DisplayName: 'Donation Field', Description: 'Custom donation field definitions (verified: /donationfields)', SupportsWrite: false, Fields: [
+        { Name: 'Id', DisplayName: 'ID', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Field ID' },
+    ]},
+    { Name: 'Bundles', DisplayName: 'Bundle', Description: 'Product/membership bundles (verified: /bundles)', SupportsWrite: false, Fields: [
+        { Name: 'Id', DisplayName: 'ID', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Bundle ID' },
     ]},
 ];
 
@@ -393,9 +390,9 @@ export class WildApricotConnector extends BaseRESTIntegrationConnector {
         // Wild Apricot wraps resources in named arrays — check all known keys
         for (const key of [
             'Contacts', 'Events', 'EventRegistrations', 'Invoices', 'Payments', 'Refunds',
-            'MembershipLevels', 'ContactFields', 'MemberGroups', 'EventSessions', 'Donations',
-            'DonationCampaigns', 'Tenders', 'AuditLogItems', 'RecurringPaymentContracts',
-            'SavedSearches', 'EmailMessages', 'Orders', 'OnlineStoreCatalogItems',
+            'MembershipLevels', 'ContactFields', 'MemberGroups', 'Donations',
+            'Tenders', 'AuditLogItems', 'SavedSearches', 'SentEmails', 'SentEmailRecipients',
+            'EmailDrafts', 'Orders', 'StoreProducts', 'EventRegistrationTypes', 'DonationFields', 'Bundles',
         ]) {
             if (Array.isArray(body[key])) return body[key] as Record<string, unknown>[];
         }
