@@ -762,6 +762,7 @@ export class PushService {
     if (this.stateManager && syncRootDir) {
       const relativeEntityDir = path.relative(syncRootDir, entityDir);
       this.stateManager.setLastPushTimestamp(relativeEntityDir, new Date().toISOString());
+      await this.stateManager.pruneStaleChecksums(syncRootDir);
       await this.stateManager.save();
     }
 
