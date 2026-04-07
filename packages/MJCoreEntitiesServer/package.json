@@ -28,6 +28,7 @@
     "@memberjunction/ai-prompts": "5.23.0",
     "@memberjunction/ai-provider-bundle": "5.23.0",
     "@memberjunction/ai-vectordb": "5.23.0",
+    "@memberjunction/tag-engine": "5.23.0",
     "@memberjunction/ai-vector-dupe": "5.23.0",
     "@memberjunction/ai-vectors-memory": "5.23.0",
     "@memberjunction/aiengine": "5.23.0",

@@ -90,13 +90,17 @@ export class FetchEntityVectorsResolver extends ResolverBase {
             // but the metadata filter ensures we only get vectors for this entity.
             const entityName = entityDoc.Entity;
             const dimensions = vectorIndex.Dimensions || 1536; // fall back to common embedding size
-            const zeroVector = new Array(dimensions).fill(0);
+            // Use a tiny uniform vector instead of zero — cosine similarity is undefined
+            // for a zero vector (division by zero), causing Pinecone to return 0 matches.
+            // A uniform vector has equal similarity to all vectors, giving us an unbiased
+            // listing that respects the metadata filter.
+            const uniformVector = new Array(dimensions).fill(1.0 / Math.sqrt(dimensions));
 
             const metadataFilter: Record<string, unknown> = { Entity: { $eq: entityName } };
 
             const queryResponse = await vectorDBInstance.QueryIndex({
                 id: vectorIndex.Name,  // index name (stripped before Pinecone query)
-                vector: zeroVector,
+                vector: uniformVector,
                 topK: limit,
                 includeMetadata: true,
                 includeValues: true,

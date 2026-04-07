@@ -1,0 +1,103 @@
+[
+  {
+    "_comments": [
+      "Content Embedding — uses OpenAI text-embedding-3-small for vectorizing content items.",
+      "Prompt type is 'Embedding' (not Chat) so the template is a simple passthrough ({{ text }}).",
+      "AIModelRunner uses this prompt for tracked embedding calls with AIPromptRun records.",
+      "Content items may have long text so a cloud model with a large context window is preferred."
+    ],
+    "fields": {
+      "Name": "Content Embedding",
+      "Description": "Embeds content item text into vector representation for semantic search and classification. Used by the content classification pipeline when vectorizing content items.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Embedding",
+      "TemplateText": "@file:templates/knowledge-hub/content-embedding.template.md",
+      "Status": "Active",
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Balanced",
+      "ParallelizationMode": "None",
+      "MaxRetries": 2,
+      "RetryDelayMS": 1000,
+      "RetryStrategy": "Exponential",
+      "PromptRole": "User",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=text-embedding-3-small",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 10
+          },
+          "primaryKey": {
+            "ID": "86964312-6EA9-42B8-BF88-350EDC31401F"
+          },
+          "sync": {
+            "lastModified": "2026-04-06T11:01:31.798Z",
+            "checksum": "30e9f172aac59419164d6f4e00abd3d2a3467db542c7009d1bb734277cbfb0f3"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "5DDB8949-DB9F-4FDD-8343-44E0199D55E6"
+    },
+    "sync": {
+      "lastModified": "2026-04-06T11:01:31.773Z",
+      "checksum": "a17db019d06118027ecdf27c042d927feab225c6542bb4cbb48ee6c12af558a9"
+    }
+  },
+  {
+    "_comments": [
+      "Tag Semantic Matching — uses a LOCAL sentence transformer (all-MiniLM-L6-v2) for tag embeddings.",
+      "Local model is preferred here because tag names are very short (2-5 words), there can be hundreds",
+      "to embed at server startup, and the similarity accuracy for short phrases is excellent with small models.",
+      "This avoids cloud API costs and latency for what is essentially a fast in-memory lookup operation.",
+      "The TagEngine uses these embeddings in SimpleVectorService for sub-millisecond cosine similarity matching."
+    ],
+    "fields": {
+      "Name": "Tag Semantic Matching",
+      "Description": "Embeds tag names and descriptions for semantic similarity matching in the TagEngine. Uses a lightweight local sentence transformer for fast, free tag resolution.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Embedding",
+      "TemplateText": "@file:templates/knowledge-hub/tag-semantic-matching.template.md",
+      "Status": "Active",
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Lowest",
+      "ParallelizationMode": "None",
+      "MaxRetries": 2,
+      "RetryDelayMS": 1000,
+      "RetryStrategy": "Exponential",
+      "PromptRole": "User",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=all-MiniLM-L6-v2 (Local)",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=LocalEmbeddings",
+            "Priority": 10
+          },
+          "primaryKey": {
+            "ID": "04CBA91E-ADA0-41B1-B48A-0EE245C42F2E"
+          },
+          "sync": {
+            "lastModified": "2026-04-06T11:01:31.813Z",
+            "checksum": "f772d524500f951a1a12ad9a5bd8268a66fa0910f49e7bf56ee8958d3a467eb8"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "DA13FE26-00FC-4EE5-A87F-DB2E6BB9BC5E"
+    },
+    "sync": {
+      "lastModified": "2026-04-06T11:01:31.385Z",
+      "checksum": "4c13ef6b1eb790239bac14522fc39d7eba659621414485a49c69a5f3284d22da"
+    }
+  }
+]

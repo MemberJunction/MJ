@@ -8,7 +8,7 @@ import { RecentAccessService } from '@memberjunction/ng-shared-generic';
 import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { Metadata, EntityInfo, RunView, EntityFieldTSType, ApplicationInfo } from '@memberjunction/core';
 // CompositeKey is used via buildCompositeKey from ng-entity-viewer
-import { MJApplicationEntityEntity, ResourceData, UserInfoEngine, ViewGridAggregatesConfig } from '@memberjunction/core-entities';
+import { MJApplicationEntityEntity, ResourceData, UserInfoEngine, MJUserViewEntity_IGridAggregatesConfig as ViewGridAggregatesConfig, MJUserViewEntity_IGridColumnSetting, MJUserViewEntity_IGridSortSetting, MJUserViewEntity_IGridState, MJUserViewEntity_ISortStateItem } from '@memberjunction/core-entities';
 import {
   RecordSelectedEvent,
   RecordOpenedEvent,
@@ -1055,7 +1055,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     }
 
     try {
-      const parsed = JSON.parse(view.GridState);
+      const parsed = view.GridStateObject;
 
       // Validate structure - expect columnSettings array
       if (parsed && Array.isArray(parsed.columnSettings)) {
@@ -1063,12 +1063,12 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
         // fields from a previously viewed entity leaking into the query
         const validColumns = this.selectedEntity
           ? parsed.columnSettings.filter(
-              (col: { Name: string }) => this.selectedEntity!.Fields.some(f => f.Name === col.Name)
+              (col: MJUserViewEntity_IGridColumnSetting) => this.selectedEntity!.Fields.some(f => f.Name === col.Name)
             )
           : parsed.columnSettings;
         const validSorts = this.selectedEntity
           ? (parsed.sortSettings || []).filter(
-              (s: { field: string }) => this.selectedEntity!.Fields.some(f => f.Name === s.field)
+              (s: MJUserViewEntity_IGridSortSetting) => this.selectedEntity!.Fields.some(f => f.Name === s.field)
             )
           : parsed.sortSettings || [];
 
@@ -1227,19 +1227,19 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
         newView.IsShared = event.isShared;
         newView.IsDefault = false;
 
-        // Set GridState and SortState
+        // Set state via typed object setters
         if (gridState) {
-          newView.GridState = JSON.stringify(gridState);
+          newView.GridStateObject = gridState;
         }
         if (sortState) {
-          newView.SortState = JSON.stringify(sortState);
+          newView.SortStateObject = sortState;
         }
 
         // Set Smart Filter settings
         newView.SmartFilterEnabled = event.smartFilterEnabled;
         newView.SmartFilterPrompt = event.smartFilterPrompt;
 
-        // BUG-008: Always set FilterState consistently
+        // BUG-008: Always set FilterState consistently (raw string — Kendo CompositeFilterDescriptor shape)
         newView.FilterState = filterStateJson;
 
         const saved = await newView.Save();
@@ -1268,19 +1268,19 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
         this.selectedViewEntity.Description = event.description;
         this.selectedViewEntity.IsShared = event.isShared;
 
-        // Update GridState and SortState
+        // Update state via typed object setters
         if (gridState) {
-          this.selectedViewEntity.GridState = JSON.stringify(gridState);
+          this.selectedViewEntity.GridStateObject = gridState;
         }
         if (sortState) {
-          this.selectedViewEntity.SortState = JSON.stringify(sortState);
+          this.selectedViewEntity.SortStateObject = sortState;
         }
 
         // Update Smart Filter settings
         this.selectedViewEntity.SmartFilterEnabled = event.smartFilterEnabled;
         this.selectedViewEntity.SmartFilterPrompt = event.smartFilterPrompt;
 
-        // BUG-008: Always set FilterState consistently
+        // BUG-008: Always set FilterState consistently (raw string — Kendo CompositeFilterDescriptor shape)
         this.selectedViewEntity.FilterState = filterStateJson;
 
         const saved = await this.selectedViewEntity.Save();
@@ -1389,8 +1389,8 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * 2. If currentGridState exists (from grid interactions) - use that
    * 3. Otherwise return null
    */
-  private buildGridState(event: ViewSaveEvent): { columnSettings: object[]; sortSettings?: object[]; aggregates?: ViewGridAggregatesConfig } | null {
-    let columnSettings: object[];
+  private buildGridState(event: ViewSaveEvent): MJUserViewEntity_IGridState | null {
+    let columnSettings: MJUserViewEntity_IGridColumnSetting[];
 
     // First check if the event has columns configured (from config panel)
     if (event.columns.length > 0) {
@@ -1400,7 +1400,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
         DisplayName: col.displayName,
         userDisplayName: col.userDisplayName, // Include user-defined column alias
         hidden: false, // Visible columns only
-        width: col.width || null,
+        width: col.width || undefined,
         orderIndex: idx,
         format: col.format // Include column format settings
       }));
@@ -1418,7 +1418,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
           Name: f.Name,
           DisplayName: f.DisplayNameOrName,
           hidden: false,
-          width: f.DefaultColumnWidth || null,
+          width: f.DefaultColumnWidth || undefined,
           orderIndex: idx
         }));
       if (columnSettings.length === 0) {
@@ -1431,7 +1431,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     }
 
     // Build sort settings - prefer event.sortItems (multi-sort), fall back to currentGridState
-    let sortSettings: object[] | undefined;
+    let sortSettings: MJUserViewEntity_IGridSortSetting[] | undefined;
     if (event.sortItems && event.sortItems.length > 0) {
       sortSettings = event.sortItems.map(item => ({
         field: item.field,
@@ -1463,12 +1463,12 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * Format: [{field, direction}] where direction is 'asc' or 'desc'
    * Supports multi-column sorting via sortItems array
    */
-  private buildSortState(event: ViewSaveEvent): object[] | null {
+  private buildSortState(event: ViewSaveEvent): MJUserViewEntity_ISortStateItem[] | null {
     // Prefer sortItems array (multi-sort) over deprecated sortField
     if (event.sortItems && event.sortItems.length > 0) {
       return event.sortItems.map(item => ({
         field: item.field,
-        direction: item.direction // 'asc' or 'desc'
+        direction: item.direction as 'asc' | 'desc'
       }));
     }
 
@@ -1476,7 +1476,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     if (event.sortField) {
       return [{
         field: event.sortField,
-        direction: event.sortDirection
+        direction: event.sortDirection as 'asc' | 'desc'
       }];
     }
 
@@ -1651,19 +1651,19 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     let aggregateCount = 0;
 
     try {
-      const gridState = view.GridState ? JSON.parse(view.GridState) : null;
-      if (Array.isArray(gridState)) {
-        columnCount = gridState.filter((c: Record<string, unknown>) => !c['hidden']).length;
+      const gridState = view.GridStateObject;
+      if (gridState?.columnSettings && Array.isArray(gridState.columnSettings)) {
+        columnCount = gridState.columnSettings.filter((c: MJUserViewEntity_IGridColumnSetting) => !c.hidden).length;
       }
     } catch { /* ignore */ }
 
     try {
-      const filterState = view.FilterState ? JSON.parse(view.FilterState) : null;
+      const filterState = view.FilterStateObject;
       if (filterState?.filters?.length) filterCount = filterState.filters.length;
     } catch { /* ignore */ }
 
     try {
-      const sortState = view.SortState ? JSON.parse(view.SortState) : null;
+      const sortState = view.SortStateObject;
       if (Array.isArray(sortState)) sortCount = sortState.length;
     } catch { /* ignore */ }
 

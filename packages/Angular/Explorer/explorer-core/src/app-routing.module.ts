@@ -153,6 +153,8 @@ export class ResourceResolver implements Resolve<void> {
     );
 
     await StartupManager.Instance.Startup();
+
+    await this.appManager.WhenReady();
   }
 
   async resolve(route: ActivatedRouteSnapshot, state: RouterStateSnapshot): Promise<void> {
@@ -199,7 +201,6 @@ export class ResourceResolver implements Resolve<void> {
       // Check app access
       const accessResult = this.appManager.CheckAppAccess(appName);
       if (accessResult.status !== 'accessible') {
-        console.log(`[ResourceResolver] User cannot access app "${appName}": ${accessResult.status}`);
         return;
       }
 
@@ -401,7 +402,6 @@ export class ResourceResolver implements Resolve<void> {
       if (accessResult.status !== 'accessible') {
         // User doesn't have access - let the shell component handle the error dialog
         // Don't create any tabs here
-        console.log(`[ResourceResolver] User cannot access app "${appName}": ${accessResult.status}`);
         return;
       }
 
@@ -423,7 +423,6 @@ export class ResourceResolver implements Resolve<void> {
       if (accessResult.status !== 'accessible') {
         // User doesn't have access - let the shell component handle the error dialog
         // Don't create any tabs here
-        console.log(`[ResourceResolver] User cannot access app "${appName}": ${accessResult.status}`);
         return;
       }
 

@@ -930,18 +930,14 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
 
     // Priority 2: GridState.sortSettings (sort may only be stored here)
     if (view.GridState) {
-      try {
-        const gridState = JSON.parse(view.GridState) as ViewGridState;
-        if (gridState.sortSettings && gridState.sortSettings.length > 0) {
-          const firstSort = gridState.sortSettings[0];
-          this.internalSortState = {
-            field: firstSort.field,
-            direction: firstSort.dir === 'desc' ? 'desc' : 'asc'
-          };
-          return;
-        }
-      } catch {
-        // Invalid GridState JSON — ignore
+      const gridState = view.GridStateObject;
+      if (gridState?.sortSettings && gridState.sortSettings.length > 0) {
+        const firstSort = gridState.sortSettings[0];
+        this.internalSortState = {
+          field: firstSort.field,
+          direction: firstSort.dir === 'desc' ? 'desc' : 'asc'
+        };
+        return;
       }
     }
 

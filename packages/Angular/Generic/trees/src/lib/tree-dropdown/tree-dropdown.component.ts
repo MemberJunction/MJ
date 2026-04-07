@@ -335,12 +335,20 @@ export class TreeDropdownComponent implements OnInit, OnDestroy, AfterViewInit {
         this.calculatePosition();
         this.attachEventListeners();
 
-        // Focus search input after opening
-        setTimeout(() => {
+        // Focus search input after opening — use microtask + fallback to ensure it works
+        // even when Angular change detection hasn't yet rendered the @if block
+        Promise.resolve().then(() => {
             if (this.EnableSearch && this.searchInput) {
                 this.searchInput.nativeElement.focus();
+            } else {
+                // Fallback: the @if block may not have rendered yet, retry after a frame
+                setTimeout(() => {
+                    if (this.EnableSearch && this.searchInput) {
+                        this.searchInput.nativeElement.focus();
+                    }
+                }, 100);
             }
-        }, 50);
+        });
 
         // Fire after event
         const afterEvent = new AfterDropdownOpenEventArgs(
@@ -480,8 +488,8 @@ export class TreeDropdownComponent implements OnInit, OnDestroy, AfterViewInit {
                 break;
             case 'ArrowDown':
                 event.preventDefault();
-                // Focus first tree node
-                if (this.treeComponent) {
+                // Focus first tree node — guard against null/empty state
+                if (this.treeComponent?.Nodes?.length) {
                     const visibleNodes = this.getVisibleNodesInOrder(this.treeComponent.Nodes);
                     if (visibleNodes.length > 0) {
                         this.treeComponent.FocusedNode = visibleNodes[0];
@@ -810,7 +818,8 @@ export class TreeDropdownComponent implements OnInit, OnDestroy, AfterViewInit {
 
         const searchText = beforeEvent.ModifiedSearchText ?? text;
 
-        if (!this.treeComponent) {
+        // Guard: tree component may not be ready or may have no nodes loaded
+        if (!this.treeComponent || !this.IsLoaded) {
             return;
         }
 
@@ -824,15 +833,15 @@ export class TreeDropdownComponent implements OnInit, OnDestroy, AfterViewInit {
             }
         );
 
-        // Auto-expand to show matches
-        if (this.SearchConfig.AutoExpandMatches !== false && searchText.trim()) {
+        // Auto-expand to show matches — guard against empty results
+        if (matchedNodes.length > 0 && this.SearchConfig.AutoExpandMatches !== false && searchText.trim()) {
             for (const node of matchedNodes) {
                 this.treeComponent.ExpandToNode(node.ID);
             }
         }
 
         // Fire after event
-        const afterEvent = new AfterSearchEventArgs(this, searchText, matchedNodes);
+        const afterEvent = new AfterSearchEventArgs(this, searchText, matchedNodes ?? []);
         this.AfterSearch.emit(afterEvent);
 
         this.cdr.detectChanges();
@@ -842,7 +851,7 @@ export class TreeDropdownComponent implements OnInit, OnDestroy, AfterViewInit {
      * Clear search filter
      */
     private clearSearch(): void {
-        if (this.treeComponent) {
+        if (this.treeComponent?.Nodes?.length) {
             this.treeComponent.FilterNodes('', {});
             this.cdr.detectChanges();
         }
@@ -852,16 +861,18 @@ export class TreeDropdownComponent implements OnInit, OnDestroy, AfterViewInit {
      * Get all visible nodes in tree order (for keyboard navigation)
      */
     private getVisibleNodesInOrder(nodes: TreeNode[]): TreeNode[] {
+        if (!nodes || nodes.length === 0) return [];
         const result: TreeNode[] = [];
         this.collectVisibleNodesRecursive(nodes, result);
         return result;
     }
 
     private collectVisibleNodesRecursive(nodes: TreeNode[], result: TreeNode[]): void {
+        if (!nodes) return;
         for (const node of nodes) {
             if (node.Visible) {
                 result.push(node);
-                if (node.Expanded && node.Type === 'branch') {
+                if (node.Expanded && node.Type === 'branch' && node.Children?.length) {
                     this.collectVisibleNodesRecursive(node.Children, result);
                 }
             }

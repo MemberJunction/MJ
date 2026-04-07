@@ -1,5 +1,5 @@
 import { EntityInfo, CompositeKey } from '@memberjunction/core';
-import { ViewGridState } from '@memberjunction/core-entities';
+import { ViewGridState } from '../types';
 
 /**
  * Build a CompositeKey from a plain record using EntityInfo PK fields.
