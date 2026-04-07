@@ -94,4 +94,17 @@ export class SyncStateManager {
   setFileChecksum(relativePath: string, checksum: string): void {
     this.state.fileChecksums[relativePath] = checksum;
   }
+
+  /** Remove checksums for files that no longer exist on disk. */
+  async pruneStaleChecksums(baseDir: string): Promise<number> {
+    let pruned = 0;
+    for (const relativePath of Object.keys(this.state.fileChecksums)) {
+      const fullPath = path.join(baseDir, relativePath);
+      if (!(await fs.pathExists(fullPath))) {
+        delete this.state.fileChecksums[relativePath];
+        pruned++;
+      }
+    }
+    return pruned;
+  }
 }

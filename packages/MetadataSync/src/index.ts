@@ -6,6 +6,7 @@ export { FileBackupManager } from './lib/file-backup-manager';
 export { SyncEngine, DeferrableLookupError } from './lib/sync-engine';
 export type { RecordData, BatchContext } from './lib/sync-engine';
 export { BatchContextIndex } from './lib/batch-context-index';
+export type { BatchContextStub } from './lib/batch-context-index';
 export { ConfigManager, configManager } from './lib/config-manager';
 export { getSyncEngine, resetSyncEngine } from './lib/singleton-manager';
 export { SQLLogger } from './lib/sql-logger';

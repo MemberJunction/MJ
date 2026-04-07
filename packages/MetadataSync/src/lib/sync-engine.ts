@@ -15,7 +15,7 @@ import axios from 'axios';
 import { EntityInfo, Metadata, RunView, BaseEntity, CompositeKey, UserInfo } from '@memberjunction/core';
 import { EntityConfig, FolderConfig } from '../config';
 import { JsonPreprocessor } from './json-preprocessor';
-import { BatchContextIndex } from './batch-context-index';
+import { BatchContextIndex, BatchContextStub } from './batch-context-index';
 import {
   METADATA_KEYWORDS,
   METADATA_KEYWORD_PREFIXES,
@@ -25,7 +25,7 @@ import {
 } from '../constants/metadata-keywords';
 
 /** Accepted types for the batchContext parameter (indexed or plain Map). */
-export type BatchContext = BatchContextIndex | Map<string, BaseEntity>;
+export type BatchContext = BatchContextIndex | Map<string, BaseEntity | BatchContextStub>;
 
 /**
  * Custom error class for lookup failures that can be deferred.
@@ -206,8 +206,8 @@ export class SyncEngine {
   async processFieldValue(
     value: any,
     baseDir: string,
-    parentRecord?: BaseEntity | null,
-    rootRecord?: BaseEntity | null,
+    parentRecord?: BaseEntity | BatchContextStub | null,
+    rootRecord?: BaseEntity | BatchContextStub | null,
     depth: number = 0,
     batchContext?: BatchContext,
     resolutionCollector?: SyncResolutionCollector,
@@ -1090,8 +1090,8 @@ export class SyncEngine {
   private async processJsonFieldValues(
     obj: any,
     baseDir: string,
-    parentRecord?: BaseEntity | null,
-    rootRecord?: BaseEntity | null,
+    parentRecord?: BaseEntity | BatchContextStub | null,
+    rootRecord?: BaseEntity | BatchContextStub | null,
     depth: number = 0,
     batchContext?: BatchContext
   ): Promise<any> {

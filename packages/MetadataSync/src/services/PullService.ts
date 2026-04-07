@@ -9,6 +9,11 @@ import { JsonWriteHelper } from '../lib/json-write-helper';
 import { RecordProcessor } from '../lib/RecordProcessor';
 import { SyncStateManager } from '../lib/sync-state-manager';
 
+/** Validates that a string is a well-formed ISO 8601 timestamp. */
+function isValidISOTimestamp(value: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:?\d{2})?)?$/.test(value);
+}
+
 export interface PullOptions {
   entity: string;
   filter?: string;
@@ -146,6 +151,9 @@ export class PullService {
     }
 
     if (sinceTimestamp) {
+      if (!isValidISOTimestamp(sinceTimestamp)) {
+        throw new Error('Invalid --since timestamp format. Expected ISO 8601 (e.g., 2026-04-07T10:00:00Z)');
+      }
       const dateFilter = `[__mj_UpdatedAt] > '${sinceTimestamp}'`;
       filter = filter ? `(${filter}) AND ${dateFilter}` : dateFilter;
       callbacks?.onLog?.(`Incremental pull: fetching records updated after ${sinceTimestamp}`);
@@ -436,6 +444,9 @@ export class PullService {
     callbacks?: PullCallbacks,
   ): Promise<void> {
     try {
+      if (!isValidISOTimestamp(sinceTimestamp)) {
+        throw new Error('Invalid --since timestamp format. Expected ISO 8601 (e.g., 2026-04-07T10:00:00Z)');
+      }
       const rv = new RunView();
       const deletedFilter = `[__mj_DeletedAt] > '${sinceTimestamp}'`;
       const baseFilter = options.filter || '';
@@ -461,10 +472,14 @@ export class PullService {
         const id = record[pkField];
         if (!id) continue;
 
-        // Try common file naming patterns
+        // Try common file naming patterns.
+        // NOTE: This is a best-effort heuristic. If the entity uses a custom
+        // file naming scheme (e.g., via newFileName config) these patterns may
+        // miss. A single-file-per-entity layout is also not covered here.
         const candidates = [
           path.join(targetDir, `${id}.json`),
           path.join(targetDir, `${record.Name ?? id}.json`),
+          path.join(targetDir, `${(record.Name ?? '').replace(/[^a-zA-Z0-9-_ ]/g, '')}.json`),
         ];
 
         for (const filePath of candidates) {
@@ -845,7 +860,7 @@ export class PullService {
 
     for (const [relationKey, relationConfig] of relatedEntityEntries) {
       try {
-        const batchResults = await this.recordProcessor.relatedEntityHandler.batchQueryRelatedEntities(
+        const batchResults = await this.recordProcessor.batchPrefetchRelatedEntities(
           allParentIds,
           relationConfig,
           verbose

@@ -3,7 +3,7 @@ import path from 'path';
 import fastGlob from 'fast-glob';
 import { BaseEntity, Metadata, UserInfo, EntitySaveOptions } from '@memberjunction/core';
 import { SyncEngine, RecordData, DeferrableLookupError, SyncResolutionCollector, BatchContext } from '../lib/sync-engine';
-import { BatchContextIndex } from '../lib/batch-context-index';
+import { BatchContextIndex, BatchContextStub } from '../lib/batch-context-index';
 import { loadEntityConfig, loadSyncConfig, EntityConfig, SyncConfig } from '../config';
 import { FileBackupManager } from '../lib/file-backup-manager';
 import { configManager } from '../lib/config-manager';
@@ -101,7 +101,7 @@ interface ProcessRecordResult {
   isDuplicate?: boolean;
   isDeletedRecord?: boolean;
   /** Entry to add to batchContext after the batch completes */
-  batchContextEntry?: { key: string; entity: BaseEntity };
+  batchContextEntry?: { key: string; entity: BaseEntity | BatchContextStub };
   /** Record to queue for deferred processing (circular dependency handling) */
   deferredRecord?: DeferredRecord;
   /** Warnings accumulated during processing */
@@ -796,11 +796,13 @@ export class PushService {
     const lookupKey = recordId;
     
     // Check if already in batch context
-    let entity = batchContext.get(lookupKey);
-    if (entity) {
+    const existingEntry = batchContext.get(lookupKey);
+    if (existingEntry) {
       // Already processed
       return { status: 'unchanged', isDuplicate: true };
     }
+
+    let entity: BaseEntity;
 
     // Record-level skip: if the record has a stored checksum and it matches
     // the current fields, nothing changed — skip without touching the DB.
@@ -821,7 +823,7 @@ export class PushService {
           EntityInfo: { Name: entityName, PrimaryKeys: Object.keys(record.primaryKey).map(k => ({ Name: k })), Fields: Object.keys(allFields).map(k => ({ Name: k })) },
           Get: (field: string) => allFields[field],
           GetAll: () => allFields,
-        } as unknown as BaseEntity;
+        } satisfies BatchContextStub;
         const batchContextEntry = { key: lookupKey, entity: stub };
         return { status: 'unchanged', isDuplicate: false, batchContextEntry };
       }
@@ -834,7 +836,7 @@ export class PushService {
     }
 
     // Get parent entity from context if available (needed for @parent refs in primaryKey)
-    let parentEntity: BaseEntity | null = null;
+    let parentEntity: BaseEntity | BatchContextStub | null = null;
     if (parentContext) {
       const parentRecordId = flattenedRecord.dependencies.values().next().value;
       if (parentRecordId) {

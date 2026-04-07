@@ -6,6 +6,7 @@ import { EntityPropertyExtractor } from './EntityPropertyExtractor';
 import { FieldExternalizer } from './FieldExternalizer';
 import { RelatedEntityHandler } from './RelatedEntityHandler';
 import { METADATA_KEYWORDS, createKeywordReference } from '../constants/metadata-keywords';
+import { RelatedEntityConfig } from '../config';
 
 /**
  * Handles the core processing of individual record data into the sync format
@@ -13,7 +14,7 @@ import { METADATA_KEYWORDS, createKeywordReference } from '../constants/metadata
 export class RecordProcessor {
   private propertyExtractor: EntityPropertyExtractor;
   private fieldExternalizer: FieldExternalizer;
-  readonly relatedEntityHandler: RelatedEntityHandler;
+  private relatedEntityHandler: RelatedEntityHandler;
 
   constructor(
     private syncEngine: SyncEngine,
@@ -22,6 +23,18 @@ export class RecordProcessor {
     this.propertyExtractor = new EntityPropertyExtractor();
     this.fieldExternalizer = new FieldExternalizer();
     this.relatedEntityHandler = new RelatedEntityHandler(syncEngine, contextUser);
+  }
+
+  /**
+   * Batch pre-fetch related entities for a set of parent records.
+   * Public facade so callers don't need direct access to relatedEntityHandler.
+   */
+  async batchPrefetchRelatedEntities(
+    parentPrimaryKeys: string[],
+    relationConfig: RelatedEntityConfig,
+    verbose?: boolean
+  ): Promise<Map<string, BaseEntity[]>> {
+    return this.relatedEntityHandler.batchQueryRelatedEntities(parentPrimaryKeys, relationConfig, verbose);
   }
 
   /**

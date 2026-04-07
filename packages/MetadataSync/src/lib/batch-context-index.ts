@@ -15,9 +15,24 @@
 
 import { BaseEntity, Metadata } from '@memberjunction/core';
 
+/**
+ * Lightweight stand-in for BaseEntity used when a record is unchanged and
+ * only needs to be present in the batch context for @parent:ID / @lookup resolution.
+ * Avoids pulling a full entity from the DB just to satisfy downstream references.
+ */
+export interface BatchContextStub {
+  EntityInfo: {
+    Name: string;
+    PrimaryKeys: Array<{ Name: string }>;
+    Fields: Array<{ Name: string }>;
+  };
+  Get(field: string): any;
+  GetAll(): Record<string, any>;
+}
+
 export class BatchContextIndex {
   /** Primary storage -- same shape the rest of the codebase expects. */
-  private map: Map<string, BaseEntity>;
+  private map: Map<string, BaseEntity | BatchContextStub>;
 
   /**
    * Secondary index: entityName -> compositeKey -> primaryKeyValue.
@@ -37,7 +52,7 @@ export class BatchContextIndex {
   private index: Map<string, Map<string, string>>;
 
   /** Per-entity-name list for fallback scans when composite key misses (3+ field subsets). */
-  private entitiesByName: Map<string, Array<{ entity: BaseEntity; pkValue: string }>>;
+  private entitiesByName: Map<string, Array<{ entity: BaseEntity | BatchContextStub; pkValue: string }>>;
 
   /** Cache of entity name -> primary key field name so we don't re-derive it. */
   private pkFieldCache: Map<string, string>;
@@ -58,13 +73,13 @@ export class BatchContextIndex {
   // ---------------------------------------------------------------------------
 
   /** Add an entity to the context (called after save). */
-  set(key: string, entity: BaseEntity): void {
+  set(key: string, entity: BaseEntity | BatchContextStub): void {
     this.map.set(key, entity);
     this.indexEntity(entity);
   }
 
   /** Get by direct key (existing behaviour). */
-  get(key: string): BaseEntity | undefined {
+  get(key: string): BaseEntity | BatchContextStub | undefined {
     return this.map.get(key);
   }
 
@@ -77,12 +92,20 @@ export class BatchContextIndex {
     return this.map.size;
   }
 
-  [Symbol.iterator](): IterableIterator<[string, BaseEntity]> {
+  [Symbol.iterator](): IterableIterator<[string, BaseEntity | BatchContextStub]> {
     return this.map[Symbol.iterator]();
   }
 
-  entries(): IterableIterator<[string, BaseEntity]> {
+  entries(): IterableIterator<[string, BaseEntity | BatchContextStub]> {
     return this.map.entries();
+  }
+
+  /** Remove all entries and free memory. */
+  clear(): void {
+    this.map.clear();
+    this.index.clear();
+    this.entitiesByName.clear();
+    this.pkFieldCache.clear();
   }
 
   // ---------------------------------------------------------------------------
@@ -183,7 +206,7 @@ export class BatchContextIndex {
    * all 2-element combinations as well. This keeps the index manageable while
    * covering the vast majority of real-world patterns.
    */
-  private indexEntity(entity: BaseEntity): void {
+  private indexEntity(entity: BaseEntity | BatchContextStub): void {
     const entityName = entity.EntityInfo?.Name;
     if (!entityName) {
       return;
@@ -246,7 +269,7 @@ export class BatchContextIndex {
 
   /** Resolve the primary key value for an entity, caching the field name. */
   private getPrimaryKeyValue(
-    entity: BaseEntity,
+    entity: BaseEntity | BatchContextStub,
     entityName: string,
   ): unknown {
     let pkField = this.pkFieldCache.get(entityName);
