@@ -41,10 +41,9 @@ RUN echo "deb http://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" > /etc
 # Install Angular CLI and Turbo globally
 RUN npm install -g @angular/cli turbo
 
-# Install Playwright CLI first, then install Chromium using the CLI's bundled
-# Playwright version so the browser revision matches what playwright-cli expects.
+# Install Playwright CLI only (Chromium is installed at container start via
+# entrypoint.sh to avoid Docker build timeouts from CDN network issues)
 RUN npm install -g @playwright/cli@latest
-RUN cd /usr/local/lib/node_modules/@playwright/cli && npx playwright install --with-deps chromium
 
 # Install Claude Code globally (latest for Opus 4.6+ support)
 RUN npm install -g @anthropic-ai/claude-code@latest
