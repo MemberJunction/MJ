@@ -139,10 +139,43 @@ export class NetForumConnector extends BaseRESTIntegrationConnector {
     public override async DiscoverObjects(_ci: MJCompanyIntegrationEntity, _cu: UserInfo): Promise<ExternalObjectSchema[]> {
         return NF_OBJECTS.map(o => ({ Name: o.Name, Label: o.DisplayName, Description: o.Description, SupportsIncrementalSync: true, SupportsWrite: o.SupportsWrite ?? false }));
     }
-    public override async DiscoverFields(_ci: MJCompanyIntegrationEntity, objectName: string, _cu: UserInfo): Promise<ExternalFieldSchema[]> {
+    public override async DiscoverFields(ci: MJCompanyIntegrationEntity, objectName: string, cu: UserInfo): Promise<ExternalFieldSchema[]> {
+        // Dynamic: fetch one record via GetQuery to discover all fields
+        try {
+            const auth = await this.Authenticate(ci, cu) as NFAuthContext;
+            const headers = this.BuildHeaders(auth);
+            const url = `${auth.Config.BaseURL}/xWeb/JSON/GetQuery?szObjectName=${objectName}&szColumnList=*&intRecordCount=1`;
+            const response = await this.MakeHTTPRequest(auth, url, 'GET', headers);
+            if (response.Status === 200) {
+                const records = this.NormalizeResponse(response.Body, null);
+                if (records.length > 0) return this.InferFieldsFromSample(records[0], objectName);
+            }
+        } catch { /* fall through to static */ }
         const obj = NF_OBJECTS.find(o => o.Name.toLowerCase() === objectName.toLowerCase());
         if (!obj) return [];
         return obj.Fields.map(f => ({ Name: f.Name, Label: f.DisplayName, Description: f.Description, DataType: f.Type, IsRequired: f.IsRequired, IsUniqueKey: f.IsPrimaryKey, IsReadOnly: f.IsReadOnly }));
+    }
+
+    private InferFieldsFromSample(sample: Record<string, unknown>, objectName: string): ExternalFieldSchema[] {
+        const staticObj = NF_OBJECTS.find(o => o.Name.toLowerCase() === objectName.toLowerCase());
+        const staticMap = new Map((staticObj?.Fields ?? []).map(f => [f.Name.toLowerCase(), f]));
+        const fields: ExternalFieldSchema[] = [];
+        for (const [key, value] of Object.entries(sample)) {
+            const sf = staticMap.get(key.toLowerCase());
+            fields.push({
+                Name: key, Label: sf?.DisplayName ?? key, Description: sf?.Description ?? '',
+                DataType: sf?.Type ?? this.InferType(value),
+                IsRequired: sf?.IsRequired ?? false, IsUniqueKey: sf?.IsPrimaryKey ?? false, IsReadOnly: sf?.IsReadOnly ?? false,
+            });
+        }
+        return fields;
+    }
+    private InferType(v: unknown): string {
+        if (v === null || v === undefined) return 'string';
+        if (typeof v === 'number') return Number.isInteger(v) ? 'number' : 'decimal';
+        if (typeof v === 'boolean') return 'boolean';
+        if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}/.test(v)) return 'datetime';
+        return 'string';
     }
 
     // ─── Auth (JSON mode) ──────────────────────────────────────────────

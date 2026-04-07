@@ -134,10 +134,53 @@ export class AptifyConnector extends BaseRESTIntegrationConnector {
     public override async DiscoverObjects(_ci: MJCompanyIntegrationEntity, _cu: UserInfo): Promise<ExternalObjectSchema[]> {
         return APT_OBJECTS.map(o => ({ Name: o.Name, Label: o.DisplayName, Description: o.Description, SupportsIncrementalSync: true, SupportsWrite: o.SupportsWrite ?? false }));
     }
-    public override async DiscoverFields(_ci: MJCompanyIntegrationEntity, objectName: string, _cu: UserInfo): Promise<ExternalFieldSchema[]> {
+    public override async DiscoverFields(ci: MJCompanyIntegrationEntity, objectName: string, cu: UserInfo): Promise<ExternalFieldSchema[]> {
+        // Dynamic: fetch one sample record from the API to discover all fields
+        try {
+            const auth = await this.Authenticate(ci, cu) as AptifyAuthContext;
+            const headers = this.BuildHeaders(auth);
+            const url = `${auth.Config.BaseURL}/services/${objectName}?$top=1`;
+            const response = await this.MakeHTTPRequest(auth, url, 'GET', headers);
+            if (response.Status === 200) {
+                const records = this.NormalizeResponse(response.Body, null);
+                if (records.length > 0) {
+                    return this.InferFieldsFromSample(records[0], objectName);
+                }
+            }
+        } catch { /* fall through to static */ }
+        // Fallback: static overlay only
         const obj = APT_OBJECTS.find(o => o.Name.toLowerCase() === objectName.toLowerCase());
         if (!obj) return [];
         return obj.Fields.map(f => ({ Name: f.Name, Label: f.DisplayName, Description: f.Description, DataType: f.Type, IsRequired: f.IsRequired, IsUniqueKey: f.IsPrimaryKey, IsReadOnly: f.IsReadOnly }));
+    }
+
+    /** Infer fields from a sample API record, then overlay static PK/FK metadata */
+    private InferFieldsFromSample(sample: Record<string, unknown>, objectName: string): ExternalFieldSchema[] {
+        const staticObj = APT_OBJECTS.find(o => o.Name.toLowerCase() === objectName.toLowerCase());
+        const staticMap = new Map((staticObj?.Fields ?? []).map(f => [f.Name.toLowerCase(), f]));
+        const fields: ExternalFieldSchema[] = [];
+        for (const [key, value] of Object.entries(sample)) {
+            const staticField = staticMap.get(key.toLowerCase());
+            fields.push({
+                Name: key,
+                Label: staticField?.DisplayName ?? key,
+                Description: staticField?.Description ?? '',
+                DataType: staticField?.Type ?? this.InferType(value),
+                IsRequired: staticField?.IsRequired ?? false,
+                IsUniqueKey: staticField?.IsPrimaryKey ?? false,
+                IsReadOnly: staticField?.IsReadOnly ?? false,
+                IsForeignKey: staticField?.Description?.startsWith('FK') ?? false,
+            });
+        }
+        return fields;
+    }
+
+    private InferType(value: unknown): string {
+        if (value === null || value === undefined) return 'string';
+        if (typeof value === 'number') return Number.isInteger(value) ? 'number' : 'decimal';
+        if (typeof value === 'boolean') return 'boolean';
+        if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value)) return 'datetime';
+        return 'string';
     }
 
     protected async Authenticate(ci: MJCompanyIntegrationEntity, cu: UserInfo): Promise<RESTAuthContext> {
