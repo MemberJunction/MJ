@@ -1700,7 +1700,8 @@ export class ManageMetadataBase {
     * Valid values for EntityField.ExtendedType, plus common LLM aliases mapped to valid values.
     */
    private static readonly VALID_EXTENDED_TYPES = new Set([
-      'Code', 'Email', 'FaceTime', 'Geo', 'MSTeams', 'Other', 'SIP', 'SMS', 'Skype', 'Tel', 'URL', 'WhatsApp', 'ZoomMtg'
+      'Code', 'Email', 'FaceTime', 'Geo', 'GeoLatitude', 'GeoLongitude', 'GeoCountry', 'GeoStateProvince',
+      'GeoCity', 'GeoPostalCode', 'GeoAddress', 'MSTeams', 'Other', 'SIP', 'SMS', 'Skype', 'Tel', 'URL', 'WhatsApp', 'ZoomMtg'
    ]);
 
    private static readonly EXTENDED_TYPE_ALIASES: Record<string, string> = {
@@ -1714,6 +1715,19 @@ export class ManageMetadataBase {
       'text': 'SMS',
       'location': 'Geo',
       'address': 'Geo',
+      'latitude': 'GeoLatitude',
+      'lat': 'GeoLatitude',
+      'longitude': 'GeoLongitude',
+      'lng': 'GeoLongitude',
+      'lon': 'GeoLongitude',
+      'country': 'GeoCountry',
+      'state': 'GeoStateProvince',
+      'province': 'GeoStateProvince',
+      'city': 'GeoCity',
+      'postalcode': 'GeoPostalCode',
+      'zipcode': 'GeoPostalCode',
+      'zip': 'GeoPostalCode',
+      'streetaddress': 'GeoAddress',
       'teams': 'MSTeams',
       'facetime': 'FaceTime',
       'zoom': 'ZoomMtg',
@@ -4586,6 +4600,9 @@ export class ManageMetadataBase {
 
       await this.applyFieldCategories(pool, entity, fields, result.fieldCategories, existingCategories);
 
+      // Auto-detect geo-capable entities and set SupportsGeoCoding
+      await this.detectAndSetGeoCodingSupport(pool, entity, result.fieldCategories);
+
       if (result.entityIcon) {
          await this.applyEntityIcon(pool, entity.ID, result.entityIcon);
       }
@@ -4603,6 +4620,59 @@ export class ManageMetadataBase {
 
       if (isNewEntity && result.entityImportance) {
          await this.applyEntityImportance(pool, entity.ID, result.entityImportance);
+      }
+   }
+
+   /**
+    * Detect if an entity has geo-capable fields based on LLM-assigned ExtendedType values.
+    * If any field has a Geo* ExtendedType, set Entity.SupportsGeoCoding = 1.
+    * Respects the AutoUpdateSupportsGeoCoding flag — if 0, the value is locked.
+    */
+   protected async detectAndSetGeoCodingSupport(
+      pool: CodeGenConnection,
+      entity: EntityInfo,
+      fieldCategories: Array<{ fieldName: string; extendedType: string | null }>
+   ): Promise<void> {
+      // Check if the entity's AutoUpdateSupportsGeoCoding flag allows us to modify it
+      const autoUpdateResult = await pool.query(`
+         SELECT AutoUpdateSupportsGeoCoding, SupportsGeoCoding
+         FROM ${mj_core_schema()}.Entity
+         WHERE ID = '${entity.ID}'
+      `);
+      const row = autoUpdateResult?.recordset?.[0];
+      if (!row || !row.AutoUpdateSupportsGeoCoding) {
+         return; // Flag is locked, don't modify
+      }
+
+      // Detect geo-capable fields from the LLM results
+      const geoExtendedTypes = new Set([
+         'Geo', 'GeoLatitude', 'GeoLongitude', 'GeoCountry', 'GeoStateProvince',
+         'GeoCity', 'GeoPostalCode', 'GeoAddress'
+      ]);
+      const hasGeoFields = fieldCategories.some(fc =>
+         fc.extendedType != null && geoExtendedTypes.has(fc.extendedType)
+      );
+
+      // Also check existing fields in the database for Geo* ExtendedTypes
+      // (in case the LLM didn't re-assign them this run but they were previously set)
+      const existingGeoResult = await pool.query(`
+         SELECT COUNT(*) AS GeoFieldCount
+         FROM ${mj_core_schema()}.EntityField
+         WHERE EntityID = '${entity.ID}'
+           AND ExtendedType IN ('Geo', 'GeoLatitude', 'GeoLongitude', 'GeoCountry', 'GeoStateProvince', 'GeoCity', 'GeoPostalCode', 'GeoAddress')
+      `);
+      const existingGeoCount = existingGeoResult?.recordset?.[0]?.GeoFieldCount ?? 0;
+
+      const shouldSupportGeo = hasGeoFields || existingGeoCount > 0;
+      const currentValue = row.SupportsGeoCoding ? true : false;
+
+      if (shouldSupportGeo !== currentValue) {
+         await pool.query(`
+            UPDATE ${mj_core_schema()}.Entity
+            SET SupportsGeoCoding = ${shouldSupportGeo ? 1 : 0}
+            WHERE ID = '${entity.ID}' AND AutoUpdateSupportsGeoCoding = 1
+         `);
+         logStatus(`  Entity ${entity.Name}: SupportsGeoCoding = ${shouldSupportGeo ? 1 : 0} (auto-detected from ${hasGeoFields ? 'LLM' : 'existing'} geo fields)`);
       }
    }
 

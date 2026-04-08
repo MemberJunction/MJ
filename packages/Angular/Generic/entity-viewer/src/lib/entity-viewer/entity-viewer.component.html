@@ -58,6 +58,15 @@
               <i class="fa-solid fa-timeline"></i>
             </button>
           }
+          @if (HasGeoCoding) {
+            <button
+              class="toggle-btn"
+              [class.active]="effectiveViewMode === 'map'"
+              (click)="setViewMode('map')"
+              title="Map View">
+              <i class="fa-solid fa-map-location-dot"></i>
+            </button>
+          }
         </div>
       }
 
@@ -184,6 +193,16 @@
       [selectedEventId]="timelineSelectedEventId"
       (afterEventClick)="onTimelineEventClick($event)">
     </mj-timeline>
+
+    <!-- Map View - rendered when geocoding supported, visibility controlled by hidden -->
+    @if (HasGeoCoding) {
+      <mj-map-view
+        [hidden]="effectiveViewMode !== 'map'"
+        [Entity]="effectiveEntity!"
+        [Records]="filteredRecords"
+        (MarkerClick)="onMapMarkerClick($event)">
+      </mj-map-view>
+    }
   </div>
 
 </div>

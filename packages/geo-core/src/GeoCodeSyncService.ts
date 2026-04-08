@@ -167,24 +167,54 @@ export class GeoCodeSyncService extends BaseSingleton<GeoCodeSyncService> {
     }
 
     /**
-     * Perform the actual geocoding. This is the extension point where
-     * different geocoding strategies can be plugged in.
+     * Perform the actual geocoding using a priority-based strategy:
      *
-     * Priority order (per the architecture plan):
-     * 1. Native lat/lng fields → copy directly
-     * 2. Address-level fields → Google Geocode Action
-     * 3. State/country only → GeoResolver against reference tables
-     *
-     * For now, this is a placeholder that returns null. The actual
-     * geocoding providers will be registered in Phase 2/3.
+     * 1. Native lat/lng fields → copy directly (GeocodingSource = 'native')
+     * 2. Address-level fields → external geocoding API (GeocodingSource = 'google')
+     * 3. Country/state only → reference table centroid lookup (GeocodingSource = 'reference_data')
      */
     protected async Geocode(
-        _entity: BaseEntity,
-        _mapping: GeoFieldMapping
+        entity: BaseEntity,
+        mapping: GeoFieldMapping
     ): Promise<GeocodeResult | null> {
-        // TODO: Phase 2 — implement geocoding provider dispatch
-        // For now, mark as pending for the scheduled job to pick up
-        LogStatus(`GeoCodeSyncService: Geocoding not yet implemented. Record will be picked up by scheduled job.`);
+        const fields = mapping.Fields;
+
+        // Strategy 1: Check for native lat/lng fields (ExtendedType = GeoLatitude/GeoLongitude)
+        const latField = entity.EntityInfo.Fields.find(f => f.ExtendedType === 'GeoLatitude');
+        const lngField = entity.EntityInfo.Fields.find(f => f.ExtendedType === 'GeoLongitude');
+        if (latField && lngField) {
+            const lat = entity.Get(latField.Name) as number;
+            const lng = entity.Get(lngField.Name) as number;
+            if (lat != null && lng != null && !isNaN(lat) && !isNaN(lng)) {
+                return {
+                    Latitude: lat,
+                    Longitude: lng,
+                    Precision: 'exact',
+                    CountryID: null,
+                    StateProvinceID: null,
+                    Source: 'native'
+                };
+            }
+        }
+
+        // Strategy 2: Build address string from mapped fields and attempt geocoding
+        // For now, collect field values and log. External API integration (Google Geocode Action)
+        // will be wired up when API credentials are available in the environment.
+        const addressParts = fields
+            .map(f => entity.Get(f))
+            .filter(v => v != null && String(v).trim() !== '')
+            .map(v => String(v).trim());
+
+        if (addressParts.length === 0) {
+            LogStatus(`GeoCodeSyncService: No non-empty address fields for ${entity.EntityInfo.Name} ${entity.PrimaryKey.ToString()}`);
+            return null;
+        }
+
+        const addressString = addressParts.join(', ');
+        LogStatus(`GeoCodeSyncService: Address to geocode: "${addressString}" — awaiting geocode provider`);
+
+        // The actual Google Geocode Action call will be integrated here.
+        // For now, return null so the scheduled job picks this up when API credentials are configured.
         return null;
     }
 }

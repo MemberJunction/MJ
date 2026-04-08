@@ -108,6 +108,9 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
     // Detect date fields for timeline support
     this.detectDateFields();
 
+    // Detect geocoding support for map view
+    this.HasGeoCoding = !!(value && value.SupportsGeoCoding);
+
     if (this._initialized) {
       // If entity changed to a different entity, clear all stale state from the old entity
       if (value && previousEntity && !UUIDsEqual(value.ID, previousEntity.ID)) {
@@ -471,6 +474,9 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
 
   /** Whether the current entity has date fields available for timeline view */
   public hasDateFields: boolean = false;
+
+  /** Whether the current entity supports geocoding (has SupportsGeoCoding = 1) */
+  public HasGeoCoding: boolean = false;
 
   /** Available date fields from the entity (sorted by priority) */
   public availableDateFields: EntityFieldInfo[] = [];
@@ -1439,6 +1445,20 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
         record,
         entity: entity,
         compositeKey: buildCompositeKey(record, entity)
+      });
+    }
+  }
+
+  /**
+   * Handle map marker click — emit the record for the parent to handle (open record, etc.)
+   */
+  onMapMarkerClick(event: { RecordID: string; Latitude: number; Longitude: number; Record: Record<string, unknown> }): void {
+    const entity = this.effectiveEntity;
+    if (event.Record && entity) {
+      this.recordSelected.emit({
+        record: event.Record,
+        entity: entity,
+        compositeKey: buildCompositeKey(event.Record, entity)
       });
     }
   }

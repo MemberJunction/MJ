@@ -80,7 +80,7 @@ export type FormLayoutResult = {
         category: string;
         reason: string;
         displayName: string;
-        extendedType: 'Code' | 'Email' | 'FaceTime' | 'Geo' | 'MSTeams' | 'SIP' | 'SMS' | 'Skype' | 'Tel' | 'URL' | 'WhatsApp' | 'ZoomMtg' | null;
+        extendedType: 'Code' | 'Email' | 'FaceTime' | 'Geo' | 'GeoLatitude' | 'GeoLongitude' | 'GeoCountry' | 'GeoStateProvince' | 'GeoCity' | 'GeoPostalCode' | 'GeoAddress' | 'MSTeams' | 'SIP' | 'SMS' | 'Skype' | 'Tel' | 'URL' | 'WhatsApp' | 'ZoomMtg' | null;
         codeType: 'CSS' | 'HTML' | 'JavaScript' | 'SQL' | 'TypeScript' | 'Other' | null;
     }>;
     /** @deprecated Use categoryInfo instead */

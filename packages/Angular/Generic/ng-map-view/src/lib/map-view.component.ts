@@ -13,9 +13,10 @@ import {
     AfterViewInit,
     inject
 } from '@angular/core';
-import { BaseEntity, EntityInfo } from '@memberjunction/core';
+import { EntityInfo } from '@memberjunction/core';
 import { MapRenderMode, MapDisplayState, MapMarkerClickEvent, MapRegionClickEvent } from './map-view.types';
-import * as L from 'leaflet';
+// Leaflet is loaded as a global script at runtime via angular.json scripts array.
+// The L namespace is available globally — see leaflet.d.ts for type declarations.
 
 /**
  * MapViewComponent — Leaflet-based map visualization for geo-enabled MJ entities.
@@ -45,8 +46,8 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
     /** Entity metadata for the displayed records. */
     @Input() Entity!: EntityInfo;
 
-    /** Array of entity records to render on the map. */
-    @Input() Records: BaseEntity[] = [];
+    /** Array of entity records to render on the map. Accepts BaseEntity[] or plain Record objects. */
+    @Input() Records: Record<string, unknown>[] = [];
 
     /** Latitude field name. Defaults to __mj_Latitude. */
     @Input() LatitudeField: string = '__mj_Latitude';
@@ -138,8 +139,8 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
         const bounds: L.LatLng[] = [];
 
         for (const record of this.Records) {
-            const lat = record.Get(this.LatitudeField) as number;
-            const lng = record.Get(this.LongitudeField) as number;
+            const lat = this.GetField(record, this.LatitudeField) as number;
+            const lng = this.GetField(record, this.LongitudeField) as number;
 
             if (lat == null || lng == null || isNaN(lat) || isNaN(lng)) continue;
 
@@ -149,16 +150,18 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
             const marker = L.marker(latLng);
 
             // Build popup with record name fields
-            const nameField = this.Entity.NameField;
-            const label = nameField ? String(record.Get(nameField.Name) ?? '') : `Record ${record.PrimaryKey.ToString()}`;
+            const nameField = this.Entity?.NameField;
+            const label = nameField ? String(this.GetField(record, nameField.Name) ?? '') : 'Record';
             marker.bindPopup(`<b>${this.EscapeHtml(label)}</b>`);
 
             marker.on('click', () => {
+                const pkFields = this.Entity?.PrimaryKeys ?? [];
+                const recordId = pkFields.map(pk => this.GetField(record, pk.Name)).join('||');
                 this.MarkerClick.emit({
-                    RecordID: record.PrimaryKey.ToString(),
+                    RecordID: recordId,
                     Latitude: lat,
                     Longitude: lng,
-                    Record: record.GetAll()
+                    Record: record
                 });
             });
 
@@ -197,6 +200,16 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
     SetRenderMode(mode: MapRenderMode): void {
         this.RenderMode = mode;
         this.RenderMarkers();
+    }
+
+    /**
+     * Get a field value from a record, supporting both BaseEntity (with .Get()) and plain objects.
+     */
+    private GetField(record: Record<string, unknown>, fieldName: string): unknown {
+        if ('Get' in record && typeof (record as Record<string, unknown>)['Get'] === 'function') {
+            return (record as { Get: (name: string) => unknown }).Get(fieldName);
+        }
+        return record[fieldName];
     }
 
     /**

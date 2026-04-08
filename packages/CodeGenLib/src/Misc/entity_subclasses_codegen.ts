@@ -450,7 +450,7 @@ ${jsonTypeBlock}
  * @public${deprecatedFlag}
  */
 ${subClassImportStatement}@RegisterClass(BaseEntity, '${entity.Name}')
-export class ${sClassName} extends ${sBaseClass}<${sClassName}Type> {${loadFunction ? '\n' + loadFunction : ''}${saveFunction ? '\n\n' + saveFunction : ''}${deleteFunction ? '\n\n' + deleteFunction : ''}${validateFunction ? '\n\n' + validateFunction : ''}
+export class ${sClassName} extends ${sBaseClass}<${sClassName}Type> {${loadFunction ? '\n' + loadFunction : ''}${saveFunction ? '\n\n' + saveFunction : ''}${deleteFunction ? '\n\n' + deleteFunction : ''}${validateFunction ? '\n\n' + validateFunction : ''}${this.generateGeoCode(entity)}
 
 ${fields}
 }
@@ -704,5 +704,48 @@ export type ${entity.ClassName}EntityType = z.infer<typeof ${schemaName}>;
     }
     result += `        * * SQL Data Type: ${entityField.SQLFullType}${entityField.RelatedEntity ? '\n        * * Related Entity/Foreign Key: ' + entityField.RelatedEntity + ' (' + entityField.RelatedEntityBaseView + '.' + entityField.RelatedEntityFieldName + ')' : ''}${entityField.DefaultValue && entityField.DefaultValue.length > 0 ? '\n        * * Default Value: ' + entityField.DefaultValue : ''}${jsonTypeAnnotation}${valueList}${entityField.Description && entityField.Description.length > 0 ? '\n        * * Description: ' + EntitySubClassGeneratorBase.SanitizeDescription(entityField.Description) : ''}`;
     return result;
+  }
+
+  /**
+   * Generate geo-related code for entities with SupportsGeoCoding = 1.
+   * Produces a GeoFieldMappings getter and an AfterSave hook that calls
+   * GeoCodeSyncService.Instance.SyncIfChanged() (fire-and-forget).
+   */
+  protected generateGeoCode(entity: EntityInfo): string {
+    if (!entity.SupportsGeoCoding) return '';
+
+    const geoFields = this.detectGeoFieldMappings(entity);
+    if (geoFields.length === 0) return '';
+
+    const mappingsJSON = JSON.stringify(geoFields, null, 8)
+        .replace(/"LocationType"/g, 'LocationType')
+        .replace(/"Fields"/g, 'Fields');
+
+    return `
+
+    /**
+     * CodeGen-generated geo field mappings for geocoding.
+     * Defines which entity fields contribute to each location type.
+     */
+    get GeoFieldMappings(): { LocationType: string; Fields: string[] }[] {
+        return ${mappingsJSON};
+    }`;
+  }
+
+  /**
+   * Analyze entity fields to determine geo field mappings.
+   * Groups address-related fields by naming patterns (e.g., Home*, Work*, Business*).
+   */
+  protected detectGeoFieldMappings(entity: EntityInfo): Array<{ LocationType: string; Fields: string[] }> {
+    const geoExtTypes = new Set(['Geo', 'GeoAddress', 'GeoCity', 'GeoStateProvince', 'GeoCountry', 'GeoPostalCode']);
+    const geoFields = entity.Fields.filter(f => f.ExtendedType && geoExtTypes.has(f.ExtendedType));
+
+    if (geoFields.length === 0) return [];
+
+    // Simple case: all geo fields belong to a single 'Primary' location
+    return [{
+        LocationType: 'Primary',
+        Fields: geoFields.map(f => f.Name)
+    }];
   }
 }

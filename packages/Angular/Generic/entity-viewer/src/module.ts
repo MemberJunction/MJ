@@ -6,6 +6,7 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { PaginationComponent } from '@memberjunction/ng-pagination';
 import { TimelineModule } from '@memberjunction/ng-timeline';
 import { ExportServiceModule } from '@memberjunction/ng-export-service';
+import { MapViewModule } from '@memberjunction/ng-map-view';
 
 import { EntityCardsComponent } from './lib/entity-cards/entity-cards.component';
 import { EntityViewerComponent } from './lib/entity-viewer/entity-viewer.component';
@@ -65,7 +66,8 @@ import { SharedViewWarningDialogComponent } from './lib/shared-view-warning-dial
     SharedGenericModule,
     PaginationComponent,
     TimelineModule,
-    ExportServiceModule
+    ExportServiceModule,
+    MapViewModule
   ],
   exports: [
     EntityCardsComponent,

@@ -1290,8 +1290,19 @@ export class SQLCodeGenBase {
     async generateBaseView(pool: CodeGenConnection, entity: EntityInfo): Promise<string> {
         const viewName: string = entity.BaseView ? entity.BaseView : `vw${entity.CodeName}`;
         const classNameFirstChar: string = entity.BaseTableCodeName.charAt(0).toLowerCase();
-        const relatedFieldsString: string = await this.generateBaseViewRelatedFieldsString(pool, entity.Fields);
+        let relatedFieldsString: string = await this.generateBaseViewRelatedFieldsString(pool, entity.Fields);
         const relatedFieldsJoinString: string = this.generateBaseViewJoins(entity, entity.Fields);
+
+        // Geo support: add __mj_Latitude and __mj_Longitude virtual fields for geo-enabled entities
+        if (entity.SupportsGeoCoding) {
+            const qi = this._dbProvider.Dialect.QuoteIdentifier.bind(this._dbProvider.Dialect);
+            const geoFieldsSelect = this.hasNativeGeoFields(entity.Fields)
+                ? this.generateNativeGeoFields(entity.Fields, classNameFirstChar, qi)
+                : this.generateRecordGeoCodeFields(qi);
+            if (geoFieldsSelect) {
+                relatedFieldsString += (relatedFieldsString ? ',\n' : '') + geoFieldsSelect;
+            }
+        }
         const permissions: string = this.generateViewPermissions(entity);
         const qi = this._dbProvider.Dialect.QuoteIdentifier.bind(this._dbProvider.Dialect);
         const whereClause: string = entity.DeleteType === 'Soft' ? `WHERE
@@ -1341,7 +1352,48 @@ export class SQLCodeGenBase {
                 sOutput += `${ef.AllowsNull ? 'LEFT OUTER' : 'INNER' } JOIN\n    ${qs(ef.RelatedEntitySchemaName, relatedTable)} AS ${ef._RelatedEntityTableAlias}\n  ON\n    ${qi(classNameFirstChar)}.${qi(ef.Name)} = ${ef._RelatedEntityTableAlias}.${qi(ef.RelatedEntityFieldName)}`;
             }
         }
+
+        // Geo support: add LEFT JOIN to vwRecordGeoCodes for entities with SupportsGeoCoding = 1
+        // that don't have native GeoLatitude/GeoLongitude fields (those get aliased directly)
+        if (entity.SupportsGeoCoding && !this.hasNativeGeoFields(entityFields)) {
+            const qi = this._dbProvider.Dialect.QuoteIdentifier.bind(this._dbProvider.Dialect);
+            const qs = this._dbProvider.Dialect.QuoteSchema.bind(this._dbProvider.Dialect);
+            sOutput += (sOutput === '' ? '' : '\n');
+            sOutput += `LEFT OUTER JOIN\n    ${qs(entity.SchemaName, 'vwRecordGeoCodes')} AS __mj_rgc\n  ON\n    __mj_rgc.${qi('EntityID')} = '${entity.ID}'\n    AND __mj_rgc.${qi('RecordID')} = CAST(${qi(classNameFirstChar)}.${qi('ID')} AS NVARCHAR(450))\n    AND __mj_rgc.${qi('LocationType')} = 'Primary'`;
+        }
+
         return sOutput;
+    }
+
+    /**
+     * Check if an entity has native latitude/longitude fields marked with GeoLatitude/GeoLongitude ExtendedType.
+     * If both exist, the view should alias them directly instead of joining to RecordGeoCode.
+     */
+    protected hasNativeGeoFields(entityFields: EntityFieldInfo[]): boolean {
+        const hasLat = entityFields.some(f => f.ExtendedType === 'GeoLatitude');
+        const hasLng = entityFields.some(f => f.ExtendedType === 'GeoLongitude');
+        return hasLat && hasLng;
+    }
+
+    /**
+     * Generate SELECT aliases for native lat/lng fields → __mj_Latitude / __mj_Longitude.
+     */
+    protected generateNativeGeoFields(
+        entityFields: EntityFieldInfo[],
+        classNameFirstChar: string,
+        qi: (name: string) => string
+    ): string {
+        const latField = entityFields.find(f => f.ExtendedType === 'GeoLatitude');
+        const lngField = entityFields.find(f => f.ExtendedType === 'GeoLongitude');
+        if (!latField || !lngField) return '';
+        return `    ${qi(classNameFirstChar)}.${qi(latField.Name)} AS ${qi('__mj_Latitude')},\n    ${qi(classNameFirstChar)}.${qi(lngField.Name)} AS ${qi('__mj_Longitude')}`;
+    }
+
+    /**
+     * Generate SELECT aliases from the RecordGeoCode LEFT JOIN → __mj_Latitude / __mj_Longitude.
+     */
+    protected generateRecordGeoCodeFields(qi: (name: string) => string): string {
+        return `    __mj_rgc.${qi('Latitude')} AS ${qi('__mj_Latitude')},\n    __mj_rgc.${qi('Longitude')} AS ${qi('__mj_Longitude')}`;
     }
 
     async generateBaseViewRelatedFieldsString(pool: CodeGenConnection, entityFields: EntityFieldInfo[]): Promise<string> {
