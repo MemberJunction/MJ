@@ -9,6 +9,9 @@ declare namespace L {
     function latLng(lat: number, lng: number): LatLng;
     function latLngBounds(latlngs: LatLng[]): LatLngBounds;
     function layerGroup(): LayerGroup;
+    function circleMarker(latlng: LatLngExpression, options?: Record<string, unknown>): CircleMarker;
+
+    interface CircleMarker extends Marker {}
 
     type LatLngExpression = [number, number] | LatLng;
 
