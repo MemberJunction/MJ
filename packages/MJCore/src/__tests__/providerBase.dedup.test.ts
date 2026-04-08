@@ -146,7 +146,10 @@ describe('ProviderBase Request Deduplication', () => {
             expect(provider.internalRunViewsCallCount).toBe(2);
         });
 
-        it('should NOT dedup requests with different Fields', async () => {
+        it('should dedup requests with different Fields (cache stores full entity width)', async () => {
+            // Fields is excluded from the dedup key because the cache always
+            // fetches all fields and filters on return. Different Fields values
+            // are effectively the same underlying query.
             const params1 = makeParams({ Fields: ['ID', 'Name'] });
             const params2 = makeParams({ Fields: ['ID'] });
 
@@ -155,7 +158,7 @@ describe('ProviderBase Request Deduplication', () => {
                 provider.RunViews([params2])
             ]);
 
-            expect(provider.internalRunViewsCallCount).toBe(2);
+            expect(provider.internalRunViewsCallCount).toBe(1);
         });
     });
 

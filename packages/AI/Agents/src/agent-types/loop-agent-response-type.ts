@@ -75,9 +75,9 @@ export interface LoopAgentResponse<P = any> {
      */
     nextStep?: {
         /**
-         * Operation type: 'Actions' | 'Sub-Agent' | 'Chat' | 'Retry' | 'ForEach' | 'While'
+         * Operation type: 'Actions' | 'ClientTools' | 'Sub-Agent' | 'Chat' | 'Retry' | 'ForEach' | 'While'
          */
-        type: 'Actions' | 'Sub-Agent' | 'Chat' | 'Retry' | 'ForEach' | 'While';
+        type: 'Actions' | 'ClientTools' | 'Sub-Agent' | 'Chat' | 'Retry' | 'ForEach' | 'While';
 
         /**
          * Actions to execute (when type='Actions')
@@ -121,6 +121,21 @@ export interface LoopAgentResponse<P = any> {
              */
             terminateAfter: boolean;
         };
+
+        /**
+         * Client tools to invoke (when type='ClientTools').
+         * Supports both PascalCase (spec) and camelCase (LLM convenience).
+         */
+        clientTools?: Array<{
+            Name?: string;
+            name?: string;
+            Params?: Record<string, unknown>;
+            params?: Record<string, unknown>;
+            TimeoutMs?: number;
+            timeoutMs?: number;
+            Description?: string;
+            description?: string;
+        }>;
 
         /**
          * ForEach operation details (when type='ForEach')

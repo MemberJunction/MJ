@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Duplicate Comparison — Slide-In Panel with Merge Selection</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  :root {
+    --mj-bg-page: #0f1729;
+    --mj-bg-surface: #1a2332;
+    --mj-bg-surface-card: #1e2a3a;
+    --mj-bg-surface-sunken: #151e2d;
+    --mj-bg-surface-elevated: #222f42;
+    --mj-bg-surface-hover: #253347;
+    --mj-bg-overlay: rgba(0,0,0,0.45);
+    --mj-text-primary: #e2e8f0;
+    --mj-text-secondary: #94a3b8;
+    --mj-text-muted: #64748b;
+    --mj-text-disabled: #475569;
+    --mj-text-inverse: #ffffff;
+    --mj-border-default: #334155;
+    --mj-border-subtle: #1e293b;
+    --mj-border-strong: #475569;
+    --mj-brand-primary: #5b8def;
+    --mj-brand-primary-hover: #4a7de0;
+    --mj-status-success: #22c55e;
+    --mj-status-success-bg: rgba(34,197,94,0.12);
+    --mj-status-success-text: #4ade80;
+    --mj-status-success-border: rgba(34,197,94,0.3);
+    --mj-status-warning: #f59e0b;
+    --mj-status-warning-bg: rgba(245,158,11,0.12);
+    --mj-status-warning-text: #fbbf24;
+    --mj-status-warning-border: rgba(245,158,11,0.3);
+    --mj-status-error: #ef4444;
+    --mj-status-error-bg: rgba(239,68,68,0.12);
+    --mj-status-error-text: #f87171;
+    --mj-status-error-border: rgba(239,68,68,0.3);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--mj-bg-page);
+    color: var(--mj-text-primary);
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  /* ── Simulated kanban behind the panel ── */
+  .kanban-bg {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    gap: 16px;
+    padding: 60px 20px 20px;
+    opacity: 0.3;
+    pointer-events: none;
+  }
+  .kanban-col {
+    flex: 1;
+    background: var(--mj-bg-surface-card);
+    border-radius: 10px;
+    padding: 16px;
+  }
+  .kanban-col h4 {
+    font-size: 0.85rem;
+    color: var(--mj-text-muted);
+    margin-bottom: 12px;
+  }
+  .kanban-placeholder {
+    height: 80px;
+    background: var(--mj-bg-surface);
+    border: 1px solid var(--mj-border-subtle);
+    border-radius: 8px;
+    margin-bottom: 8px;
+  }
+
+  /* ── Backdrop (semi-transparent, click to close) ── */
+  .slide-backdrop {
+    position: fixed;
+    inset: 0;
+    background: var(--mj-bg-overlay);
+    z-index: 9999;
+  }
+
+  /* ── Slide-in Panel ── */
+  .comparison-panel {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 82vw;
+    max-width: 1300px;
+    background: var(--mj-bg-surface);
+    border-left: 1px solid var(--mj-border-default);
+    box-shadow: -8px 0 40px rgba(0,0,0,0.4);
+    z-index: 10000;
+    display: flex;
+    flex-direction: column;
+    animation: slideIn 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  @keyframes slideIn {
+    from { transform: translateX(100%); }
+    to { transform: translateX(0); }
+  }
+
+  /* ── Header ── */
+  .comparison-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--mj-border-default);
+    flex-shrink: 0;
+    gap: 12px;
+  }
+
+  .comparison-header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+  }
+
+  .comparison-entity-icon {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+    color: var(--mj-brand-primary);
+    font-size: 1rem;
+    flex-shrink: 0;
+  }
+
+  .comparison-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--mj-text-primary);
+  }
+
+  .comparison-entity-badge {
+    display: inline-block;
+    padding: 1px 7px;
+    border-radius: 10px;
+    font-size: 0.65rem;
+    font-weight: 500;
+    background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+    color: var(--mj-brand-primary);
+    margin-right: 6px;
+  }
+
+  .comparison-match-count {
+    font-size: 0.72rem;
+    color: var(--mj-text-muted);
+  }
+
+  .comparison-header-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+  }
+
+  /* ── Toggle ── */
+  .comparison-toggle {
+    display: flex;
+    border: 1px solid var(--mj-border-default);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+
+  .toggle-btn {
+    padding: 5px 12px;
+    font-size: 0.7rem;
+    font-weight: 500;
+    border: none;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    background: var(--mj-bg-surface);
+    color: var(--mj-text-secondary);
+  }
+
+  .toggle-btn:first-child { border-right: 1px solid var(--mj-border-default); }
+
+  .toggle-btn.toggle-active {
+    background: var(--mj-brand-primary);
+    color: var(--mj-text-inverse);
+  }
+
+  .comparison-close-btn {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    background: var(--mj-bg-surface-sunken);
+    color: var(--mj-text-muted);
+    font-size: 0.85rem;
+    transition: all 0.15s ease;
+  }
+
+  .comparison-close-btn:hover {
+    background: var(--mj-bg-surface-hover);
+    color: var(--mj-text-primary);
+  }
+
+  /* ── Grid Wrapper ── */
+  .comparison-grid-wrapper {
+    flex: 1;
+    overflow: auto;
+    min-height: 0;
+  }
+
+  /* ── Grid ── */
+  .comparison-grid {
+    display: grid;
+    grid-template-columns: 160px repeat(5, minmax(180px, 1fr));
+    min-width: 100%;
+  }
+
+  .comparison-grid > div {
+    padding: 8px 12px;
+    font-size: 0.78rem;
+    border-bottom: 1px solid var(--mj-border-subtle);
+    border-right: 1px solid var(--mj-border-subtle);
+  }
+
+  /* ── Corner Cell ── */
+  .grid-corner-cell {
+    position: sticky;
+    top: 0;
+    left: 0;
+    z-index: 4;
+    background: var(--mj-bg-surface-elevated);
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--mj-text-muted);
+    display: flex;
+    align-items: flex-end;
+    padding-bottom: 6px;
+  }
+
+  /* ── Column Headers ── */
+  .grid-col-header {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    background: var(--mj-bg-surface-elevated);
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .grid-col-source {
+    border-left: 3px solid var(--mj-brand-primary);
+    background: color-mix(in srgb, var(--mj-brand-primary) 6%, var(--mj-bg-surface-elevated));
+  }
+
+  .col-header-label {
+    font-size: 0.6rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--mj-brand-primary);
+  }
+
+  .col-header-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+  }
+
+  .col-header-name {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--mj-text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .col-header-diff-count {
+    font-size: 0.65rem;
+    color: var(--mj-status-warning-text);
+  }
+
+  /* ── Surviving Record Selector ── */
+  .surviving-selector {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 4px;
+  }
+
+  .surviving-radio {
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    border: 2px solid var(--mj-border-strong);
+    border-radius: 50%;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    flex-shrink: 0;
+  }
+
+  .surviving-radio:checked {
+    border-color: var(--mj-brand-primary);
+    background: var(--mj-brand-primary);
+    box-shadow: inset 0 0 0 2px var(--mj-bg-surface-elevated);
+  }
+
+  .surviving-label {
+    font-size: 0.65rem;
+    color: var(--mj-text-muted);
+    cursor: pointer;
+  }
+
+  .surviving-label.is-survivor {
+    color: var(--mj-brand-primary);
+    font-weight: 600;
+  }
+
+  /* ── "Use All Fields" button in column header ── */
+  .use-all-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border: 1px solid var(--mj-border-default);
+    border-radius: 4px;
+    background: var(--mj-bg-surface);
+    color: var(--mj-text-secondary);
+    font-size: 0.62rem;
+    cursor: pointer;
+    transition: all 0.12s ease;
+    margin-top: 2px;
+  }
+
+  .use-all-btn:hover {
+    background: var(--mj-bg-surface-hover);
+    color: var(--mj-text-primary);
+    border-color: var(--mj-brand-primary);
+  }
+
+  .use-all-btn.all-selected {
+    background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+    color: var(--mj-brand-primary);
+    border-color: var(--mj-brand-primary);
+  }
+
+  /* ── Score Badges ── */
+  .score-indicator {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 36px;
+    padding: 2px 7px;
+    border-radius: 10px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+
+  .score-high {
+    background: var(--mj-status-success-bg);
+    color: var(--mj-status-success-text);
+    border: 1px solid var(--mj-status-success-border);
+  }
+
+  .score-medium {
+    background: var(--mj-status-warning-bg);
+    color: var(--mj-status-warning-text);
+    border: 1px solid var(--mj-status-warning-border);
+  }
+
+  /* ── Per-match actions in header ── */
+  .comparison-match-actions {
+    display: flex;
+    gap: 4px;
+    margin-top: 3px;
+  }
+
+  .action-btn-sm {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 0.65rem;
+    transition: all 0.15s ease;
+  }
+
+  .approve-btn-sm {
+    background: var(--mj-status-success-bg);
+    color: var(--mj-status-success-text);
+    border-color: var(--mj-status-success-border);
+  }
+  .approve-btn-sm:hover { background: rgba(34,197,94,0.25); }
+
+  .reject-btn-sm {
+    background: var(--mj-status-error-bg);
+    color: var(--mj-status-error-text);
+    border-color: var(--mj-status-error-border);
+  }
+  .reject-btn-sm:hover { background: rgba(239,68,68,0.25); }
+
+  /* ── Label Cells ── */
+  .grid-label-cell {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    background: var(--mj-bg-surface);
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--mj-text-secondary);
+    display: flex;
+    align-items: center;
+  }
+
+  .grid-row-odd {
+    background: color-mix(in srgb, var(--mj-bg-surface-sunken) 50%, var(--mj-bg-surface));
+  }
+
+  .grid-label-cell.grid-row-odd {
+    background: color-mix(in srgb, var(--mj-bg-surface-sunken) 50%, var(--mj-bg-surface));
+  }
+
+  /* ── Value Cells ── */
+  .grid-value-cell {
+    font-size: 0.78rem;
+    color: var(--mj-text-primary);
+    line-height: 1.45;
+    word-break: break-word;
+    position: relative;
+  }
+
+  .grid-source-cell {
+    background: color-mix(in srgb, var(--mj-brand-primary) 3%, var(--mj-bg-surface));
+    border-left: 3px solid transparent;
+  }
+
+  .grid-source-cell.grid-row-odd {
+    background: color-mix(in srgb, var(--mj-brand-primary) 3%, color-mix(in srgb, var(--mj-bg-surface-sunken) 50%, var(--mj-bg-surface)));
+  }
+
+  .grid-source-cell.has-diff-in-row { font-weight: 600; }
+
+  /* ── Diff Highlighting ── */
+  .value-same { color: var(--mj-text-muted); }
+
+  .value-different {
+    background: color-mix(in srgb, var(--mj-status-warning) 8%, transparent) !important;
+    border-left: 3px solid var(--mj-status-warning);
+    color: var(--mj-text-primary);
+  }
+
+  .field-not-available {
+    font-style: italic;
+    font-size: 0.72rem;
+    color: var(--mj-text-disabled);
+  }
+
+  /* ── Field Selection Radio Buttons ── */
+  .field-select-radio {
+    position: absolute;
+    top: 50%;
+    right: 8px;
+    transform: translateY(-50%);
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--mj-border-strong);
+    border-radius: 50%;
+    cursor: pointer;
+    transition: all 0.12s ease;
+    opacity: 0.4;
+  }
+
+  .field-select-radio:hover { opacity: 0.8; }
+
+  .field-select-radio:checked {
+    border-color: var(--mj-brand-primary);
+    background: var(--mj-brand-primary);
+    box-shadow: inset 0 0 0 2.5px var(--mj-bg-surface);
+    opacity: 1;
+  }
+
+  /* When a cell has a selected field radio, highlight it */
+  .grid-value-cell.field-selected {
+    background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface)) !important;
+    border-left: 3px solid var(--mj-brand-primary);
+  }
+
+  .grid-value-cell.field-selected .field-select-radio {
+    opacity: 1;
+  }
+
+  /* ── Category Headers ── */
+  .grid-category-row {
+    grid-column: 1 / -1;
+    background: var(--mj-bg-surface-sunken);
+    padding: 6px 12px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--mj-text-muted);
+    border-bottom: 1px solid var(--mj-border-default);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .grid-category-row i {
+    font-size: 0.6rem;
+    color: var(--mj-brand-primary);
+  }
+
+  /* ── Footer ── */
+  .comparison-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 20px;
+    border-top: 1px solid var(--mj-border-default);
+    flex-shrink: 0;
+  }
+
+  .comparison-footer-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .comparison-summary {
+    font-size: 0.72rem;
+    color: var(--mj-text-muted);
+  }
+
+  .merge-summary {
+    font-size: 0.72rem;
+    color: var(--mj-brand-primary);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .merge-summary i { font-size: 0.65rem; }
+
+  .comparison-footer-right {
+    display: flex;
+    gap: 8px;
+  }
+
+  .action-btn {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 7px 14px;
+    border: 1px solid;
+    border-radius: 7px;
+    cursor: pointer;
+    font-size: 0.78rem;
+    font-weight: 500;
+    transition: all 0.15s ease;
+  }
+
+  .approve-btn {
+    background: var(--mj-status-success-bg);
+    color: var(--mj-status-success-text);
+    border-color: var(--mj-status-success-border);
+  }
+  .approve-btn:hover { background: rgba(34,197,94,0.25); }
+
+  .reject-btn {
+    background: var(--mj-status-error-bg);
+    color: var(--mj-status-error-text);
+    border-color: var(--mj-status-error-border);
+  }
+  .reject-btn:hover { background: rgba(239,68,68,0.25); }
+
+  .merge-btn {
+    background: var(--mj-brand-primary);
+    color: var(--mj-text-inverse);
+    border-color: var(--mj-brand-primary);
+  }
+  .merge-btn:hover { background: var(--mj-brand-primary-hover); }
+
+  /* ── Tooltip for merge info ── */
+  .merge-info-tip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--mj-bg-surface-sunken);
+    color: var(--mj-text-muted);
+    font-size: 0.55rem;
+    cursor: help;
+    margin-left: 4px;
+  }
+</style>
+</head>
+<body>
+
+<!-- Simulated kanban columns behind -->
+<div class="kanban-bg">
+  <div class="kanban-col">
+    <h4>Pending Review (108)</h4>
+    <div class="kanban-placeholder"></div>
+    <div class="kanban-placeholder"></div>
+    <div class="kanban-placeholder"></div>
+    <div class="kanban-placeholder"></div>
+  </div>
+  <div class="kanban-col">
+    <h4>Approved (1)</h4>
+    <div class="kanban-placeholder"></div>
+  </div>
+  <div class="kanban-col">
+    <h4>Rejected (1)</h4>
+    <div class="kanban-placeholder"></div>
+  </div>
+</div>
+
+<!-- Backdrop -->
+<div class="slide-backdrop"></div>
+
+<!-- ═══════ SLIDE-IN COMPARISON PANEL ═══════ -->
+<div class="comparison-panel">
+
+  <!-- ── HEADER ── -->
+  <div class="comparison-header">
+    <div class="comparison-header-left">
+      <div class="comparison-entity-icon">
+        <i class="fa-solid fa-microchip"></i>
+      </div>
+      <div>
+        <div class="comparison-title">Claude 3.5 Sonnet</div>
+        <span class="comparison-entity-badge">MJ: AI Models</span>
+        <span class="comparison-match-count">4 potential duplicates</span>
+      </div>
+    </div>
+    <div class="comparison-header-right">
+      <div class="comparison-toggle">
+        <button class="toggle-btn toggle-active">All Fields</button>
+        <button class="toggle-btn">Differences Only</button>
+      </div>
+      <button class="comparison-close-btn" title="Close (Esc)">
+        <i class="fa-solid fa-times"></i>
+      </button>
+    </div>
+  </div>
+
+  <!-- ── GRID ── -->
+  <div class="comparison-grid-wrapper">
+    <div class="comparison-grid">
+
+      <!-- Row 0: Column Headers -->
+      <div class="grid-corner-cell">Field</div>
+
+      <!-- SOURCE -->
+      <div class="grid-col-header grid-col-source">
+        <span class="col-header-label">Source</span>
+        <span class="col-header-name">Claude 3.5 Sonnet</span>
+        <div class="surviving-selector">
+          <input type="radio" name="survivor" class="surviving-radio" checked id="surv0">
+          <label for="surv0" class="surviving-label is-survivor">Surviving Record</label>
+        </div>
+        <button class="use-all-btn all-selected"><i class="fa-solid fa-check-double"></i> Using all fields</button>
+      </div>
+
+      <!-- Match 1 -->
+      <div class="grid-col-header">
+        <div class="col-header-top">
+          <span class="col-header-name">Claude 3 - Sonnet</span>
+          <span class="score-indicator score-high">96%</span>
+        </div>
+        <span class="col-header-diff-count">3 differences</span>
+        <div class="surviving-selector">
+          <input type="radio" name="survivor" class="surviving-radio" id="surv1">
+          <label for="surv1" class="surviving-label">Set as survivor</label>
+        </div>
+        <button class="use-all-btn"><i class="fa-solid fa-clone"></i> Use all fields</button>
+        <div class="comparison-match-actions">
+          <button class="action-btn-sm approve-btn-sm" title="Approve"><i class="fa-solid fa-check"></i></button>
+          <button class="action-btn-sm reject-btn-sm" title="Reject"><i class="fa-solid fa-times"></i></button>
+        </div>
+      </div>
+
+      <!-- Match 2 -->
+      <div class="grid-col-header">
+        <div class="col-header-top">
+          <span class="col-header-name">Claude 3.7 Sonnet</span>
+          <span class="score-indicator score-high">93%</span>
+        </div>
+        <span class="col-header-diff-count">4 differences</span>
+        <div class="surviving-selector">
+          <input type="radio" name="survivor" class="surviving-radio" id="surv2">
+          <label for="surv2" class="surviving-label">Set as survivor</label>
+        </div>
+        <button class="use-all-btn"><i class="fa-solid fa-clone"></i> Use all fields</button>
+        <div class="comparison-match-actions">
+          <button class="action-btn-sm approve-btn-sm" title="Approve"><i class="fa-solid fa-check"></i></button>
+          <button class="action-btn-sm reject-btn-sm" title="Reject"><i class="fa-solid fa-times"></i></button>
+        </div>
+      </div>
+
+      <!-- Match 3 -->
+      <div class="grid-col-header">
+        <div class="col-header-top">
+          <span class="col-header-name">Claude 4 Sonnet</span>
+          <span class="score-indicator score-high">92%</span>
+        </div>
+        <span class="col-header-diff-count">5 differences</span>
+        <div class="surviving-selector">
+          <input type="radio" name="survivor" class="surviving-radio" id="surv3">
+          <label for="surv3" class="surviving-label">Set as survivor</label>
+        </div>
+        <button class="use-all-btn"><i class="fa-solid fa-clone"></i> Use all fields</button>
+        <div class="comparison-match-actions">
+          <button class="action-btn-sm approve-btn-sm" title="Approve"><i class="fa-solid fa-check"></i></button>
+          <button class="action-btn-sm reject-btn-sm" title="Reject"><i class="fa-solid fa-times"></i></button>
+        </div>
+      </div>
+
+      <!-- Match 4 -->
+      <div class="grid-col-header">
+        <div class="col-header-top">
+          <span class="col-header-name">Claude Sonnet 4.6</span>
+          <span class="score-indicator score-medium">82%</span>
+        </div>
+        <span class="col-header-diff-count">6 differences</span>
+        <div class="surviving-selector">
+          <input type="radio" name="survivor" class="surviving-radio" id="surv4">
+          <label for="surv4" class="surviving-label">Set as survivor</label>
+        </div>
+        <button class="use-all-btn"><i class="fa-solid fa-clone"></i> Use all fields</button>
+        <div class="comparison-match-actions">
+          <button class="action-btn-sm approve-btn-sm" title="Approve"><i class="fa-solid fa-check"></i></button>
+          <button class="action-btn-sm reject-btn-sm" title="Reject"><i class="fa-solid fa-times"></i></button>
+        </div>
+      </div>
+
+      <!-- ── Category: General ── -->
+      <div class="grid-category-row"><i class="fa-solid fa-circle-info"></i> General</div>
+
+      <!-- Row: Name (different) — source selected -->
+      <div class="grid-label-cell">Name</div>
+      <div class="grid-value-cell grid-source-cell has-diff-in-row field-selected">
+        Claude 3.5 Sonnet
+        <input type="radio" name="field-Name" class="field-select-radio" checked>
+      </div>
+      <div class="grid-value-cell value-different">
+        Claude 3 - Sonnet
+        <input type="radio" name="field-Name" class="field-select-radio">
+      </div>
+      <div class="grid-value-cell value-different">
+        Claude 3.7 Sonnet
+        <input type="radio" name="field-Name" class="field-select-radio">
+      </div>
+      <div class="grid-value-cell value-different">
+        Claude 4 Sonnet
+        <input type="radio" name="field-Name" class="field-select-radio">
+      </div>
+      <div class="grid-value-cell value-different">
+        Claude Sonnet 4.6
+        <input type="radio" name="field-Name" class="field-select-radio">
+      </div>
+
+      <!-- Row: Description (different) — match 3 selected (cherry-picked) -->
+      <div class="grid-label-cell grid-row-odd">Description</div>
+      <div class="grid-value-cell grid-source-cell grid-row-odd has-diff-in-row">
+        Fast, affordable model for everyday tasks.
+        <input type="radio" name="field-Desc" class="field-select-radio">
+      </div>
+      <div class="grid-value-cell grid-row-odd value-different">
+        Previous generation Sonnet model.
+        <input type="radio" name="field-Desc" class="field-select-radio">
+      </div>
+      <div class="grid-value-cell grid-row-odd value-different">
+        Enhanced reasoning with extended thinking.
+        <input type="radio" name="field-Desc" class="field-select-radio">
+      </div>
+      <div class="grid-value-cell grid-row-odd value-different field-selected">
+        Latest Sonnet-class with frontier intelligence.
+        <input type="radio" name="field-Desc" class="field-select-radio" checked>
+      </div>
+      <div class="grid-value-cell grid-row-odd value-different">
+        Most advanced Sonnet with superior reasoning.
+        <input type="radio" name="field-Desc" class="field-select-radio">
+      </div>
+
+      <!-- Row: Status (same) — source auto-selected -->
+      <div class="grid-label-cell">Status</div>
+      <div class="grid-value-cell grid-source-cell field-selected">
+        Active
+        <input type="radio" name="field-Status" class="field-select-radio" checked>
+      </div>
+      <div class="grid-value-cell value-same">Active <input type="radio" name="field-Status" class="field-select-radio"></div>
+      <div class="grid-value-cell value-same">Active <input type="radio" name="field-Status" class="field-select-radio"></div>
+      <div class="grid-value-cell value-same">Active <input type="radio" name="field-Status" class="field-select-radio"></div>
+      <div class="grid-value-cell value-same">Active <input type="radio" name="field-Status" class="field-select-radio"></div>
+
+      <!-- Row: Vendor (same) -->
+      <div class="grid-label-cell grid-row-odd">Vendor</div>
+      <div class="grid-value-cell grid-source-cell grid-row-odd field-selected">
+        Anthropic
+        <input type="radio" name="field-Vendor" class="field-select-radio" checked>
+      </div>
+      <div class="grid-value-cell grid-row-odd value-same">Anthropic <input type="radio" name="field-Vendor" class="field-select-radio"></div>
+      <div class="grid-value-cell grid-row-odd value-same">Anthropic <input type="radio" name="field-Vendor" class="field-select-radio"></div>
+      <div class="grid-value-cell grid-row-odd value-same">Anthropic <input type="radio" name="field-Vendor" class="field-select-radio"></div>
+      <div class="grid-value-cell grid-row-odd value-same">Anthropic <input type="radio" name="field-Vendor" class="field-select-radio"></div>
+
+      <!-- ── Category: Capabilities ── -->
+      <div class="grid-category-row"><i class="fa-solid fa-bolt"></i> Capabilities</div>
+
+      <!-- Row: PowerRank (different) -->
+      <div class="grid-label-cell">Power Rank</div>
+      <div class="grid-value-cell grid-source-cell has-diff-in-row field-selected">
+        3 <input type="radio" name="field-Power" class="field-select-radio" checked>
+      </div>
+      <div class="grid-value-cell value-different">2 <input type="radio" name="field-Power" class="field-select-radio"></div>
+      <div class="grid-value-cell value-different">4 <input type="radio" name="field-Power" class="field-select-radio"></div>
+      <div class="grid-value-cell value-different">5 <input type="radio" name="field-Power" class="field-select-radio"></div>
+      <div class="grid-value-cell value-different">6 <input type="radio" name="field-Power" class="field-select-radio"></div>
+
+      <!-- Row: MaxInputTokens -->
+      <div class="grid-label-cell grid-row-odd">Max Input Tokens</div>
+      <div class="grid-value-cell grid-source-cell grid-row-odd has-diff-in-row field-selected">
+        200,000 <input type="radio" name="field-MaxIn" class="field-select-radio" checked>
+      </div>
+      <div class="grid-value-cell grid-row-odd value-same">200,000 <input type="radio" name="field-MaxIn" class="field-select-radio"></div>
+      <div class="grid-value-cell grid-row-odd value-same">200,000 <input type="radio" name="field-MaxIn" class="field-select-radio"></div>
+      <div class="grid-value-cell grid-row-odd value-different">1,000,000 <input type="radio" name="field-MaxIn" class="field-select-radio"></div>
+      <div class="grid-value-cell grid-row-odd value-different">1,000,000 <input type="radio" name="field-MaxIn" class="field-select-radio"></div>
+
+      <!-- Row: MaxOutputTokens (cherry-picked from match 4) -->
+      <div class="grid-label-cell">Max Output Tokens</div>
+      <div class="grid-value-cell grid-source-cell has-diff-in-row">
+        8,192 <input type="radio" name="field-MaxOut" class="field-select-radio">
+      </div>
+      <div class="grid-value-cell value-same">8,192 <input type="radio" name="field-MaxOut" class="field-select-radio"></div>
+      <div class="grid-value-cell value-different">16,384 <input type="radio" name="field-MaxOut" class="field-select-radio"></div>
+      <div class="grid-value-cell value-different field-selected">32,768 <input type="radio" name="field-MaxOut" class="field-select-radio" checked></div>
+      <div class="grid-value-cell value-different">32,768 <input type="radio" name="field-MaxOut" class="field-select-radio"></div>
+
+      <!-- Row: SupportsStreaming (same) -->
+      <div class="grid-label-cell grid-row-odd">Streaming</div>
+      <div class="grid-value-cell grid-source-cell grid-row-odd field-selected">Yes <input type="radio" name="field-Stream" class="field-select-radio" checked></div>
+      <div class="grid-value-cell grid-row-odd value-same">Yes <input type="radio" name="field-Stream" class="field-select-radio"></div>
+      <div class="grid-value-cell grid-row-odd value-same">Yes <input type="radio" name="field-Stream" class="field-select-radio"></div>
+      <div class="grid-value-cell grid-row-odd value-same">Yes <input type="radio" name="field-Stream" class="field-select-radio"></div>
+      <div class="grid-value-cell grid-row-odd value-same">Yes <input type="radio" name="field-Stream" class="field-select-radio"></div>
+
+      <!-- ── Category: Pricing ── -->
+      <div class="grid-category-row"><i class="fa-solid fa-dollar-sign"></i> Pricing</div>
+
+      <!-- Row: APIName (different) -->
+      <div class="grid-label-cell">API Name</div>
+      <div class="grid-value-cell grid-source-cell has-diff-in-row field-selected">
+        claude-3-5-sonnet-20241022
+        <input type="radio" name="field-API" class="field-select-radio" checked>
+      </div>
+      <div class="grid-value-cell value-different">claude-3-sonnet-20240229 <input type="radio" name="field-API" class="field-select-radio"></div>
+      <div class="grid-value-cell value-different">claude-3-7-sonnet-20250219 <input type="radio" name="field-API" class="field-select-radio"></div>
+      <div class="grid-value-cell value-different">claude-sonnet-4-20250514 <input type="radio" name="field-API" class="field-select-radio"></div>
+      <div class="grid-value-cell value-different">claude-sonnet-4-6-20250514 <input type="radio" name="field-API" class="field-select-radio"></div>
+
+      <!-- Row: DriverClass (same) -->
+      <div class="grid-label-cell grid-row-odd">Driver Class</div>
+      <div class="grid-value-cell grid-source-cell grid-row-odd field-selected">AnthropicLLM <input type="radio" name="field-Driver" class="field-select-radio" checked></div>
+      <div class="grid-value-cell grid-row-odd value-same">AnthropicLLM <input type="radio" name="field-Driver" class="field-select-radio"></div>
+      <div class="grid-value-cell grid-row-odd value-same">AnthropicLLM <input type="radio" name="field-Driver" class="field-select-radio"></div>
+      <div class="grid-value-cell grid-row-odd value-same">AnthropicLLM <input type="radio" name="field-Driver" class="field-select-radio"></div>
+      <div class="grid-value-cell grid-row-odd value-same">AnthropicLLM <input type="radio" name="field-Driver" class="field-select-radio"></div>
+
+      <!-- Row: Missing field -->
+      <div class="grid-label-cell">Speed Rank</div>
+      <div class="grid-value-cell grid-source-cell field-selected">2 <input type="radio" name="field-Speed" class="field-select-radio" checked></div>
+      <div class="grid-value-cell"><span class="field-not-available">(not available)</span></div>
+      <div class="grid-value-cell">3 <input type="radio" name="field-Speed" class="field-select-radio"></div>
+      <div class="grid-value-cell"><span class="field-not-available">(not available)</span></div>
+      <div class="grid-value-cell">4 <input type="radio" name="field-Speed" class="field-select-radio"></div>
+
+    </div>
+  </div>
+
+  <!-- ── FOOTER ── -->
+  <div class="comparison-footer">
+    <div class="comparison-footer-left">
+      <span class="comparison-summary">Showing 11 of 18 fields</span>
+      <span class="merge-summary">
+        <i class="fa-solid fa-code-merge"></i>
+        Surviving: <strong>Claude 3.5 Sonnet</strong> &middot; 2 fields cherry-picked from other records
+        <span class="merge-info-tip" title="The surviving record keeps its ID. Selected field values from other records will overwrite the surviving record's fields before non-surviving records are deleted.">?</span>
+      </span>
+    </div>
+    <div class="comparison-footer-right">
+      <button class="action-btn reject-btn">
+        <i class="fa-solid fa-times"></i> Reject All
+      </button>
+      <button class="action-btn approve-btn">
+        <i class="fa-solid fa-check"></i> Approve All
+      </button>
+      <button class="action-btn merge-btn">
+        <i class="fa-solid fa-code-merge"></i> Merge Records
+      </button>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

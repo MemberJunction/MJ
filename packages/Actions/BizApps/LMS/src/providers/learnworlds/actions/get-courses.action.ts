@@ -228,64 +228,84 @@ export class GetLearnWorldsCoursesAction extends LearnWorldsBaseAction {
    */
   private mapLearnWorldsCourse(lwCourse: LWApiCourse): LearnWorldsCourse {
     return {
-      id: lwCourse.id || lwCourse._id || '',
-      title: lwCourse.title,
-      subtitle: lwCourse.subtitle,
-      description: lwCourse.description,
-      shortDescription: lwCourse.short_description || lwCourse.excerpt,
+      ...this.mapCourseIdentity(lwCourse),
+      ...this.mapCoursePricing(lwCourse),
+      ...this.mapCourseInstructor(lwCourse),
+      ...this.mapCourseContentStats(lwCourse),
+      ...this.mapCourseMeta(lwCourse),
+    };
+  }
 
-      status: this.mapCourseStatus(lwCourse.status || ''),
-      visibility: this.mapCourseVisibility(lwCourse.visibility || lwCourse.access_type || ''),
-      isActive: lwCourse.is_active !== false,
-      isFree: lwCourse.is_free || lwCourse.price === 0 || false,
+  private mapCourseIdentity(lw: LWApiCourse): Pick<LearnWorldsCourse, 'id' | 'title' | 'subtitle' | 'description' | 'shortDescription' | 'status' | 'visibility' | 'isActive' | 'isFree' | 'categoryId' | 'categoryName' | 'tags' | 'level' | 'language' | 'duration' | 'thumbnailUrl' | 'coverImageUrl' | 'promoVideoUrl'> {
+    return {
+      id: lw.id || lw._id || '',
+      title: lw.title,
+      subtitle: lw.subtitle,
+      description: lw.description,
+      shortDescription: lw.short_description || lw.excerpt,
+      status: this.mapCourseStatus(lw.status || ''),
+      visibility: this.mapCourseVisibility(lw.visibility || lw.access_type || ''),
+      isActive: lw.is_active !== false,
+      isFree: lw.is_free || lw.price === 0 || false,
+      categoryId: lw.category_id || lw.category?.id,
+      categoryName: lw.category_name || lw.category?.name,
+      tags: lw.tags || [],
+      level: this.mapCourseLevel(lw.level || lw.difficulty || ''),
+      language: lw.language || 'en',
+      duration: lw.duration || lw.estimated_duration,
+      thumbnailUrl: lw.thumbnail_url || lw.image,
+      coverImageUrl: lw.cover_image_url || lw.cover_image,
+      promoVideoUrl: lw.promo_video_url || lw.video_url,
+    };
+  }
 
-      price: lwCourse.price,
-      currency: lwCourse.currency || 'USD',
-      originalPrice: lwCourse.original_price,
-      discountPercentage: this.calculateDiscountPercentage(lwCourse.original_price, lwCourse.price),
+  private mapCoursePricing(lw: LWApiCourse): Pick<LearnWorldsCourse, 'price' | 'currency' | 'originalPrice' | 'discountPercentage'> {
+    return {
+      price: lw.price,
+      currency: lw.currency || 'USD',
+      originalPrice: lw.original_price,
+      discountPercentage: this.calculateDiscountPercentage(lw.original_price, lw.price),
+    };
+  }
 
-      categoryId: lwCourse.category_id || lwCourse.category?.id,
-      categoryName: lwCourse.category_name || lwCourse.category?.name,
-      tags: lwCourse.tags || [],
-      level: this.mapCourseLevel(lwCourse.level || lwCourse.difficulty || ''),
-      language: lwCourse.language || 'en',
-      duration: lwCourse.duration || lwCourse.estimated_duration,
+  private mapCourseInstructor(lw: LWApiCourse): Pick<LearnWorldsCourse, 'instructorId' | 'instructorName' | 'instructorBio' | 'instructorAvatarUrl'> {
+    return {
+      instructorId: lw.instructor_id || lw.instructor?.id || lw.author_id,
+      instructorName: lw.instructor_name || lw.instructor?.name || lw.author_name,
+      instructorBio: lw.instructor_bio || lw.instructor?.bio,
+      instructorAvatarUrl: lw.instructor_avatar || lw.instructor?.avatar_url,
+    };
+  }
 
-      thumbnailUrl: lwCourse.thumbnail_url || lwCourse.image,
-      coverImageUrl: lwCourse.cover_image_url || lwCourse.cover_image,
-      promoVideoUrl: lwCourse.promo_video_url || lwCourse.video_url,
+  private mapCourseContentStats(lw: LWApiCourse): Pick<LearnWorldsCourse, 'totalUnits' | 'totalLessons' | 'totalQuizzes' | 'totalAssignments' | 'estimatedDuration' | 'totalEnrollments' | 'activeEnrollments' | 'completionRate' | 'averageRating' | 'totalReviews'> {
+    return {
+      totalUnits: lw.total_units || lw.sections_count || 0,
+      totalLessons: lw.total_lessons || lw.lessons_count || 0,
+      totalQuizzes: lw.total_quizzes || lw.quizzes_count || 0,
+      totalAssignments: lw.total_assignments || lw.assignments_count || 0,
+      estimatedDuration: lw.estimated_duration || lw.total_duration,
+      totalEnrollments: lw.total_enrollments || lw.students_count || 0,
+      activeEnrollments: lw.active_enrollments || lw.active_students || 0,
+      completionRate: lw.completion_rate || 0,
+      averageRating: lw.average_rating || lw.rating,
+      totalReviews: lw.total_reviews || lw.reviews_count,
+    };
+  }
 
-      instructorId: lwCourse.instructor_id || lwCourse.instructor?.id || lwCourse.author_id,
-      instructorName: lwCourse.instructor_name || lwCourse.instructor?.name || lwCourse.author_name,
-      instructorBio: lwCourse.instructor_bio || lwCourse.instructor?.bio,
-      instructorAvatarUrl: lwCourse.instructor_avatar || lwCourse.instructor?.avatar_url,
-
-      totalUnits: lwCourse.total_units || lwCourse.sections_count || 0,
-      totalLessons: lwCourse.total_lessons || lwCourse.lessons_count || 0,
-      totalQuizzes: lwCourse.total_quizzes || lwCourse.quizzes_count || 0,
-      totalAssignments: lwCourse.total_assignments || lwCourse.assignments_count || 0,
-      estimatedDuration: lwCourse.estimated_duration || lwCourse.total_duration,
-
-      totalEnrollments: lwCourse.total_enrollments || lwCourse.students_count || 0,
-      activeEnrollments: lwCourse.active_enrollments || lwCourse.active_students || 0,
-      completionRate: lwCourse.completion_rate || 0,
-      averageRating: lwCourse.average_rating || lwCourse.rating,
-      totalReviews: lwCourse.total_reviews || lwCourse.reviews_count,
-
-      createdAt: this.parseLearnWorldsDate(lwCourse.created || lwCourse.created_at || ''),
-      updatedAt: this.parseLearnWorldsDate(lwCourse.updated || lwCourse.updated_at || ''),
-      publishedAt: lwCourse.published_at ? this.parseLearnWorldsDate(lwCourse.published_at) : undefined,
-      enrollmentStartDate: lwCourse.enrollment_start ? this.parseLearnWorldsDate(lwCourse.enrollment_start) : undefined,
-      enrollmentEndDate: lwCourse.enrollment_end ? this.parseLearnWorldsDate(lwCourse.enrollment_end) : undefined,
-
-      requiresApproval: lwCourse.requires_approval || false,
-      hasPrerequisites: lwCourse.has_prerequisites || false,
-      prerequisites: lwCourse.prerequisites || [],
-      certificateAvailable: lwCourse.certificate_available || lwCourse.has_certificate || false,
-
-      objectives: lwCourse.objectives || lwCourse.learning_objectives || [],
-      targetAudience: lwCourse.target_audience || [],
-      requirements: lwCourse.requirements || lwCourse.prerequisites_text || [],
+  private mapCourseMeta(lw: LWApiCourse): Pick<LearnWorldsCourse, 'createdAt' | 'updatedAt' | 'publishedAt' | 'enrollmentStartDate' | 'enrollmentEndDate' | 'requiresApproval' | 'hasPrerequisites' | 'prerequisites' | 'certificateAvailable' | 'objectives' | 'targetAudience' | 'requirements'> {
+    return {
+      createdAt: this.parseLearnWorldsDate(lw.created || lw.created_at || ''),
+      updatedAt: this.parseLearnWorldsDate(lw.updated || lw.updated_at || ''),
+      publishedAt: lw.published_at ? this.parseLearnWorldsDate(lw.published_at) : undefined,
+      enrollmentStartDate: lw.enrollment_start ? this.parseLearnWorldsDate(lw.enrollment_start) : undefined,
+      enrollmentEndDate: lw.enrollment_end ? this.parseLearnWorldsDate(lw.enrollment_end) : undefined,
+      requiresApproval: lw.requires_approval || false,
+      hasPrerequisites: lw.has_prerequisites || false,
+      prerequisites: lw.prerequisites || [],
+      certificateAvailable: lw.certificate_available || lw.has_certificate || false,
+      objectives: lw.objectives || lw.learning_objectives || [],
+      targetAudience: lw.target_audience || [],
+      requirements: lw.requirements || lw.prerequisites_text || [],
     };
   }
 

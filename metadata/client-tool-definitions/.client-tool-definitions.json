@@ -1,0 +1,99 @@
+[
+  {
+    "fields": {
+      "Name": "NavigateToApp",
+      "Description": "Navigate the user to a specific application and optionally a specific nav item within it. Use this when the user asks to go to a specific area of the system (e.g., 'take me to the Data Explorer' or 'show me my queries').",
+      "Category": "navigation",
+      "InputSchemaJSON": "{\"type\":\"object\",\"properties\":{\"AppName\":{\"type\":\"string\",\"description\":\"The application name to navigate to (e.g., 'Data Explorer', 'Chat', 'Knowledge Hub')\"},\"NavItemName\":{\"type\":\"string\",\"description\":\"Optional: the specific nav item/tab within the app (e.g., 'Queries', 'Conversations', 'Collections')\"}},\"required\":[\"AppName\"]}",
+      "DefaultTimeoutMs": 30000
+    },
+    "primaryKey": {
+      "ID": "1ABF31AE-ACA5-4D3A-83F1-EE21C2DFBB42"
+    },
+    "sync": {
+      "lastModified": "2026-04-04T01:09:57.401Z",
+      "checksum": "f41f9f279cd57644cac6ec2c45cb16afaad6330a2fcd2cdda47b836a89f67ca6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "NavigateToRecord",
+      "Description": "Open a specific entity record in a new tab for the user to view or edit. Use when the user wants to see a particular record.",
+      "Category": "navigation",
+      "InputSchemaJSON": "{\"type\":\"object\",\"properties\":{\"EntityName\":{\"type\":\"string\",\"description\":\"The entity name (e.g., 'Contacts', 'Companies')\"},\"RecordID\":{\"type\":\"string\",\"description\":\"The record ID to open\"}},\"required\":[\"EntityName\",\"RecordID\"]}",
+      "DefaultTimeoutMs": 30000
+    },
+    "primaryKey": {
+      "ID": "80F34AAF-E0D0-4FCA-93DA-FE06EB4292B4"
+    },
+    "sync": {
+      "lastModified": "2026-04-04T01:09:57.415Z",
+      "checksum": "4d592a6a279e0e3d3e31e2e0338cefdf761851c052167de17189da6828c4f9fc"
+    }
+  },
+  {
+    "fields": {
+      "Name": "SwitchDashboardTab",
+      "Description": "Switch the active tab in the current application dashboard. Use when the user asks to see a different section of the current app.",
+      "Category": "navigation",
+      "InputSchemaJSON": "{\"type\":\"object\",\"properties\":{\"TabName\":{\"type\":\"string\",\"description\":\"The tab/nav item name to switch to\"}},\"required\":[\"TabName\"]}",
+      "DefaultTimeoutMs": 30000
+    },
+    "primaryKey": {
+      "ID": "80B7F0A0-FB09-4409-856D-9C19E4A87728"
+    },
+    "sync": {
+      "lastModified": "2026-04-04T01:09:57.426Z",
+      "checksum": "fa75b44641211a2a9ead2acd43895f4193a46a3a5c216d2dbd60e9260a7e4110"
+    }
+  },
+  {
+    "fields": {
+      "Name": "ShowSearchResults",
+      "Description": "Navigate to the Knowledge Hub search tab and execute a search query. Use when the user wants to search across all data sources.",
+      "Category": "display",
+      "InputSchemaJSON": "{\"type\":\"object\",\"properties\":{\"Query\":{\"type\":\"string\",\"description\":\"The search query to execute\"}},\"required\":[\"Query\"]}",
+      "OutputSchemaJSON": "{\"type\":\"object\",\"properties\":{\"resultCount\":{\"type\":\"number\"},\"navigated\":{\"type\":\"boolean\"}}}",
+      "DefaultTimeoutMs": 30000
+    },
+    "primaryKey": {
+      "ID": "3052BB8B-0C1D-4087-AC7C-ECFE4C729D37"
+    },
+    "sync": {
+      "lastModified": "2026-04-04T01:09:57.439Z",
+      "checksum": "5d54f280577697484876e98e328e290ec0bd519cb5be4212302f94d66a9b6547"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sleep",
+      "Description": "Wait for a specified number of seconds before continuing. Use when the user asks to pause, wait, or delay between actions (e.g., 'wait 5 seconds then do X').",
+      "Category": "utility",
+      "InputSchemaJSON": "{\"type\":\"object\",\"properties\":{\"Seconds\":{\"type\":\"number\",\"description\":\"Number of seconds to wait (1-120)\",\"minimum\":1,\"maximum\":120}},\"required\":[\"Seconds\"]}",
+      "DefaultTimeoutMs": 130000
+    },
+    "primaryKey": {
+      "ID": "B932ED39-2F4F-4421-9AF6-A573AECCA20C"
+    },
+    "sync": {
+      "lastModified": "2026-04-04T01:09:57.452Z",
+      "checksum": "eae377de1f921554cdea280e2614940d6c486577e2f50db107b08b7f9f61fd70"
+    }
+  },
+  {
+    "fields": {
+      "Name": "OpenBrowserTab",
+      "Description": "Open a URL in a new browser tab. Use when the user asks to visit an external website, view documentation, or open any URL outside the current application.",
+      "Category": "navigation",
+      "InputSchemaJSON": "{\"type\":\"object\",\"properties\":{\"URL\":{\"type\":\"string\",\"description\":\"The full URL to open (must start with http:// or https://)\"},\"Label\":{\"type\":\"string\",\"description\":\"Optional descriptive label for the tab\"}},\"required\":[\"URL\"]}",
+      "DefaultTimeoutMs": 10000
+    },
+    "primaryKey": {
+      "ID": "2860B326-CA0E-49CF-BD10-071B9479B4D4"
+    },
+    "sync": {
+      "lastModified": "2026-04-04T01:09:57.387Z",
+      "checksum": "6658c922edd2d43c5452fadbb0a5aaf50542ed89dcd438a668191e568af669b3"
+    }
+  }
+]

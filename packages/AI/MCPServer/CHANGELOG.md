@@ -1,5 +1,62 @@
 # @memberjunction/ai-mcp-server
 
+## 5.24.0
+
+### Patch Changes
+
+- f9792d1: Add custom tool provider extension hook for MCP server and add retry with exponential backoff for React CDN bootstrap failures
+- Updated dependencies [c318a0c]
+- Updated dependencies [3a35955]
+- Updated dependencies [1912726]
+  - @memberjunction/ai-agents@5.24.0
+  - @memberjunction/ai-core-plus@5.24.0
+  - @memberjunction/ai-prompts@5.24.0
+  - @memberjunction/core@5.24.0
+  - @memberjunction/core-entities@5.24.0
+  - @memberjunction/server@5.24.0
+  - @memberjunction/server-bootstrap-lite@5.24.0
+  - @memberjunction/aiengine@5.24.0
+  - @memberjunction/actions@5.24.0
+  - @memberjunction/sqlserver-dataprovider@5.24.0
+  - @memberjunction/ai-provider-bundle@5.24.0
+  - @memberjunction/api-keys@5.24.0
+  - @memberjunction/actions-base@5.24.0
+  - @memberjunction/auth-providers@5.24.0
+  - @memberjunction/credentials@5.24.0
+  - @memberjunction/encryption@5.24.0
+  - @memberjunction/ai@5.24.0
+  - @memberjunction/config@5.24.0
+  - @memberjunction/global@5.24.0
+
+## 5.23.0
+
+### Patch Changes
+
+- Updated dependencies [247df16]
+- Updated dependencies [9250070]
+- Updated dependencies [513b20c]
+- Updated dependencies [44bc22b]
+- Updated dependencies [1d1e02e]
+  - @memberjunction/core@5.23.0
+  - @memberjunction/global@5.23.0
+  - @memberjunction/ai-agents@5.23.0
+  - @memberjunction/ai-prompts@5.23.0
+  - @memberjunction/sqlserver-dataprovider@5.23.0
+  - @memberjunction/core-entities@5.23.0
+  - @memberjunction/server@5.23.0
+  - @memberjunction/ai-core-plus@5.23.0
+  - @memberjunction/aiengine@5.23.0
+  - @memberjunction/api-keys@5.23.0
+  - @memberjunction/actions-base@5.23.0
+  - @memberjunction/actions@5.23.0
+  - @memberjunction/auth-providers@5.23.0
+  - @memberjunction/credentials@5.23.0
+  - @memberjunction/encryption@5.23.0
+  - @memberjunction/server-bootstrap-lite@5.23.0
+  - @memberjunction/ai@5.23.0
+  - @memberjunction/ai-provider-bundle@5.23.0
+  - @memberjunction/config@5.23.0
+
 ## 5.22.0
 
 ### Patch Changes

@@ -3,7 +3,7 @@ import { BehaviorSubject, Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { RunView, UserInfo } from '@memberjunction/core';
 import { MJAIAgentRunEntity } from '@memberjunction/core-entities';
-import { ConversationDataService } from './conversation-data.service';
+import { ConversationEngine } from '@memberjunction/core-entities';
 
 /**
  * Represents an active agent task that is currently running
@@ -31,8 +31,7 @@ export interface ActiveTask {
 export class ActiveTasksService {
   private _tasks$ = new BehaviorSubject<Map<string, ActiveTask>>(new Map());
   private _conversationIdsWithTasks$ = new BehaviorSubject<Set<string>>(new Set());
-
-  constructor(private conversationData: ConversationDataService) {}
+  private engine = ConversationEngine.Instance;
 
   /**
    * Observable of all active tasks as an array
@@ -228,11 +227,11 @@ export class ActiveTasksService {
         return;
       }
 
-      // Get conversation names from cached ConversationDataService
+      // Get conversation names from cached ConversationEngine
       const conversationNames = new Map<string, string>();
       for (const agentRun of result.Results) {
         if (agentRun.ConversationID) {
-          const conv = this.conversationData.getConversationById(agentRun.ConversationID);
+          const conv = this.engine.GetConversation(agentRun.ConversationID);
           if (conv?.Name) {
             conversationNames.set(agentRun.ConversationID, conv.Name);
           }

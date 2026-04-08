@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Content Autotagging Dashboard — Full Mockup with Left Nav</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  :root {
+    --mj-bg-page: #0f1729;
+    --mj-bg-surface: #1a2332;
+    --mj-bg-surface-card: #1e2a3a;
+    --mj-bg-surface-sunken: #151e2d;
+    --mj-bg-surface-elevated: #222f42;
+    --mj-bg-surface-hover: #253347;
+    --mj-text-primary: #e2e8f0;
+    --mj-text-secondary: #94a3b8;
+    --mj-text-muted: #64748b;
+    --mj-text-disabled: #475569;
+    --mj-text-inverse: #ffffff;
+    --mj-border-default: #334155;
+    --mj-border-subtle: #1e293b;
+    --mj-brand-primary: #5b8def;
+    --mj-brand-primary-hover: #4a7de0;
+    --mj-status-success: #22c55e;
+    --mj-status-success-bg: rgba(34,197,94,0.12);
+    --mj-status-success-text: #4ade80;
+    --mj-status-success-border: rgba(34,197,94,0.3);
+    --mj-status-warning: #f59e0b;
+    --mj-status-warning-bg: rgba(245,158,11,0.12);
+    --mj-status-warning-text: #fbbf24;
+    --mj-status-error: #ef4444;
+    --mj-status-error-bg: rgba(239,68,68,0.12);
+    --mj-status-error-text: #f87171;
+    --mj-status-error-border: rgba(239,68,68,0.3);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--mj-bg-page); color: var(--mj-text-primary); height: 100vh; overflow: hidden; }
+
+  .dashboard { display: flex; height: 100vh; }
+
+  /* ══════ LEFT NAV ══════ */
+  .left-nav { width: 220px; background: var(--mj-bg-surface); border-right: 1px solid var(--mj-border-default); display: flex; flex-direction: column; flex-shrink: 0; }
+  .left-nav-header { padding: 16px 16px 12px; border-bottom: 1px solid var(--mj-border-subtle); }
+  .left-nav-header h2 { font-size: 0.95rem; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .left-nav-header h2 i { color: var(--mj-brand-primary); }
+  .left-nav-items { flex: 1; padding: 8px; overflow-y: auto; }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; font-size: 0.82rem; font-weight: 500; color: var(--mj-text-muted); cursor: pointer; transition: all 0.12s ease; margin-bottom: 2px; }
+  .nav-item:hover { background: var(--mj-bg-surface-hover); color: var(--mj-text-secondary); }
+  .nav-item.active { background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface)); color: var(--mj-brand-primary); font-weight: 600; }
+  .nav-item i { width: 18px; text-align: center; font-size: 0.8rem; }
+  .nav-badge { margin-left: auto; background: var(--mj-bg-surface-sunken); padding: 1px 7px; border-radius: 10px; font-size: 0.65rem; font-weight: 600; }
+  .nav-item.active .nav-badge { background: color-mix(in srgb, var(--mj-brand-primary) 18%, var(--mj-bg-surface)); color: var(--mj-brand-primary); }
+  .nav-divider { height: 1px; background: var(--mj-border-subtle); margin: 8px 12px; }
+  .left-nav-footer { padding: 12px; border-top: 1px solid var(--mj-border-subtle); }
+  .run-pipeline-btn { width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px; border: none; border-radius: 8px; background: var(--mj-brand-primary); color: var(--mj-text-inverse); font-size: 0.82rem; font-weight: 600; cursor: pointer; transition: background 0.15s ease; }
+  .run-pipeline-btn:hover { background: var(--mj-brand-primary-hover); }
+
+  /* ══════ MAIN CONTENT AREA ══════ */
+  .main-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  .page-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; border-bottom: 1px solid var(--mj-border-default); flex-shrink: 0; }
+  .page-title { font-size: 1rem; font-weight: 700; }
+  .page-subtitle { font-size: 0.72rem; color: var(--mj-text-muted); margin-top: 2px; }
+  .page-actions { display: flex; gap: 8px; }
+  .action-btn { display: flex; align-items: center; gap: 6px; padding: 7px 14px; border: 1px solid; border-radius: 7px; cursor: pointer; font-size: 0.78rem; font-weight: 500; transition: all 0.15s ease; }
+  .primary-btn { background: var(--mj-brand-primary); color: var(--mj-text-inverse); border-color: var(--mj-brand-primary); }
+  .secondary-btn { background: var(--mj-bg-surface); color: var(--mj-text-secondary); border-color: var(--mj-border-default); }
+  .page-body { flex: 1; overflow-y: auto; padding: 16px 20px; }
+
+  /* ══════ SHARED COMPONENTS ══════ */
+  .kpi-strip { display: flex; gap: 12px; margin-bottom: 16px; }
+  .kpi-card { flex: 1; background: var(--mj-bg-surface-card); border: 1px solid var(--mj-border-subtle); border-radius: 10px; padding: 14px 16px; }
+  .kpi-value { font-size: 1.4rem; font-weight: 700; }
+  .kpi-label { font-size: 0.72rem; color: var(--mj-text-muted); margin-top: 2px; }
+  .kpi-trend { font-size: 0.68rem; margin-top: 4px; display: flex; align-items: center; gap: 4px; }
+  .kpi-trend.up { color: var(--mj-status-success-text); }
+  .card { background: var(--mj-bg-surface-card); border: 1px solid var(--mj-border-subtle); border-radius: 10px; overflow: hidden; }
+  .card-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--mj-border-subtle); }
+  .card-title { font-size: 0.82rem; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+  .card-title i { color: var(--mj-brand-primary); font-size: 0.75rem; }
+  .card-body { padding: 0; }
+  .progress-bar { height: 4px; background: var(--mj-bg-surface-sunken); border-radius: 2px; overflow: hidden; }
+  .progress-fill { height: 100%; background: var(--mj-brand-primary); border-radius: 2px; }
+
+  /* ══════ PIPELINE TAB ══════ */
+  .pipeline-layout { display: flex; gap: 16px; }
+  .pipeline-center { flex: 1; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  .pipeline-right { width: 320px; flex-shrink: 0; display: flex; flex-direction: column; gap: 12px; }
+  .pipeline-stages { display: flex; gap: 0; align-items: center; background: var(--mj-bg-surface-card); border: 1px solid var(--mj-border-subtle); border-radius: 10px; padding: 12px 16px; }
+  .pipeline-stage { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .pipeline-stage-icon { width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 50%; font-size: 0.85rem; }
+  .stage-idle .pipeline-stage-icon { background: var(--mj-bg-surface-sunken); color: var(--mj-text-muted); }
+  .stage-active .pipeline-stage-icon { background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface)); color: var(--mj-brand-primary); animation: pulse 1.5s infinite; }
+  .stage-complete .pipeline-stage-icon { background: var(--mj-status-success-bg); color: var(--mj-status-success-text); }
+  @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(91,141,239,0.3); } 50% { box-shadow: 0 0 0 6px rgba(91,141,239,0); } }
+  .pipeline-stage-name { font-size: 0.68rem; font-weight: 600; color: var(--mj-text-secondary); }
+  .pipeline-stage-count { font-size: 0.6rem; color: var(--mj-text-muted); }
+  .pipeline-arrow { width: 24px; text-align: center; color: var(--mj-text-disabled); font-size: 0.6rem; }
+  .feed-item { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--mj-border-subtle); font-size: 0.78rem; }
+  .feed-item:last-child { border-bottom: none; }
+  .feed-status-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .feed-status-dot.complete { background: var(--mj-status-success); }
+  .feed-status-dot.processing { background: var(--mj-brand-primary); animation: pulse 1.5s infinite; }
+  .feed-status-dot.error { background: var(--mj-status-error); }
+  .feed-item-name { flex: 1; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .feed-item-source { color: var(--mj-text-muted); font-size: 0.7rem; min-width: 100px; }
+  .feed-item-tags { display: flex; gap: 4px; }
+  .feed-tag { padding: 1px 6px; border-radius: 3px; font-size: 0.62rem; background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface)); color: var(--mj-brand-primary); }
+  .feed-item-time { color: var(--mj-text-muted); font-size: 0.68rem; white-space: nowrap; min-width: 60px; text-align: right; }
+
+  /* Source mini-cards in right panel */
+  .source-mini { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--mj-border-subtle); cursor: pointer; transition: background 0.1s ease; }
+  .source-mini:hover { background: var(--mj-bg-surface-hover); }
+  .source-mini:last-child { border-bottom: none; }
+  .source-mini-icon { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: 6px; background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface)); color: var(--mj-brand-primary); font-size: 0.72rem; flex-shrink: 0; }
+  .source-mini-info { flex: 1; min-width: 0; }
+  .source-mini-name { font-size: 0.78rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .source-mini-meta { font-size: 0.65rem; color: var(--mj-text-muted); }
+  .source-mini-status { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .source-mini-status.active { background: var(--mj-status-success); }
+  .source-mini-status.error { background: var(--mj-status-error); }
+  .source-mini-status.inactive { background: var(--mj-text-disabled); }
+
+  /* ══════ SOURCES TAB ══════ */
+  .sources-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
+  .source-card-full { background: var(--mj-bg-surface-card); border: 1px solid var(--mj-border-subtle); border-radius: 10px; padding: 16px; transition: border-color 0.15s ease; cursor: pointer; }
+  .source-card-full:hover { border-color: var(--mj-border-default); }
+  .source-card-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .source-card-icon { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 10px; background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface)); color: var(--mj-brand-primary); font-size: 1rem; flex-shrink: 0; }
+  .source-card-title { font-size: 0.9rem; font-weight: 700; }
+  .source-card-type { font-size: 0.68rem; color: var(--mj-text-muted); }
+  .source-card-status { margin-left: auto; display: flex; align-items: center; gap: 5px; font-size: 0.7rem; font-weight: 500; }
+  .source-card-status.active { color: var(--mj-status-success-text); }
+  .source-card-status.error { color: var(--mj-status-error-text); }
+  .source-card-status.inactive { color: var(--mj-text-disabled); }
+  .source-card-stats { display: flex; gap: 16px; padding-top: 10px; border-top: 1px solid var(--mj-border-subtle); }
+  .source-stat { display: flex; flex-direction: column; }
+  .source-stat-value { font-size: 1rem; font-weight: 700; }
+  .source-stat-label { font-size: 0.65rem; color: var(--mj-text-muted); }
+  .source-card-url { font-size: 0.7rem; color: var(--mj-brand-primary); margin-bottom: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .source-card-actions { display: flex; gap: 6px; margin-top: 10px; }
+  .source-action-btn { flex: 1; display: flex; align-items: center; justify-content: center; gap: 4px; padding: 6px; border: 1px solid var(--mj-border-default); border-radius: 6px; font-size: 0.7rem; cursor: pointer; background: var(--mj-bg-surface); color: var(--mj-text-secondary); transition: all 0.12s ease; }
+  .source-action-btn:hover { border-color: var(--mj-brand-primary); color: var(--mj-brand-primary); }
+  .add-source-card { background: none; border: 2px dashed var(--mj-border-default); border-radius: 10px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 40px; cursor: pointer; transition: all 0.15s ease; color: var(--mj-text-muted); min-height: 200px; }
+  .add-source-card:hover { border-color: var(--mj-brand-primary); color: var(--mj-brand-primary); }
+  .add-source-card i { font-size: 1.5rem; }
+
+  /* ══════ CONTENT TYPES TAB ══════ */
+  .ct-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+  .ct-card { background: var(--mj-bg-surface-card); border: 1px solid var(--mj-border-subtle); border-radius: 10px; padding: 16px; }
+  .ct-card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .ct-card-name { font-size: 0.9rem; font-weight: 700; }
+  .ct-card-model { font-size: 0.68rem; color: var(--mj-brand-primary); background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface)); padding: 2px 8px; border-radius: 10px; }
+  .ct-field { display: flex; align-items: center; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--mj-border-subtle); font-size: 0.78rem; }
+  .ct-field:last-child { border-bottom: none; }
+  .ct-field-label { color: var(--mj-text-muted); }
+  .ct-field-value { font-weight: 500; }
+  .ct-tag-range { display: flex; align-items: center; gap: 8px; margin-top: 8px; padding: 8px 10px; background: var(--mj-bg-surface-sunken); border-radius: 6px; font-size: 0.75rem; }
+  .ct-tag-range i { color: var(--mj-brand-primary); }
+  .ct-tag-range-bar { flex: 1; height: 6px; background: var(--mj-bg-surface); border-radius: 3px; position: relative; }
+  .ct-tag-range-fill { position: absolute; left: 15%; right: 40%; height: 100%; background: var(--mj-brand-primary); border-radius: 3px; }
+
+  /* ══════ TAG LIBRARY TAB ══════ */
+  .tag-lib-layout { display: flex; gap: 16px; }
+  .tag-lib-main { flex: 1; }
+  .tag-lib-sidebar { width: 280px; flex-shrink: 0; }
+  .tag-table { width: 100%; border-collapse: collapse; }
+  .tag-table th { text-align: left; padding: 8px 12px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--mj-text-muted); border-bottom: 1px solid var(--mj-border-default); background: var(--mj-bg-surface-elevated); position: sticky; top: 0; z-index: 1; }
+  .tag-table td { padding: 10px 12px; font-size: 0.8rem; border-bottom: 1px solid var(--mj-border-subtle); }
+  .tag-table tr:hover td { background: var(--mj-bg-surface-hover); }
+  .tag-name-cell { font-weight: 600; }
+  .tag-bar { width: 80px; height: 6px; background: var(--mj-bg-surface-sunken); border-radius: 3px; display: inline-block; vertical-align: middle; margin-left: 6px; }
+  .tag-bar-fill { height: 100%; background: var(--mj-brand-primary); border-radius: 3px; }
+  .tag-cloud-card { padding: 16px; }
+  .tag-cloud { display: flex; flex-wrap: wrap; gap: 5px; }
+  .tag-pill { padding: 4px 12px; border-radius: 14px; font-size: 0.72rem; font-weight: 500; background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface)); color: var(--mj-text-secondary); border: 1px solid var(--mj-border-subtle); cursor: pointer; transition: all 0.12s ease; }
+  .tag-pill:hover { border-color: var(--mj-brand-primary); color: var(--mj-brand-primary); }
+  .tag-pill.large { font-size: 0.85rem; padding: 5px 14px; }
+  .tag-pill.small { font-size: 0.65rem; padding: 3px 8px; color: var(--mj-text-muted); }
+
+  /* ══════ RUN HISTORY TAB ══════ */
+  .run-table { width: 100%; border-collapse: collapse; }
+  .run-table th { text-align: left; padding: 10px 14px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--mj-text-muted); border-bottom: 1px solid var(--mj-border-default); background: var(--mj-bg-surface-elevated); position: sticky; top: 0; z-index: 1; }
+  .run-table td { padding: 12px 14px; font-size: 0.8rem; border-bottom: 1px solid var(--mj-border-subtle); }
+  .run-table tr:hover td { background: var(--mj-bg-surface-hover); cursor: pointer; }
+  .run-status-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 10px; border-radius: 10px; font-size: 0.7rem; font-weight: 600; }
+  .run-status-badge.complete { background: var(--mj-status-success-bg); color: var(--mj-status-success-text); }
+  .run-status-badge.failed { background: var(--mj-status-error-bg); color: var(--mj-status-error-text); }
+  .run-status-badge.running { background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface)); color: var(--mj-brand-primary); }
+  .run-duration { color: var(--mj-text-muted); font-size: 0.75rem; }
+  .run-source-name { font-weight: 500; }
+
+  /* ══════ TAB VISIBILITY (JS toggle) ══════ */
+  .tab-content { display: none; }
+  .tab-content.visible { display: block; }
+  .tab-content.visible.flex-layout { display: flex; }
+</style>
+</head>
+<body>
+
+<div class="dashboard">
+  <!-- ══════ LEFT NAV ══════ -->
+  <div class="left-nav">
+    <div class="left-nav-header">
+      <h2><i class="fa-solid fa-tags"></i> Autotagging</h2>
+    </div>
+    <div class="left-nav-items">
+      <div class="nav-item active" onclick="showTab('pipeline')">
+        <i class="fa-solid fa-gauge-high"></i> Pipeline
+        <span class="nav-badge" style="background: var(--mj-status-success-bg); color: var(--mj-status-success-text);">Live</span>
+      </div>
+      <div class="nav-item" onclick="showTab('sources')">
+        <i class="fa-solid fa-database"></i> Sources
+        <span class="nav-badge">5</span>
+      </div>
+      <div class="nav-item" onclick="showTab('types')">
+        <i class="fa-solid fa-sliders"></i> Content Types
+        <span class="nav-badge">4</span>
+      </div>
+      <div class="nav-item" onclick="showTab('tags')">
+        <i class="fa-solid fa-tag"></i> Tag Library
+        <span class="nav-badge">847</span>
+      </div>
+      <div class="nav-divider"></div>
+      <div class="nav-item" onclick="showTab('history')">
+        <i class="fa-solid fa-clock-rotate-left"></i> Run History
+      </div>
+    </div>
+    <div class="left-nav-footer">
+      <button class="run-pipeline-btn"><i class="fa-solid fa-play"></i> Run Pipeline</button>
+    </div>
+  </div>
+
+  <!-- ══════ MAIN AREA ══════ -->
+  <div class="main-area">
+
+    <!-- ════════════════════════════════════════════ -->
+    <!-- TAB 1: PIPELINE (default) -->
+    <!-- ════════════════════════════════════════════ -->
+    <div id="tab-pipeline" class="tab-content visible">
+      <div class="page-header">
+        <div><div class="page-title">Pipeline Monitor</div><div class="page-subtitle">Real-time processing status and recent activity</div></div>
+        <div class="page-actions">
+          <button class="action-btn secondary-btn"><i class="fa-solid fa-arrows-rotate"></i> Refresh</button>
+        </div>
+      </div>
+      <div class="page-body">
+        <!-- KPIs -->
+        <div class="kpi-strip">
+          <div class="kpi-card"><div class="kpi-value">5</div><div class="kpi-label">Active Sources</div><div class="kpi-trend up"><i class="fa-solid fa-arrow-up"></i> 2 added this week</div></div>
+          <div class="kpi-card"><div class="kpi-value">2,847</div><div class="kpi-label">Content Items</div><div class="kpi-trend up"><i class="fa-solid fa-arrow-up"></i> +312 today</div></div>
+          <div class="kpi-card"><div class="kpi-value">8,541</div><div class="kpi-label">Tags Generated</div><div class="kpi-trend up"><i class="fa-solid fa-arrow-up"></i> 3.0 avg/item</div></div>
+          <div class="kpi-card"><div class="kpi-value" style="color: var(--mj-status-error-text)">12</div><div class="kpi-label">Errors</div></div>
+        </div>
+
+        <div class="pipeline-layout">
+          <div class="pipeline-center">
+            <!-- Pipeline Stages -->
+            <div class="pipeline-stages">
+              <div class="pipeline-stage stage-complete"><div class="pipeline-stage-icon"><i class="fa-solid fa-download"></i></div><span class="pipeline-stage-name">Ingest</span><span class="pipeline-stage-count">312</span></div>
+              <div class="pipeline-arrow"><i class="fa-solid fa-chevron-right"></i></div>
+              <div class="pipeline-stage stage-complete"><div class="pipeline-stage-icon"><i class="fa-solid fa-file-lines"></i></div><span class="pipeline-stage-name">Extract</span><span class="pipeline-stage-count">312</span></div>
+              <div class="pipeline-arrow"><i class="fa-solid fa-chevron-right"></i></div>
+              <div class="pipeline-stage stage-active"><div class="pipeline-stage-icon"><i class="fa-solid fa-scissors"></i></div><span class="pipeline-stage-name">Chunk</span><span class="pipeline-stage-count">187/312</span></div>
+              <div class="pipeline-arrow"><i class="fa-solid fa-chevron-right"></i></div>
+              <div class="pipeline-stage stage-idle"><div class="pipeline-stage-icon"><i class="fa-solid fa-tags"></i></div><span class="pipeline-stage-name">Tag</span><span class="pipeline-stage-count">—</span></div>
+              <div class="pipeline-arrow"><i class="fa-solid fa-chevron-right"></i></div>
+              <div class="pipeline-stage stage-idle"><div class="pipeline-stage-icon"><i class="fa-solid fa-vector-square"></i></div><span class="pipeline-stage-name">Vectorize</span><span class="pipeline-stage-count">—</span></div>
+            </div>
+            <!-- Progress -->
+            <div style="background: var(--mj-bg-surface-card); border: 1px solid var(--mj-border-subtle); border-radius: 8px; padding: 10px 16px;">
+              <div style="display: flex; justify-content: space-between; font-size: 0.75rem; margin-bottom: 4px;">
+                <span style="color: var(--mj-text-secondary); font-weight: 500;">Chunk stage</span>
+                <span style="color: var(--mj-brand-primary); font-weight: 600;">60%</span>
+              </div>
+              <div class="progress-bar"><div class="progress-fill" style="width: 60%"></div></div>
+              <div style="font-size: 0.68rem; color: var(--mj-text-muted); margin-top: 4px;">187 of 312 · 2m 14s elapsed · ~1m 30s remaining</div>
+            </div>
+            <!-- Feed -->
+            <div class="card" style="flex: 1;">
+              <div class="card-header"><span class="card-title"><i class="fa-solid fa-bolt"></i> Recent Processing</span></div>
+              <div class="card-body">
+                <div class="feed-item"><div class="feed-status-dot complete"></div><span class="feed-item-name">Getting Started with MJ</span><span class="feed-item-source">MJ Docs</span><div class="feed-item-tags"><span class="feed-tag">tutorial</span><span class="feed-tag">setup</span></div><span class="feed-item-time">2m</span></div>
+                <div class="feed-item"><div class="feed-status-dot complete"></div><span class="feed-item-name">AI Agent Architecture Deep Dive</span><span class="feed-item-source">Blog RSS</span><div class="feed-item-tags"><span class="feed-tag">AI</span><span class="feed-tag">agents</span></div><span class="feed-item-time">5m</span></div>
+                <div class="feed-item"><div class="feed-status-dot processing"></div><span class="feed-item-name">Q1 2026 Product Roadmap.pdf</span><span class="feed-item-source">PDFs</span><div class="feed-item-tags"></div><span class="feed-item-time">...</span></div>
+                <div class="feed-item"><div class="feed-status-dot error"></div><span class="feed-item-name">Re: Billing Issue #4521</span><span class="feed-item-source">Emails</span><div class="feed-item-tags"></div><span class="feed-item-time" style="color:var(--mj-status-error-text)">auth</span></div>
+                <div class="feed-item"><div class="feed-status-dot complete"></div><span class="feed-item-name">Entity Framework Best Practices</span><span class="feed-item-source">MJ Docs</span><div class="feed-item-tags"><span class="feed-tag">entities</span></div><span class="feed-item-time">12m</span></div>
+                <div class="feed-item"><div class="feed-status-dot complete"></div><span class="feed-item-name">Vector Search Implementation</span><span class="feed-item-source">Blog RSS</span><div class="feed-item-tags"><span class="feed-tag">vectors</span><span class="feed-tag">search</span></div><span class="feed-item-time">18m</span></div>
+              </div>
+            </div>
+          </div>
+          <!-- Right: Sources Quick List -->
+          <div class="pipeline-right">
+            <div class="card">
+              <div class="card-header"><span class="card-title"><i class="fa-solid fa-database"></i> Sources</span></div>
+              <div class="card-body">
+                <div class="source-mini"><div class="source-mini-icon"><i class="fa-solid fa-globe"></i></div><div class="source-mini-info"><div class="source-mini-name">MJ Documentation</div><div class="source-mini-meta">847 items · 2h ago</div></div><div class="source-mini-status active"></div></div>
+                <div class="source-mini"><div class="source-mini-icon"><i class="fa-solid fa-rss"></i></div><div class="source-mini-info"><div class="source-mini-name">Tech Blog RSS</div><div class="source-mini-meta">1,203 items · 30m ago</div></div><div class="source-mini-status active"></div></div>
+                <div class="source-mini"><div class="source-mini-icon"><i class="fa-solid fa-file-pdf"></i></div><div class="source-mini-info"><div class="source-mini-name">Product PDFs</div><div class="source-mini-meta">156 items · 1d ago</div></div><div class="source-mini-status active"></div></div>
+                <div class="source-mini"><div class="source-mini-icon"><i class="fa-solid fa-envelope"></i></div><div class="source-mini-info"><div class="source-mini-name">Support Emails</div><div class="source-mini-meta">641 items · error</div></div><div class="source-mini-status error"></div></div>
+                <div class="source-mini"><div class="source-mini-icon"><i class="fa-solid fa-code"></i></div><div class="source-mini-info"><div class="source-mini-name">API Docs</div><div class="source-mini-meta">Paused</div></div><div class="source-mini-status inactive"></div></div>
+              </div>
+            </div>
+            <!-- Top Tags Quick View -->
+            <div class="card tag-cloud-card">
+              <div class="card-title" style="margin-bottom: 10px;"><i class="fa-solid fa-chart-bar"></i> Trending Tags</div>
+              <div class="tag-cloud">
+                <span class="tag-pill large">tutorial</span>
+                <span class="tag-pill large">API</span>
+                <span class="tag-pill">entities</span>
+                <span class="tag-pill">setup</span>
+                <span class="tag-pill">AI</span>
+                <span class="tag-pill small">vectors</span>
+                <span class="tag-pill small">auth</span>
+                <span class="tag-pill small">Angular</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════ -->
+    <!-- TAB 2: SOURCES -->
+    <!-- ════════════════════════════════════════════ -->
+    <div id="tab-sources" class="tab-content">
+      <div class="page-header">
+        <div><div class="page-title">Content Sources</div><div class="page-subtitle">Configure where content is ingested from</div></div>
+        <div class="page-actions"><button class="action-btn primary-btn"><i class="fa-solid fa-plus"></i> Add Source</button></div>
+      </div>
+      <div class="page-body">
+        <div class="sources-grid">
+          <div class="source-card-full">
+            <div class="source-card-header">
+              <div class="source-card-icon"><i class="fa-solid fa-globe"></i></div>
+              <div><div class="source-card-title">MJ Documentation Site</div><div class="source-card-type">Web Crawler · HTML</div></div>
+              <div class="source-card-status active"><div class="source-mini-status active"></div> Active</div>
+            </div>
+            <div class="source-card-url">https://docs.memberjunction.org</div>
+            <div class="source-card-stats">
+              <div class="source-stat"><div class="source-stat-value">847</div><div class="source-stat-label">Items</div></div>
+              <div class="source-stat"><div class="source-stat-value">2,541</div><div class="source-stat-label">Tags</div></div>
+              <div class="source-stat"><div class="source-stat-value">3.0</div><div class="source-stat-label">Avg Tags</div></div>
+              <div class="source-stat"><div class="source-stat-value">2h</div><div class="source-stat-label">Last Run</div></div>
+            </div>
+            <div class="source-card-actions">
+              <button class="source-action-btn"><i class="fa-solid fa-pen"></i> Edit</button>
+              <button class="source-action-btn"><i class="fa-solid fa-play"></i> Run</button>
+              <button class="source-action-btn"><i class="fa-solid fa-chart-bar"></i> Stats</button>
+            </div>
+          </div>
+
+          <div class="source-card-full">
+            <div class="source-card-header">
+              <div class="source-card-icon"><i class="fa-solid fa-rss"></i></div>
+              <div><div class="source-card-title">Tech Blog RSS Feed</div><div class="source-card-type">RSS Feed · Mixed</div></div>
+              <div class="source-card-status active"><div class="source-mini-status active"></div> Active</div>
+            </div>
+            <div class="source-card-url">https://blog.example.com/feed.xml</div>
+            <div class="source-card-stats">
+              <div class="source-stat"><div class="source-stat-value">1,203</div><div class="source-stat-label">Items</div></div>
+              <div class="source-stat"><div class="source-stat-value">3,609</div><div class="source-stat-label">Tags</div></div>
+              <div class="source-stat"><div class="source-stat-value">3.0</div><div class="source-stat-label">Avg Tags</div></div>
+              <div class="source-stat"><div class="source-stat-value">30m</div><div class="source-stat-label">Last Run</div></div>
+            </div>
+            <div class="source-card-actions">
+              <button class="source-action-btn"><i class="fa-solid fa-pen"></i> Edit</button>
+              <button class="source-action-btn"><i class="fa-solid fa-play"></i> Run</button>
+              <button class="source-action-btn"><i class="fa-solid fa-chart-bar"></i> Stats</button>
+            </div>
+          </div>
+
+          <div class="source-card-full">
+            <div class="source-card-header">
+              <div class="source-card-icon"><i class="fa-solid fa-envelope"></i></div>
+              <div><div class="source-card-title">Support Emails</div><div class="source-card-type">Email · Text</div></div>
+              <div class="source-card-status error"><div class="source-mini-status error"></div> Error</div>
+            </div>
+            <div class="source-card-url">imap://support@company.com</div>
+            <div class="source-card-stats">
+              <div class="source-stat"><div class="source-stat-value">641</div><div class="source-stat-label">Items</div></div>
+              <div class="source-stat"><div class="source-stat-value">1,923</div><div class="source-stat-label">Tags</div></div>
+              <div class="source-stat"><div class="source-stat-value">3.0</div><div class="source-stat-label">Avg Tags</div></div>
+              <div class="source-stat" style="color: var(--mj-status-error-text)"><div class="source-stat-value">!</div><div class="source-stat-label">Auth Error</div></div>
+            </div>
+            <div class="source-card-actions">
+              <button class="source-action-btn"><i class="fa-solid fa-pen"></i> Edit</button>
+              <button class="source-action-btn"><i class="fa-solid fa-arrows-rotate"></i> Retry</button>
+              <button class="source-action-btn" style="color:var(--mj-status-error-text)"><i class="fa-solid fa-trash"></i> Delete</button>
+            </div>
+          </div>
+
+          <div class="add-source-card">
+            <i class="fa-solid fa-plus-circle"></i>
+            <span style="font-size: 0.85rem; font-weight: 600;">Add Content Source</span>
+            <span style="font-size: 0.72rem;">Web, RSS, Email, Files, API</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════ -->
+    <!-- TAB 3: CONTENT TYPES -->
+    <!-- ════════════════════════════════════════════ -->
+    <div id="tab-types" class="tab-content">
+      <div class="page-header">
+        <div><div class="page-title">Content Types</div><div class="page-subtitle">Configure AI tagging rules per content category</div></div>
+        <div class="page-actions"><button class="action-btn primary-btn"><i class="fa-solid fa-plus"></i> Add Type</button></div>
+      </div>
+      <div class="page-body">
+        <div class="ct-grid">
+          <div class="ct-card">
+            <div class="ct-card-header">
+              <span class="ct-card-name">Documentation</span>
+              <span class="ct-card-model">Gemini 3.1 Flash Lite</span>
+            </div>
+            <div class="ct-field"><span class="ct-field-label">Description</span><span class="ct-field-value">Technical docs & guides</span></div>
+            <div class="ct-field"><span class="ct-field-label">Sources Using</span><span class="ct-field-value">2</span></div>
+            <div class="ct-field"><span class="ct-field-label">Items Tagged</span><span class="ct-field-value">1,003</span></div>
+            <div class="ct-tag-range">
+              <i class="fa-solid fa-tags"></i>
+              <span>2</span>
+              <div class="ct-tag-range-bar"><div class="ct-tag-range-fill" style="left:10%;right:20%"></div></div>
+              <span>8</span>
+              <span style="color: var(--mj-text-muted);">tags/item</span>
+            </div>
+          </div>
+
+          <div class="ct-card">
+            <div class="ct-card-header">
+              <span class="ct-card-name">Blog Posts</span>
+              <span class="ct-card-model">GPT 5-nano</span>
+            </div>
+            <div class="ct-field"><span class="ct-field-label">Description</span><span class="ct-field-value">Blog articles & essays</span></div>
+            <div class="ct-field"><span class="ct-field-label">Sources Using</span><span class="ct-field-value">1</span></div>
+            <div class="ct-field"><span class="ct-field-label">Items Tagged</span><span class="ct-field-value">1,203</span></div>
+            <div class="ct-tag-range">
+              <i class="fa-solid fa-tags"></i>
+              <span>3</span>
+              <div class="ct-tag-range-bar"><div class="ct-tag-range-fill" style="left:20%;right:40%"></div></div>
+              <span>6</span>
+              <span style="color: var(--mj-text-muted);">tags/item</span>
+            </div>
+          </div>
+
+          <div class="ct-card">
+            <div class="ct-card-header">
+              <span class="ct-card-name">PDF Documents</span>
+              <span class="ct-card-model">Claude Haiku 4.5</span>
+            </div>
+            <div class="ct-field"><span class="ct-field-label">Description</span><span class="ct-field-value">Reports, whitepapers, specs</span></div>
+            <div class="ct-field"><span class="ct-field-label">Sources Using</span><span class="ct-field-value">1</span></div>
+            <div class="ct-field"><span class="ct-field-label">Items Tagged</span><span class="ct-field-value">156</span></div>
+            <div class="ct-tag-range">
+              <i class="fa-solid fa-tags"></i>
+              <span>1</span>
+              <div class="ct-tag-range-bar"><div class="ct-tag-range-fill" style="left:5%;right:50%"></div></div>
+              <span>5</span>
+              <span style="color: var(--mj-text-muted);">tags/item</span>
+            </div>
+          </div>
+
+          <div class="ct-card">
+            <div class="ct-card-header">
+              <span class="ct-card-name">Email Threads</span>
+              <span class="ct-card-model">Gemini 3.1 Flash Lite</span>
+            </div>
+            <div class="ct-field"><span class="ct-field-label">Description</span><span class="ct-field-value">Support & internal comms</span></div>
+            <div class="ct-field"><span class="ct-field-label">Sources Using</span><span class="ct-field-value">1</span></div>
+            <div class="ct-field"><span class="ct-field-label">Items Tagged</span><span class="ct-field-value">641</span></div>
+            <div class="ct-tag-range">
+              <i class="fa-solid fa-tags"></i>
+              <span>2</span>
+              <div class="ct-tag-range-bar"><div class="ct-tag-range-fill" style="left:10%;right:30%"></div></div>
+              <span>7</span>
+              <span style="color: var(--mj-text-muted);">tags/item</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════ -->
+    <!-- TAB 4: TAG LIBRARY -->
+    <!-- ════════════════════════════════════════════ -->
+    <div id="tab-tags" class="tab-content">
+      <div class="page-header">
+        <div><div class="page-title">Tag Library</div><div class="page-subtitle">847 unique tags across all content sources</div></div>
+        <div class="page-actions">
+          <input type="text" placeholder="Search tags..." style="padding: 7px 12px; border: 1px solid var(--mj-border-default); border-radius: 7px; background: var(--mj-bg-surface); color: var(--mj-text-primary); font-size: 0.8rem; width: 200px; outline: none;">
+        </div>
+      </div>
+      <div class="page-body">
+        <div class="tag-lib-layout">
+          <div class="tag-lib-main">
+            <div class="card">
+              <div class="card-body" style="max-height: 500px; overflow-y: auto;">
+                <table class="tag-table">
+                  <thead><tr><th>Tag</th><th>Usage Count</th><th>Distribution</th><th>Top Source</th><th>First Seen</th></tr></thead>
+                  <tbody>
+                    <tr><td class="tag-name-cell">tutorial</td><td>124</td><td><div class="tag-bar"><div class="tag-bar-fill" style="width:100%"></div></div></td><td>MJ Docs</td><td>Mar 15</td></tr>
+                    <tr><td class="tag-name-cell">API</td><td>98</td><td><div class="tag-bar"><div class="tag-bar-fill" style="width:79%"></div></div></td><td>MJ Docs</td><td>Mar 15</td></tr>
+                    <tr><td class="tag-name-cell">entities</td><td>87</td><td><div class="tag-bar"><div class="tag-bar-fill" style="width:70%"></div></div></td><td>MJ Docs</td><td>Mar 16</td></tr>
+                    <tr><td class="tag-name-cell">setup</td><td>72</td><td><div class="tag-bar"><div class="tag-bar-fill" style="width:58%"></div></div></td><td>MJ Docs</td><td>Mar 15</td></tr>
+                    <tr><td class="tag-name-cell">authentication</td><td>65</td><td><div class="tag-bar"><div class="tag-bar-fill" style="width:52%"></div></div></td><td>Blog RSS</td><td>Mar 18</td></tr>
+                    <tr><td class="tag-name-cell">actions</td><td>54</td><td><div class="tag-bar"><div class="tag-bar-fill" style="width:44%"></div></div></td><td>MJ Docs</td><td>Mar 20</td></tr>
+                    <tr><td class="tag-name-cell">AI</td><td>48</td><td><div class="tag-bar"><div class="tag-bar-fill" style="width:39%"></div></div></td><td>Blog RSS</td><td>Mar 17</td></tr>
+                    <tr><td class="tag-name-cell">vectors</td><td>41</td><td><div class="tag-bar"><div class="tag-bar-fill" style="width:33%"></div></div></td><td>Blog RSS</td><td>Mar 22</td></tr>
+                    <tr><td class="tag-name-cell">migration</td><td>36</td><td><div class="tag-bar"><div class="tag-bar-fill" style="width:29%"></div></div></td><td>MJ Docs</td><td>Mar 19</td></tr>
+                    <tr><td class="tag-name-cell">Angular</td><td>31</td><td><div class="tag-bar"><div class="tag-bar-fill" style="width:25%"></div></div></td><td>MJ Docs</td><td>Mar 21</td></tr>
+                    <tr><td class="tag-name-cell">GraphQL</td><td>28</td><td><div class="tag-bar"><div class="tag-bar-fill" style="width:23%"></div></div></td><td>MJ Docs</td><td>Mar 20</td></tr>
+                    <tr><td class="tag-name-cell">TypeScript</td><td>25</td><td><div class="tag-bar"><div class="tag-bar-fill" style="width:20%"></div></div></td><td>Blog RSS</td><td>Mar 23</td></tr>
+                    <tr><td class="tag-name-cell">performance</td><td>22</td><td><div class="tag-bar"><div class="tag-bar-fill" style="width:18%"></div></div></td><td>Blog RSS</td><td>Mar 25</td></tr>
+                    <tr><td class="tag-name-cell">security</td><td>19</td><td><div class="tag-bar"><div class="tag-bar-fill" style="width:15%"></div></div></td><td>Emails</td><td>Mar 28</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+          <div class="tag-lib-sidebar">
+            <div class="card tag-cloud-card">
+              <div class="card-title" style="margin-bottom: 12px;"><i class="fa-solid fa-cloud"></i> Tag Cloud</div>
+              <div class="tag-cloud">
+                <span class="tag-pill large">tutorial</span>
+                <span class="tag-pill large">API</span>
+                <span class="tag-pill large">entities</span>
+                <span class="tag-pill">setup</span>
+                <span class="tag-pill">authentication</span>
+                <span class="tag-pill">actions</span>
+                <span class="tag-pill">AI</span>
+                <span class="tag-pill">vectors</span>
+                <span class="tag-pill small">migration</span>
+                <span class="tag-pill small">Angular</span>
+                <span class="tag-pill small">GraphQL</span>
+                <span class="tag-pill small">TypeScript</span>
+                <span class="tag-pill small">performance</span>
+                <span class="tag-pill small">security</span>
+                <span class="tag-pill small">database</span>
+                <span class="tag-pill small">testing</span>
+                <span class="tag-pill small">deployment</span>
+                <span class="tag-pill small">monitoring</span>
+              </div>
+            </div>
+            <div class="card" style="padding: 16px; margin-top: 12px;">
+              <div class="card-title" style="margin-bottom: 10px;"><i class="fa-solid fa-chart-pie"></i> By Source</div>
+              <div style="font-size: 0.78rem;">
+                <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--mj-border-subtle)"><span>MJ Docs</span><strong>412</strong></div>
+                <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--mj-border-subtle)"><span>Blog RSS</span><strong>228</strong></div>
+                <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--mj-border-subtle)"><span>Emails</span><strong>142</strong></div>
+                <div style="display:flex;justify-content:space-between;padding:5px 0;"><span>PDFs</span><strong>65</strong></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════ -->
+    <!-- TAB 5: RUN HISTORY -->
+    <!-- ════════════════════════════════════════════ -->
+    <div id="tab-history" class="tab-content">
+      <div class="page-header">
+        <div><div class="page-title">Run History</div><div class="page-subtitle">Processing run log across all content sources</div></div>
+        <div class="page-actions">
+          <select style="padding:7px 12px;border:1px solid var(--mj-border-default);border-radius:7px;background:var(--mj-bg-surface);color:var(--mj-text-primary);font-size:0.78rem;outline:none;">
+            <option>All Sources</option>
+            <option>MJ Documentation</option>
+            <option>Tech Blog RSS</option>
+            <option>Product PDFs</option>
+            <option>Support Emails</option>
+          </select>
+          <select style="padding:7px 12px;border:1px solid var(--mj-border-default);border-radius:7px;background:var(--mj-bg-surface);color:var(--mj-text-primary);font-size:0.78rem;outline:none;">
+            <option>All Status</option>
+            <option>Complete</option>
+            <option>Failed</option>
+            <option>Running</option>
+          </select>
+        </div>
+      </div>
+      <div class="page-body">
+        <div class="card">
+          <div class="card-body" style="max-height: 600px; overflow-y: auto;">
+            <table class="run-table">
+              <thead><tr><th>Status</th><th>Source</th><th>Started</th><th>Duration</th><th>Items</th><th>Tags</th><th>Errors</th></tr></thead>
+              <tbody>
+                <tr><td><span class="run-status-badge running"><i class="fa-solid fa-spinner fa-spin" style="font-size:0.55rem"></i> Running</span></td><td class="run-source-name">MJ Documentation</td><td>Apr 3, 3:52 PM</td><td class="run-duration">2m 14s</td><td>187 / 312</td><td>—</td><td>0</td></tr>
+                <tr><td><span class="run-status-badge complete">Complete</span></td><td class="run-source-name">Tech Blog RSS</td><td>Apr 3, 3:20 PM</td><td class="run-duration">45s</td><td>28</td><td>84</td><td>0</td></tr>
+                <tr><td><span class="run-status-badge complete">Complete</span></td><td class="run-source-name">MJ Documentation</td><td>Apr 2, 3:45 PM</td><td class="run-duration">8m 12s</td><td>847</td><td>2,541</td><td>3</td></tr>
+                <tr><td><span class="run-status-badge complete">Complete</span></td><td class="run-source-name">Product PDFs</td><td>Apr 2, 11:20 AM</td><td class="run-duration">3m 45s</td><td>156</td><td>468</td><td>0</td></tr>
+                <tr><td><span class="run-status-badge failed">Failed</span></td><td class="run-source-name">Support Emails</td><td>Apr 2, 9:00 AM</td><td class="run-duration">12s</td><td>0</td><td>0</td><td style="color:var(--mj-status-error-text)">Auth Error</td></tr>
+                <tr><td><span class="run-status-badge complete">Complete</span></td><td class="run-source-name">Tech Blog RSS</td><td>Apr 1, 4:15 PM</td><td class="run-duration">1m 02s</td><td>45</td><td>135</td><td>1</td></tr>
+                <tr><td><span class="run-status-badge complete">Complete</span></td><td class="run-source-name">MJ Documentation</td><td>Apr 1, 11:20 AM</td><td class="run-duration">7m 38s</td><td>812</td><td>2,436</td><td>5</td></tr>
+                <tr><td><span class="run-status-badge failed">Failed</span></td><td class="run-source-name">Support Emails</td><td>Mar 30, 9:00 AM</td><td class="run-duration">8s</td><td>0</td><td>0</td><td style="color:var(--mj-status-error-text)">Timeout</td></tr>
+                <tr><td><span class="run-status-badge complete">Complete</span></td><td class="run-source-name">Product PDFs</td><td>Mar 28, 2:30 PM</td><td class="run-duration">2m 55s</td><td>142</td><td>426</td><td>0</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+function showTab(name) {
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('visible'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('visible');
+  event.currentTarget.classList.add('active');
+}
+</script>
+</body>
+</html>

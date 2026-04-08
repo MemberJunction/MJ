@@ -1,7 +1,7 @@
 import { Resolver, Mutation, Arg, Ctx, ObjectType, Field, Float, InputType } from 'type-graphql';
 import { AppContext } from '../types.js';
 import { LogError, LogStatus, Metadata, RunView, UserInfo, ComputeRRF, ScoredCandidate, EntityRecordNameInput, CompositeKey } from '@memberjunction/core';
-import { MJVectorIndexEntity, MJVectorDatabaseEntity } from '@memberjunction/core-entities';
+import { MJVectorIndexEntity, MJVectorDatabaseEntity, KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { AIEngine } from '@memberjunction/aiengine';
 import { BaseEmbeddings, GetAIAPIKey } from '@memberjunction/ai';
@@ -59,6 +59,10 @@ export class SearchKnowledgeResultItem {
 
     @Field()
     MatchedAt: Date;
+
+    /** Raw vector metadata as JSON string — contains all entity fields stored in the vector DB */
+    @Field({ nullable: true })
+    RawMetadata?: string;
 }
 
 @ObjectType()
@@ -149,11 +153,16 @@ export class SearchKnowledgeResolver extends ResolverBase {
             const fusedResults = this.fuseResults(vectorResults, fullTextResults, topK);
             const dedupedResults = this.deduplicateResults(fusedResults);
 
+            // Exclude Content Items that originated from Entity sources — those entities
+            // are already searchable directly via their own vector embeddings, so showing
+            // the Content Item shadow result is redundant.
+            const withoutEntityContentItems = await this.excludeEntitySourcedContentItems(dedupedResults, currentUser);
+
             // Apply minimum score threshold (post-RRF, so fusion can surface cross-source matches first)
             const scoreThreshold = minScore ?? 0;
             const filteredResults = scoreThreshold > 0
-                ? dedupedResults.filter(r => r.Score >= scoreThreshold)
-                : dedupedResults;
+                ? withoutEntityContentItems.filter(r => r.Score >= scoreThreshold)
+                : withoutEntityContentItems;
             LogStatus(`SearchKnowledge: Fuse + dedup + threshold≥${Math.round(scoreThreshold * 100)}% (${dedupedResults.length} → ${filteredResults.length} results): ${Date.now() - t0}ms`);
 
             // Enrich with entity icons and record names
@@ -341,6 +350,7 @@ export class SearchKnowledgeResolver extends ResolverBase {
      * Full-text search using the MJCore Metadata.FullTextSearch() method.
      * Delegates to the provider stack which uses database-native FTS
      * (SQL Server FREETEXT, PostgreSQL tsvector) via RunView + UserSearchString.
+     * When Tags filters are provided, post-filters results by checking tag associations.
      */
     private async searchFullText(
         query: string,
@@ -361,7 +371,7 @@ export class SearchKnowledgeResolver extends ResolverBase {
                 return [];
             }
 
-            return ftsResult.Results.map(r => ({
+            const results: SearchKnowledgeResultItem[] = ftsResult.Results.map(r => ({
                 ID: `ft-${r.EntityName}-${r.RecordID}`,
                 EntityName: r.EntityName,
                 RecordID: r.RecordID,
@@ -370,12 +380,160 @@ export class SearchKnowledgeResolver extends ResolverBase {
                 Snippet: r.Snippet,
                 Score: r.Score,
                 ScoreBreakdown: { FullText: r.Score },
-                Tags: [],
+                Tags: [] as string[],
                 MatchedAt: new Date()
             }));
+
+            // Batch-load tags from TaggedItems/ContentItemTags for FTS results
+            await this.enrichResultsWithTags(results, md, contextUser);
+
+            // Apply tag filter: keep only results that have at least one matching tag
+            if (filters?.Tags?.length) {
+                return this.filterResultsByTags(results, filters.Tags);
+            }
+
+            return results;
         } catch (error) {
             LogError(`SearchKnowledge: Full-text search error: ${error}`);
             return [];
+        }
+    }
+
+    /**
+     * Filter results to only include those with at least one tag matching the specified tag list.
+     * Uses case-insensitive comparison for robustness.
+     */
+    private filterResultsByTags(results: SearchKnowledgeResultItem[], requiredTags: string[]): SearchKnowledgeResultItem[] {
+        const lowerTags = new Set(requiredTags.map(t => t.toLowerCase()));
+        return results.filter(r =>
+            r.Tags.some(t => lowerTags.has(t.toLowerCase()))
+        );
+    }
+
+    /**
+     * Enrich search results with tags from both the TaggedItems entity (for general entities)
+     * and the ContentItemTag entity (for Content Items). Runs both queries in parallel
+     * for maximum throughput, then merges the tag sets onto each result.
+     */
+    private async enrichResultsWithTags(
+        results: SearchKnowledgeResultItem[],
+        md: Metadata,
+        contextUser: UserInfo
+    ): Promise<void> {
+        if (results.length === 0) return;
+
+        try {
+            // Separate results into Content Items vs everything else
+            const contentItemResults = results.filter(r => r.EntityName === 'MJ: Content Items');
+            const generalResults = results.filter(r => r.EntityName !== 'MJ: Content Items');
+
+            // Run both tag lookups in parallel
+            await Promise.all([
+                this.loadTaggedItemTags(generalResults, md, contextUser),
+                this.loadContentItemTags(contentItemResults, contextUser)
+            ]);
+        } catch (error) {
+            LogError(`SearchKnowledge: Error enriching results with tags: ${error}`);
+            // Non-fatal — results still usable without tags
+        }
+    }
+
+    /**
+     * Load tags from the TaggedItems entity for non-Content-Item results.
+     * Queries by EntityID + RecordID pairs in a single batch.
+     */
+    private async loadTaggedItemTags(
+        results: SearchKnowledgeResultItem[],
+        md: Metadata,
+        contextUser: UserInfo
+    ): Promise<void> {
+        if (results.length === 0) return;
+
+        // Get entity IDs from metadata
+        const entityIdMap = new Map<string, string>();
+        for (const r of results) {
+            if (!entityIdMap.has(r.EntityName)) {
+                const entityInfo = md.Entities.find(e => e.Name === r.EntityName);
+                if (entityInfo) {
+                    entityIdMap.set(r.EntityName, entityInfo.ID);
+                }
+            }
+        }
+
+        if (entityIdMap.size === 0) return;
+
+        // Build filter for TaggedItems: OR across all entity+record pairs
+        const conditions: string[] = [];
+        for (const r of results) {
+            const entityID = entityIdMap.get(r.EntityName);
+            if (!entityID) continue;
+            conditions.push(`(EntityID='${entityID}' AND RecordID='${r.RecordID}')`);
+        }
+
+        if (conditions.length === 0) return;
+
+        const rv = new RunView();
+        const tagResult = await rv.RunView<{ EntityID: string; RecordID: string; Tag: string }>({
+            EntityName: 'MJ: Tagged Items',
+            ExtraFilter: conditions.join(' OR '),
+            Fields: ['EntityID', 'RecordID', 'Tag'],
+            ResultType: 'simple'
+        }, contextUser);
+
+        if (!tagResult.Success) return;
+
+        // Build a lookup: "entityID::recordID" -> tag names
+        const tagMap = new Map<string, string[]>();
+        for (const ti of tagResult.Results) {
+            const key = `${ti.EntityID}::${ti.RecordID}`;
+            const tags = tagMap.get(key) ?? [];
+            tags.push(ti.Tag);
+            tagMap.set(key, tags);
+        }
+
+        // Apply tags to results
+        for (const r of results) {
+            const entityID = entityIdMap.get(r.EntityName);
+            if (!entityID) continue;
+            const key = `${entityID}::${r.RecordID}`;
+            r.Tags = tagMap.get(key) ?? [];
+        }
+    }
+
+    /**
+     * Load tags from the ContentItemTag entity for Content Item results.
+     * Queries by ItemID (which maps to the result's RecordID) in a single batch.
+     */
+    private async loadContentItemTags(
+        results: SearchKnowledgeResultItem[],
+        contextUser: UserInfo
+    ): Promise<void> {
+        if (results.length === 0) return;
+
+        const recordIDs = results.map(r => `'${r.RecordID}'`);
+        const rv = new RunView();
+        const tagResult = await rv.RunView<{ ItemID: string; Tag: string }>({
+            EntityName: 'MJ: Content Item Tags',
+            ExtraFilter: `ItemID IN (${recordIDs.join(',')})`,
+            Fields: ['ItemID', 'Tag'],
+            ResultType: 'simple'
+        }, contextUser);
+
+        if (!tagResult.Success) return;
+
+        // Build a lookup: ItemID -> tag names
+        const tagMap = new Map<string, string[]>();
+        for (const ti of tagResult.Results) {
+            const key = ti.ItemID;
+            const tags = tagMap.get(key) ?? [];
+            tags.push(ti.Tag);
+            tagMap.set(key, tags);
+        }
+
+        // Apply tags to results (use case-insensitive UUID comparison)
+        for (const r of results) {
+            // Check both raw and lowercase keys since UUID casing may vary
+            r.Tags = tagMap.get(r.RecordID) ?? tagMap.get(r.RecordID.toLowerCase()) ?? [];
         }
     }
 
@@ -392,9 +550,14 @@ export class SearchKnowledgeResolver extends ResolverBase {
             return [];
         }
 
-        // If only one source has results, just return those
-        if (fullTextResults.length === 0) return vectorResults.slice(0, topK);
-        if (vectorResults.length === 0) return fullTextResults.slice(0, topK);
+        // If only one source has results, normalize scores relative to the top result
+        // so the best match shows ~90-95% instead of raw cosine similarity (~40-50%)
+        if (fullTextResults.length === 0) {
+            return this.normalizeScores(vectorResults.slice(0, topK));
+        }
+        if (vectorResults.length === 0) {
+            return this.normalizeScores(fullTextResults.slice(0, topK));
+        }
 
         // Build scored candidate lists for RRF
         const vectorCandidates: ScoredCandidate[] = vectorResults.map((r, i) => ({
@@ -441,6 +604,26 @@ export class SearchKnowledgeResolver extends ResolverBase {
         });
     }
 
+    /**
+     * Normalize scores when only one search source returned results.
+     * Scales scores relative to the top result so the best match shows
+     * ~90-95% instead of raw cosine similarity (~40-50%).
+     * This prevents artificially low-looking scores when RRF isn't applied.
+     */
+    private normalizeScores(results: SearchKnowledgeResultItem[]): SearchKnowledgeResultItem[] {
+        if (results.length === 0) return results;
+
+        const maxScore = results[0].Score; // Results are already sorted by score desc
+        if (maxScore <= 0) return results;
+
+        // Scale so the top result maps to ~0.95 and others proportionally
+        const scaleFactor = 0.95 / maxScore;
+        for (const r of results) {
+            r.Score = Math.min(0.99, r.Score * scaleFactor);
+        }
+        return results;
+    }
+
     /** Build Pinecone metadata filter from input */
     private buildPineconeFilter(filters?: SearchFiltersInput): object | undefined {
         if (!filters) return undefined;
@@ -475,6 +658,9 @@ export class SearchKnowledgeResolver extends ResolverBase {
             const entityIcon = (meta['EntityIcon'] as string) || undefined;
             const updatedAt = meta['__mj_UpdatedAt'] ? new Date(meta['__mj_UpdatedAt'] as string) : new Date();
 
+            // Extract tags from vector metadata if stored during indexing
+            const metaTags = Array.isArray(meta['Tags']) ? (meta['Tags'] as string[]) : [];
+
             return {
                 ID: match.id,
                 EntityName: entityName,
@@ -484,19 +670,47 @@ export class SearchKnowledgeResolver extends ResolverBase {
                 Snippet: snippet,
                 Score: match.score ?? 0,
                 ScoreBreakdown: { Vector: match.score ?? 0 },
-                Tags: [],
+                Tags: metaTags,
                 EntityIcon: entityIcon,
                 RecordName: title,
                 MatchedAt: updatedAt,
+                RawMetadata: JSON.stringify(meta),
             };
         });
     }
 
-    /** Extract the best display title from vector metadata */
+    /**
+     * Extract the best display title from vector metadata using entity field metadata.
+     * Combines all IsNameField fields in Sequence order (e.g., FirstName + LastName → "Sarah Chen").
+     * Falls back to heuristic field name matching when entity metadata isn't available.
+     */
     private extractDisplayTitle(meta: Record<string, unknown>, fallbackEntity: string): string {
-        // Check common name fields stored in metadata
-        const nameFields = ['Name', 'Title', 'Subject', 'Label', 'DisplayName'];
-        for (const field of nameFields) {
+        // 1. Use entity metadata to find IsNameField fields and combine them
+        const entityName = meta['Entity'] as string | undefined;
+        if (entityName) {
+            const md = new Metadata();
+            const entityInfo = md.Entities.find(e => e.Name === entityName);
+            if (entityInfo) {
+                const nameFields = entityInfo.Fields
+                    .filter(f => f.IsNameField)
+                    .sort((a, b) => (a.Sequence ?? 9999) - (b.Sequence ?? 9999));
+                if (nameFields.length > 0) {
+                    const parts = nameFields
+                        .map(f => meta[f.Name])
+                        .filter(v => v != null && String(v).trim() !== '')
+                        .map(v => String(v));
+                    if (parts.length > 0) return parts.join(' ');
+                }
+                // Single NameField fallback
+                if (entityInfo.NameField && meta[entityInfo.NameField.Name]) {
+                    return String(meta[entityInfo.NameField.Name]);
+                }
+            }
+        }
+
+        // 2. Heuristic fallbacks for common field names
+        const heuristicFields = ['Name', 'Title', 'Subject', 'Label', 'DisplayName'];
+        for (const field of heuristicFields) {
             if (meta[field] && typeof meta[field] === 'string') {
                 return meta[field] as string;
             }
@@ -542,6 +756,49 @@ export class SearchKnowledgeResolver extends ResolverBase {
             }
         }
         return Array.from(seen.values()).sort((a, b) => b.Score - a.Score);
+    }
+
+    /**
+     * Remove Content Item results that originated from Entity-type content sources.
+     * These are redundant because the underlying entity records are already vectorized
+     * and searchable directly — showing both creates duplicate results.
+     */
+    private async excludeEntitySourcedContentItems(
+        results: SearchKnowledgeResultItem[],
+        contextUser: UserInfo
+    ): Promise<SearchKnowledgeResultItem[]> {
+        const contentItemResults = results.filter(r => r.EntityName === 'MJ: Content Items');
+        if (contentItemResults.length === 0) return results;
+
+        // Use cached engine data — no RunView needed
+        await KnowledgeHubMetadataEngine.Instance.Config(false, contextUser);
+        const engine = KnowledgeHubMetadataEngine.Instance;
+
+        // Find source type ID for "Entity"
+        const entitySourceType = engine.ContentSourceTypes.find(st => st.Name === 'Entity');
+        if (!entitySourceType) return results;
+
+        // Collect all ContentSource IDs that are entity-type
+        const entitySourceIDs = new Set(
+            engine.ContentSources
+                .filter(cs => UUIDsEqual(cs.ContentSourceTypeID, entitySourceType.ID))
+                .map(cs => cs.ID.toLowerCase())
+        );
+        if (entitySourceIDs.size === 0) return results;
+
+        // Filter using ContentSourceID from vector metadata — no DB lookup needed
+        return results.filter(r => {
+            if (r.EntityName !== 'MJ: Content Items') return true;
+            if (!r.RawMetadata) return true;
+            try {
+                const meta = JSON.parse(r.RawMetadata) as Record<string, string>;
+                const sourceID = meta.ContentSourceID;
+                if (!sourceID) return true;
+                return !entitySourceIDs.has(sourceID.toLowerCase());
+            } catch {
+                return true;
+            }
+        });
     }
 
     /** Enrich results with entity icons and record names */

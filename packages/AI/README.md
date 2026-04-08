@@ -149,7 +149,7 @@ Each provider implements one or more capability interfaces from `@memberjunction
 |---------|-----|:----------:|-------------|
 | [Engine](./Engine/README.md) | `@memberjunction/aiengine` | | AI orchestration engine -- automatic execution of Entity AI Actions using configured models |
 | [Prompts](./Prompts/README.md) | `@memberjunction/ai-prompts` | | Prompt execution engine with hierarchical template composition, system placeholders, parallel runs, and output validation |
-| [Agents](./Agents/README.md) | `@memberjunction/ai-agents` | | Agent execution and management with metadata-driven agent types and sub-agent delegation |
+| [Agents](./Agents/README.md) | `@memberjunction/ai-agents` | | Agent execution and management with metadata-driven agent types, sub-agent delegation, and [client tool invocation](./Agents/docs/CLIENT_TOOLS_GUIDE.md) for browser-side UI operations |
 
 ### Agent Management
 

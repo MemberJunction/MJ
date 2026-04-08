@@ -1,5 +1,58 @@
 # @memberjunction/ng-bootstrap-lite
 
+## 5.24.0
+
+### Minor Changes
+
+- c318a0c: metadata + migrations in this PR == minor
+
+### Patch Changes
+
+- Updated dependencies [c318a0c]
+- Updated dependencies [3a35955]
+- Updated dependencies [1912726]
+  - @memberjunction/ai-core-plus@5.24.0
+  - @memberjunction/ng-explorer-core@5.24.0
+  - @memberjunction/graphql-dataprovider@5.24.0
+  - @memberjunction/core@5.24.0
+  - @memberjunction/core-entities@5.24.0
+  - @memberjunction/ng-auth-services@5.24.0
+  - @memberjunction/ng-artifacts@5.24.0
+  - @memberjunction/ai-engine-base@5.24.0
+  - @memberjunction/ng-core-entity-forms@5.24.0
+  - @memberjunction/ng-shared@5.24.0
+  - @memberjunction/ng-file-storage@5.24.0
+  - @memberjunction/actions-base@5.24.0
+  - @memberjunction/ng-dashboard-viewer@5.24.0
+  - @memberjunction/communication-types@5.24.0
+  - @memberjunction/entity-communications-base@5.24.0
+
+## 5.23.0
+
+### Patch Changes
+
+- Updated dependencies [247df16]
+- Updated dependencies [9250070]
+- Updated dependencies [513b20c]
+- Updated dependencies [44bc22b]
+- Updated dependencies [1d1e02e]
+- Updated dependencies [c17be20]
+  - @memberjunction/core@5.23.0
+  - @memberjunction/ng-explorer-core@5.23.0
+  - @memberjunction/ng-artifacts@5.23.0
+  - @memberjunction/ng-dashboard-viewer@5.23.0
+  - @memberjunction/graphql-dataprovider@5.23.0
+  - @memberjunction/core-entities@5.23.0
+  - @memberjunction/ai-core-plus@5.23.0
+  - @memberjunction/ai-engine-base@5.23.0
+  - @memberjunction/actions-base@5.23.0
+  - @memberjunction/ng-auth-services@5.23.0
+  - @memberjunction/ng-core-entity-forms@5.23.0
+  - @memberjunction/ng-shared@5.23.0
+  - @memberjunction/ng-file-storage@5.23.0
+  - @memberjunction/communication-types@5.23.0
+  - @memberjunction/entity-communications-base@5.23.0
+
 ## 5.22.0
 
 ### Minor Changes

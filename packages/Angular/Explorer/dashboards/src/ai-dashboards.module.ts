@@ -43,6 +43,21 @@ import {
   LoadKnowledgeConfigResource
 } from './KnowledgeHub/components/config/knowledge-config-resource.component';
 import { SearchResultDetailComponent } from './KnowledgeHub/components/results-detail/search-result-detail.component';
+import {
+  ClusterVisualizationResourceComponent,
+  LoadClusterVisualizationResource
+} from './KnowledgeHub/components/clusters/cluster-visualization-resource.component';
+import {
+  SchedulingResourceComponent,
+  LoadSchedulingResource
+} from './KnowledgeHub/components/scheduling/scheduling-resource.component';
+import {
+  AnalyticsResourceComponent,
+  LoadAnalyticsResource
+} from './KnowledgeHub/components/analytics/analytics-resource.component';
+import { ClusteringModule } from '@memberjunction/ng-clustering';
+import { SchedulingModule } from '@memberjunction/ng-scheduling';
+import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
 
 /**
  * AIDashboardsModule — AI feature area: models, prompts, agents,
@@ -69,7 +84,10 @@ import { SearchResultDetailComponent } from './KnowledgeHub/components/results-d
     VectorManagementResourceComponent,
     KnowledgeSearchResourceComponent,
     KnowledgeConfigResourceComponent,
-    SearchResultDetailComponent
+    SearchResultDetailComponent,
+    ClusterVisualizationResourceComponent,
+    SchedulingResourceComponent,
+    AnalyticsResourceComponent
   ],
   imports: [
     CommonModule,
@@ -84,7 +102,10 @@ import { SearchResultDetailComponent } from './KnowledgeHub/components/results-d
     NgTreesModule,
     SharedDashboardWidgetsModule,
     SharedPipesModule,
-    SearchModule
+    SearchModule,
+    ClusteringModule,
+    SchedulingModule,
+    MJWordCloudComponent
   ],
   providers: [
     AIInstrumentationService
@@ -104,7 +125,17 @@ import { SearchResultDetailComponent } from './KnowledgeHub/components/results-d
     KnowledgeSearchResourceComponent,
     KnowledgeConfigResourceComponent,
     SearchResultDetailComponent,
+    ClusterVisualizationResourceComponent,
+    SchedulingResourceComponent,
+    AnalyticsResourceComponent,
     SharedDashboardWidgetsModule
   ]
 })
-export class AIDashboardsModule { }
+export class AIDashboardsModule {
+    constructor() {
+        // Ensure tree-shaking prevention loaders are called
+        LoadClusterVisualizationResource();
+        LoadSchedulingResource();
+        LoadAnalyticsResource();
+    }
+}
