@@ -235,6 +235,27 @@
     justify-content: center;
 }
 
+.schedule-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border: 1px solid var(--mj-border-default);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--mj-text-muted);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.schedule-btn:hover {
+    background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+    color: var(--mj-brand-primary);
+    border-color: var(--mj-brand-primary);
+}
+
 .edit-btn {
     display: inline-flex;
     align-items: center;
@@ -254,6 +275,32 @@
     background: var(--mj-bg-surface-hover);
     color: var(--mj-text-primary);
     border-color: var(--mj-border-strong);
+}
+
+/* --- Schedule Dialog --- */
+.schedule-dialog {
+    width: 440px;
+    max-width: 90vw;
+    background: var(--mj-bg-surface);
+    border-radius: 12px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+    overflow: hidden;
+}
+
+.schedule-cron-preview {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 0 0;
+    font-size: 0.82rem;
+    color: var(--mj-text-muted);
+}
+
+.schedule-toggle-row {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
 }
 
 .edit-delete-btn {

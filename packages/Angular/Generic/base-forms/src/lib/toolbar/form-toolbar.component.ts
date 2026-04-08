@@ -90,6 +90,15 @@ export class MjFormToolbarComponent implements DoCheck {
   /** Count of lists this record belongs to */
   @Input() ListCount = 0;
 
+  /** Number of tags applied to this record */
+  @Input() TagCount = 0;
+
+  /** Whether the tags panel is currently open */
+  @Input() IsTagsPanelOpen = false;
+
+  /** Number of record change versions for this record (displayed as "vN" badge on history button) */
+  @Input() VersionCount = 0;
+
   /** Entity info for IS-A hierarchy and metadata */
   @Input() EntityInfo: EntityInfo | null = null;
 
@@ -151,6 +160,9 @@ export class MjFormToolbarComponent implements DoCheck {
 
   /** Request to show list management */
   @Output() ListManagementRequested = new EventEmitter<void>();
+
+  /** Emitted when the Tags button is clicked */
+  @Output() TagsPanelToggled = new EventEmitter<void>();
 
   /** Request to show dirty field changes */
   @Output() ShowChangesRequested = new EventEmitter<void>();
@@ -487,6 +499,11 @@ export class MjFormToolbarComponent implements DoCheck {
 
     if (this.DispatchToFormRef('OnListManagementRequested')) return;
     this.ListManagementRequested.emit();
+  }
+
+  OnTagsPanel(): void {
+    if (this.DispatchToFormRef('HandleTagsPanel')) return;
+    this.TagsPanelToggled.emit();
   }
 
   OnCustomButtonClick(button: CustomToolbarButton): void {

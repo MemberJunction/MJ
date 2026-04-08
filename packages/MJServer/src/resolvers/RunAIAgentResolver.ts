@@ -361,7 +361,9 @@ export class RunAIAgentResolver extends ResolverBase {
         createArtifacts: boolean = false,
         createNotification: boolean = false,
         sourceArtifactId?: string,
-        sourceArtifactVersionId?: string
+        sourceArtifactVersionId?: string,
+        /** LATENCY OPT #2: Pre-resolved conversationId avoids redundant DB load in AgentRunner */
+        conversationId?: string
     ): Promise<AIAgentRunResult> {
         const startTime = Date.now();
         
@@ -418,6 +420,7 @@ export class RunAIAgentResolver extends ResolverBase {
                 }
             }, {
                 conversationDetailId: conversationDetailId, // Use existing if provided
+                conversationId: conversationId, // LATENCY OPT #2: pre-resolved to skip redundant load in AgentRunner
                 userMessage: userMessage, // Provide user message when conversationDetailId not provided
                 createArtifacts: createArtifacts || false,
                 sourceArtifactId: sourceArtifactId
@@ -435,35 +438,51 @@ export class RunAIAgentResolver extends ResolverBase {
 
             const executionTime = Date.now() - startTime;
 
-            // Sync feedback request if this is a continuation run (user responded via conversation)
+            // LATENCY OPTIMIZATION (Opt #6): These three post-execution operations are independent
+            // of each other — none reads the output of another. Previously they ran sequentially,
+            // adding their latencies together (~50ms total). Now they run in parallel via Promise.all,
+            // so we only pay the cost of the slowest one.
+            //
+            // 1. syncFeedbackRequestFromConversation — links a prior Chat-step feedback request to
+            //    the new agent run so the conversation thread stays coherent.
+            // 2. sendFeedbackRequestNotification — sends an in-app/email/SMS notification when the
+            //    agent paused for human input (Chat step).
+            // 3. createCompletionNotification — sends an in-app/email/SMS notification that the
+            //    agent finished and created an artifact.
+            const postExecutionOps: Promise<void>[] = [];
+
             if (lastRunId && result.agentRun?.ID) {
-                await this.syncFeedbackRequestFromConversation(
-                    lastRunId,
-                    result.agentRun.ID,
-                    userMessage,
-                    currentUser
+                postExecutionOps.push(
+                    this.syncFeedbackRequestFromConversation(lastRunId, result.agentRun.ID, userMessage, currentUser)
                 );
             }
 
-            // Send notification if agent created a feedback request (Chat step)
             if (result.feedbackRequestId) {
-                await this.sendFeedbackRequestNotification(result, currentUser, pubSub, userPayload);
+                postExecutionOps.push(
+                    this.sendFeedbackRequestNotification(result, currentUser, pubSub, userPayload)
+                );
             }
 
-            // Create notification if enabled and artifact was created successfully
             if (createNotification && result.success && artifactInfo && artifactInfo.artifactId && artifactInfo.versionId && artifactInfo.versionNumber) {
-                await this.createCompletionNotification(
-                    result.agentRun,
-                    {
-                        artifactId: artifactInfo.artifactId,
-                        versionId: artifactInfo.versionId,
-                        versionNumber: artifactInfo.versionNumber
-                    },
-                    finalConversationDetailId,
-                    currentUser,
-                    pubSub,
-                    userPayload
+                postExecutionOps.push(
+                    this.createCompletionNotification(
+                        result.agentRun,
+                        {
+                            artifactId: artifactInfo.artifactId,
+                            versionId: artifactInfo.versionId,
+                            versionNumber: artifactInfo.versionNumber
+                        },
+                        conversationResult.conversationId,
+                        finalConversationDetailId,
+                        currentUser,
+                        pubSub,
+                        userPayload
+                    )
                 );
+            }
+
+            if (postExecutionOps.length > 0) {
+                await Promise.all(postExecutionOps);
             }
 
             // Create sanitized payload for JSON serialization
@@ -680,34 +699,31 @@ export class RunAIAgentResolver extends ResolverBase {
      * Create a user notification for agent completion with artifact
      * Notification includes navigation link back to the conversation
      */
+    /**
+     * LATENCY OPTIMIZATION (Opt #2): Now accepts conversationId directly instead of
+     * conversationDetailId. Previously this method loaded a ConversationDetail entity
+     * from the DB solely to extract its ConversationID field for building a URL — a
+     * redundant ~50ms DB round-trip since the caller already resolved conversationId
+     * when loading conversation history.
+     */
     private async createCompletionNotification(
         agentRun: MJAIAgentRunEntityExtended,
         artifactInfo: { artifactId: string; versionId: string; versionNumber: number },
+        conversationId: string,
         conversationDetailId: string,
         contextUser: UserInfo,
         pubSub: PubSubEngine,
         userPayload: UserPayload
     ): Promise<void> {
         try {
-            const md = new Metadata();
-
             // Get agent info for notification message
             await AIEngine.Instance.Config(false, contextUser);
             const agent = AIEngine.Instance.Agents.find(a => UUIDsEqual(a.ID, agentRun.AgentID));
             const agentName = agent?.Name || 'Agent';
 
-            // Load conversation detail to get conversation info
-            const detail = await md.GetEntityObject<MJConversationDetailEntity>(
-                'MJ: Conversation Details',
-                contextUser
-            );
-            if (!(await detail.Load(conversationDetailId))) {
-                throw new Error(`Failed to load conversation detail ${conversationDetailId}`);
-            }
-
             // Build conversation URL for email/SMS templates
             const baseUrl = process.env.APP_BASE_URL || 'http://localhost:4201';
-            const conversationUrl = `${baseUrl}/conversations/${detail.ConversationID}?artifact=${artifactInfo.artifactId}`;
+            const conversationUrl = `${baseUrl}/conversations/${conversationId}?artifact=${artifactInfo.artifactId}`;
 
             // Craft message based on versioning
             const message = artifactInfo.versionNumber > 1
@@ -724,7 +740,7 @@ export class RunAIAgentResolver extends ResolverBase {
                 message: message,
                 resourceConfiguration: {
                     type: 'conversation',
-                    conversationId: detail.ConversationID,
+                    conversationId: conversationId,
                     messageId: conversationDetailId,
                     artifactId: artifactInfo.artifactId,
                     versionId: artifactInfo.versionId,
@@ -755,7 +771,7 @@ export class RunAIAgentResolver extends ResolverBase {
                         action: 'create',
                         title: `${agentName} completed your request`,
                         message: message,
-                        conversationId: detail.ConversationID
+                        conversationId: conversationId
                     })
                 });
 
@@ -918,9 +934,24 @@ export class RunAIAgentResolver extends ResolverBase {
         }
 
         try {
+            // LATENCY OPTIMIZATION (Opt #2 + #3): Load ConversationDetail once here to extract
+            // conversationId, then pass it downstream. Previously this record was loaded multiple
+            // times: once in loadConversationHistoryWithAttachments (just to get conversationId),
+            // once in AgentRunner (same reason), and once in createCompletionNotification. Now we
+            // load it a single time and thread conversationId through the call chain.
+            const md = new Metadata();
+            const currentDetail = await md.GetEntityObject<MJConversationDetailEntity>(
+                'MJ: Conversation Details',
+                currentUser
+            );
+            if (!await currentDetail.Load(conversationDetailId)) {
+                throw new Error(`Conversation detail ${conversationDetailId} not found`);
+            }
+            const conversationId = currentDetail.ConversationID;
+
             // Load conversation history with attachments from DB
             const messages = await this.loadConversationHistoryWithAttachments(
-                conversationDetailId,
+                conversationId,
                 currentUser,
                 maxHistoryMessages || 20
             );
@@ -935,7 +966,7 @@ export class RunAIAgentResolver extends ResolverBase {
                     p, dataSource, agentId, userPayload, messagesJson, sessionId, pubSub,
                     data, payload, lastRunId, autoPopulateLastRunPayload, configurationId,
                     conversationDetailId, createArtifacts || false, createNotification || false,
-                    sourceArtifactId, sourceArtifactVersionId
+                    sourceArtifactId, sourceArtifactVersionId, conversationId
                 );
 
                 LogStatus(`🔥 Fire-and-forget: Agent ${agentId} execution started in background for session ${sessionId}`);
@@ -965,7 +996,8 @@ export class RunAIAgentResolver extends ResolverBase {
                 createArtifacts || false,
                 createNotification || false,
                 sourceArtifactId,
-                sourceArtifactVersionId
+                sourceArtifactVersionId,
+                conversationId // LATENCY OPT #2: pass pre-resolved conversationId
             );
         } catch (error) {
             const errorMessage = (error as Error).message || 'Unknown error loading conversation history';
@@ -1178,14 +1210,16 @@ export class RunAIAgentResolver extends ResolverBase {
         createArtifacts: boolean = false,
         createNotification: boolean = false,
         sourceArtifactId?: string,
-        sourceArtifactVersionId?: string
+        sourceArtifactVersionId?: string,
+        /** LATENCY OPT #2: Pre-resolved conversationId avoids redundant DB load in AgentRunner */
+        conversationId?: string
     ): void {
         // Execute in background - errors are handled within, not propagated
         this.executeAIAgent(
             p, dataSource, agentId, userPayload, messagesJson, sessionId, pubSub,
             data, payload, undefined, lastRunId, autoPopulateLastRunPayload,
             configurationId, conversationDetailId, createArtifacts, createNotification,
-            sourceArtifactId, sourceArtifactVersionId
+            sourceArtifactId, sourceArtifactVersionId, conversationId
         ).catch((error: unknown) => {
             // Background execution failed unexpectedly (executeAIAgent has its own try-catch,
             // so this would only fire for truly unexpected errors).
@@ -1210,34 +1244,39 @@ export class RunAIAgentResolver extends ResolverBase {
     /**
      * Load conversation history with attachments from database.
      * Builds ChatMessage[] with multimodal content blocks for attachments.
+     *
+     * LATENCY OPTIMIZATIONS (plans/agent-latency-optimization.md — Opts #3 and #8):
+     *
+     * Opt #3: This method now accepts conversationId directly instead of conversationDetailId.
+     * Previously it loaded a ConversationDetail entity object just to extract its ConversationID
+     * field — a redundant DB round-trip (~40ms) since the caller already has this information.
+     * The caller (RunAIAgentFromConversationDetail) now loads the ConversationDetail once and
+     * passes conversationId down.
+     *
+     * Opt #8: Switched from ResultType 'entity_object' to 'simple' with explicit Fields.
+     * The history query only needs ID, Role, and Message from each ConversationDetail record.
+     * Using 'entity_object' created full BaseEntity instances with getters/setters, dirty tracking,
+     * and validation — none of which are needed for read-only history assembly. The 'simple' result
+     * type returns plain JS objects, reducing per-record overhead (~30ms total savings).
      */
     private async loadConversationHistoryWithAttachments(
-        conversationDetailId: string,
+        conversationId: string,
         contextUser: UserInfo,
         maxMessages: number
     ): Promise<ChatMessage[]> {
-        const md = new Metadata();
         const rv = new RunView();
         const attachmentService = getAttachmentService();
 
-        // Load the current conversation detail to get the conversation ID
-        const currentDetail = await md.GetEntityObject<MJConversationDetailEntity>(
-            'MJ: Conversation Details',
-            contextUser
-        );
-        if (!await currentDetail.Load(conversationDetailId)) {
-            throw new Error(`Conversation detail ${conversationDetailId} not found`);
-        }
-
-        const conversationId = currentDetail.ConversationID;
-
-        // Load recent conversation details (messages) for this conversation
-        const detailsResult = await rv.RunView<MJConversationDetailEntity>({
+        // Load recent conversation details (messages) for this conversation.
+        // Only fetch the three fields we actually use — ID for attachment lookups,
+        // Role for message routing, Message for content.
+        const detailsResult = await rv.RunView<{ ID: string; Role: string; Message: string }>({
             EntityName: 'MJ: Conversation Details',
             ExtraFilter: `ConversationID='${conversationId}'`,
             OrderBy: '__mj_CreatedAt DESC',
             MaxRows: maxMessages,
-            ResultType: 'entity_object'
+            Fields: ['ID', 'Role', 'Message'],
+            ResultType: 'simple'
         }, contextUser);
 
         if (!detailsResult.Success || !detailsResult.Results) {

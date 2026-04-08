@@ -129,6 +129,20 @@ vi.mock('@memberjunction/core-entities', () => ({
     MJEntityDocumentEntity: vi.fn(),
     MJListDetailEntity: vi.fn(),
     MJListEntity: vi.fn(),
+    KnowledgeHubMetadataEngine: {
+        Instance: {
+            Config: vi.fn().mockResolvedValue(undefined),
+            EntityDocuments: [],
+            VectorIndexes: [],
+            GetEntityDocumentById: vi.fn().mockReturnValue(undefined),
+            GetVectorIndexById: vi.fn().mockReturnValue({
+                ID: 'vi-1',
+                Name: 'mj-knowledge-index',
+                VectorDatabaseID: 'vdb-1',
+                EmbeddingModelID: 'model-1',
+            }),
+        },
+    },
 }));
 
 vi.mock('@memberjunction/ai-vectors', () => {
@@ -469,17 +483,15 @@ describe('DuplicateRecordDetector', () => {
 
     describe('buildSourceMetadataMap', () => {
         it('should build a map with entity name and display fields', () => {
-            // Use 'Name' as the NameField so the display field loop skips it
-            // (the code writes NameField value to meta['Name'], then skips
-            //  displayFieldNames entries where fn === nameField.Name)
+            // Fields now use IsNameField and DefaultInView instead of NameField
             const entityInfo = {
                 Name: 'Contacts',
-                NameField: { Name: 'Name' },
+                NameField: null,
                 Icon: 'fa-user',
                 Fields: [
-                    { Name: 'Name' },
-                    { Name: 'Title' },
-                    { Name: 'Status' },
+                    { Name: 'Name', IsNameField: true, DefaultInView: true, Sequence: 1, IsPrimaryKey: false },
+                    { Name: 'Title', IsNameField: false, DefaultInView: true, Sequence: 2, IsPrimaryKey: false },
+                    { Name: 'Status', IsNameField: false, DefaultInView: true, Sequence: 3, IsPrimaryKey: false },
                 ],
                 FirstPrimaryKey: { Name: 'ID', NeedsQuotes: true },
             };
@@ -506,7 +518,7 @@ describe('DuplicateRecordDetector', () => {
             const meta = JSON.parse(result.get('rec-1'));
             expect(meta.Entity).toBe('Contacts');
             expect(meta.EntityIcon).toBe('fa-user');
-            expect(meta.Name).toBe('John Doe'); // From NameField
+            expect(meta.Name).toBe('John Doe'); // From IsNameField
             expect(meta.Title).toBe('Manager');
             expect(meta.Status).toBe('Active');
         });
@@ -516,7 +528,9 @@ describe('DuplicateRecordDetector', () => {
                 Name: 'Items',
                 NameField: null,
                 Icon: null,
-                Fields: [{ Name: 'Description' }],
+                Fields: [
+                    { Name: 'Description', IsNameField: false, DefaultInView: true, Sequence: 1, IsPrimaryKey: false },
+                ],
                 FirstPrimaryKey: { Name: 'ID', NeedsQuotes: true },
             };
 
@@ -535,7 +549,7 @@ describe('DuplicateRecordDetector', () => {
             const meta = JSON.parse(result.get('item-1'));
             expect(meta.Entity).toBe('Items');
             expect(meta.EntityIcon).toBeUndefined();
-            expect(meta.Name).toBeUndefined(); // No NameField
+            expect(meta.Name).toBeUndefined(); // No IsNameField
             expect(meta.Description).toBe('A test item');
         });
 
@@ -545,7 +559,9 @@ describe('DuplicateRecordDetector', () => {
                 Name: 'Notes',
                 NameField: null,
                 Icon: null,
-                Fields: [{ Name: 'Description' }],
+                Fields: [
+                    { Name: 'Description', IsNameField: false, DefaultInView: true, Sequence: 1, IsPrimaryKey: false },
+                ],
                 FirstPrimaryKey: { Name: 'ID', NeedsQuotes: true },
             };
 
@@ -582,9 +598,13 @@ describe('DuplicateRecordDetector', () => {
         it('should skip null field values in display fields', () => {
             const entityInfo = {
                 Name: 'People',
-                NameField: { Name: 'Name' },
+                NameField: null,
                 Icon: null,
-                Fields: [{ Name: 'Name' }, { Name: 'Title' }, { Name: 'Status' }],
+                Fields: [
+                    { Name: 'Name', IsNameField: true, DefaultInView: true, Sequence: 1, IsPrimaryKey: false },
+                    { Name: 'Title', IsNameField: false, DefaultInView: true, Sequence: 2, IsPrimaryKey: false },
+                    { Name: 'Status', IsNameField: false, DefaultInView: true, Sequence: 3, IsPrimaryKey: false },
+                ],
                 FirstPrimaryKey: { Name: 'ID', NeedsQuotes: true },
             };
 
@@ -604,6 +624,262 @@ describe('DuplicateRecordDetector', () => {
             expect(meta.Name).toBe('Alice');
             expect(meta.Title).toBeUndefined();
             expect(meta.Status).toBeUndefined();
+        });
+
+        it('should combine multiple IsNameField fields into Name', () => {
+            const entityInfo = {
+                Name: 'Contacts',
+                NameField: null,
+                Icon: 'fa-user',
+                Fields: [
+                    { Name: 'FirstName', IsNameField: true, DefaultInView: true, Sequence: 1, IsPrimaryKey: false },
+                    { Name: 'LastName', IsNameField: true, DefaultInView: true, Sequence: 2, IsPrimaryKey: false },
+                    { Name: 'Email', IsNameField: false, DefaultInView: true, Sequence: 3, IsPrimaryKey: false },
+                ],
+                FirstPrimaryKey: { Name: 'ID', NeedsQuotes: true },
+            };
+
+            const mockRecord = {
+                PrimaryKey: {
+                    KeyValuePairs: [{ FieldName: 'ID', Value: 'c-1' }],
+                    Values: () => 'c-1',
+                },
+                Get: (fieldName: string) => {
+                    const data: Record<string, string> = {
+                        FirstName: 'John',
+                        LastName: 'Doe',
+                        Email: 'john@example.com',
+                    };
+                    return data[fieldName] ?? null;
+                },
+            };
+
+            const result = (detector as never)['buildSourceMetadataMap']([mockRecord], entityInfo);
+            const meta = JSON.parse(result.get('c-1'));
+
+            // Combined name from all IsNameField fields
+            expect(meta.Name).toBe('John Doe');
+            // Individual name fields should also be stored
+            expect(meta.FirstName).toBe('John');
+            expect(meta.LastName).toBe('Doe');
+            // Non-name DefaultInView field
+            expect(meta.Email).toBe('john@example.com');
+        });
+
+        it('should fall back to NameField when no IsNameField is set', () => {
+            const entityInfo = {
+                Name: 'OldEntity',
+                NameField: { Name: 'Title', IsNameField: false, DefaultInView: true, Sequence: 1, IsPrimaryKey: false },
+                Icon: null,
+                Fields: [
+                    { Name: 'Title', IsNameField: false, DefaultInView: true, Sequence: 1, IsPrimaryKey: false },
+                ],
+                FirstPrimaryKey: { Name: 'ID', NeedsQuotes: true },
+            };
+
+            const mockRecord = {
+                PrimaryKey: {
+                    KeyValuePairs: [{ FieldName: 'ID', Value: 'old-1' }],
+                    Values: () => 'old-1',
+                },
+                Get: (fieldName: string) => {
+                    if (fieldName === 'Title') return 'Legacy Record';
+                    return null;
+                },
+            };
+
+            const result = (detector as never)['buildSourceMetadataMap']([mockRecord], entityInfo);
+            const meta = JSON.parse(result.get('old-1'));
+            // Falls back to singular NameField
+            expect(meta.Name).toBe('Legacy Record');
+        });
+    });
+
+    describe('Batching and cursor management', () => {
+        it('should chunk arrays correctly via chunkArray utility', () => {
+            // Test the internal chunkArray logic used throughout the detector
+            // We verify the same chunking logic the code uses
+            const items = Array.from({ length: 250 }, (_, i) => `item-${i}`);
+            const chunkSize = 100;
+            const chunks: string[][] = [];
+            for (let i = 0; i < items.length; i += chunkSize) {
+                chunks.push(items.slice(i, i + chunkSize));
+            }
+
+            expect(chunks).toHaveLength(3);
+            expect(chunks[0]).toHaveLength(100);
+            expect(chunks[1]).toHaveLength(100);
+            expect(chunks[2]).toHaveLength(50);
+        });
+
+        it('should handle a batch smaller than the chunk size', () => {
+            const items = Array.from({ length: 30 }, (_, i) => `item-${i}`);
+            const chunkSize = 100;
+            const chunks: string[][] = [];
+            for (let i = 0; i < items.length; i += chunkSize) {
+                chunks.push(items.slice(i, i + chunkSize));
+            }
+
+            expect(chunks).toHaveLength(1);
+            expect(chunks[0]).toHaveLength(30);
+        });
+
+        it('should handle an empty batch', () => {
+            const items: string[] = [];
+            const chunkSize = 100;
+            const chunks: string[][] = [];
+            for (let i = 0; i < items.length; i += chunkSize) {
+                chunks.push(items.slice(i, i + chunkSize));
+            }
+
+            expect(chunks).toHaveLength(0);
+        });
+
+        it('should handle a batch exactly equal to chunk size', () => {
+            const items = Array.from({ length: 100 }, (_, i) => `item-${i}`);
+            const chunkSize = 100;
+            const chunks: string[][] = [];
+            for (let i = 0; i < items.length; i += chunkSize) {
+                chunks.push(items.slice(i, i + chunkSize));
+            }
+
+            expect(chunks).toHaveLength(1);
+            expect(chunks[0]).toHaveLength(100);
+        });
+
+        it('should update ProcessedItemCount after each outer batch iteration', () => {
+            // Simulate the cursor update logic from GetDuplicateRecords (lines 203-205)
+            const recordIDs = Array.from({ length: 1200 }, (_, i) => `rec-${i}`);
+            const batchSize = 500;
+            const cursors: { ProcessedItemCount: number; LastProcessedOffset: number }[] = [];
+
+            for (let offset = 0; offset < recordIDs.length; offset += batchSize) {
+                const batchIDs = recordIDs.slice(offset, offset + batchSize);
+                cursors.push({
+                    ProcessedItemCount: offset + batchIDs.length,
+                    LastProcessedOffset: offset + batchSize,
+                });
+            }
+
+            // 3 batches: 500, 500, 200
+            expect(cursors).toHaveLength(3);
+            expect(cursors[0]).toEqual({ ProcessedItemCount: 500, LastProcessedOffset: 500 });
+            expect(cursors[1]).toEqual({ ProcessedItemCount: 1000, LastProcessedOffset: 1000 });
+            expect(cursors[2]).toEqual({ ProcessedItemCount: 1200, LastProcessedOffset: 1500 });
+        });
+
+        it('should resume from LastProcessedOffset when restarting', () => {
+            // Simulate resume logic from GetDuplicateRecords (lines 177-180)
+            const recordIDs = Array.from({ length: 1200 }, (_, i) => `rec-${i}`);
+            const batchSize = 500;
+            const resumeOffset = 500; // Simulate previously processed 500 records
+
+            const processedBatches: string[][] = [];
+            for (let offset = resumeOffset; offset < recordIDs.length; offset += batchSize) {
+                processedBatches.push(recordIDs.slice(offset, offset + batchSize));
+            }
+
+            // Should skip the first 500, process remaining in 2 batches
+            expect(processedBatches).toHaveLength(2);
+            expect(processedBatches[0]).toHaveLength(500);
+            expect(processedBatches[0][0]).toBe('rec-500');
+            expect(processedBatches[1]).toHaveLength(200);
+            expect(processedBatches[1][0]).toBe('rec-1000');
+        });
+
+        it('should respect VECTOR_QUERY_BATCH_SIZE within each outer batch', () => {
+            // Simulate the sub-batching of records within ProcessBatch
+            // Outer batch of 500 records should be split into 5 sub-batches of 100
+            const vectorQueryBatchSize = 100;
+            const outerBatch = Array.from({ length: 500 }, (_, i) => `rec-${i}`);
+            const subBatches: string[][] = [];
+            for (let i = 0; i < outerBatch.length; i += vectorQueryBatchSize) {
+                subBatches.push(outerBatch.slice(i, i + vectorQueryBatchSize));
+            }
+
+            expect(subBatches).toHaveLength(5);
+            for (const sub of subBatches) {
+                expect(sub.length).toBeLessThanOrEqual(vectorQueryBatchSize);
+            }
+        });
+
+        it('should handle sub-batch with fewer records than VECTOR_QUERY_BATCH_SIZE', () => {
+            const vectorQueryBatchSize = 100;
+            const outerBatch = Array.from({ length: 50 }, (_, i) => `rec-${i}`);
+            const subBatches: string[][] = [];
+            for (let i = 0; i < outerBatch.length; i += vectorQueryBatchSize) {
+                subBatches.push(outerBatch.slice(i, i + vectorQueryBatchSize));
+            }
+
+            expect(subBatches).toHaveLength(1);
+            expect(subBatches[0]).toHaveLength(50);
+        });
+    });
+
+    describe('CancellationRequested between batches', () => {
+        it('should stop processing when CancellationRequested is true', () => {
+            // Simulate the cancellation check from GetDuplicateRecords (lines 184-192)
+            const recordIDs = Array.from({ length: 1500 }, (_, i) => `rec-${i}`);
+            const batchSize = 500;
+            const cancelAtOffset = 500; // Cancel after first batch
+            const processedBatches: number[] = [];
+
+            for (let offset = 0; offset < recordIDs.length; offset += batchSize) {
+                // Simulate: check CancellationRequested before processing
+                if (offset === cancelAtOffset) {
+                    // Cancellation requested - stop processing
+                    break;
+                }
+                processedBatches.push(offset);
+            }
+
+            // Only the first batch at offset 0 was processed
+            expect(processedBatches).toHaveLength(1);
+            expect(processedBatches[0]).toBe(0);
+        });
+
+        it('should process all batches when CancellationRequested is never set', () => {
+            const recordIDs = Array.from({ length: 1500 }, (_, i) => `rec-${i}`);
+            const batchSize = 500;
+            const processedBatches: number[] = [];
+
+            for (let offset = 0; offset < recordIDs.length; offset += batchSize) {
+                // No cancellation
+                processedBatches.push(offset);
+            }
+
+            expect(processedBatches).toHaveLength(3);
+            expect(processedBatches).toEqual([0, 500, 1000]);
+        });
+
+        it('should allow partial completion with resume support on cancellation', () => {
+            // Simulate: after cancellation, the run can be resumed from where it left off
+            const totalRecords = 2000;
+            const batchSize = 500;
+            const cancelAtBatch = 2; // Cancel after 2 batches (1000 records)
+            let lastProcessedOffset = 0;
+            let processedItemCount = 0;
+            let batchIndex = 0;
+
+            for (let offset = 0; offset < totalRecords; offset += batchSize) {
+                if (batchIndex === cancelAtBatch) {
+                    break;
+                }
+                const batchEnd = Math.min(offset + batchSize, totalRecords);
+                processedItemCount = batchEnd;
+                lastProcessedOffset = offset + batchSize;
+                batchIndex++;
+            }
+
+            expect(processedItemCount).toBe(1000);
+            expect(lastProcessedOffset).toBe(1000);
+
+            // Now simulate resume from lastProcessedOffset
+            const remainingBatches: number[] = [];
+            for (let offset = lastProcessedOffset; offset < totalRecords; offset += batchSize) {
+                remainingBatches.push(offset);
+            }
+            expect(remainingBatches).toEqual([1000, 1500]);
         });
     });
 

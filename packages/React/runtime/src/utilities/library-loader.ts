@@ -149,16 +149,16 @@ export class LibraryLoader {
     if (typeof window !== 'undefined') {
       if (React && !(window as any).React) {
         (window as any).React = React;
-        console.log('✓ Exposed React as window.React for UMD compatibility');
+        //console.log('✓ Exposed React as window.React for UMD compatibility');
       }
       if (ReactDOM && !(window as any).ReactDOM) {
         (window as any).ReactDOM = ReactDOM;
-        console.log('✓ Exposed ReactDOM as window.ReactDOM for UMD compatibility');
+        //console.log('✓ Exposed ReactDOM as window.ReactDOM for UMD compatibility');
       }
       // Also expose PropTypes as empty object if not present (for older libraries)
       if (!(window as any).PropTypes) {
         (window as any).PropTypes = {};
-        console.log('✓ Exposed empty PropTypes as window.PropTypes for UMD compatibility');
+        //console.log('✓ Exposed empty PropTypes as window.PropTypes for UMD compatibility');
       }
     }
     

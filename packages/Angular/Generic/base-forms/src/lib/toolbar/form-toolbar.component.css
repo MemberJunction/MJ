@@ -93,6 +93,7 @@
    BUTTONS
    ============================================ */
 .mj-forms-btn {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -188,6 +189,30 @@
 /* List button with count badge */
 .mj-forms-btn--list {
   position: relative;
+}
+
+/* History button with version badge */
+.mj-forms-btn--history {
+  position: relative;
+}
+
+.mj-version-count-badge {
+  position: absolute;
+  top: -6px;
+  right: -10px;
+  padding: 0 5px;
+  font-size: 10px;
+  font-weight: var(--mj-font-bold);
+  color: var(--mj-text-inverse);
+  background: linear-gradient(135deg, var(--mj-status-success) 0%, color-mix(in srgb, var(--mj-status-success) 85%, black) 100%);
+  border-radius: var(--mj-radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 16px;
+  border: 2px solid var(--mj-bg-surface-card);
+  white-space: nowrap;
+  line-height: 1;
 }
 
 .mj-list-count-badge {

@@ -194,7 +194,7 @@
       "ID": "FF7D441F-36E1-458A-B548-0FC2208923BE"
     },
     "sync": {
-      "lastModified": "2026-04-06T16:15:02.299Z",
+      "lastModified": "2026-04-04T01:09:53.857Z",
       "checksum": "a4e35edabb72ff058846ca2ac7e99e0080e4b0b885c9cff2e8fe77a87917ad0f"
     }
   },
@@ -1312,7 +1312,7 @@
       "ID": "8BF32885-8504-4DAF-87AE-695E09F1BC3A"
     },
     "sync": {
-      "lastModified": "2026-04-06T15:23:47.523Z",
+      "lastModified": "2026-03-30T21:07:06.972Z",
       "checksum": "fad86be5204f3eafc768bb637d84efe1ee0c1c5d98bf7876cfc65d0cd2685a8c"
     }
   },
@@ -1341,14 +1341,14 @@
             "PromptID": "@parent:ID",
             "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.1 Flash-Lite",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
-            "Priority": 22
+            "Priority": 20
           },
           "primaryKey": {
             "ID": "608B38EC-1C18-4858-9BE9-472FDED52C7A"
           },
           "sync": {
-            "lastModified": "2026-03-29T16:48:49.285Z",
-            "checksum": "8f81e8262c7f3868eee5f104097e9257e7f694b0201ef3daff30a69960d8e070"
+            "lastModified": "2026-04-06T11:01:32.387Z",
+            "checksum": "f5ed20b3feebae35f0c06a6fafa3f7506f6e4728dbd0c55082ef1ba8d5d85b1b"
           }
         },
         {
@@ -1356,14 +1356,29 @@
             "PromptID": "@parent:ID",
             "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.1 Flash-Lite",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
-            "Priority": 21
+            "Priority": 19
           },
           "primaryKey": {
             "ID": "6B70317E-3763-4D7B-82A4-3068CA24A711"
           },
           "sync": {
-            "lastModified": "2026-03-29T16:48:49.358Z",
-            "checksum": "1d64bc00a30b9f7a8d613fc6dd568bf2707d80b42c59e9e1b00bfb6356dc7198"
+            "lastModified": "2026-04-06T11:01:32.445Z",
+            "checksum": "4c217143ae14af402812030798392bfa770198fa84a63015f238c5a823f99ded"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
+            "Priority": 25
+          },
+          "primaryKey": {
+            "ID": "914F9304-BE04-41B7-8F63-314F595D7A2F"
+          },
+          "sync": {
+            "lastModified": "2026-04-06T11:01:32.459Z",
+            "checksum": "64bf88bedb7932cc6afedb0009029a1b77dbee6b82874c8cdede15d6eb54f998"
           }
         },
         {
@@ -1372,20 +1387,20 @@
             "ModelID": "@lookup:MJ: AI Models.Name=GPT-OSS-120B",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
             "ConfigurationID": "@lookup:MJ: AI Configurations.Name=Sage Text",
-            "Priority": 20
+            "Priority": 22
           },
           "primaryKey": {
             "ID": "14AD0B61-10CC-4AC0-AEA9-0CE4A6B43172"
           },
           "sync": {
-            "lastModified": "2026-02-13T20:49:00.239Z",
-            "checksum": "7fabd299938e87c953f3b8491c96458b26f38432c80feeb723438da2ac0bddb4"
+            "lastModified": "2026-04-06T11:01:32.488Z",
+            "checksum": "440a9b9207020b03f6e5590cf611cf143571031671816dec0de846602a7a91bd"
           }
         },
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=GPT 4.1-mini",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT 5-mini",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
             "Priority": 1
           },
@@ -1393,8 +1408,8 @@
             "ID": "49864BAC-3207-4C62-9CF9-F12063E3F781"
           },
           "sync": {
-            "lastModified": "2026-02-13T20:49:00.213Z",
-            "checksum": "9891ff90107e4d2c502cb884505068edd4b27f8bfe15c3106fd92c89c57ae9ac"
+            "lastModified": "2026-04-06T11:01:32.473Z",
+            "checksum": "997de1960f15c66147e70257a981fd028cf8084e0ad251931e8a59d87fdc3caf"
           }
         }
       ]
@@ -1403,7 +1418,7 @@
       "ID": "49B60EDF-8E51-4406-9471-7B95F80A6D81"
     },
     "sync": {
-      "lastModified": "2026-04-06T15:23:55.505Z",
+      "lastModified": "2026-02-13T20:48:58.924Z",
       "checksum": "51f910cba7f980ad790746d953774e73e0c8b1c8a1d33ca0721a84059d8a59ef"
     }
   },

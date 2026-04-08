@@ -1,5 +1,16 @@
 # @memberjunction/ng-actions
 
+## 5.24.0
+
+### Patch Changes
+
+- Updated dependencies [c318a0c]
+- Updated dependencies [1912726]
+  - @memberjunction/graphql-dataprovider@5.24.0
+  - @memberjunction/core@5.24.0
+  - @memberjunction/core-entities@5.24.0
+  - @memberjunction/global@5.24.0
+
 ## 5.23.0
 
 ### Patch Changes

@@ -1,5 +1,7 @@
 # @memberjunction/ng-ui-components
 
+## 5.24.0
+
 ## 5.23.0
 
 ### Patch Changes

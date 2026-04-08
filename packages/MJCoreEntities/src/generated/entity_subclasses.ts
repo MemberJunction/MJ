@@ -79906,6 +79906,38 @@ export class MJTagCoOccurrenceEntity extends BaseEntity<MJTagCoOccurrenceEntityT
     }
 
     /**
+    * Validate() method override for MJ: Tag Co Occurrences entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: Tag A must be ordered before Tag B to ensure that each pair of tags is stored consistently and to prevent duplicate entries for the same combination.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateTagAIDLessThanTagBID(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Tag A must be ordered before Tag B to ensure that each pair of tags is stored consistently and to prevent duplicate entries for the same combination.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateTagAIDLessThanTagBID(result: ValidationResult) {
+    	if (this.TagAID != null && this.TagBID != null && this.TagAID >= this.TagBID) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"TagAID",
+    			"Tag A must be ordered before Tag B to ensure a consistent ordering of tag pairs.",
+    			this.TagAID,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier

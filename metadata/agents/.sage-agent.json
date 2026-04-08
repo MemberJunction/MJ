@@ -371,76 +371,6 @@
             "lastModified": "2026-02-13T21:09:24.831Z",
             "checksum": "4a9447b3f1107b741f1dd561bb10bf06fdccd154626325f10a5dc0f340a43b78"
           }
-        },
-        {
-          "fields": {
-            "AgentID": "@parent:ID",
-            "ActionID": "@lookup:MJ: Actions.Name=Create Document",
-            "Status": "Active"
-          },
-          "primaryKey": {
-            "ID": "58871365-9771-41A3-883B-C5781C27C194"
-          },
-          "sync": {
-            "lastModified": "2026-04-06T15:24:02.596Z",
-            "checksum": "c64953505f5d324047ea3eb3731b54be9905c69566e3b82925b9d43a168a8361"
-          }
-        },
-        {
-          "fields": {
-            "AgentID": "@parent:ID",
-            "ActionID": "@lookup:MJ: Actions.Name=Add Document Content",
-            "Status": "Active"
-          },
-          "primaryKey": {
-            "ID": "42C8CABF-9F1F-491F-A673-95997B8E6AA8"
-          },
-          "sync": {
-            "lastModified": "2026-04-06T15:24:02.733Z",
-            "checksum": "7697496d97e02cfc4e6234541546d2f019c2ea99d27c0dba3a4afcc54ce6820b"
-          }
-        },
-        {
-          "fields": {
-            "AgentID": "@parent:ID",
-            "ActionID": "@lookup:MJ: Actions.Name=Preview Document",
-            "Status": "Active"
-          },
-          "primaryKey": {
-            "ID": "9CD06C62-6543-48D1-A6C6-FEA662AD4711"
-          },
-          "sync": {
-            "lastModified": "2026-04-06T15:24:02.745Z",
-            "checksum": "cf16b134d19d904bd54a9445b99452c23f4f268b2f8ca3581fbc6a4e0406718c"
-          }
-        },
-        {
-          "fields": {
-            "AgentID": "@parent:ID",
-            "ActionID": "@lookup:MJ: Actions.Name=Modify Document Section",
-            "Status": "Active"
-          },
-          "primaryKey": {
-            "ID": "F9D1DC37-BF52-41BC-8ABC-0991A8D910EF"
-          },
-          "sync": {
-            "lastModified": "2026-04-06T15:24:02.755Z",
-            "checksum": "d5c3106a16f5d325f6bf51e1c3bfac8bc3e871bd52c4fef5eeda964c515c5240"
-          }
-        },
-        {
-          "fields": {
-            "AgentID": "@parent:ID",
-            "ActionID": "@lookup:MJ: Actions.Name=Finalize Document",
-            "Status": "Active"
-          },
-          "primaryKey": {
-            "ID": "E2E65DF3-B003-4711-A2BA-3278305613DE"
-          },
-          "sync": {
-            "lastModified": "2026-04-06T15:24:02.763Z",
-            "checksum": "f771348487b3ef029c984184fb097591e903ab745616272331914b6fb0d78c22"
-          }
         }
       ],
       "MJ: AI Agent Configurations": [
@@ -495,7 +425,7 @@
             "ID": "4163F9D8-EFA8-4EB4-8930-0640255D3E0E"
           },
           "sync": {
-            "lastModified": "2026-04-03T14:26:10.206Z",
+            "lastModified": "2026-04-04T01:10:01.020Z",
             "checksum": "faaaa230d507c8abc87148565417c12d779941c9f6db23c21b23655ea00a51b7"
           }
         },
@@ -510,7 +440,7 @@
             "ID": "CE24F596-F478-4987-8577-543A9091127E"
           },
           "sync": {
-            "lastModified": "2026-04-03T14:26:10.216Z",
+            "lastModified": "2026-04-04T01:10:01.031Z",
             "checksum": "42d4921794b1ec9be3caefe697bfd7646b1032d4c39011739df9051e4d02f9d7"
           }
         },
@@ -525,7 +455,7 @@
             "ID": "8C2E7348-78D3-4CBB-B916-EE625CC3A4AB"
           },
           "sync": {
-            "lastModified": "2026-04-03T15:46:00.461Z",
+            "lastModified": "2026-04-04T01:10:01.042Z",
             "checksum": "e1b61998442df340611bfb6f2748bc5b608a0978e0207d3b036eca2d556e673d"
           }
         },
@@ -538,6 +468,10 @@
           },
           "primaryKey": {
             "ID": "F2431AD1-EE53-4004-AE86-BF263BEB4B2F"
+          },
+          "sync": {
+            "lastModified": "2026-04-04T01:10:00.988Z",
+            "checksum": "42b7f6eb38b3173ecf36e7ef03b7340fff28fa548ae6ceda43791d093a2e390c"
           }
         }
       ]

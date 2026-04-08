@@ -32,6 +32,14 @@ export interface CachedComponentInfo {
   // Restored to the tab config when the component is reattached,
   // so the URL reflects the component's preserved state.
   savedQueryParams?: Record<string, string>;
+
+  // Agent context reported by this component via NavigationService.SetAgentContext()
+  // Cached so it can be restored when the component becomes active again.
+  AgentContext?: Record<string, unknown>;
+
+  // Agent client tools registered by this component via NavigationService.SetAgentClientTools()
+  // Cached so they can be re-registered when the component becomes active again.
+  AgentClientTools?: { Name: string; Description: string; ParameterSchema: Record<string, unknown>; Handler: (params: Record<string, unknown>) => Promise<unknown> }[];
 }
 
 /**

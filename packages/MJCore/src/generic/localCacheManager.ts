@@ -985,6 +985,13 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         // ResultType is intentionally excluded from the fingerprint.
         // The cache always stores plain JSON objects regardless of ResultType.
         // Transformation to entity objects happens post-cache at consumption time.
+        //
+        // Fields is also intentionally excluded. On cache miss, we always fetch ALL
+        // fields from the DB (overriding any caller-specified Fields). This means one
+        // cache entry per entity+filter satisfies all field subsets. On cache hit,
+        // the caller's Fields list is used to filter columns from the cached data.
+        // This avoids N separate cache entries for different field subsets and guarantees
+        // a narrow-field query never poisons the cache for a full-field query.
         const maxRows = params.MaxRows ?? -1;
         const startRow = params.StartRow ?? 0;
         const connection = connectionPrefix || '';
