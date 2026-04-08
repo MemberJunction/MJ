@@ -19,23 +19,50 @@ import {
     selector: 'mj-search-results-resource',
     template: `
         <div class="search-results-page">
-            <!-- Search header with refinement input -->
+            <!-- Header bar -->
             <div class="search-header">
-                <div class="search-input-wrapper">
-                    <i class="fa-solid fa-magnifying-glass search-icon"></i>
-                    <input
-                        #refineInput
-                        class="mj-input search-input"
-                        [value]="CurrentQuery"
-                        placeholder="Refine your search..."
-                        (keydown.enter)="OnRefineSearch(refineInput.value)" />
+                <div class="search-header-left">
+                    @if (!ShowFilterPanel && HasSearched && TotalCount > 0) {
+                        <button class="sr-icon-btn" title="Show filters" (click)="ToggleFilterPanel()">
+                            <i class="fa-solid fa-filter"></i>
+                        </button>
+                    }
+                    @if (!IsSearching && TotalCount > 0) {
+                        <span class="search-meta">
+                            {{ FilteredResults.length }} of {{ TotalCount }} result{{ TotalCount !== 1 ? 's' : '' }}
+                            for "{{ CurrentQuery }}" in {{ ElapsedMs }}ms
+                        </span>
+                    }
                 </div>
-                @if (!IsSearching && TotalCount > 0) {
-                    <span class="search-meta">
-                        {{ TotalCount }} result{{ TotalCount !== 1 ? 's' : '' }}
-                        in {{ ElapsedMs }}ms
-                    </span>
-                }
+                <div class="search-header-right">
+                    <!-- Search within results -->
+                    @if (TotalCount > 0) {
+                        <div class="sr-refine-wrapper">
+                            <i class="fa-solid fa-filter-list sr-refine-icon"></i>
+                            <input class="mj-input sr-refine-input"
+                                   placeholder="Filter within results..."
+                                   [value]="ClientFilterText"
+                                   (input)="OnClientFilterTextChange($any($event.target).value)" />
+                            @if (ClientFilterText) {
+                                <button class="sr-refine-clear" (click)="OnClientFilterTextChange('')">
+                                    <i class="fa-solid fa-xmark"></i>
+                                </button>
+                            }
+                        </div>
+                    }
+                    <!-- Sort -->
+                    @if (TotalCount > 0) {
+                        <select class="mj-input sr-sort-select" [value]="SortField" (change)="OnSortChange($any($event.target).value)">
+                            <option value="score">Sort: Relevance</option>
+                            <option value="title">Sort: Name</option>
+                            <option value="entity">Sort: Entity</option>
+                        </select>
+                    }
+                    <!-- Refresh -->
+                    <button class="sr-icon-btn" title="Refresh search" (click)="OnRefresh()" [disabled]="IsSearching">
+                        <i class="fa-solid fa-arrows-rotate" [class.fa-spin]="IsSearching"></i>
+                    </button>
+                </div>
             </div>
 
             <!-- Loading state -->
@@ -56,17 +83,21 @@ import {
                 }
                 @if (TotalCount > 0) {
                     <div class="search-body">
-                        <mj-search-filter
-                            [Filters]="Filters"
-                            [ActiveFilters]="ActiveFilters"
-                            [ShowRelevanceSlider]="true"
-                            [MinScorePercent]="MinScorePercent"
-                            (FilterChanged)="OnFilterChanged($event)"
-                            (FiltersCleared)="OnFiltersCleared()"
-                            (MinScoreChanged)="OnMinScoreChanged($any($event))">
-                        </mj-search-filter>
+                        @if (ShowFilterPanel) {
+                            <mj-search-filter
+                                [Filters]="Filters"
+                                [ActiveFilters]="ActiveFilters"
+                                [ShowRelevanceSlider]="true"
+                                [MinScorePercent]="MinScorePercent"
+                                (FilterChanged)="OnFilterChanged($event)"
+                                (FiltersCleared)="OnFiltersCleared()"
+                                (CloseRequested)="ToggleFilterPanel()"
+                                (MinScoreChanged)="OnMinScoreChanged($any($event))">
+                            </mj-search-filter>
+                        }
                         <mj-search-results
                             [FlatResults]="FilteredResults"
+                            [HighlightText]="ClientFilterText"
                             [ShowScores]="true"
                             [ShowTags]="true"
                             [ShowSummary]="false"
@@ -90,42 +121,79 @@ import {
         .search-header {
             display: flex;
             align-items: center;
-            gap: 16px;
-            padding: 16px 24px;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 8px 24px;
             border-bottom: 1px solid var(--mj-border-default);
             background: var(--mj-bg-surface);
             flex-shrink: 0;
         }
-        .search-input-wrapper {
-            flex: 1;
-            max-width: 600px;
-            position: relative;
+        .search-header-left {
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
-        .search-icon {
-            position: absolute;
-            left: 12px;
-            top: 50%;
-            transform: translateY(-50%);
-            color: var(--mj-text-muted);
-            font-size: 14px;
-        }
-        .search-input {
-            width: 100%;
-            padding: 10px 12px 10px 36px;
-            font-size: 15px;
-            border: 1px solid var(--mj-border-default);
-            border-radius: 8px;
-            background: var(--mj-bg-surface);
-        }
-        .search-input:focus {
-            border-color: var(--mj-brand-primary);
-            outline: none;
-            box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
+        .search-header-right {
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
         .search-meta {
             color: var(--mj-text-muted);
             font-size: 13px;
             white-space: nowrap;
+        }
+        .sr-icon-btn {
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid var(--mj-border-default);
+            border-radius: 6px;
+            background: var(--mj-bg-surface);
+            color: var(--mj-text-secondary);
+            cursor: pointer;
+            transition: all 0.15s;
+            font-size: 13px;
+            flex-shrink: 0;
+        }
+        .sr-icon-btn:hover { background: var(--mj-bg-surface-hover); color: var(--mj-text-primary); }
+        .sr-icon-btn:disabled { opacity: 0.4; cursor: default; }
+        .sr-refine-wrapper {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+        .sr-refine-icon {
+            position: absolute;
+            left: 8px;
+            color: var(--mj-text-muted);
+            font-size: 12px;
+            pointer-events: none;
+        }
+        .sr-refine-input {
+            padding: 5px 28px 5px 26px;
+            font-size: 12px;
+            width: 180px;
+            border-radius: 6px;
+        }
+        .sr-refine-clear {
+            position: absolute;
+            right: 6px;
+            background: none;
+            border: none;
+            color: var(--mj-text-muted);
+            cursor: pointer;
+            font-size: 11px;
+            padding: 2px;
+        }
+        .sr-refine-clear:hover { color: var(--mj-text-primary); }
+        .sr-sort-select {
+            padding: 5px 8px;
+            font-size: 12px;
+            border-radius: 6px;
+            min-width: 130px;
         }
         .search-loading {
             display: flex;
@@ -184,6 +252,9 @@ export class SearchResultsResource extends BaseResourceComponent {
     ActiveFilters: Record<string, string[]> = {};
     FilteredResults: SearchResultItem[] = [];
     MinScorePercent = 0;
+    ShowFilterPanel = true;
+    SortField: 'score' | 'title' | 'entity' = 'score';
+    ClientFilterText = '';
 
     /** All results from the last search (before client-side filtering) */
     private allResults: SearchResultItem[] = [];
@@ -204,6 +275,13 @@ export class SearchResultsResource extends BaseResourceComponent {
     }
 
     private async loadFromData(): Promise<void> {
+        // Load filter panel preference
+        try {
+            const { UserInfoEngine } = require('@memberjunction/core-entities');
+            const pref = UserInfoEngine.Instance.GetSetting('search.showFilterPanel');
+            if (pref === 'false') this.ShowFilterPanel = false;
+        } catch { /* ignore */ }
+
         const config = this.Data?.Configuration;
         if (config?.Query) {
             this.CurrentQuery = config.Query as string;
@@ -263,6 +341,38 @@ export class SearchResultsResource extends BaseResourceComponent {
         this.navigateToRecord(event.EntityName, event.RecordID);
     }
 
+    async OnRefresh(): Promise<void> {
+        if (this.CurrentQuery) {
+            this.ActiveFilters = {};
+            this.MinScorePercent = 0;
+            this.ClientFilterText = '';
+            await this.ExecuteSearch(this.CurrentQuery);
+        }
+    }
+
+    ToggleFilterPanel(): void {
+        this.ShowFilterPanel = !this.ShowFilterPanel;
+        // Persist preference
+        try {
+            const { UserInfoEngine } = require('@memberjunction/core-entities');
+            UserInfoEngine.Instance.SetSettingDebounced(
+                'search.showFilterPanel',
+                this.ShowFilterPanel ? 'true' : 'false'
+            );
+        } catch { /* ignore if UserInfoEngine not available */ }
+        this.cdr.detectChanges();
+    }
+
+    OnSortChange(field: string): void {
+        this.SortField = field as 'score' | 'title' | 'entity';
+        this.applyClientFilters();
+    }
+
+    OnClientFilterTextChange(text: string): void {
+        this.ClientFilterText = text;
+        this.applyClientFilters();
+    }
+
     private navigateToRecord(entityName: string, recordID: string): void {
         if (entityName && recordID) {
             const pkey = new CompositeKey([{ FieldName: 'ID', Value: recordID }]);
@@ -313,8 +423,33 @@ export class SearchResultsResource extends BaseResourceComponent {
             results = results.filter(r => r.Score >= minScore);
         }
 
-        // Sort by score descending
-        this.FilteredResults = results.sort((a, b) => b.Score - a.Score);
+        // Apply client text filter (search within results)
+        if (this.ClientFilterText.trim()) {
+            const term = this.ClientFilterText.trim().toLowerCase();
+            results = results.filter(r =>
+                (r.Title?.toLowerCase().includes(term)) ||
+                (r.Snippet?.toLowerCase().includes(term)) ||
+                (r.EntityName?.toLowerCase().includes(term)) ||
+                (r.RecordName?.toLowerCase().includes(term)) ||
+                (r.Tags?.some(t => t.toLowerCase().includes(term)))
+            );
+        }
+
+        // Sort
+        switch (this.SortField) {
+            case 'title':
+                results = [...results].sort((a, b) => (a.Title || '').localeCompare(b.Title || ''));
+                break;
+            case 'entity':
+                results = [...results].sort((a, b) => a.EntityName.localeCompare(b.EntityName) || b.Score - a.Score);
+                break;
+            case 'score':
+            default:
+                results = [...results].sort((a, b) => b.Score - a.Score);
+                break;
+        }
+
+        this.FilteredResults = results;
         this.cdr.detectChanges();
     }
 
@@ -328,7 +463,7 @@ export class SearchResultsResource extends BaseResourceComponent {
             return false;
         }
 
-        const sourceFilter = this.ActiveFilters['Source Type'];
+        const sourceFilter = this.ActiveFilters['Source'];
         if (sourceFilter?.length && !sourceFilter.includes(result.SourceType)) {
             return false;
         }

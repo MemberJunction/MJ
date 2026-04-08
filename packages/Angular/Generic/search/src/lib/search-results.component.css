@@ -509,3 +509,12 @@
 .pager-next i {
     font-size: 0.7rem;
 }
+
+/* Search text highlighting */
+:host ::ng-deep .search-highlight,
+.search-highlight {
+    background: color-mix(in srgb, var(--mj-status-warning) 35%, transparent);
+    color: inherit;
+    padding: 1px 2px;
+    border-radius: 2px;
+}

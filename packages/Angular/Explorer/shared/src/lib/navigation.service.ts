@@ -633,6 +633,44 @@ export class NavigationService implements OnDestroy {
   }
 
   /**
+   * Open a universal search results tab for the given query.
+   * This is the primary way to open search results from anywhere in the application.
+   *
+   * @param query The search query text
+   * @param options Navigation options
+   */
+  public OpenSearch(
+    query: string,
+    options?: NavigationOptions
+  ): string {
+    const appId = this.getDefaultApplicationId();
+    const appColor = this.getDefaultAppColor();
+    const forceNew = this.shouldForceNewTab(options);
+
+    const request: TabRequest = {
+      ApplicationId: appId,
+      Title: `Search: ${query}`,
+      Configuration: {
+        resourceType: 'Search Results',
+        Query: query,
+        SearchInput: query,
+        recordId: `search-${query}`
+      },
+      ResourceRecordId: `search-${query}`,
+      IsPinned: false
+    };
+
+    // Handle transition from single-resource mode
+    this.handleSingleResourceModeTransition(forceNew, request);
+
+    if (forceNew) {
+      return this.workspaceManager.OpenTabForced(request, appColor);
+    } else {
+      return this.workspaceManager.OpenTab(request, appColor);
+    }
+  }
+
+  /**
    * Navigate to a nav item by name within the current or specified application.
    * Allows passing additional configuration parameters to merge with the nav item's config.
    * This is useful for cross-resource navigation where a component needs to navigate

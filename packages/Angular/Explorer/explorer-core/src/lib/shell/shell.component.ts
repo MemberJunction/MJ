@@ -680,6 +680,14 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         return;
       }
 
+      // Check for app-scoped search URL: /app/:appName/search/:searchInput
+      const appSearchMatch = urlPath.match(/^\/app\/([^\/]+)\/search\/(.+)$/);
+      if (appSearchMatch) {
+        const searchInput = decodeURIComponent(appSearchMatch[2]);
+        this.navigationService.OpenSearch(searchInput);
+        return;
+      }
+
       // Check for app-only URL: /app/:appName
       const appOnlyMatch = urlPath.match(/^\/app\/([^\/]+)$/);
       if (appOnlyMatch) {
@@ -2395,35 +2403,14 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
 
   OnSearchResultSelected(result: { EntityName: string; RecordID: string }): void {
       if (result.EntityName && result.RecordID) {
-          this.tabService.OpenTab({
-              ApplicationId: SYSTEM_APP_ID,
-              Title: `${result.EntityName} - ${result.RecordID}`,
-              Configuration: {
-                  resourceType: 'Records',
-                  Entity: result.EntityName,
-                  recordId: result.RecordID
-              },
-              ResourceRecordId: result.RecordID,
-              IsPinned: false
-          });
+          const pkey = new CompositeKey([{ FieldName: 'ID', Value: result.RecordID }]);
+          this.navigationService.OpenEntityRecord(result.EntityName, pkey);
       }
   }
 
   OnSearchSubmitted(query: string): void {
       if (query && query.trim().length >= 2) {
-          this.tabService.OpenTab({
-              ApplicationId: SYSTEM_APP_ID,
-              Title: `Search: ${query}`,
-              Configuration: {
-                  resourceType: 'Custom',
-                  driverClass: 'SearchResultsResource',
-                  Query: query,
-                  SearchInput: query,
-                  recordId: `search-${query}`
-              },
-              ResourceRecordId: `search-${query}`,
-              IsPinned: false
-          });
+          this.navigationService.OpenSearch(query);
       }
   }
 

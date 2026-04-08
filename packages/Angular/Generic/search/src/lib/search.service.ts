@@ -32,8 +32,8 @@ const SOURCE_TYPE_ICONS: Record<string, string> = {
 
 /** Default labels for source types */
 const SOURCE_TYPE_LABELS: Record<string, string> = {
-    'entity': 'Entity Records',
-    'vector': 'Vector Search',
+    'entity': 'Database',
+    'vector': 'Semantic Search',
     'fulltext': 'Full-Text Search',
     'content-item': 'Content Items',
     'file': 'Documents',
@@ -172,7 +172,7 @@ export class SearchService {
             IsSelected: false,
             Icon: SOURCE_TYPE_ICONS[type]
         }));
-        return { Category: 'Source Type', Options: options, MultiSelect: true };
+        return { Category: 'Source', Options: options, MultiSelect: true };
     }
 
     private buildEntityNameFilter(results: SearchResultItem[]): SearchFilter {
@@ -355,7 +355,7 @@ export class SearchService {
             result.EntityNames = entityFilters;
         }
 
-        const sourceFilters = request.ActiveFilters['Source Type'];
+        const sourceFilters = request.ActiveFilters['Source'];
         if (sourceFilters?.length) {
             result.SourceTypes = sourceFilters;
         }
