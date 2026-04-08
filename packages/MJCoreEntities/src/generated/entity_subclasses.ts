@@ -14293,7 +14293,7 @@ export const MJEntityFieldSchema = z.object({
     *   * ListOrUserEntry
     *   * None
         * * Description: Possible Values of None, List, ListOrUserEntry - the last option meaning that the list of possible values are options, but a user can enter anything else desired too.`),
-    ExtendedType: z.union([z.literal('Code'), z.literal('Email'), z.literal('FaceTime'), z.literal('Geo'), z.literal('MSTeams'), z.literal('Other'), z.literal('SIP'), z.literal('SMS'), z.literal('Skype'), z.literal('Tel'), z.literal('URL'), z.literal('WhatsApp'), z.literal('ZoomMtg')]).nullable().describe(`
+    ExtendedType: z.union([z.literal('Code'), z.literal('Email'), z.literal('FaceTime'), z.literal('Geo'), z.literal('GeoAddress'), z.literal('GeoCity'), z.literal('GeoCountry'), z.literal('GeoLatitude'), z.literal('GeoLongitude'), z.literal('GeoPostalCode'), z.literal('GeoStateProvince'), z.literal('MSTeams'), z.literal('Other'), z.literal('SIP'), z.literal('SMS'), z.literal('Skype'), z.literal('Tel'), z.literal('URL'), z.literal('WhatsApp'), z.literal('ZoomMtg')]).nullable().describe(`
         * * Field Name: ExtendedType
         * * Display Name: Extended Type
         * * SQL Data Type: nvarchar(50)
@@ -14303,6 +14303,13 @@ export const MJEntityFieldSchema = z.object({
     *   * Email
     *   * FaceTime
     *   * Geo
+    *   * GeoAddress
+    *   * GeoCity
+    *   * GeoCountry
+    *   * GeoLatitude
+    *   * GeoLongitude
+    *   * GeoPostalCode
+    *   * GeoStateProvince
     *   * MSTeams
     *   * Other
     *   * SIP
@@ -19686,6 +19693,18 @@ export const MJRecordGeoCodeSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Entity: z.string().describe(`
+        * * Field Name: Entity
+        * * Display Name: Entity
+        * * SQL Data Type: nvarchar(255)`),
+    Country: z.string().nullable().describe(`
+        * * Field Name: Country
+        * * Display Name: Country
+        * * SQL Data Type: nvarchar(200)`),
+    StateProvince: z.string().nullable().describe(`
+        * * Field Name: StateProvince
+        * * Display Name: State Province
+        * * SQL Data Type: nvarchar(200)`),
 });
 
 export type MJRecordGeoCodeEntityType = z.infer<typeof MJRecordGeoCodeSchema>;
@@ -21261,6 +21280,10 @@ export const MJStateProvinceSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Country: z.string().describe(`
+        * * Field Name: Country
+        * * Display Name: Country
+        * * SQL Data Type: nvarchar(200)`),
 });
 
 export type MJStateProvinceEntityType = z.infer<typeof MJStateProvinceSchema>;
@@ -22083,6 +22106,69 @@ export const MJTemplateSchema = z.object({
 });
 
 export type MJTemplateEntityType = z.infer<typeof MJTemplateSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Test Organizations
+ */
+export const MJTestOrganizationSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(200)`),
+    Address: z.string().nullable().describe(`
+        * * Field Name: Address
+        * * Display Name: Address
+        * * SQL Data Type: nvarchar(500)`),
+    City: z.string().nullable().describe(`
+        * * Field Name: City
+        * * Display Name: City
+        * * SQL Data Type: nvarchar(100)`),
+    State: z.string().nullable().describe(`
+        * * Field Name: State
+        * * Display Name: State
+        * * SQL Data Type: nvarchar(100)`),
+    PostalCode: z.string().nullable().describe(`
+        * * Field Name: PostalCode
+        * * Display Name: Postal Code
+        * * SQL Data Type: nvarchar(20)`),
+    Country: z.string().nullable().describe(`
+        * * Field Name: Country
+        * * Display Name: Country
+        * * SQL Data Type: nvarchar(100)`),
+    Phone: z.string().nullable().describe(`
+        * * Field Name: Phone
+        * * Display Name: Phone
+        * * SQL Data Type: nvarchar(50)`),
+    Website: z.string().nullable().describe(`
+        * * Field Name: Website
+        * * Display Name: Website
+        * * SQL Data Type: nvarchar(500)`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_Latitude: z.number().nullable().describe(`
+        * * Field Name: __mj_Latitude
+        * * Display Name: Mj Latitude
+        * * SQL Data Type: decimal(10, 6)`),
+    __mj_Longitude: z.number().nullable().describe(`
+        * * Field Name: __mj_Longitude
+        * * Display Name: Mj Longitude
+        * * SQL Data Type: decimal(10, 6)`),
+});
+
+export type MJTestOrganizationEntityType = z.infer<typeof MJTestOrganizationSchema>;
 
 /**
  * zod schema definition for the entity MJ: Test Rubrics
@@ -43520,7 +43606,7 @@ export class MJApplicationEntity extends BaseEntity<MJApplicationEntityType> {
     * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get DefaultNavItemsObject(): Array<MJApplicationEntity_IDefaultNavItem> | null {
-        const raw = this.Get('DefaultNavItems');
+        const raw = this.DefaultNavItems;
         if (raw !== this._DefaultNavItemsObject_lastRaw) {
             this._DefaultNavItemsObject_cached = raw ? JSON.parse(raw) : null;
             this._DefaultNavItemsObject_lastRaw = raw;
@@ -43529,7 +43615,7 @@ export class MJApplicationEntity extends BaseEntity<MJApplicationEntityType> {
     }
     set DefaultNavItemsObject(value: Array<MJApplicationEntity_IDefaultNavItem> | null) {
         const raw = value ? JSON.stringify(value) : null;
-        this.Set('DefaultNavItems', raw);
+        this.DefaultNavItems = raw;
         this._DefaultNavItemsObject_cached = value;
         this._DefaultNavItemsObject_lastRaw = raw;
     }
@@ -51356,7 +51442,7 @@ export class MJContentProcessRunEntity extends BaseEntity<MJContentProcessRunEnt
     * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get ConfigurationObject(): MJContentProcessRunEntity_IContentProcessRunConfiguration | null {
-        const raw = this.Get('Configuration');
+        const raw = this.Configuration;
         if (raw !== this._ConfigurationObject_lastRaw) {
             this._ConfigurationObject_cached = raw ? JSON.parse(raw) : null;
             this._ConfigurationObject_lastRaw = raw;
@@ -51365,7 +51451,7 @@ export class MJContentProcessRunEntity extends BaseEntity<MJContentProcessRunEnt
     }
     set ConfigurationObject(value: MJContentProcessRunEntity_IContentProcessRunConfiguration | null) {
         const raw = value ? JSON.stringify(value) : null;
-        this.Set('Configuration', raw);
+        this.Configuration = raw;
         this._ConfigurationObject_cached = value;
         this._ConfigurationObject_lastRaw = raw;
     }
@@ -51818,7 +51904,7 @@ export class MJContentSourceTypeEntity extends BaseEntity<MJContentSourceTypeEnt
     * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get ConfigurationObject(): MJContentSourceTypeEntity_IContentSourceTypeConfiguration | null {
-        const raw = this.Get('Configuration');
+        const raw = this.Configuration;
         if (raw !== this._ConfigurationObject_lastRaw) {
             this._ConfigurationObject_cached = raw ? JSON.parse(raw) : null;
             this._ConfigurationObject_lastRaw = raw;
@@ -51827,7 +51913,7 @@ export class MJContentSourceTypeEntity extends BaseEntity<MJContentSourceTypeEnt
     }
     set ConfigurationObject(value: MJContentSourceTypeEntity_IContentSourceTypeConfiguration | null) {
         const raw = value ? JSON.stringify(value) : null;
-        this.Set('Configuration', raw);
+        this.Configuration = raw;
         this._ConfigurationObject_cached = value;
         this._ConfigurationObject_lastRaw = raw;
     }
@@ -52046,7 +52132,7 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
     * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get ConfigurationObject(): MJContentSourceEntity_IContentSourceConfiguration | null {
-        const raw = this.Get('Configuration');
+        const raw = this.Configuration;
         if (raw !== this._ConfigurationObject_lastRaw) {
             this._ConfigurationObject_cached = raw ? JSON.parse(raw) : null;
             this._ConfigurationObject_lastRaw = raw;
@@ -52055,7 +52141,7 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
     }
     set ConfigurationObject(value: MJContentSourceEntity_IContentSourceConfiguration | null) {
         const raw = value ? JSON.stringify(value) : null;
-        this.Set('Configuration', raw);
+        this.Configuration = raw;
         this._ConfigurationObject_cached = value;
         this._ConfigurationObject_lastRaw = raw;
     }
@@ -52481,7 +52567,7 @@ export class MJContentTypeEntity extends BaseEntity<MJContentTypeEntityType> {
     * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get ConfigurationObject(): MJContentTypeEntity_IContentTypeConfiguration | null {
-        const raw = this.Get('Configuration');
+        const raw = this.Configuration;
         if (raw !== this._ConfigurationObject_lastRaw) {
             this._ConfigurationObject_cached = raw ? JSON.parse(raw) : null;
             this._ConfigurationObject_lastRaw = raw;
@@ -52490,7 +52576,7 @@ export class MJContentTypeEntity extends BaseEntity<MJContentTypeEntityType> {
     }
     set ConfigurationObject(value: MJContentTypeEntity_IContentTypeConfiguration | null) {
         const raw = value ? JSON.stringify(value) : null;
-        this.Set('Configuration', raw);
+        this.Configuration = raw;
         this._ConfigurationObject_cached = value;
         this._ConfigurationObject_lastRaw = raw;
     }
@@ -62358,6 +62444,13 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
     *   * Email
     *   * FaceTime
     *   * Geo
+    *   * GeoAddress
+    *   * GeoCity
+    *   * GeoCountry
+    *   * GeoLatitude
+    *   * GeoLongitude
+    *   * GeoPostalCode
+    *   * GeoStateProvince
     *   * MSTeams
     *   * Other
     *   * SIP
@@ -62369,10 +62462,10 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
     *   * ZoomMtg
     * * Description: Defines extended behaviors for a field such as for Email, Web URLs, Code, etc.
     */
-    get ExtendedType(): 'Code' | 'Email' | 'FaceTime' | 'Geo' | 'MSTeams' | 'Other' | 'SIP' | 'SMS' | 'Skype' | 'Tel' | 'URL' | 'WhatsApp' | 'ZoomMtg' | null {
+    get ExtendedType(): 'Code' | 'Email' | 'FaceTime' | 'Geo' | 'GeoAddress' | 'GeoCity' | 'GeoCountry' | 'GeoLatitude' | 'GeoLongitude' | 'GeoPostalCode' | 'GeoStateProvince' | 'MSTeams' | 'Other' | 'SIP' | 'SMS' | 'Skype' | 'Tel' | 'URL' | 'WhatsApp' | 'ZoomMtg' | null {
         return this.Get('ExtendedType');
     }
-    set ExtendedType(value: 'Code' | 'Email' | 'FaceTime' | 'Geo' | 'MSTeams' | 'Other' | 'SIP' | 'SMS' | 'Skype' | 'Tel' | 'URL' | 'WhatsApp' | 'ZoomMtg' | null) {
+    set ExtendedType(value: 'Code' | 'Email' | 'FaceTime' | 'Geo' | 'GeoAddress' | 'GeoCity' | 'GeoCountry' | 'GeoLatitude' | 'GeoLongitude' | 'GeoPostalCode' | 'GeoStateProvince' | 'MSTeams' | 'Other' | 'SIP' | 'SMS' | 'Skype' | 'Tel' | 'URL' | 'WhatsApp' | 'ZoomMtg' | null) {
         this.Set('ExtendedType', value);
     }
 
@@ -76154,6 +76247,33 @@ export class MJRecordGeoCodeEntity extends BaseEntity<MJRecordGeoCodeEntityType>
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
+
+    /**
+    * * Field Name: Entity
+    * * Display Name: Entity
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Entity(): string {
+        return this.Get('Entity');
+    }
+
+    /**
+    * * Field Name: Country
+    * * Display Name: Country
+    * * SQL Data Type: nvarchar(200)
+    */
+    get Country(): string | null {
+        return this.Get('Country');
+    }
+
+    /**
+    * * Field Name: StateProvince
+    * * Display Name: State Province
+    * * SQL Data Type: nvarchar(200)
+    */
+    get StateProvince(): string | null {
+        return this.Get('StateProvince');
+    }
 }
 
 
@@ -80381,6 +80501,15 @@ export class MJStateProvinceEntity extends BaseEntity<MJStateProvinceEntityType>
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
+
+    /**
+    * * Field Name: Country
+    * * Display Name: Country
+    * * SQL Data Type: nvarchar(200)
+    */
+    get Country(): string {
+        return this.Get('Country');
+    }
 }
 
 
@@ -82499,6 +82628,204 @@ export class MJTemplateEntity extends BaseEntity<MJTemplateEntityType> {
     */
     get User(): string {
         return this.Get('User');
+    }
+}
+
+
+/**
+ * MJ: Test Organizations - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: TestOrganization
+ * * Base View: vwTestOrganizations
+ * * @description Test entity for geo features validation. Has address fields that CodeGen should auto-detect for geocoding support.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Test Organizations')
+export class MJTestOrganizationEntity extends BaseEntity<MJTestOrganizationEntityType> {
+    /**
+    * Loads the MJ: Test Organizations record from the database
+    * @param ID: string - primary key value to load the MJ: Test Organizations record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJTestOrganizationEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+     * CodeGen-generated geo field mappings for geocoding.
+     * Defines which entity fields contribute to each location type.
+     */
+    get GeoFieldMappings(): { LocationType: string; Fields: string[] }[] {
+        return [
+        {
+                LocationType: "Primary",
+                Fields: [
+                        "Address",
+                        "City",
+                        "State",
+                        "PostalCode",
+                        "Country"
+                ]
+        }
+];
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(200)
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Address
+    * * Display Name: Address
+    * * SQL Data Type: nvarchar(500)
+    */
+    get Address(): string | null {
+        return this.Get('Address');
+    }
+    set Address(value: string | null) {
+        this.Set('Address', value);
+    }
+
+    /**
+    * * Field Name: City
+    * * Display Name: City
+    * * SQL Data Type: nvarchar(100)
+    */
+    get City(): string | null {
+        return this.Get('City');
+    }
+    set City(value: string | null) {
+        this.Set('City', value);
+    }
+
+    /**
+    * * Field Name: State
+    * * Display Name: State
+    * * SQL Data Type: nvarchar(100)
+    */
+    get State(): string | null {
+        return this.Get('State');
+    }
+    set State(value: string | null) {
+        this.Set('State', value);
+    }
+
+    /**
+    * * Field Name: PostalCode
+    * * Display Name: Postal Code
+    * * SQL Data Type: nvarchar(20)
+    */
+    get PostalCode(): string | null {
+        return this.Get('PostalCode');
+    }
+    set PostalCode(value: string | null) {
+        this.Set('PostalCode', value);
+    }
+
+    /**
+    * * Field Name: Country
+    * * Display Name: Country
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Country(): string | null {
+        return this.Get('Country');
+    }
+    set Country(value: string | null) {
+        this.Set('Country', value);
+    }
+
+    /**
+    * * Field Name: Phone
+    * * Display Name: Phone
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Phone(): string | null {
+        return this.Get('Phone');
+    }
+    set Phone(value: string | null) {
+        this.Set('Phone', value);
+    }
+
+    /**
+    * * Field Name: Website
+    * * Display Name: Website
+    * * SQL Data Type: nvarchar(500)
+    */
+    get Website(): string | null {
+        return this.Get('Website');
+    }
+    set Website(value: string | null) {
+        this.Set('Website', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_Latitude
+    * * Display Name: Mj Latitude
+    * * SQL Data Type: decimal(10, 6)
+    */
+    get __mj_Latitude(): number | null {
+        return this.Get('__mj_Latitude');
+    }
+
+    /**
+    * * Field Name: __mj_Longitude
+    * * Display Name: Mj Longitude
+    * * SQL Data Type: decimal(10, 6)
+    */
+    get __mj_Longitude(): number | null {
+        return this.Get('__mj_Longitude');
     }
 }
 
@@ -87343,7 +87670,7 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
     * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get GridStateObject(): MJUserViewEntity_IGridState | null {
-        const raw = this.Get('GridState');
+        const raw = this.GridState;
         if (raw !== this._GridStateObject_lastRaw) {
             this._GridStateObject_cached = raw ? JSON.parse(raw) : null;
             this._GridStateObject_lastRaw = raw;
@@ -87352,7 +87679,7 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
     }
     set GridStateObject(value: MJUserViewEntity_IGridState | null) {
         const raw = value ? JSON.stringify(value) : null;
-        this.Set('GridState', raw);
+        this.GridState = raw;
         this._GridStateObject_cached = value;
         this._GridStateObject_lastRaw = raw;
     }
@@ -87378,7 +87705,7 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
     * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get FilterStateObject(): MJUserViewEntity_IFilterState | null {
-        const raw = this.Get('FilterState');
+        const raw = this.FilterState;
         if (raw !== this._FilterStateObject_lastRaw) {
             this._FilterStateObject_cached = raw ? JSON.parse(raw) : null;
             this._FilterStateObject_lastRaw = raw;
@@ -87387,7 +87714,7 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
     }
     set FilterStateObject(value: MJUserViewEntity_IFilterState | null) {
         const raw = value ? JSON.stringify(value) : null;
-        this.Set('FilterState', raw);
+        this.FilterState = raw;
         this._FilterStateObject_cached = value;
         this._FilterStateObject_lastRaw = raw;
     }
@@ -87507,7 +87834,7 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
     * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get SortStateObject(): Array<MJUserViewEntity_ISortStateItem> | null {
-        const raw = this.Get('SortState');
+        const raw = this.SortState;
         if (raw !== this._SortStateObject_lastRaw) {
             this._SortStateObject_cached = raw ? JSON.parse(raw) : null;
             this._SortStateObject_lastRaw = raw;
@@ -87516,7 +87843,7 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
     }
     set SortStateObject(value: Array<MJUserViewEntity_ISortStateItem> | null) {
         const raw = value ? JSON.stringify(value) : null;
-        this.Set('SortState', raw);
+        this.SortState = raw;
         this._SortStateObject_cached = value;
         this._SortStateObject_lastRaw = raw;
     }
@@ -87575,7 +87902,7 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
     * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get CardStateObject(): MJUserViewEntity_ICardState | null {
-        const raw = this.Get('CardState');
+        const raw = this.CardState;
         if (raw !== this._CardStateObject_lastRaw) {
             this._CardStateObject_cached = raw ? JSON.parse(raw) : null;
             this._CardStateObject_lastRaw = raw;
@@ -87584,7 +87911,7 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
     }
     set CardStateObject(value: MJUserViewEntity_ICardState | null) {
         const raw = value ? JSON.stringify(value) : null;
-        this.Set('CardState', raw);
+        this.CardState = raw;
         this._CardStateObject_cached = value;
         this._CardStateObject_lastRaw = raw;
     }
@@ -87610,7 +87937,7 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
     * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get DisplayStateObject(): MJUserViewEntity_IDisplayState | null {
-        const raw = this.Get('DisplayState');
+        const raw = this.DisplayState;
         if (raw !== this._DisplayStateObject_lastRaw) {
             this._DisplayStateObject_cached = raw ? JSON.parse(raw) : null;
             this._DisplayStateObject_lastRaw = raw;
@@ -87619,7 +87946,7 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
     }
     set DisplayStateObject(value: MJUserViewEntity_IDisplayState | null) {
         const raw = value ? JSON.stringify(value) : null;
-        this.Set('DisplayState', raw);
+        this.DisplayState = raw;
         this._DisplayStateObject_cached = value;
         this._DisplayStateObject_lastRaw = raw;
     }
