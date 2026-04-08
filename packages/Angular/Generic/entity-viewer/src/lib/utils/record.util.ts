@@ -76,5 +76,14 @@ export function computeFieldsList(entityInfo: EntityInfo, gridState?: ViewGridSt
     fields.add('__mj_CreatedAt');
     fields.add('__mj_UpdatedAt');
 
+    // Include __mj geo fields when they exist in the entity's field list
+    // These virtual fields come from the LEFT JOIN to vwRecordGeoCodes for geo-enabled entities
+    if (entityInfo.Fields.some(f => f.Name === '__mj_Latitude')) {
+        fields.add('__mj_Latitude');
+    }
+    if (entityInfo.Fields.some(f => f.Name === '__mj_Longitude')) {
+        fields.add('__mj_Longitude');
+    }
+
     return Array.from(fields);
 }

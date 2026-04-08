@@ -85,7 +85,14 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
 
     ngOnChanges(changes: SimpleChanges): void {
         if ((changes['Records'] || changes['RenderMode']) && this.map) {
-            this.RenderMarkers();
+            // When records change or the component becomes visible, re-render markers
+            // Use setTimeout to ensure the container is visible and has dimensions
+            setTimeout(() => {
+                if (this.map) {
+                    this.map.invalidateSize();
+                    this.RenderMarkers();
+                }
+            }, 100);
         }
     }
 
@@ -124,9 +131,15 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
         // Persist view state on move/zoom
         this.map.on('moveend', () => this.EmitDisplayState());
 
-        this.RenderMarkers();
-        this.IsLoading = false;
-        this.cdr.detectChanges();
+        // Render markers after a delay to ensure container is visible and has dimensions
+        setTimeout(() => {
+            if (this.map) {
+                this.map.invalidateSize();
+                this.RenderMarkers();
+                this.IsLoading = false;
+                this.cdr.detectChanges();
+            }
+        }, 300);
     }
 
     /**
