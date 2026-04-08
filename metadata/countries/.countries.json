@@ -1,0 +1,62 @@
+[
+  {
+    "fields": {
+      "Name": "United States",
+      "ISO2": "US",
+      "ISO3": "USA",
+      "NumericCode": 840,
+      "Latitude": 37.0902,
+      "Longitude": -95.7129,
+      "BoundaryGeoJSON": "@file:boundaries/US.geojson",
+      "CommonAliases": "[\"United States\",\"USA\",\"U.S.\",\"U.S.A.\",\"America\",\"United States of America\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Canada",
+      "ISO2": "CA",
+      "ISO3": "CAN",
+      "NumericCode": 124,
+      "Latitude": 56.1304,
+      "Longitude": -106.3468,
+      "BoundaryGeoJSON": "@file:boundaries/CA.geojson",
+      "CommonAliases": "[\"Canada\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "United Kingdom",
+      "ISO2": "GB",
+      "ISO3": "GBR",
+      "NumericCode": 826,
+      "Latitude": 55.3781,
+      "Longitude": -3.4360,
+      "BoundaryGeoJSON": "@file:boundaries/GB.geojson",
+      "CommonAliases": "[\"United Kingdom\",\"UK\",\"U.K.\",\"Great Britain\",\"Britain\",\"England\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Germany",
+      "ISO2": "DE",
+      "ISO3": "DEU",
+      "NumericCode": 276,
+      "Latitude": 51.1657,
+      "Longitude": 10.4515,
+      "BoundaryGeoJSON": "@file:boundaries/DE.geojson",
+      "CommonAliases": "[\"Germany\",\"Deutschland\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "France",
+      "ISO2": "FR",
+      "ISO3": "FRA",
+      "NumericCode": 250,
+      "Latitude": 46.2276,
+      "Longitude": 2.2137,
+      "BoundaryGeoJSON": "@file:boundaries/FR.geojson",
+      "CommonAliases": "[\"France\"]"
+    }
+  }
+]

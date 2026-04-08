@@ -1,0 +1,62 @@
+[
+  {
+    "fields": {
+      "_CountryISO2": "US",
+      "Name": "California",
+      "Code": "CA",
+      "ISO3166_2": "US-CA",
+      "Latitude": 36.7783,
+      "Longitude": -119.4179,
+      "BoundaryGeoJSON": "@file:boundaries/US-CA.geojson",
+      "CommonAliases": "[\"California\",\"Calif.\",\"Cal.\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "US",
+      "Name": "New York",
+      "Code": "NY",
+      "ISO3166_2": "US-NY",
+      "Latitude": 40.7128,
+      "Longitude": -74.0060,
+      "BoundaryGeoJSON": "@file:boundaries/US-NY.geojson",
+      "CommonAliases": "[\"New York\",\"NY\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "US",
+      "Name": "Texas",
+      "Code": "TX",
+      "ISO3166_2": "US-TX",
+      "Latitude": 31.9686,
+      "Longitude": -99.9018,
+      "BoundaryGeoJSON": "@file:boundaries/US-TX.geojson",
+      "CommonAliases": "[\"Texas\",\"Tex.\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "US",
+      "Name": "Florida",
+      "Code": "FL",
+      "ISO3166_2": "US-FL",
+      "Latitude": 27.6648,
+      "Longitude": -81.5158,
+      "BoundaryGeoJSON": "@file:boundaries/US-FL.geojson",
+      "CommonAliases": "[\"Florida\",\"Fla.\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "US",
+      "Name": "Illinois",
+      "Code": "IL",
+      "ISO3166_2": "US-IL",
+      "Latitude": 40.6331,
+      "Longitude": -89.3985,
+      "BoundaryGeoJSON": "@file:boundaries/US-IL.geojson",
+      "CommonAliases": "[\"Illinois\",\"Ill.\"]"
+    }
+  }
+]

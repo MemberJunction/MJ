@@ -1,0 +1,30 @@
+<div class="mj-map-view-wrapper">
+    <div class="mj-map-toolbar">
+        <div class="mj-map-mode-buttons">
+            <button class="mj-map-mode-btn"
+                    [class.active]="RenderMode === 'point'"
+                    (click)="SetRenderMode('point')">
+                <i class="fa-solid fa-location-dot"></i> Points
+            </button>
+            <button class="mj-map-mode-btn"
+                    [class.active]="RenderMode === 'choropleth'"
+                    (click)="SetRenderMode('choropleth')">
+                <i class="fa-solid fa-map"></i> Choropleth
+            </button>
+            <button class="mj-map-mode-btn"
+                    [class.active]="RenderMode === 'heatmap'"
+                    (click)="SetRenderMode('heatmap')">
+                <i class="fa-solid fa-fire"></i> Heat Map
+            </button>
+        </div>
+        <div class="mj-map-info">
+            {{ MarkerCount }} location{{ MarkerCount !== 1 ? 's' : '' }} mapped
+        </div>
+    </div>
+    @if (IsLoading) {
+        <div class="mj-map-loading">
+            <mj-loading text="Loading map..."></mj-loading>
+        </div>
+    }
+    <div #mapContainer class="mj-map-container" [class.hidden]="IsLoading"></div>
+</div>
