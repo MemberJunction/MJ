@@ -28,7 +28,7 @@ import { BatchContextIndex, BatchContextStub } from '../lib/batch-context-index'
 /** Build a minimal BatchContextStub with given entity name and field values. */
 function makeStub(
   entityName: string,
-  fields: Record<string, any>,
+  fields: Record<string, unknown>,
 ): BatchContextStub {
   const fieldNames = Object.keys(fields);
   return {

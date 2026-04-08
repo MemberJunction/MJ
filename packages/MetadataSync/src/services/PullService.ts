@@ -842,7 +842,7 @@ export class PullService {
     const pkFieldName = entityInfo.PrimaryKeys[0].Name;
     const allParentIds: string[] = [];
     for (const record of records) {
-      const id = (record as any)[pkFieldName];
+      const id = record.Get(pkFieldName);
       if (id != null) {
         allParentIds.push(String(id));
       }
@@ -871,9 +871,10 @@ export class PullService {
           const totalRelated = Array.from(batchResults.values()).reduce((sum, arr) => sum + arr.length, 0);
           callbacks?.onLog?.(`  ${relationKey}: ${totalRelated} related records across ${batchResults.size} parents`);
         }
-      } catch (error) {
+      } catch (error: unknown) {
         if (verbose) {
-          callbacks?.onWarn?.(`Failed to batch pre-fetch ${relationKey}: ${(error as any).message || error}`);
+          const message = error instanceof Error ? error.message : String(error);
+          callbacks?.onWarn?.(`Failed to batch pre-fetch ${relationKey}: ${message}`);
         }
         // Don't add to batchedRelatedData — processRelatedEntities will fall back to per-record
       }

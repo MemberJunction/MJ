@@ -26,8 +26,8 @@ export interface BatchContextStub {
     PrimaryKeys: Array<{ Name: string }>;
     Fields: Array<{ Name: string }>;
   };
-  Get(field: string): any;
-  GetAll(): Record<string, any>;
+  Get(field: string): unknown;
+  GetAll(): Record<string, unknown>;
 }
 
 export class BatchContextIndex {
