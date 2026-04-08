@@ -1,0 +1,144 @@
+/**
+ * @fileoverview Search result fusion using Reciprocal Rank Fusion (RRF).
+ *
+ * Takes ranked lists from vector, full-text, and entity search providers,
+ * applies RRF to produce a unified ranking, deduplicates by EntityName+RecordID,
+ * and normalizes scores when only a single source has results.
+ *
+ * @module @memberjunction/search-engine
+ */
+
+import { ComputeRRF, ScoredCandidate } from '@memberjunction/core';
+import { SearchResultItem, SearchSource, SearchScoreBreakdown } from './search.types';
+
+/**
+ * A labeled list of search results from a single source.
+ */
+export interface LabeledResultList {
+    /** Which search source produced these results */
+    Source: SearchSource;
+    /** The results, sorted by descending relevance */
+    Results: SearchResultItem[];
+}
+
+/**
+ * Handles fusion and deduplication of multi-source search results
+ * using Reciprocal Rank Fusion.
+ */
+export class SearchFusion {
+    /**
+     * Fuse multiple ranked result lists using RRF, deduplicate, and return
+     * the top results up to maxResults.
+     *
+     * When only one source has results, scores are normalized relative to
+     * the top result so the best match appears at ~95% rather than raw
+     * cosine similarity (~40-50%).
+     *
+     * @param lists - Labeled result lists from each search source
+     * @param maxResults - Maximum number of results to return
+     * @returns Fused, deduplicated, and ranked results
+     */
+    public Fuse(lists: LabeledResultList[], maxResults: number): SearchResultItem[] {
+        // Collect only lists that have results
+        const nonEmpty = lists.filter(l => l.Results.length > 0);
+        if (nonEmpty.length === 0) return [];
+
+        // Single source: normalize and return
+        if (nonEmpty.length === 1) {
+            return this.normalizeScores(nonEmpty[0].Results.slice(0, maxResults));
+        }
+
+        // Multiple sources: apply RRF
+        return this.applyRRF(nonEmpty, maxResults);
+    }
+
+    /**
+     * Deduplicate results by EntityName+RecordID, keeping the highest-scored entry.
+     */
+    public Deduplicate(results: SearchResultItem[]): SearchResultItem[] {
+        const seen = new Map<string, SearchResultItem>();
+        for (const result of results) {
+            const key = `${result.EntityName}::${result.RecordID}`;
+            const existing = seen.get(key);
+            if (!existing || result.Score > existing.Score) {
+                seen.set(key, result);
+            }
+        }
+        return Array.from(seen.values()).sort((a, b) => b.Score - a.Score);
+    }
+
+    /**
+     * Apply RRF across multiple result lists.
+     * Maps results to ScoredCandidate[], runs ComputeRRF, then maps back.
+     */
+    private applyRRF(lists: LabeledResultList[], maxResults: number): SearchResultItem[] {
+        // Build ScoredCandidate arrays for each source
+        const rankedLists: ScoredCandidate[][] = lists.map(list =>
+            list.Results.map((r, i) => ({
+                ID: r.RecordID,
+                Score: r.Score,
+                Rank: i + 1
+            }))
+        );
+
+        // Run RRF fusion
+        const fused = ComputeRRF(rankedLists);
+
+        // Build a lookup from RecordID to full result item (prefer first occurrence)
+        const resultMap = new Map<string, SearchResultItem>();
+        for (const list of lists) {
+            for (const r of list.Results) {
+                if (!resultMap.has(r.RecordID)) {
+                    resultMap.set(r.RecordID, r);
+                }
+            }
+        }
+
+        // Map fused candidates back to full result items
+        return fused.slice(0, maxResults).map(candidate => {
+            const item = resultMap.get(candidate.ID);
+            if (item) {
+                return { ...item, Score: candidate.Score };
+            }
+            // Fallback (shouldn't happen in practice)
+            return this.createFallbackItem(candidate);
+        });
+    }
+
+    /**
+     * Normalize scores when only one search source returned results.
+     * Scales scores relative to the top result so the best match shows
+     * ~95% instead of raw cosine similarity (~40-50%).
+     */
+    private normalizeScores(results: SearchResultItem[]): SearchResultItem[] {
+        if (results.length === 0) return results;
+
+        const maxScore = results[0].Score; // Results are already sorted desc
+        if (maxScore <= 0) return results;
+
+        const scaleFactor = 0.95 / maxScore;
+        return results.map(r => ({
+            ...r,
+            Score: Math.min(0.99, r.Score * scaleFactor)
+        }));
+    }
+
+    /**
+     * Create a fallback SearchResultItem for a fused candidate that has
+     * no matching full result item (defensive).
+     */
+    private createFallbackItem(candidate: ScoredCandidate): SearchResultItem {
+        return {
+            ID: candidate.ID,
+            EntityName: 'Unknown',
+            RecordID: candidate.ID,
+            SourceType: 'fused',
+            Title: 'Unknown',
+            Snippet: '',
+            Score: candidate.Score,
+            ScoreBreakdown: {} as SearchScoreBreakdown,
+            Tags: [],
+            MatchedAt: new Date()
+        };
+    }
+}
