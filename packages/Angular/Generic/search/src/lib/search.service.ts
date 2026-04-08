@@ -85,6 +85,26 @@ export class SearchService {
         }
     }
 
+    /**
+     * Lightweight preview search for autocomplete/typeahead.
+     * Does NOT update SearchResults$ or IsSearching$ observables,
+     * and does NOT add to recent search history.
+     */
+    public async PreviewSearch(query: string, maxResults: number = 8): Promise<SearchResponse> {
+        try {
+            return await this.executeGraphQLSearch({
+                Query: query,
+                MaxResults: maxResults,
+                ActiveFilters: {},
+                IncludeSources: ['vector', 'fulltext', 'entity'],
+                MinScore: 0
+            });
+        } catch (err) {
+            const errorMessage = err instanceof Error ? err.message : 'Preview search failed';
+            return this.createEmptyResponse(errorMessage);
+        }
+    }
+
     /** Clear the current search results */
     public ClearResults(): void {
         this.SearchResults$.next(null);

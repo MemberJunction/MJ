@@ -18511,11 +18511,11 @@ export class MJApplicationEntity_ {
     @MaxLength(255)
     EntityBaseTable: string;
         
-    @Field(() => Boolean) 
-    EntityCodeName: boolean;
+    @Field({nullable: true}) 
+    EntityCodeName?: string;
         
-    @Field(() => Boolean) 
-    EntityClassName: boolean;
+    @Field({nullable: true}) 
+    EntityClassName?: string;
         
     @Field({nullable: true}) 
     EntityBaseTableCodeName?: string;
@@ -40653,8 +40653,9 @@ export class MJEntityFieldValue_ {
     @MaxLength(255)
     EntityField: string;
         
-    @Field(() => Boolean) 
-    Entity: boolean;
+    @Field() 
+    @MaxLength(255)
+    Entity: string;
         
     @Field() 
     @MaxLength(36)

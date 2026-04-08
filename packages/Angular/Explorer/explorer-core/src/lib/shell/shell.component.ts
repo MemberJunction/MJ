@@ -26,7 +26,7 @@ import { LoadingTheme, LoadingAnimationType, AnimationStep, getActiveTheme } fro
 import { AppAccessDialogComponent, AppAccessDialogConfig, AppAccessDialogResult } from './components/dialogs/app-access-dialog.component';
 import { TabContainerComponent } from './components/tabs/tab-container.component';
 import { BaseUserMenu, UserMenuElement, UserMenuItem, UserMenuContext, isUserMenuDivider, ApplicationInfoRef } from '../user-menu';
-import { MJUserEntity } from '@memberjunction/core-entities';
+import { MJUserEntity, InstanceConfigEngine } from '@memberjunction/core-entities';
 import { CommandPaletteService } from '../command-palette/command-palette.service';
 
 /**
@@ -106,6 +106,17 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   searchableEntities: EntityInfo[] = [];
   selectedEntity: EntityInfo | null = null;
   @ViewChild('searchInput') searchInput!: ElementRef<HTMLInputElement>;
+
+  // Universal search bar
+  @ViewChild('shellSearchComposite') shellSearchComposite: { Focus?(): void } | undefined;
+
+  // Instance configuration feature flags
+  get ShowSearchBar(): boolean {
+      return InstanceConfigEngine.Instance.GetBoolean('Shell.SearchBar.Enabled', true);
+  }
+  get ShowSearchPreview(): boolean {
+      return InstanceConfigEngine.Instance.GetBoolean('Shell.SearchBar.EnablePreview', true);
+  }
 
   // Tab container reference for thumbnail capture
   @ViewChild(TabContainerComponent) tabContainerRef!: TabContainerComponent;
@@ -213,6 +224,11 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     this.appManager.Initialize();
 
     await StartupManager.Instance.Startup();
+
+    // Initialize instance configuration for feature flags
+    await InstanceConfigEngine.Instance.Config(false).catch(() => {
+        LogStatus('InstanceConfigEngine initialization skipped (not critical)');
+    });
 
     // Get current user
     const md = new Metadata();
@@ -2356,6 +2372,63 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         }
       });
     }
+  }
+
+  // ========================================
+  // UNIVERSAL SEARCH EVENT HANDLERS
+  // ========================================
+
+  @HostListener('document:keydown', ['$event'])
+  OnGlobalKeydown(event: KeyboardEvent): void {
+      const target = event.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return;
+      const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+      const isCtrlOrCmd = isMac ? event.metaKey : event.ctrlKey;
+      if (isCtrlOrCmd && event.key === 'k') {
+          event.preventDefault();
+          event.stopPropagation();
+          if (this.shellSearchComposite?.Focus) {
+              this.shellSearchComposite.Focus();
+          }
+      }
+  }
+
+  OnSearchResultSelected(result: { EntityName: string; RecordID: string }): void {
+      if (result.EntityName && result.RecordID) {
+          this.tabService.OpenTab({
+              ApplicationId: SYSTEM_APP_ID,
+              Title: `${result.EntityName} - ${result.RecordID}`,
+              Configuration: {
+                  resourceType: 'Records',
+                  Entity: result.EntityName,
+                  recordId: result.RecordID
+              },
+              ResourceRecordId: result.RecordID,
+              IsPinned: false
+          });
+      }
+  }
+
+  OnSearchSubmitted(query: string): void {
+      if (query && query.trim().length >= 2) {
+          this.tabService.OpenTab({
+              ApplicationId: SYSTEM_APP_ID,
+              Title: `Search: ${query}`,
+              Configuration: {
+                  resourceType: 'Custom',
+                  driverClass: 'SearchResultsResource',
+                  Query: query,
+                  SearchInput: query,
+                  recordId: `search-${query}`
+              },
+              ResourceRecordId: `search-${query}`,
+              IsPinned: false
+          });
+      }
+  }
+
+  OnSeeAllSearch(query: string): void {
+      this.OnSearchSubmitted(query);
   }
 
   // ========================================

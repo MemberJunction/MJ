@@ -6888,14 +6888,14 @@ export const MJApplicationEntitySchema = z.object({
         * * Field Name: EntityBaseTable
         * * Display Name: Entity Base Table
         * * SQL Data Type: nvarchar(255)`),
-    EntityCodeName: z.boolean().describe(`
+    EntityCodeName: z.string().nullable().describe(`
         * * Field Name: EntityCodeName
         * * Display Name: Entity Code Name
-        * * SQL Data Type: bit`),
-    EntityClassName: z.boolean().describe(`
+        * * SQL Data Type: nvarchar(MAX)`),
+    EntityClassName: z.string().nullable().describe(`
         * * Field Name: EntityClassName
         * * Display Name: Entity Class Name
-        * * SQL Data Type: bit`),
+        * * SQL Data Type: nvarchar(MAX)`),
     EntityBaseTableCodeName: z.string().nullable().describe(`
         * * Field Name: EntityBaseTableCodeName
         * * Display Name: Entity Base Table Code Name
@@ -14112,10 +14112,10 @@ export const MJEntityFieldValueSchema = z.object({
         * * Field Name: EntityField
         * * Display Name: Entity Field
         * * SQL Data Type: nvarchar(255)`),
-    Entity: z.boolean().describe(`
+    Entity: z.string().describe(`
         * * Field Name: Entity
         * * Display Name: Entity
-        * * SQL Data Type: bit`),
+        * * SQL Data Type: nvarchar(255)`),
     EntityID: z.string().describe(`
         * * Field Name: EntityID
         * * Display Name: Entity ID
@@ -43093,18 +43093,18 @@ export class MJApplicationEntityEntity extends BaseEntity<MJApplicationEntityEnt
     /**
     * * Field Name: EntityCodeName
     * * Display Name: Entity Code Name
-    * * SQL Data Type: bit
+    * * SQL Data Type: nvarchar(MAX)
     */
-    get EntityCodeName(): boolean {
+    get EntityCodeName(): string | null {
         return this.Get('EntityCodeName');
     }
 
     /**
     * * Field Name: EntityClassName
     * * Display Name: Entity Class Name
-    * * SQL Data Type: bit
+    * * SQL Data Type: nvarchar(MAX)
     */
-    get EntityClassName(): boolean {
+    get EntityClassName(): string | null {
         return this.Get('EntityClassName');
     }
 
@@ -61829,9 +61829,9 @@ export class MJEntityFieldValueEntity extends BaseEntity<MJEntityFieldValueEntit
     /**
     * * Field Name: Entity
     * * Display Name: Entity
-    * * SQL Data Type: bit
+    * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): boolean {
+    get Entity(): string {
         return this.Get('Entity');
     }
 

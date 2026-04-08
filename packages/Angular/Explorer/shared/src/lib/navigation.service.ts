@@ -166,7 +166,6 @@ export class NavigationService implements OnDestroy {
    *   should know about. Each dashboard defines its own shape.
    */
   public SetAgentContext(caller: BaseResourceComponent, context: Record<string, unknown>): void {
-    console.log(`[AgentContext] SetAgentContext from ${caller.constructor.name}:`, Object.keys(context));
     this.AgentContextUpdated$.next({ Caller: caller, AgentContext: context });
   }
 
@@ -186,7 +185,6 @@ export class NavigationService implements OnDestroy {
     ParameterSchema: Record<string, unknown>;
     Handler: (params: Record<string, unknown>) => Promise<unknown>;
   }>): void {
-    console.log(`[AgentContext] SetAgentClientTools from ${caller.constructor.name}: [${tools.map(t => t.Name).join(', ')}]`);
     this.AgentContextUpdated$.next({ Caller: caller, AgentClientTools: tools });
   }
 

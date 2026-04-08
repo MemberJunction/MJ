@@ -363,7 +363,6 @@ export class MJExplorerAppComponent implements OnInit, OnDestroy {
 
     // Update AdditionalContext in the current snapshot
     if (update.AgentContext !== undefined && this.AppContextSnapshot) {
-      console.log(`[AgentContext] Context update from ${callerName}:`, Object.keys(update.AgentContext));
       this.AppContextSnapshot = {
         ...this.AppContextSnapshot,
         AdditionalContext: update.AgentContext,
@@ -375,7 +374,6 @@ export class MJExplorerAppComponent implements OnInit, OnDestroy {
     if (update.AgentClientTools !== undefined) {
       // Unregister any previously registered dashboard tools
       if (this.activeDashboardToolNames.length > 0) {
-        console.log(`[AgentContext] Unregistering ${this.activeDashboardToolNames.length} tools from previous dashboard:`, this.activeDashboardToolNames);
         for (const toolName of this.activeDashboardToolNames) {
           this.agentClient.UnregisterTool(toolName);
         }
@@ -383,7 +381,6 @@ export class MJExplorerAppComponent implements OnInit, OnDestroy {
 
       // Register the new tools
       this.activeDashboardToolNames = update.AgentClientTools.map(t => t.Name);
-      console.log(`[AgentContext] Registering ${update.AgentClientTools.length} tools from ${callerName}:`, this.activeDashboardToolNames);
       for (const tool of update.AgentClientTools) {
         this.agentClient.RegisterTool({
           Name: tool.Name,
