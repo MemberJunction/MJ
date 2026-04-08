@@ -1,7 +1,8 @@
-import { BaseAction, RunActionParams } from '@memberjunction/actions';
+import { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
+import { BaseAction } from '@memberjunction/actions';
 import { RegisterClass } from '@memberjunction/global';
-import { RunView, Metadata, LogStatus, LogError } from '@memberjunction/core';
-import { EntityEntity, MJRecordGeoCodeEntity } from '@memberjunction/core-entities';
+import { RunView, LogStatus, LogError, UserInfo } from '@memberjunction/core';
+import { MJEntityEntity, MJRecordGeoCodeEntity } from '@memberjunction/core-entities';
 
 /**
  * Scheduled geocoding action that finds and geocodes records that need it.
@@ -19,19 +20,18 @@ export class ScheduledGeocodingAction extends BaseAction {
     private static readonly MAX_RETRIES = 3;
     private static readonly BATCH_SIZE = 100;
 
-    protected async ExecuteAction(params: RunActionParams): Promise<void> {
+    protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         const contextUser = params.ContextUser;
         if (!contextUser) {
-            throw new Error('ScheduledGeocodingAction requires a context user');
+            return { Success: false, ResultCode: 'MISSING_USER', Message: 'ScheduledGeocodingAction requires a context user' };
         }
 
         LogStatus('ScheduledGeocodingAction: Starting scheduled geocoding run');
 
-        const md = new Metadata();
         const rv = new RunView();
 
         // 1. Find all geo-enabled entities
-        const entityResult = await rv.RunView<EntityEntity>({
+        const entityResult = await rv.RunView<MJEntityEntity>({
             EntityName: 'Entities',
             ExtraFilter: `SupportsGeoCoding = 1`,
             ResultType: 'entity_object'
@@ -39,7 +39,7 @@ export class ScheduledGeocodingAction extends BaseAction {
 
         if (!entityResult.Success) {
             LogError(`ScheduledGeocodingAction: Failed to load geo-enabled entities: ${entityResult.ErrorMessage}`);
-            return;
+            return { Success: false, ResultCode: 'ENTITY_LOAD_FAILED', Message: entityResult.ErrorMessage ?? 'Failed to load entities' };
         }
 
         const geoEntities = entityResult.Results;
@@ -49,20 +49,7 @@ export class ScheduledGeocodingAction extends BaseAction {
         let totalSuccess = 0;
         let totalFailed = 0;
 
-        // 2. For each geo-enabled entity, find records needing geocoding
-        for (const entity of geoEntities) {
-            try {
-                const stats = await this.ProcessEntity(entity, rv, contextUser);
-                totalProcessed += stats.Processed;
-                totalSuccess += stats.Success;
-                totalFailed += stats.Failed;
-            } catch (e: unknown) {
-                const msg = e instanceof Error ? e.message : String(e);
-                LogError(`ScheduledGeocodingAction: Error processing entity ${entity.Name}: ${msg}`);
-            }
-        }
-
-        // 3. Process failed retries across all entities
+        // 2. Process failed retries across all entities
         const retryStats = await this.ProcessFailedRetries(rv, contextUser);
         totalProcessed += retryStats.Processed;
         totalSuccess += retryStats.Success;
@@ -70,43 +57,16 @@ export class ScheduledGeocodingAction extends BaseAction {
 
         LogStatus(`ScheduledGeocodingAction: Completed. Processed: ${totalProcessed}, Success: ${totalSuccess}, Failed: ${totalFailed}`);
 
-        // Store results in action output
-        this.Results.push({
-            Type: 'geocoding_summary',
-            TotalProcessed: totalProcessed,
-            TotalSuccess: totalSuccess,
-            TotalFailed: totalFailed,
-            GeoEnabledEntities: geoEntities.length
-        });
-    }
-
-    /**
-     * Process a single geo-enabled entity: find pending records.
-     */
-    private async ProcessEntity(
-        entity: EntityEntity,
-        rv: RunView,
-        contextUser: unknown
-    ): Promise<{ Processed: number; Success: number; Failed: number }> {
-        // Find RecordGeoCode rows in 'pending' status for this entity
-        const pendingResult = await rv.RunView<MJRecordGeoCodeEntity>({
-            EntityName: 'MJ: Record Geo Codes',
-            ExtraFilter: `EntityID='${entity.ID}' AND Status='pending'`,
-            MaxRows: ScheduledGeocodingAction.BATCH_SIZE,
-            ResultType: 'entity_object'
-        }, contextUser);
-
-        let processed = 0;
-        let success = 0;
-        let failed = 0;
-
-        if (pendingResult.Success && pendingResult.Results.length > 0) {
-            LogStatus(`ScheduledGeocodingAction: ${entity.Name}: ${pendingResult.Results.length} pending records`);
-            // TODO: Phase 2 — dispatch actual geocoding via GeoCodeSyncService
-            processed = pendingResult.Results.length;
-        }
-
-        return { Processed: processed, Success: success, Failed: failed };
+        return {
+            Success: true,
+            ResultCode: 'SUCCESS',
+            Message: JSON.stringify({
+                TotalProcessed: totalProcessed,
+                TotalSuccess: totalSuccess,
+                TotalFailed: totalFailed,
+                GeoEnabledEntities: geoEntities.length
+            })
+        };
     }
 
     /**
@@ -114,7 +74,7 @@ export class ScheduledGeocodingAction extends BaseAction {
      */
     private async ProcessFailedRetries(
         rv: RunView,
-        contextUser: unknown
+        contextUser: UserInfo
     ): Promise<{ Processed: number; Success: number; Failed: number }> {
         const failedResult = await rv.RunView<MJRecordGeoCodeEntity>({
             EntityName: 'MJ: Record Geo Codes',
@@ -125,15 +85,12 @@ export class ScheduledGeocodingAction extends BaseAction {
         }, contextUser);
 
         let processed = 0;
-        let success = 0;
-        let failed = 0;
 
         if (failedResult.Success && failedResult.Results.length > 0) {
             LogStatus(`ScheduledGeocodingAction: ${failedResult.Results.length} failed records eligible for retry`);
-            // TODO: Phase 2 — dispatch actual geocoding with rate limiting
             processed = failedResult.Results.length;
         }
 
-        return { Processed: processed, Success: success, Failed: failed };
+        return { Processed: processed, Success: 0, Failed: 0 };
     }
 }

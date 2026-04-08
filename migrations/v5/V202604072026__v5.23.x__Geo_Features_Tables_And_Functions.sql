@@ -269,10 +269,16 @@ EXEC sp_addextendedproperty @name=N'MS_Description', @value=N'When true (default
 
 
 -- ============================================================================
--- ALTER EntityField: Add AutoUpdateExtendedType column
+-- ALTER EntityField: Add AutoUpdateExtendedType column + update ExtendedType CHECK constraint
 -- ============================================================================
 ALTER TABLE ${flyway:defaultSchema}.EntityField
 ADD AutoUpdateExtendedType BIT NOT NULL DEFAULT 1;
+
+-- Update the CHECK constraint to include new Geo* ExtendedType values
+ALTER TABLE ${flyway:defaultSchema}.EntityField DROP CONSTRAINT CK_EntityField_ExtendedType;
+ALTER TABLE ${flyway:defaultSchema}.EntityField ADD CONSTRAINT CK_EntityField_ExtendedType CHECK (
+    ExtendedType IN ('Code', 'Email', 'FaceTime', 'Geo', 'GeoLatitude', 'GeoLongitude', 'GeoCountry', 'GeoStateProvince', 'GeoCity', 'GeoPostalCode', 'GeoAddress', 'MSTeams', 'Other', 'SIP', 'SMS', 'Skype', 'Tel', 'URL', 'WhatsApp', 'ZoomMtg')
+);
 
 EXEC sp_addextendedproperty @name=N'MS_Description', @value=N'When true (default), CodeGen can automatically suggest and apply ExtendedType values (GeoLatitude, GeoLongitude, GeoAddress, etc.) during LLM field categorization. Set to 0 to lock admin-specified ExtendedType.',
     @level0type=N'SCHEMA', @level0name=N'${flyway:defaultSchema}',

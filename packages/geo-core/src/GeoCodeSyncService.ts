@@ -52,9 +52,13 @@ export class GeoCodeSyncService extends BaseSingleton<GeoCodeSyncService> {
     protected async ProcessMapping(entity: BaseEntity, mapping: GeoFieldMapping): Promise<void> {
         const hash = ComputeGeoSourceHash(entity, mapping.Fields);
 
+        // Use the raw primary key value (not the composite key format with field name prefix)
+        // because the view JOIN does CAST(t.ID AS NVARCHAR(450)) which produces bare UUID
+        const recordId = entity.PrimaryKey.Values.length > 0 ? String(entity.PrimaryKey.Values[0].Value) : '';
+
         const existing = await this.FindExistingGeoCode(
             entity.EntityInfo.ID,
-            entity.PrimaryKey.ToString(),
+            recordId,
             mapping.LocationType
         );
 
@@ -65,7 +69,7 @@ export class GeoCodeSyncService extends BaseSingleton<GeoCodeSyncService> {
         // Upsert a pending row
         const row = existing ?? await this.CreateGeoCodeRow(
             entity.EntityInfo.ID,
-            entity.PrimaryKey.ToString(),
+            recordId,
             mapping.LocationType
         );
 
