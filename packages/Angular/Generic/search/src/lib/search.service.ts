@@ -23,6 +23,8 @@ const DEFAULT_MIN_SCORE = 0.35;
 /** Default icon mapping for source types */
 const SOURCE_TYPE_ICONS: Record<string, string> = {
     'entity': 'fa-solid fa-database',
+    'vector': 'fa-solid fa-brain',
+    'fulltext': 'fa-solid fa-magnifying-glass',
     'content-item': 'fa-solid fa-file-lines',
     'file': 'fa-solid fa-file',
     'web-page': 'fa-solid fa-globe',
@@ -31,6 +33,8 @@ const SOURCE_TYPE_ICONS: Record<string, string> = {
 /** Default labels for source types */
 const SOURCE_TYPE_LABELS: Record<string, string> = {
     'entity': 'Entity Records',
+    'vector': 'Vector Search',
+    'fulltext': 'Full-Text Search',
     'content-item': 'Content Items',
     'file': 'Documents',
     'web-page': 'Web Pages',
@@ -148,7 +152,7 @@ export class SearchService {
             this.buildSourceTypeFilter(results),
             this.buildEntityNameFilter(results),
             this.buildTagFilter(results)
-        ];
+        ].filter(f => f.Options.length > 0); // Hide categories with no options (e.g., Tags when none exist)
     }
 
     /** Get the icon for a given source type */

@@ -59,8 +59,11 @@ import {
                         <mj-search-filter
                             [Filters]="Filters"
                             [ActiveFilters]="ActiveFilters"
+                            [ShowRelevanceSlider]="true"
+                            [MinScorePercent]="MinScorePercent"
                             (FilterChanged)="OnFilterChanged($event)"
-                            (FiltersCleared)="OnFiltersCleared()">
+                            (FiltersCleared)="OnFiltersCleared()"
+                            (MinScoreChanged)="OnMinScoreChanged($any($event))">
                         </mj-search-filter>
                         <mj-search-results
                             [FlatResults]="FilteredResults"
@@ -180,6 +183,7 @@ export class SearchResultsResource extends BaseResourceComponent {
     Filters: SearchFilter[] = [];
     ActiveFilters: Record<string, string[]> = {};
     FilteredResults: SearchResultItem[] = [];
+    MinScorePercent = 0;
 
     /** All results from the last search (before client-side filtering) */
     private allResults: SearchResultItem[] = [];
@@ -242,6 +246,12 @@ export class SearchResultsResource extends BaseResourceComponent {
 
     OnFiltersCleared(): void {
         this.ActiveFilters = {};
+        this.MinScorePercent = 0;
+        this.applyClientFilters();
+    }
+
+    OnMinScoreChanged(percent: number): void {
+        this.MinScorePercent = percent;
         this.applyClientFilters();
     }
 
@@ -275,7 +285,7 @@ export class SearchResultsResource extends BaseResourceComponent {
 
         const response: SearchResponse = await this.searchService.ExecuteSearch(request);
 
-        this.allResults = response.Results;
+        this.allResults = [...response.Results].sort((a, b) => b.Score - a.Score);
         this.TotalCount = response.TotalCount;
         this.ElapsedMs = response.ElapsedMs;
         this.Filters = response.Filters;
@@ -290,11 +300,21 @@ export class SearchResultsResource extends BaseResourceComponent {
      * Apply active filter selections to the full result set.
      */
     private applyClientFilters(): void {
-        if (!this.hasActiveFilters()) {
-            this.FilteredResults = [...this.allResults];
-        } else {
-            this.FilteredResults = this.allResults.filter(r => this.matchesActiveFilters(r));
+        let results = this.allResults;
+
+        // Apply facet filters
+        if (this.hasActiveFilters()) {
+            results = results.filter(r => this.matchesActiveFilters(r));
         }
+
+        // Apply min score filter
+        if (this.MinScorePercent > 0) {
+            const minScore = this.MinScorePercent / 100;
+            results = results.filter(r => r.Score >= minScore);
+        }
+
+        // Sort by score descending
+        this.FilteredResults = results.sort((a, b) => b.Score - a.Score);
         this.cdr.detectChanges();
     }
 

@@ -60,7 +60,27 @@
         </div>
     }
 
-    @if (Filters.length === 0) {
+    <!-- Relevance Threshold Slider -->
+    @if (ShowRelevanceSlider) {
+        <div class="filter-category">
+            <div class="filter-category-header-row">
+                <div class="filter-category-header">
+                    <span class="filter-category-name">Min Relevance</span>
+                </div>
+            </div>
+            <div class="filter-relevance-slider">
+                <input
+                    type="range"
+                    min="0" max="100" step="5"
+                    [value]="MinScorePercent"
+                    (input)="OnMinScoreChange($any($event.target).value)"
+                    class="relevance-range" />
+                <span class="relevance-value">{{ MinScorePercent }}%</span>
+            </div>
+        </div>
+    }
+
+    @if (Filters.length === 0 && !ShowRelevanceSlider) {
         <div class="filter-empty">
             <p>No filters available</p>
         </div>

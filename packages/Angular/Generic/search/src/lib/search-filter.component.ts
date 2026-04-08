@@ -33,9 +33,16 @@ export class SearchFilterComponent {
     /** Whether the filter panel is collapsible */
     @Input() Collapsible = true;
 
+    /** Whether to show the min relevance slider */
+    @Input() ShowRelevanceSlider = true;
+
+    /** Current minimum score as a percentage (0-100) */
+    @Input() MinScorePercent = 0;
+
     @Output() FilterChanged = new EventEmitter<SearchFilterChangeEvent>();
     @Output() FiltersCleared = new EventEmitter<void>();
     @Output() CloseRequested = new EventEmitter<void>();
+    @Output() MinScoreChanged = new EventEmitter<number>();
 
     /** Collapsed state per category */
     public CollapsedCategories = new Set<string>();
@@ -116,5 +123,11 @@ export class SearchFilterComponent {
         if (!filter) return false;
         const selection = this.ActiveFilters[category] ?? [];
         return selection.length === filter.Options.length;
+    }
+
+    /** Handle relevance slider change */
+    public OnMinScoreChange(value: string): void {
+        this.MinScorePercent = parseInt(value, 10);
+        this.MinScoreChanged.emit(this.MinScorePercent);
     }
 }

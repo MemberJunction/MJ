@@ -228,6 +228,8 @@ export class VectorSearchProvider implements ISearchProvider {
             const updatedAt = meta['__mj_UpdatedAt'] ? new Date(meta['__mj_UpdatedAt'] as string) : new Date();
             const metaTags = Array.isArray(meta['Tags']) ? (meta['Tags'] as string[]) : [];
 
+            const rawScore = match.score ?? 0;
+
             return {
                 ID: match.id,
                 EntityName: entityName,
@@ -235,8 +237,8 @@ export class VectorSearchProvider implements ISearchProvider {
                 SourceType: 'vector',
                 Title: title,
                 Snippet: snippet,
-                Score: match.score ?? 0,
-                ScoreBreakdown: { Vector: match.score ?? 0 },
+                Score: rawScore,
+                ScoreBreakdown: { Vector: rawScore },
                 Tags: metaTags,
                 EntityIcon: entityIcon,
                 RecordName: title,
@@ -351,4 +353,5 @@ export class VectorSearchProvider implements ISearchProvider {
         // Multi-key: join values with || for consistent dedup key
         return ck.KeyValuePairs.map(kv => kv.Value).join('||');
     }
+
 }

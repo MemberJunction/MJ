@@ -101,7 +101,7 @@
             </div>
             @if (ShowScores) {
                 <div class="result-card-score">
-                    <div class="score-circle">
+                    <div class="score-circle" [class.score-high]="result.Score >= 0.40" [class.score-medium]="result.Score >= 0.15 && result.Score < 0.40" [class.score-low]="result.Score < 0.15">
                         <span class="score-value">{{ FormatScore(result.Score) }}</span>
                     </div>
                 </div>

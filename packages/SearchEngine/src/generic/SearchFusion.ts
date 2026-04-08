@@ -43,9 +43,9 @@ export class SearchFusion {
         const nonEmpty = lists.filter(l => l.Results.length > 0);
         if (nonEmpty.length === 0) return [];
 
-        // Single source: normalize and return
+        // Single source: return as-is (no normalization needed, scores are native to that source)
         if (nonEmpty.length === 1) {
-            return this.normalizeScores(nonEmpty[0].Results.slice(0, maxResults));
+            return nonEmpty[0].Results.slice(0, maxResults);
         }
 
         // Multiple sources: apply RRF
@@ -82,7 +82,14 @@ export class SearchFusion {
                 });
             }
         }
-        return Array.from(seen.values()).sort((a, b) => b.Score - a.Score);
+        // Ensure Score is the max of all ScoreBreakdown values (handles cases
+        // where dedup didn't merge but breakdown was set from a single source)
+        const deduplicated = Array.from(seen.values()).map(r => {
+            const breakdownValues = Object.values(r.ScoreBreakdown).filter((v): v is number => typeof v === 'number' && v > 0);
+            const breakdownMax = breakdownValues.length > 0 ? Math.max(...breakdownValues) : 0;
+            return breakdownMax > r.Score ? { ...r, Score: breakdownMax } : r;
+        });
+        return deduplicated.sort((a, b) => b.Score - a.Score);
     }
 
     /**
