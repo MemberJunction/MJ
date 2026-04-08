@@ -70,6 +70,10 @@ export interface SuiteFlags extends CommonFlags {
      */
     var?: string[];
     /**
+     * Maximum number of parallel workers (default 4).
+     */
+    maxParallel?: number;
+    /**
      * Delay in milliseconds between test executions.
      * Useful for avoiding rate limits (e.g., Auth0 brute-force protection).
      */

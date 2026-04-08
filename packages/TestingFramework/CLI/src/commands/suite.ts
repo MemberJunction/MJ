@@ -81,12 +81,12 @@ export class SuiteCommand {
             // Execute suite
             this.spinner.start(`Running test suite: ${suite.Name}...`);
 
-            // Note: parallel and failFast are handled by RunSuite internally
-            // We only pass the standard TestRunOptions
             const result = await engine.RunSuite(suite.ID, {
                 verbose: flags.verbose,
                 variables,
-                delayBetweenTests: flags.delay
+                delayBetweenTests: flags.delay,
+                parallel: flags.parallel,
+                maxParallel: flags.maxParallel
             }, contextUser);
 
             this.spinner.stop();

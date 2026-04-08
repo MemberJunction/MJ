@@ -114,6 +114,7 @@ All variables go in `docker/regression/.env.test` (gitignored). See `.env.test.e
 | `TEST_PWD` | Yes | Test user password in Auth0 |
 | `ANTHROPIC_API_KEY` | Yes | Anthropic API key (for Computer Use controller/judge LLM) |
 | `GOOGLE_API_KEY` | No | Google API key (if using Gemini models) |
+| `MAX_PARALLEL_WORKERS` | No | Number of parallel browser workers (default: 4) |
 
 **Auth0 setup requirements** -- the SPA application must have:
 - **Allowed Callback URLs**: `http://localhost:4200`
@@ -125,9 +126,11 @@ All variables go in `docker/regression/.env.test` (gitignored). See `.env.test.e
 
 ### How Tests Work
 
+Tests run in **parallel** across multiple browser worker contexts (default: 4 workers). Each worker gets its own `BrowserContext` within a single shared Chromium instance — providing full session isolation (separate localStorage, cookies, cache). The first test in each worker logs into Auth0; subsequent tests in the same worker skip login because the auth tokens persist in the context.
+
 Each test uses the **ComputerUseTestDriver** which:
 
-1. Launches headless Chromium via Playwright
+1. Gets assigned to a worker's shared `BrowserContext` (or launches its own if running sequentially)
 2. Navigates to MJExplorer at `http://localhost:4200`
 3. Takes a screenshot and sends it to an LLM (controller) which decides what to click/type
 4. The LLM-driven agent performs the test workflow (login, navigate, verify UI)
@@ -135,6 +138,8 @@ Each test uses the **ComputerUseTestDriver** which:
 6. Oracles score the result (goal-completion, url-match, step-count)
 7. Results and screenshots are persisted to the MJ database
 8. The entrypoint extracts screenshots to `test-results/screenshots/` and generates `report.md`
+
+**Parallel architecture**: 1 Browser → N BrowserContexts → 1 Page per test. Workers are created with staggered delays (2.5s apart) to avoid simultaneous Auth0 logins triggering rate limits. Tests are distributed round-robin across workers. Configure with `MAX_PARALLEL_WORKERS` env var (default: 4).
 
 **Oracles** -- each test configures weighted oracles:
 
@@ -221,7 +226,7 @@ Each run produces three artifacts in `docker/regression/test-results/`:
 | Judge LLM (Sonnet, every 3 steps) | ~$0.02 | 5 avg | $0.10 |
 | **Total per test** | | | **~$0.40** |
 
-Full 25-test suite: approximately **$10-12** per run.
+Full 25-test suite: approximately **$10-12** per run. Parallel execution (4 workers) reduces wall clock time by ~4x but does not change LLM cost since the same number of steps and judge calls are made.
 
 ### Container Details
 
@@ -233,7 +238,7 @@ Full 25-test suite: approximately **$10-12** per run.
 
 **Dockerfile.test-runner** -- Based on `mcr.microsoft.com/playwright:v1.58.1-noble` (includes Chromium). Installs `socat`, builds the full monorepo with `--concurrency=2` (avoids OOM), creates a bootstrap ESM file to register `ComputerUseTestDriver` via `@RegisterClass`.
 
-**test-runner-entrypoint.sh** -- Orchestrates: socat proxy → metadata sync → MJAPI/nginx verification → suite execution (with `--delay 15000` between tests for Auth0 rate limits) → screenshot extraction → markdown report. Uses `set +e` around suite execution so failures don't prevent screenshot/report generation.
+**test-runner-entrypoint.sh** -- Orchestrates: socat proxy → metadata sync → MJAPI/nginx verification → parallel suite execution (`--parallel --max-parallel N`) → screenshot extraction → markdown report. Uses `set +e` around suite execution so failures don't prevent screenshot/report generation.
 
 ### Port Mapping
 
@@ -409,5 +414,5 @@ All configurations require **Docker** installed on your machine.
 | Configuration | Minimum | Recommended |
 |---------------|---------|-------------|
 | Workbench | 8 GB | 16 GB |
-| Regression Tests | 8 GB | 12 GB |
+| Regression Tests | 10 GB | 16 GB |
 | MJAPI (production) | 2 GB | 4 GB |

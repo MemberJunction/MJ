@@ -71,6 +71,7 @@ import {
     LocalStorageInjectionAuthMethod,
 } from '@memberjunction/computer-use';
 import type { AuthMethod, ComputerUseResult } from '@memberjunction/computer-use';
+import { BaseBrowserAdapter } from '@memberjunction/computer-use';
 
 import { MJComputerUseEngine } from '../engine/MJComputerUseEngine.js';
 import { MJRunComputerUseParams, PromptEntityRef, ActionRef } from '../types/mj-params.js';
@@ -145,7 +146,7 @@ export class ComputerUseTestDriver extends BaseTestDriver {
 
             // 3. Execute with timeout
             const effectiveTimeout = this.getEffectiveTimeout(context.test, config);
-            const { result, timedOut } = await this.executeWithTimeout(runParams, effectiveTimeout, context);
+            const { result, timedOut } = await this.executeWithTimeout(runParams, effectiveTimeout, context, config);
 
             // 4. Build actual output with execution configuration
             const actualOutput = this.buildActualOutput(result);
@@ -378,13 +379,24 @@ export class ComputerUseTestDriver extends BaseTestDriver {
     /**
      * Execute the engine with a timeout.
      * Uses engine.Stop() for graceful cancellation.
+     *
+     * When running in parallel (workerIndex is set), uses HeadlessBrowserEngine
+     * singleton to get a recycled browser context keyed by session strategy.
      */
     private async executeWithTimeout(
         params: MJRunComputerUseParams,
         timeoutMs: number,
-        context: DriverExecutionContext
+        context: DriverExecutionContext,
+        config: ComputerUseTestConfig
     ): Promise<{ result: ComputerUseResult; timedOut: boolean }> {
         const engine = new MJComputerUseEngine();
+
+        // Resolve browser session strategy
+        const adapter = await this.resolveBrowserAdapter(config, context);
+        if (adapter) {
+            engine.SetBrowserAdapter(adapter);
+        }
+
         let timedOut = false;
         let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
@@ -404,6 +416,48 @@ export class ComputerUseTestDriver extends BaseTestDriver {
                 clearTimeout(timeoutId);
             }
         }
+    }
+
+    /**
+     * Resolve the browser adapter based on the test config's browserSession
+     * strategy and the execution context's workerIndex.
+     *
+     * - "new" → fresh context (returns null, engine creates its own)
+     * - "shared:suite" → recycled by suite run + worker index
+     * - "shared:global" → recycled by worker index only
+     * - Any other string → used as a literal key
+     * - Undefined + workerIndex set → defaults to "shared:suite"
+     * - Undefined + no workerIndex → returns null (fresh)
+     */
+    private async resolveBrowserAdapter(
+        config: ComputerUseTestConfig,
+        context: DriverExecutionContext
+    ): Promise<BaseBrowserAdapter | null> {
+        const strategy = config.browserSession
+            ?? (context.workerIndex != null ? 'shared:suite' : 'new');
+
+        if (strategy === 'new') return null;
+
+        const { HeadlessBrowserEngine, BrowserConfig: BConfig } = await import('@memberjunction/computer-use');
+        const browserEngine = HeadlessBrowserEngine.Instance;
+
+        // Build a BrowserConfig from test config
+        const browserConfig = new BConfig();
+        browserConfig.Headless = config.headless ?? true;
+        browserConfig.ViewportWidth = config.viewportWidth ?? 1280;
+        browserConfig.ViewportHeight = config.viewportHeight ?? 720;
+
+        // Build the session key
+        let key: string;
+        if (strategy === 'shared:suite') {
+            key = `suite:${context.testRun.TestSuiteRunID ?? 'standalone'}:worker-${context.workerIndex ?? 0}`;
+        } else if (strategy === 'shared:global') {
+            key = `global:worker-${context.workerIndex ?? 0}`;
+        } else {
+            key = strategy; // Literal key
+        }
+
+        return browserEngine.GetRecycled(key, browserConfig);
     }
 
     // ═══════════════════════════════════════════════════════════

@@ -3,7 +3,7 @@
 # 1. Forwards localhost:4200 → mjexplorer:4200 (secure context for Auth0)
 # 2. Syncs test metadata to database
 # 3. Verifies MJAPI and nginx proxy are working
-# 4. Runs the regression test suite
+# 4. Runs the regression test suite in parallel (N workers, shared browser contexts)
 # 5. Extracts screenshots and generates markdown report
 set -e
 
@@ -73,10 +73,11 @@ node -e "
 echo ""
 
 # Run the regression suite (disable set -e so we can capture screenshots on failure)
-# --delay 15000: 15s pause between tests to avoid Auth0 brute-force rate limiting
-echo "Running regression suite..."
+# --parallel: N workers sharing browser contexts (1 login per worker, not per test)
+WORKERS=${MAX_PARALLEL_WORKERS:-4}
+echo "Running regression suite (${WORKERS} parallel workers)..."
 set +e
-npx mj test suite --name "MJ Explorer Regression Suite" --format json --output /app/test-results/results.json --delay 15000
+npx mj test suite --name "MJ Explorer Regression Suite" --format json --output /app/test-results/results.json --parallel --max-parallel "$WORKERS"
 EXIT_CODE=$?
 set -e
 

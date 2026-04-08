@@ -42,6 +42,15 @@ export default class TestSuite extends Command {
       description: 'Delay in milliseconds between test executions (avoids Auth0 rate limits)',
       default: 0,
     }),
+    parallel: Flags.boolean({
+      char: 'p',
+      description: 'Run tests in parallel with shared browser sessions',
+      default: false,
+    }),
+    'max-parallel': Flags.integer({
+      description: 'Maximum number of parallel workers (default 4)',
+      default: 4,
+    }),
   };
 
   async run(): Promise<void> {
@@ -59,6 +68,8 @@ export default class TestSuite extends Command {
         output: flags.output,
         verbose: flags.verbose,
         delay: flags.delay,
+        parallel: flags.parallel,
+        maxParallel: flags['max-parallel'],
       });
 
     } catch (error) {
