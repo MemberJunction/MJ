@@ -125,7 +125,7 @@ export function clearScopeCache(): void {
  */
 export async function getScopeByName(name: string): Promise<APIScopeInfo | undefined> {
   const scopes = await loadActiveScopes();
-  return scopes.find((s) => s.Name === name);
+  return scopes.find((s) => s.FullPath === name);
 }
 
 /**
@@ -140,7 +140,7 @@ export async function validateScopes(requestedScopes: string[]): Promise<{
   invalidScopes: string[];
 }> {
   const availableScopes = await loadActiveScopes();
-  const availableScopeNames = new Set(availableScopes.map((s) => s.Name));
+  const availableScopeNames = new Set(availableScopes.map((s) => s.FullPath));
 
   const validScopes: string[] = [];
   const invalidScopes: string[] = [];
