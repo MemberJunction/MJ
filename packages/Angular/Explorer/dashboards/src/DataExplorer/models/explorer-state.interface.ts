@@ -52,7 +52,7 @@ export interface BreadcrumbItem {
 /**
  * View mode options for the Data Explorer
  */
-export type DataExplorerViewMode = 'grid' | 'cards' | 'timeline';
+export type DataExplorerViewMode = 'grid' | 'cards' | 'timeline' | 'map';
 
 /**
  * Timeline orientation options
