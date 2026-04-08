@@ -13,7 +13,7 @@ import {
     AfterViewInit,
     inject
 } from '@angular/core';
-import { EntityInfo } from '@memberjunction/core';
+import { EntityInfo, RunView } from '@memberjunction/core';
 import { MapRenderMode, MapDisplayState, MapMarkerClickEvent, MapRegionClickEvent } from './map-view.types';
 // Leaflet is loaded as a global script at runtime via angular.json scripts array.
 // The L namespace is available globally — see leaflet.d.ts for type declarations.
@@ -147,11 +147,15 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
         this.map = L.map(this.mapContainer.nativeElement, {
             center,
             zoom,
-            zoomControl: true
+            zoomControl: true,
+            attributionControl: false
         });
 
+        // Compact attribution — required by OSM terms but styled to be unobtrusive
+        L.control.attribution({ prefix: false, position: 'bottomright' }).addTo(this.map);
+
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>',
             maxZoom: 18
         }).addTo(this.map);
 
@@ -294,71 +298,176 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
     }
 
     /**
-     * Choropleth mode: regional grouping with colored bubbles per state/region.
-     * Groups records by geographic proximity into state-sized clusters,
-     * each with a distinct color and size proportional to record count.
-     * Full GeoJSON boundary rendering is a future enhancement.
+     * Regions mode: shaded geographic regions using GeoJSON boundaries.
+     * Loads Country boundary data and colors each country by record count.
+     * Falls back to spatial clustering if boundary data isn't available.
      */
     private RenderChoropleth(): void {
         const bounds: L.LatLng[] = [];
-        const recordsWithCoords: { lat: number; lng: number; record: Record<string, unknown> }[] = [];
-        const colors = ['#3498db', '#2ecc71', '#e74c3c', '#f39c12', '#9b59b6',
-                        '#1abc9c', '#e67e22', '#2980b9', '#27ae60', '#c0392b',
-                        '#16a085', '#d35400', '#8e44ad', '#2c3e50', '#f1c40f'];
+        const recordsByCountry = new Map<string, Record<string, unknown>[]>();
 
         for (const record of this.Records) {
             const lat = this.GetField(record, this.LatitudeField) as number;
             const lng = this.GetField(record, this.LongitudeField) as number;
             if (lat == null || lng == null || isNaN(lat) || isNaN(lng)) continue;
             bounds.push(L.latLng(lat, lng));
-            recordsWithCoords.push({ lat, lng, record });
-        }
 
-        // Cluster into state-sized regions (~5 degrees / ~500km)
-        const clusters = this.SpatialCluster(recordsWithCoords, 5.0);
-
-        for (let i = 0; i < clusters.length; i++) {
-            const cluster = clusters[i];
-            const color = colors[i % colors.length];
-            const radius = Math.min(20 + cluster.records.length * 6, 60);
-
-            // Try to derive a region name from the records' State or Country fields
-            const regionNames = new Set<string>();
-            for (const rec of cluster.records) {
-                const state = this.GetField(rec, 'State') as string;
-                const country = this.GetField(rec, 'Country') as string;
-                if (state) regionNames.add(String(state));
-                else if (country) regionNames.add(String(country));
-            }
-            const regionLabel = regionNames.size > 0
-                ? Array.from(regionNames).slice(0, 3).join(', ') + (regionNames.size > 3 ? '...' : '')
-                : `Region ${i + 1}`;
-
-            const circle = L.circleMarker([cluster.centerLat, cluster.centerLng], {
-                radius,
-                fillColor: color,
-                fillOpacity: 0.45,
-                color: color,
-                weight: 2,
-                opacity: 0.85
-            });
-
-            circle.bindPopup(this.BuildClusterPopup(cluster.records, regionLabel));
-
-            circle.on('click', () => {
-                this.RegionClick.emit({
-                    RegionName: regionLabel,
-                    GroupBy: 'state_province',
-                    RecordCount: cluster.records.length,
-                    Records: cluster.records
-                });
-            });
-
-            this.markerLayer!.addLayer(circle);
+            // Group by Country field
+            const country = String(this.GetField(record, 'Country') ?? 'Unknown');
+            if (!recordsByCountry.has(country)) recordsByCountry.set(country, []);
+            recordsByCountry.get(country)!.push(record);
         }
 
         this.MarkerCount = bounds.length;
+
+        // Load country boundaries and render shaded regions
+        this.LoadAndRenderRegions(recordsByCountry, bounds);
+    }
+
+    /**
+     * Load GeoJSON boundaries from Country entity and render shaded polygons.
+     */
+    private async LoadAndRenderRegions(
+        recordsByCountry: Map<string, Record<string, unknown>[]>,
+        bounds: L.LatLng[]
+    ): Promise<void> {
+        const colors = ['#3498db', '#2ecc71', '#e74c3c', '#f39c12', '#9b59b6',
+                        '#1abc9c', '#e67e22', '#2980b9', '#27ae60', '#c0392b',
+                        '#16a085', '#d35400', '#8e44ad', '#2c3e50', '#f1c40f'];
+
+        try {
+            // Load countries with boundary GeoJSON
+            const rv = new RunView();
+            const result = await rv.RunView<Record<string, unknown>>({
+                EntityName: 'MJ: Countries',
+                Fields: ['ID', 'Name', 'ISO2', 'BoundaryGeoJSON', 'CommonAliases'],
+                ResultType: 'simple'
+            });
+
+            if (result.Success && result.Results.length > 0) {
+                let colorIdx = 0;
+                let renderedAny = false;
+
+                for (const [countryName, records] of recordsByCountry) {
+                    // Match country name to our reference data
+                    const countryData = this.FindCountryMatch(result.Results, countryName);
+                    const color = colors[colorIdx % colors.length];
+
+                    if (countryData && countryData['BoundaryGeoJSON']) {
+                        // Render shaded GeoJSON polygon
+                        try {
+                            const geojson = typeof countryData['BoundaryGeoJSON'] === 'string'
+                                ? JSON.parse(countryData['BoundaryGeoJSON'] as string)
+                                : countryData['BoundaryGeoJSON'];
+
+                            const layer = L.geoJSON(geojson, {
+                                style: {
+                                    fillColor: color,
+                                    fillOpacity: 0.35,
+                                    color: color,
+                                    weight: 2,
+                                    opacity: 0.8
+                                }
+                            });
+
+                            layer.bindPopup(this.BuildClusterPopup(records, `${countryName} (${records.length})`));
+                            layer.on('click', () => {
+                                this.RegionClick.emit({
+                                    RegionName: countryName,
+                                    GroupBy: 'country',
+                                    RecordCount: records.length,
+                                    Records: records
+                                });
+                            });
+
+                            this.markerLayer!.addLayer(layer as unknown as L.Marker);
+                            renderedAny = true;
+                        } catch {
+                            // GeoJSON parse failed — fall through to circle fallback
+                        }
+                    }
+
+                    if (!renderedAny || !countryData?.['BoundaryGeoJSON']) {
+                        // Fallback: colored circle for countries without boundary data
+                        const firstRecord = records[0];
+                        const lat = this.GetField(firstRecord, this.LatitudeField) as number;
+                        const lng = this.GetField(firstRecord, this.LongitudeField) as number;
+                        if (lat && lng) {
+                            const radius = Math.min(20 + records.length * 6, 60);
+                            const circle = L.circleMarker([lat, lng], {
+                                radius, fillColor: color, fillOpacity: 0.45,
+                                color, weight: 2, opacity: 0.85
+                            });
+                            circle.bindPopup(this.BuildClusterPopup(records, countryName));
+                            this.markerLayer!.addLayer(circle);
+                        }
+                    }
+
+                    colorIdx++;
+                }
+            }
+        } catch {
+            // If boundary loading fails, fall back to spatial clustering
+            this.RenderChoroplethFallback(recordsByCountry);
+        }
+
         this.FitBoundsToMarkers(bounds);
+    }
+
+    /**
+     * Match a free-text country name to our reference data.
+     */
+    private FindCountryMatch(
+        countries: Record<string, unknown>[],
+        searchName: string
+    ): Record<string, unknown> | null {
+        const normalized = searchName.trim().toLowerCase();
+
+        // Direct name match
+        let match = countries.find(c =>
+            String(c['Name'] ?? '').toLowerCase() === normalized
+        );
+        if (match) return match;
+
+        // ISO2 match
+        match = countries.find(c =>
+            String(c['ISO2'] ?? '').toLowerCase() === normalized
+        );
+        if (match) return match;
+
+        // CommonAliases match
+        match = countries.find(c => {
+            const aliases = c['CommonAliases'];
+            if (!aliases) return false;
+            try {
+                const arr: string[] = JSON.parse(String(aliases));
+                return arr.some(a => a.toLowerCase() === normalized);
+            } catch { return false; }
+        });
+        return match ?? null;
+    }
+
+    /**
+     * Fallback choropleth using colored circles when boundaries aren't available.
+     */
+    private RenderChoroplethFallback(recordsByCountry: Map<string, Record<string, unknown>[]>): void {
+        const colors = ['#3498db', '#2ecc71', '#e74c3c', '#f39c12', '#9b59b6'];
+        let colorIdx = 0;
+        for (const [name, records] of recordsByCountry) {
+            const firstRecord = records[0];
+            const lat = this.GetField(firstRecord, this.LatitudeField) as number;
+            const lng = this.GetField(firstRecord, this.LongitudeField) as number;
+            if (lat && lng) {
+                const color = colors[colorIdx % colors.length];
+                const circle = L.circleMarker([lat, lng], {
+                    radius: Math.min(20 + records.length * 6, 60),
+                    fillColor: color, fillOpacity: 0.45, color, weight: 2, opacity: 0.85
+                });
+                circle.bindPopup(this.BuildClusterPopup(records, name));
+                this.markerLayer!.addLayer(circle);
+            }
+            colorIdx++;
+        }
     }
 
     /**

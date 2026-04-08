@@ -10,8 +10,19 @@ declare namespace L {
     function latLngBounds(latlngs: LatLng[]): LatLngBounds;
     function layerGroup(): LayerGroup;
     function circleMarker(latlng: LatLngExpression, options?: Record<string, unknown>): CircleMarker;
+    function geoJSON(geojson?: Record<string, unknown>, options?: Record<string, unknown>): GeoJSONLayer;
+    const control: { attribution(options?: Record<string, unknown>): { addTo(map: Map): unknown } };
 
     interface CircleMarker extends Marker {}
+
+    interface GeoJSONLayer {
+        addTo(map: Map): GeoJSONLayer;
+        getBounds(): LatLngBounds;
+        setStyle(style: Record<string, unknown> | ((feature: unknown) => Record<string, unknown>)): GeoJSONLayer;
+        bindPopup(content: string): GeoJSONLayer;
+        on(event: string, handler: (...args: unknown[]) => void): GeoJSONLayer;
+        eachLayer(fn: (layer: unknown) => void): void;
+    }
 
     type LatLngExpression = [number, number] | LatLng;
 

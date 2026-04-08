@@ -97,3 +97,15 @@
     width: 100% !important;
     height: 100% !important;
 }
+
+/* Compact attribution — required by OSM terms but unobtrusive */
+:host ::ng-deep .leaflet-control-attribution {
+    font-size: 9px;
+    padding: 1px 5px;
+    background: rgba(255, 255, 255, 0.6);
+    color: #666;
+}
+
+:host ::ng-deep .leaflet-control-attribution a {
+    color: #666;
+}
