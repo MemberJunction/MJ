@@ -72,31 +72,60 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
 
     private map: L.Map | null = null;
     private markerLayer: L.LayerGroup | null = null;
+    private visibilityObserver: IntersectionObserver | null = null;
+    private pendingRender = false;
     IsLoading = true;
     MarkerCount = 0;
 
     ngOnInit(): void {
-        // Map initialization happens in AfterViewInit
+        // Map initialization happens when the component becomes visible
     }
 
     ngAfterViewInit(): void {
-        this.InitializeMap();
+        // Use IntersectionObserver to detect when the map container becomes visible.
+        // Leaflet requires the container to have actual dimensions before initialization.
+        // Since the map starts hidden (grid view is default), we defer init until visible.
+        this.visibilityObserver = new IntersectionObserver((entries) => {
+            const entry = entries[0];
+            if (entry.isIntersecting && !this.map) {
+                // First time visible — initialize the map
+                this.InitializeMap();
+            } else if (entry.isIntersecting && this.map) {
+                // Becoming visible again — fix tile rendering and re-fit
+                this.map.invalidateSize();
+                if (this.pendingRender) {
+                    this.RenderMarkers();
+                    this.pendingRender = false;
+                }
+            }
+        }, { threshold: 0.1 });
+
+        if (this.mapContainer?.nativeElement) {
+            this.visibilityObserver.observe(this.mapContainer.nativeElement);
+        }
     }
 
     ngOnChanges(changes: SimpleChanges): void {
-        if ((changes['Records'] || changes['RenderMode']) && this.map) {
-            // When records change or the component becomes visible, re-render markers
-            // Use setTimeout to ensure the container is visible and has dimensions
-            setTimeout(() => {
-                if (this.map) {
-                    this.map.invalidateSize();
-                    this.RenderMarkers();
-                }
-            }, 100);
+        if (changes['Records'] || changes['RenderMode']) {
+            if (this.map) {
+                setTimeout(() => {
+                    if (this.map) {
+                        this.map.invalidateSize();
+                        this.RenderMarkers();
+                    }
+                }, 100);
+            } else {
+                // Map not initialized yet — mark for render when visible
+                this.pendingRender = true;
+            }
         }
     }
 
     ngOnDestroy(): void {
+        if (this.visibilityObserver) {
+            this.visibilityObserver.disconnect();
+            this.visibilityObserver = null;
+        }
         if (this.map) {
             this.map.remove();
             this.map = null;
@@ -131,15 +160,21 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
         // Persist view state on move/zoom
         this.map.on('moveend', () => this.EmitDisplayState());
 
-        // Render markers after a delay to ensure container is visible and has dimensions
+        // invalidateSize after a short delay to ensure tile rendering is correct
+        // then render markers and fit bounds
         setTimeout(() => {
             if (this.map) {
                 this.map.invalidateSize();
                 this.RenderMarkers();
                 this.IsLoading = false;
                 this.cdr.detectChanges();
+
+                // Double-invalidate after tiles start loading to fix partial rendering
+                setTimeout(() => {
+                    if (this.map) this.map.invalidateSize();
+                }, 500);
             }
-        }, 300);
+        }, 100);
     }
 
     /**
