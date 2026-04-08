@@ -7,7 +7,7 @@ import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
 import { MJAIPromptRunFormComponent } from '../../generated/Entities/MJAIPromptRun/mjaipromptrun.form.component';
 import { SharedService } from '@memberjunction/ng-shared';
 import { ChatMessage } from '@memberjunction/ai';
-import { TestHarnessWindowService } from '@memberjunction/ng-ai-test-harness';
+import { TestHarnessWindowManagerService } from '@memberjunction/ng-ai-test-harness';
 import { ParseJSONOptions, ParseJSONRecursive } from '@memberjunction/global';
 
 @RegisterClass(BaseFormComponent, 'MJ: AI Prompt Runs')
@@ -71,7 +71,7 @@ export class MJAIPromptRunFormComponentExtended extends MJAIPromptRunFormCompone
     public FullScreenTitle = '';
 
     // Field injections
-    private testHarnessWindowService = inject(TestHarnessWindowService);
+    private testHarnessWindowService = inject(TestHarnessWindowManagerService);
     private viewContainerRef = inject(ViewContainerRef);
     
     async ngOnInit() {

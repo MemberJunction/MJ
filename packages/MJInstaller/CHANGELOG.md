@@ -1,5 +1,13 @@
 # @memberjunction/installer
 
+## 5.24.0
+
+## 5.23.0
+
+### Patch Changes
+
+- b589bef: Switch installer from distribution bootstrap ZIP to full monorepo source download. The installer now downloads the complete MemberJunction repository via GitHub's codeload CDN (not rate-limited) instead of the smaller bootstrap distribution ZIP.
+
 ## 5.22.0
 
 ## 5.21.0

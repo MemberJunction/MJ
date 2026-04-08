@@ -1,5 +1,46 @@
 # Change Log - @memberjunction/scheduled-actions-server
 
+## 5.24.0
+
+### Patch Changes
+
+- Updated dependencies [c318a0c]
+- Updated dependencies [1912726]
+  - @memberjunction/ai-vectors-pinecone@5.24.0
+  - @memberjunction/ai-vector-sync@5.24.0
+  - @memberjunction/actions-content-autotag@5.24.0
+  - @memberjunction/core@5.24.0
+  - @memberjunction/core-entities@5.24.0
+  - @memberjunction/actions@5.24.0
+  - @memberjunction/sqlserver-dataprovider@5.24.0
+  - @memberjunction/actions-apollo@5.24.0
+  - @memberjunction/scheduled-actions@5.24.0
+  - @memberjunction/ai@5.24.0
+  - @memberjunction/ai-mistral@5.24.0
+  - @memberjunction/ai-openai@5.24.0
+
+## 5.23.0
+
+### Patch Changes
+
+- Updated dependencies [247df16]
+- Updated dependencies [9250070]
+- Updated dependencies [513b20c]
+- Updated dependencies [44bc22b]
+- Updated dependencies [1d1e02e]
+  - @memberjunction/core@5.23.0
+  - @memberjunction/sqlserver-dataprovider@5.23.0
+  - @memberjunction/ai-vectors-pinecone@5.23.0
+  - @memberjunction/ai-vector-sync@5.23.0
+  - @memberjunction/core-entities@5.23.0
+  - @memberjunction/actions-content-autotag@5.23.0
+  - @memberjunction/actions-apollo@5.23.0
+  - @memberjunction/actions@5.23.0
+  - @memberjunction/scheduled-actions@5.23.0
+  - @memberjunction/ai@5.23.0
+  - @memberjunction/ai-mistral@5.23.0
+  - @memberjunction/ai-openai@5.23.0
+
 ## 5.22.0
 
 ### Patch Changes

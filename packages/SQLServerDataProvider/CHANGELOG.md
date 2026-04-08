@@ -1,5 +1,50 @@
 # Change Log - @memberjunction/sqlserver-dataprovider
 
+## 5.24.0
+
+### Patch Changes
+
+- Updated dependencies [c318a0c]
+- Updated dependencies [1912726]
+  - @memberjunction/ai-vector-dupe@5.24.0
+  - @memberjunction/core@5.24.0
+  - @memberjunction/core-entities@5.24.0
+  - @memberjunction/aiengine@5.24.0
+  - @memberjunction/actions@5.24.0
+  - @memberjunction/ai-provider-bundle@5.24.0
+  - @memberjunction/actions-base@5.24.0
+  - @memberjunction/encryption@5.24.0
+  - @memberjunction/generic-database-provider@5.24.0
+  - @memberjunction/queue@5.24.0
+  - @memberjunction/query-processor@5.24.0
+  - @memberjunction/ai@5.24.0
+  - @memberjunction/global@5.24.0
+  - @memberjunction/sql-dialect@5.24.0
+
+## 5.23.0
+
+### Patch Changes
+
+- 247df16: Fix server-side RunView cache write asymmetry that caused repeated DB queries during metadata sync, add deterministic Nunjucks template parameter extraction via AST, support comma-delimited multi-value fields in validation, and redesign QueryPagingEngine to append paging directly instead of wrapping in CTEs (fixing ORDER BY on non-projected columns and apostrophe-in-comments bugs).
+- Updated dependencies [247df16]
+- Updated dependencies [9250070]
+- Updated dependencies [513b20c]
+- Updated dependencies [44bc22b]
+  - @memberjunction/core@5.23.0
+  - @memberjunction/global@5.23.0
+  - @memberjunction/generic-database-provider@5.23.0
+  - @memberjunction/ai-vector-dupe@5.23.0
+  - @memberjunction/core-entities@5.23.0
+  - @memberjunction/aiengine@5.23.0
+  - @memberjunction/actions-base@5.23.0
+  - @memberjunction/actions@5.23.0
+  - @memberjunction/encryption@5.23.0
+  - @memberjunction/queue@5.23.0
+  - @memberjunction/query-processor@5.23.0
+  - @memberjunction/ai@5.23.0
+  - @memberjunction/ai-provider-bundle@5.23.0
+  - @memberjunction/sql-dialect@5.23.0
+
 ## 5.22.0
 
 ### Patch Changes

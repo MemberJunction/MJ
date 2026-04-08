@@ -63,7 +63,7 @@ const SENSITIVE_ENV_PATTERNS: ReadonlyArray<string | RegExp> = [
 /**
  * Configuration files to snapshot for the diagnostic report.
  * Paths are relative to the install directory; multiple candidates
- * are checked (monorepo vs distribution layout).
+ * are checked.
  */
 const CONFIG_FILE_CANDIDATES: ReadonlyArray<{
   RelativePaths: string[];
@@ -76,22 +76,22 @@ const CONFIG_FILE_CANDIDATES: ReadonlyArray<{
     Format: 'env',
   },
   {
-    RelativePaths: ['apps/MJAPI/.env', 'packages/MJAPI/.env'],
+    RelativePaths: ['packages/MJAPI/.env', 'apps/MJAPI/.env'],
     Description: 'MJAPI .env',
     Format: 'env',
   },
   {
     RelativePaths: [
-      'apps/MJExplorer/src/environments/environment.ts',
       'packages/MJExplorer/src/environments/environment.ts',
+      'apps/MJExplorer/src/environments/environment.ts',
     ],
     Description: 'Explorer environment.ts',
     Format: 'typescript',
   },
   {
     RelativePaths: [
-      'apps/MJExplorer/src/environments/environment.development.ts',
       'packages/MJExplorer/src/environments/environment.development.ts',
+      'apps/MJExplorer/src/environments/environment.development.ts',
     ],
     Description: 'Explorer environment.development.ts',
     Format: 'typescript',
@@ -113,14 +113,15 @@ const KEY_FILES: ReadonlyArray<{ Path: string; Description: string }> = [
   { Path: 'node_modules', Description: 'Dependencies installed' },
   { Path: 'mj-db-setup.sql', Description: 'Database setup script' },
   { Path: 'mj-db-validate.sql', Description: 'Database validation script' },
-  // Distribution layout (apps/) — runs from source via register.js, no dist needed
-  { Path: 'apps/MJAPI/.env', Description: 'MJAPI environment file (distribution)' },
-  { Path: 'apps/MJAPI/src/index.ts', Description: 'MJAPI entry point (distribution)' },
-  { Path: 'apps/MJExplorer/src/environments/environment.ts', Description: 'Explorer environment (distribution)' },
-  // Monorepo layout (packages/) — compiled to dist
+  // Monorepo layout (packages/)
   { Path: 'packages/MJAPI/.env', Description: 'MJAPI environment file (monorepo)' },
   { Path: 'packages/MJAPI/dist', Description: 'MJAPI compiled output (monorepo)' },
   { Path: 'packages/MJExplorer/src/environments/environment.ts', Description: 'Explorer environment (monorepo)' },
+  { Path: 'packages/MJCoreEntities/src/generated', Description: 'Generated entity classes (monorepo)' },
+  // Distribution layout (apps/) — for diagnosing legacy/distribution installs
+  { Path: 'apps/MJAPI/.env', Description: 'MJAPI environment file (distribution)' },
+  { Path: 'apps/MJAPI/src/index.ts', Description: 'MJAPI entry point (distribution)' },
+  { Path: 'apps/MJExplorer/src/environments/environment.ts', Description: 'Explorer environment (distribution)' },
 ];
 
 /** Report filename written to the install directory. */
@@ -278,7 +279,7 @@ export class ReportGenerator {
    * Snapshot all key configuration files with sensitive values redacted.
    *
    * Reads `.env`, `environment.ts`, and `mj.config.cjs` files from both
-   * monorepo and distribution layouts, redacting passwords and secrets.
+   * the monorepo layout, redacting passwords and secrets.
    *
    * @param targetDir - The install directory to scan.
    * @returns Array of config file snapshots for inclusion in the report.

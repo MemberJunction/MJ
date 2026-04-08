@@ -2,6 +2,9 @@ import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 
+import { MJButtonDirective } from '@memberjunction/ng-ui-components';
+
+
 // MemberJunction Modules
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 
@@ -34,6 +37,7 @@ import { ExecutionContextComponent } from './components/widgets/execution-contex
     CommonModule,
     FormsModule,
     ReactiveFormsModule,
+    MJButtonDirective,
     ContainerDirectivesModule
   ],
   exports: [

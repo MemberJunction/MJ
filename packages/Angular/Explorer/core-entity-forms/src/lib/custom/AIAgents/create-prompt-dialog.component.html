@@ -29,12 +29,11 @@
               <i class="fa-solid fa-tag"></i>
               Name
             </label>
-            <kendo-textbox 
+            <input
               id="promptName"
+              class="mj-input full-width"
               formControlName="name"
-              placeholder="Enter prompt name..."
-              class="full-width">
-            </kendo-textbox>
+              placeholder="Enter prompt name...">
             @if (promptForm.get('name')?.invalid && promptForm.get('name')?.touched) {
               <div class="field-error">
                 <i class="fa-solid fa-exclamation-triangle"></i>
@@ -49,16 +48,16 @@
               <i class="fa-solid fa-category"></i>
               Type
             </label>
-            <kendo-dropdownlist 
+            <mj-dropdown
               id="promptType"
               formControlName="typeID"
-              [data]="availablePromptTypes$ | async"
-              textField="Name"
-              valueField="ID"
-              [valuePrimitive]="true"
-              placeholder="Select prompt type..."
+              [Data]="availablePromptTypes$ | async"
+              TextField="Name"
+              ValueField="ID"
+              [ValuePrimitive]="true"
+              Placeholder="Select prompt type..."
               class="full-width">
-            </kendo-dropdownlist>
+            </mj-dropdown>
             @if (promptForm.get('typeID')?.invalid && promptForm.get('typeID')?.touched) {
               <div class="field-error">
                 <i class="fa-solid fa-exclamation-triangle"></i>
@@ -73,13 +72,13 @@
               <i class="fa-solid fa-toggle-on"></i>
               Status
             </label>
-            <kendo-dropdownlist 
+            <mj-dropdown
               id="promptStatus"
               formControlName="status"
-              [data]="['Pending', 'Active', 'Disabled']"
-              [valuePrimitive]="true"
+              [Data]="['Pending', 'Active', 'Disabled']"
+              [ValuePrimitive]="true"
               class="full-width">
-            </kendo-dropdownlist>
+            </mj-dropdown>
           </div>
 
           <!-- Output Type Field -->
@@ -88,13 +87,13 @@
               <i class="fa-solid fa-file-code"></i>
               Output Type
             </label>
-            <kendo-dropdownlist 
+            <mj-dropdown
               id="outputType"
               formControlName="outputType"
-              [data]="['string', 'object']"
-              [valuePrimitive]="true"
+              [Data]="['string', 'object']"
+              [ValuePrimitive]="true"
               class="full-width">
-            </kendo-dropdownlist>
+            </mj-dropdown>
           </div>
 
         </div>
@@ -105,13 +104,12 @@
             <i class="fa-solid fa-align-left"></i>
             Description
           </label>
-          <kendo-textarea 
+          <textarea
             id="promptDescription"
+            class="mj-textarea full-width"
             formControlName="description"
             placeholder="Enter prompt description (optional)..."
-            [rows]="3"
-            class="full-width">
-          </kendo-textarea>
+            rows="3"></textarea>
         </div>
 
       </div>
@@ -200,9 +198,8 @@
               }
               
               <div class="template-actions">
-                <button kendoButton 
-                        look="outline" 
-                        size="small"
+                <button mjButton
+                        variant="flat"
                         (click)="handleTemplateModeChange('existing')">
                   <i class="fa-solid fa-sync"></i>
                   Change Template
@@ -234,15 +231,15 @@
   </div>
   
   <div class="footer-right">
-    <button kendoButton 
-            look="outline"
+    <button mjButton
+            variant="flat"
             (click)="cancel()"
             [disabled]="(isSaving$ | async) || false">
       Cancel
     </button>
-    
-    <button kendoButton 
-            themeColor="primary"
+
+    <button mjButton
+            variant="primary"
             (click)="save()"
             [disabled]="!promptForm.valid || ((isSaving$ | async) || false)">
       @if (isSaving$ | async) {

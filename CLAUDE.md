@@ -1400,12 +1400,14 @@ When encountering `ExpressionChangedAfterItHasBeenCheckedError` in Angular compo
 - Replace `setTimeout` with `Promise.resolve().then()` for microtask timing
 - Common scenarios: clearing inputs, focus management, dynamic content updates
 
-### Kendo UI Component Usage
-- **Deprecated Syntax**: Replace `<kendo-button>` with `<button kendoButton>`
-- **Window/Dialog Positioning**: 
-  - Use `kendoWindowContainer` directive on parent containers
-  - For dynamic windows, inject `ViewContainerRef` in WindowService.open()
-  - Set explicit `top` and `left` values for center positioning
+### MJ UI Components (`@memberjunction/ng-ui-components`)
+- **All UI components** should use the MJ UI components package — NOT Kendo, PrimeNG, or Angular Material
+- Available components: `mjButton`, `mj-dialog`, `MJDialogService`, `mj-window`, `mj-dropdown`, `mj-combobox`, `mj-switch`, `mj-numeric-input`, `mj-datepicker`, `mj-progress-bar`, `mj-accordion-panel` (with `mjAccordionTitle` for rich HTML titles)
+- Splitters: Use `angular-split` (`as-split` + `as-split-area`)
+- Grids: Use AG Grid (`ag-grid-angular`)
+- CSS classes: `.mj-input`, `.mj-textarea`, `.mj-checkbox` for styled native form elements
+- All components are standalone with `inject()` DI, PascalCase inputs/outputs, and `--mj-*` design tokens
+- Import from: `import { MJButtonDirective, MJDialogComponent, ... } from '@memberjunction/ng-ui-components'`
 
 ### GraphQL Parameter Types
 - **Numeric Types**: Pay attention to GraphQL scalar types
@@ -1480,6 +1482,33 @@ When encountering `ExpressionChangedAfterItHasBeenCheckedError` in Angular compo
   ```
 - Size presets: `'small'` (40x22px), `'medium'` (80x45px), `'large'` (120x67px), `'auto'` (fills container)
 - The component displays the animated MJ logo with optional text below
+
+### 🚨 CRITICAL: BaseResourceComponent Subclasses MUST Call NotifyLoadComplete() 🚨
+
+Every class that extends `BaseResourceComponent` (including `BaseDashboard` subclasses) **MUST** call `this.NotifyLoadComplete()` when its initial load is finished. Without this call, the app loading screen will hang indefinitely when navigating directly to a URL that targets that resource.
+
+- **`BaseDashboard` subclasses**: Handled automatically — `BaseDashboard.ngOnInit()` calls `NotifyLoadComplete()` after `loadData()` completes
+- **Direct `BaseResourceComponent` subclasses**: You MUST call `this.NotifyLoadComplete()` yourself, typically at the end of `ngOnInit()` or `ngAfterViewInit()`
+
+```typescript
+// ✅ CORRECT — NotifyLoadComplete called after initialization
+export class MyResourceComponent extends BaseResourceComponent implements OnInit {
+    async ngOnInit(): Promise<void> {
+        await this.loadMyData();
+        this.NotifyLoadComplete(); // REQUIRED — signals the loading screen to clear
+    }
+}
+
+// ❌ WRONG — missing NotifyLoadComplete causes permanent loading screen
+export class MyResourceComponent extends BaseResourceComponent implements OnInit {
+    async ngOnInit(): Promise<void> {
+        await this.loadMyData();
+        // Loading screen will hang forever on direct URL navigation!
+    }
+}
+```
+
+**Why this matters**: The shell's loading screen waits for the first resource component to signal completion via `LoadCompleteEvent`, which is wired to `NotifyLoadComplete()`. If the component never calls it, the loading animation plays indefinitely.
 
 ### Creating Custom Entity Forms
 

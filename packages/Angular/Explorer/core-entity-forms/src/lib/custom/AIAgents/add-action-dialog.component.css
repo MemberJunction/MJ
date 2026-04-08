@@ -462,12 +462,8 @@
   background: var(--mj-bg-surface-card);
 }
 
-.add-action-dialog .dialog-footer button[kendoButton] {
+.add-action-dialog .dialog-footer button {
   min-width: 120px;
-}
-
-.add-action-dialog .dialog-footer button[kendoButton][look="primary"] i {
-  margin-right: 0.5rem;
 }
 
 /* === Responsive Design === */

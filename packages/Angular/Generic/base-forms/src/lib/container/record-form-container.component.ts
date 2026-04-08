@@ -4,7 +4,8 @@ import {
   ContentChildren, QueryList, AfterContentInit, OnDestroy,
   ViewEncapsulation
 } from '@angular/core';
-import { BaseEntity, EntityInfo } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, EntityInfo, Metadata, RunView } from '@memberjunction/core';
+import { UserInfoEngine } from '@memberjunction/core-entities';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { FormToolbarConfig, DEFAULT_TOOLBAR_CONFIG } from '../types/toolbar-config';
@@ -21,6 +22,8 @@ import {
   CustomToolbarButtonClickEventArgs
 } from '../types/form-events';
 import { BaseFormComponent } from '../base-form-component';
+import { RestoreVersionEvent } from '@memberjunction/ng-record-changes';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 /**
  * Top-level container that composes the toolbar, content slots, and sticky behavior.
@@ -63,6 +66,7 @@ import { BaseFormComponent } from '../base-form-component';
 export class MjRecordFormContainerComponent implements AfterContentInit, OnDestroy {
   private cdr = inject(ChangeDetectorRef);
   private ngZone = inject(NgZone);
+  private notificationService = inject(MJNotificationService);
   private destroy$ = new Subject<void>();
   private panelNavReset$ = new Subject<void>();
 
@@ -70,6 +74,19 @@ export class MjRecordFormContainerComponent implements AfterContentInit, OnDestr
 
   /** Controls visibility of record changes drawer */
   ShowRecordChanges = false;
+
+  /** Controls visibility of tags panel */
+  ShowTagsPanel = false;
+
+  /** Persisted tags panel width */
+  TagsPanelWidth = 0;
+  private static readonly TAGS_WIDTH_KEY = 'MJ_TagsPanel_Width';
+
+  /** Number of tags on this record */
+  TagCount = 0;
+
+  /** Number of tracked record change versions for this record */
+  VersionCount = 0;
 
   /** Controls visibility of list management dialog */
   ShowListManagement = false;
@@ -306,6 +323,10 @@ export class MjRecordFormContainerComponent implements AfterContentInit, OnDestr
   // ---- Lifecycle ----
 
   ngAfterContentInit(): void {
+    // Load saved tags panel width
+    const savedWidth = UserInfoEngine.Instance.GetSetting(MjRecordFormContainerComponent.TAGS_WIDTH_KEY);
+    if (savedWidth) this.TagsPanelWidth = parseInt(savedWidth, 10) || 0;
+
     // Subscribe to panel Navigate events and relay them
     this.SubscribeToPanelNavigateEvents();
 
@@ -317,6 +338,8 @@ export class MjRecordFormContainerComponent implements AfterContentInit, OnDestr
 
     // Watch for changes to record dirty state
     this.watchRecordChanges();
+
+    // Badge counts are loaded when the form emits RecordReady (see SubscribeToPanelNavigateEvents)
   }
 
   ngOnDestroy(): void {
@@ -332,6 +355,13 @@ export class MjRecordFormContainerComponent implements AfterContentInit, OnDestr
    */
   private SubscribeToPanelNavigateEvents(): void {
     this.panelNavReset$.next(); // tear down previous subscriptions
+    // Subscribe to RecordReady on the form component — fires once after record is fully initialized
+    if (this.fc) {
+      this.fc.RecordReady.pipe(takeUntil(this.panelNavReset$)).subscribe(() => {
+        this.LoadBadgeCounts();
+      });
+    }
+
     this.Panels.forEach(panel => {
       panel.Navigate.pipe(takeUntil(this.panelNavReset$)).subscribe((event: FormNavigationEvent) => {
         this.Navigate.emit(event);
@@ -353,6 +383,73 @@ export class MjRecordFormContainerComponent implements AfterContentInit, OnDestr
 
     // Cleanup on destroy
     this.destroy$.subscribe(() => clearInterval(checkInterval));
+  }
+
+  // ---- Badge Count Loading ----
+
+  /**
+   * Loads tag count and record change version count for toolbar badges.
+   * Both queries run in parallel for performance.
+   */
+  private badgeCountsLoaded = false;
+
+  private LoadBadgeCounts(): void {
+    if (this.badgeCountsLoaded) return;
+
+    const record = this.EffectiveRecord;
+    if (!record?.EntityInfo) return;
+
+    this.badgeCountsLoaded = true;
+
+    // Fire both queries in parallel — no await needed, they update state async
+    this.LoadTagCount(record);
+    this.LoadVersionCount(record);
+  }
+
+  /**
+   * Queries the count of tagged items for the current entity + record
+   * and updates the TagCount badge on the toolbar.
+   */
+  private async LoadTagCount(record: BaseEntity): Promise<void> {
+    try {
+      const rv = new RunView();
+      // Don't narrow Fields — the server caches RunView results by entity+filter (ignoring Fields),
+      // so a narrow query here would poison the cache for the subsequent full-field load in the Tags panel.
+      const result = await rv.RunView({
+        EntityName: 'MJ: Tagged Items',
+        ExtraFilter: `EntityID='${record.EntityInfo.ID}' AND RecordID='${record.PrimaryKey.Values()}'`,
+        ResultType: 'simple'
+      });
+      if (result.Success) {
+        this.TagCount = result.Results.length;
+        this.cdr.detectChanges();
+      }
+    } catch {
+      // Non-critical — badge just stays at 0
+    }
+  }
+
+  /**
+   * Queries the count of record change entries for the current entity + record
+   * and updates the VersionCount badge on the toolbar.
+   */
+  private async LoadVersionCount(record: BaseEntity): Promise<void> {
+    if (!record.EntityInfo.TrackRecordChanges) return;
+    try {
+      const rv = new RunView();
+      const result = await rv.RunView<{ ID: string }>({
+        EntityName: 'MJ: Record Changes',
+        Fields: ['ID'],
+        ExtraFilter: `EntityID='${record.EntityInfo.ID}' AND RecordID='${record.PrimaryKey.ToConcatenatedString()}'`,
+        ResultType: 'simple'
+      });
+      if (result.Success) {
+        this.VersionCount = result.Results.length;
+        this.cdr.detectChanges();
+      }
+    } catch {
+      // Non-critical — badge just stays at 0
+    }
   }
 
   // ---- Toolbar Event Handlers ----
@@ -455,9 +552,96 @@ export class MjRecordFormContainerComponent implements AfterContentInit, OnDestr
     this.ListManagementRequested.emit();
   }
 
+  OnTagsPanelToggled(): void {
+    this.ShowTagsPanel = !this.ShowTagsPanel;
+    this.cdr.detectChanges();
+  }
+
+  OnTagsPanelClosed(): void {
+    this.ShowTagsPanel = false;
+    this.cdr.detectChanges();
+
+    // Refresh tag count — tags may have been added/removed while panel was open
+    const record = this.EffectiveRecord;
+    if (record?.EntityInfo) {
+      this.LoadTagCount(record);
+    }
+  }
+
+  /**
+   * Handles live tag count updates from the tags panel component.
+   */
+  OnTagCountChanged(count: number): void {
+    this.TagCount = count;
+    this.cdr.markForCheck();
+  }
+
+  OnTagsPanelWidthChanged(width: number): void {
+    this.TagsPanelWidth = width;
+    UserInfoEngine.Instance.SetSettingDebounced(MjRecordFormContainerComponent.TAGS_WIDTH_KEY, String(width));
+  }
+
+  OnTagsRecordNavigate(event: { EntityName: string; RecordID: string }): void {
+    const md = new Metadata();
+    const entityInfo = md.Entities.find(e => e.Name === event.EntityName);
+    const pkey = new CompositeKey();
+    if (entityInfo) {
+      pkey.LoadFromURLSegment(entityInfo, event.RecordID);
+    } else {
+      pkey.KeyValuePairs = [{ FieldName: 'ID', Value: event.RecordID }];
+    }
+    this.Navigate.emit({ Kind: 'record', EntityName: event.EntityName, PrimaryKey: pkey });
+  }
+
   OnRecordChangesClosed(): void {
     this.ShowRecordChanges = false;
     this.cdr.markForCheck();
+
+    // Refresh version count — new changes may have occurred
+    const record = this.EffectiveRecord;
+    if (record?.EntityInfo) {
+      this.LoadVersionCount(record);
+    }
+  }
+
+  /**
+   * Handles a restore request from the record-changes panel.
+   * Applies the old field values to the current record, saves, then refreshes version count.
+   */
+  async OnRestoreRequested(event: RestoreVersionEvent): Promise<void> {
+    const record = this.EffectiveRecord;
+    if (!record) return;
+
+    try {
+      // Apply old values from the version to the current record
+      for (const [fieldName, values] of Object.entries(event.FieldChanges)) {
+        record.Set(fieldName, values.OldValue);
+      }
+
+      // Save the record — this creates a new Record Change entry automatically
+      const saved = await record.Save();
+      if (saved) {
+        this.notificationService.CreateSimpleNotification(
+          `Restored ${Object.keys(event.FieldChanges).length} field(s) from version dated ${new Date(event.ChangedAt).toLocaleDateString()}`,
+          'info', 3000
+        );
+
+        // Refresh version count since a new change was created by the save
+        this.LoadVersionCount(record);
+        this.cdr.markForCheck();
+      } else {
+        this.notificationService.CreateSimpleNotification(
+          'Failed to save restored values. Please try again.',
+          'error', 4000
+        );
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      this.notificationService.CreateSimpleNotification(
+        `Restore failed: ${message}`,
+        'error', 4000
+      );
+    }
   }
 
   OnListManagementClosed(): void {

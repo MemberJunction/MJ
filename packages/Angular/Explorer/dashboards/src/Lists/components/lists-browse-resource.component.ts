@@ -245,8 +245,9 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
                       <td class="col-updated" role="gridcell">{{formatDate(item.list.__mj_UpdatedAt)}}</td>
                       <td class="col-actions" role="gridcell">
                         @if (item.isOwner) {
-                          <button
-                            class="action-btn"
+                          <button mjButton
+                            variant="flat"
+                            size="sm"
                             (click)="openListMenu($event, item)"
                             title="More options">
                             <i class="fa-solid fa-ellipsis-v" aria-hidden="true"></i>
@@ -379,7 +380,7 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
                   </div>
                   @if (item.isOwner) {
                     <div class="list-actions">
-                      <button class="action-btn" (click)="openListMenu($event, item)">
+                      <button mjButton variant="flat" size="sm" (click)="openListMenu($event, item)">
                         <i class="fa-solid fa-ellipsis-v" aria-hidden="true"></i>
                       </button>
                     </div>

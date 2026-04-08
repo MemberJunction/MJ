@@ -2,10 +2,10 @@
   <!-- Header Controls -->
   <div class="overview-header">
     <div class="header-controls">
-      <button class="control-btn" (click)="Refresh()">
+      <button mjButton variant="secondary" (click)="Refresh()">
         <i class="fa-solid fa-arrows-rotate"></i> Refresh
       </button>
-      <button class="control-btn" [class.active]="AutoRefreshEnabled" (click)="ToggleAutoRefresh()">
+      <button mjButton [variant]="AutoRefreshEnabled ? 'primary' : 'secondary'" (click)="ToggleAutoRefresh()">
         <i class="fa-solid fa-rotate"></i>
         Auto-Refresh: {{AutoRefreshEnabled ? 'ON' : 'OFF'}}
       </button>

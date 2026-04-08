@@ -2,8 +2,8 @@
   @if (isLoading) {
     <div><mj-loading [showText]="false" size="medium"></mj-loading></div>
   }
-  <button [disabled]="NumDirtyPermissions === 0" kendoButton (click)="savePermissions()">Save</button>
-  <button [disabled]="NumDirtyPermissions === 0" kendoButton (click)="cancelEdit()">Cancel</button>
+  <button [disabled]="NumDirtyPermissions === 0" mjButton (click)="savePermissions()">Save</button>
+  <button [disabled]="NumDirtyPermissions === 0" mjButton (click)="cancelEdit()">Cancel</button>
   @if (!isLoading) {
     <table class="grid">
       <thead>
@@ -39,16 +39,16 @@
             }
           </td>
           <td (click)="flipPermission($event, permission, 'Read', true)">
-            <input type="checkbox" kendoCheckBox [(ngModel)]="permission.CanRead" (click)="flipPermission($event, permission, 'Read', false)">
+            <input type="checkbox" [(ngModel)]="permission.CanRead" (click)="flipPermission($event, permission, 'Read', false)">
           </td>
           <td (click)="flipPermission($event, permission, 'Create', true)">
-            <input type="checkbox" kendoCheckBox [(ngModel)]="permission.CanCreate" (click)="flipPermission($event, permission, 'Create', false)">
+            <input type="checkbox" [(ngModel)]="permission.CanCreate" (click)="flipPermission($event, permission, 'Create', false)">
           </td>
           <td (click)="flipPermission($event, permission, 'Update', true)">
-            <input type="checkbox" kendoCheckBox [(ngModel)]="permission.CanUpdate" (click)="flipPermission($event, permission, 'Update', false)">
+            <input type="checkbox" [(ngModel)]="permission.CanUpdate" (click)="flipPermission($event, permission, 'Update', false)">
           </td>
           <td (click)="flipPermission($event, permission, 'Delete', true)">
-            <input type="checkbox" kendoCheckBox [(ngModel)]="permission.CanDelete" (click)="flipPermission($event, permission, 'Delete', false)">
+            <input type="checkbox" [(ngModel)]="permission.CanDelete" (click)="flipPermission($event, permission, 'Delete', false)">
           </td>
         </tr>
       }

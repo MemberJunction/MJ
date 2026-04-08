@@ -51,6 +51,7 @@ export class OverviewComponent extends BaseResourceComponent implements OnInit, 
 
   async ngOnInit(): Promise<void> {
     await this.LoadData();
+    this.NotifyLoadComplete();
   }
 
   ngOnDestroy(): void {

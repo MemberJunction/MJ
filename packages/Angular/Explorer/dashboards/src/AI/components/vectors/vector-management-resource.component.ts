@@ -11,23 +11,26 @@ import { Component, ChangeDetectorRef, OnDestroy, AfterViewInit, Input, inject }
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { EntityInfo, Metadata, RunView } from '@memberjunction/core';
-import { ResourceData } from '@memberjunction/core-entities';
-import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import {
+    ResourceData,
     MJEntityDocumentEntity,
     MJVectorDatabaseEntity,
     MJVectorIndexEntity,
     MJEntityRecordDocumentEntity,
     MJAIModelEntity,
     MJTemplateEntity,
-    MJTemplateContentEntity
+    MJTemplateContentEntity,
+    KnowledgeHubMetadataEngine
 } from '@memberjunction/core-entities';
-import { BaseResourceComponent } from '@memberjunction/ng-shared';
+import { RegisterClass, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
+import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { KPICardData } from '../widgets/kpi-card.component';
 import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { MJScheduledActionEntity, MJScheduledActionParamEntity } from '@memberjunction/core-entities';
+import { CronToHumanReadable } from '../autotagging/autotagging-pipeline-resource.component';
 
 /** Flattened row for the entity sync table */
 interface EntitySyncRow {
@@ -68,6 +71,7 @@ interface DocumentSuggestionResult {
 })
 export class VectorManagementResourceComponent extends BaseResourceComponent implements AfterViewInit, OnDestroy {
     private cdr = inject(ChangeDetectorRef);
+    private navigationService = inject(NavigationService);
     private destroy$ = new Subject<void>();
 
     /** View mode: 'index' = Option A (shared index as hero, entity docs as children),
@@ -191,6 +195,140 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         }
     }
 
+    // --- Schedule Sync Dialog ---
+    public ShowScheduleSyncDialog = false;
+    public ScheduleSyncSaving = false;
+    public ScheduleSyncDocID = '';
+    public ScheduleSyncDocName = '';
+    public ScheduleSyncCron = '0 2 * * *';
+    public ScheduleSyncEnabled = true;
+
+    /** Opens the schedule sync dialog for a specific entity document */
+    public OpenScheduleSyncDialog(entityDocumentId: string): void {
+        const doc = this.entityDocuments.find(d => UUIDsEqual(d.ID, entityDocumentId));
+        if (!doc) return;
+        this.ScheduleSyncDocID = doc.ID;
+        this.ScheduleSyncDocName = doc.Entity || doc.Name;
+        this.ScheduleSyncCron = '0 2 * * *';
+        this.ScheduleSyncEnabled = true;
+        this.ShowScheduleSyncDialog = true;
+        this.cdr.detectChanges();
+    }
+
+    /** Closes the schedule sync dialog */
+    public CloseScheduleSyncDialog(): void {
+        this.ShowScheduleSyncDialog = false;
+        this.ScheduleSyncDocID = '';
+        this.cdr.detectChanges();
+    }
+
+    /** Returns a human-readable description of a cron expression */
+    public GetScheduleCronPreview(cron: string): string {
+        return CronToHumanReadable(cron);
+    }
+
+    /** Saves a new ScheduledAction for vectorizing the selected entity document */
+    public async SaveScheduleSync(): Promise<void> {
+        if (this.ScheduleSyncSaving || !this.ScheduleSyncDocID) return;
+        this.ScheduleSyncSaving = true;
+        this.cdr.detectChanges();
+
+        try {
+            const actionID = await this.findVectorizeActionID();
+            if (!actionID) {
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    'Could not find the "__VectorizeEntity" action. Please check action configuration.',
+                    'error', 5000
+                );
+                return;
+            }
+
+            const md = new Metadata();
+
+            // Create ScheduledAction
+            const scheduledAction = await md.GetEntityObject<MJScheduledActionEntity>('MJ: Scheduled Actions');
+            scheduledAction.NewRecord();
+            scheduledAction.Name = `Vectorize: ${this.ScheduleSyncDocName}`;
+            scheduledAction.Description = `Automated vectorization for entity document "${this.ScheduleSyncDocName}"`;
+            scheduledAction.ActionID = actionID;
+            scheduledAction.Type = 'Custom';
+            scheduledAction.CronExpression = this.ScheduleSyncCron;
+            scheduledAction.CustomCronExpression = this.ScheduleSyncCron;
+            scheduledAction.Status = this.ScheduleSyncEnabled ? 'Active' : 'Disabled';
+            scheduledAction.Timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+            const saved = await scheduledAction.Save();
+            if (!saved) {
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    `Failed to create schedule: ${scheduledAction.LatestResult?.Message ?? 'Unknown error'}`,
+                    'error', 5000
+                );
+                return;
+            }
+
+            // Create param linking the entityDocumentID
+            await this.createVectorizeScheduleParam(scheduledAction.ID, actionID, this.ScheduleSyncDocID);
+
+            MJNotificationService.Instance.CreateSimpleNotification(
+                `Schedule created: ${CronToHumanReadable(this.ScheduleSyncCron)}`, 'success', 3000
+            );
+
+            this.CloseScheduleSyncDialog();
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            MJNotificationService.Instance.CreateSimpleNotification(`Error: ${msg}`, 'error', 5000);
+        } finally {
+            this.ScheduleSyncSaving = false;
+            this.cdr.detectChanges();
+        }
+    }
+
+    /** Find the __VectorizeEntity action ID */
+    private async findVectorizeActionID(): Promise<string | null> {
+        const rv = new RunView();
+        const result = await rv.RunView<{ ID: string }>({
+            EntityName: 'Actions',
+            ExtraFilter: `Name = '__VectorizeEntity'`,
+            Fields: ['ID'],
+            ResultType: 'simple',
+            MaxRows: 1,
+        });
+        if (result.Success && result.Results.length > 0) {
+            return result.Results[0].ID;
+        }
+        return null;
+    }
+
+    /** Create a ScheduledActionParam linking the entity document ID */
+    private async createVectorizeScheduleParam(scheduledActionID: string, actionID: string, entityDocumentID: string): Promise<void> {
+        const rv = new RunView();
+        const paramResult = await rv.RunView<{ ID: string; Name: string }>({
+            EntityName: 'Action Params',
+            ExtraFilter: `ActionID = '${actionID}' AND Name = 'entityDocumentID'`,
+            Fields: ['ID', 'Name'],
+            ResultType: 'simple',
+            MaxRows: 1,
+        });
+
+        if (!paramResult.Success || paramResult.Results.length === 0) {
+            console.warn('[VectorManagement] Could not find entityDocumentID action param');
+            return;
+        }
+
+        const md = new Metadata();
+        const param = await md.GetEntityObject<MJScheduledActionParamEntity>('MJ: Scheduled Action Params');
+        param.NewRecord();
+        param.ScheduledActionID = scheduledActionID;
+        param.ActionParamID = paramResult.Results[0].ID;
+        param.ValueType = 'Static';
+        param.Value = entityDocumentID;
+
+        const saved = await param.Save();
+        if (!saved) {
+            console.warn('[VectorManagement] Failed to save schedule param:', param.LatestResult?.Message);
+        }
+    }
+
     // --- Suggest Document Dialog ---
     public ShowSuggestDialog = false;
     public IsSuggesting = false;
@@ -255,6 +393,10 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
 
     async ngAfterViewInit(): Promise<void> {
         await this.LoadData();
+        this.navigationService.SetAgentContext(this, {
+            TotalVectors: this.TotalVectors,
+            KPICount: this.KPICards.length,
+        });
         this.NotifyLoadComplete();
     }
 
@@ -381,9 +523,11 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
             if (idleTimer) clearTimeout(idleTimer);
             rxSub?.unsubscribe();
 
-            // Use Promise.resolve().then() to defer state changes to the next
-            // microtask, avoiding ExpressionChangedAfterItHasBeenCheckedError
-            Promise.resolve().then(async () => {
+            // Use setTimeout to defer state changes to the next macrotask,
+            // avoiding ExpressionChangedAfterItHasBeenCheckedError.
+            // (Promise.resolve microtasks run between Angular's check passes
+            // and still trigger NG0100.)
+            setTimeout(async () => {
                 this.removeSyncingId(entityDocumentId);
 
                 if (success) {
@@ -398,8 +542,8 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
                         `Vectorization failed for ${entityName}`,
                         'error', 5000
                     );
-                    this.cdr.detectChanges();
                 }
+                this.cdr.detectChanges();
             });
         };
 
@@ -679,24 +823,20 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
     // ================================================================
 
     private async fetchAllData(): Promise<void> {
+        // Use cached engine data — BaseEngine's entity-event auto-refresh handles
+        // updates from saves/deletes on the entities it tracks.
+        const engine = KnowledgeHubMetadataEngine.Instance;
+        await engine.Config(false);
+
+        this.entityDocuments = engine.EntityDocuments;
+        this.vectorDatabases = AIEngineBase.Instance.VectorDatabases;
+        this.vectorIndexes = engine.VectorIndexes;
+
+        // Entity Record Documents and AI Models are not cached in the engine —
+        // record documents are high-volume instance data, and AI models are loaded
+        // from a different domain. Fetch them via RunView.
         const rv = new RunView();
-        const [docsResult, vdbResult, viResult, erdResult, modelsResult] = await rv.RunViews([
-            {
-                EntityName: 'MJ: Entity Documents',
-                ExtraFilter: '',
-                OrderBy: 'Name',
-                ResultType: 'entity_object'
-            },
-            {
-                EntityName: 'MJ: Vector Databases',
-                ExtraFilter: '',
-                ResultType: 'entity_object'
-            },
-            {
-                EntityName: 'MJ: Vector Indexes',
-                ExtraFilter: '',
-                ResultType: 'entity_object'
-            },
+        const [erdResult, modelsResult] = await rv.RunViews([
             {
                 EntityName: 'MJ: Entity Record Documents',
                 ExtraFilter: '',
@@ -710,15 +850,6 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
             }
         ]);
 
-        if (docsResult.Success) {
-            this.entityDocuments = docsResult.Results as MJEntityDocumentEntity[];
-        }
-        if (vdbResult.Success) {
-            this.vectorDatabases = vdbResult.Results as MJVectorDatabaseEntity[];
-        }
-        if (viResult.Success) {
-            this.vectorIndexes = viResult.Results as MJVectorIndexEntity[];
-        }
         if (erdResult.Success) {
             this.recordDocuments = erdResult.Results as MJEntityRecordDocumentEntity[];
         }

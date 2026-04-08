@@ -25,6 +25,8 @@ import { MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgent
          MJAIModalityEntity,
          MJAIAgentModalityEntity,
          MJAIModelModalityEntity,
+         MJAIClientToolDefinitionEntity,
+         MJAIAgentClientToolEntity,
          ArtifactMetadataEngine} from "@memberjunction/core-entities";
 import { AIAgentPermissionHelper, EffectiveAgentPermissions } from "./AIAgentPermissionHelper";
 import { TemplateEngineBase } from "@memberjunction/templates-base-types";
@@ -106,6 +108,8 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     private _modalities: MJAIModalityEntity[] = [];
     private _agentModalities: MJAIAgentModalityEntity[] = [];
     private _modelModalities: MJAIModelModalityEntity[] = [];
+    private _clientToolDefinitions: MJAIClientToolDefinitionEntity[] = [];
+    private _agentClientTools: MJAIAgentClientToolEntity[] = [];
 
     /**
      * Cache for configuration inheritance chains.
@@ -274,6 +278,16 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             {
                 PropertyName: '_modelModalities',
                 EntityName: 'MJ: AI Model Modalities',
+                CacheLocal: true
+            },
+            {
+                PropertyName: '_clientToolDefinitions',
+                EntityName: 'MJ: AI Client Tool Definitions',
+                CacheLocal: true
+            },
+            {
+                PropertyName: '_agentClientTools',
+                EntityName: 'MJ: AI Agent Client Tools',
                 CacheLocal: true
             }
         ];
@@ -835,6 +849,39 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      */
     public get ModelModalities(): MJAIModelModalityEntity[] {
         return this._modelModalities;
+    }
+
+    /**
+     * Gets all client tool definitions (the catalog of reusable tools).
+     */
+    public get ClientToolDefinitions(): MJAIClientToolDefinitionEntity[] {
+        return this._clientToolDefinitions;
+    }
+
+    /**
+     * Gets all agent-to-client-tool junction records.
+     */
+    public get AgentClientTools(): MJAIAgentClientToolEntity[] {
+        return this._agentClientTools;
+    }
+
+    /**
+     * Gets the client tool definitions linked to a specific agent, sorted by priority.
+     * Joins through the junction table to return full tool definition entities.
+     */
+    public GetClientToolsForAgent(agentId: string): MJAIClientToolDefinitionEntity[] {
+        const junctions = this._agentClientTools
+            .filter(j => UUIDsEqual(j.AgentID, agentId))
+            .sort((a, b) => a.Priority - b.Priority);
+
+        const tools: MJAIClientToolDefinitionEntity[] = [];
+        for (const junction of junctions) {
+            const tool = this._clientToolDefinitions.find(t => UUIDsEqual(t.ID, junction.ClientToolDefinitionID));
+            if (tool) {
+                tools.push(tool);
+            }
+        }
+        return tools;
     }
 
     /**

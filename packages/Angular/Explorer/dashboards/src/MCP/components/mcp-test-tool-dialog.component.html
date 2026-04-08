@@ -59,17 +59,17 @@
                 Server
                 <span class="required">*</span>
               </label>
-              <kendo-dropdownlist
-                [data]="DisplayServers"
-                [textField]="'Name'"
-                [valueField]="'ID'"
-                [valuePrimitive]="true"
+              <mj-dropdown
+                [Data]="DisplayServers"
+                TextField="Name"
+                ValueField="ID"
+                [ValuePrimitive]="true"
                 [(ngModel)]="ServerID"
-                (valueChange)="onServerChange()"
-                [filterable]="true"
-                (filterChange)="onServerFilterChange($event)"
-                placeholder="Select a server...">
-                <ng-template kendoDropDownListItemTemplate let-dataItem>
+                (ValueChange)="onServerChange()"
+                [Filterable]="true"
+                (FilterChange)="onServerFilterChange($event)"
+                Placeholder="Select a server...">
+                <ng-template #mjDropdownItem let-dataItem>
                   <div class="dropdown-item">
                     <span class="item-name">{{ dataItem.Name }}</span>
                     <span class="item-status" [class]="'status-' + dataItem.Status.toLowerCase()">
@@ -77,7 +77,7 @@
                     </span>
                   </div>
                 </ng-template>
-              </kendo-dropdownlist>
+              </mj-dropdown>
             </div>
             <!-- Connection Selection -->
             <div class="form-group">
@@ -86,18 +86,18 @@
                 Connection
                 <span class="required">*</span>
               </label>
-              <kendo-dropdownlist
-                [data]="DisplayConnections"
-                [textField]="'Name'"
-                [valueField]="'ID'"
-                [valuePrimitive]="true"
+              <mj-dropdown
+                [Data]="DisplayConnections"
+                TextField="Name"
+                ValueField="ID"
+                [ValuePrimitive]="true"
                 [(ngModel)]="ConnectionID"
-                (valueChange)="onConnectionChange()"
-                [disabled]="!ServerID || NoConnectionsWarning !== null"
-                [filterable]="true"
-                (filterChange)="onConnectionFilterChange($event)"
-                placeholder="Select a connection...">
-                <ng-template kendoDropDownListItemTemplate let-dataItem>
+                (ValueChange)="onConnectionChange()"
+                [Disabled]="!ServerID || NoConnectionsWarning !== null"
+                [Filterable]="true"
+                (FilterChange)="onConnectionFilterChange($event)"
+                Placeholder="Select a connection...">
+                <ng-template #mjDropdownItem let-dataItem>
                   <div class="dropdown-item">
                     <span class="item-name">{{ dataItem.Name }}</span>
                     @if (dataItem.Description) {
@@ -105,7 +105,7 @@
                     }
                   </div>
                 </ng-template>
-              </kendo-dropdownlist>
+              </mj-dropdown>
               @if (!ServerID) {
                 <span class="field-hint">Select a server first</span>
               }
@@ -129,21 +129,18 @@
                 Tool
                 <span class="required">*</span>
               </label>
-              <kendo-dropdownlist
-                [data]="DisplayTools"
-                [textField]="'ToolTitle'"
-                [valueField]="'ID'"
-                [valuePrimitive]="true"
+              <mj-dropdown
+                [Data]="DisplayTools"
+                TextField="ToolTitle"
+                ValueField="ID"
+                [ValuePrimitive]="true"
                 [(ngModel)]="ToolID"
-                (valueChange)="onToolChange()"
-                [disabled]="!ServerID"
-                [filterable]="true"
-                (filterChange)="onToolFilterChange($event)"
-                placeholder="Select a tool...">
-                <ng-template kendoDropDownListValueTemplate let-dataItem>
-                  {{ dataItem?.ToolTitle || dataItem?.ToolName || 'Select a tool...' }}
-                </ng-template>
-                <ng-template kendoDropDownListItemTemplate let-dataItem>
+                (ValueChange)="onToolChange()"
+                [Disabled]="!ServerID"
+                [Filterable]="true"
+                (FilterChange)="onToolFilterChange($event)"
+                Placeholder="Select a tool...">
+                <ng-template #mjDropdownItem let-dataItem>
                   <div class="dropdown-item tool-item">
                     <span class="item-name">{{ dataItem.ToolTitle || dataItem.ToolName }}</span>
                     @if (dataItem.ToolDescription) {
@@ -151,7 +148,7 @@
                     }
                   </div>
                 </ng-template>
-              </kendo-dropdownlist>
+              </mj-dropdown>
               @if (!ServerID) {
                 <span class="field-hint">Select a server first</span>
               }
@@ -204,12 +201,12 @@
                   }
                   <!-- Enum/Select -->
                   @if (config.enumValues.length > 0) {
-                    <kendo-dropdownlist
-                      [data]="config.enumValues"
-                      [valuePrimitive]="true"
+                    <mj-dropdown
+                      [Data]="config.enumValues"
+                      [ValuePrimitive]="true"
                       [(ngModel)]="ParameterValues[config.name]"
-                      (valueChange)="onParameterChange(config.name, $event)">
-                    </kendo-dropdownlist>
+                      (ValueChange)="onParameterChange(config.name, $any($event))">
+                    </mj-dropdown>
                   }
                   <!-- Boolean -->
                   @else if (config.type === 'boolean') {
@@ -223,16 +220,15 @@
                 }
                 <!-- Number/Integer -->
                 @else if (config.type === 'number' || config.type === 'integer') {
-                <kendo-numerictextbox
-                  [format]="config.type === 'integer' ? 'n0' : 'n'"
-                  [step]="config.type === 'integer' ? 1 : 0.1"
+                <mj-numeric-input
+                  [Step]="config.type === 'integer' ? 1 : 0.1"
                   [(ngModel)]="ParameterValues[config.name]"
-                  (valueChange)="onParameterChange(config.name, $event)">
-                </kendo-numerictextbox>
+                  (ngModelChange)="onParameterChange(config.name, $event)">
+                </mj-numeric-input>
               }
               <!-- Array/Object (Textarea with JSON) -->
               @else if (config.type === 'array' || config.type === 'object') {
-              <textarea class="json-input"
+              <textarea class="json-input mj-textarea"
                 rows="4"
                 [value]="getTextareaValue(config.name)"
                 (input)="onTextareaChange(config.name, $any($event.target).value, config)"
@@ -242,17 +238,16 @@
             <!-- String (default) -->
             @else {
             @if (isTextarea(config)) {
-              <textarea class="text-input"
+              <textarea class="text-input mj-textarea"
                 rows="3"
                 [(ngModel)]="ParameterValues[config.name]"
                 (input)="onParameterChange(config.name, $any($event.target).value)"
               [placeholder]="config.description || 'Enter value...'"></textarea>
             } @else {
-              <kendo-textbox
+              <input class="mj-input"
                 [(ngModel)]="ParameterValues[config.name]"
-                (valueChange)="onParameterChange(config.name, $event)"
-                [placeholder]="config.description || 'Enter value...'">
-              </kendo-textbox>
+                (input)="onParameterChange(config.name, $any($event.target).value)"
+                [placeholder]="config.description || 'Enter value...'" />
             }
           }
         </div>
@@ -278,7 +273,7 @@
           <span class="duration">{{ ExecutionResult?.DurationMs }}ms</span>
         }
       </div>
-      <!-- Executed Tool Info (moved to top) -->
+      <!-- Executed Tool Info -->
       <div class="execution-info">
         <div class="info-row">
           <span class="info-label">Tool:</span>
@@ -300,12 +295,12 @@
           <pre class="error-message">{{ ExecutionResult?.ErrorMessage }}</pre>
         </div>
       }
-      <!-- Result Data (fills remaining space) -->
+      <!-- Result Data -->
       @if (ExecutionResult?.Result) {
         <div class="result-panel fill-space">
           <div class="result-panel-header">
             <h4><i class="fa-solid fa-code"></i> Result</h4>
-            <button kendoButton fillMode="flat" (click)="copyResult()" title="Copy to clipboard">
+            <button mjButton variant="flat" (click)="copyResult()" title="Copy to clipboard">
               <i class="fa-solid fa-copy"></i>
             </button>
           </div>
@@ -326,14 +321,14 @@
 <div class="panel-actions">
   @switch (CurrentStep) {
     @case ('select') {
-      <button kendoButton themeColor="primary" (click)="proceedToConfig()" [disabled]="!CanProceedToConfig">
+      <button mjButton variant="primary" (click)="proceedToConfig()" [disabled]="!CanProceedToConfig">
         <i class="fa-solid fa-arrow-right"></i>
         Next
       </button>
-      <button kendoButton fillMode="flat" (click)="closeDialog()">Cancel</button>
+      <button mjButton variant="flat" (click)="closeDialog()">Cancel</button>
     }
     @case ('configure') {
-      <button kendoButton themeColor="primary" (click)="executeTool()" [disabled]="!IsValid || IsExecuting">
+      <button mjButton variant="primary" (click)="executeTool()" [disabled]="!IsValid || IsExecuting">
         @if (IsExecuting) {
           <i class="fa-solid fa-spinner fa-spin"></i>
           Executing...
@@ -342,21 +337,21 @@
           Execute Tool
         }
       </button>
-      <button kendoButton fillMode="flat" (click)="goBack()">
+      <button mjButton variant="flat" (click)="goBack()">
         <i class="fa-solid fa-arrow-left"></i>
         Back
       </button>
     }
     @case ('results') {
-      <button kendoButton themeColor="primary" (click)="runAgain()">
+      <button mjButton variant="primary" (click)="runAgain()">
         <i class="fa-solid fa-redo"></i>
         Run Again
       </button>
-      <button kendoButton fillMode="flat" (click)="goBack()">
+      <button mjButton variant="flat" (click)="goBack()">
         <i class="fa-solid fa-arrow-left"></i>
         Edit Parameters
       </button>
-      <button kendoButton fillMode="flat" (click)="closeDialog()">Close</button>
+      <button mjButton variant="flat" (click)="closeDialog()">Close</button>
     }
   }
 </div>

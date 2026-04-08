@@ -1,6 +1,8 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges, ChangeDetectorRef } from '@angular/core';
 import { EntityInfo, EntityFieldInfo } from '@memberjunction/core';
-import { ViewGridAggregate, AggregateDisplayType } from '@memberjunction/core-entities';
+import { MJUserViewEntity_IGridAggregate as ViewGridAggregate } from '@memberjunction/core-entities';
+
+type AggregateDisplayType = 'column' | 'card';
 
 /**
  * Aggregate function types for simple mode
