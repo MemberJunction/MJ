@@ -240,40 +240,58 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
     }
 
     /**
-     * Heatmap mode: circle markers with size proportional to density.
-     * Uses Leaflet's built-in circleMarker — no external heatmap plugin needed.
+     * Heatmap mode: density visualization using colored circle markers.
+     * Larger/more opaque circles where records cluster together.
+     * Click a cluster bubble to see matching records in a popup.
      */
     private RenderHeatmap(): void {
         const bounds: L.LatLng[] = [];
-        const points: { lat: number; lng: number }[] = [];
+        const recordsWithCoords: { lat: number; lng: number; record: Record<string, unknown> }[] = [];
 
         for (const record of this.Records) {
             const lat = this.GetField(record, this.LatitudeField) as number;
             const lng = this.GetField(record, this.LongitudeField) as number;
             if (lat == null || lng == null || isNaN(lat) || isNaN(lng)) continue;
             bounds.push(L.latLng(lat, lng));
-            points.push({ lat, lng });
+            recordsWithCoords.push({ lat, lng, record });
         }
 
-        // Create density-based circle markers
-        // Calculate proximity density for each point
-        for (const pt of points) {
-            // Count nearby points within ~0.5 degrees (~50km) for density
-            const nearby = points.filter(p =>
-                Math.abs(p.lat - pt.lat) < 0.5 && Math.abs(p.lng - pt.lng) < 0.5
-            ).length;
+        // Cluster nearby records (within ~2 degrees / ~200km) into groups
+        const clusters = this.SpatialCluster(recordsWithCoords, 2.0);
 
-            const radius = Math.min(8 + nearby * 4, 30);
-            const opacity = Math.min(0.3 + nearby * 0.1, 0.8);
+        for (const cluster of clusters) {
+            const radius = Math.min(12 + cluster.records.length * 5, 40);
+            const opacity = Math.min(0.3 + cluster.records.length * 0.08, 0.85);
 
-            const circle = L.circleMarker([pt.lat, pt.lng], {
+            const circle = L.circleMarker([cluster.centerLat, cluster.centerLng], {
                 radius,
                 fillColor: '#e74c3c',
                 fillOpacity: opacity,
                 color: '#c0392b',
                 weight: 1,
-                opacity: 0.6
+                opacity: 0.7
             });
+
+            // Build popup with record names for click-through
+            const nameField = this.Entity?.NameField;
+            const names = cluster.records.map(r =>
+                nameField ? String(this.GetField(r, nameField.Name) ?? '') : 'Record'
+            );
+            const popupHTML = `<div style="max-height:200px;overflow-y:auto;font-size:12px;">` +
+                `<b>${cluster.records.length} record${cluster.records.length !== 1 ? 's' : ''}</b><br>` +
+                names.map(n => `• ${this.EscapeHtml(n)}`).join('<br>') +
+                `</div>`;
+            circle.bindPopup(popupHTML);
+
+            circle.on('click', () => {
+                this.RegionClick.emit({
+                    RegionName: `Cluster (${cluster.records.length} records)`,
+                    GroupBy: 'state_province',
+                    RecordCount: cluster.records.length,
+                    Records: cluster.records
+                });
+            });
+
             this.markerLayer!.addLayer(circle);
         }
 
@@ -282,59 +300,124 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
     }
 
     /**
-     * Choropleth mode: colored circle markers sized by region grouping.
-     * Full choropleth with GeoJSON boundaries requires loading boundary data
-     * from Country/StateProvince entities (future enhancement).
-     * For now, uses large translucent circles as regional indicators.
+     * Choropleth mode: regional grouping with colored bubbles per state/region.
+     * Groups records by geographic proximity into state-sized clusters,
+     * each with a distinct color and size proportional to record count.
+     * Full GeoJSON boundary rendering is a future enhancement.
      */
     private RenderChoropleth(): void {
         const bounds: L.LatLng[] = [];
+        const recordsWithCoords: { lat: number; lng: number; record: Record<string, unknown> }[] = [];
         const colors = ['#3498db', '#2ecc71', '#e74c3c', '#f39c12', '#9b59b6',
-                        '#1abc9c', '#e67e22', '#2980b9', '#27ae60', '#c0392b'];
-
-        // Group records by country field if available
-        const groups = new Map<string, { lat: number; lng: number; count: number }>();
+                        '#1abc9c', '#e67e22', '#2980b9', '#27ae60', '#c0392b',
+                        '#16a085', '#d35400', '#8e44ad', '#2c3e50', '#f1c40f'];
 
         for (const record of this.Records) {
             const lat = this.GetField(record, this.LatitudeField) as number;
             const lng = this.GetField(record, this.LongitudeField) as number;
             if (lat == null || lng == null || isNaN(lat) || isNaN(lng)) continue;
             bounds.push(L.latLng(lat, lng));
-
-            // Group by country or state field if available
-            const country = String(this.GetField(record, 'Country') ?? this.GetField(record, 'State') ?? 'Unknown');
-            const existing = groups.get(country);
-            if (existing) {
-                existing.count++;
-                // Average the coordinates for the group center
-                existing.lat = (existing.lat * (existing.count - 1) + lat) / existing.count;
-                existing.lng = (existing.lng * (existing.count - 1) + lng) / existing.count;
-            } else {
-                groups.set(country, { lat, lng, count: 1 });
-            }
+            recordsWithCoords.push({ lat, lng, record });
         }
 
-        // Render each group as a large translucent circle
-        let colorIdx = 0;
-        for (const [name, group] of groups) {
-            const color = colors[colorIdx % colors.length];
-            const radius = Math.min(15 + group.count * 8, 60);
+        // Cluster into state-sized regions (~5 degrees / ~500km)
+        const clusters = this.SpatialCluster(recordsWithCoords, 5.0);
 
-            const circle = L.circleMarker([group.lat, group.lng], {
+        for (let i = 0; i < clusters.length; i++) {
+            const cluster = clusters[i];
+            const color = colors[i % colors.length];
+            const radius = Math.min(20 + cluster.records.length * 6, 60);
+
+            // Try to derive a region name from the records' State or Country fields
+            const regionNames = new Set<string>();
+            for (const rec of cluster.records) {
+                const state = this.GetField(rec, 'State') as string;
+                const country = this.GetField(rec, 'Country') as string;
+                if (state) regionNames.add(String(state));
+                else if (country) regionNames.add(String(country));
+            }
+            const regionLabel = regionNames.size > 0
+                ? Array.from(regionNames).slice(0, 3).join(', ') + (regionNames.size > 3 ? '...' : '')
+                : `Region ${i + 1}`;
+
+            const circle = L.circleMarker([cluster.centerLat, cluster.centerLng], {
                 radius,
                 fillColor: color,
-                fillOpacity: 0.4,
+                fillOpacity: 0.45,
                 color: color,
                 weight: 2,
-                opacity: 0.8
+                opacity: 0.85
             });
-            circle.bindPopup(`<b>${this.EscapeHtml(name)}</b><br>${group.count} record${group.count !== 1 ? 's' : ''}`);
+
+            const nameField = this.Entity?.NameField;
+            const names = cluster.records.map(r =>
+                nameField ? String(this.GetField(r, nameField.Name) ?? '') : 'Record'
+            );
+            circle.bindPopup(
+                `<div style="max-height:200px;overflow-y:auto;font-size:12px;">` +
+                `<b>${this.EscapeHtml(regionLabel)}</b><br>` +
+                `${cluster.records.length} record${cluster.records.length !== 1 ? 's' : ''}<br><hr style="margin:4px 0;">` +
+                names.map(n => `• ${this.EscapeHtml(n)}`).join('<br>') +
+                `</div>`
+            );
+
+            circle.on('click', () => {
+                this.RegionClick.emit({
+                    RegionName: regionLabel,
+                    GroupBy: 'state_province',
+                    RecordCount: cluster.records.length,
+                    Records: cluster.records
+                });
+            });
+
             this.markerLayer!.addLayer(circle);
-            colorIdx++;
         }
 
         this.MarkerCount = bounds.length;
         this.FitBoundsToMarkers(bounds);
+    }
+
+    /**
+     * Simple spatial clustering: group nearby records within a lat/lng radius.
+     * Returns clusters with center coordinates and member records.
+     */
+    private SpatialCluster(
+        items: { lat: number; lng: number; record: Record<string, unknown> }[],
+        radiusDegrees: number
+    ): { centerLat: number; centerLng: number; records: Record<string, unknown>[] }[] {
+        const assigned = new Set<number>();
+        const clusters: { centerLat: number; centerLng: number; records: Record<string, unknown>[] }[] = [];
+
+        for (let i = 0; i < items.length; i++) {
+            if (assigned.has(i)) continue;
+
+            const seed = items[i];
+            const members: Record<string, unknown>[] = [seed.record];
+            let sumLat = seed.lat;
+            let sumLng = seed.lng;
+            assigned.add(i);
+
+            // Find all unassigned neighbors within radius
+            for (let j = i + 1; j < items.length; j++) {
+                if (assigned.has(j)) continue;
+                const candidate = items[j];
+                if (Math.abs(candidate.lat - seed.lat) <= radiusDegrees &&
+                    Math.abs(candidate.lng - seed.lng) <= radiusDegrees) {
+                    members.push(candidate.record);
+                    sumLat += candidate.lat;
+                    sumLng += candidate.lng;
+                    assigned.add(j);
+                }
+            }
+
+            clusters.push({
+                centerLat: sumLat / members.length,
+                centerLng: sumLng / members.length,
+                records: members
+            });
+        }
+
+        return clusters;
     }
 
     /**
