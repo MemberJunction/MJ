@@ -1,14 +1,458 @@
 [
   {
     "fields": {
-      "Name": "United States",
-      "ISO2": "US",
-      "ISO3": "USA",
-      "NumericCode": 840,
-      "Latitude": 37.0902,
-      "Longitude": -95.7129,
-      "BoundaryGeoJSON": "@file:boundaries/US.geojson",
-      "CommonAliases": "[\"United States\",\"USA\",\"U.S.\",\"U.S.A.\",\"America\",\"United States of America\"]"
+      "Name": "Afghanistan",
+      "ISO2": "AF",
+      "ISO3": "AFG",
+      "NumericCode": 4,
+      "Latitude": 33.0,
+      "Longitude": 65.0,
+      "BoundaryGeoJSON": "@file:boundaries/AF.geojson",
+      "CommonAliases": "[\"Islamic Republic of Afghanistan\", \"Af\\u0121\\u0101nist\\u0101n\", \"Afghanistan\", \"AF\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Albania",
+      "ISO2": "AL",
+      "ISO3": "ALB",
+      "NumericCode": 8,
+      "Latitude": 41.0,
+      "Longitude": 20.0,
+      "BoundaryGeoJSON": "@file:boundaries/AL.geojson",
+      "CommonAliases": "[\"Shqipnia\", \"AL\", \"Shqip\\u00ebria\", \"Albania\", \"Republic of Albania\", \"Shqip\\u00ebri\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Algeria",
+      "ISO2": "DZ",
+      "ISO3": "DZA",
+      "NumericCode": 12,
+      "Latitude": 28.0,
+      "Longitude": 3.0,
+      "BoundaryGeoJSON": "@file:boundaries/DZ.geojson",
+      "CommonAliases": "[\"Dzayer\", \"People's Democratic Republic of Algeria\", \"Algeria\", \"DZ\", \"Alg\\u00e9rie\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "American Samoa",
+      "ISO2": "AS",
+      "ISO3": "ASM",
+      "NumericCode": 16,
+      "Latitude": -14.3333,
+      "Longitude": -170.0,
+      "BoundaryGeoJSON": "@file:boundaries/AS.geojson",
+      "CommonAliases": "[\"Amerika S\\u0101moa\", \"Amelika S\\u0101moa\", \"American Samoa\", \"AS\", \"S\\u0101moa Amelika\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Andorra",
+      "ISO2": "AD",
+      "ISO3": "AND",
+      "NumericCode": 20,
+      "Latitude": 42.5,
+      "Longitude": 1.5,
+      "BoundaryGeoJSON": "@file:boundaries/AD.geojson",
+      "CommonAliases": "[\"Principality of Andorra\", \"Andorra\", \"Principat d'Andorra\", \"AD\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Angola",
+      "ISO2": "AO",
+      "ISO3": "AGO",
+      "NumericCode": 24,
+      "Latitude": -12.5,
+      "Longitude": 18.5,
+      "BoundaryGeoJSON": "@file:boundaries/AO.geojson",
+      "CommonAliases": "[\"AO\", \"Republic of Angola\", \"Angola\", \"\\u0281\\u025bpublika de an'\\u0261\\u0254la\", \"Rep\\u00fablica de Angola\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Anguilla",
+      "ISO2": "AI",
+      "ISO3": "AIA",
+      "NumericCode": 660,
+      "Latitude": 18.25,
+      "Longitude": -63.1667,
+      "BoundaryGeoJSON": "@file:boundaries/AI.geojson",
+      "CommonAliases": "[\"Anguilla\", \"AI\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Antarctica",
+      "ISO2": "AQ",
+      "ISO3": "ATA",
+      "NumericCode": 10,
+      "Latitude": -90.0,
+      "Longitude": 0.0,
+      "BoundaryGeoJSON": "@file:boundaries/AQ.geojson",
+      "CommonAliases": "[\"AQ\", \"Antarctica\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Antigua and Barbuda",
+      "ISO2": "AG",
+      "ISO3": "ATG",
+      "NumericCode": 28,
+      "Latitude": 17.05,
+      "Longitude": -61.8,
+      "BoundaryGeoJSON": "@file:boundaries/AG.geojson",
+      "CommonAliases": "[\"AG\", \"Antigua and Barbuda\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Argentina",
+      "ISO2": "AR",
+      "ISO3": "ARG",
+      "NumericCode": 32,
+      "Latitude": -34.0,
+      "Longitude": -64.0,
+      "BoundaryGeoJSON": "@file:boundaries/AR.geojson",
+      "CommonAliases": "[\"Argentina\", \"Argentine Republic\", \"AR\", \"Rep\\u00fablica Argentina\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Armenia",
+      "ISO2": "AM",
+      "ISO3": "ARM",
+      "NumericCode": 51,
+      "Latitude": 40.0,
+      "Longitude": 45.0,
+      "BoundaryGeoJSON": "@file:boundaries/AM.geojson",
+      "CommonAliases": "[\"Republic of Armenia\", \"AM\", \"Hayastan\", \"Armenia\", \"\\u0540\\u0561\\u0575\\u0561\\u057d\\u057f\\u0561\\u0576\\u056b \\u0540\\u0561\\u0576\\u0580\\u0561\\u057a\\u0565\\u057f\\u0578\\u0582\\u0569\\u0575\\u0578\\u0582\\u0576\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Aruba",
+      "ISO2": "AW",
+      "ISO3": "ABW",
+      "NumericCode": 533,
+      "Latitude": 12.5,
+      "Longitude": -69.9667,
+      "BoundaryGeoJSON": "@file:boundaries/AW.geojson",
+      "CommonAliases": "[\"Aruba\", \"AW\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Australia",
+      "ISO2": "AU",
+      "ISO3": "AUS",
+      "NumericCode": 36,
+      "Latitude": -27.0,
+      "Longitude": 133.0,
+      "BoundaryGeoJSON": "@file:boundaries/AU.geojson",
+      "CommonAliases": "[\"Australia\", \"Commonwealth of Australia\", \"AU\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Austria",
+      "ISO2": "AT",
+      "ISO3": "AUT",
+      "NumericCode": 40,
+      "Latitude": 47.3333,
+      "Longitude": 13.3333,
+      "BoundaryGeoJSON": "@file:boundaries/AT.geojson",
+      "CommonAliases": "[\"Austria\", \"Osterreich\", \"Republic of Austria\", \"AT\", \"Oesterreich\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Azerbaijan",
+      "ISO2": "AZ",
+      "ISO3": "AZE",
+      "NumericCode": 31,
+      "Latitude": 40.5,
+      "Longitude": 47.5,
+      "BoundaryGeoJSON": "@file:boundaries/AZ.geojson",
+      "CommonAliases": "[\"Republic of Azerbaijan\", \"Az\\u0259rbaycan Respublikas\\u0131\", \"Azerbaijan\", \"AZ\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bahamas",
+      "ISO2": "BS",
+      "ISO3": "BHS",
+      "NumericCode": 44,
+      "Latitude": 25.0343,
+      "Longitude": -77.3963,
+      "BoundaryGeoJSON": "@file:boundaries/BS.geojson",
+      "CommonAliases": "[\"Bahamas\", \"Commonwealth of the Bahamas\", \"BS\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bahrain",
+      "ISO2": "BH",
+      "ISO3": "BHR",
+      "NumericCode": 48,
+      "Latitude": 26.0,
+      "Longitude": 50.55,
+      "BoundaryGeoJSON": "@file:boundaries/BH.geojson",
+      "CommonAliases": "[\"Bahrain\", \"Kingdom of Bahrain\", \"Mamlakat al-Ba\\u1e25rayn\", \"BH\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bangladesh",
+      "ISO2": "BD",
+      "ISO3": "BGD",
+      "NumericCode": 50,
+      "Latitude": 24.0,
+      "Longitude": 90.0,
+      "BoundaryGeoJSON": "@file:boundaries/BD.geojson",
+      "CommonAliases": "[\"BD\", \"G\\u00f4n\\u00f4pr\\u00f4jat\\u00f4ntri Bangladesh\", \"People's Republic of Bangladesh\", \"Bangladesh\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Barbados",
+      "ISO2": "BB",
+      "ISO3": "BRB",
+      "NumericCode": 52,
+      "Latitude": 13.1667,
+      "Longitude": -59.5333,
+      "BoundaryGeoJSON": "@file:boundaries/BB.geojson",
+      "CommonAliases": "[\"Barbados\", \"BB\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Belarus",
+      "ISO2": "BY",
+      "ISO3": "BLR",
+      "NumericCode": 112,
+      "Latitude": 53.0,
+      "Longitude": 28.0,
+      "BoundaryGeoJSON": "@file:boundaries/BY.geojson",
+      "CommonAliases": "[\"\\u0420\\u0435\\u0441\\u043f\\u0443\\u0431\\u043b\\u0438\\u043a\\u0430 \\u0411\\u0435\\u043b\\u043e\\u0440\\u0443\\u0441\\u0441\\u0438\\u044f\", \"Republic of Belarus\", \"BY\", \"Belarus\", \"Bielaru\\u015b\", \"\\u0411\\u0435\\u043b\\u043e\\u0440\\u0443\\u0441\\u0441\\u0438\\u044f\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Belgium",
+      "ISO2": "BE",
+      "ISO3": "BEL",
+      "NumericCode": 56,
+      "Latitude": 50.8333,
+      "Longitude": 4.0,
+      "BoundaryGeoJSON": "@file:boundaries/BE.geojson",
+      "CommonAliases": "[\"Belgien\", \"K\\u00f6nigreich Belgien\", \"Royaume de Belgique\", \"Belgique\", \"Belgi\\u00eb\", \"BE\", \"Belgie\", \"Koninkrijk Belgi\\u00eb\", \"Belgium\", \"Kingdom of Belgium\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Belize",
+      "ISO2": "BZ",
+      "ISO3": "BLZ",
+      "NumericCode": 84,
+      "Latitude": 17.25,
+      "Longitude": -88.75,
+      "BoundaryGeoJSON": "@file:boundaries/BZ.geojson",
+      "CommonAliases": "[\"Belize\", \"BZ\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Benin",
+      "ISO2": "BJ",
+      "ISO3": "BEN",
+      "NumericCode": 204,
+      "Latitude": 9.5,
+      "Longitude": 2.25,
+      "BoundaryGeoJSON": "@file:boundaries/BJ.geojson",
+      "CommonAliases": "[\"Republic of Benin\", \"R\\u00e9publique du B\\u00e9nin\", \"Benin\", \"BJ\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bermuda",
+      "ISO2": "BM",
+      "ISO3": "BMU",
+      "NumericCode": 60,
+      "Latitude": 32.3333,
+      "Longitude": -64.75,
+      "BoundaryGeoJSON": "@file:boundaries/BM.geojson",
+      "CommonAliases": "[\"The Bermudas\", \"BM\", \"Somers Isles\", \"The Islands of Bermuda\", \"Bermuda\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bhutan",
+      "ISO2": "BT",
+      "ISO3": "BTN",
+      "NumericCode": 64,
+      "Latitude": 27.5,
+      "Longitude": 90.5,
+      "BoundaryGeoJSON": "@file:boundaries/BT.geojson",
+      "CommonAliases": "[\"BT\", \"Bhutan\", \"Kingdom of Bhutan\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bolivia",
+      "ISO2": "BO",
+      "ISO3": "BOL",
+      "NumericCode": 68,
+      "Latitude": -17.0,
+      "Longitude": -65.0,
+      "BoundaryGeoJSON": "@file:boundaries/BO.geojson",
+      "CommonAliases": "[\"Bolivia\", \"Plurinational State of Bolivia\", \"Estado Plurinacional de Bolivia\", \"Wuliwya\", \"BO\", \"Buliwya\", \"Bolivia, Plurinational State of\", \"Buliwya Mamallaqta\", \"Tet\\u00e3 Vol\\u00edvia\", \"Wuliwya Suyu\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bosnia and Herzegovina",
+      "ISO2": "BA",
+      "ISO3": "BIH",
+      "NumericCode": 70,
+      "Latitude": 44.0,
+      "Longitude": 18.0,
+      "BoundaryGeoJSON": "@file:boundaries/BA.geojson",
+      "CommonAliases": "[\"BA\", \"\\u0411\\u043e\\u0441\\u043d\\u0430 \\u0438 \\u0425\\u0435\\u0440\\u0446\\u0435\\u0433\\u043e\\u0432\\u0438\\u043d\\u0430\", \"Bosnia and Herzegovina\", \"Bosnia-Herzegovina\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Botswana",
+      "ISO2": "BW",
+      "ISO3": "BWA",
+      "NumericCode": 72,
+      "Latitude": -22.0,
+      "Longitude": 24.0,
+      "BoundaryGeoJSON": "@file:boundaries/BW.geojson",
+      "CommonAliases": "[\"Republic of Botswana\", \"BW\", \"Lefatshe la Botswana\", \"Botswana\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bouvet Island",
+      "ISO2": "BV",
+      "ISO3": "BVT",
+      "NumericCode": 74,
+      "Latitude": -54.4208,
+      "Longitude": 3.3464,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Bouvet\\u00f8ya\", \"Bouvet-\\u00f8ya\", \"BV\", \"Bouvet Island\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Brazil",
+      "ISO2": "BR",
+      "ISO3": "BRA",
+      "NumericCode": 76,
+      "Latitude": -10.0,
+      "Longitude": -55.0,
+      "BoundaryGeoJSON": "@file:boundaries/BR.geojson",
+      "CommonAliases": "[\"Federative Republic of Brazil\", \"BR\", \"Brasil\", \"Brazil\", \"Rep\\u00fablica Federativa do Brasil\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "British Indian Ocean Territory",
+      "ISO2": "IO",
+      "ISO3": "IOT",
+      "NumericCode": 86,
+      "Latitude": -6.0,
+      "Longitude": 71.5,
+      "BoundaryGeoJSON": "@file:boundaries/IO.geojson",
+      "CommonAliases": "[\"IO\", \"British Indian Ocean Territory\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "British Virgin Islands",
+      "ISO2": "VG",
+      "ISO3": "VGB",
+      "NumericCode": 92,
+      "Latitude": 18.4314,
+      "Longitude": -64.6231,
+      "BoundaryGeoJSON": "@file:boundaries/VG.geojson",
+      "CommonAliases": "[\"VG\", \"British Virgin Islands\", \"Virgin Islands, British\", \"Virgin Islands\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Brunei",
+      "ISO2": "BN",
+      "ISO3": "BRN",
+      "NumericCode": 96,
+      "Latitude": 4.5,
+      "Longitude": 114.6667,
+      "BoundaryGeoJSON": "@file:boundaries/BN.geojson",
+      "CommonAliases": "[\"Nation of Brunei, Abode of Peace\", \"Brunei\", \"BN\", \"Brunei Darussalam\", \"the Abode of Peace\", \"Nation of Brunei\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bulgaria",
+      "ISO2": "BG",
+      "ISO3": "BGR",
+      "NumericCode": 100,
+      "Latitude": 43.0,
+      "Longitude": 25.0,
+      "BoundaryGeoJSON": "@file:boundaries/BG.geojson",
+      "CommonAliases": "[\"Republic of Bulgaria\", \"Bulgaria\", \"\\u0420\\u0435\\u043f\\u0443\\u0431\\u043b\\u0438\\u043a\\u0430 \\u0411\\u044a\\u043b\\u0433\\u0430\\u0440\\u0438\\u044f\", \"BG\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Burkina Faso",
+      "ISO2": "BF",
+      "ISO3": "BFA",
+      "NumericCode": 854,
+      "Latitude": 13.0,
+      "Longitude": -2.0,
+      "BoundaryGeoJSON": "@file:boundaries/BF.geojson",
+      "CommonAliases": "[\"Burkina Faso\", \"BF\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Burundi",
+      "ISO2": "BI",
+      "ISO3": "BDI",
+      "NumericCode": 108,
+      "Latitude": -3.5,
+      "Longitude": 30.0,
+      "BoundaryGeoJSON": "@file:boundaries/BI.geojson",
+      "CommonAliases": "[\"Republika y'Uburundi\", \"Republic of Burundi\", \"Burundi\", \"BI\", \"R\\u00e9publique du Burundi\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Cambodia",
+      "ISO2": "KH",
+      "ISO3": "KHM",
+      "NumericCode": 116,
+      "Latitude": 13.0,
+      "Longitude": 105.0,
+      "BoundaryGeoJSON": "@file:boundaries/KH.geojson",
+      "CommonAliases": "[\"Cambodia\", \"Kingdom of Cambodia\", \"KH\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Cameroon",
+      "ISO2": "CM",
+      "ISO3": "CMR",
+      "NumericCode": 120,
+      "Latitude": 6.0,
+      "Longitude": 12.0,
+      "BoundaryGeoJSON": "@file:boundaries/CM.geojson",
+      "CommonAliases": "[\"CM\", \"R\\u00e9publique du Cameroun\", \"Republic of Cameroon\", \"Cameroon\"]"
     }
   },
   {
@@ -17,34 +461,430 @@
       "ISO2": "CA",
       "ISO3": "CAN",
       "NumericCode": 124,
-      "Latitude": 56.1304,
-      "Longitude": -106.3468,
+      "Latitude": 60.0,
+      "Longitude": -95.0,
       "BoundaryGeoJSON": "@file:boundaries/CA.geojson",
-      "CommonAliases": "[\"Canada\"]"
+      "CommonAliases": "[\"Canada\", \"CA\"]"
     }
   },
   {
     "fields": {
-      "Name": "United Kingdom",
-      "ISO2": "GB",
-      "ISO3": "GBR",
-      "NumericCode": 826,
-      "Latitude": 55.3781,
-      "Longitude": -3.4360,
-      "BoundaryGeoJSON": "@file:boundaries/GB.geojson",
-      "CommonAliases": "[\"United Kingdom\",\"UK\",\"U.K.\",\"Great Britain\",\"Britain\",\"England\"]"
+      "Name": "Cape Verde",
+      "ISO2": "CV",
+      "ISO3": "CPV",
+      "NumericCode": 132,
+      "Latitude": 16.5388,
+      "Longitude": -23.0418,
+      "BoundaryGeoJSON": "@file:boundaries/CV.geojson",
+      "CommonAliases": "[\"CV\", \"Republic of Cabo Verde\", \"Cape Verde\", \"Rep\\u00fablica de Cabo Verde\"]"
     }
   },
   {
     "fields": {
-      "Name": "Germany",
-      "ISO2": "DE",
-      "ISO3": "DEU",
-      "NumericCode": 276,
-      "Latitude": 51.1657,
-      "Longitude": 10.4515,
-      "BoundaryGeoJSON": "@file:boundaries/DE.geojson",
-      "CommonAliases": "[\"Germany\",\"Deutschland\"]"
+      "Name": "Caribbean Netherlands",
+      "ISO2": "BQ",
+      "ISO3": "BES",
+      "NumericCode": 535,
+      "Latitude": 12.18,
+      "Longitude": -68.25,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"BES islands\", \"Caribbean Netherlands\", \"Bonaire, Sint Eustatius and Saba\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Cayman Islands",
+      "ISO2": "KY",
+      "ISO3": "CYM",
+      "NumericCode": 136,
+      "Latitude": 19.3133,
+      "Longitude": -81.2546,
+      "BoundaryGeoJSON": "@file:boundaries/KY.geojson",
+      "CommonAliases": "[\"KY\", \"Cayman Islands\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Central African Republic",
+      "ISO2": "CF",
+      "ISO3": "CAF",
+      "NumericCode": 140,
+      "Latitude": 7.0,
+      "Longitude": 21.0,
+      "BoundaryGeoJSON": "@file:boundaries/CF.geojson",
+      "CommonAliases": "[\"CF\", \"Central African Republic\", \"R\\u00e9publique centrafricaine\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Chad",
+      "ISO2": "TD",
+      "ISO3": "TCD",
+      "NumericCode": 148,
+      "Latitude": 15.0,
+      "Longitude": 19.0,
+      "BoundaryGeoJSON": "@file:boundaries/TD.geojson",
+      "CommonAliases": "[\"TD\", \"Chad\", \"R\\u00e9publique du Tchad\", \"Tchad\", \"Republic of Chad\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Chile",
+      "ISO2": "CL",
+      "ISO3": "CHL",
+      "NumericCode": 152,
+      "Latitude": -30.0,
+      "Longitude": -71.0,
+      "BoundaryGeoJSON": "@file:boundaries/CL.geojson",
+      "CommonAliases": "[\"Rep\\u00fablica de Chile\", \"CL\", \"Chile\", \"Republic of Chile\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "China",
+      "ISO2": "CN",
+      "ISO3": "CHN",
+      "NumericCode": 156,
+      "Latitude": 35.0,
+      "Longitude": 105.0,
+      "BoundaryGeoJSON": "@file:boundaries/CN.geojson",
+      "CommonAliases": "[\"People's Republic of China\", \"Zhonghua\", \"Zh\\u014dnghu\\u00e1 R\\u00e9nm\\u00edn G\\u00f2ngh\\u00e9gu\\u00f3\", \"Zhongguo\", \"Zh\\u014dnggu\\u00f3\", \"China\", \"CN\", \"\\u4e2d\\u534e\\u4eba\\u6c11\\u5171\\u548c\\u56fd\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Christmas Island",
+      "ISO2": "CX",
+      "ISO3": "CXR",
+      "NumericCode": 162,
+      "Latitude": -10.5,
+      "Longitude": 105.6667,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Christmas Island\", \"Territory of Christmas Island\", \"CX\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Cocos (Keeling) Islands",
+      "ISO2": "CC",
+      "ISO3": "CCK",
+      "NumericCode": 166,
+      "Latitude": -12.1642,
+      "Longitude": 96.871,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Keeling Islands\", \"Territory of the Cocos (Keeling) Islands\", \"Cocos (Keeling) Islands\", \"Cocos Islands\", \"CC\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Colombia",
+      "ISO2": "CO",
+      "ISO3": "COL",
+      "NumericCode": 170,
+      "Latitude": 4.0,
+      "Longitude": -72.0,
+      "BoundaryGeoJSON": "@file:boundaries/CO.geojson",
+      "CommonAliases": "[\"Rep\\u00fablica de Colombia\", \"Republic of Colombia\", \"Colombia\", \"CO\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Comoros",
+      "ISO2": "KM",
+      "ISO3": "COM",
+      "NumericCode": 174,
+      "Latitude": -12.1667,
+      "Longitude": 44.25,
+      "BoundaryGeoJSON": "@file:boundaries/KM.geojson",
+      "CommonAliases": "[\"Union of the Comoros\", \"Union des Comores\", \"Comoros\", \"al-Itti\\u1e25\\u0101d al-Qumur\\u012b\", \"KM\", \"Udzima wa Komori\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Cook Islands",
+      "ISO2": "CK",
+      "ISO3": "COK",
+      "NumericCode": 184,
+      "Latitude": -21.2333,
+      "Longitude": -159.7667,
+      "BoundaryGeoJSON": "@file:boundaries/CK.geojson",
+      "CommonAliases": "[\"CK\", \"Cook Islands\", \"K\\u016bki '\\u0100irani\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Costa Rica",
+      "ISO2": "CR",
+      "ISO3": "CRI",
+      "NumericCode": 188,
+      "Latitude": 10.0,
+      "Longitude": -84.0,
+      "BoundaryGeoJSON": "@file:boundaries/CR.geojson",
+      "CommonAliases": "[\"Costa Rica\", \"Rep\\u00fablica de Costa Rica\", \"Republic of Costa Rica\", \"CR\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Croatia",
+      "ISO2": "HR",
+      "ISO3": "HRV",
+      "NumericCode": 191,
+      "Latitude": 45.1667,
+      "Longitude": 15.5,
+      "BoundaryGeoJSON": "@file:boundaries/HR.geojson",
+      "CommonAliases": "[\"HR\", \"Hrvatska\", \"Croatia\", \"Republika Hrvatska\", \"Republic of Croatia\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Cuba",
+      "ISO2": "CU",
+      "ISO3": "CUB",
+      "NumericCode": 192,
+      "Latitude": 21.5,
+      "Longitude": -80.0,
+      "BoundaryGeoJSON": "@file:boundaries/CU.geojson",
+      "CommonAliases": "[\"Cuba\", \"Rep\\u00fablica de Cuba\", \"CU\", \"Republic of Cuba\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Curaçao",
+      "ISO2": "CW",
+      "ISO3": "CUW",
+      "NumericCode": 531,
+      "Latitude": 12.1167,
+      "Longitude": -68.9333,
+      "BoundaryGeoJSON": "@file:boundaries/CW.geojson",
+      "CommonAliases": "[\"Cura\\u00e7ao\", \"Land Cura\\u00e7ao\", \"CW\", \"Country of Cura\\u00e7ao\", \"K\\u00f2rsou\", \"Curacao\", \"Pais K\\u00f2rsou\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Cyprus",
+      "ISO2": "CY",
+      "ISO3": "CYP",
+      "NumericCode": 196,
+      "Latitude": 35.0,
+      "Longitude": 33.0,
+      "BoundaryGeoJSON": "@file:boundaries/CY.geojson",
+      "CommonAliases": "[\"K\\u0131br\\u0131s\", \"\\u039a\\u03c5\\u03c0\\u03c1\\u03b9\\u03b1\\u03ba\\u03ae \\u0394\\u03b7\\u03bc\\u03bf\\u03ba\\u03c1\\u03b1\\u03c4\\u03af\\u03b1\", \"Cyprus\", \"K\\u00fdpros\", \"K\\u0131br\\u0131s Cumhuriyeti\", \"CY\", \"Republic of Cyprus\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Czechia",
+      "ISO2": "CZ",
+      "ISO3": "CZE",
+      "NumericCode": 203,
+      "Latitude": 49.75,
+      "Longitude": 15.5,
+      "BoundaryGeoJSON": "@file:boundaries/CZ.geojson",
+      "CommonAliases": "[\"Czechia\", \"Czech Republic\", \"\\u010cesko\", \"\\u010cesk\\u00e1 republika\", \"CZ\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "DR Congo",
+      "ISO2": "CD",
+      "ISO3": "COD",
+      "NumericCode": 180,
+      "Latitude": 0.0,
+      "Longitude": 25.0,
+      "BoundaryGeoJSON": "@file:boundaries/CD.geojson",
+      "CommonAliases": "[\"Congo-Kinshasa\", \"CD\", \"DRC\", \"DR Congo\", \"Congo, the Democratic Republic of the\", \"Democratic Republic of the Congo\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Denmark",
+      "ISO2": "DK",
+      "ISO3": "DNK",
+      "NumericCode": 208,
+      "Latitude": 56.0,
+      "Longitude": 10.0,
+      "BoundaryGeoJSON": "@file:boundaries/DK.geojson",
+      "CommonAliases": "[\"DK\", \"Kongeriget Danmark\", \"Kingdom of Denmark\", \"Denmark\", \"Danmark\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Djibouti",
+      "ISO2": "DJ",
+      "ISO3": "DJI",
+      "NumericCode": 262,
+      "Latitude": 11.5,
+      "Longitude": 43.0,
+      "BoundaryGeoJSON": "@file:boundaries/DJ.geojson",
+      "CommonAliases": "[\"Jamhuuriyadda Jabuuti\", \"Gabuutih Ummuuno\", \"Djibouti\", \"DJ\", \"Gabuuti\", \"Republic of Djibouti\", \"Jabuuti\", \"R\\u00e9publique de Djibouti\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Dominica",
+      "ISO2": "DM",
+      "ISO3": "DMA",
+      "NumericCode": 212,
+      "Latitude": 15.4167,
+      "Longitude": -61.3333,
+      "BoundaryGeoJSON": "@file:boundaries/DM.geojson",
+      "CommonAliases": "[\"Commonwealth of Dominica\", \"Dominique\", \"Wai\\u2018tu kubuli\", \"DM\", \"Dominica\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Dominican Republic",
+      "ISO2": "DO",
+      "ISO3": "DOM",
+      "NumericCode": 214,
+      "Latitude": 19.0,
+      "Longitude": -70.6667,
+      "BoundaryGeoJSON": "@file:boundaries/DO.geojson",
+      "CommonAliases": "[\"DO\", \"Dominican Republic\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ecuador",
+      "ISO2": "EC",
+      "ISO3": "ECU",
+      "NumericCode": 218,
+      "Latitude": -2.0,
+      "Longitude": -77.5,
+      "BoundaryGeoJSON": "@file:boundaries/EC.geojson",
+      "CommonAliases": "[\"Rep\\u00fablica del Ecuador\", \"EC\", \"Republic of Ecuador\", \"Ecuador\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Egypt",
+      "ISO2": "EG",
+      "ISO3": "EGY",
+      "NumericCode": 818,
+      "Latitude": 27.0,
+      "Longitude": 30.0,
+      "BoundaryGeoJSON": "@file:boundaries/EG.geojson",
+      "CommonAliases": "[\"Egypt\", \"EG\", \"Arab Republic of Egypt\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "El Salvador",
+      "ISO2": "SV",
+      "ISO3": "SLV",
+      "NumericCode": 222,
+      "Latitude": 13.8333,
+      "Longitude": -88.9167,
+      "BoundaryGeoJSON": "@file:boundaries/SV.geojson",
+      "CommonAliases": "[\"SV\", \"El Salvador\", \"Rep\\u00fablica de El Salvador\", \"Republic of El Salvador\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Equatorial Guinea",
+      "ISO2": "GQ",
+      "ISO3": "GNQ",
+      "NumericCode": 226,
+      "Latitude": 2.0,
+      "Longitude": 10.0,
+      "BoundaryGeoJSON": "@file:boundaries/GQ.geojson",
+      "CommonAliases": "[\"Rep\\u00fablica da Guin\\u00e9 Equatorial\", \"Equatorial Guinea\", \"Republic of Equatorial Guinea\", \"GQ\", \"R\\u00e9publique de Guin\\u00e9e \\u00e9quatoriale\", \"Rep\\u00fablica de Guinea Ecuatorial\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Eritrea",
+      "ISO2": "ER",
+      "ISO3": "ERI",
+      "NumericCode": 232,
+      "Latitude": 15.0,
+      "Longitude": 39.0,
+      "BoundaryGeoJSON": "@file:boundaries/ER.geojson",
+      "CommonAliases": "[\"Eritrea\", \"\\u02beErtr\\u0101\", \"State of Eritrea\", \"ER\", \"Dawlat Iritriy\\u00e1\", \"\\u1203\\u1308\\u1228 \\u12a4\\u122d\\u1275\\u122b\", \"Iritriy\\u0101\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Estonia",
+      "ISO2": "EE",
+      "ISO3": "EST",
+      "NumericCode": 233,
+      "Latitude": 59.0,
+      "Longitude": 26.0,
+      "BoundaryGeoJSON": "@file:boundaries/EE.geojson",
+      "CommonAliases": "[\"Estonia\", \"Eesti\", \"Republic of Estonia\", \"EE\", \"Eesti Vabariik\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Eswatini",
+      "ISO2": "SZ",
+      "ISO3": "SWZ",
+      "NumericCode": 748,
+      "Latitude": -26.5,
+      "Longitude": 31.5,
+      "BoundaryGeoJSON": "@file:boundaries/SZ.geojson",
+      "CommonAliases": "[\"Ngwane\", \"Kingdom of Eswatini\", \"Eswatini\", \"weSwatini\", \"Umbuso weSwatini\", \"Swatini\", \"SZ\", \"Swaziland\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ethiopia",
+      "ISO2": "ET",
+      "ISO3": "ETH",
+      "NumericCode": 231,
+      "Latitude": 8.0,
+      "Longitude": 38.0,
+      "BoundaryGeoJSON": "@file:boundaries/ET.geojson",
+      "CommonAliases": "[\"ET\", \"\\u02be\\u012aty\\u014d\\u1e57\\u1e57y\\u0101\", \"Federal Democratic Republic of Ethiopia\", \"Ethiopia\", \"\\u12e8\\u12a2\\u1275\\u12ee\\u1335\\u12eb \\u134c\\u12f4\\u122b\\u120b\\u12ca \\u12f2\\u121e\\u12ad\\u122b\\u1232\\u12eb\\u12ca \\u122a\\u1350\\u1265\\u120a\\u12ad\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Falkland Islands",
+      "ISO2": "FK",
+      "ISO3": "FLK",
+      "NumericCode": 238,
+      "Latitude": -51.75,
+      "Longitude": -59.0,
+      "BoundaryGeoJSON": "@file:boundaries/FK.geojson",
+      "CommonAliases": "[\"Falkland Islands\", \"FK\", \"Islas Malvinas\", \"Falkland Islands (Malvinas)\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Faroe Islands",
+      "ISO2": "FO",
+      "ISO3": "FRO",
+      "NumericCode": 234,
+      "Latitude": 62.0,
+      "Longitude": -7.0,
+      "BoundaryGeoJSON": "@file:boundaries/FO.geojson",
+      "CommonAliases": "[\"F\\u00f8royar\", \"Faroe Islands\", \"F\\u00e6r\\u00f8erne\", \"FO\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Fiji",
+      "ISO2": "FJ",
+      "ISO3": "FJI",
+      "NumericCode": 242,
+      "Latitude": -17.7134,
+      "Longitude": 178.065,
+      "BoundaryGeoJSON": "@file:boundaries/FJ.geojson",
+      "CommonAliases": "[\"Viti\", \"FJ\", \"Fij\\u012b Ga\\u1e47ar\\u0101jya\", \"Republic of Fiji\", \"Matanitu ko Viti\", \"Fiji\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Finland",
+      "ISO2": "FI",
+      "ISO3": "FIN",
+      "NumericCode": 246,
+      "Latitude": 64.0,
+      "Longitude": 26.0,
+      "BoundaryGeoJSON": "@file:boundaries/FI.geojson",
+      "CommonAliases": "[\"Finland\", \"FI\", \"Suomen tasavalta\", \"Suomi\", \"Republic of Finland\", \"Republiken Finland\"]"
     }
   },
   {
@@ -53,10 +893,2110 @@
       "ISO2": "FR",
       "ISO3": "FRA",
       "NumericCode": 250,
-      "Latitude": 46.2276,
-      "Longitude": 2.2137,
-      "BoundaryGeoJSON": "@file:boundaries/FR.geojson",
-      "CommonAliases": "[\"France\"]"
+      "Latitude": 46.0,
+      "Longitude": 2.0,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"French Republic\", \"France\", \"FR\", \"R\\u00e9publique fran\\u00e7aise\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "French Guiana",
+      "ISO2": "GF",
+      "ISO3": "GUF",
+      "NumericCode": 254,
+      "Latitude": 4.0,
+      "Longitude": -53.0,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Guiana\", \"French Guiana\", \"Guyane\", \"GF\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "French Polynesia",
+      "ISO2": "PF",
+      "ISO3": "PYF",
+      "NumericCode": 258,
+      "Latitude": -17.6797,
+      "Longitude": -149.4068,
+      "BoundaryGeoJSON": "@file:boundaries/PF.geojson",
+      "CommonAliases": "[\"French Polynesia\", \"Polyn\\u00e9sie fran\\u00e7aise\", \"PF\", \"P\\u014dr\\u012bnetia Far\\u0101ni\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "French Southern and Antarctic Lands",
+      "ISO2": "TF",
+      "ISO3": "ATF",
+      "NumericCode": 260,
+      "Latitude": -49.25,
+      "Longitude": 69.167,
+      "BoundaryGeoJSON": "@file:boundaries/TF.geojson",
+      "CommonAliases": "[\"TF\", \"French Southern Territories\", \"French Southern and Antarctic Lands\", \"Territory of the French Southern and Antarctic Lands\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gabon",
+      "ISO2": "GA",
+      "ISO3": "GAB",
+      "NumericCode": 266,
+      "Latitude": -1.0,
+      "Longitude": 11.75,
+      "BoundaryGeoJSON": "@file:boundaries/GA.geojson",
+      "CommonAliases": "[\"Gabonese Republic\", \"Gabon\", \"GA\", \"R\\u00e9publique Gabonaise\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gambia",
+      "ISO2": "GM",
+      "ISO3": "GMB",
+      "NumericCode": 270,
+      "Latitude": 13.4667,
+      "Longitude": -16.5667,
+      "BoundaryGeoJSON": "@file:boundaries/GM.geojson",
+      "CommonAliases": "[\"GM\", \"Republic of the Gambia\", \"Gambia\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Georgia",
+      "ISO2": "GE",
+      "ISO3": "GEO",
+      "NumericCode": 268,
+      "Latitude": 42.0,
+      "Longitude": 43.5,
+      "BoundaryGeoJSON": "@file:boundaries/GE.geojson",
+      "CommonAliases": "[\"GE\", \"Georgia\", \"Sakartvelo\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Germany",
+      "ISO2": "DE",
+      "ISO3": "DEU",
+      "NumericCode": 276,
+      "Latitude": 51.0,
+      "Longitude": 9.0,
+      "BoundaryGeoJSON": "@file:boundaries/DE.geojson",
+      "CommonAliases": "[\"Germany\", \"Federal Republic of Germany\", \"Bundesrepublik Deutschland\", \"DE\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ghana",
+      "ISO2": "GH",
+      "ISO3": "GHA",
+      "NumericCode": 288,
+      "Latitude": 8.0,
+      "Longitude": -2.0,
+      "BoundaryGeoJSON": "@file:boundaries/GH.geojson",
+      "CommonAliases": "[\"GH\", \"Republic of Ghana\", \"Ghana\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gibraltar",
+      "ISO2": "GI",
+      "ISO3": "GIB",
+      "NumericCode": 292,
+      "Latitude": 36.1333,
+      "Longitude": -5.35,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Gibraltar\", \"GI\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Greece",
+      "ISO2": "GR",
+      "ISO3": "GRC",
+      "NumericCode": 300,
+      "Latitude": 39.0,
+      "Longitude": 22.0,
+      "BoundaryGeoJSON": "@file:boundaries/GR.geojson",
+      "CommonAliases": "[\"GR\", \"Ell\\u00e1da\", \"Hellenic Republic\", \"\\u0395\\u03bb\\u03bb\\u03b7\\u03bd\\u03b9\\u03ba\\u03ae \\u0394\\u03b7\\u03bc\\u03bf\\u03ba\\u03c1\\u03b1\\u03c4\\u03af\\u03b1\", \"Greece\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Greenland",
+      "ISO2": "GL",
+      "ISO3": "GRL",
+      "NumericCode": 304,
+      "Latitude": 72.0,
+      "Longitude": -40.0,
+      "BoundaryGeoJSON": "@file:boundaries/GL.geojson",
+      "CommonAliases": "[\"Greenland\", \"GL\", \"Gr\\u00f8nland\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Grenada",
+      "ISO2": "GD",
+      "ISO3": "GRD",
+      "NumericCode": 308,
+      "Latitude": 12.1167,
+      "Longitude": -61.6667,
+      "BoundaryGeoJSON": "@file:boundaries/GD.geojson",
+      "CommonAliases": "[\"Grenada\", \"GD\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Guadeloupe",
+      "ISO2": "GP",
+      "ISO3": "GLP",
+      "NumericCode": 312,
+      "Latitude": 16.25,
+      "Longitude": -61.5833,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Gwadloup\", \"Guadeloupe\", \"GP\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Guam",
+      "ISO2": "GU",
+      "ISO3": "GUM",
+      "NumericCode": 316,
+      "Latitude": 13.4667,
+      "Longitude": 144.7833,
+      "BoundaryGeoJSON": "@file:boundaries/GU.geojson",
+      "CommonAliases": "[\"GU\", \"Gu\\u00e5h\\u00e5n\", \"Guam\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Guatemala",
+      "ISO2": "GT",
+      "ISO3": "GTM",
+      "NumericCode": 320,
+      "Latitude": 15.5,
+      "Longitude": -90.25,
+      "BoundaryGeoJSON": "@file:boundaries/GT.geojson",
+      "CommonAliases": "[\"GT\", \"Republic of Guatemala\", \"Guatemala\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Guernsey",
+      "ISO2": "GG",
+      "ISO3": "GGY",
+      "NumericCode": 831,
+      "Latitude": 49.4667,
+      "Longitude": -2.5833,
+      "BoundaryGeoJSON": "@file:boundaries/GG.geojson",
+      "CommonAliases": "[\"Guernsey\", \"GG\", \"Bailliage de Guernesey\", \"Bailiwick of Guernsey\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Guinea",
+      "ISO2": "GN",
+      "ISO3": "GIN",
+      "NumericCode": 324,
+      "Latitude": 11.0,
+      "Longitude": -10.0,
+      "BoundaryGeoJSON": "@file:boundaries/GN.geojson",
+      "CommonAliases": "[\"GN\", \"Guinea\", \"Republic of Guinea\", \"R\\u00e9publique de Guin\\u00e9e\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Guinea-Bissau",
+      "ISO2": "GW",
+      "ISO3": "GNB",
+      "NumericCode": 624,
+      "Latitude": 12.0,
+      "Longitude": -15.0,
+      "BoundaryGeoJSON": "@file:boundaries/GW.geojson",
+      "CommonAliases": "[\"Guinea-Bissau\", \"Rep\\u00fablica da Guin\\u00e9-Bissau\", \"GW\", \"Republic of Guinea-Bissau\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Guyana",
+      "ISO2": "GY",
+      "ISO3": "GUY",
+      "NumericCode": 328,
+      "Latitude": 5.0,
+      "Longitude": -59.0,
+      "BoundaryGeoJSON": "@file:boundaries/GY.geojson",
+      "CommonAliases": "[\"Co-operative Republic of Guyana\", \"Guyana\", \"GY\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Haiti",
+      "ISO2": "HT",
+      "ISO3": "HTI",
+      "NumericCode": 332,
+      "Latitude": 19.0,
+      "Longitude": -72.4167,
+      "BoundaryGeoJSON": "@file:boundaries/HT.geojson",
+      "CommonAliases": "[\"Republic of Haiti\", \"R\\u00e9publique d'Ha\\u00efti\", \"HT\", \"Repiblik Ayiti\", \"Haiti\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Heard Island and McDonald Islands",
+      "ISO2": "HM",
+      "ISO3": "HMD",
+      "NumericCode": 334,
+      "Latitude": -53.0818,
+      "Longitude": 73.5042,
+      "BoundaryGeoJSON": "@file:boundaries/HM.geojson",
+      "CommonAliases": "[\"Heard Island and McDonald Islands\", \"HM\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Honduras",
+      "ISO2": "HN",
+      "ISO3": "HND",
+      "NumericCode": 340,
+      "Latitude": 15.0,
+      "Longitude": -86.5,
+      "BoundaryGeoJSON": "@file:boundaries/HN.geojson",
+      "CommonAliases": "[\"Rep\\u00fablica de Honduras\", \"HN\", \"Republic of Honduras\", \"Honduras\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Hong Kong",
+      "ISO2": "HK",
+      "ISO3": "HKG",
+      "NumericCode": 344,
+      "Latitude": 22.267,
+      "Longitude": 114.188,
+      "BoundaryGeoJSON": "@file:boundaries/HK.geojson",
+      "CommonAliases": "[\"Hong Kong Special Administrative Region of the People's Republic of China\", \"HK\", \"Hong Kong\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Hungary",
+      "ISO2": "HU",
+      "ISO3": "HUN",
+      "NumericCode": 348,
+      "Latitude": 47.0,
+      "Longitude": 20.0,
+      "BoundaryGeoJSON": "@file:boundaries/HU.geojson",
+      "CommonAliases": "[\"HU\", \"Hungary\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Iceland",
+      "ISO2": "IS",
+      "ISO3": "ISL",
+      "NumericCode": 352,
+      "Latitude": 65.0,
+      "Longitude": -18.0,
+      "BoundaryGeoJSON": "@file:boundaries/IS.geojson",
+      "CommonAliases": "[\"Island\", \"L\\u00fd\\u00f0veldi\\u00f0 \\u00cdsland\", \"IS\", \"Republic of Iceland\", \"Iceland\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "India",
+      "ISO2": "IN",
+      "ISO3": "IND",
+      "NumericCode": 356,
+      "Latitude": 20.0,
+      "Longitude": 77.0,
+      "BoundaryGeoJSON": "@file:boundaries/IN.geojson",
+      "CommonAliases": "[\"Bharat Ganrajya\", \"Republic of India\", \"India\", \"Bh\\u0101rat\", \"\\u0b87\\u0ba8\\u0bcd\\u0ba4\\u0bbf\\u0baf\\u0bbe\", \"IN\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Indonesia",
+      "ISO2": "ID",
+      "ISO3": "IDN",
+      "NumericCode": 360,
+      "Latitude": -5.0,
+      "Longitude": 120.0,
+      "BoundaryGeoJSON": "@file:boundaries/ID.geojson",
+      "CommonAliases": "[\"Republik Indonesia\", \"Republic of Indonesia\", \"Indonesia\", \"ID\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Iran",
+      "ISO2": "IR",
+      "ISO3": "IRN",
+      "NumericCode": 364,
+      "Latitude": 32.0,
+      "Longitude": 53.0,
+      "BoundaryGeoJSON": "@file:boundaries/IR.geojson",
+      "CommonAliases": "[\"Jomhuri-ye Esl\\u0101mi-ye Ir\\u0101n\", \"IR\", \"Iran, Islamic Republic of\", \"Islamic Republic of Iran\", \"Iran\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Iraq",
+      "ISO2": "IQ",
+      "ISO3": "IRQ",
+      "NumericCode": 368,
+      "Latitude": 33.0,
+      "Longitude": 44.0,
+      "BoundaryGeoJSON": "@file:boundaries/IQ.geojson",
+      "CommonAliases": "[\"Iraq\", \"Republic of Iraq\", \"Jumh\\u016briyyat al-\\u2018Ir\\u0101q\", \"IQ\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ireland",
+      "ISO2": "IE",
+      "ISO3": "IRL",
+      "NumericCode": 372,
+      "Latitude": 53.0,
+      "Longitude": -8.0,
+      "BoundaryGeoJSON": "@file:boundaries/IE.geojson",
+      "CommonAliases": "[\"IE\", \"Poblacht na h\\u00c9ireann\", \"\\u00c9ire\", \"Republic of Ireland\", \"Ireland\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Isle of Man",
+      "ISO2": "IM",
+      "ISO3": "IMN",
+      "NumericCode": 833,
+      "Latitude": 54.25,
+      "Longitude": -4.5,
+      "BoundaryGeoJSON": "@file:boundaries/IM.geojson",
+      "CommonAliases": "[\"IM\", \"Mann\", \"Ellan Vannin\", \"Mannin\", \"Isle of Man\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Israel",
+      "ISO2": "IL",
+      "ISO3": "ISR",
+      "NumericCode": 376,
+      "Latitude": 31.47,
+      "Longitude": 35.13,
+      "BoundaryGeoJSON": "@file:boundaries/IL.geojson",
+      "CommonAliases": "[\"Israel\", \"State of Israel\", \"Med\\u012bnat Yisr\\u0101'el\", \"IL\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Italy",
+      "ISO2": "IT",
+      "ISO3": "ITA",
+      "NumericCode": 380,
+      "Latitude": 42.8333,
+      "Longitude": 12.8333,
+      "BoundaryGeoJSON": "@file:boundaries/IT.geojson",
+      "CommonAliases": "[\"Italian Republic\", \"IT\", \"Repubblica italiana\", \"Italy\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ivory Coast",
+      "ISO2": "CI",
+      "ISO3": "CIV",
+      "NumericCode": 384,
+      "Latitude": 8.0,
+      "Longitude": -5.0,
+      "BoundaryGeoJSON": "@file:boundaries/CI.geojson",
+      "CommonAliases": "[\"R\\u00e9publique de C\\u00f4te d'Ivoire\", \"Ivory Coast\", \"Republic of C\\u00f4te d'Ivoire\", \"C\\u00f4te d'Ivoire\", \"CI\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Jamaica",
+      "ISO2": "JM",
+      "ISO3": "JAM",
+      "NumericCode": 388,
+      "Latitude": 18.25,
+      "Longitude": -77.5,
+      "BoundaryGeoJSON": "@file:boundaries/JM.geojson",
+      "CommonAliases": "[\"Jamaica\", \"JM\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Japan",
+      "ISO2": "JP",
+      "ISO3": "JPN",
+      "NumericCode": 392,
+      "Latitude": 36.0,
+      "Longitude": 138.0,
+      "BoundaryGeoJSON": "@file:boundaries/JP.geojson",
+      "CommonAliases": "[\"Japan\", \"Nihon\", \"Nippon\", \"JP\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Jersey",
+      "ISO2": "JE",
+      "ISO3": "JEY",
+      "NumericCode": 832,
+      "Latitude": 49.25,
+      "Longitude": -2.1667,
+      "BoundaryGeoJSON": "@file:boundaries/JE.geojson",
+      "CommonAliases": "[\"Jersey\", \"Bailiwick of Jersey\", \"JE\", \"Bailliage de Jersey\", \"Bailliage d\\u00e9 J\\u00e8rri\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Jordan",
+      "ISO2": "JO",
+      "ISO3": "JOR",
+      "NumericCode": 400,
+      "Latitude": 31.0,
+      "Longitude": 36.0,
+      "BoundaryGeoJSON": "@file:boundaries/JO.geojson",
+      "CommonAliases": "[\"Hashemite Kingdom of Jordan\", \"al-Mamlakah al-Urdun\\u012byah al-H\\u0101shim\\u012byah\", \"JO\", \"Jordan\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kazakhstan",
+      "ISO2": "KZ",
+      "ISO3": "KAZ",
+      "NumericCode": 398,
+      "Latitude": 48.0196,
+      "Longitude": 66.9237,
+      "BoundaryGeoJSON": "@file:boundaries/KZ.geojson",
+      "CommonAliases": "[\"\\u049a\\u0430\\u0437\\u0430\\u049b\\u0441\\u0442\\u0430\\u043d \\u0420\\u0435\\u0441\\u043f\\u0443\\u0431\\u043b\\u0438\\u043a\\u0430\\u0441\\u044b\", \"Respublika Kazakhstan\", \"Republic of Kazakhstan\", \"\\u0420\\u0435\\u0441\\u043f\\u0443\\u0431\\u043b\\u0438\\u043a\\u0430 \\u041a\\u0430\\u0437\\u0430\\u0445\\u0441\\u0442\\u0430\\u043d\", \"KZ\", \"\\u041a\\u0430\\u0437\\u0430\\u0445\\u0441\\u0442\\u0430\\u043d\", \"Qazaqstan Respubl\\u00efkas\\u0131\", \"Qazaqstan\", \"Kazakhstan\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kenya",
+      "ISO2": "KE",
+      "ISO3": "KEN",
+      "NumericCode": 404,
+      "Latitude": 1.0,
+      "Longitude": 38.0,
+      "BoundaryGeoJSON": "@file:boundaries/KE.geojson",
+      "CommonAliases": "[\"Jamhuri ya Kenya\", \"KE\", \"Kenya\", \"Republic of Kenya\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kiribati",
+      "ISO2": "KI",
+      "ISO3": "KIR",
+      "NumericCode": 296,
+      "Latitude": 1.4167,
+      "Longitude": 173.0,
+      "BoundaryGeoJSON": "@file:boundaries/KI.geojson",
+      "CommonAliases": "[\"Ribaberiki Kiribati\", \"Independent and Sovereign Republic of Kiribati\", \"Kiribati\", \"KI\", \"Republic of Kiribati\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kosovo",
+      "ISO2": "XK",
+      "ISO3": "UNK",
+      "NumericCode": null,
+      "Latitude": 42.6667,
+      "Longitude": 21.1667,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"\\u0420\\u0435\\u043f\\u0443\\u0431\\u043b\\u0438\\u043a\\u0430 \\u041a\\u043e\\u0441\\u043e\\u0432\\u043e\", \"Republic of Kosovo\", \"XK\", \"Kosovo\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kuwait",
+      "ISO2": "KW",
+      "ISO3": "KWT",
+      "NumericCode": 414,
+      "Latitude": 29.5,
+      "Longitude": 45.75,
+      "BoundaryGeoJSON": "@file:boundaries/KW.geojson",
+      "CommonAliases": "[\"Dawlat al-Kuwait\", \"State of Kuwait\", \"KW\", \"Kuwait\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kyrgyzstan",
+      "ISO2": "KG",
+      "ISO3": "KGZ",
+      "NumericCode": 417,
+      "Latitude": 41.0,
+      "Longitude": 75.0,
+      "BoundaryGeoJSON": "@file:boundaries/KG.geojson",
+      "CommonAliases": "[\"Kyrgyz Republic\", \"KG\", \"Kyrgyzstan\", \"\\u041a\\u044b\\u0440\\u0433\\u044b\\u0437 \\u0420\\u0435\\u0441\\u043f\\u0443\\u0431\\u043b\\u0438\\u043a\\u0430\\u0441\\u044b\", \"Kyrgyz Respublikasy\", \"\\u041a\\u0438\\u0440\\u0433\\u0438\\u0437\\u0438\\u044f\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Laos",
+      "ISO2": "LA",
+      "ISO3": "LAO",
+      "NumericCode": 418,
+      "Latitude": 18.0,
+      "Longitude": 105.0,
+      "BoundaryGeoJSON": "@file:boundaries/LA.geojson",
+      "CommonAliases": "[\"Sathalanalat Paxathipatai Paxaxon Lao\", \"Lao\", \"Lao People's Democratic Republic\", \"Laos\", \"LA\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Latvia",
+      "ISO2": "LV",
+      "ISO3": "LVA",
+      "NumericCode": 428,
+      "Latitude": 57.0,
+      "Longitude": 25.0,
+      "BoundaryGeoJSON": "@file:boundaries/LV.geojson",
+      "CommonAliases": "[\"Republic of Latvia\", \"Latvijas Republika\", \"Latvia\", \"LV\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Lebanon",
+      "ISO2": "LB",
+      "ISO3": "LBN",
+      "NumericCode": 422,
+      "Latitude": 33.8333,
+      "Longitude": 35.8333,
+      "BoundaryGeoJSON": "@file:boundaries/LB.geojson",
+      "CommonAliases": "[\"LB\", \"Lebanese Republic\", \"Al-Jumh\\u016br\\u012byah Al-Libn\\u0101n\\u012byah\", \"Lebanon\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Lesotho",
+      "ISO2": "LS",
+      "ISO3": "LSO",
+      "NumericCode": 426,
+      "Latitude": -29.5,
+      "Longitude": 28.5,
+      "BoundaryGeoJSON": "@file:boundaries/LS.geojson",
+      "CommonAliases": "[\"Lesotho\", \"Kingdom of Lesotho\", \"Muso oa Lesotho\", \"LS\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Liberia",
+      "ISO2": "LR",
+      "ISO3": "LBR",
+      "NumericCode": 430,
+      "Latitude": 6.5,
+      "Longitude": -9.5,
+      "BoundaryGeoJSON": "@file:boundaries/LR.geojson",
+      "CommonAliases": "[\"LR\", \"Liberia\", \"Republic of Liberia\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Libya",
+      "ISO2": "LY",
+      "ISO3": "LBY",
+      "NumericCode": 434,
+      "Latitude": 25.0,
+      "Longitude": 17.0,
+      "BoundaryGeoJSON": "@file:boundaries/LY.geojson",
+      "CommonAliases": "[\"Dawlat Libya\", \"State of Libya\", \"LY\", \"Libya\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Liechtenstein",
+      "ISO2": "LI",
+      "ISO3": "LIE",
+      "NumericCode": 438,
+      "Latitude": 47.2667,
+      "Longitude": 9.5333,
+      "BoundaryGeoJSON": "@file:boundaries/LI.geojson",
+      "CommonAliases": "[\"Principality of Liechtenstein\", \"LI\", \"F\\u00fcrstentum Liechtenstein\", \"Liechtenstein\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Lithuania",
+      "ISO2": "LT",
+      "ISO3": "LTU",
+      "NumericCode": 440,
+      "Latitude": 56.0,
+      "Longitude": 24.0,
+      "BoundaryGeoJSON": "@file:boundaries/LT.geojson",
+      "CommonAliases": "[\"Republic of Lithuania\", \"Lietuvos Respublika\", \"Lithuania\", \"LT\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Luxembourg",
+      "ISO2": "LU",
+      "ISO3": "LUX",
+      "NumericCode": 442,
+      "Latitude": 49.75,
+      "Longitude": 6.1667,
+      "BoundaryGeoJSON": "@file:boundaries/LU.geojson",
+      "CommonAliases": "[\"Grand Duchy of Luxembourg\", \"Grand-Duch\\u00e9 de Luxembourg\", \"Groussherzogtum L\\u00ebtzebuerg\", \"Luxembourg\", \"LU\", \"Gro\\u00dfherzogtum Luxemburg\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Macau",
+      "ISO2": "MO",
+      "ISO3": "MAC",
+      "NumericCode": 446,
+      "Latitude": 22.1667,
+      "Longitude": 113.55,
+      "BoundaryGeoJSON": "@file:boundaries/MO.geojson",
+      "CommonAliases": "[\"Regi\\u00e3o Administrativa Especial de Macau da Rep\\u00fablica Popular da China\", \"MO\", \"\\u6fb3\\u95e8\", \"Macao\", \"Macao Special Administrative Region of the People's Republic of China\", \"Macau\", \"\\u4e2d\\u83ef\\u4eba\\u6c11\\u5171\\u548c\\u570b\\u6fb3\\u9580\\u7279\\u5225\\u884c\\u653f\\u5340\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Madagascar",
+      "ISO2": "MG",
+      "ISO3": "MDG",
+      "NumericCode": 450,
+      "Latitude": -20.0,
+      "Longitude": 47.0,
+      "BoundaryGeoJSON": "@file:boundaries/MG.geojson",
+      "CommonAliases": "[\"R\\u00e9publique de Madagascar\", \"Republic of Madagascar\", \"MG\", \"Repoblikan'i Madagasikara\", \"Madagascar\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Malawi",
+      "ISO2": "MW",
+      "ISO3": "MWI",
+      "NumericCode": 454,
+      "Latitude": -13.5,
+      "Longitude": 34.0,
+      "BoundaryGeoJSON": "@file:boundaries/MW.geojson",
+      "CommonAliases": "[\"Republic of Malawi\", \"Malawi\", \"MW\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Malaysia",
+      "ISO2": "MY",
+      "ISO3": "MYS",
+      "NumericCode": 458,
+      "Latitude": 2.5,
+      "Longitude": 112.5,
+      "BoundaryGeoJSON": "@file:boundaries/MY.geojson",
+      "CommonAliases": "[\"MY\", \"Malaysia\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Maldives",
+      "ISO2": "MV",
+      "ISO3": "MDV",
+      "NumericCode": 462,
+      "Latitude": 3.25,
+      "Longitude": 73.0,
+      "BoundaryGeoJSON": "@file:boundaries/MV.geojson",
+      "CommonAliases": "[\"Republic of the Maldives\", \"Dhivehi Raajjeyge Jumhooriyya\", \"Maldives\", \"MV\", \"Maldive Islands\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mali",
+      "ISO2": "ML",
+      "ISO3": "MLI",
+      "NumericCode": 466,
+      "Latitude": 17.0,
+      "Longitude": -4.0,
+      "BoundaryGeoJSON": "@file:boundaries/ML.geojson",
+      "CommonAliases": "[\"ML\", \"Mali\", \"R\\u00e9publique du Mali\", \"Republic of Mali\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Malta",
+      "ISO2": "MT",
+      "ISO3": "MLT",
+      "NumericCode": 470,
+      "Latitude": 35.9375,
+      "Longitude": 14.3754,
+      "BoundaryGeoJSON": "@file:boundaries/MT.geojson",
+      "CommonAliases": "[\"Repubblika ta' Malta\", \"Republic of Malta\", \"MT\", \"Malta\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Marshall Islands",
+      "ISO2": "MH",
+      "ISO3": "MHL",
+      "NumericCode": 584,
+      "Latitude": 9.0,
+      "Longitude": 168.0,
+      "BoundaryGeoJSON": "@file:boundaries/MH.geojson",
+      "CommonAliases": "[\"Republic of the Marshall Islands\", \"MH\", \"Marshall Islands\", \"Aolep\\u0101n Aor\\u014dkin M\\u0327aje\\u013c\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Martinique",
+      "ISO2": "MQ",
+      "ISO3": "MTQ",
+      "NumericCode": 474,
+      "Latitude": 14.6667,
+      "Longitude": -61.0,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Martinique\", \"MQ\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mauritania",
+      "ISO2": "MR",
+      "ISO3": "MRT",
+      "NumericCode": 478,
+      "Latitude": 20.0,
+      "Longitude": -12.0,
+      "BoundaryGeoJSON": "@file:boundaries/MR.geojson",
+      "CommonAliases": "[\"al-Jumh\\u016briyyah al-\\u02beIsl\\u0101miyyah al-M\\u016br\\u012bt\\u0101niyyah\", \"MR\", \"Islamic Republic of Mauritania\", \"Mauritania\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mauritius",
+      "ISO2": "MU",
+      "ISO3": "MUS",
+      "NumericCode": 480,
+      "Latitude": -20.2833,
+      "Longitude": 57.55,
+      "BoundaryGeoJSON": "@file:boundaries/MU.geojson",
+      "CommonAliases": "[\"R\\u00e9publique de Maurice\", \"Mauritius\", \"MU\", \"Republic of Mauritius\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mayotte",
+      "ISO2": "YT",
+      "ISO3": "MYT",
+      "NumericCode": 175,
+      "Latitude": -12.8333,
+      "Longitude": 45.1667,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"YT\", \"Mayotte\", \"Department of Mayotte\", \"D\\u00e9partement de Mayotte\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mexico",
+      "ISO2": "MX",
+      "ISO3": "MEX",
+      "NumericCode": 484,
+      "Latitude": 23.0,
+      "Longitude": -102.0,
+      "BoundaryGeoJSON": "@file:boundaries/MX.geojson",
+      "CommonAliases": "[\"MX\", \"Mexicanos\", \"United Mexican States\", \"Mexico\", \"Estados Unidos Mexicanos\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Micronesia",
+      "ISO2": "FM",
+      "ISO3": "FSM",
+      "NumericCode": 583,
+      "Latitude": 6.9167,
+      "Longitude": 158.25,
+      "BoundaryGeoJSON": "@file:boundaries/FM.geojson",
+      "CommonAliases": "[\"Micronesia, Federated States of\", \"FM\", \"Micronesia\", \"Federated States of Micronesia\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Moldova",
+      "ISO2": "MD",
+      "ISO3": "MDA",
+      "NumericCode": 498,
+      "Latitude": 47.0,
+      "Longitude": 29.0,
+      "BoundaryGeoJSON": "@file:boundaries/MD.geojson",
+      "CommonAliases": "[\"MD\", \"Republic of Moldova\", \"Moldova\", \"Moldova, Republic of\", \"Republica Moldova\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Monaco",
+      "ISO2": "MC",
+      "ISO3": "MCO",
+      "NumericCode": 492,
+      "Latitude": 43.7333,
+      "Longitude": 7.4,
+      "BoundaryGeoJSON": "@file:boundaries/MC.geojson",
+      "CommonAliases": "[\"Monaco\", \"Principality of Monaco\", \"Principaut\\u00e9 de Monaco\", \"MC\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mongolia",
+      "ISO2": "MN",
+      "ISO3": "MNG",
+      "NumericCode": 496,
+      "Latitude": 46.0,
+      "Longitude": 105.0,
+      "BoundaryGeoJSON": "@file:boundaries/MN.geojson",
+      "CommonAliases": "[\"Mongolia\", \"MN\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Montenegro",
+      "ISO2": "ME",
+      "ISO3": "MNE",
+      "NumericCode": 499,
+      "Latitude": 42.5,
+      "Longitude": 19.3,
+      "BoundaryGeoJSON": "@file:boundaries/ME.geojson",
+      "CommonAliases": "[\"ME\", \"Montenegro\", \"Crna Gora\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Montserrat",
+      "ISO2": "MS",
+      "ISO3": "MSR",
+      "NumericCode": 500,
+      "Latitude": 16.75,
+      "Longitude": -62.2,
+      "BoundaryGeoJSON": "@file:boundaries/MS.geojson",
+      "CommonAliases": "[\"MS\", \"Montserrat\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Morocco",
+      "ISO2": "MA",
+      "ISO3": "MAR",
+      "NumericCode": 504,
+      "Latitude": 32.0,
+      "Longitude": -5.0,
+      "BoundaryGeoJSON": "@file:boundaries/MA.geojson",
+      "CommonAliases": "[\"Morocco\", \"MA\", \"Al-Mamlakah al-Ma\\u0121ribiyah\", \"Kingdom of Morocco\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mozambique",
+      "ISO2": "MZ",
+      "ISO3": "MOZ",
+      "NumericCode": 508,
+      "Latitude": -18.25,
+      "Longitude": 35.0,
+      "BoundaryGeoJSON": "@file:boundaries/MZ.geojson",
+      "CommonAliases": "[\"Rep\\u00fablica de Mo\\u00e7ambique\", \"Mozambique\", \"Republic of Mozambique\", \"MZ\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Myanmar",
+      "ISO2": "MM",
+      "ISO3": "MMR",
+      "NumericCode": 104,
+      "Latitude": 22.0,
+      "Longitude": 98.0,
+      "BoundaryGeoJSON": "@file:boundaries/MM.geojson",
+      "CommonAliases": "[\"MM\", \"Pyidaunzu Thanm\\u0103da My\\u0103ma Nainngandaw\", \"Republic of the Union of Myanmar\", \"Myanmar\", \"Burma\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Namibia",
+      "ISO2": "NA",
+      "ISO3": "NAM",
+      "NumericCode": 516,
+      "Latitude": -22.0,
+      "Longitude": 17.0,
+      "BoundaryGeoJSON": "@file:boundaries/NA.geojson",
+      "CommonAliases": "[\"Republic of Namibia\", \"Namibi\\u00eb\", \"NA\", \"Namibia\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nauru",
+      "ISO2": "NR",
+      "ISO3": "NRU",
+      "NumericCode": 520,
+      "Latitude": -0.5333,
+      "Longitude": 166.9167,
+      "BoundaryGeoJSON": "@file:boundaries/NR.geojson",
+      "CommonAliases": "[\"Naoero\", \"Nauru\", \"NR\", \"Pleasant Island\", \"Republic of Nauru\", \"Ripublik Naoero\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nepal",
+      "ISO2": "NP",
+      "ISO3": "NPL",
+      "NumericCode": 524,
+      "Latitude": 28.0,
+      "Longitude": 84.0,
+      "BoundaryGeoJSON": "@file:boundaries/NP.geojson",
+      "CommonAliases": "[\"Federal Democratic Republic of Nepal\", \"Lokt\\u0101ntrik Ganatantra Nep\\u0101l\", \"NP\", \"Nepal\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Netherlands",
+      "ISO2": "NL",
+      "ISO3": "NLD",
+      "NumericCode": 528,
+      "Latitude": 52.5,
+      "Longitude": 5.75,
+      "BoundaryGeoJSON": "@file:boundaries/NL.geojson",
+      "CommonAliases": "[\"Kingdom of the Netherlands\", \"NL\", \"The Netherlands\", \"Holland\", \"Nederland\", \"Netherlands\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "New Caledonia",
+      "ISO2": "NC",
+      "ISO3": "NCL",
+      "NumericCode": 540,
+      "Latitude": -21.5,
+      "Longitude": 165.5,
+      "BoundaryGeoJSON": "@file:boundaries/NC.geojson",
+      "CommonAliases": "[\"NC\", \"New Caledonia\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "New Zealand",
+      "ISO2": "NZ",
+      "ISO3": "NZL",
+      "NumericCode": 554,
+      "Latitude": -41.0,
+      "Longitude": 174.0,
+      "BoundaryGeoJSON": "@file:boundaries/NZ.geojson",
+      "CommonAliases": "[\"NZ\", \"New Zealand\", \"Aotearoa\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nicaragua",
+      "ISO2": "NI",
+      "ISO3": "NIC",
+      "NumericCode": 558,
+      "Latitude": 13.0,
+      "Longitude": -85.0,
+      "BoundaryGeoJSON": "@file:boundaries/NI.geojson",
+      "CommonAliases": "[\"Nicaragua\", \"Rep\\u00fablica de Nicaragua\", \"NI\", \"Republic of Nicaragua\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Niger",
+      "ISO2": "NE",
+      "ISO3": "NER",
+      "NumericCode": 562,
+      "Latitude": 16.0,
+      "Longitude": 8.0,
+      "BoundaryGeoJSON": "@file:boundaries/NE.geojson",
+      "CommonAliases": "[\"Niger\", \"Nijar\", \"NE\", \"Republic of Niger\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nigeria",
+      "ISO2": "NG",
+      "ISO3": "NGA",
+      "NumericCode": 566,
+      "Latitude": 10.0,
+      "Longitude": 8.0,
+      "BoundaryGeoJSON": "@file:boundaries/NG.geojson",
+      "CommonAliases": "[\"Nigeria\", \"Federal Republic of Nigeria\", \"Nijeriya\", \"Na\\u00edj\\u00edr\\u00ed\\u00e0\", \"NG\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Niue",
+      "ISO2": "NU",
+      "ISO3": "NIU",
+      "NumericCode": 570,
+      "Latitude": -19.0333,
+      "Longitude": -169.8667,
+      "BoundaryGeoJSON": "@file:boundaries/NU.geojson",
+      "CommonAliases": "[\"NU\", \"Niue\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Norfolk Island",
+      "ISO2": "NF",
+      "ISO3": "NFK",
+      "NumericCode": 574,
+      "Latitude": -29.0333,
+      "Longitude": 167.95,
+      "BoundaryGeoJSON": "@file:boundaries/NF.geojson",
+      "CommonAliases": "[\"NF\", \"Norfolk Island\", \"Territory of Norfolk Island\", \"Teratri of Norf'k Ailen\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "North Korea",
+      "ISO2": "KP",
+      "ISO3": "PRK",
+      "NumericCode": 408,
+      "Latitude": 40.0,
+      "Longitude": 127.0,
+      "BoundaryGeoJSON": "@file:boundaries/KP.geojson",
+      "CommonAliases": "[\"KP\", \"DPRK\", \"Chos\\u014fn Minjuju\\u016di Inmin Konghwaguk\", \"\\ubd81\\uc870\\uc120\", \"Korea, Democratic People's Republic of\", \"\\uc870\\uc120\\ubbfc\\uc8fc\\uc8fc\\uc758\\uc778\\ubbfc\\uacf5\\ud654\\uad6d\", \"Democratic People's Republic of Korea\", \"\\ubd81\\ud55c\", \"North Korea\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "North Macedonia",
+      "ISO2": "MK",
+      "ISO3": "MKD",
+      "NumericCode": 807,
+      "Latitude": 41.8333,
+      "Longitude": 22.0,
+      "BoundaryGeoJSON": "@file:boundaries/MK.geojson",
+      "CommonAliases": "[\"Macedonia, The Former Yugoslav Republic of\", \"Republic of North Macedonia\", \"North Macedonia\", \"The former Yugoslav Republic of Macedonia\", \"\\u0420\\u0435\\u043f\\u0443\\u0431\\u043b\\u0438\\u043a\\u0430 \\u0421\\u0435\\u0432\\u0435\\u0440\\u043d\\u0430 \\u041c\\u0430\\u043a\\u0435\\u0434\\u043e\\u043d\\u0438\\u0458\\u0430\", \"MK\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Northern Mariana Islands",
+      "ISO2": "MP",
+      "ISO3": "MNP",
+      "NumericCode": 580,
+      "Latitude": 15.2,
+      "Longitude": 145.75,
+      "BoundaryGeoJSON": "@file:boundaries/MP.geojson",
+      "CommonAliases": "[\"Northern Mariana Islands\", \"Commonwealth of the Northern Mariana Islands\", \"Sankattan Siha Na Islas Mari\\u00e5nas\", \"MP\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Norway",
+      "ISO2": "NO",
+      "ISO3": "NOR",
+      "NumericCode": 578,
+      "Latitude": 62.0,
+      "Longitude": 10.0,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Kingdom of Norway\", \"NO\", \"Kongeriket Noreg\", \"Noreg\", \"Norway\", \"Kongeriket Norge\", \"Norge\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Oman",
+      "ISO2": "OM",
+      "ISO3": "OMN",
+      "NumericCode": 512,
+      "Latitude": 21.0,
+      "Longitude": 57.0,
+      "BoundaryGeoJSON": "@file:boundaries/OM.geojson",
+      "CommonAliases": "[\"Oman\", \"Sal\\u1e6danat \\u02bbUm\\u0101n\", \"OM\", \"Sultanate of Oman\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Pakistan",
+      "ISO2": "PK",
+      "ISO3": "PAK",
+      "NumericCode": 586,
+      "Latitude": 30.0,
+      "Longitude": 70.0,
+      "BoundaryGeoJSON": "@file:boundaries/PK.geojson",
+      "CommonAliases": "[\"Islamic Republic of Pakistan\", \"PK\", \"Isl\\u0101m\\u012b Jumh\\u016briya'eh P\\u0101kist\\u0101n\", \"Pakistan\", \"P\\u0101kist\\u0101n\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Palau",
+      "ISO2": "PW",
+      "ISO3": "PLW",
+      "NumericCode": 585,
+      "Latitude": 7.5,
+      "Longitude": 134.5,
+      "BoundaryGeoJSON": "@file:boundaries/PW.geojson",
+      "CommonAliases": "[\"Palau\", \"PW\", \"Beluu er a Belau\", \"Republic of Palau\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Palestine",
+      "ISO2": "PS",
+      "ISO3": "PSE",
+      "NumericCode": 275,
+      "Latitude": 31.9,
+      "Longitude": 35.2,
+      "BoundaryGeoJSON": "@file:boundaries/PS.geojson",
+      "CommonAliases": "[\"Palestine, State of\", \"State of Palestine\", \"PS\", \"Palestine\", \"Dawlat Filas\\u1e6din\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Panama",
+      "ISO2": "PA",
+      "ISO3": "PAN",
+      "NumericCode": 591,
+      "Latitude": 9.0,
+      "Longitude": -80.0,
+      "BoundaryGeoJSON": "@file:boundaries/PA.geojson",
+      "CommonAliases": "[\"Panama\", \"PA\", \"Rep\\u00fablica de Panam\\u00e1\", \"Republic of Panama\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Papua New Guinea",
+      "ISO2": "PG",
+      "ISO3": "PNG",
+      "NumericCode": 598,
+      "Latitude": -6.0,
+      "Longitude": 147.0,
+      "BoundaryGeoJSON": "@file:boundaries/PG.geojson",
+      "CommonAliases": "[\"Papua New Guinea\", \"PG\", \"Independen Stet bilong Papua Niugini\", \"Independent State of Papua New Guinea\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Paraguay",
+      "ISO2": "PY",
+      "ISO3": "PRY",
+      "NumericCode": 600,
+      "Latitude": -23.0,
+      "Longitude": -58.0,
+      "BoundaryGeoJSON": "@file:boundaries/PY.geojson",
+      "CommonAliases": "[\"PY\", \"Rep\\u00fablica del Paraguay\", \"Tet\\u00e3 Paragu\\u00e1i\", \"Republic of Paraguay\", \"Paraguay\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Peru",
+      "ISO2": "PE",
+      "ISO3": "PER",
+      "NumericCode": 604,
+      "Latitude": -10.0,
+      "Longitude": -76.0,
+      "BoundaryGeoJSON": "@file:boundaries/PE.geojson",
+      "CommonAliases": "[\"Rep\\u00fablica del Per\\u00fa\", \"Republic of Peru\", \"Peru\", \"PE\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Philippines",
+      "ISO2": "PH",
+      "ISO3": "PHL",
+      "NumericCode": 608,
+      "Latitude": 13.0,
+      "Longitude": 122.0,
+      "BoundaryGeoJSON": "@file:boundaries/PH.geojson",
+      "CommonAliases": "[\"PH\", \"Rep\\u00fablika ng Pilipinas\", \"Philippines\", \"Republic of the Philippines\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Pitcairn Islands",
+      "ISO2": "PN",
+      "ISO3": "PCN",
+      "NumericCode": 612,
+      "Latitude": -25.0667,
+      "Longitude": -130.1,
+      "BoundaryGeoJSON": "@file:boundaries/PN.geojson",
+      "CommonAliases": "[\"Pitcairn Henderson Ducie and Oeno Islands\", \"PN\", \"Pitcairn Group of Islands\", \"Pitcairn Islands\", \"Pitcairn\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Poland",
+      "ISO2": "PL",
+      "ISO3": "POL",
+      "NumericCode": 616,
+      "Latitude": 52.0,
+      "Longitude": 20.0,
+      "BoundaryGeoJSON": "@file:boundaries/PL.geojson",
+      "CommonAliases": "[\"Republic of Poland\", \"PL\", \"Rzeczpospolita Polska\", \"Poland\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Portugal",
+      "ISO2": "PT",
+      "ISO3": "PRT",
+      "NumericCode": 620,
+      "Latitude": 39.5,
+      "Longitude": -8.0,
+      "BoundaryGeoJSON": "@file:boundaries/PT.geojson",
+      "CommonAliases": "[\"Portugal\", \"Portuguese Republic\", \"Portuguesa\", \"PT\", \"Rep\\u00fablica Portuguesa\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Puerto Rico",
+      "ISO2": "PR",
+      "ISO3": "PRI",
+      "NumericCode": 630,
+      "Latitude": 18.25,
+      "Longitude": -66.5,
+      "BoundaryGeoJSON": "@file:boundaries/PR.geojson",
+      "CommonAliases": "[\"PR\", \"Commonwealth of Puerto Rico\", \"Estado Libre Asociado de Puerto Rico\", \"Puerto Rico\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Qatar",
+      "ISO2": "QA",
+      "ISO3": "QAT",
+      "NumericCode": 634,
+      "Latitude": 25.5,
+      "Longitude": 51.25,
+      "BoundaryGeoJSON": "@file:boundaries/QA.geojson",
+      "CommonAliases": "[\"QA\", \"Qatar\", \"State of Qatar\", \"Dawlat Qa\\u1e6dar\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Republic of the Congo",
+      "ISO2": "CG",
+      "ISO3": "COG",
+      "NumericCode": 178,
+      "Latitude": -1.0,
+      "Longitude": 15.0,
+      "BoundaryGeoJSON": "@file:boundaries/CG.geojson",
+      "CommonAliases": "[\"Republic of the Congo\", \"Congo-Brazzaville\", \"CG\", \"Congo\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Romania",
+      "ISO2": "RO",
+      "ISO3": "ROU",
+      "NumericCode": 642,
+      "Latitude": 46.0,
+      "Longitude": 25.0,
+      "BoundaryGeoJSON": "@file:boundaries/RO.geojson",
+      "CommonAliases": "[\"Romania\", \"RO\", \"Rom\\u00e2nia\", \"Rumania\", \"Roumania\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Russia",
+      "ISO2": "RU",
+      "ISO3": "RUS",
+      "NumericCode": 643,
+      "Latitude": 60.0,
+      "Longitude": 100.0,
+      "BoundaryGeoJSON": "@file:boundaries/RU.geojson",
+      "CommonAliases": "[\"Russian Federation\", \"\\u0420\\u043e\\u0441\\u0441\\u0438\\u0439\\u0441\\u043a\\u0430\\u044f \\u0424\\u0435\\u0434\\u0435\\u0440\\u0430\\u0446\\u0438\\u044f\", \"Russia\", \"RU\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rwanda",
+      "ISO2": "RW",
+      "ISO3": "RWA",
+      "NumericCode": 646,
+      "Latitude": -2.0,
+      "Longitude": 30.0,
+      "BoundaryGeoJSON": "@file:boundaries/RW.geojson",
+      "CommonAliases": "[\"RW\", \"Republic of Rwanda\", \"Repubulika y'u Rwanda\", \"Rwanda\", \"R\\u00e9publique du Rwanda\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Réunion",
+      "ISO2": "RE",
+      "ISO3": "REU",
+      "NumericCode": 638,
+      "Latitude": -21.15,
+      "Longitude": 55.5,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Reunion\", \"R\\u00e9union\", \"RE\", \"R\\u00e9union Island\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Saint Barthélemy",
+      "ISO2": "BL",
+      "ISO3": "BLM",
+      "NumericCode": 652,
+      "Latitude": 18.5,
+      "Longitude": -63.4167,
+      "BoundaryGeoJSON": "@file:boundaries/BL.geojson",
+      "CommonAliases": "[\"Saint Barth\\u00e9lemy\", \"BL\", \"Collectivit\\u00e9 de Saint-Barth\\u00e9lemy\", \"St. Barthelemy\", \"Collectivity of Saint Barth\\u00e9lemy\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Saint Helena, Ascension and Tristan da Cunha",
+      "ISO2": "SH",
+      "ISO3": "SHN",
+      "NumericCode": 654,
+      "Latitude": -15.95,
+      "Longitude": -5.72,
+      "BoundaryGeoJSON": "@file:boundaries/SH.geojson",
+      "CommonAliases": "[\"Saint Helena, Ascension and Tristan da Cunha\", \"Saint Helena\", \"St. Helena, Ascension and Tristan da Cunha\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Saint Kitts and Nevis",
+      "ISO2": "KN",
+      "ISO3": "KNA",
+      "NumericCode": 659,
+      "Latitude": 17.3333,
+      "Longitude": -62.75,
+      "BoundaryGeoJSON": "@file:boundaries/KN.geojson",
+      "CommonAliases": "[\"Saint Kitts and Nevis\", \"Federation of Saint Christopher and Nevis\", \"KN\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Saint Lucia",
+      "ISO2": "LC",
+      "ISO3": "LCA",
+      "NumericCode": 662,
+      "Latitude": 13.8833,
+      "Longitude": -60.9667,
+      "BoundaryGeoJSON": "@file:boundaries/LC.geojson",
+      "CommonAliases": "[\"Saint Lucia\", \"LC\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Saint Martin",
+      "ISO2": "MF",
+      "ISO3": "MAF",
+      "NumericCode": 663,
+      "Latitude": 18.0708,
+      "Longitude": -63.0501,
+      "BoundaryGeoJSON": "@file:boundaries/MF.geojson",
+      "CommonAliases": "[\"Collectivit\\u00e9 de Saint-Martin\", \"Saint Martin (French part)\", \"Collectivity of Saint Martin\", \"Saint Martin\", \"MF\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Saint Pierre and Miquelon",
+      "ISO2": "PM",
+      "ISO3": "SPM",
+      "NumericCode": 666,
+      "Latitude": 46.8333,
+      "Longitude": -56.3333,
+      "BoundaryGeoJSON": "@file:boundaries/PM.geojson",
+      "CommonAliases": "[\"PM\", \"Collectivit\\u00e9 territoriale de Saint-Pierre-et-Miquelon\", \"Saint Pierre and Miquelon\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Saint Vincent and the Grenadines",
+      "ISO2": "VC",
+      "ISO3": "VCT",
+      "NumericCode": 670,
+      "Latitude": 13.25,
+      "Longitude": -61.2,
+      "BoundaryGeoJSON": "@file:boundaries/VC.geojson",
+      "CommonAliases": "[\"Saint Vincent and the Grenadines\", \"VC\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Samoa",
+      "ISO2": "WS",
+      "ISO3": "WSM",
+      "NumericCode": 882,
+      "Latitude": -13.5833,
+      "Longitude": -172.3333,
+      "BoundaryGeoJSON": "@file:boundaries/WS.geojson",
+      "CommonAliases": "[\"Samoa\", \"WS\", \"Independent State of Samoa\", \"Malo Sa\\u02bboloto Tuto\\u02bbatasi o S\\u0101moa\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "San Marino",
+      "ISO2": "SM",
+      "ISO3": "SMR",
+      "NumericCode": 674,
+      "Latitude": 43.7667,
+      "Longitude": 12.4167,
+      "BoundaryGeoJSON": "@file:boundaries/SM.geojson",
+      "CommonAliases": "[\"San Marino\", \"Repubblica di San Marino\", \"SM\", \"Republic of San Marino\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Saudi Arabia",
+      "ISO2": "SA",
+      "ISO3": "SAU",
+      "NumericCode": 682,
+      "Latitude": 25.0,
+      "Longitude": 45.0,
+      "BoundaryGeoJSON": "@file:boundaries/SA.geojson",
+      "CommonAliases": "[\"SA\", \"Al-Mamlakah al-\\u2018Arabiyyah as-Su\\u2018\\u016bdiyyah\", \"Saudi Arabia\", \"Kingdom of Saudi Arabia\", \"Saudi\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Senegal",
+      "ISO2": "SN",
+      "ISO3": "SEN",
+      "NumericCode": 686,
+      "Latitude": 14.0,
+      "Longitude": -14.0,
+      "BoundaryGeoJSON": "@file:boundaries/SN.geojson",
+      "CommonAliases": "[\"SN\", \"R\\u00e9publique du S\\u00e9n\\u00e9gal\", \"Republic of Senegal\", \"Senegal\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Serbia",
+      "ISO2": "RS",
+      "ISO3": "SRB",
+      "NumericCode": 688,
+      "Latitude": 44.0,
+      "Longitude": 21.0,
+      "BoundaryGeoJSON": "@file:boundaries/RS.geojson",
+      "CommonAliases": "[\"Republika Srbija\", \"\\u0420\\u0435\\u043f\\u0443\\u0431\\u043b\\u0438\\u043a\\u0430 \\u0421\\u0440\\u0431\\u0438\\u0458\\u0430\", \"Srbija\", \"Serbia\", \"RS\", \"Republic of Serbia\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Seychelles",
+      "ISO2": "SC",
+      "ISO3": "SYC",
+      "NumericCode": 690,
+      "Latitude": -4.5833,
+      "Longitude": 55.6667,
+      "BoundaryGeoJSON": "@file:boundaries/SC.geojson",
+      "CommonAliases": "[\"Repiblik Sesel\", \"Seychelles\", \"Republic of Seychelles\", \"R\\u00e9publique des Seychelles\", \"SC\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sierra Leone",
+      "ISO2": "SL",
+      "ISO3": "SLE",
+      "NumericCode": 694,
+      "Latitude": 8.5,
+      "Longitude": -11.5,
+      "BoundaryGeoJSON": "@file:boundaries/SL.geojson",
+      "CommonAliases": "[\"Sierra Leone\", \"Republic of Sierra Leone\", \"SL\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Singapore",
+      "ISO2": "SG",
+      "ISO3": "SGP",
+      "NumericCode": 702,
+      "Latitude": 1.3667,
+      "Longitude": 103.8,
+      "BoundaryGeoJSON": "@file:boundaries/SG.geojson",
+      "CommonAliases": "[\"Singapore\", \"Republic of Singapore\", \"\\u65b0\\u52a0\\u5761\\u5171\\u548c\\u56fd\", \"SG\", \"Singapura\", \"Republik Singapura\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sint Maarten",
+      "ISO2": "SX",
+      "ISO3": "SXM",
+      "NumericCode": 534,
+      "Latitude": 18.0333,
+      "Longitude": -63.05,
+      "BoundaryGeoJSON": "@file:boundaries/SX.geojson",
+      "CommonAliases": "[\"Sint Maarten (Dutch part)\", \"Sint Maarten\", \"SX\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Slovakia",
+      "ISO2": "SK",
+      "ISO3": "SVK",
+      "NumericCode": 703,
+      "Latitude": 48.6667,
+      "Longitude": 19.5,
+      "BoundaryGeoJSON": "@file:boundaries/SK.geojson",
+      "CommonAliases": "[\"Slovensk\\u00e1 republika\", \"SK\", \"Slovak Republic\", \"Slovakia\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Slovenia",
+      "ISO2": "SI",
+      "ISO3": "SVN",
+      "NumericCode": 705,
+      "Latitude": 46.1167,
+      "Longitude": 14.8167,
+      "BoundaryGeoJSON": "@file:boundaries/SI.geojson",
+      "CommonAliases": "[\"Slovenia\", \"Republic of Slovenia\", \"Republika Slovenija\", \"SI\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Solomon Islands",
+      "ISO2": "SB",
+      "ISO3": "SLB",
+      "NumericCode": 90,
+      "Latitude": -8.0,
+      "Longitude": 159.0,
+      "BoundaryGeoJSON": "@file:boundaries/SB.geojson",
+      "CommonAliases": "[\"SB\", \"Solomon Islands\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Somalia",
+      "ISO2": "SO",
+      "ISO3": "SOM",
+      "NumericCode": 706,
+      "Latitude": 10.0,
+      "Longitude": 49.0,
+      "BoundaryGeoJSON": "@file:boundaries/SO.geojson",
+      "CommonAliases": "[\"Jamhuuriyadda Federaalka Soomaaliya\", \"Somalia\", \"Federal Republic of Somalia\", \"SO\", \"a\\u1e63-\\u1e62\\u016bm\\u0101l\", \"Jumh\\u016briyyat a\\u1e63-\\u1e62\\u016bm\\u0101l al-Fider\\u0101liyya\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "South Africa",
+      "ISO2": "ZA",
+      "ISO3": "ZAF",
+      "NumericCode": 710,
+      "Latitude": -29.0,
+      "Longitude": 24.0,
+      "BoundaryGeoJSON": "@file:boundaries/ZA.geojson",
+      "CommonAliases": "[\"South Africa\", \"RSA\", \"ZA\", \"Suid-Afrika\", \"Republic of South Africa\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "South Georgia",
+      "ISO2": "GS",
+      "ISO3": "SGS",
+      "NumericCode": 239,
+      "Latitude": -54.5,
+      "Longitude": -37.0,
+      "BoundaryGeoJSON": "@file:boundaries/GS.geojson",
+      "CommonAliases": "[\"South Georgia and the South Sandwich Islands\", \"South Georgia\", \"GS\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "South Korea",
+      "ISO2": "KR",
+      "ISO3": "KOR",
+      "NumericCode": 410,
+      "Latitude": 37.0,
+      "Longitude": 127.5,
+      "BoundaryGeoJSON": "@file:boundaries/KR.geojson",
+      "CommonAliases": "[\"Korea, Republic of\", \"\\ub0a8\\ud55c\", \"\\ub0a8\\uc870\\uc120\", \"Republic of Korea\", \"KR\", \"South Korea\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "South Sudan",
+      "ISO2": "SS",
+      "ISO3": "SSD",
+      "NumericCode": 728,
+      "Latitude": 7.0,
+      "Longitude": 30.0,
+      "BoundaryGeoJSON": "@file:boundaries/SS.geojson",
+      "CommonAliases": "[\"Republic of South Sudan\", \"South Sudan\", \"SS\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Spain",
+      "ISO2": "ES",
+      "ISO3": "ESP",
+      "NumericCode": 724,
+      "Latitude": 40.0,
+      "Longitude": -4.0,
+      "BoundaryGeoJSON": "@file:boundaries/ES.geojson",
+      "CommonAliases": "[\"ES\", \"Spain\", \"Kingdom of Spain\", \"Reino de Espa\\u00f1a\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sri Lanka",
+      "ISO2": "LK",
+      "ISO3": "LKA",
+      "NumericCode": 144,
+      "Latitude": 7.0,
+      "Longitude": 81.0,
+      "BoundaryGeoJSON": "@file:boundaries/LK.geojson",
+      "CommonAliases": "[\"Democratic Socialist Republic of Sri Lanka\", \"LK\", \"Sri Lanka\", \"ila\\u1e45kai\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sudan",
+      "ISO2": "SD",
+      "ISO3": "SDN",
+      "NumericCode": 729,
+      "Latitude": 15.0,
+      "Longitude": 30.0,
+      "BoundaryGeoJSON": "@file:boundaries/SD.geojson",
+      "CommonAliases": "[\"Jumh\\u016br\\u012byat as-S\\u016bd\\u0101n\", \"Republic of the Sudan\", \"Sudan\", \"SD\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Suriname",
+      "ISO2": "SR",
+      "ISO3": "SUR",
+      "NumericCode": 740,
+      "Latitude": 4.0,
+      "Longitude": -56.0,
+      "BoundaryGeoJSON": "@file:boundaries/SR.geojson",
+      "CommonAliases": "[\"Suriname\", \"SR\", \"Sranangron\", \"Republiek Suriname\", \"Republic of Suriname\", \"Sarnam\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Svalbard and Jan Mayen",
+      "ISO2": "SJ",
+      "ISO3": "SJM",
+      "NumericCode": 744,
+      "Latitude": 78.0,
+      "Longitude": 20.0,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Svalbard and Jan Mayen Islands\", \"Svalbard og Jan Mayen\", \"SJ\", \"Svalbard and Jan Mayen\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sweden",
+      "ISO2": "SE",
+      "ISO3": "SWE",
+      "NumericCode": 752,
+      "Latitude": 62.0,
+      "Longitude": 15.0,
+      "BoundaryGeoJSON": "@file:boundaries/SE.geojson",
+      "CommonAliases": "[\"Konungariket Sverige\", \"Sweden\", \"SE\", \"Kingdom of Sweden\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Switzerland",
+      "ISO2": "CH",
+      "ISO3": "CHE",
+      "NumericCode": 756,
+      "Latitude": 47.0,
+      "Longitude": 8.0,
+      "BoundaryGeoJSON": "@file:boundaries/CH.geojson",
+      "CommonAliases": "[\"Swiss Confederation\", \"Schweiz\", \"Svizra\", \"Svizzera\", \"Suisse\", \"CH\", \"Switzerland\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Syria",
+      "ISO2": "SY",
+      "ISO3": "SYR",
+      "NumericCode": 760,
+      "Latitude": 35.0,
+      "Longitude": 38.0,
+      "BoundaryGeoJSON": "@file:boundaries/SY.geojson",
+      "CommonAliases": "[\"Syrian Arab Republic\", \"Al-Jumh\\u016br\\u012byah Al-\\u02bbArab\\u012byah As-S\\u016br\\u012byah\", \"SY\", \"Syria\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "São Tomé and Príncipe",
+      "ISO2": "ST",
+      "ISO3": "STP",
+      "NumericCode": 678,
+      "Latitude": 1.0,
+      "Longitude": 7.0,
+      "BoundaryGeoJSON": "@file:boundaries/ST.geojson",
+      "CommonAliases": "[\"S\\u00e3o Tom\\u00e9 and Pr\\u00edncipe\", \"Sao Tome and Principe\", \"Democratic Republic of S\\u00e3o Tom\\u00e9 and Pr\\u00edncipe\", \"ST\", \"Rep\\u00fablica Democr\\u00e1tica de S\\u00e3o Tom\\u00e9 e Pr\\u00edncipe\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Taiwan",
+      "ISO2": "TW",
+      "ISO3": "TWN",
+      "NumericCode": 158,
+      "Latitude": 23.5,
+      "Longitude": 121.0,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"\\u4e2d\\u83ef\\u6c11\\u570b\", \"Taiwan\", \"TW\", \"Zh\\u014dnghu\\u00e1 M\\u00edngu\\u00f3\", \"T\\u00e1iw\\u0101n\", \"Republic of China\", \"Chinese Taipei\", \"Republic of China (Taiwan)\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tajikistan",
+      "ISO2": "TJ",
+      "ISO3": "TJK",
+      "NumericCode": 762,
+      "Latitude": 39.0,
+      "Longitude": 71.0,
+      "BoundaryGeoJSON": "@file:boundaries/TJ.geojson",
+      "CommonAliases": "[\"\\u04b6\\u0443\\u043c\\u04b3\\u0443\\u0440\\u0438\\u0438 \\u0422\\u043e\\u04b7\\u0438\\u043a\\u0438\\u0441\\u0442\\u043e\\u043d\", \"To\\u00e7ikiston\", \"Tajikistan\", \"Republic of Tajikistan\", \"\\u00c7umhuriyi To\\u00e7ikiston\", \"TJ\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tanzania",
+      "ISO2": "TZ",
+      "ISO3": "TZA",
+      "NumericCode": 834,
+      "Latitude": -6.0,
+      "Longitude": 35.0,
+      "BoundaryGeoJSON": "@file:boundaries/TZ.geojson",
+      "CommonAliases": "[\"Jamhuri ya Muungano wa Tanzania\", \"United Republic of Tanzania\", \"Tanzania, United Republic of\", \"Tanzania\", \"TZ\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Thailand",
+      "ISO2": "TH",
+      "ISO3": "THA",
+      "NumericCode": 764,
+      "Latitude": 15.0,
+      "Longitude": 100.0,
+      "BoundaryGeoJSON": "@file:boundaries/TH.geojson",
+      "CommonAliases": "[\"Ratcha Anachak Thai\", \"Thailand\", \"Prathet\", \"Kingdom of Thailand\", \"TH\", \"\\u0e23\\u0e32\\u0e0a\\u0e2d\\u0e32\\u0e13\\u0e32\\u0e08\\u0e31\\u0e01\\u0e23\\u0e44\\u0e17\\u0e22\", \"Thai\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Timor-Leste",
+      "ISO2": "TL",
+      "ISO3": "TLS",
+      "NumericCode": 626,
+      "Latitude": -8.8333,
+      "Longitude": 125.9167,
+      "BoundaryGeoJSON": "@file:boundaries/TL.geojson",
+      "CommonAliases": "[\"Tim\\u00f3r Lorosa'e\", \"Timor-Leste\", \"Timor Lorosae\", \"East Timor\", \"TL\", \"Rep\\u00fablica Democr\\u00e1tica de Timor-Leste\", \"Democratic Republic of Timor-Leste\", \"Rep\\u00fablika Demokr\\u00e1tika Tim\\u00f3r-Leste\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Togo",
+      "ISO2": "TG",
+      "ISO3": "TGO",
+      "NumericCode": 768,
+      "Latitude": 8.0,
+      "Longitude": 1.1667,
+      "BoundaryGeoJSON": "@file:boundaries/TG.geojson",
+      "CommonAliases": "[\"Togo\", \"Togolese\", \"Togolese Republic\", \"R\\u00e9publique Togolaise\", \"TG\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tokelau",
+      "ISO2": "TK",
+      "ISO3": "TKL",
+      "NumericCode": 772,
+      "Latitude": -9.0,
+      "Longitude": -172.0,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Tokelau\", \"TK\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tonga",
+      "ISO2": "TO",
+      "ISO3": "TON",
+      "NumericCode": 776,
+      "Latitude": -20.0,
+      "Longitude": -175.0,
+      "BoundaryGeoJSON": "@file:boundaries/TO.geojson",
+      "CommonAliases": "[\"TO\", \"Kingdom of Tonga\", \"Tonga\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Trinidad and Tobago",
+      "ISO2": "TT",
+      "ISO3": "TTO",
+      "NumericCode": 780,
+      "Latitude": 10.6918,
+      "Longitude": -61.2225,
+      "BoundaryGeoJSON": "@file:boundaries/TT.geojson",
+      "CommonAliases": "[\"TT\", \"Trinidad and Tobago\", \"Republic of Trinidad and Tobago\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tunisia",
+      "ISO2": "TN",
+      "ISO3": "TUN",
+      "NumericCode": 788,
+      "Latitude": 34.0,
+      "Longitude": 9.0,
+      "BoundaryGeoJSON": "@file:boundaries/TN.geojson",
+      "CommonAliases": "[\"Tunisian Republic\", \"al-Jumh\\u016briyyah at-T\\u016bnisiyyah\", \"TN\", \"Republic of Tunisia\", \"Tunisia\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Turkey",
+      "ISO2": "TR",
+      "ISO3": "TUR",
+      "NumericCode": 792,
+      "Latitude": 39.0,
+      "Longitude": 35.0,
+      "BoundaryGeoJSON": "@file:boundaries/TR.geojson",
+      "CommonAliases": "[\"Turkiye\", \"T\\u00fcrkiye Cumhuriyeti\", \"TR\", \"Turkey\", \"Republic of Turkey\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Turkmenistan",
+      "ISO2": "TM",
+      "ISO3": "TKM",
+      "NumericCode": 795,
+      "Latitude": 40.0,
+      "Longitude": 60.0,
+      "BoundaryGeoJSON": "@file:boundaries/TM.geojson",
+      "CommonAliases": "[\"Turkmenistan\", \"TM\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Turks and Caicos Islands",
+      "ISO2": "TC",
+      "ISO3": "TCA",
+      "NumericCode": 796,
+      "Latitude": 21.75,
+      "Longitude": -71.5833,
+      "BoundaryGeoJSON": "@file:boundaries/TC.geojson",
+      "CommonAliases": "[\"TC\", \"Turks and Caicos Islands\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tuvalu",
+      "ISO2": "TV",
+      "ISO3": "TUV",
+      "NumericCode": 798,
+      "Latitude": -8.0,
+      "Longitude": 178.0,
+      "BoundaryGeoJSON": "@file:boundaries/TV.geojson",
+      "CommonAliases": "[\"Tuvalu\", \"TV\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Uganda",
+      "ISO2": "UG",
+      "ISO3": "UGA",
+      "NumericCode": 800,
+      "Latitude": 1.0,
+      "Longitude": 32.0,
+      "BoundaryGeoJSON": "@file:boundaries/UG.geojson",
+      "CommonAliases": "[\"Jamhuri ya Uganda\", \"Uganda\", \"UG\", \"Republic of Uganda\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ukraine",
+      "ISO2": "UA",
+      "ISO3": "UKR",
+      "NumericCode": 804,
+      "Latitude": 49.0,
+      "Longitude": 32.0,
+      "BoundaryGeoJSON": "@file:boundaries/UA.geojson",
+      "CommonAliases": "[\"Ukrayina\", \"UA\", \"Ukraine\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "United Arab Emirates",
+      "ISO2": "AE",
+      "ISO3": "ARE",
+      "NumericCode": 784,
+      "Latitude": 24.0,
+      "Longitude": 54.0,
+      "BoundaryGeoJSON": "@file:boundaries/AE.geojson",
+      "CommonAliases": "[\"Emirates\", \"United Arab Emirates\", \"UAE\", \"AE\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "United Kingdom",
+      "ISO2": "GB",
+      "ISO3": "GBR",
+      "NumericCode": 826,
+      "Latitude": 54.0,
+      "Longitude": -2.0,
+      "BoundaryGeoJSON": "@file:boundaries/GB.geojson",
+      "CommonAliases": "[\"GB\", \"Great Britain\", \"United Kingdom\", \"UK\", \"United Kingdom of Great Britain and Northern Ireland\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "United States",
+      "ISO2": "US",
+      "ISO3": "USA",
+      "NumericCode": 840,
+      "Latitude": 38.0,
+      "Longitude": -97.0,
+      "BoundaryGeoJSON": "@file:boundaries/US.geojson",
+      "CommonAliases": "[\"US\", \"USA\", \"United States\", \"United States of America\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "United States Minor Outlying Islands",
+      "ISO2": "UM",
+      "ISO3": "UMI",
+      "NumericCode": 581,
+      "Latitude": 19.3,
+      "Longitude": 166.6333,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"United States Minor Outlying Islands\", \"UM\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "United States Virgin Islands",
+      "ISO2": "VI",
+      "ISO3": "VIR",
+      "NumericCode": 850,
+      "Latitude": 18.35,
+      "Longitude": -64.9333,
+      "BoundaryGeoJSON": "@file:boundaries/VI.geojson",
+      "CommonAliases": "[\"Virgin Islands of the United States\", \"United States Virgin Islands\", \"Virgin Islands, U.S.\", \"VI\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Uruguay",
+      "ISO2": "UY",
+      "ISO3": "URY",
+      "NumericCode": 858,
+      "Latitude": -33.0,
+      "Longitude": -56.0,
+      "BoundaryGeoJSON": "@file:boundaries/UY.geojson",
+      "CommonAliases": "[\"UY\", \"Rep\\u00fablica Oriental del Uruguay\", \"Oriental Republic of Uruguay\", \"Uruguay\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Uzbekistan",
+      "ISO2": "UZ",
+      "ISO3": "UZB",
+      "NumericCode": 860,
+      "Latitude": 41.0,
+      "Longitude": 64.0,
+      "BoundaryGeoJSON": "@file:boundaries/UZ.geojson",
+      "CommonAliases": "[\"\\u040e\\u0437\\u0431\\u0435\\u043a\\u0438\\u0441\\u0442\\u043e\\u043d \\u0420\\u0435\\u0441\\u043f\\u0443\\u0431\\u043b\\u0438\\u043a\\u0430\\u0441\\u0438\", \"Republic of Uzbekistan\", \"Uzbekistan\", \"O\\u2018zbekiston Respublikasi\", \"UZ\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Vanuatu",
+      "ISO2": "VU",
+      "ISO3": "VUT",
+      "NumericCode": 548,
+      "Latitude": -16.0,
+      "Longitude": 167.0,
+      "BoundaryGeoJSON": "@file:boundaries/VU.geojson",
+      "CommonAliases": "[\"R\\u00e9publique de Vanuatu\", \"Vanuatu\", \"Republic of Vanuatu\", \"VU\", \"Ripablik blong Vanuatu\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Vatican City",
+      "ISO2": "VA",
+      "ISO3": "VAT",
+      "NumericCode": 336,
+      "Latitude": 41.9,
+      "Longitude": 12.45,
+      "BoundaryGeoJSON": "@file:boundaries/VA.geojson",
+      "CommonAliases": "[\"Vatican City\", \"Holy See (Vatican City State)\", \"VA\", \"Vatican City State\", \"Stato della Citt\\u00e0 del Vaticano\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Venezuela",
+      "ISO2": "VE",
+      "ISO3": "VEN",
+      "NumericCode": 862,
+      "Latitude": 8.0,
+      "Longitude": -66.0,
+      "BoundaryGeoJSON": "@file:boundaries/VE.geojson",
+      "CommonAliases": "[\"Bolivarian Republic of Venezuela\", \"Rep\\u00fablica Bolivariana de Venezuela\", \"Venezuela\", \"Venezuela, Bolivarian Republic of\", \"VE\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Vietnam",
+      "ISO2": "VN",
+      "ISO3": "VNM",
+      "NumericCode": 704,
+      "Latitude": 16.1667,
+      "Longitude": 107.8333,
+      "BoundaryGeoJSON": "@file:boundaries/VN.geojson",
+      "CommonAliases": "[\"Viet Nam\", \"Socialist Republic of Vietnam\", \"C\\u1ed9ng h\\u00f2a X\\u00e3 h\\u1ed9i ch\\u1ee7 ngh\\u0129a Vi\\u1ec7t Nam\", \"Vietnam\", \"VN\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Wallis and Futuna",
+      "ISO2": "WF",
+      "ISO3": "WLF",
+      "NumericCode": 876,
+      "Latitude": -13.3,
+      "Longitude": -176.2,
+      "BoundaryGeoJSON": "@file:boundaries/WF.geojson",
+      "CommonAliases": "[\"Territory of the Wallis and Futuna Islands\", \"WF\", \"Wallis and Futuna\", \"Territoire des \\u00eeles Wallis et Futuna\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Western Sahara",
+      "ISO2": "EH",
+      "ISO3": "ESH",
+      "NumericCode": 732,
+      "Latitude": 24.5,
+      "Longitude": -13.0,
+      "BoundaryGeoJSON": "@file:boundaries/EH.geojson",
+      "CommonAliases": "[\"EH\", \"Sahrawi Arab Democratic Republic\", \"Western Sahara\", \"Tane\\u1e93roft Tutrimt\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Yemen",
+      "ISO2": "YE",
+      "ISO3": "YEM",
+      "NumericCode": 887,
+      "Latitude": 15.0,
+      "Longitude": 48.0,
+      "BoundaryGeoJSON": "@file:boundaries/YE.geojson",
+      "CommonAliases": "[\"al-Jumh\\u016briyyah al-Yamaniyyah\", \"Republic of Yemen\", \"Yemeni Republic\", \"YE\", \"Yemen\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Zambia",
+      "ISO2": "ZM",
+      "ISO3": "ZMB",
+      "NumericCode": 894,
+      "Latitude": -15.0,
+      "Longitude": 30.0,
+      "BoundaryGeoJSON": "@file:boundaries/ZM.geojson",
+      "CommonAliases": "[\"Zambia\", \"ZM\", \"Republic of Zambia\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Zimbabwe",
+      "ISO2": "ZW",
+      "ISO3": "ZWE",
+      "NumericCode": 716,
+      "Latitude": -20.0,
+      "Longitude": 30.0,
+      "BoundaryGeoJSON": "@file:boundaries/ZW.geojson",
+      "CommonAliases": "[\"Republic of Zimbabwe\", \"Zimbabwe\", \"ZW\"]"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Åland Islands",
+      "ISO2": "AX",
+      "ISO3": "ALA",
+      "NumericCode": 248,
+      "Latitude": 60.1167,
+      "Longitude": 19.9,
+      "BoundaryGeoJSON": "@file:boundaries/AX.geojson",
+      "CommonAliases": "[\"Aaland\", \"\\u00c5land Islands\", \"Aland\", \"Ahvenanmaa\", \"AX\"]"
     }
   }
 ]

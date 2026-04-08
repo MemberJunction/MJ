@@ -1,0 +1,194 @@
+[
+  {
+    "fields": {
+      "_CountryISO2": "DE",
+      "Name": "Baden-Württemberg",
+      "Code": "BW",
+      "ISO3166_2": "DE-BW",
+      "Latitude": 48.5378,
+      "Longitude": 9.0412,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Baden-W\\u00fcrttemberg\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "DE",
+      "Name": "Bavaria",
+      "Code": "BY",
+      "ISO3166_2": "DE-BY",
+      "Latitude": 48.9468,
+      "Longitude": 11.4039,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Bavaria\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "DE",
+      "Name": "Berlin",
+      "Code": "BE",
+      "ISO3166_2": "DE-BE",
+      "Latitude": 52.5109,
+      "Longitude": 13.3989,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Berlin\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "DE",
+      "Name": "Brandenburg",
+      "Code": "BB",
+      "ISO3166_2": "DE-BB",
+      "Latitude": 52.8455,
+      "Longitude": 13.2461,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Brandenburg\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "DE",
+      "Name": "Bremen",
+      "Code": "HB",
+      "ISO3166_2": "DE-HB",
+      "Latitude": 53.0793,
+      "Longitude": 8.8017,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Bremen\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "DE",
+      "Name": "Hamburg",
+      "Code": "HH",
+      "ISO3166_2": "DE-HH",
+      "Latitude": 53.5511,
+      "Longitude": 9.9937,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Hamburg\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "DE",
+      "Name": "Hessen",
+      "Code": "HE",
+      "ISO3166_2": "DE-HE",
+      "Latitude": 50.6081,
+      "Longitude": 9.0285,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Hessen\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "DE",
+      "Name": "Lower Saxony",
+      "Code": "NI",
+      "ISO3166_2": "DE-NI",
+      "Latitude": 52.8399,
+      "Longitude": 9.076,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Lower Saxony\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "DE",
+      "Name": "Mecklenburg-Vorpommern",
+      "Code": "MV",
+      "ISO3166_2": "DE-MV",
+      "Latitude": 53.7735,
+      "Longitude": 12.5755,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Mecklenburg-Vorpommern\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "DE",
+      "Name": "North Rhine-Westphalia",
+      "Code": "NW",
+      "ISO3166_2": "DE-NW",
+      "Latitude": 51.4789,
+      "Longitude": 7.5544,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"North Rhine-Westphalia\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "DE",
+      "Name": "Rhineland-Palatinate",
+      "Code": "RP",
+      "ISO3166_2": "DE-RP",
+      "Latitude": 49.9532,
+      "Longitude": 7.3106,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Rhineland-Palatinate\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "DE",
+      "Name": "Saarland",
+      "Code": "SL",
+      "ISO3166_2": "DE-SL",
+      "Latitude": 49.3842,
+      "Longitude": 6.9537,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Saarland\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "DE",
+      "Name": "Saxony",
+      "Code": "SN",
+      "ISO3166_2": "DE-SN",
+      "Latitude": 50.9296,
+      "Longitude": 13.4585,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Saxony\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "DE",
+      "Name": "Saxony-Anhalt",
+      "Code": "ST",
+      "ISO3166_2": "DE-ST",
+      "Latitude": 51.9281,
+      "Longitude": 11.6812,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Saxony-Anhalt\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "DE",
+      "Name": "Schleswig-Holstein",
+      "Code": "SH",
+      "ISO3166_2": "DE-SH",
+      "Latitude": 54.1854,
+      "Longitude": 9.822,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Schleswig-Holstein\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "DE",
+      "Name": "Thuringia",
+      "Code": "TH",
+      "ISO3166_2": "DE-TH",
+      "Latitude": 50.9015,
+      "Longitude": 11.0378,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Thuringia\"]"
+    }
+  }
+]

@@ -1,0 +1,830 @@
+[
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "A Coruña",
+      "Code": "C",
+      "ISO3166_2": "ES-C",
+      "Latitude": 43.371,
+      "Longitude": -8.3959,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"A Coru\\u00f1a\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "Albacete",
+      "Code": "AB",
+      "ISO3166_2": "ES-AB",
+      "Latitude": 38.9951,
+      "Longitude": -1.8559,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Albacete\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "Alicante",
+      "Code": "A",
+      "ISO3166_2": "ES-A",
+      "Latitude": 38.3436,
+      "Longitude": -0.4882,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Alicante\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "Almeria",
+      "Code": "AL",
+      "ISO3166_2": "ES-AL",
+      "Latitude": 36.8414,
+      "Longitude": -2.4628,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Almeria\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "Andalusia",
+      "Code": "AN",
+      "ISO3166_2": "ES-AN",
+      "Latitude": 37.34,
+      "Longitude": -4.5812,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Andalusia\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "Araba",
+      "Code": "VI",
+      "ISO3166_2": "ES-VI",
+      "Latitude": 42.8441,
+      "Longitude": -2.6821,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Araba\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "Aragon",
+      "Code": "AR",
+      "ISO3166_2": "ES-AR",
+      "Latitude": 41.3787,
+      "Longitude": -0.7639,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Aragon\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "Asturias",
+      "Code": "O",
+      "ISO3166_2": "ES-O",
+      "Latitude": 43.3134,
+      "Longitude": -5.9419,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Asturias\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "Asturias, Principality of",
+      "Code": "AS",
+      "ISO3166_2": "ES-AS",
+      "Latitude": 43.3614,
+      "Longitude": -5.8478,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Asturias, Principality of\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "Badajoz",
+      "Code": "BA",
+      "ISO3166_2": "ES-BA",
+      "Latitude": 38.8782,
+      "Longitude": -6.9701,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Badajoz\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "Balearic Islands",
+      "Code": "IB",
+      "ISO3166_2": "ES-IB",
+      "Latitude": 39.6134,
+      "Longitude": 2.8829,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Balearic Islands\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "Barcelona",
+      "Code": "B",
+      "ISO3166_2": "ES-B",
+      "Latitude": 41.3826,
+      "Longitude": 2.1771,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Barcelona\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "Basque Country",
+      "Code": "PV",
+      "ISO3166_2": "ES-PV",
+      "Latitude": 42.9912,
+      "Longitude": -2.5543,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Basque Country\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "Bizkaia",
+      "Code": "BI",
+      "ISO3166_2": "ES-BI",
+      "Latitude": 43.2385,
+      "Longitude": -2.8516,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Bizkaia\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "Burgos",
+      "Code": "BU",
+      "ISO3166_2": "ES-BU",
+      "Latitude": 42.3247,
+      "Longitude": -3.6765,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Burgos\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "Caceres",
+      "Code": "CC",
+      "ISO3166_2": "ES-CC",
+      "Latitude": 39.4745,
+      "Longitude": -6.3717,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Caceres\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "Canary Islands",
+      "Code": "CN",
+      "ISO3166_2": "ES-CN",
+      "Latitude": 28.2936,
+      "Longitude": -16.6214,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Canary Islands\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "Cantabria",
+      "Code": "S",
+      "ISO3166_2": "ES-S",
+      "Latitude": 43.1596,
+      "Longitude": -4.0878,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Cantabria\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "Cantabria",
+      "Code": "CB",
+      "ISO3166_2": "ES-CB",
+      "Latitude": 43.3333,
+      "Longitude": -4.0,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Cantabria\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "Castellón",
+      "Code": "CS",
+      "ISO3166_2": "ES-CS",
+      "Latitude": 40.2519,
+      "Longitude": -0.0615,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Castell\\u00f3n\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "Castile and Leon",
+      "Code": "CL",
+      "ISO3166_2": "ES-CL",
+      "Latitude": 41.55,
+      "Longitude": -5.1387,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Castile and Leon\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "Castilla-La Mancha",
+      "Code": "CM",
+      "ISO3166_2": "ES-CM",
+      "Latitude": 39.4178,
+      "Longitude": -2.6232,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Castilla-La Mancha\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "Catalonia",
+      "Code": "CT",
+      "ISO3166_2": "ES-CT",
+      "Latitude": 41.8523,
+      "Longitude": 1.5745,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Catalonia\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "Ceuta",
+      "Code": "CE",
+      "ISO3166_2": "ES-CE",
+      "Latitude": 35.8884,
+      "Longitude": -5.3041,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Ceuta\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "Ciudad Real",
+      "Code": "CR",
+      "ISO3166_2": "ES-CR",
+      "Latitude": 38.9854,
+      "Longitude": -3.9285,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Ciudad Real\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "Community of Madrid",
+      "Code": "MD",
+      "ISO3166_2": "ES-MD",
+      "Latitude": 40.5248,
+      "Longitude": -3.7716,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Community of Madrid\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "Cuenca",
+      "Code": "CU",
+      "ISO3166_2": "ES-CU",
+      "Latitude": 40.0661,
+      "Longitude": -2.1314,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Cuenca\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "Cádiz",
+      "Code": "CA",
+      "ISO3166_2": "ES-CA",
+      "Latitude": 36.5297,
+      "Longitude": -6.2929,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"C\\u00e1diz\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "Córdoba",
+      "Code": "CO",
+      "ISO3166_2": "ES-CO",
+      "Latitude": 37.9567,
+      "Longitude": -4.8477,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"C\\u00f3rdoba\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "Estremadura",
+      "Code": "EX",
+      "ISO3166_2": "ES-EX",
+      "Latitude": 39.1748,
+      "Longitude": -6.153,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Estremadura\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "Galicia",
+      "Code": "GA",
+      "ISO3166_2": "ES-GA",
+      "Latitude": 42.6195,
+      "Longitude": -7.8631,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Galicia\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "Gipuzkoa",
+      "Code": "SS",
+      "ISO3166_2": "ES-SS",
+      "Latitude": 43.1445,
+      "Longitude": -2.2038,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Gipuzkoa\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "Girona",
+      "Code": "GI",
+      "ISO3166_2": "ES-GI",
+      "Latitude": 41.9793,
+      "Longitude": 2.8199,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Girona\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "Granada",
+      "Code": "GR",
+      "ISO3166_2": "ES-GR",
+      "Latitude": 37.1735,
+      "Longitude": -3.5995,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Granada\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "Guadalajara",
+      "Code": "GU",
+      "ISO3166_2": "ES-GU",
+      "Latitude": 40.6327,
+      "Longitude": -3.1646,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Guadalajara\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "Huelva",
+      "Code": "H",
+      "ISO3166_2": "ES-H",
+      "Latitude": 37.2576,
+      "Longitude": -6.9485,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Huelva\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "Huesca",
+      "Code": "HU",
+      "ISO3166_2": "ES-HU",
+      "Latitude": 42.1364,
+      "Longitude": -0.4366,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Huesca\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "Islas Baleares",
+      "Code": "PM",
+      "ISO3166_2": "ES-PM",
+      "Latitude": 39.6134,
+      "Longitude": 2.8829,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Islas Baleares\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "Jaén",
+      "Code": "J",
+      "ISO3166_2": "ES-J",
+      "Latitude": 37.7729,
+      "Longitude": -3.7883,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Ja\\u00e9n\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "La Rioja",
+      "Code": "RI",
+      "ISO3166_2": "ES-RI",
+      "Latitude": 42.25,
+      "Longitude": -2.5,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"La Rioja\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "La Rioja",
+      "Code": "LO",
+      "ISO3166_2": "ES-LO",
+      "Latitude": 42.2815,
+      "Longitude": -2.4828,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"La Rioja\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "Las Palmas",
+      "Code": "GC",
+      "ISO3166_2": "ES-GC",
+      "Latitude": 27.958,
+      "Longitude": -15.6062,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Las Palmas\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "León",
+      "Code": "LE",
+      "ISO3166_2": "ES-LE",
+      "Latitude": 42.5987,
+      "Longitude": -5.5671,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Le\\u00f3n\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "Lleida",
+      "Code": "L",
+      "ISO3166_2": "ES-L",
+      "Latitude": 41.6148,
+      "Longitude": 0.6268,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Lleida\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "Lugo",
+      "Code": "LU",
+      "ISO3166_2": "ES-LU",
+      "Latitude": 43.0118,
+      "Longitude": -7.5566,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Lugo\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "Madrid",
+      "Code": "M",
+      "ISO3166_2": "ES-M",
+      "Latitude": 40.4168,
+      "Longitude": -3.7038,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Madrid\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "Melilla",
+      "Code": "ML",
+      "ISO3166_2": "ES-ML",
+      "Latitude": 35.2937,
+      "Longitude": -2.9383,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Melilla\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "Murcia",
+      "Code": "MU",
+      "ISO3166_2": "ES-MU",
+      "Latitude": 37.9924,
+      "Longitude": -1.1305,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Murcia\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "Málaga",
+      "Code": "MA",
+      "ISO3166_2": "ES-MA",
+      "Latitude": 36.7213,
+      "Longitude": -4.4216,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"M\\u00e1laga\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "Navarra",
+      "Code": "NA",
+      "ISO3166_2": "ES-NA",
+      "Latitude": 42.6125,
+      "Longitude": -1.8308,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Navarra\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "Navarre",
+      "Code": "NC",
+      "ISO3166_2": "ES-NC",
+      "Latitude": 42.6125,
+      "Longitude": -1.8308,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Navarre\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "Ourense",
+      "Code": "OR",
+      "ISO3166_2": "ES-OR",
+      "Latitude": 42.3439,
+      "Longitude": -7.8572,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Ourense\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "Palencia",
+      "Code": "P",
+      "ISO3166_2": "ES-P",
+      "Latitude": 42.0097,
+      "Longitude": -4.5288,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Palencia\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "Pontevedra",
+      "Code": "PO",
+      "ISO3166_2": "ES-PO",
+      "Latitude": 42.4319,
+      "Longitude": -8.6432,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Pontevedra\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "Region of Murcia",
+      "Code": "MC",
+      "ISO3166_2": "ES-MC",
+      "Latitude": 38.064,
+      "Longitude": -1.6719,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Region of Murcia\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "Salamanca",
+      "Code": "SA",
+      "ISO3166_2": "ES-SA",
+      "Latitude": 40.7666,
+      "Longitude": -6.0218,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Salamanca\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "Santa Cruz de Tenerife",
+      "Code": "TF",
+      "ISO3166_2": "ES-TF",
+      "Latitude": 28.4672,
+      "Longitude": -16.2508,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Santa Cruz de Tenerife\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "Segovia",
+      "Code": "SG",
+      "ISO3166_2": "ES-SG",
+      "Latitude": 40.9429,
+      "Longitude": -4.1089,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Segovia\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "Sevilla",
+      "Code": "SE",
+      "ISO3166_2": "ES-SE",
+      "Latitude": 37.3886,
+      "Longitude": -5.9953,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Sevilla\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "Soria",
+      "Code": "SO",
+      "ISO3166_2": "ES-SO",
+      "Latitude": 41.7634,
+      "Longitude": -2.4642,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Soria\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "Tarragona",
+      "Code": "T",
+      "ISO3166_2": "ES-T",
+      "Latitude": 41.1172,
+      "Longitude": 1.2546,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Tarragona\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "Teruel",
+      "Code": "TE",
+      "ISO3166_2": "ES-TE",
+      "Latitude": 40.345,
+      "Longitude": -1.1185,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Teruel\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "Toledo",
+      "Code": "TO",
+      "ISO3166_2": "ES-TO",
+      "Latitude": 39.8561,
+      "Longitude": -4.024,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Toledo\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "Valencia",
+      "Code": "V",
+      "ISO3166_2": "ES-V",
+      "Latitude": 39.3342,
+      "Longitude": -0.7973,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Valencia\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "Valencian Community",
+      "Code": "VC",
+      "ISO3166_2": "ES-VC",
+      "Latitude": 39.682,
+      "Longitude": -0.7654,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Valencian Community\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "Valladolid",
+      "Code": "VA",
+      "ISO3166_2": "ES-VA",
+      "Latitude": 41.6517,
+      "Longitude": -4.7245,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Valladolid\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "Zamora",
+      "Code": "ZA",
+      "ISO3166_2": "ES-ZA",
+      "Latitude": 41.6858,
+      "Longitude": -5.9423,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Zamora\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "Zaragoza",
+      "Code": "Z",
+      "ISO3166_2": "ES-Z",
+      "Latitude": 41.6521,
+      "Longitude": -0.8809,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Zaragoza\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ES",
+      "Name": "Ávila",
+      "Code": "AV",
+      "ISO3166_2": "ES-AV",
+      "Latitude": 40.6233,
+      "Longitude": -4.8354,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"\\u00c1vila\"]"
+    }
+  }
+]

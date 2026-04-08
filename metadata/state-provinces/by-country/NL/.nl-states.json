@@ -1,0 +1,146 @@
+[
+  {
+    "fields": {
+      "_CountryISO2": "NL",
+      "Name": "Drenthe",
+      "Code": "DR",
+      "ISO3166_2": "NL-DR",
+      "Latitude": 52.9068,
+      "Longitude": 6.6368,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Drenthe\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "NL",
+      "Name": "Flevoland",
+      "Code": "FL",
+      "ISO3166_2": "NL-FL",
+      "Latitude": 52.4484,
+      "Longitude": 5.4235,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Flevoland\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "NL",
+      "Name": "Friesland",
+      "Code": "FR",
+      "ISO3166_2": "NL-FR",
+      "Latitude": 53.0924,
+      "Longitude": 5.777,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Friesland\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "NL",
+      "Name": "Gelderland",
+      "Code": "GE",
+      "ISO3166_2": "NL-GE",
+      "Latitude": 52.1014,
+      "Longitude": 5.9516,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Gelderland\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "NL",
+      "Name": "Groningen",
+      "Code": "GR",
+      "ISO3166_2": "NL-GR",
+      "Latitude": 53.2194,
+      "Longitude": 6.5665,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Groningen\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "NL",
+      "Name": "Limburg",
+      "Code": "LI",
+      "ISO3166_2": "NL-LI",
+      "Latitude": 51.2015,
+      "Longitude": 5.9046,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Limburg\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "NL",
+      "Name": "North Brabant",
+      "Code": "NB",
+      "ISO3166_2": "NL-NB",
+      "Latitude": 51.6018,
+      "Longitude": 5.4441,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"North Brabant\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "NL",
+      "Name": "North Holland",
+      "Code": "NH",
+      "ISO3166_2": "NL-NH",
+      "Latitude": 52.7213,
+      "Longitude": 4.8207,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"North Holland\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "NL",
+      "Name": "Overijssel",
+      "Code": "OV",
+      "ISO3166_2": "NL-OV",
+      "Latitude": 52.4254,
+      "Longitude": 6.4611,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Overijssel\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "NL",
+      "Name": "South Holland",
+      "Code": "ZH",
+      "ISO3166_2": "NL-ZH",
+      "Latitude": 51.9967,
+      "Longitude": 4.5597,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"South Holland\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "NL",
+      "Name": "Utrecht",
+      "Code": "UT",
+      "ISO3166_2": "NL-UT",
+      "Latitude": 52.0907,
+      "Longitude": 5.1214,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Utrecht\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "NL",
+      "Name": "Zeeland",
+      "Code": "ZE",
+      "ISO3166_2": "NL-ZE",
+      "Latitude": 51.4163,
+      "Longitude": 3.7028,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Zeeland\"]"
+    }
+  }
+]

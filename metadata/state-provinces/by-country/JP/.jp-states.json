@@ -1,0 +1,566 @@
+[
+  {
+    "fields": {
+      "_CountryISO2": "JP",
+      "Name": "Aichi",
+      "Code": "23",
+      "ISO3166_2": "JP-23",
+      "Latitude": 34.9992,
+      "Longitude": 137.2546,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Aichi\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "JP",
+      "Name": "Akita",
+      "Code": "05",
+      "ISO3166_2": "JP-05",
+      "Latitude": 39.6899,
+      "Longitude": 140.3426,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Akita\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "JP",
+      "Name": "Aomori",
+      "Code": "02",
+      "ISO3166_2": "JP-02",
+      "Latitude": 40.8223,
+      "Longitude": 140.7472,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Aomori\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "JP",
+      "Name": "Chiba",
+      "Code": "12",
+      "ISO3166_2": "JP-12",
+      "Latitude": 35.5494,
+      "Longitude": 140.2647,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Chiba\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "JP",
+      "Name": "Ehime",
+      "Code": "38",
+      "ISO3166_2": "JP-38",
+      "Latitude": 33.6014,
+      "Longitude": 132.8185,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Ehime\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "JP",
+      "Name": "Fukui",
+      "Code": "18",
+      "ISO3166_2": "JP-18",
+      "Latitude": 36.0618,
+      "Longitude": 136.2261,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Fukui\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "JP",
+      "Name": "Fukuoka",
+      "Code": "40",
+      "ISO3166_2": "JP-40",
+      "Latitude": 33.6251,
+      "Longitude": 130.618,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Fukuoka\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "JP",
+      "Name": "Fukushima",
+      "Code": "07",
+      "ISO3166_2": "JP-07",
+      "Latitude": 37.7608,
+      "Longitude": 140.4746,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Fukushima\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "JP",
+      "Name": "Gifu",
+      "Code": "21",
+      "ISO3166_2": "JP-21",
+      "Latitude": 35.7867,
+      "Longitude": 137.0461,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Gifu\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "JP",
+      "Name": "Gunma",
+      "Code": "10",
+      "ISO3166_2": "JP-10",
+      "Latitude": 36.522,
+      "Longitude": 139.0335,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Gunma\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "JP",
+      "Name": "Hiroshima",
+      "Code": "34",
+      "ISO3166_2": "JP-34",
+      "Latitude": 34.3917,
+      "Longitude": 132.4518,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Hiroshima\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "JP",
+      "Name": "Hokkaidō",
+      "Code": "01",
+      "ISO3166_2": "JP-01",
+      "Latitude": 43.452,
+      "Longitude": 142.8198,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Hokkaid\\u014d\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "JP",
+      "Name": "Hyōgo",
+      "Code": "28",
+      "ISO3166_2": "JP-28",
+      "Latitude": 34.9149,
+      "Longitude": 134.8607,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Hy\\u014dgo\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "JP",
+      "Name": "Ibaraki",
+      "Code": "08",
+      "ISO3166_2": "JP-08",
+      "Latitude": 36.2871,
+      "Longitude": 140.4241,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Ibaraki\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "JP",
+      "Name": "Ishikawa",
+      "Code": "17",
+      "ISO3166_2": "JP-17",
+      "Latitude": 36.9891,
+      "Longitude": 136.8163,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Ishikawa\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "JP",
+      "Name": "Iwate",
+      "Code": "03",
+      "ISO3166_2": "JP-03",
+      "Latitude": 39.5714,
+      "Longitude": 141.4254,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Iwate\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "JP",
+      "Name": "Kagawa",
+      "Code": "37",
+      "ISO3166_2": "JP-37",
+      "Latitude": 34.248,
+      "Longitude": 134.0587,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Kagawa\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "JP",
+      "Name": "Kagoshima",
+      "Code": "46",
+      "ISO3166_2": "JP-46",
+      "Latitude": 31.5216,
+      "Longitude": 130.5474,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Kagoshima\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "JP",
+      "Name": "Kanagawa",
+      "Code": "14",
+      "ISO3166_2": "JP-14",
+      "Latitude": 35.4343,
+      "Longitude": 139.3748,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Kanagawa\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "JP",
+      "Name": "Kumamoto",
+      "Code": "43",
+      "ISO3166_2": "JP-43",
+      "Latitude": 32.8034,
+      "Longitude": 130.7083,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Kumamoto\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "JP",
+      "Name": "Kyōto",
+      "Code": "26",
+      "ISO3166_2": "JP-26",
+      "Latitude": 35.0116,
+      "Longitude": 135.7681,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Ky\\u014dto\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "JP",
+      "Name": "Kōchi",
+      "Code": "39",
+      "ISO3166_2": "JP-39",
+      "Latitude": 33.568,
+      "Longitude": 133.5394,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"K\\u014dchi\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "JP",
+      "Name": "Mie",
+      "Code": "24",
+      "ISO3166_2": "JP-24",
+      "Latitude": 34.734,
+      "Longitude": 136.5154,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Mie\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "JP",
+      "Name": "Miyagi",
+      "Code": "04",
+      "ISO3166_2": "JP-04",
+      "Latitude": 38.388,
+      "Longitude": 140.9761,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Miyagi\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "JP",
+      "Name": "Miyazaki",
+      "Code": "45",
+      "ISO3166_2": "JP-45",
+      "Latitude": 32.0977,
+      "Longitude": 131.2945,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Miyazaki\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "JP",
+      "Name": "Nagano",
+      "Code": "20",
+      "ISO3166_2": "JP-20",
+      "Latitude": 36.1144,
+      "Longitude": 138.0319,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Nagano\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "JP",
+      "Name": "Nagasaki",
+      "Code": "42",
+      "ISO3166_2": "JP-42",
+      "Latitude": 33.1155,
+      "Longitude": 129.7874,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Nagasaki\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "JP",
+      "Name": "Nara",
+      "Code": "29",
+      "ISO3166_2": "JP-29",
+      "Latitude": 34.2963,
+      "Longitude": 135.8817,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Nara\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "JP",
+      "Name": "Niigata",
+      "Code": "15",
+      "ISO3166_2": "JP-15",
+      "Latitude": 37.6452,
+      "Longitude": 138.7669,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Niigata\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "JP",
+      "Name": "Okayama",
+      "Code": "33",
+      "ISO3166_2": "JP-33",
+      "Latitude": 34.8581,
+      "Longitude": 133.7759,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Okayama\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "JP",
+      "Name": "Okinawa",
+      "Code": "47",
+      "ISO3166_2": "JP-47",
+      "Latitude": 26.3344,
+      "Longitude": 127.8057,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Okinawa\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "JP",
+      "Name": "Saga",
+      "Code": "41",
+      "ISO3166_2": "JP-41",
+      "Latitude": 33.2639,
+      "Longitude": 130.3008,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Saga\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "JP",
+      "Name": "Saitama",
+      "Code": "11",
+      "ISO3166_2": "JP-11",
+      "Latitude": 35.9754,
+      "Longitude": 139.416,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Saitama\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "JP",
+      "Name": "Shiga",
+      "Code": "25",
+      "ISO3166_2": "JP-25",
+      "Latitude": 35.2472,
+      "Longitude": 136.1094,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Shiga\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "JP",
+      "Name": "Shimane",
+      "Code": "32",
+      "ISO3166_2": "JP-32",
+      "Latitude": 34.9418,
+      "Longitude": 132.5374,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Shimane\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "JP",
+      "Name": "Shizuoka",
+      "Code": "22",
+      "ISO3166_2": "JP-22",
+      "Latitude": 34.9752,
+      "Longitude": 138.3832,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Shizuoka\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "JP",
+      "Name": "Tochigi",
+      "Code": "09",
+      "ISO3166_2": "JP-09",
+      "Latitude": 36.6782,
+      "Longitude": 139.8097,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Tochigi\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "JP",
+      "Name": "Tokushima",
+      "Code": "36",
+      "ISO3166_2": "JP-36",
+      "Latitude": 33.9196,
+      "Longitude": 134.251,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Tokushima\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "JP",
+      "Name": "Tokyo",
+      "Code": "13",
+      "ISO3166_2": "JP-13",
+      "Latitude": 35.6769,
+      "Longitude": 139.7639,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Tokyo\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "JP",
+      "Name": "Tottori",
+      "Code": "31",
+      "ISO3166_2": "JP-31",
+      "Latitude": 35.3555,
+      "Longitude": 133.8679,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Tottori\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "JP",
+      "Name": "Toyama",
+      "Code": "16",
+      "ISO3166_2": "JP-16",
+      "Latitude": 36.6958,
+      "Longitude": 137.2137,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Toyama\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "JP",
+      "Name": "Wakayama",
+      "Code": "30",
+      "ISO3166_2": "JP-30",
+      "Latitude": 33.807,
+      "Longitude": 135.5931,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Wakayama\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "JP",
+      "Name": "Yamagata",
+      "Code": "06",
+      "ISO3166_2": "JP-06",
+      "Latitude": 38.4747,
+      "Longitude": 140.0832,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Yamagata\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "JP",
+      "Name": "Yamaguchi",
+      "Code": "35",
+      "ISO3166_2": "JP-35",
+      "Latitude": 34.238,
+      "Longitude": 131.5874,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Yamaguchi\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "JP",
+      "Name": "Yamanashi",
+      "Code": "19",
+      "ISO3166_2": "JP-19",
+      "Latitude": 35.6399,
+      "Longitude": 138.638,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Yamanashi\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "JP",
+      "Name": "Ōita",
+      "Code": "44",
+      "ISO3166_2": "JP-44",
+      "Latitude": 33.182,
+      "Longitude": 131.427,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"\\u014cita\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "JP",
+      "Name": "Ōsaka",
+      "Code": "27",
+      "ISO3166_2": "JP-27",
+      "Latitude": 34.6199,
+      "Longitude": 135.4904,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"\\u014csaka\"]"
+    }
+  }
+]

@@ -1,0 +1,254 @@
+[
+  {
+    "fields": {
+      "_CountryISO2": "SE",
+      "Name": "Blekinge",
+      "Code": "K",
+      "ISO3166_2": "SE-K",
+      "Latitude": 56.124,
+      "Longitude": 15.4022,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Blekinge\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "SE",
+      "Name": "Dalarna",
+      "Code": "W",
+      "ISO3166_2": "SE-W",
+      "Latitude": 61.0604,
+      "Longitude": 14.2151,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Dalarna\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "SE",
+      "Name": "Gotland",
+      "Code": "I",
+      "ISO3166_2": "SE-I",
+      "Latitude": 57.4999,
+      "Longitude": 18.4999,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Gotland\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "SE",
+      "Name": "Gävleborg",
+      "Code": "X",
+      "ISO3166_2": "SE-X",
+      "Latitude": 61.2603,
+      "Longitude": 16.6947,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"G\\u00e4vleborg\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "SE",
+      "Name": "Halland",
+      "Code": "N",
+      "ISO3166_2": "SE-N",
+      "Latitude": 56.9608,
+      "Longitude": 12.8547,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Halland\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "SE",
+      "Name": "Jämtland",
+      "Code": "Z",
+      "ISO3166_2": "SE-Z",
+      "Latitude": 63.3452,
+      "Longitude": 14.125,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"J\\u00e4mtland\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "SE",
+      "Name": "Jönköping",
+      "Code": "F",
+      "ISO3166_2": "SE-F",
+      "Latitude": 57.7826,
+      "Longitude": 14.1657,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"J\\u00f6nk\\u00f6ping\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "SE",
+      "Name": "Kalmar",
+      "Code": "H",
+      "ISO3166_2": "SE-H",
+      "Latitude": 56.6667,
+      "Longitude": 16.3331,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Kalmar\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "SE",
+      "Name": "Kronoberg",
+      "Code": "G",
+      "ISO3166_2": "SE-G",
+      "Latitude": 56.8007,
+      "Longitude": 14.4112,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Kronoberg\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "SE",
+      "Name": "Norrbotten",
+      "Code": "BD",
+      "ISO3166_2": "SE-BD",
+      "Latitude": 66.5282,
+      "Longitude": 22.953,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Norrbotten\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "SE",
+      "Name": "Skåne",
+      "Code": "M",
+      "ISO3166_2": "SE-M",
+      "Latitude": 55.8479,
+      "Longitude": 13.6337,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Sk\\u00e5ne\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "SE",
+      "Name": "Stockholm",
+      "Code": "AB",
+      "ISO3166_2": "SE-AB",
+      "Latitude": 59.3336,
+      "Longitude": 18.0277,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Stockholm\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "SE",
+      "Name": "Södermanland",
+      "Code": "D",
+      "ISO3166_2": "SE-D",
+      "Latitude": 58.9649,
+      "Longitude": 16.7294,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"S\\u00f6dermanland\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "SE",
+      "Name": "Uppsala",
+      "Code": "C",
+      "ISO3166_2": "SE-C",
+      "Latitude": 59.8662,
+      "Longitude": 17.5984,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Uppsala\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "SE",
+      "Name": "Värmland",
+      "Code": "S",
+      "ISO3166_2": "SE-S",
+      "Latitude": 59.8908,
+      "Longitude": 13.2948,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"V\\u00e4rmland\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "SE",
+      "Name": "Västerbotten",
+      "Code": "AC",
+      "ISO3166_2": "SE-AC",
+      "Latitude": 64.7285,
+      "Longitude": 18.5533,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"V\\u00e4sterbotten\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "SE",
+      "Name": "Västernorrland",
+      "Code": "Y",
+      "ISO3166_2": "SE-Y",
+      "Latitude": 63.059,
+      "Longitude": 18.1014,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"V\\u00e4sternorrland\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "SE",
+      "Name": "Västmanland",
+      "Code": "U",
+      "ISO3166_2": "SE-U",
+      "Latitude": 59.6966,
+      "Longitude": 16.1847,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"V\\u00e4stmanland\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "SE",
+      "Name": "Västra Götaland",
+      "Code": "O",
+      "ISO3166_2": "SE-O",
+      "Latitude": 58.2159,
+      "Longitude": 12.6518,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"V\\u00e4stra G\\u00f6taland\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "SE",
+      "Name": "Örebro",
+      "Code": "T",
+      "ISO3166_2": "SE-T",
+      "Latitude": 59.2747,
+      "Longitude": 15.2151,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"\\u00d6rebro\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "SE",
+      "Name": "Östergötland",
+      "Code": "E",
+      "ISO3166_2": "SE-E",
+      "Latitude": 58.365,
+      "Longitude": 16.0447,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"\\u00d6sterg\\u00f6tland\"]"
+    }
+  }
+]

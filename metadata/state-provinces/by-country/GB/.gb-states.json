@@ -1,0 +1,2654 @@
+[
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Aberdeen",
+      "Code": "ABE",
+      "ISO3166_2": "GB-ABE",
+      "Latitude": 57.1497,
+      "Longitude": -2.0943,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Aberdeen\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Aberdeenshire",
+      "Code": "ABD",
+      "ISO3166_2": "GB-ABD",
+      "Latitude": 57.1667,
+      "Longitude": -2.6667,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Aberdeenshire\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Angus",
+      "Code": "ANS",
+      "ISO3166_2": "GB-ANS",
+      "Latitude": 56.6667,
+      "Longitude": -2.9167,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Angus\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Antrim and Newtownabbey",
+      "Code": "ANN",
+      "ISO3166_2": "GB-ANN",
+      "Latitude": 54.6897,
+      "Longitude": -6.1711,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Antrim and Newtownabbey\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Ards and North Down",
+      "Code": "AND",
+      "ISO3166_2": "GB-AND",
+      "Latitude": 54.649,
+      "Longitude": -5.5628,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Ards and North Down\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Argyll and Bute",
+      "Code": "AGB",
+      "ISO3166_2": "GB-AGB",
+      "Latitude": 56.4603,
+      "Longitude": -5.8618,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Argyll and Bute\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Armagh, Banbridge and Craigavon",
+      "Code": "ABC",
+      "ISO3166_2": "GB-ABC",
+      "Latitude": 54.3161,
+      "Longitude": -6.7189,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Armagh, Banbridge and Craigavon\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Barking and Dagenham",
+      "Code": "BDG",
+      "ISO3166_2": "GB-BDG",
+      "Latitude": 51.5541,
+      "Longitude": 0.1505,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Barking and Dagenham\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Barnet",
+      "Code": "BNE",
+      "ISO3166_2": "GB-BNE",
+      "Latitude": 51.605,
+      "Longitude": -0.2076,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Barnet\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Barnsley",
+      "Code": "BNS",
+      "ISO3166_2": "GB-BNS",
+      "Latitude": 53.5528,
+      "Longitude": -1.4828,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Barnsley\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Bath and North East Somerset",
+      "Code": "BAS",
+      "ISO3166_2": "GB-BAS",
+      "Latitude": 51.3563,
+      "Longitude": -2.4867,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Bath and North East Somerset\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Bedford",
+      "Code": "BDF",
+      "ISO3166_2": "GB-BDF",
+      "Latitude": 52.1887,
+      "Longitude": -0.4666,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Bedford\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Belfast",
+      "Code": "BFS",
+      "ISO3166_2": "GB-BFS",
+      "Latitude": 54.5976,
+      "Longitude": -5.9277,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Belfast\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Bexley",
+      "Code": "BEX",
+      "ISO3166_2": "GB-BEX",
+      "Latitude": 51.4402,
+      "Longitude": 0.1479,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Bexley\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Birmingham",
+      "Code": "BIR",
+      "ISO3166_2": "GB-BIR",
+      "Latitude": 52.4797,
+      "Longitude": -1.9027,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Birmingham\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Blackburn with Darwen",
+      "Code": "BBD",
+      "ISO3166_2": "GB-BBD",
+      "Latitude": 53.6958,
+      "Longitude": -2.4683,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Blackburn with Darwen\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Blackpool",
+      "Code": "BPL",
+      "ISO3166_2": "GB-BPL",
+      "Latitude": 53.8175,
+      "Longitude": -3.0357,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Blackpool\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Blaenau Gwent",
+      "Code": "BGW",
+      "ISO3166_2": "GB-BGW",
+      "Latitude": 51.7534,
+      "Longitude": -3.1848,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Blaenau Gwent\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Bolton",
+      "Code": "BOL",
+      "ISO3166_2": "GB-BOL",
+      "Latitude": 55.9208,
+      "Longitude": -2.7906,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Bolton\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Bournemouth, Christchurch and Poole",
+      "Code": "BCP",
+      "ISO3166_2": "GB-BCP",
+      "Latitude": 50.7457,
+      "Longitude": -2.1906,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Bournemouth, Christchurch and Poole\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Bracknell Forest",
+      "Code": "BRC",
+      "ISO3166_2": "GB-BRC",
+      "Latitude": 51.4003,
+      "Longitude": -0.7418,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Bracknell Forest\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Bradford",
+      "Code": "BRD",
+      "ISO3166_2": "GB-BRD",
+      "Latitude": 53.796,
+      "Longitude": -1.7594,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Bradford\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Brent",
+      "Code": "BEN",
+      "ISO3166_2": "GB-BEN",
+      "Latitude": 52.0189,
+      "Longitude": -0.7235,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Brent\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Bridgend",
+      "Code": "BGE",
+      "ISO3166_2": "GB-BGE",
+      "Latitude": 51.5083,
+      "Longitude": -3.5812,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Bridgend\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Brighton and Hove",
+      "Code": "BNH",
+      "ISO3166_2": "GB-BNH",
+      "Latitude": 50.8453,
+      "Longitude": -0.1497,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Brighton and Hove\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Bristol",
+      "Code": "BST",
+      "ISO3166_2": "GB-BST",
+      "Latitude": 51.4538,
+      "Longitude": -2.5973,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Bristol\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Bromley",
+      "Code": "BRY",
+      "ISO3166_2": "GB-BRY",
+      "Latitude": 51.368,
+      "Longitude": 0.0701,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Bromley\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Buckinghamshire",
+      "Code": "BKM",
+      "ISO3166_2": "GB-BKM",
+      "Latitude": 51.7835,
+      "Longitude": -0.8946,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Buckinghamshire\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Bury",
+      "Code": "BUR",
+      "ISO3166_2": "GB-BUR",
+      "Latitude": 53.5933,
+      "Longitude": -2.2966,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Bury\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Caerphilly",
+      "Code": "CAY",
+      "ISO3166_2": "GB-CAY",
+      "Latitude": 51.6724,
+      "Longitude": -3.1784,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Caerphilly\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Calderdale",
+      "Code": "CLD",
+      "ISO3166_2": "GB-CLD",
+      "Latitude": 53.7205,
+      "Longitude": -1.9623,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Calderdale\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Cambridgeshire",
+      "Code": "CAM",
+      "ISO3166_2": "GB-CAM",
+      "Latitude": 52.3333,
+      "Longitude": 0.0833,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Cambridgeshire\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Camden",
+      "Code": "CMD",
+      "ISO3166_2": "GB-CMD",
+      "Latitude": 51.5455,
+      "Longitude": -0.1628,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Camden\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Cardiff",
+      "Code": "CRF",
+      "ISO3166_2": "GB-CRF",
+      "Latitude": 51.4816,
+      "Longitude": -3.1791,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Cardiff\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Carmarthenshire",
+      "Code": "CMN",
+      "ISO3166_2": "GB-CMN",
+      "Latitude": 51.8937,
+      "Longitude": -4.2173,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Carmarthenshire\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Causeway Coast and Glens",
+      "Code": "CCG",
+      "ISO3166_2": "GB-CCG",
+      "Latitude": 55.0361,
+      "Longitude": -6.5909,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Causeway Coast and Glens\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Central Bedfordshire",
+      "Code": "CBF",
+      "ISO3166_2": "GB-CBF",
+      "Latitude": 51.998,
+      "Longitude": -0.4792,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Central Bedfordshire\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Ceredigion",
+      "Code": "CGN",
+      "ISO3166_2": "GB-CGN",
+      "Latitude": 52.2946,
+      "Longitude": -3.9528,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Ceredigion\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Cheshire East",
+      "Code": "CHE",
+      "ISO3166_2": "GB-CHE",
+      "Latitude": 53.1673,
+      "Longitude": -2.2929,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Cheshire East\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Cheshire West and Chester",
+      "Code": "CHW",
+      "ISO3166_2": "GB-CHW",
+      "Latitude": 53.1638,
+      "Longitude": -2.7285,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Cheshire West and Chester\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "City of Kingston upon Hull",
+      "Code": "KHL",
+      "ISO3166_2": "GB-KHL",
+      "Latitude": 53.7676,
+      "Longitude": -0.3274,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"City of Kingston upon Hull\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "City of Southampton",
+      "Code": "STH",
+      "ISO3166_2": "GB-STH",
+      "Latitude": 50.9002,
+      "Longitude": -1.414,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"City of Southampton\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Clackmannanshire",
+      "Code": "CLK",
+      "ISO3166_2": "GB-CLK",
+      "Latitude": 56.1664,
+      "Longitude": -3.7514,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Clackmannanshire\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Conwy",
+      "Code": "CWY",
+      "ISO3166_2": "GB-CWY",
+      "Latitude": 53.2812,
+      "Longitude": -3.8287,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Conwy\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Cornwall",
+      "Code": "CON",
+      "ISO3166_2": "GB-CON",
+      "Latitude": 50.4433,
+      "Longitude": -4.6247,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Cornwall\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Coventry",
+      "Code": "COV",
+      "ISO3166_2": "GB-COV",
+      "Latitude": 52.4068,
+      "Longitude": -1.5197,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Coventry\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Croydon",
+      "Code": "CRY",
+      "ISO3166_2": "GB-CRY",
+      "Latitude": 51.3713,
+      "Longitude": -0.102,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Croydon\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Cumbria",
+      "Code": "CMA",
+      "ISO3166_2": "GB-CMA",
+      "Latitude": 54.6143,
+      "Longitude": -2.9421,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Cumbria\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Darlington",
+      "Code": "DAL",
+      "ISO3166_2": "GB-DAL",
+      "Latitude": 54.5353,
+      "Longitude": -1.5529,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Darlington\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Denbighshire",
+      "Code": "DEN",
+      "ISO3166_2": "GB-DEN",
+      "Latitude": 53.1098,
+      "Longitude": -3.3671,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Denbighshire\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Derby",
+      "Code": "DER",
+      "ISO3166_2": "GB-DER",
+      "Latitude": 53.1667,
+      "Longitude": -1.5833,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Derby\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Derbyshire",
+      "Code": "DBY",
+      "ISO3166_2": "GB-DBY",
+      "Latitude": 53.1185,
+      "Longitude": -1.5566,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Derbyshire\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Derry City and Strabane",
+      "Code": "DRS",
+      "ISO3166_2": "GB-DRS",
+      "Latitude": 55.0047,
+      "Longitude": -7.3209,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Derry City and Strabane\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Devon",
+      "Code": "DEV",
+      "ISO3166_2": "GB-DEV",
+      "Latitude": 50.7241,
+      "Longitude": -3.6608,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Devon\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Doncaster",
+      "Code": "DNC",
+      "ISO3166_2": "GB-DNC",
+      "Latitude": 53.5228,
+      "Longitude": -1.1285,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Doncaster\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Dorset",
+      "Code": "DOR",
+      "ISO3166_2": "GB-DOR",
+      "Latitude": 50.7488,
+      "Longitude": -2.3445,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Dorset\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Dudley",
+      "Code": "DUD",
+      "ISO3166_2": "GB-DUD",
+      "Latitude": 55.0541,
+      "Longitude": -1.595,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Dudley\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Dumfries and Galloway",
+      "Code": "DGY",
+      "ISO3166_2": "GB-DGY",
+      "Latitude": 55.0833,
+      "Longitude": -3.8333,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Dumfries and Galloway\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Dundee",
+      "Code": "DND",
+      "ISO3166_2": "GB-DND",
+      "Latitude": 56.462,
+      "Longitude": -2.9707,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Dundee\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Durham",
+      "Code": "DUR",
+      "ISO3166_2": "GB-DUR",
+      "Latitude": 54.6667,
+      "Longitude": -1.75,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Durham\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Ealing",
+      "Code": "EAL",
+      "ISO3166_2": "GB-EAL",
+      "Latitude": 51.5251,
+      "Longitude": -0.3143,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Ealing\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "East Ayrshire",
+      "Code": "EAY",
+      "ISO3166_2": "GB-EAY",
+      "Latitude": 55.5,
+      "Longitude": -4.25,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"East Ayrshire\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "East Dunbartonshire",
+      "Code": "EDU",
+      "ISO3166_2": "GB-EDU",
+      "Latitude": 55.9333,
+      "Longitude": -4.2,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"East Dunbartonshire\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "East Lothian",
+      "Code": "ELN",
+      "ISO3166_2": "GB-ELN",
+      "Latitude": 55.9158,
+      "Longitude": -2.7512,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"East Lothian\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "East Renfrewshire",
+      "Code": "ERW",
+      "ISO3166_2": "GB-ERW",
+      "Latitude": 55.7495,
+      "Longitude": -4.3607,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"East Renfrewshire\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "East Riding of Yorkshire",
+      "Code": "ERY",
+      "ISO3166_2": "GB-ERY",
+      "Latitude": 53.8736,
+      "Longitude": -0.5348,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"East Riding of Yorkshire\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "East Sussex",
+      "Code": "ESX",
+      "ISO3166_2": "GB-ESX",
+      "Latitude": 50.9404,
+      "Longitude": 0.37,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"East Sussex\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Edinburgh",
+      "Code": "EDH",
+      "ISO3166_2": "GB-EDH",
+      "Latitude": 55.9533,
+      "Longitude": -3.1883,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Edinburgh\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Enfield",
+      "Code": "ENF",
+      "ISO3166_2": "GB-ENF",
+      "Latitude": 51.6526,
+      "Longitude": -0.0909,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Enfield\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "England",
+      "Code": "ENG",
+      "ISO3166_2": "GB-ENG",
+      "Latitude": 52.531,
+      "Longitude": -1.2649,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"England\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Essex",
+      "Code": "ESS",
+      "ISO3166_2": "GB-ESS",
+      "Latitude": 51.7705,
+      "Longitude": 0.4647,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Essex\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Falkirk",
+      "Code": "FAL",
+      "ISO3166_2": "GB-FAL",
+      "Latitude": 56.0019,
+      "Longitude": -3.7839,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Falkirk\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Fermanagh and Omagh",
+      "Code": "FMO",
+      "ISO3166_2": "GB-FMO",
+      "Latitude": 54.3559,
+      "Longitude": -7.5937,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Fermanagh and Omagh\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Fife",
+      "Code": "FIF",
+      "ISO3166_2": "GB-FIF",
+      "Latitude": 56.3333,
+      "Longitude": -3.0,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Fife\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Flintshire",
+      "Code": "FLN",
+      "ISO3166_2": "GB-FLN",
+      "Latitude": 53.2165,
+      "Longitude": -3.1402,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Flintshire\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Gateshead",
+      "Code": "GAT",
+      "ISO3166_2": "GB-GAT",
+      "Latitude": 54.9626,
+      "Longitude": -1.6019,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Gateshead\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Glasgow",
+      "Code": "GLG",
+      "ISO3166_2": "GB-GLG",
+      "Latitude": 55.8642,
+      "Longitude": -4.2518,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Glasgow\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Gloucestershire",
+      "Code": "GLS",
+      "ISO3166_2": "GB-GLS",
+      "Latitude": 51.8333,
+      "Longitude": -2.1667,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Gloucestershire\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Greenwich",
+      "Code": "GRE",
+      "ISO3166_2": "GB-GRE",
+      "Latitude": 51.4686,
+      "Longitude": 0.0488,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Greenwich\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Gwynedd",
+      "Code": "GWN",
+      "ISO3166_2": "GB-GWN",
+      "Latitude": 52.909,
+      "Longitude": -3.8335,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Gwynedd\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Hackney",
+      "Code": "HCK",
+      "ISO3166_2": "GB-HCK",
+      "Latitude": 51.5489,
+      "Longitude": -0.0477,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Hackney\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Halton",
+      "Code": "HAL",
+      "ISO3166_2": "GB-HAL",
+      "Latitude": 55.0049,
+      "Longitude": -2.0045,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Halton\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Hammersmith and Fulham",
+      "Code": "HMF",
+      "ISO3166_2": "GB-HMF",
+      "Latitude": 51.499,
+      "Longitude": -0.2291,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Hammersmith and Fulham\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Hampshire",
+      "Code": "HAM",
+      "ISO3166_2": "GB-HAM",
+      "Latitude": 51.045,
+      "Longitude": -1.2433,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Hampshire\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Haringey",
+      "Code": "HRY",
+      "ISO3166_2": "GB-HRY",
+      "Latitude": 51.5906,
+      "Longitude": -0.111,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Haringey\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Harrow",
+      "Code": "HRW",
+      "ISO3166_2": "GB-HRW",
+      "Latitude": 51.5882,
+      "Longitude": -0.3423,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Harrow\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Hartlepool",
+      "Code": "HPL",
+      "ISO3166_2": "GB-HPL",
+      "Latitude": 54.6917,
+      "Longitude": -1.2129,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Hartlepool\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Havering",
+      "Code": "HAV",
+      "ISO3166_2": "GB-HAV",
+      "Latitude": 51.5579,
+      "Longitude": 0.2498,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Havering\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Herefordshire",
+      "Code": "HEF",
+      "ISO3166_2": "GB-HEF",
+      "Latitude": 52.0833,
+      "Longitude": -2.75,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Herefordshire\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Hertfordshire",
+      "Code": "HRT",
+      "ISO3166_2": "GB-HRT",
+      "Latitude": 51.8401,
+      "Longitude": -0.0979,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Hertfordshire\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Highland",
+      "Code": "HLD",
+      "ISO3166_2": "GB-HLD",
+      "Latitude": 57.5066,
+      "Longitude": -5.0038,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Highland\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Hillingdon",
+      "Code": "HIL",
+      "ISO3166_2": "GB-HIL",
+      "Latitude": 51.5352,
+      "Longitude": -0.4481,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Hillingdon\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Hounslow",
+      "Code": "HNS",
+      "ISO3166_2": "GB-HNS",
+      "Latitude": 51.4617,
+      "Longitude": -0.3801,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Hounslow\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Inverclyde",
+      "Code": "IVC",
+      "ISO3166_2": "GB-IVC",
+      "Latitude": 55.9,
+      "Longitude": -4.75,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Inverclyde\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Isle of Anglesey",
+      "Code": "AGY",
+      "ISO3166_2": "GB-AGY",
+      "Latitude": 53.2807,
+      "Longitude": -4.69,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Isle of Anglesey\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Isle of Wight",
+      "Code": "IOW",
+      "ISO3166_2": "GB-IOW",
+      "Latitude": 50.671,
+      "Longitude": -1.3327,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Isle of Wight\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Isles of Scilly",
+      "Code": "IOS",
+      "ISO3166_2": "GB-IOS",
+      "Latitude": 49.9203,
+      "Longitude": -6.2929,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Isles of Scilly\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Islington",
+      "Code": "ISL",
+      "ISO3166_2": "GB-ISL",
+      "Latitude": 51.5465,
+      "Longitude": -0.1058,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Islington\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Kensington and Chelsea",
+      "Code": "KEC",
+      "ISO3166_2": "GB-KEC",
+      "Latitude": 51.4991,
+      "Longitude": -0.1938,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Kensington and Chelsea\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Kent",
+      "Code": "KEN",
+      "ISO3166_2": "GB-KEN",
+      "Latitude": 51.2071,
+      "Longitude": 0.721,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Kent\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Kingston upon Thames",
+      "Code": "KTT",
+      "ISO3166_2": "GB-KTT",
+      "Latitude": 51.3818,
+      "Longitude": -0.277,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Kingston upon Thames\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Kirklees",
+      "Code": "KIR",
+      "ISO3166_2": "GB-KIR",
+      "Latitude": 53.6423,
+      "Longitude": -1.7809,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Kirklees\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Knowsley",
+      "Code": "KWL",
+      "ISO3166_2": "GB-KWL",
+      "Latitude": 53.4546,
+      "Longitude": -2.8529,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Knowsley\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Lambeth",
+      "Code": "LBH",
+      "ISO3166_2": "GB-LBH",
+      "Latitude": 51.4952,
+      "Longitude": -0.1163,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Lambeth\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Lancashire",
+      "Code": "LAN",
+      "ISO3166_2": "GB-LAN",
+      "Latitude": 53.8612,
+      "Longitude": -2.5651,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Lancashire\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Leeds",
+      "Code": "LDS",
+      "ISO3166_2": "GB-LDS",
+      "Latitude": 53.8008,
+      "Longitude": -1.5491,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Leeds\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Leicester",
+      "Code": "LCE",
+      "ISO3166_2": "GB-LCE",
+      "Latitude": 52.6369,
+      "Longitude": -1.1398,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Leicester\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Leicestershire",
+      "Code": "LEC",
+      "ISO3166_2": "GB-LEC",
+      "Latitude": 52.6849,
+      "Longitude": -1.1848,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Leicestershire\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Lewisham",
+      "Code": "LEW",
+      "ISO3166_2": "GB-LEW",
+      "Latitude": 51.4535,
+      "Longitude": -0.0125,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Lewisham\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Lincolnshire",
+      "Code": "LIN",
+      "ISO3166_2": "GB-LIN",
+      "Latitude": 53.1282,
+      "Longitude": -0.1902,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Lincolnshire\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Lisburn and Castlereagh",
+      "Code": "LBC",
+      "ISO3166_2": "GB-LBC",
+      "Latitude": 54.4974,
+      "Longitude": -6.0331,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Lisburn and Castlereagh\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Liverpool",
+      "Code": "LIV",
+      "ISO3166_2": "GB-LIV",
+      "Latitude": 53.4072,
+      "Longitude": -2.9917,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Liverpool\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "London",
+      "Code": "LND",
+      "ISO3166_2": "GB-LND",
+      "Latitude": 51.5123,
+      "Longitude": -0.091,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"London\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Luton",
+      "Code": "LUT",
+      "ISO3166_2": "GB-LUT",
+      "Latitude": 51.8911,
+      "Longitude": -0.5103,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Luton\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Manchester",
+      "Code": "MAN",
+      "ISO3166_2": "GB-MAN",
+      "Latitude": 53.4808,
+      "Longitude": -2.2426,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Manchester\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Medway",
+      "Code": "MDW",
+      "ISO3166_2": "GB-MDW",
+      "Latitude": 51.4157,
+      "Longitude": 0.5687,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Medway\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Merthyr Tydfil",
+      "Code": "MTY",
+      "ISO3166_2": "GB-MTY",
+      "Latitude": 51.7467,
+      "Longitude": -3.3813,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Merthyr Tydfil\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Merton",
+      "Code": "MRT",
+      "ISO3166_2": "GB-MRT",
+      "Latitude": 51.4109,
+      "Longitude": -0.1881,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Merton\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Mid Ulster",
+      "Code": "MUL",
+      "ISO3166_2": "GB-MUL",
+      "Latitude": 54.6386,
+      "Longitude": -6.6926,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Mid Ulster\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Mid and East Antrim",
+      "Code": "MEA",
+      "ISO3166_2": "GB-MEA",
+      "Latitude": 54.8726,
+      "Longitude": -6.1502,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Mid and East Antrim\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Middlesbrough",
+      "Code": "MDB",
+      "ISO3166_2": "GB-MDB",
+      "Latitude": 54.5742,
+      "Longitude": -1.235,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Middlesbrough\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Midlothian",
+      "Code": "MLN",
+      "ISO3166_2": "GB-MLN",
+      "Latitude": 55.8333,
+      "Longitude": -3.0833,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Midlothian\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Milton Keynes",
+      "Code": "MIK",
+      "ISO3166_2": "GB-MIK",
+      "Latitude": 52.0407,
+      "Longitude": -0.7594,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Milton Keynes\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Monmouthshire",
+      "Code": "MON",
+      "ISO3166_2": "GB-MON",
+      "Latitude": 51.7501,
+      "Longitude": -2.8333,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Monmouthshire\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Moray",
+      "Code": "MRY",
+      "ISO3166_2": "GB-MRY",
+      "Latitude": 57.4167,
+      "Longitude": -3.25,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Moray\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Neath Port Talbot",
+      "Code": "NTL",
+      "ISO3166_2": "GB-NTL",
+      "Latitude": 51.669,
+      "Longitude": -3.7218,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Neath Port Talbot\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Newcastle upon Tyne",
+      "Code": "NET",
+      "ISO3166_2": "GB-NET",
+      "Latitude": 54.9783,
+      "Longitude": -1.6178,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Newcastle upon Tyne\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Newham",
+      "Code": "NWM",
+      "ISO3166_2": "GB-NWM",
+      "Latitude": 51.5255,
+      "Longitude": 0.0352,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Newham\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Newport",
+      "Code": "NWP",
+      "ISO3166_2": "GB-NWP",
+      "Latitude": 52.7689,
+      "Longitude": -2.3784,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Newport\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Newry, Mourne and Down",
+      "Code": "NMD",
+      "ISO3166_2": "GB-NMD",
+      "Latitude": 54.1775,
+      "Longitude": -6.3375,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Newry, Mourne and Down\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Norfolk",
+      "Code": "NFK",
+      "ISO3166_2": "GB-NFK",
+      "Latitude": 52.6667,
+      "Longitude": 1.0,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Norfolk\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "North Ayrshire",
+      "Code": "NAY",
+      "ISO3166_2": "GB-NAY",
+      "Latitude": 55.7279,
+      "Longitude": -4.7272,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"North Ayrshire\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "North East Lincolnshire",
+      "Code": "NEL",
+      "ISO3166_2": "GB-NEL",
+      "Latitude": 53.5368,
+      "Longitude": -0.0937,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"North East Lincolnshire\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "North Lanarkshire",
+      "Code": "NLK",
+      "ISO3166_2": "GB-NLK",
+      "Latitude": 55.8831,
+      "Longitude": -3.9462,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"North Lanarkshire\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "North Lincolnshire",
+      "Code": "NLN",
+      "ISO3166_2": "GB-NLN",
+      "Latitude": 53.5897,
+      "Longitude": -0.6023,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"North Lincolnshire\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "North Northamptonshire",
+      "Code": "NNH",
+      "ISO3166_2": "GB-NNH",
+      "Latitude": 52.4171,
+      "Longitude": -0.9536,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"North Northamptonshire\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "North Somerset",
+      "Code": "NSM",
+      "ISO3166_2": "GB-NSM",
+      "Latitude": 51.3966,
+      "Longitude": -2.7691,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"North Somerset\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "North Tyneside",
+      "Code": "NTY",
+      "ISO3166_2": "GB-NTY",
+      "Latitude": 55.0298,
+      "Longitude": -1.5083,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"North Tyneside\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "North Yorkshire",
+      "Code": "NYK",
+      "ISO3166_2": "GB-NYK",
+      "Latitude": 54.0916,
+      "Longitude": -1.5359,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"North Yorkshire\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Northern Ireland",
+      "Code": "NIR",
+      "ISO3166_2": "GB-NIR",
+      "Latitude": 54.586,
+      "Longitude": -6.9592,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Northern Ireland\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Northumberland",
+      "Code": "NBL",
+      "ISO3166_2": "GB-NBL",
+      "Latitude": 55.25,
+      "Longitude": -2.0006,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Northumberland\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Nottingham",
+      "Code": "NGM",
+      "ISO3166_2": "GB-NGM",
+      "Latitude": 52.9548,
+      "Longitude": -1.1581,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Nottingham\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Nottinghamshire",
+      "Code": "NTT",
+      "ISO3166_2": "GB-NTT",
+      "Latitude": 53.1459,
+      "Longitude": -1.0215,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Nottinghamshire\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Oldham",
+      "Code": "OLD",
+      "ISO3166_2": "GB-OLD",
+      "Latitude": 53.5416,
+      "Longitude": -2.1148,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Oldham\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Orkney Islands",
+      "Code": "ORK",
+      "ISO3166_2": "GB-ORK",
+      "Latitude": 58.9418,
+      "Longitude": -3.1297,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Orkney Islands\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Outer Hebrides",
+      "Code": "ELS",
+      "ISO3166_2": "GB-ELS",
+      "Latitude": 57.6667,
+      "Longitude": -7.1667,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Outer Hebrides\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Oxfordshire",
+      "Code": "OXF",
+      "ISO3166_2": "GB-OXF",
+      "Latitude": 51.8333,
+      "Longitude": -1.25,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Oxfordshire\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Pembrokeshire",
+      "Code": "PEM",
+      "ISO3166_2": "GB-PEM",
+      "Latitude": 51.8339,
+      "Longitude": -4.9167,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Pembrokeshire\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Perth and Kinross",
+      "Code": "PKN",
+      "ISO3166_2": "GB-PKN",
+      "Latitude": 56.5,
+      "Longitude": -3.75,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Perth and Kinross\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Peterborough",
+      "Code": "PTE",
+      "ISO3166_2": "GB-PTE",
+      "Latitude": 52.5726,
+      "Longitude": -0.2427,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Peterborough\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Plymouth",
+      "Code": "PLY",
+      "ISO3166_2": "GB-PLY",
+      "Latitude": 50.3714,
+      "Longitude": -4.1424,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Plymouth\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Portsmouth",
+      "Code": "POR",
+      "ISO3166_2": "GB-POR",
+      "Latitude": 50.8,
+      "Longitude": -1.0906,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Portsmouth\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Powys",
+      "Code": "POW",
+      "ISO3166_2": "GB-POW",
+      "Latitude": 52.3271,
+      "Longitude": -3.3553,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Powys\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Reading",
+      "Code": "RDG",
+      "ISO3166_2": "GB-RDG",
+      "Latitude": 51.4515,
+      "Longitude": -0.9836,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Reading\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Redbridge",
+      "Code": "RDB",
+      "ISO3166_2": "GB-RDB",
+      "Latitude": 51.5766,
+      "Longitude": 0.0453,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Redbridge\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Redcar and Cleveland",
+      "Code": "RCC",
+      "ISO3166_2": "GB-RCC",
+      "Latitude": 54.5679,
+      "Longitude": -1.0055,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Redcar and Cleveland\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Renfrewshire",
+      "Code": "RFW",
+      "ISO3166_2": "GB-RFW",
+      "Latitude": 55.8333,
+      "Longitude": -4.5,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Renfrewshire\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Rhondda Cynon Taf",
+      "Code": "RCT",
+      "ISO3166_2": "GB-RCT",
+      "Latitude": 51.6652,
+      "Longitude": -3.4578,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Rhondda Cynon Taf\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Richmond upon Thames",
+      "Code": "RIC",
+      "ISO3166_2": "GB-RIC",
+      "Latitude": 51.4406,
+      "Longitude": -0.3076,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Richmond upon Thames\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Rochdale",
+      "Code": "RCH",
+      "ISO3166_2": "GB-RCH",
+      "Latitude": 53.6097,
+      "Longitude": -2.1561,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Rochdale\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Rotherham",
+      "Code": "ROT",
+      "ISO3166_2": "GB-ROT",
+      "Latitude": 53.4326,
+      "Longitude": -1.3635,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Rotherham\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Rutland",
+      "Code": "RUT",
+      "ISO3166_2": "GB-RUT",
+      "Latitude": 52.6423,
+      "Longitude": -0.6633,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Rutland\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Salford",
+      "Code": "SLF",
+      "ISO3166_2": "GB-SLF",
+      "Latitude": 53.4875,
+      "Longitude": -2.2901,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Salford\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Sandwell",
+      "Code": "SAW",
+      "ISO3166_2": "GB-SAW",
+      "Latitude": 52.5148,
+      "Longitude": -2.0135,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Sandwell\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Scotland",
+      "Code": "SCT",
+      "ISO3166_2": "GB-SCT",
+      "Latitude": 56.7861,
+      "Longitude": -4.1141,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Scotland\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Scottish Borders",
+      "Code": "SCB",
+      "ISO3166_2": "GB-SCB",
+      "Latitude": 55.5833,
+      "Longitude": -2.8333,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Scottish Borders\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Sefton",
+      "Code": "SFT",
+      "ISO3166_2": "GB-SFT",
+      "Latitude": 53.5034,
+      "Longitude": -2.9704,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Sefton\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Sheffield",
+      "Code": "SHF",
+      "ISO3166_2": "GB-SHF",
+      "Latitude": 53.3807,
+      "Longitude": -1.4702,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Sheffield\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Shetland Islands",
+      "Code": "ZET",
+      "ISO3166_2": "GB-ZET",
+      "Latitude": 60.3333,
+      "Longitude": -1.3333,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Shetland Islands\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Shropshire",
+      "Code": "SHR",
+      "ISO3166_2": "GB-SHR",
+      "Latitude": 52.6523,
+      "Longitude": -2.7959,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Shropshire\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Slough",
+      "Code": "SLG",
+      "ISO3166_2": "GB-SLG",
+      "Latitude": 51.5105,
+      "Longitude": -0.595,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Slough\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Solihull",
+      "Code": "SOL",
+      "ISO3166_2": "GB-SOL",
+      "Latitude": 52.4118,
+      "Longitude": -1.7776,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Solihull\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Somerset",
+      "Code": "SOM",
+      "ISO3166_2": "GB-SOM",
+      "Latitude": 51.0833,
+      "Longitude": -3.0,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Somerset\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "South Ayrshire",
+      "Code": "SAY",
+      "ISO3166_2": "GB-SAY",
+      "Latitude": 55.2998,
+      "Longitude": -4.646,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"South Ayrshire\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "South Gloucestershire",
+      "Code": "SGC",
+      "ISO3166_2": "GB-SGC",
+      "Latitude": 51.5492,
+      "Longitude": -2.481,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"South Gloucestershire\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "South Lanarkshire",
+      "Code": "SLK",
+      "ISO3166_2": "GB-SLK",
+      "Latitude": 55.5832,
+      "Longitude": -3.8332,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"South Lanarkshire\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "South Tyneside",
+      "Code": "STY",
+      "ISO3166_2": "GB-STY",
+      "Latitude": 54.9637,
+      "Longitude": -1.4419,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"South Tyneside\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Southend-on-Sea",
+      "Code": "SOS",
+      "ISO3166_2": "GB-SOS",
+      "Latitude": 51.5459,
+      "Longitude": 0.7077,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Southend-on-Sea\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Southwark",
+      "Code": "SWK",
+      "ISO3166_2": "GB-SWK",
+      "Latitude": 51.4653,
+      "Longitude": -0.069,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Southwark\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "St Helens",
+      "Code": "SHN",
+      "ISO3166_2": "GB-SHN",
+      "Latitude": 53.4535,
+      "Longitude": -2.7343,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"St Helens\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Staffordshire",
+      "Code": "STS",
+      "ISO3166_2": "GB-STS",
+      "Latitude": 52.8247,
+      "Longitude": -2.0075,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Staffordshire\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Stirling",
+      "Code": "STG",
+      "ISO3166_2": "GB-STG",
+      "Latitude": 56.1165,
+      "Longitude": -3.9369,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Stirling\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Stockport",
+      "Code": "SKP",
+      "ISO3166_2": "GB-SKP",
+      "Latitude": 53.4106,
+      "Longitude": -2.1575,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Stockport\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Stockton-on-Tees",
+      "Code": "STT",
+      "ISO3166_2": "GB-STT",
+      "Latitude": 54.5641,
+      "Longitude": -1.3129,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Stockton-on-Tees\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Stoke-on-Trent",
+      "Code": "STE",
+      "ISO3166_2": "GB-STE",
+      "Latitude": 53.0162,
+      "Longitude": -2.1813,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Stoke-on-Trent\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Suffolk",
+      "Code": "SFK",
+      "ISO3166_2": "GB-SFK",
+      "Latitude": 52.241,
+      "Longitude": 1.0466,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Suffolk\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Sunderland",
+      "Code": "SND",
+      "ISO3166_2": "GB-SND",
+      "Latitude": 54.9059,
+      "Longitude": -1.3829,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Sunderland\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Surrey",
+      "Code": "SRY",
+      "ISO3166_2": "GB-SRY",
+      "Latitude": 51.2715,
+      "Longitude": -0.3415,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Surrey\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Sutton",
+      "Code": "STN",
+      "ISO3166_2": "GB-STN",
+      "Latitude": 51.3574,
+      "Longitude": -0.1753,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Sutton\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Swansea",
+      "Code": "SWA",
+      "ISO3166_2": "GB-SWA",
+      "Latitude": 51.6214,
+      "Longitude": -3.9436,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Swansea\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Swindon",
+      "Code": "SWD",
+      "ISO3166_2": "GB-SWD",
+      "Latitude": 51.5558,
+      "Longitude": -1.7797,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Swindon\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Tameside",
+      "Code": "TAM",
+      "ISO3166_2": "GB-TAM",
+      "Latitude": 53.4806,
+      "Longitude": -2.081,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Tameside\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Telford and Wrekin",
+      "Code": "TFW",
+      "ISO3166_2": "GB-TFW",
+      "Latitude": 52.7214,
+      "Longitude": -2.5009,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Telford and Wrekin\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Thurrock",
+      "Code": "THR",
+      "ISO3166_2": "GB-THR",
+      "Latitude": 51.508,
+      "Longitude": 0.3963,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Thurrock\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Torbay",
+      "Code": "TOB",
+      "ISO3166_2": "GB-TOB",
+      "Latitude": 50.4392,
+      "Longitude": -3.537,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Torbay\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Torfaen",
+      "Code": "TOF",
+      "ISO3166_2": "GB-TOF",
+      "Latitude": 51.7002,
+      "Longitude": -3.0446,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Torfaen\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Tower Hamlets",
+      "Code": "TWH",
+      "ISO3166_2": "GB-TWH",
+      "Latitude": 51.1289,
+      "Longitude": 1.2987,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Tower Hamlets\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Trafford",
+      "Code": "TRF",
+      "ISO3166_2": "GB-TRF",
+      "Latitude": 53.4189,
+      "Longitude": -2.3593,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Trafford\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Vale of Glamorgan",
+      "Code": "VGL",
+      "ISO3166_2": "GB-VGL",
+      "Latitude": 51.4471,
+      "Longitude": -3.3989,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Vale of Glamorgan\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Wakefield",
+      "Code": "WKF",
+      "ISO3166_2": "GB-WKF",
+      "Latitude": 53.683,
+      "Longitude": -1.4967,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Wakefield\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Wales",
+      "Code": "WLS",
+      "ISO3166_2": "GB-WLS",
+      "Latitude": 52.2928,
+      "Longitude": -3.7389,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Wales\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Walsall",
+      "Code": "WLL",
+      "ISO3166_2": "GB-WLL",
+      "Latitude": 52.5862,
+      "Longitude": -1.9829,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Walsall\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Waltham Forest",
+      "Code": "WFT",
+      "ISO3166_2": "GB-WFT",
+      "Latitude": 51.5983,
+      "Longitude": -0.0177,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Waltham Forest\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Wandsworth",
+      "Code": "WND",
+      "ISO3166_2": "GB-WND",
+      "Latitude": 51.4568,
+      "Longitude": -0.1897,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Wandsworth\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Warrington",
+      "Code": "WRT",
+      "ISO3166_2": "GB-WRT",
+      "Latitude": 53.3899,
+      "Longitude": -2.5943,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Warrington\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Warwickshire",
+      "Code": "WAR",
+      "ISO3166_2": "GB-WAR",
+      "Latitude": 52.3213,
+      "Longitude": -1.5537,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Warwickshire\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "West Berkshire",
+      "Code": "WBK",
+      "ISO3166_2": "GB-WBK",
+      "Latitude": 51.4463,
+      "Longitude": -1.2759,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"West Berkshire\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "West Dunbartonshire",
+      "Code": "WDU",
+      "ISO3166_2": "GB-WDU",
+      "Latitude": 55.9667,
+      "Longitude": -4.5333,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"West Dunbartonshire\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "West Lothian",
+      "Code": "WLN",
+      "ISO3166_2": "GB-WLN",
+      "Latitude": 55.9167,
+      "Longitude": -3.5,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"West Lothian\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "West Northamptonshire",
+      "Code": "WNH",
+      "ISO3166_2": "GB-WNH",
+      "Latitude": 52.2269,
+      "Longitude": -1.3483,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"West Northamptonshire\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "West Sussex",
+      "Code": "WSX",
+      "ISO3166_2": "GB-WSX",
+      "Latitude": 50.9446,
+      "Longitude": -0.5278,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"West Sussex\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Westminster",
+      "Code": "WSM",
+      "ISO3166_2": "GB-WSM",
+      "Latitude": 51.4973,
+      "Longitude": -0.1371,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Westminster\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Wigan",
+      "Code": "WGN",
+      "ISO3166_2": "GB-WGN",
+      "Latitude": 53.5457,
+      "Longitude": -2.6265,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Wigan\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Wiltshire",
+      "Code": "WIL",
+      "ISO3166_2": "GB-WIL",
+      "Latitude": 51.3242,
+      "Longitude": -1.9032,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Wiltshire\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Windsor and Maidenhead",
+      "Code": "WNM",
+      "ISO3166_2": "GB-WNM",
+      "Latitude": 51.4803,
+      "Longitude": -0.677,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Windsor and Maidenhead\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Wirral",
+      "Code": "WRL",
+      "ISO3166_2": "GB-WRL",
+      "Latitude": 53.341,
+      "Longitude": -3.0501,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Wirral\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Wokingham",
+      "Code": "WOK",
+      "ISO3166_2": "GB-WOK",
+      "Latitude": 51.4105,
+      "Longitude": -0.8339,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Wokingham\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Wolverhampton",
+      "Code": "WLV",
+      "ISO3166_2": "GB-WLV",
+      "Latitude": 52.5848,
+      "Longitude": -2.1276,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Wolverhampton\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Worcestershire",
+      "Code": "WOR",
+      "ISO3166_2": "GB-WOR",
+      "Latitude": 52.2109,
+      "Longitude": -2.157,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Worcestershire\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "Wrexham",
+      "Code": "WRX",
+      "ISO3166_2": "GB-WRX",
+      "Latitude": 53.0465,
+      "Longitude": -2.9938,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Wrexham\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "GB",
+      "Name": "York",
+      "Code": "YOR",
+      "ISO3166_2": "GB-YOR",
+      "Latitude": 53.96,
+      "Longitude": -1.0873,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"York\"]"
+    }
+  }
+]

@@ -2,13 +2,409 @@
   {
     "fields": {
       "_CountryISO2": "US",
+      "Name": "Alabama",
+      "Code": "AL",
+      "ISO3166_2": "US-AL",
+      "Latitude": 33.2589,
+      "Longitude": -86.8295,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Alabama\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "US",
+      "Name": "Alaska",
+      "Code": "AK",
+      "ISO3166_2": "US-AK",
+      "Latitude": 64.446,
+      "Longitude": -149.6809,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Alaska\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "US",
+      "Name": "American Samoa",
+      "Code": "AS",
+      "ISO3166_2": "US-AS",
+      "Latitude": -14.2971,
+      "Longitude": -170.7131,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"American Samoa\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "US",
+      "Name": "Arizona",
+      "Code": "AZ",
+      "ISO3166_2": "US-AZ",
+      "Latitude": 34.3953,
+      "Longitude": -111.7633,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Arizona\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "US",
+      "Name": "Arkansas",
+      "Code": "AR",
+      "ISO3166_2": "US-AR",
+      "Latitude": 35.2049,
+      "Longitude": -92.4479,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Arkansas\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "US",
       "Name": "California",
       "Code": "CA",
       "ISO3166_2": "US-CA",
-      "Latitude": 36.7783,
-      "Longitude": -119.4179,
-      "BoundaryGeoJSON": "@file:boundaries/US-CA.geojson",
-      "CommonAliases": "[\"California\",\"Calif.\",\"Cal.\"]"
+      "Latitude": 36.7015,
+      "Longitude": -118.756,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"California\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "US",
+      "Name": "Colorado",
+      "Code": "CO",
+      "ISO3166_2": "US-CO",
+      "Latitude": 38.7252,
+      "Longitude": -105.6077,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Colorado\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "US",
+      "Name": "Connecticut",
+      "Code": "CT",
+      "ISO3166_2": "US-CT",
+      "Latitude": 41.65,
+      "Longitude": -72.7342,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Connecticut\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "US",
+      "Name": "Delaware",
+      "Code": "DE",
+      "ISO3166_2": "US-DE",
+      "Latitude": 38.692,
+      "Longitude": -75.4013,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Delaware\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "US",
+      "Name": "District of Columbia",
+      "Code": "DC",
+      "ISO3166_2": "US-DC",
+      "Latitude": 38.895,
+      "Longitude": -77.0365,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"District of Columbia\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "US",
+      "Name": "Florida",
+      "Code": "FL",
+      "ISO3166_2": "US-FL",
+      "Latitude": 27.7568,
+      "Longitude": -81.464,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Florida\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "US",
+      "Name": "Georgia",
+      "Code": "GA",
+      "ISO3166_2": "US-GA",
+      "Latitude": 32.3294,
+      "Longitude": -83.1137,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Georgia\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "US",
+      "Name": "Guam",
+      "Code": "GU",
+      "ISO3166_2": "US-GU",
+      "Latitude": 13.45,
+      "Longitude": 144.7652,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Guam\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "US",
+      "Name": "Hawaii",
+      "Code": "HI",
+      "ISO3166_2": "US-HI",
+      "Latitude": 19.6273,
+      "Longitude": -155.5646,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Hawaii\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "US",
+      "Name": "Idaho",
+      "Code": "ID",
+      "ISO3166_2": "US-ID",
+      "Latitude": 43.6448,
+      "Longitude": -114.0154,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Idaho\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "US",
+      "Name": "Illinois",
+      "Code": "IL",
+      "ISO3166_2": "US-IL",
+      "Latitude": 40.0797,
+      "Longitude": -89.4337,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Illinois\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "US",
+      "Name": "Indiana",
+      "Code": "IN",
+      "ISO3166_2": "US-IN",
+      "Latitude": 40.327,
+      "Longitude": -86.1747,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Indiana\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "US",
+      "Name": "Iowa",
+      "Code": "IA",
+      "ISO3166_2": "US-IA",
+      "Latitude": 41.9217,
+      "Longitude": -93.3123,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Iowa\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "US",
+      "Name": "Kansas",
+      "Code": "KS",
+      "ISO3166_2": "US-KS",
+      "Latitude": 38.2731,
+      "Longitude": -98.5822,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Kansas\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "US",
+      "Name": "Kentucky",
+      "Code": "KY",
+      "ISO3166_2": "US-KY",
+      "Latitude": 37.5726,
+      "Longitude": -85.1551,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Kentucky\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "US",
+      "Name": "Louisiana",
+      "Code": "LA",
+      "ISO3166_2": "US-LA",
+      "Latitude": 30.8704,
+      "Longitude": -92.0071,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Louisiana\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "US",
+      "Name": "Maine",
+      "Code": "ME",
+      "ISO3166_2": "US-ME",
+      "Latitude": 45.7091,
+      "Longitude": -68.859,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Maine\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "US",
+      "Name": "Maryland",
+      "Code": "MD",
+      "ISO3166_2": "US-MD",
+      "Latitude": 39.5162,
+      "Longitude": -76.9382,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Maryland\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "US",
+      "Name": "Massachusetts",
+      "Code": "MA",
+      "ISO3166_2": "US-MA",
+      "Latitude": 42.3789,
+      "Longitude": -72.0324,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Massachusetts\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "US",
+      "Name": "Michigan",
+      "Code": "MI",
+      "ISO3166_2": "US-MI",
+      "Latitude": 43.6212,
+      "Longitude": -84.6824,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Michigan\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "US",
+      "Name": "Minnesota",
+      "Code": "MN",
+      "ISO3166_2": "US-MN",
+      "Latitude": 45.9897,
+      "Longitude": -94.6113,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Minnesota\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "US",
+      "Name": "Mississippi",
+      "Code": "MS",
+      "ISO3166_2": "US-MS",
+      "Latitude": 32.9715,
+      "Longitude": -89.7348,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Mississippi\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "US",
+      "Name": "Missouri",
+      "Code": "MO",
+      "ISO3166_2": "US-MO",
+      "Latitude": 38.7605,
+      "Longitude": -92.5618,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Missouri\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "US",
+      "Name": "Montana",
+      "Code": "MT",
+      "ISO3166_2": "US-MT",
+      "Latitude": 47.3753,
+      "Longitude": -109.6388,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Montana\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "US",
+      "Name": "Nebraska",
+      "Code": "NE",
+      "ISO3166_2": "US-NE",
+      "Latitude": 41.737,
+      "Longitude": -99.5874,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Nebraska\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "US",
+      "Name": "Nevada",
+      "Code": "NV",
+      "ISO3166_2": "US-NV",
+      "Latitude": 39.5159,
+      "Longitude": -116.8537,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Nevada\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "US",
+      "Name": "New Hampshire",
+      "Code": "NH",
+      "ISO3166_2": "US-NH",
+      "Latitude": 43.4849,
+      "Longitude": -71.6554,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"New Hampshire\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "US",
+      "Name": "New Jersey",
+      "Code": "NJ",
+      "ISO3166_2": "US-NJ",
+      "Latitude": 40.0757,
+      "Longitude": -74.4042,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"New Jersey\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "US",
+      "Name": "New Mexico",
+      "Code": "NM",
+      "ISO3166_2": "US-NM",
+      "Latitude": 34.5802,
+      "Longitude": -105.996,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"New Mexico\"]"
     }
   },
   {
@@ -18,9 +414,153 @@
       "Code": "NY",
       "ISO3166_2": "US-NY",
       "Latitude": 40.7128,
-      "Longitude": -74.0060,
-      "BoundaryGeoJSON": "@file:boundaries/US-NY.geojson",
-      "CommonAliases": "[\"New York\",\"NY\"]"
+      "Longitude": -74.006,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"New York\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "US",
+      "Name": "North Carolina",
+      "Code": "NC",
+      "ISO3166_2": "US-NC",
+      "Latitude": 35.673,
+      "Longitude": -79.0393,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"North Carolina\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "US",
+      "Name": "North Dakota",
+      "Code": "ND",
+      "ISO3166_2": "US-ND",
+      "Latitude": 47.6201,
+      "Longitude": -100.5407,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"North Dakota\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "US",
+      "Name": "Northern Mariana Islands",
+      "Code": "MP",
+      "ISO3166_2": "US-MP",
+      "Latitude": 15.1754,
+      "Longitude": 145.7379,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Northern Mariana Islands\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "US",
+      "Name": "Ohio",
+      "Code": "OH",
+      "ISO3166_2": "US-OH",
+      "Latitude": 40.2254,
+      "Longitude": -82.6881,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Ohio\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "US",
+      "Name": "Oklahoma",
+      "Code": "OK",
+      "ISO3166_2": "US-OK",
+      "Latitude": 35.5545,
+      "Longitude": -97.4366,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Oklahoma\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "US",
+      "Name": "Oregon",
+      "Code": "OR",
+      "ISO3166_2": "US-OR",
+      "Latitude": 43.9793,
+      "Longitude": -120.7373,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Oregon\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "US",
+      "Name": "Pennsylvania",
+      "Code": "PA",
+      "ISO3166_2": "US-PA",
+      "Latitude": 40.97,
+      "Longitude": -77.7279,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Pennsylvania\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "US",
+      "Name": "Puerto Rico",
+      "Code": "PR",
+      "ISO3166_2": "US-PR",
+      "Latitude": 18.2248,
+      "Longitude": -66.4858,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Puerto Rico\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "US",
+      "Name": "Rhode Island",
+      "Code": "RI",
+      "ISO3166_2": "US-RI",
+      "Latitude": 41.7962,
+      "Longitude": -71.5992,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Rhode Island\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "US",
+      "Name": "South Carolina",
+      "Code": "SC",
+      "ISO3166_2": "US-SC",
+      "Latitude": 33.6874,
+      "Longitude": -80.4364,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"South Carolina\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "US",
+      "Name": "South Dakota",
+      "Code": "SD",
+      "ISO3166_2": "US-SD",
+      "Latitude": 44.6472,
+      "Longitude": -100.3488,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"South Dakota\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "US",
+      "Name": "Tennessee",
+      "Code": "TN",
+      "ISO3166_2": "US-TN",
+      "Latitude": 35.773,
+      "Longitude": -86.282,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Tennessee\"]"
     }
   },
   {
@@ -29,34 +569,118 @@
       "Name": "Texas",
       "Code": "TX",
       "ISO3166_2": "US-TX",
-      "Latitude": 31.9686,
-      "Longitude": -99.9018,
-      "BoundaryGeoJSON": "@file:boundaries/US-TX.geojson",
-      "CommonAliases": "[\"Texas\",\"Tex.\"]"
+      "Latitude": 31.2639,
+      "Longitude": -98.5456,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Texas\"]"
     }
   },
   {
     "fields": {
       "_CountryISO2": "US",
-      "Name": "Florida",
-      "Code": "FL",
-      "ISO3166_2": "US-FL",
-      "Latitude": 27.6648,
-      "Longitude": -81.5158,
-      "BoundaryGeoJSON": "@file:boundaries/US-FL.geojson",
-      "CommonAliases": "[\"Florida\",\"Fla.\"]"
+      "Name": "United States Minor Outlying Islands",
+      "Code": "UM",
+      "ISO3166_2": "US-UM",
+      "Latitude": 28.2361,
+      "Longitude": -177.3686,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"United States Minor Outlying Islands\"]"
     }
   },
   {
     "fields": {
       "_CountryISO2": "US",
-      "Name": "Illinois",
-      "Code": "IL",
-      "ISO3166_2": "US-IL",
-      "Latitude": 40.6331,
-      "Longitude": -89.3985,
-      "BoundaryGeoJSON": "@file:boundaries/US-IL.geojson",
-      "CommonAliases": "[\"Illinois\",\"Ill.\"]"
+      "Name": "United States Virgin Islands",
+      "Code": "VI",
+      "ISO3166_2": "US-VI",
+      "Latitude": 17.7892,
+      "Longitude": -64.7081,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"United States Virgin Islands\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "US",
+      "Name": "Utah",
+      "Code": "UT",
+      "ISO3166_2": "US-UT",
+      "Latitude": 39.4225,
+      "Longitude": -111.7144,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Utah\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "US",
+      "Name": "Vermont",
+      "Code": "VT",
+      "ISO3166_2": "US-VT",
+      "Latitude": 44.5991,
+      "Longitude": -72.5003,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Vermont\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "US",
+      "Name": "Virginia",
+      "Code": "VA",
+      "ISO3166_2": "US-VA",
+      "Latitude": 37.1232,
+      "Longitude": -78.4928,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Virginia\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "US",
+      "Name": "Washington",
+      "Code": "WA",
+      "ISO3166_2": "US-WA",
+      "Latitude": 47.2868,
+      "Longitude": -120.2126,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Washington\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "US",
+      "Name": "West Virginia",
+      "Code": "WV",
+      "ISO3166_2": "US-WV",
+      "Latitude": 38.4758,
+      "Longitude": -80.8408,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"West Virginia\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "US",
+      "Name": "Wisconsin",
+      "Code": "WI",
+      "ISO3166_2": "US-WI",
+      "Latitude": 44.4309,
+      "Longitude": -89.6885,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Wisconsin\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "US",
+      "Name": "Wyoming",
+      "Code": "WY",
+      "ISO3166_2": "US-WY",
+      "Latitude": 43.17,
+      "Longitude": -107.5685,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Wyoming\"]"
     }
   }
 ]
