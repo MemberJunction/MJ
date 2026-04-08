@@ -78,14 +78,16 @@
     display: none;
 }
 
-/* Leaflet popup styling to match MJ design tokens */
+/* Leaflet popup styling — use hardcoded colors, NOT design tokens.
+   Leaflet has its own light theme and popups are always white background.
+   Using --mj-text-primary would make text white in dark mode = invisible. */
 :host ::ng-deep .leaflet-popup-content-wrapper {
     border-radius: 6px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
 :host ::ng-deep .leaflet-popup-content {
-    color: var(--mj-text-primary);
+    color: #1e293b;
     font-size: 13px;
     margin: 10px 14px;
 }
