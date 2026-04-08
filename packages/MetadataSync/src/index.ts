@@ -15,7 +15,6 @@ export { JsonWriteHelper } from './lib/json-write-helper';
 export { FileWriteBatch } from './lib/file-write-batch';
 export { JsonPreprocessor } from './lib/json-preprocessor';
 export type { IncludeDirective } from './lib/json-preprocessor';
-export { FileLocalStorageProvider } from './lib/FileLocalStorageProvider';
 export { SyncStateManager } from './lib/sync-state-manager';
 export type { SyncState } from './lib/sync-state-manager';
 

@@ -8,13 +8,12 @@
  */
 
 import sql from 'mssql';
-import { SQLServerDataProvider, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { SQLServerDataProvider, SQLServerProviderConfigData, UserCache, setupSQLServerClient } from '@memberjunction/sqlserver-dataprovider';
 import type { MJConfig } from '../config';
 import * as fs from 'fs';
 import * as path from 'path';
-import { DatabaseProviderBase, SetProvider, StartupManager, UserInfo, LogError } from '@memberjunction/core';
+import { DatabaseProviderBase, UserInfo } from '@memberjunction/core';
 import { minimatch } from 'minimatch';
-import { FileLocalStorageProvider } from './FileLocalStorageProvider';
 
 /** Global ConnectionPool instance for connection lifecycle management */
 let globalPool: sql.ConnectionPool | null = null;
@@ -85,19 +84,8 @@ export async function initializeProvider(config: MJConfig): Promise<SQLServerDat
       config.mjCoreSchema || '__mj' 
     );
     
-    // Initialize provider with file-based metadata cache so the warm-start
-    // path in providerBase.ts can load from disk instead of 26 SQL queries.
-    // This replaces setupSQLServerClient() to inject the cache before Config().
-    const provider = new SQLServerDataProvider();
-    provider.SetLocalStorageProvider(new FileLocalStorageProvider());
-    await provider.Config(providerConfig);
-    SetProvider(provider);
-    await UserCache.Instance.Refresh(pool);
-    const sysUser = UserCache.Instance.GetSystemUser();
-    const backupSysUser = UserCache.Instance.Users.find((u: any) => u.IsActive && u.Type === 'Owner');
-    await StartupManager.Instance.Startup(false, sysUser || backupSysUser, provider);
-
-    globalProvider = provider;
+    // Use setupSQLServerClient to properly initialize
+    globalProvider = await setupSQLServerClient(providerConfig);
     return globalProvider;
   })();
   
