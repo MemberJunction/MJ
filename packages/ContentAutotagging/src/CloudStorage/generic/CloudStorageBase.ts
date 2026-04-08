@@ -37,7 +37,7 @@ export abstract class CloudStorageBase extends AutotagBase {
         this.contentSourceTypeID = this.engine.SetSubclassContentSourceType('Cloud Storage');
         const contentSources: MJContentSourceEntity[] = await this.engine.getAllContentSources(this.contextUser, this.contentSourceTypeID) || [];
         const contentItemsToProcess: MJContentItemEntity[] = await this.SetContentItemsToProcess(contentSources)
-        await this.engine.ExtractTextAndProcessWithLLM(contentItemsToProcess, this.contextUser, undefined, onProgress);
+        await this.engine.ExtractTextAndProcessWithLLM(contentItemsToProcess, this.contextUser, undefined, undefined, onProgress);
     }
 
     public async SetContentItemsToProcess(contentSources: MJContentSourceEntity[]): Promise<MJContentItemEntity[]> {

@@ -1,7 +1,7 @@
 {
   "fields": {
     "Name": "Knowledge Hub",
-    "Description": "Unified knowledge management: semantic search, vector management, duplicate detection, content autotagging, and AI assistant",
+    "Description": "Unified knowledge management: semantic search, vector management, duplicate detection, content classification, and AI assistant",
     "Icon": "fa-solid fa-brain",
     "DefaultForNewUser": false,
     "Color": "#7c3aed",
@@ -15,17 +15,10 @@
         "isDefault": true
       },
       {
-        "Label": "Vectors",
-        "Icon": "fa-solid fa-cubes",
+        "Label": "Classify",
+        "Icon": "fa-solid fa-tags",
         "ResourceType": "Custom",
-        "DriverClass": "VectorManagementResource",
-        "isDefault": false
-      },
-      {
-        "Label": "Duplicates",
-        "Icon": "fa-solid fa-clone",
-        "ResourceType": "Custom",
-        "DriverClass": "DuplicateDetectionResource",
+        "DriverClass": "AutotaggingPipelineResource",
         "isDefault": false
       },
       {
@@ -36,10 +29,24 @@
         "isDefault": false
       },
       {
-        "Label": "Autotagging",
-        "Icon": "fa-solid fa-tags",
+        "Label": "Duplicates",
+        "Icon": "fa-solid fa-clone",
         "ResourceType": "Custom",
-        "DriverClass": "AutotaggingPipelineResource",
+        "DriverClass": "DuplicateDetectionResource",
+        "isDefault": false
+      },
+      {
+        "Label": "Analytics",
+        "Icon": "fa-solid fa-chart-line",
+        "ResourceType": "Custom",
+        "DriverClass": "AnalyticsResource",
+        "isDefault": false
+      },
+      {
+        "Label": "Vectors",
+        "Icon": "fa-solid fa-cubes",
+        "ResourceType": "Custom",
+        "DriverClass": "VectorManagementResource",
         "isDefault": false
       },
       {
@@ -58,7 +65,7 @@
     "ID": "796EB8B2-B392-428B-839C-E9637C3D7EDB"
   },
   "sync": {
-    "lastModified": "2026-04-02T20:43:28.138Z",
-    "checksum": "ae1cb4c8835d3eda3fe215ca330c528f7eb17e543b10b70c53a9dfd065677628"
+    "lastModified": "2026-04-06T11:01:37.978Z",
+    "checksum": "e24bd79312848a246e85d687ff7acf0d3085ce1b6fb0f1e626bd725bdb1b1639"
   }
 }

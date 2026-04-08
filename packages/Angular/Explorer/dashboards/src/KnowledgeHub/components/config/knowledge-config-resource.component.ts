@@ -11,8 +11,9 @@ import { Subject } from 'rxjs';
 import { Metadata, RunView } from '@memberjunction/core';
 import { ResourceData, MJVectorDatabaseEntity, MJVectorIndexEntity, MJEntityDocumentEntity, KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
-import { BaseResourceComponent } from '@memberjunction/ng-shared';
+import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 
 /** Configuration section definition */
 interface ConfigSection {
@@ -80,6 +81,7 @@ interface FTSEntityRecord {
 })
 export class KnowledgeConfigResourceComponent extends BaseResourceComponent implements AfterViewInit, OnDestroy {
     private cdr = inject(ChangeDetectorRef);
+    private navigationService = inject(NavigationService);
     private destroy$ = new Subject<void>();
 
     async GetResourceDisplayName(_data: ResourceData): Promise<string> {
@@ -97,6 +99,7 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
         { ID: 'fulltext', Label: 'Full-Text Indexes', Icon: 'fa-solid fa-text-width', Description: 'Configure SQL full-text search indexes' },
         { ID: 'embedding', Label: 'Embedding Models', Icon: 'fa-solid fa-microchip', Description: 'Select and configure embedding models' },
         { ID: 'thresholds', Label: 'Thresholds', Icon: 'fa-solid fa-sliders', Description: 'Set scoring thresholds for search and deduplication' },
+        { ID: 'scheduling', Label: 'Scheduling', Icon: 'fa-solid fa-clock', Description: 'Manage automated pipeline schedules' },
     ];
 
     public ActiveSection = 'pipeline';
@@ -172,6 +175,10 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
 
     ngAfterViewInit(): void {
         this.loadConfiguration();
+        this.navigationService.SetAgentContext(this, {
+            ActiveSection: this.ActiveSection,
+        });
+        this.NotifyLoadComplete();
     }
 
     ngOnDestroy(): void {
@@ -331,7 +338,7 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
             const engine = KnowledgeHubMetadataEngine.Instance;
             await engine.Config(false);
 
-            this.loadVectorDBProvidersFromEngine(engine.VectorDatabases);
+            this.loadVectorDBProvidersFromEngine(AIEngineBase.Instance.VectorDatabases);
             this.loadVectorIndexesFromEngine(engine.VectorIndexes);
             this.loadEntityDocumentsAndThresholds(engine.GetActiveEntityDocuments());
 

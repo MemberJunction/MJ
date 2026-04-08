@@ -38,11 +38,8 @@ export class StartupValidationService {
    */
   private validateUserRoles(): void {
     try {
-      console.log('StartupValidationService: Validating user roles');
       const md = new Metadata();
       const currentUser = md.CurrentUser;
-      
-      console.log('StartupValidationService: Current user:', currentUser);
       
       if (!currentUser) {
         console.log('StartupValidationService: No current user found');
@@ -55,8 +52,6 @@ export class StartupValidationService {
         });
         return;
       }
-      
-      console.log('StartupValidationService: User roles:', currentUser.UserRoles);
       
       if (!currentUser.UserRoles || currentUser.UserRoles.length === 0) {
         console.log('StartupValidationService: No user roles found, adding validation issue');

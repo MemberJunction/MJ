@@ -51,4 +51,12 @@ export interface AppContextSnapshot {
         /** User's assigned roles */
         Roles: string[];
     };
+
+    /**
+     * Additional context reported by the active view/component.
+     * Contains whatever state the current view wants the agent to know about —
+     * active tab, filter state, pipeline status, selected items, etc.
+     * Updated dynamically as the user interacts with the view.
+     */
+    AdditionalContext?: Record<string, unknown>;
 }

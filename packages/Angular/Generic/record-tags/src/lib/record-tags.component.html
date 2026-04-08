@@ -1,0 +1,123 @@
+<mj-slide-panel
+    [Mode]="'slide'"
+    [Title]="'Tags'"
+    [Visible]="true"
+    [Resizable]="true"
+    [MinWidthPx]="350"
+    [MaxWidthRatio]="0.5"
+    [WidthPx]="WidthPx"
+    (Closed)="OnClose()"
+    (WidthChanged)="OnWidthChanged($event)">
+
+    @if (IsLoading) {
+        <mj-loading text="Loading tags..."></mj-loading>
+    } @else if (TaggedItems.length === 0) {
+        <div class="mj-record-tags-empty">
+            <i class="fa-solid fa-tags mj-record-tags-empty-icon"></i>
+            <p>No tags have been applied to this record yet.</p>
+            <p class="mj-record-tags-hint">Tags are automatically applied when content is processed through the Knowledge Hub autotagging pipeline.</p>
+        </div>
+    } @else {
+        <div class="mj-record-tags-container">
+            <div class="mj-record-tags-header">
+                <div class="mj-record-tags-count">{{ TaggedItems.length }} tag{{ TaggedItems.length === 1 ? '' : 's' }}</div>
+                <button class="mj-record-tags-view-toggle"
+                        (click)="ToggleViewMode()"
+                        [title]="ViewMode === 'list' ? 'Switch to word cloud view' : 'Switch to list view'">
+                    <i class="fa-solid" [class.fa-cloud]="ViewMode === 'list'" [class.fa-list]="ViewMode === 'cloud'"></i>
+                </button>
+            </div>
+
+            @if (ViewMode === 'list') {
+                <div class="mj-record-tags-list">
+                    @for (item of TaggedItems; track item.ID) {
+                        <span class="mj-record-tag-pill"
+                              [style.opacity]="GetTagOpacity(item.Weight)"
+                              [style.font-size]="GetTagFontSize(item.Weight)">
+                            {{ item.Tag }}
+                            @if (item.Weight < 1.0) {
+                                <span class="mj-record-tag-weight">{{ (item.Weight * 100).toFixed(0) }}%</span>
+                            }
+                            @if (AllowRemove) {
+                                <button class="mj-record-tag-remove" (click)="RemoveTag(item)" title="Remove tag">
+                                    <i class="fa-solid fa-times"></i>
+                                </button>
+                            }
+                        </span>
+                    }
+                </div>
+            } @else {
+                <div class="mj-record-tags-cloud">
+                    <mj-word-cloud
+                        [Items]="CloudItems"
+                        [MaxFontSize]="32"
+                        [MinFontSize]="14"
+                        Layout="rectangular"
+                        ColorMode="weight-gradient"
+                        [Interactive]="true"
+                        (ItemClick)="OnCloudItemClick($event)">
+                    </mj-word-cloud>
+                </div>
+            }
+        </div>
+
+        <!-- Related Records Section -->
+        <div class="mj-related-records-section">
+            <div class="mj-related-header" (click)="ShowRelated = !ShowRelated">
+                <i class="fa-solid" [class.fa-chevron-down]="ShowRelated" [class.fa-chevron-right]="!ShowRelated"></i>
+                <span class="mj-related-title">Related Records</span>
+                @if (RelatedRecords.length > 0) {
+                    <span class="mj-related-count">{{ RelatedRecords.length }}</span>
+                }
+            </div>
+
+            @if (ShowRelated) {
+                @if (IsLoadingRelated) {
+                    <div class="mj-related-loading">
+                        <mj-loading text="Finding related records..." size="small"></mj-loading>
+                    </div>
+                } @else if (RelatedRecords.length === 0) {
+                    <div class="mj-related-empty">
+                        <p>No related records found via shared tags.</p>
+                    </div>
+                } @else {
+                    <div class="mj-related-list">
+                        @for (related of RelatedRecords; track related.RecordID) {
+                            <div class="mj-related-item" (click)="OnRelatedRecordClick(related)">
+                                <div class="mj-related-item-icon">
+                                    <i [class]="related.EntityIcon"></i>
+                                </div>
+                                <div class="mj-related-item-content">
+                                    <div class="mj-related-item-name">{{ related.DisplayName }}</div>
+                                    <div class="mj-related-item-entity">{{ related.EntityName }}</div>
+                                    <div class="mj-related-item-tags">
+                                        @for (tag of related.SharedTags.slice(0, 3); track tag) {
+                                            <span class="mj-related-shared-tag">{{ tag }}</span>
+                                        }
+                                        @if (related.SharedTags.length > 3) {
+                                            <span class="mj-related-tag-more">+{{ related.SharedTags.length - 3 }}</span>
+                                        }
+                                    </div>
+                                </div>
+                                <div class="mj-related-item-meta">
+                                    <span class="mj-related-item-score">{{ FormatScore(related.Score) }}</span>
+                                    @if (related.Source === 'both') {
+                                        <span class="mj-related-source-badge mj-related-source-both" title="Found via tags and vector similarity">both</span>
+                                    } @else if (related.Source === 'vectors') {
+                                        <span class="mj-related-source-badge mj-related-source-vectors" title="Found via vector similarity">vector</span>
+                                    }
+                                    @if (ShowOpenRecordButton) {
+                                        <button class="mj-related-open-btn" (click)="OnRelatedRecordClick(related); $event.stopPropagation()" title="Open record">
+                                            <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                                        </button>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            }
+        </div>
+    }
+
+</mj-slide-panel>

@@ -253,6 +253,7 @@ export class SearchService {
                         EntityIcon
                         RecordName
                         MatchedAt
+                        RawMetadata
                     }
                 }
             }
@@ -274,7 +275,7 @@ export class SearchService {
                 ID: string; EntityName: string; RecordID: string; SourceType: string;
                 Title: string; Snippet: string; Score: number;
                 ScoreBreakdown: { Vector?: number; FullText?: number; Entity?: number };
-                Tags: string[]; EntityIcon?: string; RecordName?: string; MatchedAt: string;
+                Tags: string[]; EntityIcon?: string; RecordName?: string; MatchedAt: string; RawMetadata?: string;
             }>;
             TotalCount: number;
             ElapsedMs: number;
@@ -300,6 +301,7 @@ export class SearchService {
             EntityIcon: r.EntityIcon,
             RecordName: r.RecordName,
             MatchedAt: new Date(r.MatchedAt),
+            RawMetadata: r.RawMetadata,
         }));
 
         const groups = this.GroupResults(results);

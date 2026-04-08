@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 
 import { ClusterScatterComponent } from './cluster-scatter.component';
 import { ClusterConfigPanelComponent } from './cluster-config-panel.component';
+import { MJEntityCardComponent } from '@memberjunction/ng-entity-card';
 
 @NgModule({
     declarations: [
@@ -13,6 +14,7 @@ import { ClusterConfigPanelComponent } from './cluster-config-panel.component';
     imports: [
         CommonModule,
         FormsModule,
+        MJEntityCardComponent,
     ],
     exports: [
         ClusterScatterComponent,
