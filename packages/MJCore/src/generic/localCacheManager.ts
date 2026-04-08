@@ -997,15 +997,25 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         const connection = connectionPrefix || '';
         const aggHash = this.generateAggregateHash(params.Aggregates);
 
+        // UserSearchString affects which rows are returned (generates LIKE/FTS WHERE clauses)
+        // and MUST be part of the fingerprint to prevent cross-query cache poisoning.
+        const userSearch = (params.UserSearchString ?? '').trim();
+
+        // NOTE: ViewID and ViewName are intentionally excluded from the fingerprint.
+        // Views are just containers for entity + filter + orderBy. Two different views
+        // that resolve to the same entity/filter/orderBy produce identical SQL and results,
+        // so they should share the same cache entry.
+
         // Build human-readable fingerprint with pipe separators
-        // Format: Entity|Filter|OrderBy|MaxRows|StartRow|AggHash[|Connection]
+        // Format: Entity|Filter|OrderBy|MaxRows|StartRow|AggHash|UserSearch[|Connection]
         const parts = [
             entity,
             filter || '_',           // Use underscore for empty filter
             orderBy || '_',          // Use underscore for empty orderBy
             maxRows.toString(),
             startRow.toString(),
-            aggHash                  // Aggregate hash (or '_' for no aggregates)
+            aggHash,                 // Aggregate hash (or '_' for no aggregates)
+            userSearch || '_'        // User search string (generates LIKE/FTS clauses)
         ];
 
         // Only include connection if provided
