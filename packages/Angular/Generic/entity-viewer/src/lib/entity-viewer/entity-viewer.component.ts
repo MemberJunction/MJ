@@ -108,6 +108,9 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
     // Detect date fields for timeline support
     this.detectDateFields();
 
+    // Detect geocoding support for map view
+    this.updateGeoCodingSupport();
+
     if (this._initialized) {
       // If entity changed to a different entity, clear all stale state from the old entity
       if (value && previousEntity && !UUIDsEqual(value.ID, previousEntity.ID)) {
@@ -473,10 +476,7 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
   public hasDateFields: boolean = false;
 
   /** Whether the current entity supports geocoding (has SupportsGeoCoding = 1) */
-  get HasGeoCoding(): boolean {
-    const entity = this.effectiveEntity;
-    return !!(entity && entity.SupportsGeoCoding);
-  }
+  public HasGeoCoding: boolean = false;
 
   /** Available date fields from the entity (sorted by priority) */
   public availableDateFields: EntityFieldInfo[] = [];
@@ -1116,6 +1116,9 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
         this.pagination.totalRecords = result.TotalRowCount;
         this.pagination.hasMore = false; // No longer used with page-based paging
 
+        // Re-check geo support after data loads (effectiveEntity may have resolved via viewEntity)
+        this.updateGeoCodingSupport();
+
         this.dataLoaded.emit({
           totalRowCount: result.TotalRowCount,
           loadedRowCount: this.internalRecords.length,
@@ -1446,6 +1449,19 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
         entity: entity,
         compositeKey: buildCompositeKey(record, entity)
       });
+    }
+  }
+
+  /**
+   * Update HasGeoCoding based on the current effectiveEntity.
+   * Called from entity setter and after data loads (when effectiveEntity may resolve via viewEntity).
+   */
+  private updateGeoCodingSupport(): void {
+    const entity = this.effectiveEntity;
+    const newValue = !!(entity && entity.SupportsGeoCoding);
+    if (newValue !== this.HasGeoCoding) {
+      this.HasGeoCoding = newValue;
+      this.cdr.detectChanges();
     }
   }
 

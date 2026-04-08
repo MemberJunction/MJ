@@ -58,15 +58,14 @@
               <i class="fa-solid fa-timeline"></i>
             </button>
           }
-          @if (HasGeoCoding) {
-            <button
-              class="toggle-btn"
-              [class.active]="effectiveViewMode === 'map'"
-              (click)="setViewMode('map')"
-              title="Map View">
-              <i class="fa-solid fa-map-location-dot"></i>
-            </button>
-          }
+          <button
+            class="toggle-btn"
+            [class.active]="effectiveViewMode === 'map'"
+            [class.geo-hidden]="!HasGeoCoding"
+            (click)="setViewMode('map')"
+            title="Map View">
+            <i class="fa-solid fa-map-location-dot"></i>
+          </button>
         </div>
       }
 

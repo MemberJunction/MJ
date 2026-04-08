@@ -230,3 +230,8 @@ mj-timeline:not([hidden]) {
   height: 100%;
   width: 100%;
 }
+
+/* Hide map toggle when entity does not support geocoding */
+.toggle-btn.geo-hidden {
+  display: none !important;
+}
