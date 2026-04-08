@@ -6,6 +6,9 @@
 -- System user (ECAFCCEC-6A37-EF11-86D4-000D3A4E707E) is used as CreatedByUserID.
 -- StorageAccountID is left NULL — must be configured before activation.
 
+-- Enable AllowAllRowsAPI for all archive entities (admin configuration entities)
+UPDATE [${flyway:defaultSchema}].[Entity] SET [AllowAllRowsAPI] = 1 WHERE [Name] LIKE 'MJ: Archive%';
+
 -- 1. Record Changes - 12 Month
 IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ArchiveConfiguration] WHERE [ID] = 'A1B1C1D1-0001-4000-A001-000000000001')
 BEGIN
