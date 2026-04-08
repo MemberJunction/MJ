@@ -53,15 +53,33 @@ export class SearchFusion {
     }
 
     /**
-     * Deduplicate results by EntityName+RecordID, keeping the highest-scored entry.
+     * Deduplicate results by EntityName+RecordID.
+     * When the same record appears from multiple sources (e.g., vector + entity),
+     * prefer entity results (they have richer metadata like snippets and field data)
+     * and merge the score breakdowns. The final score is the maximum across sources.
      */
     public Deduplicate(results: SearchResultItem[]): SearchResultItem[] {
         const seen = new Map<string, SearchResultItem>();
         for (const result of results) {
             const key = `${result.EntityName}::${result.RecordID}`;
             const existing = seen.get(key);
-            if (!existing || result.Score > existing.Score) {
+            if (!existing) {
                 seen.set(key, result);
+            } else {
+                // Merge: keep the better result, combine score breakdowns
+                const mergedBreakdown = { ...existing.ScoreBreakdown, ...result.ScoreBreakdown };
+                const maxScore = Math.max(existing.Score, result.Score);
+
+                // Prefer 'entity' source type (richer data) over 'vector'
+                const preferred = existing.SourceType === 'entity' ? existing :
+                                  result.SourceType === 'entity' ? result :
+                                  result.Score > existing.Score ? result : existing;
+
+                seen.set(key, {
+                    ...preferred,
+                    Score: maxScore,
+                    ScoreBreakdown: mergedBreakdown
+                });
             }
         }
         return Array.from(seen.values()).sort((a, b) => b.Score - a.Score);

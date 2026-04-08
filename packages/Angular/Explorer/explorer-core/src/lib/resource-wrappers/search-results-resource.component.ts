@@ -1,6 +1,6 @@
-import { Component, OnInit, ChangeDetectorRef, inject } from '@angular/core';
-import { Router } from '@angular/router';
-import { BaseResourceComponent } from '@memberjunction/ng-shared';
+import { Component, ChangeDetectorRef, inject } from '@angular/core';
+import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
+import { CompositeKey } from '@memberjunction/core';
 import { ResourceData } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import {
@@ -167,9 +167,9 @@ import {
         }
     `]
 })
-export class SearchResultsResource extends BaseResourceComponent implements OnInit {
+export class SearchResultsResource extends BaseResourceComponent {
     private cdr = inject(ChangeDetectorRef);
-    private router = inject(Router);
+    private navigationService = inject(NavigationService);
     private searchService = inject(SearchService);
 
     CurrentQuery = '';
@@ -184,13 +184,26 @@ export class SearchResultsResource extends BaseResourceComponent implements OnIn
     /** All results from the last search (before client-side filtering) */
     private allResults: SearchResultItem[] = [];
 
-    async ngOnInit(): Promise<void> {
+    private dataLoaded = false;
+
+    // Override Data setter to trigger search when tab container provides the data
+    // (ngOnInit fires before Data is set, so we can't rely on it)
+    override set Data(value: ResourceData) {
+        super.Data = value;
+        if (!this.dataLoaded) {
+            this.dataLoaded = true;
+            this.loadFromData();
+        }
+    }
+    override get Data(): ResourceData {
+        return super.Data;
+    }
+
+    private async loadFromData(): Promise<void> {
         const config = this.Data?.Configuration;
         if (config?.Query) {
-            // Universal search route: query string passed as Query
             this.CurrentQuery = config.Query as string;
         } else if (config?.SearchInput) {
-            // Legacy route: entity-scoped search
             this.CurrentQuery = config.SearchInput as string;
         }
 
@@ -242,7 +255,8 @@ export class SearchResultsResource extends BaseResourceComponent implements OnIn
 
     private navigateToRecord(entityName: string, recordID: string): void {
         if (entityName && recordID) {
-            this.router.navigate(['resource', 'record', entityName, recordID]);
+            const pkey = new CompositeKey([{ FieldName: 'ID', Value: recordID }]);
+            this.navigationService.OpenEntityRecord(entityName, pkey);
         }
     }
 
@@ -255,7 +269,8 @@ export class SearchResultsResource extends BaseResourceComponent implements OnIn
             Query: query,
             MaxResults: 50,
             ActiveFilters: {},
-            IncludeSources: ['vector', 'fulltext', 'entity']
+            IncludeSources: ['vector', 'fulltext', 'entity'],
+            MinScore: 0
         };
 
         const response: SearchResponse = await this.searchService.ExecuteSearch(request);

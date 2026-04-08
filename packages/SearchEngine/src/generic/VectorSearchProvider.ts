@@ -9,7 +9,7 @@
  * @module @memberjunction/search-engine
  */
 
-import { LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { LogError, LogStatus, Metadata, RunView, UserInfo, CompositeKey } from '@memberjunction/core';
 import { MJVectorIndexEntity, MJVectorDatabaseEntity } from '@memberjunction/core-entities';
 import { AIEngine } from '@memberjunction/aiengine';
 import { BaseEmbeddings, GetAIAPIKey } from '@memberjunction/ai';
@@ -216,7 +216,11 @@ export class VectorSearchProvider implements ISearchProvider {
         return matches.map(match => {
             const meta = match.metadata ?? {};
             const entityName = (meta['Entity'] as string) ?? 'Unknown';
-            const recordID = (meta['RecordID'] as string) ?? match.id;
+            // Vector metadata stores RecordID in CompositeKey URL format: "FieldName|Value" or "F1|V1||F2|V2"
+            // Use CompositeKey to properly parse it, then extract just the values for consistent
+            // matching with entity search results (which use plain record IDs)
+            const rawRecordID = (meta['RecordID'] as string) ?? match.id;
+            const recordID = this.extractRecordIDFromCompositeKey(rawRecordID);
 
             const title = this.extractDisplayTitle(meta, entityName);
             const snippet = this.extractDisplaySnippet(meta, indexName, match.score);
@@ -320,5 +324,31 @@ export class VectorSearchProvider implements ISearchProvider {
         if (conditions.length === 0) return undefined;
         if (conditions.length === 1) return conditions[0];
         return { $and: conditions };
+    }
+
+    /**
+     * Extract a plain record ID from a CompositeKey URL segment string.
+     * Vector metadata stores RecordID in format "FieldName|Value" or "F1|V1||F2|V2".
+     * For deduplication with entity search results, we need just the value(s).
+     * Uses CompositeKey.SimpleLoadFromURLSegment for proper multi-field parsing.
+     */
+    private extractRecordIDFromCompositeKey(raw: string): string {
+        if (!raw.includes('|')) {
+            return raw; // Already a plain ID (no composite key format)
+        }
+
+        const ck = new CompositeKey();
+        ck.SimpleLoadFromURLSegment(raw);
+
+        if (ck.KeyValuePairs.length === 0) {
+            return raw; // Parsing failed, return as-is
+        }
+
+        if (ck.KeyValuePairs.length === 1) {
+            return ck.KeyValuePairs[0].Value; // Single-key: just the UUID
+        }
+
+        // Multi-key: join values with || for consistent dedup key
+        return ck.KeyValuePairs.map(kv => kv.Value).join('||');
     }
 }

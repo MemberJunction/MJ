@@ -551,6 +551,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     // ── Slide-in form ──
     public FormMode: FormMode = 'none';
     public FormSaving = false;
+    public ShowNoContentTypeWarning = false;
 
     // Source form fields
     public FormSourceName = '';
@@ -1730,6 +1731,35 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
 
     public async SaveSource(): Promise<void> {
         if (this.FormSaving) return;
+
+        // Validate required fields before saving
+        if (!this.FormSourceName.trim()) {
+            MJNotificationService.Instance.CreateSimpleNotification('Please enter a source name.', 'warning', 3000);
+            return;
+        }
+        if (!this.FormSourceTypeID) {
+            MJNotificationService.Instance.CreateSimpleNotification('Please select a source type.', 'warning', 3000);
+            return;
+        }
+
+        // For non-Entity source types, ContentType is required
+        if (!this.IsEntitySourceTypeSelected && this.SelectedSourceTypeRequiresContentType) {
+            if (!this.FormContentTypeID) {
+                if (this.ContentTypeOptions.length === 0) {
+                    MJNotificationService.Instance.CreateSimpleNotification(
+                        'No content types are configured. Please create a content type first in the Content Types section.',
+                        'warning', 5000
+                    );
+                } else {
+                    MJNotificationService.Instance.CreateSimpleNotification(
+                        'Please select a content type.',
+                        'warning', 3000
+                    );
+                }
+                return;
+            }
+        }
+
         this.FormSaving = true;
         this.cdr.detectChanges();
 
@@ -1750,7 +1780,13 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             // but the DB columns are NOT NULL, so default to the first available value
             if (this.IsEntitySourceTypeSelected) {
                 const engine = KnowledgeHubMetadataEngine.Instance;
-                if (!entity.ContentTypeID && engine.ContentTypes.length > 0) {
+                if (!entity.ContentTypeID) {
+                    if (engine.ContentTypes.length === 0) {
+                        this.FormSaving = false;
+                        this.cdr.detectChanges();
+                        this.ShowNoContentTypeWarning = true;
+                        return;
+                    }
                     entity.ContentTypeID = engine.ContentTypes[0].ID;
                 }
                 if (!entity.ContentFileTypeID && engine.ContentFileTypes.length > 0) {

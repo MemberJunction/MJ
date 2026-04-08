@@ -123,7 +123,7 @@ export class EntitySearchProvider implements ISearchProvider {
                 return [];
             }
 
-            return this.convertResults(result.Results, entityName);
+            return this.convertResults(result.Results, entityName, query);
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
             LogError(`EntitySearchProvider: Error searching "${entityName}": ${msg}`);
@@ -132,19 +132,48 @@ export class EntitySearchProvider implements ISearchProvider {
     }
 
     /**
-     * Convert RunView results to SearchResultItem format with rank-based scores.
+     * Convert RunView results to SearchResultItem format with field-match relevance scores.
+     * Score is based on how many searchable fields contain the query and whether
+     * the match is in a name/title field (higher weight) vs description/other fields.
      */
     private convertResults(
         records: Record<string, unknown>[],
-        entityName: string
+        entityName: string,
+        query: string
     ): SearchResultItem[] {
         const md = new Metadata();
         const entityInfo = md.Entities.find(e => e.Name === entityName);
+        const queryLower = query.toLowerCase();
 
-        return records.map((record, index) => {
+        // Get searchable fields and classify them by importance
+        const searchFields = entityInfo?.Fields.filter(f => f.IncludeInUserSearchAPI) ?? [];
+        const nameFields = searchFields.filter(f => f.IsNameField);
+        const totalSearchableFields = Math.max(searchFields.length, 1);
+
+        return records.map((record) => {
             const recordID = String(record.ID ?? '');
             const title = this.extractTitle(record, entityInfo);
             const snippet = this.extractSnippet(record, entityInfo);
+
+            // Calculate relevance: check how many fields match the query
+            let matchedFields = 0;
+            let nameFieldMatch = false;
+            for (const field of searchFields) {
+                const val = record[field.Name];
+                if (val != null && String(val).toLowerCase().includes(queryLower)) {
+                    matchedFields++;
+                    if (nameFields.some(nf => nf.Name === field.Name)) {
+                        nameFieldMatch = true;
+                    }
+                }
+            }
+
+            // Score: base from field match ratio, boost for name field matches
+            // Range: ~0.15 (weak match in one field) to ~0.95 (name field + multiple fields)
+            const fieldRatio = matchedFields / totalSearchableFields;
+            const baseScore = 0.15 + (fieldRatio * 0.45); // 0.15 to 0.60
+            const nameBoost = nameFieldMatch ? 0.35 : 0;  // +0.35 for name field match
+            const score = Math.min(baseScore + nameBoost, 0.95);
 
             return {
                 ID: `ent-${entityName}-${recordID}`,
@@ -153,9 +182,8 @@ export class EntitySearchProvider implements ISearchProvider {
                 SourceType: 'entity',
                 Title: title,
                 Snippet: snippet,
-                // Rank-based scoring: 1/(rank+1) gives decreasing scores
-                Score: 1.0 / (index + 1),
-                ScoreBreakdown: { Entity: 1.0 / (index + 1) },
+                Score: Math.round(score * 100) / 100, // Round to 2 decimal places
+                ScoreBreakdown: { Entity: Math.round(score * 100) / 100 },
                 Tags: [],
                 EntityIcon: entityInfo?.Icon ?? undefined,
                 MatchedAt: new Date()
