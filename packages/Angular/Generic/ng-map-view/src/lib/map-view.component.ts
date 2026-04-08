@@ -160,6 +160,9 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
         // Persist view state on move/zoom
         this.map.on('moveend', () => this.EmitDisplayState());
 
+        // Set up popup click handlers for record drill-through
+        this.SetupPopupClickHandler();
+
         // invalidateSize after a short delay to ensure tile rendering is correct
         // then render markers and fit bounds
         setTimeout(() => {
@@ -272,16 +275,7 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
                 opacity: 0.7
             });
 
-            // Build popup with record names for click-through
-            const nameField = this.Entity?.NameField;
-            const names = cluster.records.map(r =>
-                nameField ? String(this.GetField(r, nameField.Name) ?? '') : 'Record'
-            );
-            const popupHTML = `<div style="max-height:200px;overflow-y:auto;font-size:12px;">` +
-                `<b>${cluster.records.length} record${cluster.records.length !== 1 ? 's' : ''}</b><br>` +
-                names.map(n => `• ${this.EscapeHtml(n)}`).join('<br>') +
-                `</div>`;
-            circle.bindPopup(popupHTML);
+            circle.bindPopup(this.BuildClusterPopup(cluster.records, `${cluster.records.length} record${cluster.records.length !== 1 ? 's' : ''}`));
 
             circle.on('click', () => {
                 this.RegionClick.emit({
@@ -349,17 +343,7 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
                 opacity: 0.85
             });
 
-            const nameField = this.Entity?.NameField;
-            const names = cluster.records.map(r =>
-                nameField ? String(this.GetField(r, nameField.Name) ?? '') : 'Record'
-            );
-            circle.bindPopup(
-                `<div style="max-height:200px;overflow-y:auto;font-size:12px;">` +
-                `<b>${this.EscapeHtml(regionLabel)}</b><br>` +
-                `${cluster.records.length} record${cluster.records.length !== 1 ? 's' : ''}<br><hr style="margin:4px 0;">` +
-                names.map(n => `• ${this.EscapeHtml(n)}`).join('<br>') +
-                `</div>`
-            );
+            circle.bindPopup(this.BuildClusterPopup(cluster.records, regionLabel));
 
             circle.on('click', () => {
                 this.RegionClick.emit({
@@ -462,6 +446,75 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
             return (record as { Get: (name: string) => unknown }).Get(fieldName);
         }
         return record[fieldName];
+    }
+
+    /**
+     * Build a popup for a cluster of records.
+     * Shows first 5 records as clickable links, then "and X more..." if needed.
+     * Clicking a record name emits MarkerClick so the parent can open it.
+     */
+    private BuildClusterPopup(records: Record<string, unknown>[], title: string): string {
+        const nameField = this.Entity?.NameField;
+        const maxShow = 5;
+        const shown = records.slice(0, maxShow);
+        const remaining = records.length - maxShow;
+
+        let html = `<div style="font-size:12px;min-width:160px;">` +
+            `<b>${this.EscapeHtml(title)}</b>` +
+            `<hr style="margin:4px 0;border-color:#e5e7eb;">`;
+
+        for (const rec of shown) {
+            const name = nameField ? String(this.GetField(rec, nameField.Name) ?? '') : 'Record';
+            const pkFields = this.Entity?.PrimaryKeys ?? [];
+            const recordId = pkFields.map(pk => this.GetField(rec, pk.Name)).join('||');
+            // Clickable record name — uses a data attribute that the click handler reads
+            html += `<div style="padding:2px 0;cursor:pointer;color:#2563eb;" ` +
+                `class="mj-map-popup-record" data-record-id="${this.EscapeHtml(recordId)}">` +
+                `${this.EscapeHtml(name)}</div>`;
+        }
+
+        if (remaining > 0) {
+            html += `<div style="padding:4px 0 0;color:#6b7280;font-style:italic;">` +
+                `and ${remaining} more...</div>`;
+        }
+
+        html += `</div>`;
+        return html;
+    }
+
+    /**
+     * Set up popup click handlers after the map initializes.
+     * Listens for clicks on record links in popups and emits MarkerClick.
+     */
+    private SetupPopupClickHandler(): void {
+        if (!this.map) return;
+        this.map.on('popupopen', () => {
+            // Attach click handlers to all popup record links
+            setTimeout(() => {
+                const links = document.querySelectorAll('.mj-map-popup-record');
+                links.forEach(link => {
+                    link.addEventListener('click', (e) => {
+                        const recordId = (e.currentTarget as HTMLElement).getAttribute('data-record-id') ?? '';
+                        // Find the matching record
+                        const record = this.Records.find(r => {
+                            const pkFields = this.Entity?.PrimaryKeys ?? [];
+                            const id = pkFields.map(pk => this.GetField(r, pk.Name)).join('||');
+                            return id === recordId;
+                        });
+                        if (record) {
+                            const lat = this.GetField(record, this.LatitudeField) as number ?? 0;
+                            const lng = this.GetField(record, this.LongitudeField) as number ?? 0;
+                            this.MarkerClick.emit({
+                                RecordID: recordId,
+                                Latitude: lat,
+                                Longitude: lng,
+                                Record: record
+                            });
+                        }
+                    });
+                });
+            }, 50);
+        });
     }
 
     /**
