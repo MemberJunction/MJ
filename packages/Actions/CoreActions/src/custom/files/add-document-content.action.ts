@@ -2,7 +2,7 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from '@memberjunction/actions';
 import { BaseFileHandlerAction } from "../utilities/base-file-handler";
-import { DocumentBuilderService, DocumentOperation } from "../utilities/document-builder-service";
+import { ArtifactBuilderService, DocumentOperation } from "../utilities/artifact-builder-service";
 import { JSONParamHelper } from "../utilities/json-param-helper";
 
 /**
@@ -44,7 +44,7 @@ export class AddDocumentContentAction extends BaseFileHandlerAction {
                 return { Success: false, Message: "Operations must be a non-empty array", ResultCode: "INVALID_OPERATIONS" };
             }
 
-            const service = DocumentBuilderService.Instance;
+            const service = ArtifactBuilderService.Instance;
             const sectionIds = service.AddContent(handle.toString(), operations);
             const preview = service.GetPreview(handle.toString());
 

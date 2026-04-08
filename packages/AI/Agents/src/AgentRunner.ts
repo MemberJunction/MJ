@@ -16,7 +16,7 @@ import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ExecuteAgentResult, ExecuteAgentParams, MediaOutput, FileOutputRef } from '@memberjunction/ai-core-plus';
 import { BaseAgent } from './base-agent';
-import { MJConversationEntity, MJConversationDetailEntity, MJArtifactEntity, MJArtifactVersionEntity, MJConversationDetailArtifactEntity, MJAIAgentRunMediaEntity, MJConversationDetailAttachmentEntity, MJFileEntity, ArtifactMetadataEngine, FileStorageEngine } from '@memberjunction/core-entities';
+import { MJConversationEntity, MJConversationDetailEntity, MJArtifactEntity, MJArtifactVersionEntity, MJConversationDetailArtifactEntity, MJAIAgentRunMediaEntity, MJConversationDetailAttachmentEntity, MJFileEntity, ArtifactMetadataEngine, FileStorageEngine, StorageAccountWithProvider } from '@memberjunction/core-entities';
 import { initializeDriverWithAccountCredentials } from '@memberjunction/storage';
 
 // ── Types used only by the historical reprocessing path ──────────────────────
@@ -428,7 +428,8 @@ export class AgentRunner {
                 await this.ProcessFileArtifacts(
                     agentResult.fileOutputs,
                     agentResponseDetailId,
-                    contextUser
+                    contextUser,
+                    agentResult.resolvedStorageAccountId
                 );
             }
 
@@ -1161,11 +1162,15 @@ export class AgentRunner {
      * @param fileOutputs - File outputs collected by BaseAgent during action execution
      * @param conversationDetailId - The conversation detail to link artifacts to
      * @param contextUser - User context for DB operations
+     * @param resolvedStorageAccountId - Pre-resolved FileStorageAccount ID from the agent's
+     *   hierarchical resolution chain (Runtime → Agent → Category → Type → fallback).
+     *   When provided, uploads use this specific account instead of picking the first active one.
      */
     public async ProcessFileArtifacts(
         fileOutputs: FileOutputRef[],
         conversationDetailId: string,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        resolvedStorageAccountId?: string
     ): Promise<void> {
         if (fileOutputs.length === 0) return;
 
@@ -1176,7 +1181,7 @@ export class AgentRunner {
         ]);
 
         await Promise.all(
-            fileOutputs.map(fo => this.processFileOutput(fo, conversationDetailId, contextUser))
+            fileOutputs.map(fo => this.processFileOutput(fo, conversationDetailId, contextUser, resolvedStorageAccountId))
         );
     }
 
@@ -1253,7 +1258,8 @@ export class AgentRunner {
     private async processFileOutput(
         fo: FileOutputRef,
         conversationDetailId: string,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        resolvedStorageAccountId?: string
     ): Promise<void> {
         try {
             if (fo.fileId) {
@@ -1278,7 +1284,8 @@ export class AgentRunner {
                     fo.fileData!,
                     fo.fileName,
                     fo.mimeType,
-                    contextUser
+                    contextUser,
+                    resolvedStorageAccountId
                 );
                 await this.createFileArtifact(fileId, fo.mimeType, fo.fileName, fo.sizeBytes, conversationDetailId, contextUser);
             } catch (storageError) {
@@ -1294,19 +1301,28 @@ export class AgentRunner {
     /**
      * Uploads base64-encoded file content to MJStorage and creates an MJ: Files record.
      * Returns the new MJ: Files record ID.
+     *
+     * @param resolvedStorageAccountId - Pre-resolved account from the agent's storage resolution chain.
+     *   When provided, uploads to this specific account. Otherwise falls back to the first active account.
      */
     private async uploadBase64ToStorage(
         base64Data: string,
         fileName: string,
         mimeType: string,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        resolvedStorageAccountId?: string
     ): Promise<string> {
         const accounts = FileStorageEngine.Instance.AccountsWithProviders;
         if (accounts.length === 0) {
             throw new Error('No file storage accounts configured. Cannot upload file artifact.');
         }
 
-        const { account, provider } = accounts.find(a => a.provider.IsActive !== false) ?? accounts[0];
+        // Use the resolved account if provided, otherwise fall back to first active
+        let resolved: StorageAccountWithProvider | undefined;
+        if (resolvedStorageAccountId) {
+            resolved = FileStorageEngine.Instance.GetAccountWithProvider(resolvedStorageAccountId) ?? undefined;
+        }
+        const { account, provider } = resolved ?? accounts.find(a => a.provider.IsActive !== false) ?? accounts[0];
         const driver = await initializeDriverWithAccountCredentials({
             accountEntity: account,
             providerEntity: provider,

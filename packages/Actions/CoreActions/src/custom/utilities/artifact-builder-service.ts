@@ -1,5 +1,5 @@
 /**
- * DocumentBuilderService — manages in-progress document state for incremental building.
+ * ArtifactBuilderService — manages in-progress artifact/document state for incremental building.
  *
  * The LLM creates a document handle, then adds content across multiple agent turns.
  * At finalize, the accumulated content is rendered to a binary file (PDF, DOCX, XLSX)
@@ -81,8 +81,8 @@ const CLEANUP_INTERVAL_MS = 5 * 60 * 1000; // Check every 5 minutes
  * Each document is identified by a UUID handle and persists across agent turns
  * within the same Node.js process.
  */
-export class DocumentBuilderService {
-    private static _instance: DocumentBuilderService | null = null;
+export class ArtifactBuilderService {
+    private static _instance: ArtifactBuilderService | null = null;
     private documents: Map<string, InProgressDocument> = new Map();
     private cleanupTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -90,11 +90,11 @@ export class DocumentBuilderService {
         this.startCleanupTimer();
     }
 
-    public static get Instance(): DocumentBuilderService {
-        if (!DocumentBuilderService._instance) {
-            DocumentBuilderService._instance = new DocumentBuilderService();
+    public static get Instance(): ArtifactBuilderService {
+        if (!ArtifactBuilderService._instance) {
+            ArtifactBuilderService._instance = new ArtifactBuilderService();
         }
-        return DocumentBuilderService._instance;
+        return ArtifactBuilderService._instance;
     }
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────

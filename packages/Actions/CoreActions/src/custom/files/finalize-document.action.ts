@@ -2,7 +2,7 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from '@memberjunction/actions';
 import { BaseFileHandlerAction } from "../utilities/base-file-handler";
-import { DocumentBuilderService } from "../utilities/document-builder-service";
+import { ArtifactBuilderService } from "../utilities/artifact-builder-service";
 
 /**
  * Finalizes an in-progress document: renders it to a binary file, saves to MJStorage,
@@ -33,7 +33,7 @@ export class FinalizeDocumentAction extends BaseFileHandlerAction {
             const storageAccountName = this.getParamValue(params, 'storageaccountname');
             const storagePath = this.getParamValue(params, 'storagepath');
 
-            const service = DocumentBuilderService.Instance;
+            const service = ArtifactBuilderService.Instance;
             const result = await service.Finalize(handle.toString());
 
             const fileName = fileNameOverride?.toString() || result.fileName;

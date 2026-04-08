@@ -2,7 +2,7 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from '@memberjunction/actions';
 import { BaseFileHandlerAction } from "../utilities/base-file-handler";
-import { DocumentBuilderService, DocumentType, DocumentOptions } from "../utilities/document-builder-service";
+import { ArtifactBuilderService, DocumentType, DocumentOptions } from "../utilities/artifact-builder-service";
 import { JSONParamHelper } from "../utilities/json-param-helper";
 
 /**
@@ -35,7 +35,7 @@ export class CreateDocumentAction extends BaseFileHandlerAction {
             const fileName = this.getParamValue(params, 'filename');
             const options = JSONParamHelper.getJSONParam(params, 'options') as DocumentOptions | null;
 
-            const service = DocumentBuilderService.Instance;
+            const service = ArtifactBuilderService.Instance;
             const handle = service.CreateDocument(documentType, fileName ?? undefined, options ?? undefined);
 
             const defaultFileNames: Record<string, string> = { pdf: 'document.pdf', docx: 'document.docx', xlsx: 'workbook.xlsx' };

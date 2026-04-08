@@ -1,6 +1,6 @@
 /**
  * DOCX rendering engine extracted from WordGeneratorAction.
- * Used by both the single-shot Word Generator action and the incremental DocumentBuilderService.
+ * Used by both the single-shot Word Generator action and the incremental ArtifactBuilderService.
  */
 import {
     AlignmentType,
