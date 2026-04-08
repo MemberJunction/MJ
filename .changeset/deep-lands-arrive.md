@@ -5,4 +5,4 @@
 "@memberjunction/metadata-sync": minor
 ---
 
-Add --incrememntal flag for push/pull, lazy embedding loading, indexed batch context lookups, batched pull queries
+Add --incremental flag for push/pull, lazy embedding loading, indexed batch context lookups, batched pull queries
