@@ -4,7 +4,7 @@
     "Name": "T02 - Home Application Load",
     "Description": "After login, verifies the Home application loads with navigation elements visible including header, app switcher, and at least one navigation item.",
     "InputDefinition": {
-      "goal": "Log in to MJ Explorer using the provided credentials. After login, the application will show a loading screen for up to 60 seconds — this is normal. IMPORTANT: Do NOT click any 'Reset' button during loading. Just wait patiently by using Wait actions. If you see an 'Authorize App' consent screen, click 'Accept'. Once loading completes, verify the Home application has loaded successfully. Confirm that the application header with the MJ logo is visible, the app switcher or navigation sidebar is present, and at least one navigation item is displayed.",
+      "goal": "Verify the Home application has loaded successfully. Confirm that the application header with the MJ logo is visible, the app switcher or navigation sidebar is present, and at least one navigation item is displayed.",
       "startUrl": "http://localhost:4200",
       "allowedDomains": [
         "localhost",
@@ -76,7 +76,7 @@
     "ID": "5FF83062-9015-4E5E-8BD7-3C38F22A5356"
   },
   "sync": {
-    "lastModified": "2026-04-06T06:00:26.586Z",
+    "lastModified": "2026-04-08T04:19:00.144Z",
     "checksum": "6adbdc9c05787ff7dc45bea749d148a162011f6aa5762059d339c9b489b879c5"
   }
 }

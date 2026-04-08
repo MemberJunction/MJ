@@ -4,7 +4,7 @@
     "Name": "T06 - Data Explorer Search",
     "Description": "Uses the search functionality to find an entity or record. Searches for 'Event' and verifies results appear.",
     "InputDefinition": {
-      "goal": "Log in to MJ Explorer. After login, the application will show a loading screen for up to 60 seconds — this is normal. IMPORTANT: Do NOT click any 'Reset' button during loading. Just wait patiently. If you see an 'Authorize App' consent screen, click 'Accept'. Once loaded, use the search functionality (the search bar or search icon typically located in the header or navigation area). Type 'Event' into the search field and submit the search. Verify that search results appear showing Event-related entities or records.",
+      "goal": "Use the search functionality (the search bar or search icon typically located in the header or navigation area). Type 'Event' into the search field and submit the search. Verify that search results appear showing Event-related entities or records.",
       "startUrl": "http://localhost:4200",
       "allowedDomains": [
         "localhost",
@@ -74,7 +74,7 @@
     "ID": "8D4FF31A-B6D0-4E02-9528-4F0D0E240851"
   },
   "sync": {
-    "lastModified": "2026-04-06T06:00:26.695Z",
+    "lastModified": "2026-04-08T04:19:00.232Z",
     "checksum": "9377e77038da60040b9136131482d5ba2aefa854ce201a1b04954b16ca87b313"
   }
 }

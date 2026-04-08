@@ -4,7 +4,7 @@
     "Name": "T07 - Entity Form View Record Details",
     "Description": "Opens the Events entity in Data Explorer, selects an event record, and verifies the detail form displays correctly with event name, date, and status fields.",
     "InputDefinition": {
-      "goal": "Log in to MJ Explorer. After login, the application will show a loading screen for up to 60 seconds — this is normal. IMPORTANT: Do NOT click any 'Reset' button during loading. Just wait patiently. If you see an 'Authorize App' consent screen, click 'Accept'. Once loaded, navigate to Data Explorer and find the Events entity. Open the Events entity to see the records grid. Click on an event record to open its detail form. Verify that the form displays correctly with fields like event name, date, location, and status visible and populated with values. The form should not be in an error state.",
+      "goal": "Navigate to Data Explorer and find the Events entity. Open the Events entity to see the records grid. Click on an event record to open its detail form. Verify that the form displays correctly with fields like event name, date, location, and status visible and populated with values. The form should not be in an error state.",
       "startUrl": "http://localhost:4200",
       "allowedDomains": [
         "localhost",
@@ -75,7 +75,7 @@
     "ID": "BBC02CFF-554C-4587-915B-FE55FF351AC5"
   },
   "sync": {
-    "lastModified": "2026-04-06T06:00:26.726Z",
+    "lastModified": "2026-04-08T04:19:00.252Z",
     "checksum": "aa474a80ced1d0e54f9e41b50f5ebf2f0191291876555ad37ec0a73c400c9fc5"
   }
 }

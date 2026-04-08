@@ -4,7 +4,7 @@
     "Name": "T25 - Multiple Tab Workflow",
     "Description": "Opens three different entity types in separate tabs, verifies each tab has correct content, closes the middle tab, and verifies remaining tabs work.",
     "InputDefinition": {
-      "goal": "Log in to MJ Explorer. After login, the application will show a loading screen for up to 60 seconds — this is normal. IMPORTANT: Do NOT click any 'Reset' button during loading. Just wait patiently. If you see an 'Authorize App' consent screen, click 'Accept'. Once loaded, navigate to Data Explorer. Open three different entity types (e.g., Members, Events, Organizations) so each opens in a separate tab. Verify that each tab shows its own content by switching between them. Then close the middle tab and verify that the remaining two tabs are still functional with their correct content displayed.",
+      "goal": "Navigate to Data Explorer. Open three different entity types (e.g., Members, Events, Organizations) so each opens in a separate tab. Verify that each tab shows its own content by switching between them. Then close the middle tab and verify that the remaining two tabs are still functional with their correct content displayed.",
       "startUrl": "http://localhost:4200",
       "allowedDomains": [
         "localhost",
@@ -75,7 +75,7 @@
     "ID": "98B5BFE9-41F3-465E-9C68-25CBD4B7E48A"
   },
   "sync": {
-    "lastModified": "2026-04-06T06:00:27.031Z",
+    "lastModified": "2026-04-08T04:19:00.624Z",
     "checksum": "525afaaa9b0d2f636b2d005a9210ebf7191fb4f6a79f403a60d0be6a01d3ace8"
   }
 }

@@ -4,7 +4,7 @@
     "Name": "T03 - Application Switcher",
     "Description": "Uses the application switcher to navigate from Home to Data Explorer, then to AI application, then back to Home. Validates that all three applications load correctly.",
     "InputDefinition": {
-      "goal": "Log in to MJ Explorer. After login, the application will show a loading screen for up to 60 seconds — this is normal. IMPORTANT: Do NOT click any 'Reset' button during loading. Just wait patiently. If you see an 'Authorize App' consent screen, click 'Accept'. Once loaded, use the application switcher (the dropdown or sidebar that lists available applications) to navigate between applications. First, switch from the Home application to Data Explorer and confirm it loads. Then switch to the AI application and confirm it loads. Finally, switch back to the Home application. Verify each application displays its own content when active.",
+      "goal": "Use the application switcher (the dropdown or sidebar that lists available applications) to navigate between applications. First, switch from the Home application to Data Explorer and confirm it loads. Then switch to the AI application and confirm it loads. Finally, switch back to the Home application. Verify each application displays its own content when active.",
       "startUrl": "http://localhost:4200",
       "allowedDomains": [
         "localhost",
@@ -75,7 +75,7 @@
     "ID": "010D3E19-FFE9-4D91-A68B-5300F0CABE92"
   },
   "sync": {
-    "lastModified": "2026-04-06T06:00:26.614Z",
+    "lastModified": "2026-04-08T04:19:00.168Z",
     "checksum": "d1b3432bcf9301184165c2e738f24251a548d6f99a000b3c1d8ea2467adcc725"
   }
 }

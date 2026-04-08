@@ -4,7 +4,7 @@
     "Name": "T20 - Dashboard Browser",
     "Description": "Navigates to Data Explorer > Dashboards and opens a dashboard to verify it renders correctly.",
     "InputDefinition": {
-      "goal": "Log in to MJ Explorer. After login, the application will show a loading screen for up to 60 seconds — this is normal. IMPORTANT: Do NOT click any 'Reset' button during loading. Just wait patiently. If you see an 'Authorize App' consent screen, click 'Accept'. Once loaded, navigate to Data Explorer. Find the Dashboards section and open a dashboard. Verify that the dashboard renders with at least one widget, chart, or data display visible.",
+      "goal": "Navigate to Data Explorer. Find the Dashboards section and open a dashboard. Verify that the dashboard renders with at least one widget, chart, or data display visible.",
       "startUrl": "http://localhost:4200",
       "allowedDomains": [
         "localhost",
@@ -74,7 +74,7 @@
     "ID": "4069DC55-B2BB-452C-8AD2-599802D90E6B"
   },
   "sync": {
-    "lastModified": "2026-04-06T06:00:26.957Z",
+    "lastModified": "2026-04-08T04:19:00.520Z",
     "checksum": "6bfc9c3ef902be216be3d228638e18dd5e680e50ee629c270e199fec46aff0ed"
   }
 }

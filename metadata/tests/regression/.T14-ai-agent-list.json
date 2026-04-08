@@ -4,7 +4,7 @@
     "Name": "T14 - AI Application Agent List View",
     "Description": "Navigates to the AI application and views the list of configured AI agents.",
     "InputDefinition": {
-      "goal": "Log in to MJ Explorer. After login, the application will show a loading screen for up to 60 seconds — this is normal. IMPORTANT: Do NOT click any 'Reset' button during loading. Just wait patiently. If you see an 'Authorize App' consent screen, click 'Accept'. Once loaded, use the application switcher to navigate to the AI application. Find and view the list of configured AI agents. Verify that the agent list or configuration view is displayed with no error messages.",
+      "goal": "Use the application switcher to navigate to the AI application. Find and view the list of configured AI agents. Verify that the agent list or configuration view is displayed with no error messages.",
       "startUrl": "http://localhost:4200",
       "allowedDomains": [
         "localhost",
@@ -75,7 +75,7 @@
     "ID": "566E4865-BB38-49D0-921F-D32E7CE451AA"
   },
   "sync": {
-    "lastModified": "2026-04-06T06:00:26.864Z",
+    "lastModified": "2026-04-08T04:19:00.393Z",
     "checksum": "1cec3c4278169ef3f1b3346f0c656c210a37a02b9a119f8ffb9fb61e1a67f110"
   }
 }

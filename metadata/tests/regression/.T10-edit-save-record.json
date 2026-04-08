@@ -4,7 +4,7 @@
     "Name": "T10 - Entity Form Edit and Save Record",
     "Description": "Opens an existing Member record, modifies a field value, saves the changes, and verifies the save succeeded.",
     "InputDefinition": {
-      "goal": "Log in to MJ Explorer. After login, the application will show a loading screen for up to 60 seconds — this is normal. IMPORTANT: Do NOT click any 'Reset' button during loading. Just wait patiently. If you see an 'Authorize App' consent screen, click 'Accept'. Once loaded, navigate to Data Explorer and open the Members entity. Click on any member record to open its detail form. Modify any editable text field (such as Title, Notes, or Description) by clearing it and typing a new value. Save the record. Verify that a save confirmation message appears or the form shows the updated value.",
+      "goal": "Navigate to Data Explorer and open the Members entity. Click on any member record to open its detail form. Modify any editable text field (such as Title, Notes, or Description) by clearing it and typing a new value. Save the record. Verify that a save confirmation message appears or the form shows the updated value.",
       "startUrl": "http://localhost:4200",
       "allowedDomains": [
         "localhost",
@@ -75,7 +75,7 @@
     "ID": "E3EDE599-BBCB-4AB0-947E-76E933261185"
   },
   "sync": {
-    "lastModified": "2026-04-06T06:00:26.800Z",
+    "lastModified": "2026-04-08T04:19:00.311Z",
     "checksum": "0b8194d3eb80053a915b9e55845a3b2faf9f9d916dc922fd2951b3256c756ac6"
   }
 }

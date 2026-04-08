@@ -4,7 +4,7 @@
     "Name": "T23 - Handle Invalid Navigation Gracefully",
     "Description": "Attempts to navigate to a non-existent entity or URL path and verifies the application handles it gracefully without crashing.",
     "InputDefinition": {
-      "goal": "Log in to MJ Explorer. After login, the application will show a loading screen for up to 60 seconds — this is normal. IMPORTANT: Do NOT click any 'Reset' button during loading. Just wait patiently. If you see an 'Authorize App' consent screen, click 'Accept'. Once loaded, navigate the browser to an invalid URL path like http://localhost:4200/app/nonexistent/invalid-path. Verify that the application handles this gracefully by showing an error page, a 'not found' message, or redirecting to a valid page. The application should NOT show a blank white screen or crash.",
+      "goal": "Navigate the browser to an invalid URL path like http://localhost:4200/app/nonexistent/invalid-path. Verify that the application handles this gracefully by showing an error page, a 'not found' message, or redirecting to a valid page. The application should NOT show a blank white screen or crash.",
       "startUrl": "http://localhost:4200",
       "allowedDomains": [
         "localhost",
@@ -75,7 +75,7 @@
     "ID": "36A5AAA2-25B8-42FC-A06A-DF19BFEA56F0"
   },
   "sync": {
-    "lastModified": "2026-04-06T06:00:27.001Z",
+    "lastModified": "2026-04-08T04:19:00.581Z",
     "checksum": "cf42ebdf46e1ab2f407b3a3fda08108ebfe91ddbe162d51c9af50d99d03f07e6"
   }
 }

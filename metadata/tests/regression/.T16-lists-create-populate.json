@@ -4,7 +4,7 @@
     "Name": "T16 - Lists Create and Populate",
     "Description": "Navigates to the Lists application, creates a new list, adds a record to it, and verifies the list contains the record.",
     "InputDefinition": {
-      "goal": "Log in to MJ Explorer. After login, the application will show a loading screen for up to 60 seconds — this is normal. IMPORTANT: Do NOT click any 'Reset' button during loading. Just wait patiently. If you see an 'Authorize App' consent screen, click 'Accept'. Once loaded, navigate to the Lists application (if available in the app switcher). Create a new list named 'Regression Test List'. Add at least one record to it (such as a Member record). Verify the list shows the added record.",
+      "goal": "Navigate to the Lists application (if available in the app switcher). Create a new list named 'Regression Test List'. Add at least one record to it (such as a Member record). Verify the list shows the added record.",
       "startUrl": "http://localhost:4200",
       "allowedDomains": [
         "localhost",
@@ -75,7 +75,7 @@
     "ID": "5BE50BF7-D0C4-4A02-A441-41C8ECF08CF6"
   },
   "sync": {
-    "lastModified": "2026-04-06T06:00:26.894Z",
+    "lastModified": "2026-04-08T04:19:00.434Z",
     "checksum": "235a8a7a3c60aae0b9e20ae0bc89a9e49ecea17374dc3bc9c431418ef28f0cd7"
   }
 }

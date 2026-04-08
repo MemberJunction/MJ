@@ -4,7 +4,7 @@
     "Name": "T17 - Settings Page Navigation",
     "Description": "Opens the user settings/preferences page and verifies settings categories are displayed.",
     "InputDefinition": {
-      "goal": "Log in to MJ Explorer. After login, the application will show a loading screen for up to 60 seconds — this is normal. IMPORTANT: Do NOT click any 'Reset' button during loading. Just wait patiently. If you see an 'Authorize App' consent screen, click 'Accept'. Once loaded, find and open the user settings or preferences page (usually accessible from the user menu or a gear icon). Verify that the settings page displays with multiple settings categories visible.",
+      "goal": "Find and open the user settings or preferences page (usually accessible from the user menu or a gear icon). Verify that the settings page displays with multiple settings categories visible.",
       "startUrl": "http://localhost:4200",
       "allowedDomains": [
         "localhost",
@@ -74,7 +74,7 @@
     "ID": "D94781D3-F117-4832-B497-3CDB9CE2296E"
   },
   "sync": {
-    "lastModified": "2026-04-06T06:00:26.911Z",
+    "lastModified": "2026-04-08T04:19:00.454Z",
     "checksum": "aeffc99559ca0f7737b8d4851618c304f1be14a2e9c1a09e4b043303bf5cc043"
   }
 }

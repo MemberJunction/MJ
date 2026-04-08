@@ -4,7 +4,7 @@
     "Name": "T22 - Integrations Overview",
     "Description": "Navigates to the Integrations application and verifies the overview dashboard loads.",
     "InputDefinition": {
-      "goal": "Log in to MJ Explorer. After login, the application will show a loading screen for up to 60 seconds — this is normal. IMPORTANT: Do NOT click any 'Reset' button during loading. Just wait patiently. If you see an 'Authorize App' consent screen, click 'Accept'. Once loaded, use the application switcher to navigate to the Integrations application (if available). Verify that the integrations overview or connection list is displayed.",
+      "goal": "Use the application switcher to navigate to the Integrations application (if available). Verify that the integrations overview or connection list is displayed.",
       "startUrl": "http://localhost:4200",
       "allowedDomains": [
         "localhost",
@@ -74,7 +74,7 @@
     "ID": "5266CE50-884B-4AAD-B450-07098B547C8D"
   },
   "sync": {
-    "lastModified": "2026-04-06T06:00:26.986Z",
+    "lastModified": "2026-04-08T04:19:00.561Z",
     "checksum": "7badc232ca0d9e114665215868c36035468455f4a549fddf9abee7ffaf790f5f"
   }
 }

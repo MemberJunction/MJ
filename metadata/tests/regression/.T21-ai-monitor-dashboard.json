@@ -4,7 +4,7 @@
     "Name": "T21 - AI Monitor Dashboard",
     "Description": "Navigates to AI > Monitor and verifies the monitoring dashboard loads with status indicators.",
     "InputDefinition": {
-      "goal": "Log in to MJ Explorer. After login, the application will show a loading screen for up to 60 seconds — this is normal. IMPORTANT: Do NOT click any 'Reset' button during loading. Just wait patiently. If you see an 'Authorize App' consent screen, click 'Accept'. Once loaded, use the application switcher to navigate to the AI application. Find and open the Monitor or monitoring dashboard section. Verify that the dashboard displays with monitoring widgets, status indicators, or agent execution data. No error messages or crash screens should be visible.",
+      "goal": "Use the application switcher to navigate to the AI application. Find and open the Monitor or monitoring dashboard section. Verify that the dashboard displays with monitoring widgets, status indicators, or agent execution data. No error messages or crash screens should be visible.",
       "startUrl": "http://localhost:4200",
       "allowedDomains": [
         "localhost",
@@ -75,7 +75,7 @@
     "ID": "7F861EDC-EDEF-4333-8EFE-C9B6F2209404"
   },
   "sync": {
-    "lastModified": "2026-04-06T06:00:26.972Z",
+    "lastModified": "2026-04-08T04:19:00.541Z",
     "checksum": "1919a650e5632bdadab34da4d194b9fc20b5198956f5d623f666de9ce6ac57ee"
   }
 }

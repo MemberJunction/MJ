@@ -4,7 +4,7 @@
     "Name": "T08 - Navigation and Tab Management",
     "Description": "Opens multiple entity records in separate tabs, switches between tabs, and closes a tab without losing the others. Validates the core tab management workflow.",
     "InputDefinition": {
-      "goal": "Log in to MJ Explorer. After login, the application will show a loading screen for up to 60 seconds — this is normal. IMPORTANT: Do NOT click any 'Reset' button during loading. Just wait patiently. If you see an 'Authorize App' consent screen, click 'Accept'. Once loaded, navigate to Data Explorer. Open at least two different entity records so they appear in separate tabs in the tab bar. Switch between the tabs to verify each shows its own content. Then close one of the tabs and verify that the remaining tab(s) are still open and functional with their correct content displayed.",
+      "goal": "Navigate to Data Explorer. Open at least two different entity records so they appear in separate tabs in the tab bar. Switch between the tabs to verify each shows its own content. Then close one of the tabs and verify that the remaining tab(s) are still open and functional with their correct content displayed.",
       "startUrl": "http://localhost:4200",
       "allowedDomains": [
         "localhost",
@@ -75,7 +75,7 @@
     "ID": "8F37873C-FD30-4C2C-A875-716DCE7C9E77"
   },
   "sync": {
-    "lastModified": "2026-04-06T06:00:26.758Z",
+    "lastModified": "2026-04-08T04:19:00.272Z",
     "checksum": "b6dfc7c1abd7126219506fa75942db122c3c819a738757ce9d25372302790fb2"
   }
 }

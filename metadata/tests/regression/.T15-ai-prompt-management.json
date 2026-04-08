@@ -4,7 +4,7 @@
     "Name": "T15 - AI Application Prompt Management",
     "Description": "Navigates to AI > Prompts and views the prompt management interface. Opens a prompt to see its detail form.",
     "InputDefinition": {
-      "goal": "Log in to MJ Explorer. After login, the application will show a loading screen for up to 60 seconds — this is normal. IMPORTANT: Do NOT click any 'Reset' button during loading. Just wait patiently. If you see an 'Authorize App' consent screen, click 'Accept'. Once loaded, use the application switcher to navigate to the AI application. Find and open the Prompts section. View the list of prompts, then click on one to open its detail form. Verify that the prompt detail form shows prompt text or configuration.",
+      "goal": "Use the application switcher to navigate to the AI application. Find and open the Prompts section. View the list of prompts, then click on one to open its detail form. Verify that the prompt detail form shows prompt text or configuration.",
       "startUrl": "http://localhost:4200",
       "allowedDomains": [
         "localhost",
@@ -75,7 +75,7 @@
     "ID": "92255EB2-CC3D-4FF2-8652-EE2CFB5D8A6D"
   },
   "sync": {
-    "lastModified": "2026-04-06T06:00:26.879Z",
+    "lastModified": "2026-04-08T04:19:00.414Z",
     "checksum": "80869c0f0fe9af7482239cdb0348e8f9b45f43aae578025d026b5602bf651992"
   }
 }

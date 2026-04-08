@@ -4,7 +4,7 @@
     "Name": "T13 - Admin Dashboard User Management",
     "Description": "Navigates to Admin > Users and verifies the user management dashboard loads with a list of users.",
     "InputDefinition": {
-      "goal": "Log in to MJ Explorer. After login, the application will show a loading screen for up to 60 seconds — this is normal. IMPORTANT: Do NOT click any 'Reset' button during loading. Just wait patiently. If you see an 'Authorize App' consent screen, click 'Accept'. Once loaded, use the application switcher to navigate to the Admin application. Find and open the Users section or user management area. Verify that a list of users is displayed with at least one user record visible.",
+      "goal": "Use the application switcher to navigate to the Admin application. Find and open the Users section or user management area. Verify that a list of users is displayed with at least one user record visible.",
       "startUrl": "http://localhost:4200",
       "allowedDomains": [
         "localhost",
@@ -75,7 +75,7 @@
     "ID": "3881D46F-D7C9-46DE-B3E3-D54FB8DA4566"
   },
   "sync": {
-    "lastModified": "2026-04-06T06:00:26.849Z",
+    "lastModified": "2026-04-08T04:19:00.373Z",
     "checksum": "0d2ecfe77dee107faa084453c33db8f4be124a8c9d26c8842e2837d43594c091"
   }
 }

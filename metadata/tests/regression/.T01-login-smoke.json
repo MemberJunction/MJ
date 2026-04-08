@@ -2,9 +2,9 @@
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
     "Name": "T01 - Login Smoke",
-    "Description": "Navigates to MJ Explorer, authenticates via Auth0 FormLogin, and verifies the application loads after login. This is the most fundamental regression test — if login fails, nothing else can run.",
+    "Description": "Navigates to MJ Explorer, authenticates via Auth0 FormLogin, and verifies the application loads after login. This is the most fundamental regression test \u2014 if login fails, nothing else can run.",
     "InputDefinition": {
-      "goal": "Navigate to the MJ Explorer login page. You will see an Auth0 login form. Enter the provided username and password credentials to log in. After login, the application will show a loading screen for up to 60 seconds — this is normal. IMPORTANT: Do NOT click any 'Reset' button during loading. Just wait patiently by using Wait actions. If you see an 'Authorize App' consent screen, click 'Accept'. After loading completes, verify the MJ Explorer dashboard or home screen has loaded successfully with navigation elements visible.",
+      "goal": "Verify the MJ Explorer dashboard or home screen has loaded successfully with navigation elements visible.",
       "startUrl": "http://localhost:4200",
       "allowedDomains": [
         "localhost",
@@ -84,7 +84,7 @@
     "ID": "2F4CAED9-0916-433E-8A63-70C4B71B337B"
   },
   "sync": {
-    "lastModified": "2026-04-06T06:00:26.557Z",
+    "lastModified": "2026-04-08T04:19:00.121Z",
     "checksum": "ef3c11ac3e97ae69cea36d660016dc2c41b2459a9132668d474b04138cddcb81"
   }
 }

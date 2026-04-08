@@ -4,7 +4,7 @@
     "Name": "T19 - Query Browser Execute Query",
     "Description": "Navigates to Data Explorer > Queries, finds a query related to events or members, executes it, and verifies results display.",
     "InputDefinition": {
-      "goal": "Log in to MJ Explorer. After login, the application will show a loading screen for up to 60 seconds — this is normal. IMPORTANT: Do NOT click any 'Reset' button during loading. Just wait patiently. If you see an 'Authorize App' consent screen, click 'Accept'. Once loaded, navigate to Data Explorer. Find the Queries section and locate a query related to events or members. Select and execute the query. Verify that results are displayed in a tabular format with data rows.",
+      "goal": "Navigate to Data Explorer. Find the Queries section and locate a query related to events or members. Select and execute the query. Verify that results are displayed in a tabular format with data rows.",
       "startUrl": "http://localhost:4200",
       "allowedDomains": [
         "localhost",
@@ -75,7 +75,7 @@
     "ID": "F89CF3DF-CDC1-4460-9BD1-C98E750C163F"
   },
   "sync": {
-    "lastModified": "2026-04-06T06:00:26.941Z",
+    "lastModified": "2026-04-08T04:19:00.498Z",
     "checksum": "57c582dabbcad83b2709af5ee608f03a17e5641bc53df21567e5d965afe82f71"
   }
 }

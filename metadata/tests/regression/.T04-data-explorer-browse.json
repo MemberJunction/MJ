@@ -4,7 +4,7 @@
     "Name": "T04 - Data Explorer Browse Entities",
     "Description": "Navigates to Data Explorer, browses the list of available entities, locates the Members entity from AssociationDB, and opens it to view records in a grid.",
     "InputDefinition": {
-      "goal": "Log in to MJ Explorer. After login, the application will show a loading screen for up to 60 seconds — this is normal. IMPORTANT: Do NOT click any 'Reset' button during loading. Just wait patiently. If you see an 'Authorize App' consent screen, click 'Accept'. Once loaded, navigate to the Data Explorer application. Browse the list of available entities. Find and click on the 'Members' entity (from the AssociationDemo schema) to open it. Verify that a grid or list of member records is displayed with multiple rows of data.",
+      "goal": "Navigate to the Data Explorer application. Browse the list of available entities. Find and click on the 'Members' entity (from the AssociationDemo schema) to open it. Verify that a grid or list of member records is displayed with multiple rows of data.",
       "startUrl": "http://localhost:4200",
       "allowedDomains": [
         "localhost",
@@ -83,7 +83,7 @@
     "ID": "F83547E5-E480-424E-BF85-999324FB8DB4"
   },
   "sync": {
-    "lastModified": "2026-04-06T06:00:26.641Z",
+    "lastModified": "2026-04-08T04:19:00.190Z",
     "checksum": "3a88955bf08a2f5ffdaf88e29c0e49eca5295e2c1f76239fd3756683d35c1ed5"
   }
 }

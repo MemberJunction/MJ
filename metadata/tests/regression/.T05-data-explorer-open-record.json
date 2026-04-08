@@ -4,7 +4,7 @@
     "Name": "T05 - Data Explorer Open Entity Record",
     "Description": "From the Members entity grid in Data Explorer, opens a specific member record to view its detail form with fields like Name, Email, and Organization.",
     "InputDefinition": {
-      "goal": "Log in to MJ Explorer. After login, the application will show a loading screen for up to 60 seconds — this is normal. IMPORTANT: Do NOT click any 'Reset' button during loading. Just wait patiently. If you see an 'Authorize App' consent screen, click 'Accept'. Once loaded, navigate to Data Explorer and open the Members entity to see the records grid. Then click on a specific member record to open its detail form. Verify that the detail form displays with populated fields such as Name, Email, Organization, or Membership Type.",
+      "goal": "Navigate to Data Explorer and open the Members entity to see the records grid. Then click on a specific member record to open its detail form. Verify that the detail form displays with populated fields such as Name, Email, Organization, or Membership Type.",
       "startUrl": "http://localhost:4200",
       "allowedDomains": [
         "localhost",
@@ -83,7 +83,7 @@
     "ID": "2BB830E5-AAB2-4537-BC35-366E5F7D9D31"
   },
   "sync": {
-    "lastModified": "2026-04-06T06:00:26.669Z",
+    "lastModified": "2026-04-08T04:19:00.211Z",
     "checksum": "7badb06ea2302e6e39033a3e6a0ac4da5e2781e17cdd40be4bc5273737442ae9"
   }
 }
