@@ -232,7 +232,7 @@ import { UUIDsEqual } from '@memberjunction/global';
           <div
             class="unified-grid"
             [class.select-mode]="isSelectMode">
-            @for (item of unifiedItems; track item) {
+            @for (item of PagedItems; track item) {
               <div
                 class="grid-item"
                 [class.selected]="item.selected"
@@ -315,6 +315,45 @@ import { UUIDsEqual } from '@memberjunction/global';
               </div>
             }
           </div>
+
+          <!-- Pagination controls (grid mode, when more than one page) -->
+          @if (TotalPages > 1) {
+            <div class="pagination-bar">
+              <span class="pagination-info">
+                {{ (CurrentPage - 1) * PageSize + 1 }}–{{ CurrentPage * PageSize < unifiedItems.length ? CurrentPage * PageSize : unifiedItems.length }}
+                of {{ unifiedItems.length }} items
+              </span>
+              <div class="pagination-controls">
+                <button class="pagination-btn"
+                  [disabled]="CurrentPage === 1"
+                  (click)="GoToPage(1)"
+                  title="First page">
+                  <i class="fas fa-angles-left"></i>
+                </button>
+                <button class="pagination-btn"
+                  [disabled]="CurrentPage === 1"
+                  (click)="GoToPage(CurrentPage - 1)"
+                  title="Previous page">
+                  <i class="fas fa-chevron-left"></i>
+                </button>
+                <span class="pagination-page-info">
+                  Page {{ CurrentPage }} of {{ TotalPages }}
+                </span>
+                <button class="pagination-btn"
+                  [disabled]="CurrentPage === TotalPages"
+                  (click)="GoToPage(CurrentPage + 1)"
+                  title="Next page">
+                  <i class="fas fa-chevron-right"></i>
+                </button>
+                <button class="pagination-btn"
+                  [disabled]="CurrentPage === TotalPages"
+                  (click)="GoToPage(TotalPages)"
+                  title="Last page">
+                  <i class="fas fa-angles-right"></i>
+                </button>
+              </div>
+            </div>
+          }
         }
     
         <!-- List view -->
@@ -366,7 +405,7 @@ import { UUIDsEqual } from '@memberjunction/global';
                 </tr>
               </thead>
               <tbody>
-                @for (item of unifiedItems; track item) {
+                @for (item of PagedItems; track item) {
                   <tr
                     class="list-item"
                     [class.selected]="item.selected"
@@ -419,6 +458,45 @@ import { UUIDsEqual } from '@memberjunction/global';
               </tbody>
             </table>
           </div>
+
+          <!-- Pagination controls (list mode only, when more than one page) -->
+          @if (TotalPages > 1) {
+            <div class="pagination-bar">
+              <span class="pagination-info">
+                {{ (CurrentPage - 1) * PageSize + 1 }}–{{ CurrentPage * PageSize < unifiedItems.length ? CurrentPage * PageSize : unifiedItems.length }}
+                of {{ unifiedItems.length }} items
+              </span>
+              <div class="pagination-controls">
+                <button class="pagination-btn"
+                  [disabled]="CurrentPage === 1"
+                  (click)="GoToPage(1)"
+                  title="First page">
+                  <i class="fas fa-angles-left"></i>
+                </button>
+                <button class="pagination-btn"
+                  [disabled]="CurrentPage === 1"
+                  (click)="GoToPage(CurrentPage - 1)"
+                  title="Previous page">
+                  <i class="fas fa-chevron-left"></i>
+                </button>
+                <span class="pagination-page-info">
+                  Page {{ CurrentPage }} of {{ TotalPages }}
+                </span>
+                <button class="pagination-btn"
+                  [disabled]="CurrentPage === TotalPages"
+                  (click)="GoToPage(CurrentPage + 1)"
+                  title="Next page">
+                  <i class="fas fa-chevron-right"></i>
+                </button>
+                <button class="pagination-btn"
+                  [disabled]="CurrentPage === TotalPages"
+                  (click)="GoToPage(TotalPages)"
+                  title="Last page">
+                  <i class="fas fa-angles-right"></i>
+                </button>
+              </div>
+            </div>
+          }
         }
       </div>
     </div>
@@ -501,6 +579,13 @@ import { UUIDsEqual } from '@memberjunction/global';
     </mj-collection-share-modal>
     `,
   styles: [`
+    :host {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-height: 0;
+    }
+
     /* Main container */
     .collections-view {
       display: flex;
@@ -868,6 +953,7 @@ import { UUIDsEqual } from '@memberjunction/global';
       grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
       gap: 16px;
       padding: 4px;
+      flex-shrink: 0;
     }
 
     .grid-item {
@@ -1069,6 +1155,7 @@ import { UUIDsEqual } from '@memberjunction/global';
       border: 1px solid var(--mj-border-default);
       border-radius: 8px;
       overflow: hidden;
+      flex-shrink: 0;
     }
 
     .list-table {
@@ -1205,6 +1292,63 @@ import { UUIDsEqual } from '@memberjunction/global';
       width: 150px;
     }
 
+    /* Pagination */
+    .pagination-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 16px;
+      margin-top: 8px;
+      background: var(--mj-bg-surface);
+      border: 1px solid var(--mj-border-default);
+      border-radius: 8px;
+      font-size: 13px;
+      color: var(--mj-text-secondary);
+      flex-shrink: 0;
+    }
+
+    .pagination-info {
+      white-space: nowrap;
+    }
+
+    .pagination-controls {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .pagination-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      border: 1px solid var(--mj-border-default);
+      border-radius: 6px;
+      background: var(--mj-bg-surface);
+      color: var(--mj-text-secondary);
+      cursor: pointer;
+      transition: all 150ms ease;
+      font-size: 12px;
+    }
+
+    .pagination-btn:hover:not(:disabled) {
+      background: var(--mj-bg-surface-hover);
+      border-color: var(--mj-border-strong);
+      color: var(--mj-text-primary);
+    }
+
+    .pagination-btn:disabled {
+      opacity: 0.35;
+      cursor: default;
+    }
+
+    .pagination-page-info {
+      padding: 0 8px;
+      white-space: nowrap;
+      font-weight: 500;
+    }
+
     /* Toolbar separator and action group */
     .toolbar-separator {
       width: 1px;
@@ -1334,6 +1478,26 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
   public activeArtifactId: string | null = null; // Track which artifact is currently being viewed
   private itemCountMap: Map<string, number> = new Map();
   public isSelectMode: boolean = false; // Toggle for selection mode
+
+  // Pagination state
+  public PageSize: number = 50;
+  public CurrentPage: number = 1;
+
+  /** Total number of pages based on current items and page size */
+  get TotalPages(): number {
+    return Math.max(1, Math.ceil(this.unifiedItems.length / this.PageSize));
+  }
+
+  /** Items for the current page */
+  get PagedItems(): CollectionViewItem[] {
+    const start = (this.CurrentPage - 1) * this.PageSize;
+    return this.unifiedItems.slice(start, start + this.PageSize);
+  }
+
+  /** Navigate to a specific page */
+  GoToPage(page: number): void {
+    this.CurrentPage = Math.max(1, Math.min(page, this.TotalPages));
+  }
 
   IsArtifactActive(item: CollectionViewItem): boolean {
     return UUIDsEqual(item.artifact?.ID, this.activeArtifactId);
@@ -2128,8 +2292,9 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
       });
     }
 
-    // Apply sorting
+    // Apply sorting and reset pagination
     this.unifiedItems = this.sortItems(items);
+    this.CurrentPage = 1;
     this.cdr.detectChanges();
   }
 
