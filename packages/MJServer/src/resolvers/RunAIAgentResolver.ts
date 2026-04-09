@@ -1,6 +1,6 @@
 import { Resolver, Mutation, Query, Arg, Ctx, ObjectType, Field, PubSub, PubSubEngine, Subscription, Root, ResolverFilterData, ID, Int } from 'type-graphql';
 import { AppContext, UserPayload } from '../types.js';
-import { DatabaseProviderBase, LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { DatabaseProviderBase, LogError, LogStatus, Metadata, RunView, UserInfo, IMetadataProvider, IRunViewProvider } from '@memberjunction/core';
 import { MJConversationDetailEntity, MJConversationDetailAttachmentEntity, MJConversationDetailArtifactEntity, MJArtifactVersionEntity, MJAIAgentRequestEntity } from '@memberjunction/core-entities';
 import { AgentRunner } from '@memberjunction/ai-agents';
 import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, ExecuteAgentResult, ConversationUtility, AttachmentData } from '@memberjunction/ai-core-plus';
@@ -11,7 +11,7 @@ import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { GetReadWriteProvider } from '../util.js';
 import { SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
-import { getAttachmentService } from '@memberjunction/aiengine';
+import { GetAttachmentService } from '@memberjunction/aiengine';
 import { NotificationEngine } from '@memberjunction/notifications';
 
 @ObjectType()
@@ -453,7 +453,7 @@ export class RunAIAgentResolver extends ResolverBase {
 
             if (lastRunId && result.agentRun?.ID) {
                 postExecutionOps.push(
-                    this.syncFeedbackRequestFromConversation(lastRunId, result.agentRun.ID, userMessage, currentUser)
+                    this.syncFeedbackRequestFromConversation(lastRunId, result.agentRun.ID, userMessage, currentUser, p)
                 );
             }
 
@@ -797,10 +797,11 @@ export class RunAIAgentResolver extends ResolverBase {
         lastRunId: string,
         newRunId: string,
         userMessage: string | undefined,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider: IMetadataProvider
     ): Promise<void> {
         try {
-            const rv = new RunView();
+            const rv = new RunView(<IRunViewProvider><any>provider);
             const result = await rv.RunView<MJAIAgentRequestEntity>({
                 EntityName: 'MJ: AI Agent Requests',
                 ExtraFilter: `OriginatingAgentRunID='${lastRunId}' AND Status='Requested'`,
@@ -939,8 +940,7 @@ export class RunAIAgentResolver extends ResolverBase {
             // times: once in loadConversationHistoryWithAttachments (just to get conversationId),
             // once in AgentRunner (same reason), and once in createCompletionNotification. Now we
             // load it a single time and thread conversationId through the call chain.
-            const md = new Metadata();
-            const currentDetail = await md.GetEntityObject<MJConversationDetailEntity>(
+            const currentDetail = await p.GetEntityObject<MJConversationDetailEntity>(
                 'MJ: Conversation Details',
                 currentUser
             );
@@ -953,7 +953,8 @@ export class RunAIAgentResolver extends ResolverBase {
             const messages = await this.loadConversationHistoryWithAttachments(
                 conversationId,
                 currentUser,
-                maxHistoryMessages || 20
+                maxHistoryMessages || 20,
+                p
             );
 
             // Convert to JSON string for the existing executeAIAgent method
@@ -1031,8 +1032,8 @@ export class RunAIAgentResolver extends ResolverBase {
                 throw new Error('Unable to determine current user');
             }
 
-            const md = new Metadata();
-            const request = await md.GetEntityObject<MJAIAgentRequestEntity>(
+            const p = GetReadWriteProvider(providers);
+            const request = await p.GetEntityObject<MJAIAgentRequestEntity>(
                 'MJ: AI Agent Requests',
                 currentUser
             );
@@ -1096,7 +1097,7 @@ export class RunAIAgentResolver extends ResolverBase {
     async ReassignAgentRequest(
         @Arg('requestId') requestId: string,
         @Arg('newUserID') newUserID: string,
-        @Ctx() { userPayload }: AppContext,
+        @Ctx() { userPayload, providers }: AppContext,
         @Arg('note', { nullable: true }) note?: string
     ): Promise<AIAgentRunResult> {
         const startTime = Date.now();
@@ -1106,8 +1107,8 @@ export class RunAIAgentResolver extends ResolverBase {
                 throw new Error('Unable to determine current user');
             }
 
-            const md = new Metadata();
-            const request = await md.GetEntityObject<MJAIAgentRequestEntity>(
+            const p = GetReadWriteProvider(providers);
+            const request = await p.GetEntityObject<MJAIAgentRequestEntity>(
                 'MJ: AI Agent Requests',
                 currentUser
             );
@@ -1262,10 +1263,11 @@ export class RunAIAgentResolver extends ResolverBase {
     private async loadConversationHistoryWithAttachments(
         conversationId: string,
         contextUser: UserInfo,
-        maxMessages: number
+        maxMessages: number,
+        provider: IMetadataProvider
     ): Promise<ChatMessage[]> {
-        const rv = new RunView();
-        const attachmentService = getAttachmentService();
+        const rv = new RunView(<IRunViewProvider><any>provider);
+        const attachmentService = GetAttachmentService();
 
         // Load recent conversation details (messages) for this conversation.
         // Only fetch the three fields we actually use — ID for attachment lookups,
@@ -1290,10 +1292,10 @@ export class RunAIAgentResolver extends ResolverBase {
         const messageIds = details.map(d => d.ID);
 
         // Batch load all attachments for these messages
-        const attachmentsByDetailId = await attachmentService.getAttachmentsBatch(messageIds, contextUser);
+        const attachmentsByDetailId = await attachmentService.GetAttachmentsBatch(messageIds, contextUser, provider);
 
         // Batch load input artifacts for these messages
-        const inputArtifactsByDetailId = await this.loadInputArtifactsBatch(messageIds, contextUser);
+        const inputArtifactsByDetailId = await this.loadInputArtifactsBatch(messageIds, contextUser, provider);
 
         // Build ChatMessage array with attachments and input artifacts
         const messages: ChatMessage[] = [];
@@ -1304,7 +1306,7 @@ export class RunAIAgentResolver extends ResolverBase {
 
             // Get attachment data with content URLs (handles both inline and FileID storage)
             const attachmentDataPromises = attachments.map(att =>
-                attachmentService.getAttachmentData(att, contextUser)
+                attachmentService.GetAttachmentData(att, contextUser, provider)
             );
             const attachmentDataResults = await Promise.all(attachmentDataPromises);
 
@@ -1327,7 +1329,7 @@ export class RunAIAgentResolver extends ResolverBase {
             for (const artifactVersion of inputArtifacts) {
                 if (artifactVersion.ContentMode === 'File' && artifactVersion.FileID) {
                     // File-backed artifact — download content and treat like a document attachment
-                    const fileContent = await this.downloadArtifactFileContent(artifactVersion, contextUser);
+                    const fileContent = await this.downloadArtifactFileContent(artifactVersion, contextUser, provider);
                     if (fileContent) {
                         validAttachments.push({
                             type: ConversationUtility.GetAttachmentTypeFromMime(artifactVersion.MimeType || ''),
@@ -1387,12 +1389,13 @@ export class RunAIAgentResolver extends ResolverBase {
      */
     private async loadInputArtifactsBatch(
         conversationDetailIds: string[],
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider: IMetadataProvider
     ): Promise<Map<string, MJArtifactVersionEntity[]>> {
         const map = new Map<string, MJArtifactVersionEntity[]>();
         if (conversationDetailIds.length === 0) return map;
 
-        const rv = new RunView();
+        const rv = new RunView(<IRunViewProvider><any>provider);
         const idList = conversationDetailIds.map(id => `'${id}'`).join(',');
 
         // Load ConversationDetailArtifact links with Direction='Input'
@@ -1443,14 +1446,15 @@ export class RunAIAgentResolver extends ResolverBase {
      */
     private async downloadArtifactFileContent(
         artifactVersion: MJArtifactVersionEntity,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider: IMetadataProvider
     ): Promise<string | null> {
         if (!artifactVersion.FileID) return null;
 
         try {
             // Use the attachment service's downloadFileContent which uses GetObject directly
-            const attachmentService = getAttachmentService();
-            const buffer = await attachmentService.downloadFileContent(artifactVersion.FileID, contextUser);
+            const attachmentService = GetAttachmentService();
+            const buffer = await attachmentService.DownloadFileContent(artifactVersion.FileID, contextUser, provider);
             if (!buffer) return null;
 
             const base64 = buffer.toString('base64');
