@@ -316,12 +316,15 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
 
     /**
      * Regions mode: shaded geographic regions using GeoJSON boundaries.
-     * Loads Country boundary data and colors each country by record count.
+     * Auto-detects grouping level:
+     * - If records span multiple countries → group by Country, render country polygons
+     * - If all records are in one country → group by State/Province, render spatial clusters
      * Falls back to spatial clustering if boundary data isn't available.
      */
     private RenderChoropleth(): void {
         const bounds: L.LatLng[] = [];
         const recordsByCountry = new Map<string, Record<string, unknown>[]>();
+        const recordsByState = new Map<string, Record<string, unknown>[]>();
 
         for (const record of this.Records) {
             const lat = this.GetField(record, this.LatitudeField) as number;
@@ -329,16 +332,81 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
             if (lat == null || lng == null || isNaN(lat) || isNaN(lng)) continue;
             bounds.push(L.latLng(lat, lng));
 
-            // Group by Country field
             const country = String(this.GetField(record, 'Country') ?? 'Unknown');
             if (!recordsByCountry.has(country)) recordsByCountry.set(country, []);
             recordsByCountry.get(country)!.push(record);
+
+            const state = String(this.GetField(record, 'State') ?? 'Unknown');
+            const stateKey = `${state}, ${country}`;
+            if (!recordsByState.has(stateKey)) recordsByState.set(stateKey, []);
+            recordsByState.get(stateKey)!.push(record);
         }
 
         this.MarkerCount = bounds.length;
 
-        // Load country boundaries and render shaded regions
-        this.LoadAndRenderRegions(recordsByCountry, bounds);
+        // Auto-detect grouping: if all records are in one country, use state-level
+        if (recordsByCountry.size <= 1 && recordsByState.size > 1) {
+            // Single country — drill down to state-level spatial clusters
+            this.RenderStateLevelRegions(recordsByState, bounds);
+        } else {
+            // Multiple countries — use country-level GeoJSON boundaries
+            this.LoadAndRenderRegions(recordsByCountry, bounds);
+        }
+    }
+
+    /**
+     * Render state-level regions using colored spatial clusters.
+     * Used when all records are in a single country.
+     */
+    private RenderStateLevelRegions(
+        recordsByState: Map<string, Record<string, unknown>[]>,
+        bounds: L.LatLng[]
+    ): void {
+        const colors = ['#3498db', '#2ecc71', '#e74c3c', '#f39c12', '#9b59b6',
+                        '#1abc9c', '#e67e22', '#2980b9', '#27ae60', '#c0392b',
+                        '#16a085', '#d35400', '#8e44ad', '#2c3e50', '#f1c40f'];
+
+        let colorIdx = 0;
+        for (const [stateName, records] of recordsByState) {
+            const color = colors[colorIdx % colors.length];
+
+            // Compute center of all records in this state
+            let sumLat = 0, sumLng = 0, count = 0;
+            for (const rec of records) {
+                const lat = this.GetField(rec, this.LatitudeField) as number;
+                const lng = this.GetField(rec, this.LongitudeField) as number;
+                if (lat && lng) { sumLat += lat; sumLng += lng; count++; }
+            }
+            if (count === 0) continue;
+
+            const centerLat = sumLat / count;
+            const centerLng = sumLng / count;
+            const radius = Math.min(15 + records.length * 5, 50);
+
+            const circle = L.circleMarker([centerLat, centerLng], {
+                radius,
+                fillColor: color,
+                fillOpacity: 0.45,
+                color: color,
+                weight: 2,
+                opacity: 0.85
+            });
+
+            circle.bindPopup(this.BuildClusterPopup(records, `${stateName} (${records.length})`));
+            circle.on('click', () => {
+                this.RegionClick.emit({
+                    RegionName: stateName,
+                    GroupBy: 'state_province',
+                    RecordCount: records.length,
+                    Records: records
+                });
+            });
+
+            this.markerLayer!.addLayer(circle);
+            colorIdx++;
+        }
+
+        this.FitBoundsToMarkers(bounds);
     }
 
     /**
@@ -534,9 +602,9 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
      * Fit map bounds to encompass all marker coordinates.
      */
     private FitBoundsToMarkers(bounds: L.LatLng[]): void {
-        if (bounds.length > 0 && this.map && !this.DisplayState?.CenterLat) {
+        if (bounds.length > 0 && this.map) {
             const boundsObj = L.latLngBounds(bounds);
-            this.map.fitBounds(boundsObj, { padding: [30, 30], maxZoom: 12 });
+            this.map.fitBounds(boundsObj, { padding: [30, 30], maxZoom: 14 });
         }
         this.cdr.detectChanges();
     }
