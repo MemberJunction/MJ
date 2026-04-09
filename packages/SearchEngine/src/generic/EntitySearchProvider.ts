@@ -9,7 +9,8 @@
  */
 
 import { LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
-import { ISearchProvider } from './ISearchProvider';
+import { RegisterClass } from '@memberjunction/global';
+import { BaseSearchProvider } from './ISearchProvider';
 import { SearchSource, SearchFilters, SearchResultItem, SearchResultType } from './search.types';
 
 /**
@@ -17,16 +18,9 @@ import { SearchSource, SearchFilters, SearchResultItem, SearchResultType } from 
  * Searches all entities where AllowUserSearchAPI=true, returning results
  * with rank-based scores.
  */
-export class EntitySearchProvider implements ISearchProvider {
+@RegisterClass(BaseSearchProvider, 'EntitySearchProvider')
+export class EntitySearchProvider extends BaseSearchProvider {
     public readonly SourceType: SearchSource = 'entity';
-
-    /**
-     * Entity search is always available since it uses the standard RunView
-     * infrastructure with no external dependencies.
-     */
-    public IsAvailable(): boolean {
-        return true;
-    }
 
     /**
      * Execute an entity search across all entities with AllowUserSearchAPI=true.

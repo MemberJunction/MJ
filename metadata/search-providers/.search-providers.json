@@ -1,0 +1,86 @@
+[
+  {
+    "fields": {
+      "Name": "Database",
+      "Description": "LIKE-based search across all database entities with AllowUserSearchAPI=true using RunView + UserSearchString. Always available as it uses the standard MJ provider infrastructure with no external dependencies.",
+      "DriverClass": "EntitySearchProvider",
+      "Status": "Active",
+      "Priority": 0,
+      "SupportsPreview": true,
+      "MaxResultsOverride": null,
+      "ProviderConfig": null,
+      "CredentialID": null,
+      "Comments": "Built-in provider. Searches database entities using field-match relevance scoring with name field boost."
+    },
+    "primaryKey": {
+      "ID": "5D3F92FE-851A-4EB9-8764-0021753D869C"
+    },
+    "sync": {
+      "lastModified": "2026-04-09T19:59:08.342Z",
+      "checksum": "4f89b5901f2689f86dba34b984a1af2c8b4c46cfa7adb03ce34b8909c816641a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Database Full-Text",
+      "Description": "Database-native full-text search using SQL Server FREETEXT or PostgreSQL tsvector. Searches all FTS-enabled entities and enriches results with tags from the knowledge graph.",
+      "DriverClass": "FullTextSearchProvider",
+      "Status": "Active",
+      "Priority": 1,
+      "SupportsPreview": true,
+      "MaxResultsOverride": null,
+      "ProviderConfig": null,
+      "CredentialID": null,
+      "Comments": "Built-in provider. Requires FTS indexes to be configured on entities via CodeGen."
+    },
+    "primaryKey": {
+      "ID": "0DD5242D-6852-4E95-9CE2-44BCD5527CC3"
+    },
+    "sync": {
+      "lastModified": "2026-04-09T19:59:08.361Z",
+      "checksum": "a90b57ace38becae2c22f9d6c52154d6f0146e231ae9ad92e8262cdee1d2ee9a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Semantic",
+      "Description": "AI-powered semantic similarity search using vector embeddings. Embeds the search query using AI models, then finds semantically similar content across all configured vector indexes. Groups indexes by embedding model and queries in parallel with an LRU embedding cache for performance.",
+      "DriverClass": "VectorSearchProvider",
+      "Status": "Active",
+      "Priority": 2,
+      "SupportsPreview": true,
+      "MaxResultsOverride": null,
+      "ProviderConfig": null,
+      "CredentialID": null,
+      "Comments": "Built-in provider. Requires at least one vector index to be configured. Gracefully returns empty results when no indexes exist."
+    },
+    "primaryKey": {
+      "ID": "538CFEA3-62C0-4205-996A-199759BF2E28"
+    },
+    "sync": {
+      "lastModified": "2026-04-09T19:59:08.378Z",
+      "checksum": "b2b9faa96b51494fdbd43b66447c08984a51b804374fb0fe5f5fce9e6773e03c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "File Storage",
+      "Description": "Searches files across MJ File Storage accounts (Box, Google Drive, SharePoint, Dropbox) that have IncludeInGlobalSearch=true, using each provider's native search API. Results are permission-checked against FileStorageAccountPermission.",
+      "DriverClass": "StorageSearchProvider",
+      "Status": "Active",
+      "Priority": 3,
+      "SupportsPreview": true,
+      "MaxResultsOverride": null,
+      "ProviderConfig": null,
+      "CredentialID": null,
+      "Comments": "Built-in provider. Requires at least one storage account with IncludeInGlobalSearch=true and a provider with SupportsSearch=true."
+    },
+    "primaryKey": {
+      "ID": "A3130198-1B7E-40D4-9D0C-0DB818451AFD"
+    },
+    "sync": {
+      "lastModified": "2026-04-09T19:59:08.393Z",
+      "checksum": "9bf5668f42a874bc7a137d62777c1353985e68f1d993b3a5befe0267a8b62e4b"
+    }
+  }
+]

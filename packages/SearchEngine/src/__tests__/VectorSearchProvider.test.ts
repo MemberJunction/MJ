@@ -72,6 +72,7 @@ vi.mock('@memberjunction/global', () => ({
         },
     },
     UUIDsEqual: vi.fn(),
+    RegisterClass: () => (target: Function) => target,
 }));
 
 import { VectorSearchProvider } from '../generic/VectorSearchProvider';
