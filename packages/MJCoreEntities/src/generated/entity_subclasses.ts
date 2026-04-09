@@ -22158,14 +22158,6 @@ export const MJTestOrganizationSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    __mj_Latitude: z.number().nullable().describe(`
-        * * Field Name: __mj_Latitude
-        * * Display Name: Mj Latitude
-        * * SQL Data Type: decimal(10, 6)`),
-    __mj_Longitude: z.number().nullable().describe(`
-        * * Field Name: __mj_Longitude
-        * * Display Name: Mj Longitude
-        * * SQL Data Type: decimal(10, 6)`),
 });
 
 export type MJTestOrganizationEntityType = z.infer<typeof MJTestOrganizationSchema>;
@@ -82663,6 +82655,25 @@ export class MJTestOrganizationEntity extends BaseEntity<MJTestOrganizationEntit
     }
 
     /**
+     * CodeGen-generated geo field mappings for geocoding.
+     * Defines which entity fields contribute to each location type.
+     */
+    get GeoFieldMappings(): { LocationType: string; Fields: string[] }[] {
+        return [
+        {
+                LocationType: "Primary",
+                Fields: [
+                        "Address",
+                        "City",
+                        "State",
+                        "PostalCode",
+                        "Country"
+                ]
+        }
+];
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -82789,24 +82800,6 @@ export class MJTestOrganizationEntity extends BaseEntity<MJTestOrganizationEntit
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
-    }
-
-    /**
-    * * Field Name: __mj_Latitude
-    * * Display Name: Mj Latitude
-    * * SQL Data Type: decimal(10, 6)
-    */
-    get __mj_Latitude(): number | null {
-        return this.Get('__mj_Latitude');
-    }
-
-    /**
-    * * Field Name: __mj_Longitude
-    * * Display Name: Mj Longitude
-    * * SQL Data Type: decimal(10, 6)
-    */
-    get __mj_Longitude(): number | null {
-        return this.Get('__mj_Longitude');
     }
 }
 
