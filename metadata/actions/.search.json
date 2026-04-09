@@ -3,7 +3,7 @@
     "fields": {
       "Name": "Search",
       "Description": "Executes a universal search across the organization's knowledge base using vector similarity, full-text, and entity LIKE-based search with Reciprocal Rank Fusion (RRF). Returns ranked, scored, and enriched results. Designed for AI agents, MCP connectors, A2A connectors, and workflow orchestration.",
-      "DriverClass": "Search",
+      "DriverClass": "__Internal_Search",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-magnifying-glass",
@@ -135,8 +135,8 @@
             "ID": "72949CFB-AAA2-4760-B5C8-08DF929147AD"
           },
           "sync": {
-            "lastModified": "2026-04-08T18:40:32.246Z",
-            "checksum": "2be582b09851660486754667abb4335e616848b19038ae0f90d82e7ebb33f674"
+            "lastModified": "2026-04-09T16:01:09.597Z",
+            "checksum": "fb408e9b06c0e117d9a26a2b1f80e27bd6a11be003db272ff07b8285e785d773"
           }
         },
         {
@@ -276,8 +276,8 @@
       "ID": "449CF6F8-2418-4C58-9EAE-5D67A9C76639"
     },
     "sync": {
-      "lastModified": "2026-04-08T18:40:32.034Z",
-      "checksum": "ee1567ec77d6f4775c8d4fab05e7d18b39bc15efb7fbcd3c5a6cd795c9dad8a4"
+      "lastModified": "2026-04-09T16:01:09.482Z",
+      "checksum": "4c16b3ea91f17fba3f638b1f19f74934031d88bf986960a1ff6e37d3e3f39b22"
     }
   }
 ]

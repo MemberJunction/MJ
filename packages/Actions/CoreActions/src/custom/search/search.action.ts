@@ -65,7 +65,7 @@ interface FormattedSearchResult {
  * });
  * ```
  */
-@RegisterClass(BaseAction, "Search")
+@RegisterClass(BaseAction, "__Internal_Search")
 export class SearchAction extends BaseAction {
 
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {

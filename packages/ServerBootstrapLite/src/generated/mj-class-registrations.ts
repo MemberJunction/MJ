@@ -354,7 +354,7 @@ import {
     ZhipuLLM,
 } from '@memberjunction/ai-zhipu';
 
-// @memberjunction/core-actions (104 classes)
+// @memberjunction/core-actions (105 classes)
 import {
     APIRateLimiterAction,
     AddRecordsToListAction,
@@ -440,6 +440,7 @@ import {
     ReverseGeocodeAction,
     RunAdhocQueryAction,
     RunStoredQueryAction,
+    SearchAction,
     SearchQueryCatalogAction,
     SearchStorageFilesAction,
     SendSingleMessageAction,
@@ -1132,6 +1133,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     ReverseGeocodeAction,
     RunAdhocQueryAction,
     RunStoredQueryAction,
+    SearchAction,
     SearchQueryCatalogAction,
     SearchStorageFilesAction,
     SendSingleMessageAction,
@@ -1507,7 +1509,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 640;
+export const CLASS_REGISTRATIONS_COUNT = 641;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
