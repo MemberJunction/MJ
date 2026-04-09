@@ -1819,10 +1819,10 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   /**
    * Get the current map display state for passing to the EntityViewer/MapView.
    */
-  get mapDisplayState(): { RenderMode: string; ZoomLevel: number; CenterLat: number; CenterLng: number } | null {
+  get mapDisplayState(): { RenderMode: 'point' | 'choropleth' | 'heatmap'; ZoomLevel: number; CenterLat: number; CenterLng: number } | null {
     if (this.state.mapZoom == null) return null;
     return {
-      RenderMode: this.state.mapRenderMode || 'point',
+      RenderMode: (this.state.mapRenderMode as 'point' | 'choropleth' | 'heatmap') || 'point',
       ZoomLevel: this.state.mapZoom,
       CenterLat: this.state.mapCenterLat ?? 20,
       CenterLng: this.state.mapCenterLng ?? 0
