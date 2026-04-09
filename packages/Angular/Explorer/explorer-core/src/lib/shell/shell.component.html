@@ -44,14 +44,26 @@
       </mj-app-nav>
     }
 
+    <!-- Universal Search Bar -->
+    @if (ShowSearchBar) {
+      <div class="shell-search-bar desktop-only">
+        <mj-search-composite
+          #shellSearchComposite
+          Placeholder="Search everything..."
+          [ShowShortcutHint]="true"
+          [EnablePreview]="ShowSearchPreview"
+          [EnableRecent]="true"
+          [MaxPreviewResults]="8"
+          (ResultSelected)="OnSearchResultSelected($event)"
+          (SearchSubmitted)="OnSearchSubmitted($event)"
+          (SeeAllRequested)="OnSeeAllSearch($event)">
+        </mj-search-composite>
+      </div>
+    }
     <!-- Spacer -->
     <div class="spacer"></div>
-
-    <!-- Actions (search, notifications, user menu) -->
+    <!-- Actions (notifications, user menu) -->
     <div class="header-actions">
-      <button class="icon-btn desktop-only search-toggle-btn" title="Search" (click)="toggleSearch()">
-        <i class="fa-solid fa-search"></i>
-      </button>
       <button class="icon-btn desktop-only notification-btn" title="Notifications" (click)="showNotifications()">
         <i class="fa-solid fa-bell"></i>
         @if (unreadNotificationCount > 0) {

@@ -23,6 +23,8 @@ const DEFAULT_MIN_SCORE = 0.35;
 /** Default icon mapping for source types */
 const SOURCE_TYPE_ICONS: Record<string, string> = {
     'entity': 'fa-solid fa-database',
+    'vector': 'fa-solid fa-brain',
+    'fulltext': 'fa-solid fa-magnifying-glass',
     'content-item': 'fa-solid fa-file-lines',
     'file': 'fa-solid fa-file',
     'web-page': 'fa-solid fa-globe',
@@ -30,7 +32,9 @@ const SOURCE_TYPE_ICONS: Record<string, string> = {
 
 /** Default labels for source types */
 const SOURCE_TYPE_LABELS: Record<string, string> = {
-    'entity': 'Entity Records',
+    'entity': 'Database',
+    'vector': 'Semantic Search',
+    'fulltext': 'Full-Text Search',
     'content-item': 'Content Items',
     'file': 'Documents',
     'web-page': 'Web Pages',
@@ -85,6 +89,26 @@ export class SearchService {
         }
     }
 
+    /**
+     * Lightweight preview search for autocomplete/typeahead.
+     * Does NOT update SearchResults$ or IsSearching$ observables,
+     * and does NOT add to recent search history.
+     */
+    public async PreviewSearch(query: string, maxResults: number = 8): Promise<SearchResponse> {
+        try {
+            return await this.executeGraphQLSearch({
+                Query: query,
+                MaxResults: maxResults,
+                ActiveFilters: {},
+                IncludeSources: ['vector', 'fulltext', 'entity'],
+                MinScore: 0
+            });
+        } catch (err) {
+            const errorMessage = err instanceof Error ? err.message : 'Preview search failed';
+            return this.createEmptyResponse(errorMessage);
+        }
+    }
+
     /** Clear the current search results */
     public ClearResults(): void {
         this.SearchResults$.next(null);
@@ -128,7 +152,7 @@ export class SearchService {
             this.buildSourceTypeFilter(results),
             this.buildEntityNameFilter(results),
             this.buildTagFilter(results)
-        ];
+        ].filter(f => f.Options.length > 0); // Hide categories with no options (e.g., Tags when none exist)
     }
 
     /** Get the icon for a given source type */
@@ -148,7 +172,7 @@ export class SearchService {
             IsSelected: false,
             Icon: SOURCE_TYPE_ICONS[type]
         }));
-        return { Category: 'Source Type', Options: options, MultiSelect: true };
+        return { Category: 'Source', Options: options, MultiSelect: true };
     }
 
     private buildEntityNameFilter(results: SearchResultItem[]): SearchFilter {
@@ -331,7 +355,7 @@ export class SearchService {
             result.EntityNames = entityFilters;
         }
 
-        const sourceFilters = request.ActiveFilters['Source Type'];
+        const sourceFilters = request.ActiveFilters['Source'];
         if (sourceFilters?.length) {
             result.SourceTypes = sourceFilters;
         }

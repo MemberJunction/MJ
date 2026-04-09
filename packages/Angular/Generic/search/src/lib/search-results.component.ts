@@ -62,6 +62,9 @@ export class SearchResultsComponent {
     /** Whether to show source type icons */
     @Input() ShowSourceIcons = true;
 
+    /** Text to highlight within result cards (e.g. from a client-side filter) */
+    @Input() HighlightText = '';
+
     @Output() ResultSelected = new EventEmitter<SearchResultSelectedEvent>();
 
     /** Emitted when user clicks "Open Record" — parent handles navigation */
@@ -186,6 +189,17 @@ export class SearchResultsComponent {
     public OnMoreLikeThis(result: SearchResultItem, event: MouseEvent): void {
         event.stopPropagation();
         this.MoreLikeThisRequested.emit(result);
+    }
+
+    /**
+     * Wrap substrings matching HighlightText in <mark> tags for visual emphasis.
+     * The input is regex-escaped so user text is treated as a literal string.
+     */
+    public HighlightMatch(text: string): string {
+        if (!this.HighlightText || !text) return text;
+        const escaped = this.HighlightText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const regex = new RegExp(`(${escaped})`, 'gi');
+        return text.replace(regex, '<mark class="search-highlight">$1</mark>');
     }
 
     /** Format a score as a percentage */

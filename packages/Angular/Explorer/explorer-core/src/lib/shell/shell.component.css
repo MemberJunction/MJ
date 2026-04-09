@@ -732,6 +732,21 @@ mj-tab-container ::ng-deep .lm_stack {
 }
 
 /* ========================================
+   UNIVERSAL SEARCH BAR
+   ======================================== */
+.shell-search-bar {
+    flex: 0 1 420px;
+    min-width: 200px;
+    max-width: 520px;
+    margin: 0 12px;
+    position: relative;
+    z-index: 100;
+}
+@media (max-width: 768px) {
+    .shell-search-bar { display: none; }
+}
+
+/* ========================================
    SEARCH POPUP
    ======================================== */
 

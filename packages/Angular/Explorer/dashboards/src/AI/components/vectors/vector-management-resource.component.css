@@ -1047,6 +1047,90 @@
     padding: 8px 0;
 }
 
+/* --- Edit Panel Template Header --- */
+.edit-template-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.edit-regenerate-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    border: 1px solid var(--mj-brand-primary);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--mj-brand-primary);
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+}
+
+.edit-regenerate-btn:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+}
+
+.edit-regenerate-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* --- No Vector Index Warning Dialog --- */
+.no-index-warning-dialog {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 440px;
+    max-width: 90vw;
+    background: var(--mj-bg-surface);
+    border-radius: 12px;
+    box-shadow: 0 20px 60px color-mix(in srgb, var(--mj-text-primary) 20%, transparent);
+    padding: 32px;
+    text-align: center;
+}
+
+.no-index-warning-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 56px;
+    height: 56px;
+    margin: 0 auto 16px;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--mj-status-warning) 12%, var(--mj-bg-surface));
+}
+
+.no-index-warning-icon i {
+    font-size: 24px;
+    color: var(--mj-status-warning);
+}
+
+.no-index-warning-title {
+    margin: 0 0 8px 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--mj-text-primary);
+}
+
+.no-index-warning-message {
+    margin: 0 0 24px 0;
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--mj-text-secondary);
+}
+
+.no-index-warning-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+}
+
 /* ================================================================
    Responsive — Vector Management
    ================================================================ */

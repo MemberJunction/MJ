@@ -60,6 +60,8 @@ import { ChatTasksResource } from './lib/resource-wrappers/chat-tasks-resource.c
 import { ArtifactResource } from './lib/resource-wrappers/artifact-resource.component';
 import { NotificationsResource } from './lib/resource-wrappers/notifications-resource.component';
 import { OAuthCallbackComponent } from './lib/oauth/oauth-callback.component';
+import { SearchModule } from '@memberjunction/ng-search';
+import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
 
 @NgModule({
   declarations: [
@@ -116,6 +118,8 @@ import { OAuthCallbackComponent } from './lib/oauth/oauth-callback.component';
     SharedGenericModule,
     EntityViewerModule,
     ListDetailGridModule,
+    SearchModule,
+    MJWordCloudComponent,
     MJButtonDirective,
     MJDialogComponent,
     MJDialogTitlebarComponent,
