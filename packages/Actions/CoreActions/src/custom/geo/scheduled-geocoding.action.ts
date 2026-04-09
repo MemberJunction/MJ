@@ -32,7 +32,7 @@ export class ScheduledGeocodingAction extends BaseAction {
 
         // 1. Find all geo-enabled entities
         const entityResult = await rv.RunView<MJEntityEntity>({
-            EntityName: 'Entities',
+            EntityName: 'MJ: Entities',
             ExtraFilter: `SupportsGeoCoding = 1`,
             ResultType: 'entity_object'
         }, contextUser);

@@ -1,4 +1,5 @@
 import { EntityInfo } from '@memberjunction/core';
+import { MapRenderMode } from '@memberjunction/ng-map-view';
 
 /**
  * Filter configuration for the Data Explorer
@@ -179,7 +180,7 @@ export interface DataExplorerState {
   timelineSortOrder: 'asc' | 'desc';
 
   // Map configuration (persisted across page reloads)
-  mapRenderMode: 'point' | 'choropleth' | 'heatmap';
+  mapRenderMode: MapRenderMode;
   mapZoom: number | null;
   mapCenterLat: number | null;
   mapCenterLng: number | null;

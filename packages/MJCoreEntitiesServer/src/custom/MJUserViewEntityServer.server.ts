@@ -1,5 +1,5 @@
-import { RegisterClass, SafeJSONParse, CleanAndParseJSON } from "@memberjunction/global";
-import { BaseEntity, EntityInfo, LogError, IMetadataProvider } from "@memberjunction/core";
+import { RegisterClass, CleanAndParseJSON } from "@memberjunction/global";
+import { BaseEntity, EntityInfo, LogError, IMetadataProvider, Metadata } from "@memberjunction/core";
 import { MJUserViewEntityExtended } from '@memberjunction/core-entities'
 import { AIPromptParams } from "@memberjunction/ai-core-plus";
 import { AIEngine } from "@memberjunction/aiengine";
@@ -12,6 +12,20 @@ interface SmartFilterResponse {
     whereClause: string;
     orderByClause?: string;
     userExplanationMessage: string;
+}
+
+/**
+ * Template data passed to the Smart Filter Generation Nunjucks prompt.
+ */
+interface SmartFilterTemplateData extends Record<string, unknown> {
+    entityName: string;
+    entityId: string;
+    baseView: string;
+    fieldsDescription: string;
+    relatedViewsDescription: string;
+    listsSchema: string;
+    listsFields: string;
+    listDetailsFields: string;
 }
 
 @RegisterClass(BaseEntity, 'MJ: User Views')
@@ -72,8 +86,8 @@ export class MJUserViewEntityServer extends MJUserViewEntityExtended  {
             // Otherwise parse the string result (OutputType='string' returns raw text
             // that may be wrapped in markdown fencing).
             let llmResponse: SmartFilterResponse | null;
-            if (result.result && typeof result.result === 'object' && 'whereClause' in (result.result as unknown as Record<string, unknown>)) {
-                llmResponse = result.result as SmartFilterResponse;
+            if (result.result && typeof result.result === 'object' && 'whereClause' in result.result) {
+                llmResponse = result.result;
             } else {
                 llmResponse = CleanAndParseJSON<SmartFilterResponse>(String(result.result ?? result.rawResult ?? ''), true);
             }
@@ -114,9 +128,9 @@ export class MJUserViewEntityServer extends MJUserViewEntityExtended  {
      * Builds the template data object for the Smart Filter Generation prompt.
      * This data is used to populate the Nunjucks template variables.
      */
-    protected BuildTemplateData(entityInfo: EntityInfo): Record<string, unknown> {
+    protected BuildTemplateData(entityInfo: EntityInfo): SmartFilterTemplateData {
         const processedViews: string[] = [entityInfo.BaseView];
-        const md = this.ProviderToUse as unknown as IMetadataProvider;
+        const md: IMetadataProvider = Metadata.Provider;
         const listsEntity = md.Entities.find(e => e.Name === "MJ: Lists");
         const listDetailsEntity = md.Entities.find(e => e.Name === "MJ: List Details");
 

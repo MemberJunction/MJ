@@ -223,8 +223,8 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
         }) : null;
 
         for (const record of this.Records) {
-            const lat = this.GetField(record, this.LatitudeField) as number;
-            const lng = this.GetField(record, this.LongitudeField) as number;
+            const lat = this.GetNumericField(record, this.LatitudeField);
+            const lng = this.GetNumericField(record, this.LongitudeField);
 
             if (lat == null || lng == null || isNaN(lat) || isNaN(lng)) continue;
 
@@ -256,7 +256,7 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
         }
 
         if (clusterGroup) {
-            this.markerLayer!.addLayer(clusterGroup as unknown as L.Marker);
+            this.markerLayer!.addLayer(clusterGroup as L.Layer);
         }
 
         this.MarkerCount = bounds.length;
@@ -273,8 +273,8 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
         const recordsWithCoords: { lat: number; lng: number; record: Record<string, unknown> }[] = [];
 
         for (const record of this.Records) {
-            const lat = this.GetField(record, this.LatitudeField) as number;
-            const lng = this.GetField(record, this.LongitudeField) as number;
+            const lat = this.GetNumericField(record, this.LatitudeField);
+            const lng = this.GetNumericField(record, this.LongitudeField);
             if (lat == null || lng == null || isNaN(lat) || isNaN(lng)) continue;
             bounds.push(L.latLng(lat, lng));
             recordsWithCoords.push({ lat, lng, record });
@@ -327,8 +327,8 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
         const recordsByState = new Map<string, Record<string, unknown>[]>();
 
         for (const record of this.Records) {
-            const lat = this.GetField(record, this.LatitudeField) as number;
-            const lng = this.GetField(record, this.LongitudeField) as number;
+            const lat = this.GetNumericField(record, this.LatitudeField);
+            const lng = this.GetNumericField(record, this.LongitudeField);
             if (lat == null || lng == null || isNaN(lat) || isNaN(lng)) continue;
             bounds.push(L.latLng(lat, lng));
 
@@ -393,7 +393,7 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
                     if (stateData && stateData['BoundaryGeoJSON']) {
                         try {
                             const geojson = typeof stateData['BoundaryGeoJSON'] === 'string'
-                                ? JSON.parse(stateData['BoundaryGeoJSON'] as string)
+                                ? JSON.parse(String(stateData['BoundaryGeoJSON']))
                                 : stateData['BoundaryGeoJSON'];
 
                             const layer = L.geoJSON(geojson, {
@@ -416,7 +416,7 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
                                 });
                             });
 
-                            this.markerLayer!.addLayer(layer as unknown as L.Marker);
+                            this.markerLayer!.addLayer(layer as L.Layer);
                             rendered = true;
                         } catch { /* GeoJSON parse failed */ }
                     }
@@ -426,8 +426,8 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
                 if (!rendered) {
                     let sumLat = 0, sumLng = 0, count = 0;
                     for (const rec of records) {
-                        const lat = this.GetField(rec, this.LatitudeField) as number;
-                        const lng = this.GetField(rec, this.LongitudeField) as number;
+                        const lat = this.GetNumericField(rec, this.LatitudeField);
+                        const lng = this.GetNumericField(rec, this.LongitudeField);
                         if (lat && lng) { sumLat += lat; sumLng += lng; count++; }
                     }
                     if (count > 0) {
@@ -450,8 +450,8 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
                 const color = colors[colorIdx % colors.length];
                 let sumLat = 0, sumLng = 0, count = 0;
                 for (const rec of records) {
-                    const lat = this.GetField(rec, this.LatitudeField) as number;
-                    const lng = this.GetField(rec, this.LongitudeField) as number;
+                    const lat = this.GetNumericField(rec, this.LatitudeField);
+                    const lng = this.GetNumericField(rec, this.LongitudeField);
                     if (lat && lng) { sumLat += lat; sumLng += lng; count++; }
                 }
                 if (count > 0) {
@@ -502,7 +502,7 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
                         // Render shaded GeoJSON polygon
                         try {
                             const geojson = typeof countryData['BoundaryGeoJSON'] === 'string'
-                                ? JSON.parse(countryData['BoundaryGeoJSON'] as string)
+                                ? JSON.parse(String(countryData['BoundaryGeoJSON']))
                                 : countryData['BoundaryGeoJSON'];
 
                             const layer = L.geoJSON(geojson, {
@@ -525,7 +525,7 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
                                 });
                             });
 
-                            this.markerLayer!.addLayer(layer as unknown as L.Marker);
+                            this.markerLayer!.addLayer(layer as L.Layer);
                             renderedAny = true;
                         } catch {
                             // GeoJSON parse failed — fall through to circle fallback
@@ -535,8 +535,8 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
                     if (!renderedAny || !countryData?.['BoundaryGeoJSON']) {
                         // Fallback: colored circle for countries without boundary data
                         const firstRecord = records[0];
-                        const lat = this.GetField(firstRecord, this.LatitudeField) as number;
-                        const lng = this.GetField(firstRecord, this.LongitudeField) as number;
+                        const lat = this.GetNumericField(firstRecord, this.LatitudeField);
+                        const lng = this.GetNumericField(firstRecord, this.LongitudeField);
                         if (lat && lng) {
                             const radius = Math.min(20 + records.length * 6, 60);
                             const circle = L.circleMarker([lat, lng], {
@@ -600,8 +600,8 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
         let colorIdx = 0;
         for (const [name, records] of recordsByCountry) {
             const firstRecord = records[0];
-            const lat = this.GetField(firstRecord, this.LatitudeField) as number;
-            const lng = this.GetField(firstRecord, this.LongitudeField) as number;
+            const lat = this.GetNumericField(firstRecord, this.LatitudeField);
+            const lng = this.GetNumericField(firstRecord, this.LongitudeField);
             if (lat && lng) {
                 const color = colors[colorIdx % colors.length];
                 const circle = L.circleMarker([lat, lng], {
@@ -696,10 +696,20 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
      * Get a field value from a record, supporting both BaseEntity (with .Get()) and plain objects.
      */
     private GetField(record: Record<string, unknown>, fieldName: string): unknown {
-        if ('Get' in record && typeof (record as Record<string, unknown>)['Get'] === 'function') {
+        if ('Get' in record && typeof record['Get'] === 'function') {
             return (record as { Get: (name: string) => unknown }).Get(fieldName);
         }
         return record[fieldName];
+    }
+
+    /**
+     * Get a numeric field value from a record, returning null if not a valid number.
+     */
+    private GetNumericField(record: Record<string, unknown>, fieldName: string): number | null {
+        const val = this.GetField(record, fieldName);
+        if (val == null) return null;
+        const num = Number(val);
+        return isNaN(num) ? null : num;
     }
 
     /**
@@ -756,8 +766,9 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
                             return id === recordId;
                         });
                         if (record) {
-                            const lat = this.GetField(record, this.LatitudeField) as number ?? 0;
-                            const lng = this.GetField(record, this.LongitudeField) as number ?? 0;
+                            const lat = this.GetNumericField(record, this.LatitudeField) ?? 0;
+                            const lng = this.GetNumericField(record, this.LongitudeField) ?? 0;
+
                             this.MarkerClick.emit({
                                 RecordID: recordId,
                                 Latitude: lat,

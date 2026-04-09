@@ -19,7 +19,7 @@ declare namespace L {
 
     interface MarkerClusterGroup extends LayerGroup {}
 
-    interface GeoJSONLayer {
+    interface GeoJSONLayer extends Layer {
         addTo(map: Map): GeoJSONLayer;
         getBounds(): LatLngBounds;
         setStyle(style: Record<string, unknown> | ((feature: unknown) => Record<string, unknown>)): GeoJSONLayer;
@@ -56,16 +56,21 @@ declare namespace L {
         addTo(map: Map): TileLayer;
     }
 
-    interface Marker {
+    interface Marker extends Layer {
         addTo(map: Map): Marker;
         bindPopup(content: string): Marker;
         on(event: string, handler: (...args: unknown[]) => void): Marker;
         remove(): void;
     }
 
-    interface LayerGroup {
+    /** Base layer type — Marker, CircleMarker, GeoJSONLayer, LayerGroup all qualify. */
+    interface Layer {
+        addTo?(map: Map): Layer;
+    }
+
+    interface LayerGroup extends Layer {
         addTo(map: Map): LayerGroup;
-        addLayer(layer: Marker): LayerGroup;
+        addLayer(layer: Layer): LayerGroup;
         clearLayers(): LayerGroup;
     }
 }

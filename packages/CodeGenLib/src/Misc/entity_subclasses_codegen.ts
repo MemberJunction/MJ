@@ -1,4 +1,4 @@
-import { BaseEntity, EntityFieldInfo, EntityFieldValueListType, EntityInfo, Metadata, TypeScriptTypeFromSQLType } from '@memberjunction/core';
+import { BaseEntity, EntityFieldExtendedType, EntityFieldInfo, EntityFieldValueListType, EntityInfo, Metadata, TypeScriptTypeFromSQLType } from '@memberjunction/core';
 import fs from 'fs';
 import path from 'path';
 import ts from 'typescript';
@@ -727,7 +727,7 @@ export type ${entity.ClassName}EntityType = z.infer<typeof ${schemaName}>;
      * CodeGen-generated geo field mappings for geocoding.
      * Defines which entity fields contribute to each location type.
      */
-    get GeoFieldMappings(): { LocationType: string; Fields: string[] }[] {
+    get GeoFieldMappings(): { LocationType: 'Primary'; Fields: string[] }[] {
         return ${mappingsJSON};
     }`;
   }
@@ -736,8 +736,8 @@ export type ${entity.ClassName}EntityType = z.infer<typeof ${schemaName}>;
    * Analyze entity fields to determine geo field mappings.
    * Groups address-related fields by naming patterns (e.g., Home*, Work*, Business*).
    */
-  protected detectGeoFieldMappings(entity: EntityInfo): Array<{ LocationType: string; Fields: string[] }> {
-    const geoExtTypes = new Set(['Geo', 'GeoAddress', 'GeoCity', 'GeoStateProvince', 'GeoCountry', 'GeoPostalCode']);
+  protected detectGeoFieldMappings(entity: EntityInfo): Array<{ LocationType: 'Primary'; Fields: string[] }> {
+    const geoExtTypes = new Set<EntityFieldExtendedType>(['Geo', 'GeoAddress', 'GeoCity', 'GeoStateProvince', 'GeoCountry', 'GeoPostalCode']);
     const geoFields = entity.Fields.filter(f => f.ExtendedType && geoExtTypes.has(f.ExtendedType));
 
     if (geoFields.length === 0) return [];

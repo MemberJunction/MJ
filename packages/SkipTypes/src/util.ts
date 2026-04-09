@@ -1,4 +1,4 @@
-import { EntityFieldInfo, EntityFieldValueInfo, EntityInfo, EntityRelationshipInfo } from "@memberjunction/core";
+import { EntityFieldExtendedType, EntityFieldInfo, EntityFieldValueInfo, EntityInfo, EntityRelationshipInfo } from "@memberjunction/core";
 import { SimpleEntityInfo, SimpleEntityFieldInfo } from "@memberjunction/interactive-component-types";
 import { SkipEntityFieldInfo, SkipEntityFieldValueInfo, SkipEntityInfo, SkipEntityRelationshipInfo } from "./entity-metadata-types";
 
@@ -92,7 +92,7 @@ export function MapEntityFieldInfoToSkipEntityFieldInfo(f: EntityFieldInfo): Ski
         defaultValue: f.DefaultValue,
         autoIncrement: f.AutoIncrement,
         valueListType: f.ValueListType,
-        extendedType: f.ExtendedType,
+        extendedType: f.ExtendedType as string,
         defaultInView: f.DefaultInView,
         defaultColumnWidth: f.DefaultColumnWidth,
         isVirtual: f.IsVirtual,
@@ -135,7 +135,7 @@ export function MapSkipEntityFieldInfoToEntityFieldInfo(skipField: SkipEntityFie
         DefaultValue: skipField.defaultValue,
         AutoIncrement: skipField.autoIncrement,
         ValueListType: skipField.valueListType,
-        ExtendedType: skipField.extendedType,
+        ExtendedType: skipField.extendedType as EntityFieldExtendedType,
         DefaultInView: skipField.defaultInView,
         DefaultColumnWidth: skipField.defaultColumnWidth,
         IsVirtual: skipField.isVirtual,

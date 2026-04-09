@@ -18,7 +18,7 @@ export interface MapDisplayState {
     CenterLng?: number;
     ClusterMarkers?: boolean;
     ChoroplethGroupBy?: ChoroplethGroupBy;
-    ChoroplethMetric?: 'count' | string;
+    ChoroplethMetric?: 'count' | 'sum' | 'average';
 }
 
 /**

@@ -34,7 +34,8 @@ import { ViewSelectedEvent, SaveViewRequestedEvent, ViewSelectorComponent } from
 import { CompositeFilterDescriptor, FilterFieldInfo, createEmptyFilter } from '@memberjunction/ng-filter-builder';
 import { MJUserViewEntityExtended } from '@memberjunction/core-entities';
 import { ExplorerStateService } from './services/explorer-state.service';
-import { DataExplorerState, DataExplorerFilter, BreadcrumbItem, DataExplorerDeepLink, RecentRecordAccess, FavoriteRecord, AppEntityGroup } from './models/explorer-state.interface';
+import { DataExplorerState, DataExplorerFilter, BreadcrumbItem, DataExplorerDeepLink, DataExplorerViewMode, RecentRecordAccess, FavoriteRecord, AppEntityGroup } from './models/explorer-state.interface';
+import { MapRenderMode } from '@memberjunction/ng-map-view';
 import { OpenRecordEvent, SelectRecordEvent } from './components/navigation-panel/navigation-panel.component';
 import { DisplaySimpleNotificationRequestData, MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';
 import { ListManagementDialogConfig, ListManagementResult } from '@memberjunction/ng-list-management';
@@ -1468,7 +1469,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     if (event.sortItems && event.sortItems.length > 0) {
       return event.sortItems.map(item => ({
         field: item.field,
-        direction: item.direction as 'asc' | 'desc'
+        direction: item.direction
       }));
     }
 
@@ -1476,7 +1477,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     if (event.sortField) {
       return [{
         field: event.sortField,
-        direction: event.sortDirection as 'asc' | 'desc'
+        direction: event.sortDirection
       }];
     }
 
@@ -1819,10 +1820,10 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   /**
    * Get the current map display state for passing to the EntityViewer/MapView.
    */
-  get mapDisplayState(): { RenderMode: 'point' | 'choropleth' | 'heatmap'; ZoomLevel: number; CenterLat: number; CenterLng: number } | null {
+  get mapDisplayState(): { RenderMode: MapRenderMode; ZoomLevel: number; CenterLat: number; CenterLng: number } | null {
     if (this.state.mapZoom == null) return null;
     return {
-      RenderMode: (this.state.mapRenderMode as 'point' | 'choropleth' | 'heatmap') || 'point',
+      RenderMode: this.state.mapRenderMode || 'point',
       ZoomLevel: this.state.mapZoom,
       CenterLat: this.state.mapCenterLat ?? 20,
       CenterLng: this.state.mapCenterLng ?? 0
@@ -1833,9 +1834,9 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * Handle map display state changes from the map component.
    * Persists zoom, center, and render mode across page reloads.
    */
-  public onMapDisplayStateChange(state: { RenderMode?: string; ZoomLevel?: number; CenterLat?: number; CenterLng?: number }): void {
+  public onMapDisplayStateChange(state: { RenderMode?: MapRenderMode; ZoomLevel?: number; CenterLat?: number; CenterLng?: number }): void {
     this.stateService.updateState({
-      mapRenderMode: (state.RenderMode as 'point' | 'choropleth' | 'heatmap') || 'point',
+      mapRenderMode: state.RenderMode || 'point',
       mapZoom: state.ZoomLevel ?? null,
       mapCenterLat: state.CenterLat ?? null,
       mapCenterLng: state.CenterLng ?? null
@@ -2527,7 +2528,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     const entity = params.get('entity');
     const record = params.get('record');
     const filter = params.get('filter');
-    const view = params.get('view') as 'grid' | 'cards' | null;
+    const view = params.get('view') as DataExplorerViewMode | null;
 
     // If no params, return null
     if (!entity && !record && !filter && !view) {
@@ -2615,7 +2616,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       this.selectedEntity = null;
       this.selectedRecord = null;
       this.detailPanelEntity = null;
-      this.stateService.selectEntity(null as unknown as string);
+      this.stateService.selectEntity(null);
       this.stateService.closeDetailPanel();
     }
 
@@ -2700,7 +2701,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       this.selectedEntity = null;
       this.selectedRecord = null;
       this.detailPanelEntity = null;
-      this.stateService.selectEntity(null as unknown as string);
+      this.stateService.selectEntity(null);
       this.stateService.closeDetailPanel();
     }
     this.skipUrlUpdates = false;
@@ -2725,7 +2726,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     const entity = params.get('entity');
     const record = params.get('record');
     const filterParam = params.get('filter');
-    const view = params.get('view') as 'grid' | 'cards' | null;
+    const view = params.get('view') as DataExplorerViewMode | null;
 
     // If no params, return null
     if (!entity && !record && !filterParam && !view) {

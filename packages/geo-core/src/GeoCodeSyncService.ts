@@ -192,9 +192,11 @@ export class GeoCodeSyncService extends BaseSingleton<GeoCodeSyncService> {
         const latField = entity.EntityInfo.Fields.find(f => f.ExtendedType === 'GeoLatitude');
         const lngField = entity.EntityInfo.Fields.find(f => f.ExtendedType === 'GeoLongitude');
         if (latField && lngField) {
-            const lat = entity.Get(latField.Name) as number;
-            const lng = entity.Get(lngField.Name) as number;
-            if (lat != null && lng != null && !isNaN(lat) && !isNaN(lng)) {
+            const latVal: unknown = entity.Get(latField.Name);
+            const lngVal: unknown = entity.Get(lngField.Name);
+            const lat = Number(latVal);
+            const lng = Number(lngVal);
+            if (latVal != null && lngVal != null && !isNaN(lat) && !isNaN(lng)) {
                 return {
                     Latitude: lat,
                     Longitude: lng,
@@ -210,8 +212,8 @@ export class GeoCodeSyncService extends BaseSingleton<GeoCodeSyncService> {
         // For now, collect field values and log. External API integration (Google Geocode Action)
         // will be wired up when API credentials are available in the environment.
         const addressParts = fields
-            .map(f => entity.Get(f))
-            .filter(v => v != null && String(v).trim() !== '')
+            .map(f => entity.Get(f) as unknown)
+            .filter((v): v is string | number => v != null && String(v).trim() !== '')
             .map(v => String(v).trim());
 
         if (addressParts.length === 0) {

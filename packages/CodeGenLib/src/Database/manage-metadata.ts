@@ -2,7 +2,7 @@ import { SQLDialect } from '@memberjunction/sql-dialect';
 import { CodeGenConnection, CodeGenTransaction, CodeGenQueryResult, CodeGenDatabaseProvider } from './codeGenDatabaseProvider';
 import { SQLServerCodeGenProvider } from './providers/sqlserver/SQLServerCodeGenProvider';
 import { configInfo, currentWorkingDirectory, dbType, getSettingValue, mj_core_schema, outputDir } from '../Config/config';
-import { ApplicationInfo, CodeNameFromString, EntityFieldInfo, EntityInfo, ExtractActualDefaultValue, FieldCategoryInfo, LogError, LogStatus, Metadata, SeverityType, UserInfo } from "@memberjunction/core";
+import { ApplicationInfo, CodeNameFromString, EntityFieldExtendedType, EntityFieldInfo, EntityInfo, ExtractActualDefaultValue, FieldCategoryInfo, LogError, LogStatus, Metadata, SeverityType, UserInfo } from "@memberjunction/core";
 import { MJApplicationEntity } from "@memberjunction/core-entities";
 import { logError, logMessage, logStatus } from "../Misc/status_logging";
 import { SQLUtilityBase } from "./sql";
@@ -1699,12 +1699,12 @@ export class ManageMetadataBase {
    /**
     * Valid values for EntityField.ExtendedType, plus common LLM aliases mapped to valid values.
     */
-   private static readonly VALID_EXTENDED_TYPES = new Set([
+   private static readonly VALID_EXTENDED_TYPES = new Set<EntityFieldExtendedType>([
       'Code', 'Email', 'FaceTime', 'Geo', 'GeoLatitude', 'GeoLongitude', 'GeoCountry', 'GeoStateProvince',
       'GeoCity', 'GeoPostalCode', 'GeoAddress', 'MSTeams', 'Other', 'SIP', 'SMS', 'Skype', 'Tel', 'URL', 'WhatsApp', 'ZoomMtg'
    ]);
 
-   private static readonly EXTENDED_TYPE_ALIASES: Record<string, string> = {
+   private static readonly EXTENDED_TYPE_ALIASES: Record<string, EntityFieldExtendedType> = {
       'phone': 'Tel',
       'telephone': 'Tel',
       'website': 'URL',
@@ -1739,7 +1739,7 @@ export class ManageMetadataBase {
     * Validates an LLM-suggested ExtendedType against the allowed values in EntityField.
     * Returns the valid value (case-corrected) or null if invalid.
     */
-   protected validateExtendedType(suggested: string): string | null {
+   protected validateExtendedType(suggested: string): EntityFieldExtendedType | null {
       // Direct match (case-insensitive)
       for (const valid of ManageMetadataBase.VALID_EXTENDED_TYPES) {
          if (valid.toLowerCase() === suggested.toLowerCase()) {
@@ -4782,7 +4782,7 @@ export class ManageMetadataBase {
    protected async detectAndSetGeoCodingSupport(
       pool: CodeGenConnection,
       entity: EntityInfo,
-      fieldCategories: Array<{ fieldName: string; extendedType: string | null }>
+      fieldCategories: Array<{ fieldName: string; extendedType: EntityFieldExtendedType | null }>
    ): Promise<void> {
       // Check if the entity's AutoUpdateSupportsGeoCoding flag allows us to modify it
       const autoUpdateResult = await pool.query(`
@@ -4796,7 +4796,7 @@ export class ManageMetadataBase {
       }
 
       // Detect geo-capable fields from the LLM results
-      const geoExtendedTypes = new Set([
+      const geoExtendedTypes = new Set<EntityFieldExtendedType>([
          'Geo', 'GeoLatitude', 'GeoLongitude', 'GeoCountry', 'GeoStateProvince',
          'GeoCity', 'GeoPostalCode', 'GeoAddress'
       ]);

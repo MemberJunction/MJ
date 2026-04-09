@@ -12,7 +12,7 @@ import { BaseEntity } from '@memberjunction/core';
  */
 export function ComputeGeoSourceHash(entity: BaseEntity, fieldNames: string[]): string {
     const values = fieldNames.map(f => {
-        const val = entity.Get(f);
+        const val: unknown = entity.Get(f);
         return val != null ? String(val).trim() : '';
     });
     const input = values.join('|');

@@ -9,6 +9,16 @@ import { CompositeKey } from "./compositeKey"
 import { WarningManager, SafeJSONParse, UUIDsEqual } from "@memberjunction/global"
 
 /**
+ * Valid values for EntityField.ExtendedType.
+ * Defines semantic meaning beyond the SQL data type (e.g., a string field that holds an email, URL, or geo address).
+ */
+export type EntityFieldExtendedType =
+    | 'Code' | 'Email' | 'FaceTime' | 'Geo'
+    | 'GeoLatitude' | 'GeoLongitude' | 'GeoCountry' | 'GeoStateProvince'
+    | 'GeoCity' | 'GeoPostalCode' | 'GeoAddress'
+    | 'MSTeams' | 'Other' | 'SIP' | 'SMS' | 'Skype' | 'Tel' | 'URL' | 'WhatsApp' | 'ZoomMtg';
+
+/**
  * The possible status values for a record change
  */
 export const RecordChangeStatus = {
@@ -484,7 +494,7 @@ export class EntityFieldInfo extends BaseInfo {
     DefaultValue: string = null
     AutoIncrement: boolean = null
     ValueListType: string = null
-    ExtendedType: string = null
+    ExtendedType: EntityFieldExtendedType | null = null
     DefaultInView: boolean = null 
     ViewCellTemplate: string = null
     DefaultColumnWidth: number = null 
