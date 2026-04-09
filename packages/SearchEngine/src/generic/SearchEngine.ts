@@ -305,13 +305,18 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
     ): Promise<SearchResultItem[]> {
         if (results.length === 0) return results;
 
-        const byEntity = this.groupResultsByEntity(results);
-        const permitted: SearchResultItem[] = [];
+        // Storage file results have their own permission model (FileStorageAccountPermission)
+        // which is already checked by StorageSearchProvider — pass them through here
+        const storageResults = results.filter(r => r.ResultType === 'storage-file');
+        const entityResults = results.filter(r => r.ResultType !== 'storage-file');
+
+        const byEntity = this.groupResultsByEntity(entityResults);
+        const permitted: SearchResultItem[] = [...storageResults];
 
         const promises: Promise<void>[] = [];
-        for (const [entityName, entityResults] of byEntity) {
+        for (const [entityName, groupResults] of byEntity) {
             promises.push(
-                this.filterEntityResults(entityName, entityResults, contextUser, permitted)
+                this.filterEntityResults(entityName, groupResults, contextUser, permitted)
             );
         }
         await Promise.all(promises);

@@ -95,6 +95,7 @@ function createMockSearchResult(overrides: Record<string, unknown> = {}) {
                 EntityName: 'Contacts',
                 RecordID: 'abc-123',
                 SourceType: 'entity',
+                ResultType: 'entity-record',
                 Title: 'John Smith',
                 Snippet: 'A contact record',
                 Score: 0.85,

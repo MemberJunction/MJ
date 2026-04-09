@@ -128,7 +128,7 @@
             "Type": "Output",
             "ValueType": "Simple Object",
             "IsArray": true,
-            "Description": "Array of search result objects, each containing: ID, EntityName, RecordID, SourceType, Title, Snippet, Score, ScoreBreakdown, Tags, EntityIcon, RecordName, MatchedAt, and RawMetadata.",
+            "Description": "Array of search result objects, each containing: ID, EntityName, RecordID, SourceType, ResultType (entity-record|storage-file|content-item), Title, Snippet, Score, ScoreBreakdown (Vector/FullText/Entity/Storage), Tags, EntityIcon, RecordName, MatchedAt, and RawMetadata.",
             "IsRequired": false
           },
           "primaryKey": {

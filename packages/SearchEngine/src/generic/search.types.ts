@@ -14,6 +14,14 @@
 export type SearchSource = 'vector' | 'fulltext' | 'entity' | 'storage';
 
 /**
+ * Discriminator for how a search result should be rendered in the UI.
+ * - 'entity-record': A record from an MJ entity (navigable via EntityRecord viewer)
+ * - 'storage-file': A file from a file storage provider (open externally)
+ * - 'content-item': A content item (articles, web pages, etc.)
+ */
+export type SearchResultType = 'entity-record' | 'storage-file' | 'content-item';
+
+/**
  * Search modes that control the level of enrichment applied to results.
  * - 'full': Apply all enrichment (icons, record names, tags)
  * - 'preview': Skip enrichment for faster results (e.g., autocomplete)
@@ -92,6 +100,8 @@ export interface SearchResultItem {
     MatchedAt: Date;
     /** Raw vector metadata as JSON string (contains all entity fields stored in vector DB) */
     RawMetadata?: string;
+    /** Discriminator for UI rendering: entity-record, storage-file, or content-item */
+    ResultType: SearchResultType;
 }
 
 /**

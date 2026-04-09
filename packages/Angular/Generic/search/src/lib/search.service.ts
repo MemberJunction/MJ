@@ -164,8 +164,9 @@ export class SearchService {
         return [
             this.buildSourceTypeFilter(results),
             this.buildEntityNameFilter(results),
+            this.buildFileTypeFilter(results),
             this.buildTagFilter(results)
-        ].filter(f => f.Options.length > 0); // Hide categories with no options (e.g., Tags when none exist)
+        ].filter(f => f.Options.length > 0); // Hide categories with no options
     }
 
     /** Get the icon for a given source type */
@@ -190,8 +191,13 @@ export class SearchService {
 
     private buildEntityNameFilter(results: SearchResultItem[]): SearchFilter {
         const counts = new Map<string, number>();
+        let fileCount = 0;
         for (const r of results) {
-            counts.set(r.EntityName, (counts.get(r.EntityName) ?? 0) + 1);
+            if (r.ResultType === 'storage-file') {
+                fileCount++;
+            } else {
+                counts.set(r.EntityName, (counts.get(r.EntityName) ?? 0) + 1);
+            }
         }
         const options: SearchFilterOption[] = Array.from(counts.entries())
             .sort((a, b) => b[1] - a[1])
@@ -202,7 +208,40 @@ export class SearchService {
                 IsSelected: false,
                 Icon: 'fa-solid fa-table'
             }));
+
+        // Add a single "Files" entry for all storage file results
+        if (fileCount > 0) {
+            options.push({
+                Label: 'Files',
+                Value: '__storage-files__',
+                Count: fileCount,
+                IsSelected: false,
+                Icon: 'fa-solid fa-file'
+            });
+        }
+
         return { Category: 'Entity', Options: options, MultiSelect: true };
+    }
+
+    private buildFileTypeFilter(results: SearchResultItem[]): SearchFilter {
+        const counts = new Map<string, number>();
+        for (const r of results) {
+            if (r.ResultType !== 'storage-file') continue;
+            const ext = r.Title?.split('.').pop()?.toUpperCase();
+            if (ext && ext.length <= 6) {
+                counts.set(ext, (counts.get(ext) ?? 0) + 1);
+            }
+        }
+        const options: SearchFilterOption[] = Array.from(counts.entries())
+            .sort((a, b) => b[1] - a[1])
+            .map(([ext, count]) => ({
+                Label: ext,
+                Value: ext,
+                Count: count,
+                IsSelected: false,
+                Icon: 'fa-solid fa-file'
+            }));
+        return { Category: 'File Type', Options: options, MultiSelect: true };
     }
 
     private buildTagFilter(results: SearchResultItem[]): SearchFilter {
@@ -311,6 +350,7 @@ export class SearchService {
             EntityName: r.EntityName,
             RecordID: r.RecordID,
             SourceType: (r.SourceType as SearchResultItem['SourceType']) || 'entity',
+            ResultType: r.ResultType,
             Score: r.Score,
             ScoreBreakdown: r.ScoreBreakdown ?? {},
             Tags: r.Tags ?? [],

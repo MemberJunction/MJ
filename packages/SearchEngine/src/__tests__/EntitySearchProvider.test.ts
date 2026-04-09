@@ -287,6 +287,27 @@ describe('EntitySearchProvider', () => {
             }
         });
 
+        it('should set ResultType to "entity-record" on all results', async () => {
+            mockEntities.push({
+                Name: 'People',
+                AllowUserSearchAPI: true,
+                Fields: [
+                    { Name: 'Name', IncludeInUserSearchAPI: true, IsNameField: true, Sequence: 1 },
+                ],
+                NameField: { Name: 'Name' },
+            });
+
+            mockRunViewFn.mockResolvedValue({
+                Success: true,
+                Results: [{ ID: 'rec-1', Name: 'Alice' }],
+            });
+
+            const results = await provider.Search('Alice', 10, undefined, contextUser);
+            for (const r of results) {
+                expect(r.ResultType).toBe('entity-record');
+            }
+        });
+
         it('should populate ScoreBreakdown.Entity on results', async () => {
             mockEntities.push({
                 Name: 'People',

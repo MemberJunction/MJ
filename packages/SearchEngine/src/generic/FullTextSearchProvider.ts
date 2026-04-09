@@ -11,7 +11,7 @@
 
 import { LogError, Metadata, UserInfo } from '@memberjunction/core';
 import { ISearchProvider } from './ISearchProvider';
-import { SearchSource, SearchFilters, SearchResultItem } from './search.types';
+import { SearchSource, SearchFilters, SearchResultItem, SearchResultType } from './search.types';
 import { SearchEnricher } from './SearchEnricher';
 
 /**
@@ -68,6 +68,7 @@ export class FullTextSearchProvider implements ISearchProvider {
                 EntityName: r.EntityName,
                 RecordID: r.RecordID,
                 SourceType: 'fulltext',
+                ResultType: 'entity-record' as SearchResultType,
                 Title: r.Title,
                 Snippet: r.Snippet,
                 Score: r.Score,

@@ -222,7 +222,7 @@ describe('VectorSearchProvider', () => {
                 convertMatches: (
                     matches: Array<{ id: string; score?: number; metadata?: Record<string, unknown> }>,
                     indexName: string
-                ) => Array<{ SourceType: string }>
+                ) => Array<{ SourceType: string; ResultType: string }>
             }).convertMatches;
 
             const results = convertFn.call(provider, [
@@ -230,6 +230,7 @@ describe('VectorSearchProvider', () => {
             ], 'test-index');
 
             expect(results[0].SourceType).toBe('vector');
+            expect(results[0].ResultType).toBe('entity-record');
         });
 
         it('should extract entity name from vector metadata', () => {

@@ -2401,11 +2401,18 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       }
   }
 
-  OnSearchResultSelected(result: { EntityName: string; RecordID: string }): void {
-      if (result.EntityName && result.RecordID) {
-          const pkey = new CompositeKey([{ FieldName: 'ID', Value: result.RecordID }]);
-          this.navigationService.OpenEntityRecord(result.EntityName, pkey);
+  OnSearchResultSelected(result: { EntityName: string; RecordID: string; ResultType?: string }): void {
+      if (!result.EntityName || !result.RecordID) return;
+
+      if (result.ResultType === 'storage-file') {
+          // Storage files — open in new tab (placeholder for future file viewer)
+          window.open(`about:blank#storage-file:${result.RecordID}`, '_blank');
+          return;
       }
+
+      // Entity records — open via NavigationService
+      const pkey = new CompositeKey([{ FieldName: 'ID', Value: result.RecordID }]);
+      this.navigationService.OpenEntityRecord(result.EntityName, pkey);
   }
 
   OnSearchSubmitted(query: string): void {

@@ -62,6 +62,10 @@ export class SearchKnowledgeResultItem {
     /** Raw vector metadata as JSON string — contains all entity fields stored in the vector DB */
     @Field({ nullable: true })
     RawMetadata?: string;
+
+    /** Discriminator for UI rendering: 'entity-record', 'storage-file', or 'content-item' */
+    @Field()
+    ResultType: string;
 }
 
 @ObjectType()
@@ -150,6 +154,7 @@ export class SearchKnowledgeResolver extends ResolverBase {
                     EntityName: r.EntityName,
                     RecordID: r.RecordID,
                     SourceType: r.SourceType,
+                    ResultType: r.ResultType,
                     Title: r.Title,
                     Snippet: r.Snippet,
                     Score: r.Score,
@@ -199,6 +204,7 @@ export class SearchKnowledgeResolver extends ResolverBase {
                     EntityName: r.EntityName,
                     RecordID: r.RecordID,
                     SourceType: r.SourceType,
+                    ResultType: r.ResultType,
                     Title: r.Title,
                     Snippet: r.Snippet,
                     Score: r.Score,

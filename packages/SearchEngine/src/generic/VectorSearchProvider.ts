@@ -16,7 +16,7 @@ import { BaseEmbeddings, GetAIAPIKey } from '@memberjunction/ai';
 import { VectorDBBase, BaseResponse } from '@memberjunction/ai-vectordb';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { ISearchProvider } from './ISearchProvider';
-import { SearchSource, SearchFilters, SearchResultItem } from './search.types';
+import { SearchSource, SearchFilters, SearchResultItem, SearchResultType } from './search.types';
 
 /**
  * Provides vector similarity search across all configured vector indexes.
@@ -285,6 +285,7 @@ export class VectorSearchProvider implements ISearchProvider {
                 EntityName: entityName,
                 RecordID: recordID,
                 SourceType: 'vector',
+                ResultType: 'entity-record' as SearchResultType,
                 Title: title,
                 Snippet: snippet,
                 Score: rawScore,

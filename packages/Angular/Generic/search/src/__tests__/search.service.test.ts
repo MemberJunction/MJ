@@ -406,6 +406,7 @@ function createMockResult(
         EntityName: entityName,
         RecordID: `rec-${id}`,
         SourceType: sourceType,
+        ResultType: sourceType === 'file' ? 'storage-file' : 'entity-record',
         Score: 0.85,
         ScoreBreakdown: { Vector: 0.8, FullText: 0.9 },
         Tags: tags,

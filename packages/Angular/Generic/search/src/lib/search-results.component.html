@@ -107,8 +107,9 @@
                 </div>
             }
             <div class="result-card-actions">
-                <button class="result-open-btn" (click)="OnOpenRecord(result, $event)" title="Open record">
-                    <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                <button class="result-open-btn" (click)="OnOpenRecord(result, $event)"
+                        [title]="result.ResultType === 'storage-file' ? 'Open file' : 'Open record'">
+                    <i [class]="result.ResultType === 'storage-file' ? 'fa-solid fa-external-link' : 'fa-solid fa-arrow-up-right-from-square'"></i>
                 </button>
                 <button class="result-expand-btn" (click)="ToggleExpand(result, $event)" title="Expand details">
                     <i class="fa-solid" [class.fa-chevron-down]="!IsExpanded(result.ID)"
@@ -176,7 +177,11 @@
                 }
                 <div class="detail-actions">
                     <button class="detail-open-btn" (click)="OnOpenRecord(result, $event)">
-                        <i class="fa-solid fa-arrow-up-right-from-square"></i> Open Record
+                        @if (result.ResultType === 'storage-file') {
+                            <i class="fa-solid fa-external-link"></i> Open File
+                        } @else {
+                            <i class="fa-solid fa-arrow-up-right-from-square"></i> Open Record
+                        }
                     </button>
                     <button class="detail-similar-btn" (click)="OnMoreLikeThis(result, $event)">
                         <i class="fa-solid fa-shuffle"></i> See Similar Items

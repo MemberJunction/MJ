@@ -22,7 +22,7 @@ import {
     initializeDriverWithAccountCredentials
 } from '@memberjunction/storage';
 import { ISearchProvider } from './ISearchProvider';
-import { SearchSource, SearchFilters, SearchResultItem } from './search.types';
+import { SearchSource, SearchFilters, SearchResultItem, SearchResultType } from './search.types';
 
 /**
  * Represents a storage account that is eligible for search, along with
@@ -278,16 +278,25 @@ export class StorageSearchProvider implements ISearchProvider {
 
             return {
                 ID: `storage-${NormalizeUUID(account.ID)}-${file.objectId ?? file.path}`,
-                EntityName: 'MJ: File Storage Accounts',
-                RecordID: account.ID,
+                EntityName: account.Name,
+                RecordID: file.objectId ?? file.path,
                 SourceType: 'storage',
+                ResultType: 'storage-file' as SearchResultType,
                 Title: file.name,
                 Snippet: snippet,
                 Score: Math.round(score * 100) / 100,
                 ScoreBreakdown: { Storage: Math.round(score * 100) / 100 },
                 Tags: this.buildTags(file, account),
-                EntityIcon: 'fa-solid fa-folder-open',
-                MatchedAt: new Date()
+                EntityIcon: this.getFileIcon(file),
+                RecordName: file.name,
+                MatchedAt: file.lastModified ?? new Date(),
+                RawMetadata: JSON.stringify({
+                    path: file.path,
+                    size: file.size,
+                    contentType: file.contentType,
+                    provider: account.Name,
+                    objectId: file.objectId
+                })
             };
         });
     }
@@ -328,45 +337,82 @@ export class StorageSearchProvider implements ISearchProvider {
         file: FileSearchResult,
         account: MJFileStorageAccountEntity
     ): string {
+        const parts: string[] = [];
+
+        // If provider returned a content excerpt, lead with that
         if (file.excerpt) {
-            // Strip HTML tags from provider excerpts
-            const cleanExcerpt = file.excerpt.replace(/<[^>]*>/g, '');
-            return cleanExcerpt.length > 200
-                ? cleanExcerpt.substring(0, 200) + '...'
-                : cleanExcerpt;
+            const cleanExcerpt = file.excerpt.replace(/<[^>]*>/g, '').trim();
+            if (cleanExcerpt.length > 0) {
+                parts.push(cleanExcerpt.length > 150 ? cleanExcerpt.substring(0, 150) + '...' : cleanExcerpt);
+            }
         }
 
-        const parts: string[] = [];
-        parts.push(`File in ${account.Name}`);
+        // Build metadata line: provider · path · size · modified
+        const meta: string[] = [];
+        meta.push(account.Name);
         if (file.path && file.path !== file.name) {
-            parts.push(`Path: ${file.path}`);
+            // Show folder path without the filename
+            const folder = file.path.substring(0, file.path.lastIndexOf('/')) || '/';
+            meta.push(folder);
         }
         if (file.size > 0) {
-            parts.push(`Size: ${this.formatFileSize(file.size)}`);
+            meta.push(this.formatFileSize(file.size));
         }
-        return parts.join(' | ');
+        if (file.contentType) {
+            meta.push(file.contentType);
+        }
+        parts.push(meta.join(' · '));
+
+        return parts.join('\n');
     }
 
     /**
      * Build tags for a file search result.
      */
     private buildTags(
-        file: FileSearchResult,
-        account: MJFileStorageAccountEntity
+        _file: FileSearchResult,
+        _account: MJFileStorageAccountEntity
     ): string[] {
-        const tags: string[] = [account.Name];
+        // Storage files don't use MJ tags — file type and provider are shown
+        // in dedicated filter sections (File Type, Source) instead
+        return [];
+    }
 
-        // Add file extension as a tag
-        const dotIndex = file.name.lastIndexOf('.');
-        if (dotIndex > 0) {
-            tags.push(file.name.substring(dotIndex + 1).toUpperCase());
-        }
+    /**
+     * Get an appropriate Font Awesome icon for a file based on its extension/content type.
+     */
+    private getFileIcon(file: FileSearchResult): string {
+        const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
+        const type = file.contentType?.toLowerCase() ?? '';
 
-        if (file.matchInFilename) {
-            tags.push('Filename Match');
-        }
-
-        return tags;
+        // PDFs
+        if (ext === 'pdf' || type.includes('pdf')) return 'fa-solid fa-file-pdf';
+        // Images
+        if (['jpg', 'jpeg', 'png', 'gif', 'svg', 'webp', 'bmp'].includes(ext) || type.startsWith('image/'))
+            return 'fa-solid fa-file-image';
+        // Spreadsheets
+        if (['xlsx', 'xls', 'csv', 'tsv'].includes(ext) || type.includes('spreadsheet'))
+            return 'fa-solid fa-file-excel';
+        // Documents
+        if (['docx', 'doc', 'rtf', 'odt'].includes(ext) || type.includes('document') || type.includes('msword'))
+            return 'fa-solid fa-file-word';
+        // Presentations
+        if (['pptx', 'ppt', 'odp'].includes(ext) || type.includes('presentation'))
+            return 'fa-solid fa-file-powerpoint';
+        // Code / text
+        if (['txt', 'md', 'json', 'xml', 'yaml', 'yml', 'html', 'css', 'js', 'ts'].includes(ext) || type.startsWith('text/'))
+            return 'fa-solid fa-file-code';
+        // Archives
+        if (['zip', 'tar', 'gz', 'rar', '7z'].includes(ext) || type.includes('archive') || type.includes('zip'))
+            return 'fa-solid fa-file-zipper';
+        // Audio
+        if (['mp3', 'wav', 'ogg', 'flac', 'aac'].includes(ext) || type.startsWith('audio/'))
+            return 'fa-solid fa-file-audio';
+        // Video
+        if (['mp4', 'avi', 'mov', 'mkv', 'webm'].includes(ext) || type.startsWith('video/'))
+            return 'fa-solid fa-file-video';
+        // Default
+        return 'fa-solid fa-file';
     }
 
     /**

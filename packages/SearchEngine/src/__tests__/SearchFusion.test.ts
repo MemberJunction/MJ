@@ -29,6 +29,7 @@ function makeResult(overrides: Partial<SearchResultItem> & { RecordID: string; E
         EntityName: overrides.EntityName,
         RecordID: overrides.RecordID,
         SourceType: overrides.SourceType ?? 'entity',
+        ResultType: overrides.ResultType ?? 'entity-record',
         Title: overrides.Title ?? `Title ${overrides.RecordID}`,
         Snippet: overrides.Snippet ?? '',
         Score: overrides.Score ?? 0.5,

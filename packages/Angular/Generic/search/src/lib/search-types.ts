@@ -19,6 +19,8 @@ export interface SearchResultItem {
     RecordID: string;
     /** Classification of the result source */
     SourceType: 'entity' | 'content-item' | 'file' | 'web-page';
+    /** Discriminator for UI rendering: 'entity-record', 'storage-file', or 'content-item' */
+    ResultType?: string;
     /** Relevance score between 0 and 1 */
     Score: number;
     /** Breakdown of how the score was computed */
@@ -91,7 +93,7 @@ export interface SearchRequest {
     /** Active filter selections */
     ActiveFilters: Record<string, string[]>;
     /** Which search sources to include */
-    IncludeSources: ('vector' | 'fulltext' | 'entity')[];
+    IncludeSources: ('vector' | 'fulltext' | 'entity' | 'storage')[];
     /**
      * Minimum relevance score (0-1) to include in results.
      * Results below this threshold are filtered out.
