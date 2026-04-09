@@ -1,4 +1,4 @@
-import { RegisterClass, SafeJSONParse } from "@memberjunction/global";
+import { RegisterClass, SafeJSONParse, CleanAndParseJSON } from "@memberjunction/global";
 import { BaseEntity, EntityInfo, LogError, IMetadataProvider } from "@memberjunction/core";
 import { MJUserViewEntityExtended } from '@memberjunction/core-entities'
 import { AIPromptParams } from "@memberjunction/ai-core-plus";
@@ -68,14 +68,17 @@ export class MJUserViewEntityServer extends MJUserViewEntityExtended  {
                 throw new Error(`AI prompt execution failed: ${result.errorMessage}`);
             }
 
-            if (!result.rawResult) {
-                throw new Error('AI returned empty result');
+            // If the prompt runner already parsed into an object, use it directly.
+            // Otherwise parse the string result (OutputType='string' returns raw text
+            // that may be wrapped in markdown fencing).
+            let llmResponse: SmartFilterResponse | null;
+            if (result.result && typeof result.result === 'object' && 'whereClause' in (result.result as unknown as Record<string, unknown>)) {
+                llmResponse = result.result as SmartFilterResponse;
+            } else {
+                llmResponse = CleanAndParseJSON<SmartFilterResponse>(String(result.result ?? result.rawResult ?? ''), true);
             }
-
-            // Process the response
-            const llmResponse = SafeJSONParse<SmartFilterResponse>(result.rawResult);
             if (!llmResponse) {
-                throw new Error('Failed to parse AI response as JSON');
+                throw new Error(`Invalid response from AI, could not extract whereClause`);
             }
 
             // Handle the whereClause - sometimes LLM prefixes with WHERE
