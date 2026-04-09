@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { Component, EventEmitter, Input, Output, ChangeDetectorRef, inject } from '@angular/core';
 import { GraphQLDataProvider, GraphQLFileStorageClient } from '@memberjunction/graphql-dataprovider';
 import { StorageAccountWithProvider } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
@@ -88,6 +88,8 @@ export class FolderTreeComponent {
    * Folders in current path
    */
   public folders: FolderItem[] = [];
+
+  private cdr = inject(ChangeDetectorRef);
 
   /**
    * Loading state
@@ -240,6 +242,7 @@ export class FolderTreeComponent {
 
     this.isLoading = true;
     this.errorMessage = null;
+    this.cdr.detectChanges();
 
     try {
       const listResult = await this.storageClient.ListObjects(
@@ -248,15 +251,8 @@ export class FolderTreeComponent {
         '/'
       );
 
-      console.log('[FolderTree] ListObjects result:', {
-        prefixesCount: listResult.prefixes?.length || 0,
-        prefixes: listResult.prefixes,
-        objectsCount: listResult.objects?.length || 0
-      });
-
       // Convert prefixes to FolderItems
       const prefixes = listResult.prefixes || [];
-      console.log('[FolderTree] Processing prefixes:', prefixes);
       this.folders = prefixes.map((prefix: string) => {
         // Remove trailing slash and get just the folder name
         const cleanPath = prefix.endsWith('/') ? prefix.slice(0, -1) : prefix;
@@ -273,6 +269,7 @@ export class FolderTreeComponent {
       this.folders = [];
     } finally {
       this.isLoading = false;
+      this.cdr.detectChanges();
     }
   }
 

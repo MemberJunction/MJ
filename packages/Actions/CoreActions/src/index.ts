@@ -118,4 +118,6 @@ export * from './custom/visualization/shared/mermaid-types';
 // MCP Actions
 export * from './custom/mcp';
 
+export * from './custom/search/search.action';
+
 

@@ -3,6 +3,7 @@ import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-sha
 import { CompositeKey, Metadata, RunView } from '@memberjunction/core';
 import { ResourceData } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
+import { FileOpenService } from '@memberjunction/ng-file-storage';
 import {
     SearchService,
     SearchResultItem,
@@ -20,24 +21,22 @@ import { WordCloudItem, WordCloudItemEvent } from '@memberjunction/ng-word-cloud
     selector: 'mj-search-results-resource',
     template: `
         <div class="search-results-page">
-            <!-- Header bar -->
-            <div class="search-header">
-                <div class="search-header-left">
-                    @if (!ShowFilterPanel && HasSearched && TotalCount > 0) {
-                        <button class="sr-icon-btn" title="Show filters" (click)="ToggleFilterPanel()">
-                            <i class="fa-solid fa-filter"></i>
-                        </button>
-                    }
-                    @if (!IsSearching && TotalCount > 0) {
+            <!-- Header bar (always visible when we have server results) -->
+            @if (HasSearched && ServerResultCount > 0) {
+                <div class="search-header">
+                    <div class="search-header-left">
+                        @if (!ShowFilterPanel) {
+                            <button class="sr-icon-btn" title="Show filters" (click)="ToggleFilterPanel()">
+                                <i class="fa-solid fa-filter"></i>
+                            </button>
+                        }
                         <span class="search-meta">
-                            {{ FilteredResults.length }} of {{ TotalCount }} result{{ TotalCount !== 1 ? 's' : '' }}
+                            {{ FilteredResults.length }} of {{ ServerResultCount }} result{{ ServerResultCount !== 1 ? 's' : '' }}
                             for "{{ CurrentQuery }}" in {{ ElapsedMs }}ms
                         </span>
-                    }
-                </div>
-                <div class="search-header-right">
-                    <!-- Search within results -->
-                    @if (TotalCount > 0) {
+                    </div>
+                    <div class="search-header-right">
+                        <!-- Search within results -->
                         <div class="sr-refine-wrapper">
                             <i class="fa-solid fa-filter-list sr-refine-icon"></i>
                             <input class="mj-input sr-refine-input"
@@ -50,17 +49,13 @@ import { WordCloudItem, WordCloudItemEvent } from '@memberjunction/ng-word-cloud
                                 </button>
                             }
                         </div>
-                    }
-                    <!-- Sort -->
-                    @if (TotalCount > 0) {
+                        <!-- Sort -->
                         <select class="mj-input sr-sort-select" [value]="SortField" (change)="OnSortChange($any($event.target).value)">
                             <option value="score">Sort: Relevance</option>
                             <option value="title">Sort: Name</option>
                             <option value="entity">Sort: Entity</option>
                         </select>
-                    }
-                    <!-- View mode toggle -->
-                    @if (TotalCount > 0) {
+                        <!-- View mode toggle -->
                         <div class="sr-view-toggle">
                             <button class="sr-icon-btn"
                                     [class.sr-view-active]="ViewMode === 'list'"
@@ -75,31 +70,39 @@ import { WordCloudItem, WordCloudItemEvent } from '@memberjunction/ng-word-cloud
                                 <i class="fa-solid fa-cloud"></i>
                             </button>
                         </div>
-                    }
-                    <!-- Refresh -->
-                    <button class="sr-icon-btn" title="Refresh search" (click)="OnRefresh()" [disabled]="IsSearching">
-                        <i class="fa-solid fa-arrows-rotate" [class.fa-spin]="IsSearching"></i>
-                    </button>
+                        <!-- Refresh -->
+                        <button class="sr-icon-btn" title="Refresh search" (click)="OnRefresh()" [disabled]="IsSearching">
+                            <i class="fa-solid fa-arrows-rotate" [class.fa-spin]="IsSearching"></i>
+                        </button>
+                    </div>
                 </div>
-            </div>
+            }
 
-            <!-- Loading state -->
-            @if (IsSearching) {
+            <!-- Initial loading (first search) -->
+            @if (IsSearching && ServerResultCount === 0) {
                 <div class="search-loading">
                     <mj-loading text="Searching..." size="medium"></mj-loading>
                 </div>
             }
 
-            <!-- Results area -->
-            @if (!IsSearching) {
-                @if (TotalCount === 0 && HasSearched) {
-                    <div class="search-no-results">
-                        <i class="fa-solid fa-magnifying-glass-minus"></i>
-                        <h3>No results found</h3>
-                        <p>Try different keywords or broaden your search.</p>
-                    </div>
-                }
-                @if (TotalCount > 0) {
+            <!-- No server results -->
+            @if (!IsSearching && ServerResultCount === 0 && HasSearched) {
+                <div class="search-no-results">
+                    <i class="fa-solid fa-magnifying-glass-minus"></i>
+                    <h3>No results found</h3>
+                    <p>Try different keywords or broaden your search.</p>
+                </div>
+            }
+            <!-- Results body (visible when server returned results) -->
+            @if (ServerResultCount > 0) {
+                <div class="search-results-body-wrapper">
+                    <!-- Semi-opaque loading overlay for re-queries (slider lowered, etc.) -->
+                    @if (IsSearching) {
+                        <div class="search-requery-overlay">
+                            <mj-loading text="Updating results..." size="medium"></mj-loading>
+                        </div>
+                    }
+
                     @if (ViewMode === 'cloud') {
                         <div class="search-cloud-wrapper">
                             @if (IsLoadingCloud) {
@@ -122,25 +125,33 @@ import { WordCloudItem, WordCloudItemEvent } from '@memberjunction/ng-word-cloud
                                     [ActiveFilters]="ActiveFilters"
                                     [ShowRelevanceSlider]="true"
                                     [MinScorePercent]="MinScorePercent"
+                                    [ServerMinScorePercent]="serverMinScorePercent"
                                     (FilterChanged)="OnFilterChanged($event)"
                                     (FiltersCleared)="OnFiltersCleared()"
                                     (CloseRequested)="ToggleFilterPanel()"
                                     (MinScoreChanged)="OnMinScoreChanged($any($event))">
                                 </mj-search-filter>
                             }
-                            <mj-search-results
-                                [FlatResults]="FilteredResults"
-                                [HighlightText]="ClientFilterText"
-                                [ShowScores]="true"
-                                [ShowTags]="true"
-                                [ShowSummary]="false"
-                                [PageSize]="20"
-                                (ResultSelected)="OnResultSelected($event)"
-                                (OpenRecordRequested)="OnOpenRecord($event)">
-                            </mj-search-results>
+                            @if (FilteredResults.length > 0) {
+                                <mj-search-results
+                                    [FlatResults]="FilteredResults"
+                                    [HighlightText]="ClientFilterText"
+                                    [ShowScores]="true"
+                                    [ShowTags]="true"
+                                    [ShowSummary]="false"
+                                    [PageSize]="20"
+                                    (ResultSelected)="OnResultSelected($event)"
+                                    (OpenRecordRequested)="OnOpenRecord($event)">
+                                </mj-search-results>
+                            } @else {
+                                <div class="search-no-results-inline">
+                                    <i class="fa-solid fa-filter-circle-xmark"></i>
+                                    <p>No results match current filters. Try lowering the minimum relevance.</p>
+                                </div>
+                            }
                         </div>
                     }
-                }
+                </div>
             }
         </div>
     `,
@@ -224,7 +235,7 @@ import { WordCloudItem, WordCloudItemEvent } from '@memberjunction/ng-word-cloud
         }
         .sr-refine-clear:hover { color: var(--mj-text-primary); }
         .sr-sort-select {
-            padding: 5px 8px;
+            padding: 5px 24px 5px 8px;
             font-size: 12px;
             border-radius: 6px;
             min-width: 130px;
@@ -270,6 +281,40 @@ import { WordCloudItem, WordCloudItemEvent } from '@memberjunction/ng-word-cloud
             font-size: 14px;
             margin: 0;
         }
+        .search-results-body-wrapper {
+            position: relative;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .search-requery-overlay {
+            position: absolute;
+            inset: 0;
+            background: color-mix(in srgb, var(--mj-bg-page) 75%, transparent);
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .search-no-results-inline {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            color: var(--mj-text-muted);
+            padding: 40px 20px;
+        }
+        .search-no-results-inline i {
+            font-size: 32px;
+            opacity: 0.4;
+        }
+        .search-no-results-inline p {
+            font-size: 13px;
+            margin: 0;
+        }
         .sr-view-toggle {
             display: flex;
             gap: 2px;
@@ -310,6 +355,7 @@ export class SearchResultsResource extends BaseResourceComponent {
     private cdr = inject(ChangeDetectorRef);
     private navigationService = inject(NavigationService);
     private searchService = inject(SearchService);
+    private fileOpenService = inject(FileOpenService);
 
     CurrentQuery = '';
     IsSearching = false;
@@ -319,7 +365,12 @@ export class SearchResultsResource extends BaseResourceComponent {
     Filters: SearchFilter[] = [];
     ActiveFilters: Record<string, string[]> = {};
     FilteredResults: SearchResultItem[] = [];
-    MinScorePercent = 0;
+    MinScorePercent = 30;
+    /** The MinScore that was sent to the server on the last search. If the user
+     *  slides below this, we need to re-query the server to get more results. */
+    serverMinScorePercent = 30;
+    /** How many results the server returned (before client-side filtering) */
+    ServerResultCount = 0;
     ShowFilterPanel = true;
     SortField: 'score' | 'title' | 'entity' = 'score';
     ClientFilterText = '';
@@ -362,6 +413,17 @@ export class SearchResultsResource extends BaseResourceComponent {
             this.CurrentQuery = config.SearchInput as string;
         }
 
+        // Apply min relevance from the search bar dropdown if provided
+        if (config?.MinRelevance != null) {
+            const mr = Number(config.MinRelevance);
+            if (!isNaN(mr) && mr >= 0 && mr <= 100) {
+                this.MinScorePercent = mr;
+            }
+        }
+
+        // Sync min relevance to URL query param
+        this.navigationService.UpdateActiveTabQueryParams({ minRelevance: String(this.MinScorePercent) });
+
         if (this.CurrentQuery) {
             await this.ExecuteSearch(this.CurrentQuery);
         }
@@ -397,27 +459,35 @@ export class SearchResultsResource extends BaseResourceComponent {
 
     OnFiltersCleared(): void {
         this.ActiveFilters = {};
-        this.MinScorePercent = 0;
+        this.MinScorePercent = 30;
+        this.navigationService.UpdateActiveTabQueryParams({ minRelevance: '30' });
         this.applyClientFilters();
     }
 
     OnMinScoreChanged(percent: number): void {
         this.MinScorePercent = percent;
-        this.applyClientFilters();
+        this.navigationService.UpdateActiveTabQueryParams({ minRelevance: String(percent) });
+        if (percent < this.serverMinScorePercent && this.CurrentQuery) {
+            // User lowered below what server filtered — need to re-query with lower threshold
+            this.ExecuteSearch(this.CurrentQuery);
+        } else {
+            // User raised or stayed at/above server threshold — client-side filter is sufficient
+            this.applyClientFilters();
+        }
     }
 
     OnResultSelected(event: SearchResultSelectedEvent): void {
-        this.navigateToRecord(event.Result.EntityName, event.Result.RecordID);
+        this.navigateToResult(event.Result);
     }
 
-    OnOpenRecord(event: { EntityName: string; RecordID: string }): void {
-        this.navigateToRecord(event.EntityName, event.RecordID);
+    OnOpenRecord(result: SearchResultItem): void {
+        this.navigateToResult(result);
     }
 
     async OnRefresh(): Promise<void> {
         if (this.CurrentQuery) {
             this.ActiveFilters = {};
-            this.MinScorePercent = 0;
+            this.MinScorePercent = 30;
             this.ClientFilterText = '';
             await this.ExecuteSearch(this.CurrentQuery);
         }
@@ -460,11 +530,26 @@ export class SearchResultsResource extends BaseResourceComponent {
         // Future: clicking a tag could filter results to only those with that tag.
     }
 
-    private navigateToRecord(entityName: string, recordID: string): void {
-        if (entityName && recordID) {
-            const pkey = new CompositeKey([{ FieldName: 'ID', Value: recordID }]);
-            this.navigationService.OpenEntityRecord(entityName, pkey);
+    /**
+     * Navigate to a search result based on its ResultType discriminator.
+     * - entity-record: opens the MJ entity record viewer
+     * - storage-file: opens the file via pre-authenticated URL in new tab
+     * - content-item: opens the MJ entity record viewer (content items are entity records)
+     */
+    private navigateToResult(result: SearchResultItem): void {
+        if (result.ResultType === 'storage-file') {
+            // Try preview first (opens in provider's web viewer), fall back to download
+            if (!this.fileOpenService.OpenPreviewFromSearchResult(result.RawMetadata)) {
+                this.fileOpenService.OpenFileFromSearchResult(result.RawMetadata);
+            }
+            return;
         }
+
+        if (!result.EntityName || !result.RecordID) return;
+
+        // entity-record, content-item, or unset — navigate to entity record
+        const pkey = new CompositeKey([{ FieldName: 'ID', Value: result.RecordID }]);
+        this.navigationService.OpenEntityRecord(result.EntityName, pkey);
     }
 
     private async ExecuteSearch(query: string): Promise<void> {
@@ -472,17 +557,19 @@ export class SearchResultsResource extends BaseResourceComponent {
         this.HasSearched = false;
         this.cdr.detectChanges();
 
+        this.serverMinScorePercent = this.MinScorePercent;
         const request: SearchRequest = {
             Query: query,
             MaxResults: 50,
             ActiveFilters: {},
-            IncludeSources: ['vector', 'fulltext', 'entity'],
-            MinScore: 0
+            IncludeSources: ['vector', 'fulltext', 'entity', 'storage'],
+            MinScore: this.MinScorePercent / 100
         };
 
         const response: SearchResponse = await this.searchService.ExecuteSearch(request);
 
         this.allResults = [...response.Results].sort((a, b) => b.Score - a.Score);
+        this.ServerResultCount = this.allResults.length;
         this.TotalCount = response.TotalCount;
         this.ElapsedMs = response.ElapsedMs;
         this.Filters = response.Filters;
@@ -500,15 +587,19 @@ export class SearchResultsResource extends BaseResourceComponent {
     private applyClientFilters(): void {
         let results = this.allResults;
 
-        // Apply facet filters
-        if (this.hasActiveFilters()) {
-            results = results.filter(r => this.matchesActiveFilters(r));
-        }
-
-        // Apply min score filter
+        // Apply min score filter FIRST (this determines what's "available")
         if (this.MinScorePercent > 0) {
             const minScore = this.MinScorePercent / 100;
             results = results.filter(r => r.Score >= minScore);
+        }
+
+        // Rebuild filters from score-filtered results so counts are accurate
+        this.Filters = this.searchService.BuildFilters(results);
+        this.TotalCount = results.length;
+
+        // Apply facet filters
+        if (this.hasActiveFilters()) {
+            results = results.filter(r => this.matchesActiveFilters(r));
         }
 
         // Apply client text filter (search within results)
@@ -548,8 +639,10 @@ export class SearchResultsResource extends BaseResourceComponent {
 
     private matchesActiveFilters(result: SearchResultItem): boolean {
         const entityFilter = this.ActiveFilters['Entity'];
-        if (entityFilter?.length && !entityFilter.includes(result.EntityName)) {
-            return false;
+        if (entityFilter?.length) {
+            const matchesEntity = entityFilter.includes(result.EntityName);
+            const matchesFiles = entityFilter.includes('__storage-files__') && result.ResultType === 'storage-file';
+            if (!matchesEntity && !matchesFiles) return false;
         }
 
         const sourceFilter = this.ActiveFilters['Source'];
@@ -560,6 +653,13 @@ export class SearchResultsResource extends BaseResourceComponent {
         const tagFilter = this.ActiveFilters['Tags'];
         if (tagFilter?.length && !tagFilter.some(t => result.Tags.includes(t))) {
             return false;
+        }
+
+        const fileTypeFilter = this.ActiveFilters['File Type'];
+        if (fileTypeFilter?.length) {
+            if (result.ResultType !== 'storage-file') return false;
+            const ext = result.Title?.split('.').pop()?.toUpperCase() ?? '';
+            if (!fileTypeFilter.includes(ext)) return false;
         }
 
         return true;

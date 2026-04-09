@@ -140,6 +140,14 @@
     background: var(--mj-bg-surface-hover);
 }
 
+.filter-option-readonly {
+    cursor: default;
+    opacity: 0.85;
+}
+.filter-option-readonly:hover {
+    background: transparent;
+}
+
 .filter-checkbox {
     width: 1rem;
     height: 1rem;
@@ -230,4 +238,18 @@
     color: var(--mj-brand-primary);
     min-width: 36px;
     text-align: right;
+}
+
+/* Server threshold indicator */
+.filter-server-threshold {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 2px 12px 6px;
+    font-size: 10px;
+    color: var(--mj-text-muted);
+}
+.server-threshold-warning {
+    color: var(--mj-status-warning-text, var(--mj-status-warning));
+    font-weight: 600;
 }

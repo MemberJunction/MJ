@@ -22,6 +22,17 @@ export type SmartFieldIdentificationResult = {
     defaultInViewReason: string;
     searchableFields: string[];
     searchableFieldsReason: string;
+    /** Whether this entity should be searchable by users via the search API */
+    allowUserSearch?: boolean;
+    allowUserSearchReason?: string;
+    /** Per-field search predicate recommendations (BeginsWith, Contains, EndsWith, Exact) */
+    searchPredicates?: Array<{ field: string; predicate: 'BeginsWith' | 'Contains' | 'EndsWith' | 'Exact' }>;
+    searchPredicatesReason?: string;
+    /** Whether full-text search should be enabled for this entity */
+    enableFullTextSearch?: boolean;
+    /** Which fields should be included in the full-text search index */
+    fullTextSearchFields?: string[];
+    fullTextSearchReason?: string;
     confidence: 'high' | 'medium' | 'low';
 }
 

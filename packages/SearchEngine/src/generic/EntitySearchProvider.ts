@@ -10,7 +10,7 @@
 
 import { LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { ISearchProvider } from './ISearchProvider';
-import { SearchSource, SearchFilters, SearchResultItem } from './search.types';
+import { SearchSource, SearchFilters, SearchResultItem, SearchResultType } from './search.types';
 
 /**
  * Provides entity-level LIKE-based search using RunView + UserSearchString.
@@ -180,6 +180,7 @@ export class EntitySearchProvider implements ISearchProvider {
                 EntityName: entityName,
                 RecordID: recordID,
                 SourceType: 'entity',
+                ResultType: 'entity-record' as SearchResultType,
                 Title: title,
                 Snippet: snippet,
                 Score: Math.round(score * 100) / 100, // Round to 2 decimal places

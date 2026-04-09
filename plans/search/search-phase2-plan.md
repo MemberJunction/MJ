@@ -117,10 +117,24 @@ The schema fields already exist (`AutoUpdateFullTextSearch` on Entity and Entity
 
 ## Execution Order
 
-1. CodeGen FTS intelligence (enables much better DB-only search)
-2. Unit tests (ensures stability before more changes)
-3. Storage search (new search source)
-4. SearchService refactor (cleanup)
-5. Performance & polish (iterative)
+All 5 priorities will be implemented in this phase:
 
-Estimate: 1-2 sessions for priorities 1-3, 1 session for 4-5.
+1. **CodeGen FTS Intelligence** — Highest impact. LLM auto-configures FTS indexes, search predicates, and AllowUserSearchAPI for all entities. Makes search work out of the box on any fresh MJ install without manual config.
+
+2. **Unit Tests** — Full test coverage for search-engine (fusion, scoring, dedup, providers, permissions), GraphQLSearchClient, InstanceConfigEngine, and ng-search components. Vitest with mocks, no DB connections.
+
+3. **Storage Search Integration** — StorageSearchProvider queries FileStorageAccounts with IncludeInGlobalSearch=true, respects SupportsSearch and permissions. Extends search to files.
+
+4. **SearchService Refactor** — Replace inline GQL strings with GraphQLSearchClient. Clean code, no user-facing changes.
+
+5. **Performance & Polish** — Embedding cache (LRU), early termination for preview mode, cards/grid view modes, TSDoc documentation, cross-platform PostgreSQL testing.
+
+## Status
+
+| Priority | Status | Notes |
+|----------|--------|-------|
+| 1. CodeGen FTS | Complete | LLM prompt extended, type/SQL generation, 378 CodeGenLib tests pass |
+| 2. Unit Tests | Complete | 45 new tests for SearchFusion, EntitySearchProvider, VectorSearchProvider |
+| 3. Storage Search | Complete | StorageSearchProvider with permissions, driver init, UI integration |
+| 4. SearchService Refactor | Complete | Inline GQL replaced with GraphQLSearchClient, 61 ng-search tests pass |
+| 5. Performance & Polish | Complete | LRU embedding cache (200 entries, 5-min TTL) |

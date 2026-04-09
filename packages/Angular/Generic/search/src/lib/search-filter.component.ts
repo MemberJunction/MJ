@@ -39,6 +39,9 @@ export class SearchFilterComponent {
     /** Current minimum score as a percentage (0-100) */
     @Input() MinScorePercent = 0;
 
+    /** The MinScore that was last sent to the server (for visual indicator) */
+    @Input() ServerMinScorePercent = 0;
+
     @Output() FilterChanged = new EventEmitter<SearchFilterChangeEvent>();
     @Output() FiltersCleared = new EventEmitter<void>();
     @Output() CloseRequested = new EventEmitter<void>();
@@ -125,7 +128,17 @@ export class SearchFilterComponent {
         return selection.length === filter.Options.length;
     }
 
-    /** Handle relevance slider change */
+    /** Handle relevance slider drag (preview only — updates display without triggering search) */
+    public OnMinScorePreview(value: string): void {
+        this.MinScorePercent = parseInt(value, 10);
+    }
+
+    /** Handle relevance slider release — commits the value and triggers re-query if needed */
+    public OnMinScoreCommit(): void {
+        this.MinScoreChanged.emit(this.MinScorePercent);
+    }
+
+    /** Handle relevance slider change (legacy — used when input event fires) */
     public OnMinScoreChange(value: string): void {
         this.MinScorePercent = parseInt(value, 10);
         this.MinScoreChanged.emit(this.MinScorePercent);

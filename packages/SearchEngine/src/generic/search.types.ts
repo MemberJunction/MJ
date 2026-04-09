@@ -11,7 +11,15 @@
 /**
  * Source types that can contribute to search results.
  */
-export type SearchSource = 'vector' | 'fulltext' | 'entity';
+export type SearchSource = 'vector' | 'fulltext' | 'entity' | 'storage';
+
+/**
+ * Discriminator for how a search result should be rendered in the UI.
+ * - 'entity-record': A record from an MJ entity (navigable via EntityRecord viewer)
+ * - 'storage-file': A file from a file storage provider (open externally)
+ * - 'content-item': A content item (articles, web pages, etc.)
+ */
+export type SearchResultType = 'entity-record' | 'storage-file' | 'content-item';
 
 /**
  * Search modes that control the level of enrichment applied to results.
@@ -30,6 +38,8 @@ export interface SearchScoreBreakdown {
     FullText?: number;
     /** Score from entity LIKE-based search */
     Entity?: number;
+    /** Score from file storage search */
+    Storage?: number;
 }
 
 /**
@@ -90,6 +100,8 @@ export interface SearchResultItem {
     MatchedAt: Date;
     /** Raw vector metadata as JSON string (contains all entity fields stored in vector DB) */
     RawMetadata?: string;
+    /** Discriminator for UI rendering: entity-record, storage-file, or content-item */
+    ResultType: SearchResultType;
 }
 
 /**
@@ -109,6 +121,7 @@ export interface SearchResult {
         Vector: number;
         FullText: number;
         Entity: number;
+        Storage: number;
     };
     /** Error message if Success is false */
     ErrorMessage?: string;

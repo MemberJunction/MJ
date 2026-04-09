@@ -28,6 +28,7 @@ import { TabContainerComponent } from './components/tabs/tab-container.component
 import { BaseUserMenu, UserMenuElement, UserMenuItem, UserMenuContext, isUserMenuDivider, ApplicationInfoRef } from '../user-menu';
 import { MJUserEntity, InstanceConfigEngine } from '@memberjunction/core-entities';
 import { CommandPaletteService } from '../command-palette/command-palette.service';
+import { FileOpenService } from '@memberjunction/ng-file-storage';
 
 /**
  * Main shell component for the new Explorer UX.
@@ -108,7 +109,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   @ViewChild('searchInput') searchInput!: ElementRef<HTMLInputElement>;
 
   // Universal search bar
-  @ViewChild('shellSearchComposite') shellSearchComposite: { Focus?(): void } | undefined;
+  @ViewChild('shellSearchComposite') shellSearchComposite: { Focus?(): void; MinRelevancePercent?: number } | undefined;
 
   // Instance configuration feature flags
   get ShowSearchBar(): boolean {
@@ -160,7 +161,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     public developerModeService: DeveloperModeService,
     private commandPaletteService: CommandPaletteService,
     private themeService: ThemeService,
-    private homePinService: HomeAppPinService
+    private homePinService: HomeAppPinService,
+    private fileOpenService: FileOpenService
   ) {
     // Initialize theme immediately so loading UI shows correct colors from the start
     this.activeTheme = getActiveTheme();
@@ -1180,17 +1182,27 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           }
           break;
 
-        case 'search results':
-          // /app/:appName/search/:searchInput?Entity=...
+        case 'search results': {
+          // /app/:appName/search/:searchInput?minRelevance=...&Entity=...
           const searchInput = config['SearchInput'] as string | undefined;
           if (searchInput) {
             let url = `/app/${encodeURIComponent(appPath)}/search/${encodeURIComponent(searchInput)}`;
+            const searchParams = new URLSearchParams();
             if (entityName) {
-              url += `?Entity=${encodeURIComponent(entityName)}`;
+              searchParams.set('Entity', entityName);
+            }
+            if (queryParams) {
+              for (const [key, value] of Object.entries(queryParams)) {
+                if (value != null) searchParams.set(key, value);
+              }
+            }
+            if (searchParams.toString()) {
+              url += `?${searchParams.toString()}`;
             }
             return url;
           }
           break;
+        }
       }
     }
 
@@ -2401,16 +2413,25 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       }
   }
 
-  OnSearchResultSelected(result: { EntityName: string; RecordID: string }): void {
-      if (result.EntityName && result.RecordID) {
-          const pkey = new CompositeKey([{ FieldName: 'ID', Value: result.RecordID }]);
-          this.navigationService.OpenEntityRecord(result.EntityName, pkey);
+  OnSearchResultSelected(result: { EntityName: string; RecordID: string; ResultType?: string; RawMetadata?: string }): void {
+      if (result.ResultType === 'storage-file') {
+          if (!this.fileOpenService.OpenPreviewFromSearchResult(result.RawMetadata)) {
+              this.fileOpenService.OpenFileFromSearchResult(result.RawMetadata);
+          }
+          return;
       }
+
+      if (!result.EntityName || !result.RecordID) return;
+
+      // Entity records — open via NavigationService
+      const pkey = new CompositeKey([{ FieldName: 'ID', Value: result.RecordID }]);
+      this.navigationService.OpenEntityRecord(result.EntityName, pkey);
   }
 
   OnSearchSubmitted(query: string): void {
       if (query && query.trim().length >= 2) {
-          this.navigationService.OpenSearch(query);
+          const minRelevance = this.shellSearchComposite?.MinRelevancePercent;
+          this.navigationService.OpenSearch(query, minRelevance ? { minRelevance } : undefined);
       }
   }
 
