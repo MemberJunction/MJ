@@ -273,6 +273,12 @@ mj-tab-container ::ng-deep .lm_stack {
   color: var(--mj-text-muted);
 }
 
+.user-menu-header .user-subtitle {
+  font-size: 11px;
+  color: var(--mj-text-muted);
+  font-style: italic;
+}
+
 /* User Context Menu */
 .user-context-menu {
   position: absolute;
