@@ -1291,6 +1291,14 @@ export class EntityInfo extends BaseInfo {
      */
     AuditViewRuns: boolean = null
     /**
+     * When true (default), the server-side RunView cache will store and return cached results
+     * for this entity, trusting that all mutations flow through BaseEntity.Save() which fires
+     * cache invalidation events. Set to false for entities whose rows are created as side-effects
+     * of other operations via raw SQL (e.g., Record Changes created by spCreateRecordChange_Internal),
+     * since those inserts bypass BaseEntity and never trigger cache invalidation.
+     */
+    TrustServerCacheCompletely: boolean = true
+    /**
      * Whether this entity is available through the GraphQL API
      */
     IncludeInAPI: boolean = false
