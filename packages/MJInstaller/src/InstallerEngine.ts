@@ -585,11 +585,13 @@ export class InstallerEngine {
   ): Promise<PhaseExecutionResult> {
     const tag = plan.Tag === 'latest' ? undefined : plan.Tag;
 
+    const installMode = config.InstallMode ?? 'distribution';
     const result = await this.scaffold.Run({
       Tag: tag,
       Dir: plan.Dir,
       Yes: yes,
       Emitter: this.emitter,
+      InstallMode: installMode,
     });
 
     this.emitter.Emit('log', {
@@ -1132,7 +1134,7 @@ export class InstallerEngine {
     results.push(await this.captureServiceStartup(
       runner, targetDir, 'Explorer', ['run', 'start:explorer'],
       InstallerEngine.EXPLORER_READY_PATTERNS,
-      config.ExplorerPort ?? 4201
+      config.ExplorerPort ?? 4200
     ));
 
     return results;
