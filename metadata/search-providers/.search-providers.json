@@ -10,14 +10,16 @@
       "MaxResultsOverride": null,
       "ProviderConfig": null,
       "CredentialID": null,
+      "DisplayName": "Database",
+      "Icon": "fa-solid fa-database",
       "Comments": "Built-in provider. Searches database entities using field-match relevance scoring with name field boost."
     },
     "primaryKey": {
       "ID": "5D3F92FE-851A-4EB9-8764-0021753D869C"
     },
     "sync": {
-      "lastModified": "2026-04-09T19:59:08.342Z",
-      "checksum": "4f89b5901f2689f86dba34b984a1af2c8b4c46cfa7adb03ce34b8909c816641a"
+      "lastModified": "2026-04-09T23:41:26.538Z",
+      "checksum": "8bff10d9877ad2bd711e046a5289eb56ec355408228eb67870ff4799874f9fc6"
     }
   },
   {
@@ -31,14 +33,16 @@
       "MaxResultsOverride": null,
       "ProviderConfig": null,
       "CredentialID": null,
+      "DisplayName": "Full-Text Search",
+      "Icon": "fa-solid fa-magnifying-glass",
       "Comments": "Built-in provider. Requires FTS indexes to be configured on entities via CodeGen."
     },
     "primaryKey": {
       "ID": "0DD5242D-6852-4E95-9CE2-44BCD5527CC3"
     },
     "sync": {
-      "lastModified": "2026-04-09T19:59:08.361Z",
-      "checksum": "a90b57ace38becae2c22f9d6c52154d6f0146e231ae9ad92e8262cdee1d2ee9a"
+      "lastModified": "2026-04-09T23:41:26.558Z",
+      "checksum": "8dd3ed57d1aae13fc86b00a80d4527b61da602ce33d74d2390b825726959bd1f"
     }
   },
   {
@@ -52,14 +56,16 @@
       "MaxResultsOverride": null,
       "ProviderConfig": null,
       "CredentialID": null,
+      "DisplayName": "Semantic Search",
+      "Icon": "fa-solid fa-brain",
       "Comments": "Built-in provider. Requires at least one vector index to be configured. Gracefully returns empty results when no indexes exist."
     },
     "primaryKey": {
       "ID": "538CFEA3-62C0-4205-996A-199759BF2E28"
     },
     "sync": {
-      "lastModified": "2026-04-09T19:59:08.378Z",
-      "checksum": "b2b9faa96b51494fdbd43b66447c08984a51b804374fb0fe5f5fce9e6773e03c"
+      "lastModified": "2026-04-09T23:41:26.581Z",
+      "checksum": "a7fbe9bba9eb89594bab0b770989c3d0dac67689cbafb25c156c7a42ea4cee58"
     }
   },
   {
@@ -73,14 +79,16 @@
       "MaxResultsOverride": null,
       "ProviderConfig": null,
       "CredentialID": null,
+      "DisplayName": "File Storage",
+      "Icon": "fa-solid fa-folder-open",
       "Comments": "Built-in provider. Requires at least one storage account with IncludeInGlobalSearch=true and a provider with SupportsSearch=true."
     },
     "primaryKey": {
       "ID": "A3130198-1B7E-40D4-9D0C-0DB818451AFD"
     },
     "sync": {
-      "lastModified": "2026-04-09T19:59:08.393Z",
-      "checksum": "9bf5668f42a874bc7a137d62777c1353985e68f1d993b3a5befe0267a8b62e4b"
+      "lastModified": "2026-04-09T23:41:26.598Z",
+      "checksum": "aea546cc28930fe957c55ea603805767e2377d35b6ba8c943e39b98c42ba03cc"
     }
   }
 ]
