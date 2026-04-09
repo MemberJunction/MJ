@@ -52,9 +52,14 @@ export class GeoCodeSyncService extends BaseSingleton<GeoCodeSyncService> {
     protected async ProcessMapping(entity: BaseEntity, mapping: GeoFieldMapping): Promise<void> {
         const hash = ComputeGeoSourceHash(entity, mapping.Fields);
 
-        // Use the raw primary key value (not the composite key format with field name prefix)
-        // because the view JOIN does CAST(t.ID AS NVARCHAR(450)) which produces bare UUID
-        const recordId = entity.PrimaryKey.Values.length > 0 ? String(entity.PrimaryKey.Values[0].Value) : '';
+        // Build RecordID matching the format used in the view's LEFT JOIN to vwRecordGeoCodes:
+        // - Single PK: bare value as string (e.g., "38CB433E-F36B-1410-84B4-00BD01F02867")
+        // - Composite PK: values joined with "||" (e.g., "val1||val2")
+        // This must match sql_codegen.ts generateBaseViewJoins() geo JOIN format.
+        const pkPairs = entity.PrimaryKey.KeyValuePairs;
+        const recordId = pkPairs.length === 1
+            ? String(pkPairs[0].Value)
+            : pkPairs.map(pk => String(pk.Value)).join('||');
 
         const existing = await this.FindExistingGeoCode(
             entity.EntityInfo.ID,

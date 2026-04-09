@@ -1359,7 +1359,24 @@ export class SQLCodeGenBase {
             const qi = this._dbProvider.Dialect.QuoteIdentifier.bind(this._dbProvider.Dialect);
             const qs = this._dbProvider.Dialect.QuoteSchema.bind(this._dbProvider.Dialect);
             sOutput += (sOutput === '' ? '' : '\n');
-            sOutput += `LEFT OUTER JOIN\n    ${qs(entity.SchemaName, 'vwRecordGeoCodes')} AS __mj_rgc\n  ON\n    __mj_rgc.${qi('EntityID')} = '${entity.ID}'\n    AND __mj_rgc.${qi('RecordID')} = CAST(${qi(classNameFirstChar)}.${qi('ID')} AS NVARCHAR(450))\n    AND __mj_rgc.${qi('LocationType')} = 'Primary'`;
+
+            // Build RecordID expression that handles both single and composite primary keys.
+            // Format: for single PK → CAST(e.ID AS NVARCHAR(450))
+            //         for composite PK → e.Field1 + '||' + e.Field2 (concatenated with || separator)
+            // This must match the format used by GeoCodeSyncService when storing RecordGeoCode rows.
+            const pkFields = entity.PrimaryKeys;
+            let recordIdExpr: string;
+            if (pkFields.length === 1) {
+                recordIdExpr = `CAST(${qi(classNameFirstChar)}.${qi(pkFields[0].Name)} AS NVARCHAR(450))`;
+            } else {
+                // Composite key: concatenate all PK values with || separator
+                const parts = pkFields.map(pk =>
+                    `CAST(${qi(classNameFirstChar)}.${qi(pk.Name)} AS NVARCHAR(200))`
+                );
+                recordIdExpr = parts.join(` + '||' + `);
+            }
+
+            sOutput += `LEFT OUTER JOIN\n    ${qs(entity.SchemaName, 'vwRecordGeoCodes')} AS __mj_rgc\n  ON\n    __mj_rgc.${qi('EntityID')} = '${entity.ID}'\n    AND __mj_rgc.${qi('RecordID')} = ${recordIdExpr}\n    AND __mj_rgc.${qi('LocationType')} = 'Primary'`;
         }
 
         return sOutput;
