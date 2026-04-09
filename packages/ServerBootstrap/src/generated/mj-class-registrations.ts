@@ -507,7 +507,7 @@ import {
     XMLParserAction,
 } from '@memberjunction/core-actions';
 
-// @memberjunction/core-entities (310 classes)
+// @memberjunction/core-entities (316 classes)
 import {
     MJAIActionEntity,
     MJAIAgentActionEntity,
@@ -635,6 +635,7 @@ import {
     MJConversationDetailEntity,
     MJConversationDetailRatingEntity,
     MJConversationEntity,
+    MJCountryEntity,
     MJCredentialCategoryEntity,
     MJCredentialEntity,
     MJCredentialTypeEntity,
@@ -747,6 +748,7 @@ import {
     MJRecommendationRunEntity,
     MJRecordChangeEntity,
     MJRecordChangeReplayRunEntity,
+    MJRecordGeoCodeEntity,
     MJRecordLinkEntity,
     MJRecordMergeDeletionLogEntity,
     MJRecordMergeLogEntity,
@@ -769,7 +771,9 @@ import {
     MJScheduledJobRunEntity,
     MJScheduledJobTypeEntity,
     MJSchemaInfoEntity,
+    MJSearchProviderEntity,
     MJSkillEntity,
+    MJStateProvinceEntity,
     MJTagAuditLogEntity,
     MJTagCoOccurrenceEntity,
     MJTagEntity,
@@ -784,6 +788,8 @@ import {
     MJTemplateEntityExtended,
     MJTemplateParamEntity,
     MJTestEntity,
+    MJTestGeoCompositeKeyEntity,
+    MJTestOrganizationEntity,
     MJTestRubricEntity,
     MJTestRunEntity,
     MJTestRunFeedbackEntity,
@@ -1392,6 +1398,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJConversationDetailEntity,
     MJConversationDetailRatingEntity,
     MJConversationEntity,
+    MJCountryEntity,
     MJCredentialCategoryEntity,
     MJCredentialEntity,
     MJCredentialTypeEntity,
@@ -1504,6 +1511,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJRecommendationRunEntity,
     MJRecordChangeEntity,
     MJRecordChangeReplayRunEntity,
+    MJRecordGeoCodeEntity,
     MJRecordLinkEntity,
     MJRecordMergeDeletionLogEntity,
     MJRecordMergeLogEntity,
@@ -1526,7 +1534,9 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJScheduledJobRunEntity,
     MJScheduledJobTypeEntity,
     MJSchemaInfoEntity,
+    MJSearchProviderEntity,
     MJSkillEntity,
+    MJStateProvinceEntity,
     MJTagAuditLogEntity,
     MJTagCoOccurrenceEntity,
     MJTagEntity,
@@ -1541,6 +1551,8 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJTemplateEntityExtended,
     MJTemplateParamEntity,
     MJTestEntity,
+    MJTestGeoCompositeKeyEntity,
+    MJTestOrganizationEntity,
     MJTestRubricEntity,
     MJTestRunEntity,
     MJTestRunFeedbackEntity,
@@ -1645,7 +1657,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 681;
+export const CLASS_REGISTRATIONS_COUNT = 687;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

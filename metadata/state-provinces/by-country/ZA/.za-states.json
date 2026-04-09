@@ -1,0 +1,110 @@
+[
+  {
+    "fields": {
+      "_CountryISO2": "ZA",
+      "Name": "Eastern Cape",
+      "Code": "EC",
+      "ISO3166_2": "ZA-EC",
+      "Latitude": -32.2172,
+      "Longitude": 26.6386,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Eastern Cape\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ZA",
+      "Name": "Free State",
+      "Code": "FS",
+      "ISO3166_2": "ZA-FS",
+      "Latitude": -28.7854,
+      "Longitude": 26.4979,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Free State\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ZA",
+      "Name": "Gauteng",
+      "Code": "GP",
+      "ISO3166_2": "ZA-GP",
+      "Latitude": -25.9363,
+      "Longitude": 28.0813,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Gauteng\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ZA",
+      "Name": "KwaZulu-Natal",
+      "Code": "KZN",
+      "ISO3166_2": "ZA-KZN",
+      "Latitude": -28.5038,
+      "Longitude": 30.8875,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"KwaZulu-Natal\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ZA",
+      "Name": "Limpopo",
+      "Code": "LP",
+      "ISO3166_2": "ZA-LP",
+      "Latitude": -23.4735,
+      "Longitude": 29.3959,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Limpopo\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ZA",
+      "Name": "Mpumalanga",
+      "Code": "MP",
+      "ISO3166_2": "ZA-MP",
+      "Latitude": -26.2768,
+      "Longitude": 30.15,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Mpumalanga\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ZA",
+      "Name": "North West",
+      "Code": "NW",
+      "ISO3166_2": "ZA-NW",
+      "Latitude": -26.1348,
+      "Longitude": 25.6547,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"North West\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ZA",
+      "Name": "Northern Cape",
+      "Code": "NC",
+      "ISO3166_2": "ZA-NC",
+      "Latitude": -29.5734,
+      "Longitude": 21.2051,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Northern Cape\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "ZA",
+      "Name": "Western Cape",
+      "Code": "WC",
+      "ISO3166_2": "ZA-WC",
+      "Latitude": -33.547,
+      "Longitude": 20.7275,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Western Cape\"]"
+    }
+  }
+]

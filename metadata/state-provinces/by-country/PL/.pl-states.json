@@ -1,0 +1,194 @@
+[
+  {
+    "fields": {
+      "_CountryISO2": "PL",
+      "Name": "Greater Poland",
+      "Code": "30",
+      "ISO3166_2": "PL-30",
+      "Latitude": 52.1459,
+      "Longitude": 17.3977,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Greater Poland\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "PL",
+      "Name": "Holy Cross",
+      "Code": "26",
+      "ISO3166_2": "PL-26",
+      "Latitude": 50.7505,
+      "Longitude": 20.7829,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Holy Cross\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "PL",
+      "Name": "Kuyavia-Pomerania",
+      "Code": "04",
+      "ISO3166_2": "PL-04",
+      "Latitude": 53.1648,
+      "Longitude": 18.4834,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Kuyavia-Pomerania\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "PL",
+      "Name": "Lesser Poland",
+      "Code": "12",
+      "ISO3166_2": "PL-12",
+      "Latitude": 49.791,
+      "Longitude": 20.3794,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Lesser Poland\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "PL",
+      "Name": "Lower Silesia",
+      "Code": "02",
+      "ISO3166_2": "PL-02",
+      "Latitude": 50.9206,
+      "Longitude": 16.4946,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Lower Silesia\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "PL",
+      "Name": "Lublin",
+      "Code": "06",
+      "ISO3166_2": "PL-06",
+      "Latitude": 51.2506,
+      "Longitude": 22.5701,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Lublin\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "PL",
+      "Name": "Lubusz",
+      "Code": "08",
+      "ISO3166_2": "PL-08",
+      "Latitude": 52.1002,
+      "Longitude": 15.3605,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Lubusz\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "PL",
+      "Name": "Mazovia",
+      "Code": "14",
+      "ISO3166_2": "PL-14",
+      "Latitude": 52.5462,
+      "Longitude": 21.2073,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Mazovia\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "PL",
+      "Name": "Podlaskie",
+      "Code": "20",
+      "ISO3166_2": "PL-20",
+      "Latitude": 53.2668,
+      "Longitude": 22.8526,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Podlaskie\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "PL",
+      "Name": "Pomerania",
+      "Code": "22",
+      "ISO3166_2": "PL-22",
+      "Latitude": 54.2456,
+      "Longitude": 18.1099,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Pomerania\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "PL",
+      "Name": "Silesia",
+      "Code": "24",
+      "ISO3166_2": "PL-24",
+      "Latitude": 50.5687,
+      "Longitude": 19.2344,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Silesia\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "PL",
+      "Name": "Subcarpathia",
+      "Code": "18",
+      "ISO3166_2": "PL-18",
+      "Latitude": 49.3113,
+      "Longitude": 22.4326,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Subcarpathia\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "PL",
+      "Name": "Upper Silesia",
+      "Code": "16",
+      "ISO3166_2": "PL-16",
+      "Latitude": 50.2467,
+      "Longitude": 18.6454,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Upper Silesia\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "PL",
+      "Name": "Warmia-Masuria",
+      "Code": "28",
+      "ISO3166_2": "PL-28",
+      "Latitude": 53.9312,
+      "Longitude": 21.1261,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Warmia-Masuria\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "PL",
+      "Name": "West Pomerania",
+      "Code": "32",
+      "ISO3166_2": "PL-32",
+      "Latitude": 53.5451,
+      "Longitude": 15.5662,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"West Pomerania\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "PL",
+      "Name": "Łódź",
+      "Code": "10",
+      "ISO3166_2": "PL-10",
+      "Latitude": 51.7687,
+      "Longitude": 19.457,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"\\u0141\\u00f3d\\u017a\"]"
+    }
+  }
+]

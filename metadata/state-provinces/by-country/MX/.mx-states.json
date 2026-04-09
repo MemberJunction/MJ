@@ -1,0 +1,386 @@
+[
+  {
+    "fields": {
+      "_CountryISO2": "MX",
+      "Name": "Aguascalientes",
+      "Code": "AGU",
+      "ISO3166_2": "MX-AGU",
+      "Latitude": 21.8853,
+      "Longitude": -102.2916,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Aguascalientes\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "MX",
+      "Name": "Baja California",
+      "Code": "BCN",
+      "ISO3166_2": "MX-BCN",
+      "Latitude": 30.0339,
+      "Longitude": -115.1425,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Baja California\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "MX",
+      "Name": "Baja California Sur",
+      "Code": "BCS",
+      "ISO3166_2": "MX-BCS",
+      "Latitude": 25.5818,
+      "Longitude": -111.5706,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Baja California Sur\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "MX",
+      "Name": "Campeche",
+      "Code": "CAM",
+      "ISO3166_2": "MX-CAM",
+      "Latitude": 19.8381,
+      "Longitude": -90.5198,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Campeche\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "MX",
+      "Name": "Chiapas",
+      "Code": "CHP",
+      "ISO3166_2": "MX-CHP",
+      "Latitude": 16.5,
+      "Longitude": -92.5,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Chiapas\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "MX",
+      "Name": "Chihuahua",
+      "Code": "CHH",
+      "ISO3166_2": "MX-CHH",
+      "Latitude": 28.633,
+      "Longitude": -106.0691,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Chihuahua\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "MX",
+      "Name": "Ciudad de México",
+      "Code": "CMX",
+      "ISO3166_2": "MX-CMX",
+      "Latitude": 19.4326,
+      "Longitude": -99.1332,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Ciudad de M\\u00e9xico\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "MX",
+      "Name": "Coahuila de Zaragoza",
+      "Code": "COA",
+      "ISO3166_2": "MX-COA",
+      "Latitude": 27.3333,
+      "Longitude": -102.0,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Coahuila de Zaragoza\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "MX",
+      "Name": "Colima",
+      "Code": "COL",
+      "ISO3166_2": "MX-COL",
+      "Latitude": 19.2452,
+      "Longitude": -103.7241,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Colima\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "MX",
+      "Name": "Durango",
+      "Code": "DUR",
+      "ISO3166_2": "MX-DUR",
+      "Latitude": 24.8333,
+      "Longitude": -104.8333,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Durango\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "MX",
+      "Name": "Estado de México",
+      "Code": "MEX",
+      "ISO3166_2": "MX-MEX",
+      "Latitude": 19.4839,
+      "Longitude": -99.69,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Estado de M\\u00e9xico\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "MX",
+      "Name": "Guanajuato",
+      "Code": "GUA",
+      "ISO3166_2": "MX-GUA",
+      "Latitude": 21.019,
+      "Longitude": -101.2574,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Guanajuato\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "MX",
+      "Name": "Guerrero",
+      "Code": "GRO",
+      "ISO3166_2": "MX-GRO",
+      "Latitude": 17.6667,
+      "Longitude": -100.0,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Guerrero\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "MX",
+      "Name": "Hidalgo",
+      "Code": "HID",
+      "ISO3166_2": "MX-HID",
+      "Latitude": 24.1686,
+      "Longitude": -99.3874,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Hidalgo\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "MX",
+      "Name": "Jalisco",
+      "Code": "JAL",
+      "ISO3166_2": "MX-JAL",
+      "Latitude": 20.3333,
+      "Longitude": -103.6667,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Jalisco\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "MX",
+      "Name": "Michoacán de Ocampo",
+      "Code": "MIC",
+      "ISO3166_2": "MX-MIC",
+      "Latitude": 19.2071,
+      "Longitude": -101.8781,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Michoac\\u00e1n de Ocampo\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "MX",
+      "Name": "Morelos",
+      "Code": "MOR",
+      "ISO3166_2": "MX-MOR",
+      "Latitude": 18.75,
+      "Longitude": -99.0,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Morelos\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "MX",
+      "Name": "Nayarit",
+      "Code": "NAY",
+      "ISO3166_2": "MX-NAY",
+      "Latitude": 22.0,
+      "Longitude": -105.0,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Nayarit\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "MX",
+      "Name": "Nuevo León",
+      "Code": "NLE",
+      "ISO3166_2": "MX-NLE",
+      "Latitude": 26.2384,
+      "Longitude": -99.8873,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Nuevo Le\\u00f3n\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "MX",
+      "Name": "Oaxaca",
+      "Code": "OAX",
+      "ISO3166_2": "MX-OAX",
+      "Latitude": 17.0,
+      "Longitude": -96.5,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Oaxaca\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "MX",
+      "Name": "Puebla",
+      "Code": "PUE",
+      "ISO3166_2": "MX-PUE",
+      "Latitude": 19.0414,
+      "Longitude": -98.2063,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Puebla\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "MX",
+      "Name": "Querétaro",
+      "Code": "QUE",
+      "ISO3166_2": "MX-QUE",
+      "Latitude": 20.5888,
+      "Longitude": -100.3899,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Quer\\u00e9taro\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "MX",
+      "Name": "Quintana Roo",
+      "Code": "ROO",
+      "ISO3166_2": "MX-ROO",
+      "Latitude": 19.6667,
+      "Longitude": -88.5,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Quintana Roo\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "MX",
+      "Name": "San Luis Potosí",
+      "Code": "SLP",
+      "ISO3166_2": "MX-SLP",
+      "Latitude": 22.1516,
+      "Longitude": -100.9764,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"San Luis Potos\\u00ed\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "MX",
+      "Name": "Sinaloa",
+      "Code": "SIN",
+      "ISO3166_2": "MX-SIN",
+      "Latitude": 25.0,
+      "Longitude": -107.5,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Sinaloa\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "MX",
+      "Name": "Sonora",
+      "Code": "SON",
+      "ISO3166_2": "MX-SON",
+      "Latitude": 29.3333,
+      "Longitude": -110.6667,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Sonora\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "MX",
+      "Name": "Tabasco",
+      "Code": "TAB",
+      "ISO3166_2": "MX-TAB",
+      "Latitude": 17.9999,
+      "Longitude": -92.6682,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Tabasco\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "MX",
+      "Name": "Tamaulipas",
+      "Code": "TAM",
+      "ISO3166_2": "MX-TAM",
+      "Latitude": 23.9892,
+      "Longitude": -98.7027,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Tamaulipas\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "MX",
+      "Name": "Tlaxcala",
+      "Code": "TLA",
+      "ISO3166_2": "MX-TLA",
+      "Latitude": 19.3182,
+      "Longitude": -98.2375,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Tlaxcala\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "MX",
+      "Name": "Veracruz de Ignacio de la Llave",
+      "Code": "VER",
+      "ISO3166_2": "MX-VER",
+      "Latitude": 19.3333,
+      "Longitude": -96.6667,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Veracruz de Ignacio de la Llave\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "MX",
+      "Name": "Yucatán",
+      "Code": "YUC",
+      "ISO3166_2": "MX-YUC",
+      "Latitude": 20.6846,
+      "Longitude": -88.8756,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Yucat\\u00e1n\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "MX",
+      "Name": "Zacatecas",
+      "Code": "ZAC",
+      "ISO3166_2": "MX-ZAC",
+      "Latitude": 22.7754,
+      "Longitude": -102.5723,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Zacatecas\"]"
+    }
+  }
+]

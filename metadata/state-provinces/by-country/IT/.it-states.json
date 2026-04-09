@@ -1,0 +1,1514 @@
+[
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Abruzzo",
+      "Code": "65",
+      "ISO3166_2": "IT-65",
+      "Latitude": 42.2277,
+      "Longitude": 13.855,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Abruzzo\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Agrigento",
+      "Code": "AG",
+      "ISO3166_2": "IT-AG",
+      "Latitude": 37.3123,
+      "Longitude": 13.5747,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Agrigento\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Alessandria",
+      "Code": "AL",
+      "ISO3166_2": "IT-AL",
+      "Latitude": 44.835,
+      "Longitude": 8.745,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Alessandria\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Ancona",
+      "Code": "AN",
+      "ISO3166_2": "IT-AN",
+      "Latitude": 43.4801,
+      "Longitude": 13.2187,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Ancona\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Aosta Valley",
+      "Code": "23",
+      "ISO3166_2": "IT-23",
+      "Latitude": 45.7301,
+      "Longitude": 7.3874,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Aosta Valley\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Apulia",
+      "Code": "75",
+      "ISO3166_2": "IT-75",
+      "Latitude": 40.9843,
+      "Longitude": 16.621,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Apulia\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Arezzo",
+      "Code": "AR",
+      "ISO3166_2": "IT-AR",
+      "Latitude": 43.5171,
+      "Longitude": 11.7639,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Arezzo\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Ascoli Piceno",
+      "Code": "AP",
+      "ISO3166_2": "IT-AP",
+      "Latitude": 42.8546,
+      "Longitude": 13.5755,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Ascoli Piceno\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Asti",
+      "Code": "AT",
+      "ISO3166_2": "IT-AT",
+      "Latitude": 44.9008,
+      "Longitude": 8.2064,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Asti\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Avellino",
+      "Code": "AV",
+      "ISO3166_2": "IT-AV",
+      "Latitude": 40.9965,
+      "Longitude": 15.1406,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Avellino\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Bari",
+      "Code": "BA",
+      "ISO3166_2": "IT-BA",
+      "Latitude": 41.1171,
+      "Longitude": 16.8719,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Bari\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Barletta-Andria-Trani",
+      "Code": "BT",
+      "ISO3166_2": "IT-BT",
+      "Latitude": 41.1802,
+      "Longitude": 16.1466,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Barletta-Andria-Trani\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Basilicata",
+      "Code": "77",
+      "ISO3166_2": "IT-77",
+      "Latitude": 40.5006,
+      "Longitude": 16.082,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Basilicata\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Belluno",
+      "Code": "BL",
+      "ISO3166_2": "IT-BL",
+      "Latitude": 46.2805,
+      "Longitude": 12.0789,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Belluno\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Benevento",
+      "Code": "BN",
+      "ISO3166_2": "IT-BN",
+      "Latitude": 41.2476,
+      "Longitude": 14.7057,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Benevento\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Bergamo",
+      "Code": "BG",
+      "ISO3166_2": "IT-BG",
+      "Latitude": 45.6983,
+      "Longitude": 9.6773,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Bergamo\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Biella",
+      "Code": "BI",
+      "ISO3166_2": "IT-BI",
+      "Latitude": 45.5628,
+      "Longitude": 8.0583,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Biella\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Bologna",
+      "Code": "BO",
+      "ISO3166_2": "IT-BO",
+      "Latitude": 44.4949,
+      "Longitude": 11.3426,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Bologna\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Brescia",
+      "Code": "BS",
+      "ISO3166_2": "IT-BS",
+      "Latitude": 45.5416,
+      "Longitude": 10.2118,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Brescia\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Brindisi",
+      "Code": "BR",
+      "ISO3166_2": "IT-BR",
+      "Latitude": 40.6359,
+      "Longitude": 17.6885,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Brindisi\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Cagliari",
+      "Code": "CA",
+      "ISO3166_2": "IT-CA",
+      "Latitude": 39.2238,
+      "Longitude": 9.1217,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Cagliari\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Calabria",
+      "Code": "78",
+      "ISO3166_2": "IT-78",
+      "Latitude": 39.0566,
+      "Longitude": 16.525,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Calabria\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Caltanissetta",
+      "Code": "CL",
+      "ISO3166_2": "IT-CL",
+      "Latitude": 37.486,
+      "Longitude": 14.0615,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Caltanissetta\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Campania",
+      "Code": "72",
+      "ISO3166_2": "IT-72",
+      "Latitude": 40.8607,
+      "Longitude": 14.844,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Campania\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Campobasso",
+      "Code": "CB",
+      "ISO3166_2": "IT-CB",
+      "Latitude": 41.7173,
+      "Longitude": 14.8262,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Campobasso\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Caserta",
+      "Code": "CE",
+      "ISO3166_2": "IT-CE",
+      "Latitude": 41.2035,
+      "Longitude": 14.1169,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Caserta\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Catania",
+      "Code": "CT",
+      "ISO3166_2": "IT-CT",
+      "Latitude": 37.5029,
+      "Longitude": 15.087,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Catania\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Catanzaro",
+      "Code": "CZ",
+      "ISO3166_2": "IT-CZ",
+      "Latitude": 38.83,
+      "Longitude": 16.4316,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Catanzaro\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Chieti",
+      "Code": "CH",
+      "ISO3166_2": "IT-CH",
+      "Latitude": 42.1027,
+      "Longitude": 14.4159,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Chieti\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Como",
+      "Code": "CO",
+      "ISO3166_2": "IT-CO",
+      "Latitude": 45.808,
+      "Longitude": 9.0852,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Como\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Cosenza",
+      "Code": "CS",
+      "ISO3166_2": "IT-CS",
+      "Latitude": 39.5967,
+      "Longitude": 16.3331,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Cosenza\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Cremona",
+      "Code": "CR",
+      "ISO3166_2": "IT-CR",
+      "Latitude": 45.2209,
+      "Longitude": 10.037,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Cremona\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Crotone",
+      "Code": "KR",
+      "ISO3166_2": "IT-KR",
+      "Latitude": 39.0806,
+      "Longitude": 17.1272,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Crotone\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Cuneo",
+      "Code": "CN",
+      "ISO3166_2": "IT-CN",
+      "Latitude": 44.4581,
+      "Longitude": 7.5581,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Cuneo\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Emilia-Romagna",
+      "Code": "45",
+      "ISO3166_2": "IT-45",
+      "Latitude": 44.5257,
+      "Longitude": 11.0394,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Emilia-Romagna\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Enna",
+      "Code": "EN",
+      "ISO3166_2": "IT-EN",
+      "Latitude": 37.5676,
+      "Longitude": 14.2795,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Enna\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Fermo",
+      "Code": "FM",
+      "ISO3166_2": "IT-FM",
+      "Latitude": 43.0922,
+      "Longitude": 13.6388,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Fermo\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Ferrara",
+      "Code": "FE",
+      "ISO3166_2": "IT-FE",
+      "Latitude": 44.7668,
+      "Longitude": 11.8279,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Ferrara\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Florence",
+      "Code": "FI",
+      "ISO3166_2": "IT-FI",
+      "Latitude": 43.7692,
+      "Longitude": 11.2559,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Florence\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Foggia",
+      "Code": "FG",
+      "ISO3166_2": "IT-FG",
+      "Latitude": 41.5028,
+      "Longitude": 15.4529,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Foggia\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Forlì-Cesena",
+      "Code": "FC",
+      "ISO3166_2": "IT-FC",
+      "Latitude": 44.0227,
+      "Longitude": 12.0141,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Forl\\u00ec-Cesena\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Friuli–Venezia Giulia",
+      "Code": "36",
+      "ISO3166_2": "IT-36",
+      "Latitude": 46.151,
+      "Longitude": 13.0559,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Friuli\\u2013Venezia Giulia\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Frosinone",
+      "Code": "FR",
+      "ISO3166_2": "IT-FR",
+      "Latitude": 41.6285,
+      "Longitude": 13.5758,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Frosinone\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Genoa",
+      "Code": "GE",
+      "ISO3166_2": "IT-GE",
+      "Latitude": 44.4115,
+      "Longitude": 8.9329,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Genoa\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Gorizia",
+      "Code": "GO",
+      "ISO3166_2": "IT-GO",
+      "Latitude": 45.8625,
+      "Longitude": 13.4979,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Gorizia\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Grosseto",
+      "Code": "GR",
+      "ISO3166_2": "IT-GR",
+      "Latitude": 42.7751,
+      "Longitude": 11.2878,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Grosseto\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Imperia",
+      "Code": "IM",
+      "ISO3166_2": "IT-IM",
+      "Latitude": 43.9584,
+      "Longitude": 7.8667,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Imperia\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Isernia",
+      "Code": "IS",
+      "ISO3166_2": "IT-IS",
+      "Latitude": 41.6002,
+      "Longitude": 14.2383,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Isernia\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "L'Aquila",
+      "Code": "AQ",
+      "ISO3166_2": "IT-AQ",
+      "Latitude": 42.1369,
+      "Longitude": 13.6103,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"L'Aquila\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "La Spezia",
+      "Code": "SP",
+      "ISO3166_2": "IT-SP",
+      "Latitude": 44.2384,
+      "Longitude": 9.6912,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"La Spezia\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Latina",
+      "Code": "LT",
+      "ISO3166_2": "IT-LT",
+      "Latitude": 41.4595,
+      "Longitude": 13.0126,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Latina\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Lazio",
+      "Code": "62",
+      "ISO3166_2": "IT-62",
+      "Latitude": 41.9808,
+      "Longitude": 12.7662,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Lazio\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Lecce",
+      "Code": "LE",
+      "ISO3166_2": "IT-LE",
+      "Latitude": 40.1522,
+      "Longitude": 18.2261,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Lecce\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Lecco",
+      "Code": "LC",
+      "ISO3166_2": "IT-LC",
+      "Latitude": 45.9005,
+      "Longitude": 9.412,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Lecco\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Liguria",
+      "Code": "42",
+      "ISO3166_2": "IT-42",
+      "Latitude": 44.4778,
+      "Longitude": 8.7026,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Liguria\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Livorno",
+      "Code": "LI",
+      "ISO3166_2": "IT-LI",
+      "Latitude": 42.7902,
+      "Longitude": 10.3402,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Livorno\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Lodi",
+      "Code": "LO",
+      "ISO3166_2": "IT-LO",
+      "Latitude": 45.2613,
+      "Longitude": 9.4917,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Lodi\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Lombardy",
+      "Code": "25",
+      "ISO3166_2": "IT-25",
+      "Latitude": 45.5704,
+      "Longitude": 9.7733,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Lombardy\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Lucca",
+      "Code": "LU",
+      "ISO3166_2": "IT-LU",
+      "Latitude": 43.8377,
+      "Longitude": 10.4951,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Lucca\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Macerata",
+      "Code": "MC",
+      "ISO3166_2": "IT-MC",
+      "Latitude": 43.153,
+      "Longitude": 13.1509,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Macerata\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Mantua",
+      "Code": "MN",
+      "ISO3166_2": "IT-MN",
+      "Latitude": 45.1567,
+      "Longitude": 10.7917,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Mantua\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Marche",
+      "Code": "57",
+      "ISO3166_2": "IT-57",
+      "Latitude": 43.3458,
+      "Longitude": 13.1416,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Marche\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Massa and Carrara",
+      "Code": "MS",
+      "ISO3166_2": "IT-MS",
+      "Latitude": 44.041,
+      "Longitude": 10.1555,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Massa and Carrara\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Matera",
+      "Code": "MT",
+      "ISO3166_2": "IT-MT",
+      "Latitude": 40.6663,
+      "Longitude": 16.6044,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Matera\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Messina",
+      "Code": "ME",
+      "ISO3166_2": "IT-ME",
+      "Latitude": 38.194,
+      "Longitude": 15.5526,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Messina\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Milan",
+      "Code": "MI",
+      "ISO3166_2": "IT-MI",
+      "Latitude": 45.4668,
+      "Longitude": 9.1901,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Milan\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Modena",
+      "Code": "MO",
+      "ISO3166_2": "IT-MO",
+      "Latitude": 44.5385,
+      "Longitude": 10.936,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Modena\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Molise",
+      "Code": "67",
+      "ISO3166_2": "IT-67",
+      "Latitude": 41.6308,
+      "Longitude": 14.4929,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Molise\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Monza and Brianza",
+      "Code": "MB",
+      "ISO3166_2": "IT-MB",
+      "Latitude": 45.6395,
+      "Longitude": 9.2788,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Monza and Brianza\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Naples",
+      "Code": "NA",
+      "ISO3166_2": "IT-NA",
+      "Latitude": 40.8518,
+      "Longitude": 14.2681,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Naples\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Novara",
+      "Code": "NO",
+      "ISO3166_2": "IT-NO",
+      "Latitude": 45.5842,
+      "Longitude": 8.546,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Novara\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Nuoro",
+      "Code": "NU",
+      "ISO3166_2": "IT-NU",
+      "Latitude": 40.3211,
+      "Longitude": 9.3297,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Nuoro\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Oristano",
+      "Code": "OR",
+      "ISO3166_2": "IT-OR",
+      "Latitude": 40.0266,
+      "Longitude": 8.6796,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Oristano\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Padua",
+      "Code": "PD",
+      "ISO3166_2": "IT-PD",
+      "Latitude": 45.3914,
+      "Longitude": 11.8058,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Padua\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Palermo",
+      "Code": "PA",
+      "ISO3166_2": "IT-PA",
+      "Latitude": 38.1157,
+      "Longitude": 13.3615,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Palermo\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Parma",
+      "Code": "PR",
+      "ISO3166_2": "IT-PR",
+      "Latitude": 44.8015,
+      "Longitude": 10.3279,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Parma\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Pavia",
+      "Code": "PV",
+      "ISO3166_2": "IT-PV",
+      "Latitude": 45.186,
+      "Longitude": 9.1546,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Pavia\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Perugia",
+      "Code": "PG",
+      "ISO3166_2": "IT-PG",
+      "Latitude": 43.112,
+      "Longitude": 12.389,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Perugia\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Pesaro and Urbino",
+      "Code": "PU",
+      "ISO3166_2": "IT-PU",
+      "Latitude": 43.613,
+      "Longitude": 12.7135,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Pesaro and Urbino\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Pescara",
+      "Code": "PE",
+      "ISO3166_2": "IT-PE",
+      "Latitude": 42.3103,
+      "Longitude": 13.9576,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Pescara\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Piacenza",
+      "Code": "PC",
+      "ISO3166_2": "IT-PC",
+      "Latitude": 44.8476,
+      "Longitude": 9.6665,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Piacenza\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Piedmont",
+      "Code": "21",
+      "ISO3166_2": "IT-21",
+      "Latitude": 45.0607,
+      "Longitude": 7.9235,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Piedmont\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Pisa",
+      "Code": "PI",
+      "ISO3166_2": "IT-PI",
+      "Latitude": 43.7228,
+      "Longitude": 10.4017,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Pisa\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Pistoia",
+      "Code": "PT",
+      "ISO3166_2": "IT-PT",
+      "Latitude": 43.9741,
+      "Longitude": 10.8687,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Pistoia\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Pordenone",
+      "Code": "PN",
+      "ISO3166_2": "IT-PN",
+      "Latitude": 46.1017,
+      "Longitude": 12.7039,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Pordenone\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Potenza",
+      "Code": "PZ",
+      "ISO3166_2": "IT-PZ",
+      "Latitude": 40.5173,
+      "Longitude": 15.8216,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Potenza\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Prato",
+      "Code": "PO",
+      "ISO3166_2": "IT-PO",
+      "Latitude": 43.9357,
+      "Longitude": 11.0941,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Prato\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Ragusa",
+      "Code": "RG",
+      "ISO3166_2": "IT-RG",
+      "Latitude": 36.9269,
+      "Longitude": 14.7255,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Ragusa\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Ravenna",
+      "Code": "RA",
+      "ISO3166_2": "IT-RA",
+      "Latitude": 44.4184,
+      "Longitude": 12.2036,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Ravenna\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Reggio Calabria",
+      "Code": "RC",
+      "ISO3166_2": "IT-RC",
+      "Latitude": 38.1088,
+      "Longitude": 15.6439,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Reggio Calabria\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Reggio Emilia",
+      "Code": "RE",
+      "ISO3166_2": "IT-RE",
+      "Latitude": 44.6087,
+      "Longitude": 10.5941,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Reggio Emilia\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Rieti",
+      "Code": "RI",
+      "ISO3166_2": "IT-RI",
+      "Latitude": 42.4027,
+      "Longitude": 12.8608,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Rieti\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Rimini",
+      "Code": "RN",
+      "ISO3166_2": "IT-RN",
+      "Latitude": 44.0678,
+      "Longitude": 12.5695,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Rimini\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Rome",
+      "Code": "RM",
+      "ISO3166_2": "IT-RM",
+      "Latitude": 41.8928,
+      "Longitude": 12.4837,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Rome\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Rovigo",
+      "Code": "RO",
+      "ISO3166_2": "IT-RO",
+      "Latitude": 45.0698,
+      "Longitude": 11.7888,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Rovigo\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Salerno",
+      "Code": "SA",
+      "ISO3166_2": "IT-SA",
+      "Latitude": 40.4194,
+      "Longitude": 15.3106,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Salerno\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Sardinia",
+      "Code": "88",
+      "ISO3166_2": "IT-88",
+      "Latitude": 40.0913,
+      "Longitude": 9.0306,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Sardinia\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Sassari",
+      "Code": "SS",
+      "ISO3166_2": "IT-SS",
+      "Latitude": 40.7235,
+      "Longitude": 8.5613,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Sassari\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Savona",
+      "Code": "SV",
+      "ISO3166_2": "IT-SV",
+      "Latitude": 44.2334,
+      "Longitude": 8.2526,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Savona\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Sicily",
+      "Code": "82",
+      "ISO3166_2": "IT-82",
+      "Latitude": 37.5878,
+      "Longitude": 14.155,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Sicily\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Siena",
+      "Code": "SI",
+      "ISO3166_2": "IT-SI",
+      "Latitude": 43.3186,
+      "Longitude": 11.3317,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Siena\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Siracusa",
+      "Code": "SR",
+      "ISO3166_2": "IT-SR",
+      "Latitude": 37.0657,
+      "Longitude": 15.2857,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Siracusa\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Sondrio",
+      "Code": "SO",
+      "ISO3166_2": "IT-SO",
+      "Latitude": 46.1714,
+      "Longitude": 9.8734,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Sondrio\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "South Sardinia",
+      "Code": "SU",
+      "ISO3166_2": "IT-SU",
+      "Latitude": 39.3894,
+      "Longitude": 8.9397,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"South Sardinia\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "South Tyrol",
+      "Code": "BZ",
+      "ISO3166_2": "IT-BZ",
+      "Latitude": 46.4993,
+      "Longitude": 11.3566,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"South Tyrol\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Taranto",
+      "Code": "TA",
+      "ISO3166_2": "IT-TA",
+      "Latitude": 40.4712,
+      "Longitude": 17.2432,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Taranto\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Teramo",
+      "Code": "TE",
+      "ISO3166_2": "IT-TE",
+      "Latitude": 42.6581,
+      "Longitude": 13.6979,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Teramo\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Terni",
+      "Code": "TR",
+      "ISO3166_2": "IT-TR",
+      "Latitude": 42.5641,
+      "Longitude": 12.6405,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Terni\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Trapani",
+      "Code": "TP",
+      "ISO3166_2": "IT-TP",
+      "Latitude": 38.0183,
+      "Longitude": 12.5148,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Trapani\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Trentino",
+      "Code": "TN",
+      "ISO3166_2": "IT-TN",
+      "Latitude": 46.0679,
+      "Longitude": 11.1211,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Trentino\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Trentino-South Tyrol",
+      "Code": "32",
+      "ISO3166_2": "IT-32",
+      "Latitude": 46.4996,
+      "Longitude": 11.3553,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Trentino-South Tyrol\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Treviso",
+      "Code": "TV",
+      "ISO3166_2": "IT-TV",
+      "Latitude": 45.6669,
+      "Longitude": 12.2431,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Treviso\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Trieste",
+      "Code": "TS",
+      "ISO3166_2": "IT-TS",
+      "Latitude": 45.6895,
+      "Longitude": 13.7833,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Trieste\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Turin",
+      "Code": "TO",
+      "ISO3166_2": "IT-TO",
+      "Latitude": 45.0705,
+      "Longitude": 7.6868,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Turin\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Tuscany",
+      "Code": "52",
+      "ISO3166_2": "IT-52",
+      "Latitude": 43.4587,
+      "Longitude": 11.1389,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Tuscany\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Udine",
+      "Code": "UD",
+      "ISO3166_2": "IT-UD",
+      "Latitude": 46.1459,
+      "Longitude": 13.2974,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Udine\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Umbria",
+      "Code": "55",
+      "ISO3166_2": "IT-55",
+      "Latitude": 42.9659,
+      "Longitude": 12.4902,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Umbria\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Varese",
+      "Code": "VA",
+      "ISO3166_2": "IT-VA",
+      "Latitude": 45.8397,
+      "Longitude": 8.7541,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Varese\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Veneto",
+      "Code": "34",
+      "ISO3166_2": "IT-34",
+      "Latitude": 45.6477,
+      "Longitude": 11.8665,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Veneto\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Venice",
+      "Code": "VE",
+      "ISO3166_2": "IT-VE",
+      "Latitude": 45.4341,
+      "Longitude": 12.3389,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Venice\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Verbano-Cusio-Ossola",
+      "Code": "VB",
+      "ISO3166_2": "IT-VB",
+      "Latitude": 46.1156,
+      "Longitude": 8.3836,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Verbano-Cusio-Ossola\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Vercelli",
+      "Code": "VC",
+      "ISO3166_2": "IT-VC",
+      "Latitude": 45.3202,
+      "Longitude": 8.4185,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Vercelli\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Verona",
+      "Code": "VR",
+      "ISO3166_2": "IT-VR",
+      "Latitude": 45.4385,
+      "Longitude": 10.9924,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Verona\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Vibo Valentia",
+      "Code": "VV",
+      "ISO3166_2": "IT-VV",
+      "Latitude": 38.6267,
+      "Longitude": 16.0987,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Vibo Valentia\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Vicenza",
+      "Code": "VI",
+      "ISO3166_2": "IT-VI",
+      "Latitude": 45.6349,
+      "Longitude": 11.4064,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Vicenza\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "IT",
+      "Name": "Viterbo",
+      "Code": "VT",
+      "ISO3166_2": "IT-VT",
+      "Latitude": 42.493,
+      "Longitude": 11.9488,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Viterbo\"]"
+    }
+  }
+]

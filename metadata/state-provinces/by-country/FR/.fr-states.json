@@ -1,0 +1,1490 @@
+[
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Ain",
+      "Code": "01",
+      "ISO3166_2": "FR-01",
+      "Latitude": 46.0652,
+      "Longitude": 5.2848,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Ain\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Aisne",
+      "Code": "02",
+      "ISO3166_2": "FR-02",
+      "Latitude": 49.4533,
+      "Longitude": 3.6069,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Aisne\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Allier",
+      "Code": "03",
+      "ISO3166_2": "FR-03",
+      "Latitude": 46.3675,
+      "Longitude": 3.1639,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Allier\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Alpes-Maritimes",
+      "Code": "06",
+      "ISO3166_2": "FR-06",
+      "Latitude": 43.942,
+      "Longitude": 7.0203,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Alpes-Maritimes\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Alpes-de-Haute-Provence",
+      "Code": "04",
+      "ISO3166_2": "FR-04",
+      "Latitude": 44.1641,
+      "Longitude": 6.1879,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Alpes-de-Haute-Provence\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Alsace",
+      "Code": "6AE",
+      "ISO3166_2": "FR-6AE",
+      "Latitude": 48.0099,
+      "Longitude": 7.5875,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Alsace\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Ardennes",
+      "Code": "08",
+      "ISO3166_2": "FR-08",
+      "Latitude": 49.698,
+      "Longitude": 4.6716,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Ardennes\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Ardèche",
+      "Code": "07",
+      "ISO3166_2": "FR-07",
+      "Latitude": 44.8152,
+      "Longitude": 4.3987,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Ard\\u00e8che\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Ariège",
+      "Code": "09",
+      "ISO3166_2": "FR-09",
+      "Latitude": 42.9455,
+      "Longitude": 1.4066,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Ari\\u00e8ge\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Aube",
+      "Code": "10",
+      "ISO3166_2": "FR-10",
+      "Latitude": 48.3202,
+      "Longitude": 4.1905,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Aube\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Aude",
+      "Code": "11",
+      "ISO3166_2": "FR-11",
+      "Latitude": 43.0543,
+      "Longitude": 2.5125,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Aude\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Auvergne-Rhône-Alpes",
+      "Code": "ARA",
+      "ISO3166_2": "FR-ARA",
+      "Latitude": 45.2968,
+      "Longitude": 4.6605,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Auvergne-Rh\\u00f4ne-Alpes\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Aveyron",
+      "Code": "12",
+      "ISO3166_2": "FR-12",
+      "Latitude": 44.3159,
+      "Longitude": 2.5066,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Aveyron\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Bas-Rhin",
+      "Code": "67",
+      "ISO3166_2": "FR-67",
+      "Latitude": 48.5992,
+      "Longitude": 7.5337,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Bas-Rhin\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Bouches-du-Rhône",
+      "Code": "13",
+      "ISO3166_2": "FR-13",
+      "Latitude": 43.5424,
+      "Longitude": 5.0343,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Bouches-du-Rh\\u00f4ne\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Bourgogne-Franche-Comté",
+      "Code": "BFC",
+      "ISO3166_2": "FR-BFC",
+      "Latitude": 47.1187,
+      "Longitude": 4.9691,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Bourgogne-Franche-Comt\\u00e9\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Bretagne",
+      "Code": "BRE",
+      "ISO3166_2": "FR-BRE",
+      "Latitude": 48.2641,
+      "Longitude": -2.9202,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Bretagne\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Calvados",
+      "Code": "14",
+      "ISO3166_2": "FR-14",
+      "Latitude": 49.0908,
+      "Longitude": -0.2414,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Calvados\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Cantal",
+      "Code": "15",
+      "ISO3166_2": "FR-15",
+      "Latitude": 45.0498,
+      "Longitude": 2.6997,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Cantal\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Centre-Val de Loire",
+      "Code": "CVL",
+      "ISO3166_2": "FR-CVL",
+      "Latitude": 47.549,
+      "Longitude": 1.7324,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Centre-Val de Loire\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Charente",
+      "Code": "16",
+      "ISO3166_2": "FR-16",
+      "Latitude": 45.7302,
+      "Longitude": -0.7213,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Charente\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Charente-Maritime",
+      "Code": "17",
+      "ISO3166_2": "FR-17",
+      "Latitude": 45.7302,
+      "Longitude": -0.7213,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Charente-Maritime\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Cher",
+      "Code": "18",
+      "ISO3166_2": "FR-18",
+      "Latitude": 47.0249,
+      "Longitude": 2.5753,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Cher\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Clipperton",
+      "Code": "CP",
+      "ISO3166_2": "FR-CP",
+      "Latitude": 10.3021,
+      "Longitude": -109.2178,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Clipperton\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Corrèze",
+      "Code": "19",
+      "ISO3166_2": "FR-19",
+      "Latitude": 45.3429,
+      "Longitude": 1.8176,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Corr\\u00e8ze\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Corse",
+      "Code": "20R",
+      "ISO3166_2": "FR-20R",
+      "Latitude": 42.1881,
+      "Longitude": 9.0684,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Corse\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Corse-du-Sud",
+      "Code": "2A",
+      "ISO3166_2": "FR-2A",
+      "Latitude": 41.8734,
+      "Longitude": 9.0087,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Corse-du-Sud\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Creuse",
+      "Code": "23",
+      "ISO3166_2": "FR-23",
+      "Latitude": 46.0593,
+      "Longitude": 2.0489,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Creuse\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Côte-d'Or",
+      "Code": "21",
+      "ISO3166_2": "FR-21",
+      "Latitude": 47.4655,
+      "Longitude": 4.7481,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"C\\u00f4te-d'Or\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Côtes-d'Armor",
+      "Code": "22",
+      "ISO3166_2": "FR-22",
+      "Latitude": 48.4615,
+      "Longitude": -2.7514,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"C\\u00f4tes-d'Armor\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Deux-Sèvres",
+      "Code": "79",
+      "ISO3166_2": "FR-79",
+      "Latitude": 46.5391,
+      "Longitude": -0.2995,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Deux-S\\u00e8vres\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Dordogne",
+      "Code": "24",
+      "ISO3166_2": "FR-24",
+      "Latitude": 45.1429,
+      "Longitude": 0.6321,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Dordogne\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Doubs",
+      "Code": "25",
+      "ISO3166_2": "FR-25",
+      "Latitude": 46.9322,
+      "Longitude": 6.3476,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Doubs\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Drôme",
+      "Code": "26",
+      "ISO3166_2": "FR-26",
+      "Latitude": 44.7295,
+      "Longitude": 5.2046,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Dr\\u00f4me\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Essonne",
+      "Code": "91",
+      "ISO3166_2": "FR-91",
+      "Latitude": 48.5303,
+      "Longitude": 2.2393,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Essonne\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Eure",
+      "Code": "27",
+      "ISO3166_2": "FR-27",
+      "Latitude": 49.0756,
+      "Longitude": 0.9652,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Eure\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Eure-et-Loir",
+      "Code": "28",
+      "ISO3166_2": "FR-28",
+      "Latitude": 48.4474,
+      "Longitude": 1.3999,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Eure-et-Loir\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Finistère",
+      "Code": "29",
+      "ISO3166_2": "FR-29",
+      "Latitude": 48.2451,
+      "Longitude": -4.0441,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Finist\\u00e8re\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "French Guiana",
+      "Code": "973",
+      "ISO3166_2": "FR-973",
+      "Latitude": 4.004,
+      "Longitude": -53.0,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"French Guiana\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "French Polynesia",
+      "Code": "PF",
+      "ISO3166_2": "FR-PF",
+      "Latitude": -17.0244,
+      "Longitude": -144.6435,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"French Polynesia\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "French Southern and Antarctic Lands",
+      "Code": "TF",
+      "ISO3166_2": "FR-TF",
+      "Latitude": -49.2374,
+      "Longitude": 69.6228,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"French Southern and Antarctic Lands\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Gard",
+      "Code": "30",
+      "ISO3166_2": "FR-30",
+      "Latitude": 43.9599,
+      "Longitude": 4.2976,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Gard\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Gers",
+      "Code": "32",
+      "ISO3166_2": "FR-32",
+      "Latitude": 43.6955,
+      "Longitude": 0.4101,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Gers\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Gironde",
+      "Code": "33",
+      "ISO3166_2": "FR-33",
+      "Latitude": 44.8837,
+      "Longitude": -0.6051,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Gironde\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Grand-Est",
+      "Code": "GES",
+      "ISO3166_2": "FR-GES",
+      "Latitude": 48.4845,
+      "Longitude": 6.113,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Grand-Est\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Guadeloupe",
+      "Code": "971",
+      "ISO3166_2": "FR-971",
+      "Latitude": 16.2529,
+      "Longitude": -61.5687,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Guadeloupe\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Haut-Rhin",
+      "Code": "68",
+      "ISO3166_2": "FR-68",
+      "Latitude": 47.8655,
+      "Longitude": 7.2315,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Haut-Rhin\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Haute-Corse",
+      "Code": "2B",
+      "ISO3166_2": "FR-2B",
+      "Latitude": 42.422,
+      "Longitude": 9.1009,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Haute-Corse\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Haute-Garonne",
+      "Code": "31",
+      "ISO3166_2": "FR-31",
+      "Latitude": 43.3055,
+      "Longitude": 0.9717,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Haute-Garonne\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Haute-Loire",
+      "Code": "43",
+      "ISO3166_2": "FR-43",
+      "Latitude": 45.0857,
+      "Longitude": 3.8338,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Haute-Loire\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Haute-Marne",
+      "Code": "52",
+      "ISO3166_2": "FR-52",
+      "Latitude": 48.1329,
+      "Longitude": 5.2529,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Haute-Marne\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Haute-Savoie",
+      "Code": "74",
+      "ISO3166_2": "FR-74",
+      "Latitude": 46.069,
+      "Longitude": 6.3445,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Haute-Savoie\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Haute-Saône",
+      "Code": "70",
+      "ISO3166_2": "FR-70",
+      "Latitude": 47.6384,
+      "Longitude": 6.0951,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Haute-Sa\\u00f4ne\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Haute-Vienne",
+      "Code": "87",
+      "ISO3166_2": "FR-87",
+      "Latitude": 45.919,
+      "Longitude": 1.2032,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Haute-Vienne\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Hautes-Alpes",
+      "Code": "05",
+      "ISO3166_2": "FR-05",
+      "Latitude": 44.6565,
+      "Longitude": 6.352,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Hautes-Alpes\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Hautes-Pyrénées",
+      "Code": "65",
+      "ISO3166_2": "FR-65",
+      "Latitude": 43.1438,
+      "Longitude": 0.1587,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Hautes-Pyr\\u00e9n\\u00e9es\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Hauts-de-France",
+      "Code": "HDF",
+      "ISO3166_2": "FR-HDF",
+      "Latitude": 50.1025,
+      "Longitude": 2.7248,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Hauts-de-France\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Hauts-de-Seine",
+      "Code": "92",
+      "ISO3166_2": "FR-92",
+      "Latitude": 48.8402,
+      "Longitude": 2.1986,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Hauts-de-Seine\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Hérault",
+      "Code": "34",
+      "ISO3166_2": "FR-34",
+      "Latitude": 43.5914,
+      "Longitude": 3.3553,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"H\\u00e9rault\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Ille-et-Vilaine",
+      "Code": "35",
+      "ISO3166_2": "FR-35",
+      "Latitude": 48.1728,
+      "Longitude": -1.6498,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Ille-et-Vilaine\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Indre",
+      "Code": "36",
+      "ISO3166_2": "FR-36",
+      "Latitude": 46.8121,
+      "Longitude": 1.5382,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Indre\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Indre-et-Loire",
+      "Code": "37",
+      "ISO3166_2": "FR-37",
+      "Latitude": 47.2232,
+      "Longitude": 0.6867,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Indre-et-Loire\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Isère",
+      "Code": "38",
+      "ISO3166_2": "FR-38",
+      "Latitude": 45.2898,
+      "Longitude": 5.6344,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Is\\u00e8re\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Jura",
+      "Code": "39",
+      "ISO3166_2": "FR-39",
+      "Latitude": 46.7834,
+      "Longitude": 5.7833,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Jura\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "La Réunion",
+      "Code": "974",
+      "ISO3166_2": "FR-974",
+      "Latitude": -21.1307,
+      "Longitude": 55.5365,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"La R\\u00e9union\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Landes",
+      "Code": "40",
+      "ISO3166_2": "FR-40",
+      "Latitude": 44.01,
+      "Longitude": -0.6434,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Landes\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Loir-et-Cher",
+      "Code": "41",
+      "ISO3166_2": "FR-41",
+      "Latitude": 47.6598,
+      "Longitude": 1.2972,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Loir-et-Cher\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Loire",
+      "Code": "42",
+      "ISO3166_2": "FR-42",
+      "Latitude": 47.6151,
+      "Longitude": -0.9784,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Loire\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Loire-Atlantique",
+      "Code": "44",
+      "ISO3166_2": "FR-44",
+      "Latitude": 47.3482,
+      "Longitude": -1.8727,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Loire-Atlantique\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Loiret",
+      "Code": "45",
+      "ISO3166_2": "FR-45",
+      "Latitude": 47.9139,
+      "Longitude": 2.3075,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Loiret\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Lot",
+      "Code": "46",
+      "ISO3166_2": "FR-46",
+      "Latitude": 44.625,
+      "Longitude": 1.6658,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Lot\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Lot-et-Garonne",
+      "Code": "47",
+      "ISO3166_2": "FR-47",
+      "Latitude": 44.3692,
+      "Longitude": 0.4539,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Lot-et-Garonne\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Lozère",
+      "Code": "48",
+      "ISO3166_2": "FR-48",
+      "Latitude": 44.5426,
+      "Longitude": 3.5211,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Loz\\u00e8re\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Maine-et-Loire",
+      "Code": "49",
+      "ISO3166_2": "FR-49",
+      "Latitude": 47.3886,
+      "Longitude": -0.3909,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Maine-et-Loire\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Manche",
+      "Code": "50",
+      "ISO3166_2": "FR-50",
+      "Latitude": 49.0919,
+      "Longitude": -1.2455,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Manche\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Marne",
+      "Code": "51",
+      "ISO3166_2": "FR-51",
+      "Latitude": 48.9613,
+      "Longitude": 4.3122,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Marne\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Martinique",
+      "Code": "972",
+      "ISO3166_2": "FR-972",
+      "Latitude": 14.6368,
+      "Longitude": -61.0158,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Martinique\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Mayenne",
+      "Code": "53",
+      "ISO3166_2": "FR-53",
+      "Latitude": 48.3044,
+      "Longitude": -0.618,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Mayenne\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Mayotte",
+      "Code": "976",
+      "ISO3166_2": "FR-976",
+      "Latitude": -12.823,
+      "Longitude": 45.1521,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Mayotte\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Meurthe-et-Moselle",
+      "Code": "54",
+      "ISO3166_2": "FR-54",
+      "Latitude": 48.956,
+      "Longitude": 5.987,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Meurthe-et-Moselle\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Meuse",
+      "Code": "55",
+      "ISO3166_2": "FR-55",
+      "Latitude": 49.013,
+      "Longitude": 5.4287,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Meuse\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Morbihan",
+      "Code": "56",
+      "ISO3166_2": "FR-56",
+      "Latitude": 47.826,
+      "Longitude": -2.7633,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Morbihan\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Moselle",
+      "Code": "57",
+      "ISO3166_2": "FR-57",
+      "Latitude": 49.0207,
+      "Longitude": 6.538,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Moselle\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Métropole de Lyon",
+      "Code": "69M",
+      "ISO3166_2": "FR-69M",
+      "Latitude": 45.7482,
+      "Longitude": 4.8557,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"M\\u00e9tropole de Lyon\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Nièvre",
+      "Code": "58",
+      "ISO3166_2": "FR-58",
+      "Latitude": 47.1197,
+      "Longitude": 3.5449,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Ni\\u00e8vre\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Nord",
+      "Code": "59",
+      "ISO3166_2": "FR-59",
+      "Latitude": 50.529,
+      "Longitude": 3.0884,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Nord\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Normandie",
+      "Code": "NOR",
+      "ISO3166_2": "FR-NOR",
+      "Latitude": 49.0678,
+      "Longitude": 0.3139,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Normandie\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Nouvelle-Aquitaine",
+      "Code": "NAQ",
+      "ISO3166_2": "FR-NAQ",
+      "Latitude": 45.4039,
+      "Longitude": 0.3756,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Nouvelle-Aquitaine\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Nouvelle-Calédonie",
+      "Code": "NC",
+      "ISO3166_2": "FR-NC",
+      "Latitude": -21.25,
+      "Longitude": 165.3,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Nouvelle-Cal\\u00e9donie\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Occitanie",
+      "Code": "OCC",
+      "ISO3166_2": "FR-OCC",
+      "Latitude": 43.6488,
+      "Longitude": 2.3436,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Occitanie\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Oise",
+      "Code": "60",
+      "ISO3166_2": "FR-60",
+      "Latitude": 49.4121,
+      "Longitude": 2.4065,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Oise\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Orne",
+      "Code": "61",
+      "ISO3166_2": "FR-61",
+      "Latitude": 48.5759,
+      "Longitude": 0.0449,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Orne\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Paris",
+      "Code": "75C",
+      "ISO3166_2": "FR-75C",
+      "Latitude": 48.8566,
+      "Longitude": 2.3522,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Paris\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Pas-de-Calais",
+      "Code": "62",
+      "ISO3166_2": "FR-62",
+      "Latitude": 50.5144,
+      "Longitude": 2.258,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Pas-de-Calais\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Pays-de-la-Loire",
+      "Code": "PDL",
+      "ISO3166_2": "FR-PDL",
+      "Latitude": 47.6595,
+      "Longitude": -0.8186,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Pays-de-la-Loire\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Provence-Alpes-Côte-d’Azur",
+      "Code": "PAC",
+      "ISO3166_2": "FR-PAC",
+      "Latitude": 44.0581,
+      "Longitude": 6.0639,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Provence-Alpes-C\\u00f4te-d\\u2019Azur\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Puy-de-Dôme",
+      "Code": "63",
+      "ISO3166_2": "FR-63",
+      "Latitude": 45.7726,
+      "Longitude": 2.9644,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Puy-de-D\\u00f4me\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Pyrénées-Atlantiques",
+      "Code": "64",
+      "ISO3166_2": "FR-64",
+      "Latitude": 43.1872,
+      "Longitude": -0.7282,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Pyr\\u00e9n\\u00e9es-Atlantiques\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Pyrénées-Orientales",
+      "Code": "66",
+      "ISO3166_2": "FR-66",
+      "Latitude": 42.6259,
+      "Longitude": 2.5065,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Pyr\\u00e9n\\u00e9es-Orientales\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Rhône",
+      "Code": "69",
+      "ISO3166_2": "FR-69",
+      "Latitude": 45.8802,
+      "Longitude": 4.5645,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Rh\\u00f4ne\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Saint Pierre and Miquelon",
+      "Code": "PM",
+      "ISO3166_2": "FR-PM",
+      "Latitude": 46.8375,
+      "Longitude": -56.2121,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Saint Pierre and Miquelon\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Saint-Barthélemy",
+      "Code": "BL",
+      "ISO3166_2": "FR-BL",
+      "Latitude": 17.9005,
+      "Longitude": -62.8206,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Saint-Barth\\u00e9lemy\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Saint-Martin",
+      "Code": "MF",
+      "ISO3166_2": "FR-MF",
+      "Latitude": 18.0814,
+      "Longitude": -63.0467,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Saint-Martin\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Sarthe",
+      "Code": "72",
+      "ISO3166_2": "FR-72",
+      "Latitude": 48.0269,
+      "Longitude": 0.2538,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Sarthe\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Savoie",
+      "Code": "73",
+      "ISO3166_2": "FR-73",
+      "Latitude": 45.4949,
+      "Longitude": 6.3847,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Savoie\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Saône-et-Loire",
+      "Code": "71",
+      "ISO3166_2": "FR-71",
+      "Latitude": 46.6557,
+      "Longitude": 4.5586,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Sa\\u00f4ne-et-Loire\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Seine-Maritime",
+      "Code": "76",
+      "ISO3166_2": "FR-76",
+      "Latitude": 49.6632,
+      "Longitude": 0.9401,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Seine-Maritime\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Seine-Saint-Denis",
+      "Code": "93",
+      "ISO3166_2": "FR-93",
+      "Latitude": 48.9098,
+      "Longitude": 2.4529,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Seine-Saint-Denis\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Seine-et-Marne",
+      "Code": "77",
+      "ISO3166_2": "FR-77",
+      "Latitude": 48.619,
+      "Longitude": 3.0418,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Seine-et-Marne\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Somme",
+      "Code": "80",
+      "ISO3166_2": "FR-80",
+      "Latitude": 49.9689,
+      "Longitude": 2.3739,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Somme\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Tarn",
+      "Code": "81",
+      "ISO3166_2": "FR-81",
+      "Latitude": 43.7922,
+      "Longitude": 2.134,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Tarn\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Tarn-et-Garonne",
+      "Code": "82",
+      "ISO3166_2": "FR-82",
+      "Latitude": 44.0807,
+      "Longitude": 1.2051,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Tarn-et-Garonne\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Territoire de Belfort",
+      "Code": "90",
+      "ISO3166_2": "FR-90",
+      "Latitude": 47.6292,
+      "Longitude": 6.8993,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Territoire de Belfort\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Val-d'Oise",
+      "Code": "95",
+      "ISO3166_2": "FR-95",
+      "Latitude": 49.0751,
+      "Longitude": 2.2098,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Val-d'Oise\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Val-de-Marne",
+      "Code": "94",
+      "ISO3166_2": "FR-94",
+      "Latitude": 48.7745,
+      "Longitude": 2.4543,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Val-de-Marne\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Var",
+      "Code": "83",
+      "ISO3166_2": "FR-83",
+      "Latitude": 43.4174,
+      "Longitude": 6.2665,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Var\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Vaucluse",
+      "Code": "84",
+      "ISO3166_2": "FR-84",
+      "Latitude": 43.9939,
+      "Longitude": 5.1819,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Vaucluse\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Vendée",
+      "Code": "85",
+      "ISO3166_2": "FR-85",
+      "Latitude": 46.6758,
+      "Longitude": -1.2914,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Vend\\u00e9e\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Vienne",
+      "Code": "86",
+      "ISO3166_2": "FR-86",
+      "Latitude": 45.5252,
+      "Longitude": 4.8748,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Vienne\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Vosges",
+      "Code": "88",
+      "ISO3166_2": "FR-88",
+      "Latitude": 48.1638,
+      "Longitude": 6.3821,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Vosges\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Wallis and Futuna",
+      "Code": "WF",
+      "ISO3166_2": "FR-WF",
+      "Latitude": -13.2894,
+      "Longitude": -176.2042,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Wallis and Futuna\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Yonne",
+      "Code": "89",
+      "ISO3166_2": "FR-89",
+      "Latitude": 47.8551,
+      "Longitude": 3.645,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Yonne\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Yvelines",
+      "Code": "78",
+      "ISO3166_2": "FR-78",
+      "Latitude": 48.762,
+      "Longitude": 1.8871,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Yvelines\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "FR",
+      "Name": "Île-de-France",
+      "Code": "IDF",
+      "ISO3166_2": "FR-IDF",
+      "Latitude": 48.6443,
+      "Longitude": 2.7538,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"\\u00cele-de-France\"]"
+    }
+  }
+]

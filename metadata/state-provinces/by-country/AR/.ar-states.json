@@ -1,0 +1,290 @@
+[
+  {
+    "fields": {
+      "_CountryISO2": "AR",
+      "Name": "Autonomous City of Buenos Aires",
+      "Code": "C",
+      "ISO3166_2": "AR-C",
+      "Latitude": -34.6161,
+      "Longitude": -58.4356,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Autonomous City of Buenos Aires\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "AR",
+      "Name": "Buenos Aires",
+      "Code": "B",
+      "ISO3166_2": "AR-B",
+      "Latitude": -37.1498,
+      "Longitude": -60.1319,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Buenos Aires\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "AR",
+      "Name": "Catamarca",
+      "Code": "K",
+      "ISO3166_2": "AR-K",
+      "Latitude": -28.4716,
+      "Longitude": -65.7877,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Catamarca\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "AR",
+      "Name": "Chaco",
+      "Code": "H",
+      "ISO3166_2": "AR-H",
+      "Latitude": -26.383,
+      "Longitude": -60.8816,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Chaco\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "AR",
+      "Name": "Chubut",
+      "Code": "U",
+      "ISO3166_2": "AR-U",
+      "Latitude": -43.7128,
+      "Longitude": -68.7462,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Chubut\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "AR",
+      "Name": "Corrientes",
+      "Code": "W",
+      "ISO3166_2": "AR-W",
+      "Latitude": -27.4819,
+      "Longitude": -58.7956,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Corrientes\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "AR",
+      "Name": "Córdoba",
+      "Code": "X",
+      "ISO3166_2": "AR-X",
+      "Latitude": -31.4167,
+      "Longitude": -64.1834,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"C\\u00f3rdoba\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "AR",
+      "Name": "Entre Ríos",
+      "Code": "E",
+      "ISO3166_2": "AR-E",
+      "Latitude": -31.6253,
+      "Longitude": -59.354,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Entre R\\u00edos\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "AR",
+      "Name": "Formosa",
+      "Code": "P",
+      "ISO3166_2": "AR-P",
+      "Latitude": -26.1853,
+      "Longitude": -58.1745,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Formosa\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "AR",
+      "Name": "Jujuy",
+      "Code": "Y",
+      "ISO3166_2": "AR-Y",
+      "Latitude": -23.3161,
+      "Longitude": -65.7595,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Jujuy\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "AR",
+      "Name": "La Pampa",
+      "Code": "L",
+      "ISO3166_2": "AR-L",
+      "Latitude": -37.2315,
+      "Longitude": -65.3973,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"La Pampa\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "AR",
+      "Name": "La Rioja",
+      "Code": "F",
+      "ISO3166_2": "AR-F",
+      "Latitude": -29.4194,
+      "Longitude": -66.856,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"La Rioja\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "AR",
+      "Name": "Mendoza",
+      "Code": "M",
+      "ISO3166_2": "AR-M",
+      "Latitude": -32.8895,
+      "Longitude": -68.8458,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Mendoza\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "AR",
+      "Name": "Misiones",
+      "Code": "N",
+      "ISO3166_2": "AR-N",
+      "Latitude": -26.7372,
+      "Longitude": -54.4315,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Misiones\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "AR",
+      "Name": "Neuquén",
+      "Code": "Q",
+      "ISO3166_2": "AR-Q",
+      "Latitude": -38.952,
+      "Longitude": -68.0592,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Neuqu\\u00e9n\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "AR",
+      "Name": "Río Negro",
+      "Code": "R",
+      "ISO3166_2": "AR-R",
+      "Latitude": -39.7296,
+      "Longitude": -65.3418,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"R\\u00edo Negro\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "AR",
+      "Name": "Salta",
+      "Code": "A",
+      "ISO3166_2": "AR-A",
+      "Latitude": -24.7893,
+      "Longitude": -65.4103,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Salta\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "AR",
+      "Name": "San Juan",
+      "Code": "J",
+      "ISO3166_2": "AR-J",
+      "Latitude": -31.5371,
+      "Longitude": -68.5252,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"San Juan\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "AR",
+      "Name": "San Luis",
+      "Code": "D",
+      "ISO3166_2": "AR-D",
+      "Latitude": -33.2962,
+      "Longitude": -66.3295,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"San Luis\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "AR",
+      "Name": "Santa Cruz",
+      "Code": "Z",
+      "ISO3166_2": "AR-Z",
+      "Latitude": -48.5693,
+      "Longitude": -70.1607,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Santa Cruz\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "AR",
+      "Name": "Santa Fe",
+      "Code": "S",
+      "ISO3166_2": "AR-S",
+      "Latitude": -31.6187,
+      "Longitude": -60.702,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Santa Fe\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "AR",
+      "Name": "Santiago del Estero",
+      "Code": "G",
+      "ISO3166_2": "AR-G",
+      "Latitude": -27.7834,
+      "Longitude": -64.2642,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Santiago del Estero\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "AR",
+      "Name": "Tierra del Fuego",
+      "Code": "V",
+      "ISO3166_2": "AR-V",
+      "Latitude": -54.4071,
+      "Longitude": -67.8975,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Tierra del Fuego\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "AR",
+      "Name": "Tucumán",
+      "Code": "T",
+      "ISO3166_2": "AR-T",
+      "Latitude": -26.8304,
+      "Longitude": -65.2038,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Tucum\\u00e1n\"]"
+    }
+  }
+]

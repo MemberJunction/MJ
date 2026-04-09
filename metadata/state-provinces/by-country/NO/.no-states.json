@@ -1,0 +1,206 @@
+[
+  {
+    "fields": {
+      "_CountryISO2": "NO",
+      "Name": "Agder",
+      "Code": "42",
+      "ISO3166_2": "NO-42",
+      "Latitude": 58.7194,
+      "Longitude": 8.035,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Agder\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "NO",
+      "Name": "Akershus",
+      "Code": "32",
+      "ISO3166_2": "NO-32",
+      "Latitude": 60.0312,
+      "Longitude": 11.3175,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Akershus\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "NO",
+      "Name": "Buskerud",
+      "Code": "33",
+      "ISO3166_2": "NO-33",
+      "Latitude": 60.2498,
+      "Longitude": 8.9628,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Buskerud\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "NO",
+      "Name": "Finnmark",
+      "Code": "56",
+      "ISO3166_2": "NO-56",
+      "Latitude": 69.9698,
+      "Longitude": 24.7686,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Finnmark\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "NO",
+      "Name": "Innlandet",
+      "Code": "34",
+      "ISO3166_2": "NO-34",
+      "Latitude": 63.1048,
+      "Longitude": 7.7352,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Innlandet\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "NO",
+      "Name": "Jan Mayen",
+      "Code": "22",
+      "ISO3166_2": "NO-22",
+      "Latitude": 70.9931,
+      "Longitude": -8.3521,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Jan Mayen\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "NO",
+      "Name": "Møre og Romsdal",
+      "Code": "15",
+      "ISO3166_2": "NO-15",
+      "Latitude": 62.8453,
+      "Longitude": 7.5182,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"M\\u00f8re og Romsdal\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "NO",
+      "Name": "Nordland",
+      "Code": "18",
+      "ISO3166_2": "NO-18",
+      "Latitude": 67.2756,
+      "Longitude": 13.8624,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Nordland\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "NO",
+      "Name": "Oslo",
+      "Code": "03",
+      "ISO3166_2": "NO-03",
+      "Latitude": 59.9139,
+      "Longitude": 10.7522,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Oslo\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "NO",
+      "Name": "Rogaland",
+      "Code": "11",
+      "ISO3166_2": "NO-11",
+      "Latitude": 58.9363,
+      "Longitude": 5.8059,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Rogaland\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "NO",
+      "Name": "Svalbard",
+      "Code": "21",
+      "ISO3166_2": "NO-21",
+      "Latitude": 78.7199,
+      "Longitude": 20.3493,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Svalbard\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "NO",
+      "Name": "Telemark",
+      "Code": "40",
+      "ISO3166_2": "NO-40",
+      "Latitude": 59.3963,
+      "Longitude": 8.6627,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Telemark\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "NO",
+      "Name": "Troms",
+      "Code": "55",
+      "ISO3166_2": "NO-55",
+      "Latitude": 69.5311,
+      "Longitude": 19.5297,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Troms\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "NO",
+      "Name": "Trøndelag",
+      "Code": "50",
+      "ISO3166_2": "NO-50",
+      "Latitude": 63.8776,
+      "Longitude": 10.1951,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Tr\\u00f8ndelag\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "NO",
+      "Name": "Vestfold",
+      "Code": "39",
+      "ISO3166_2": "NO-39",
+      "Latitude": 59.1955,
+      "Longitude": 10.2663,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Vestfold\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "NO",
+      "Name": "Vestland",
+      "Code": "46",
+      "ISO3166_2": "NO-46",
+      "Latitude": 60.9291,
+      "Longitude": 6.1079,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Vestland\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "NO",
+      "Name": "Østfold",
+      "Code": "31",
+      "ISO3166_2": "NO-31",
+      "Latitude": 59.2669,
+      "Longitude": 11.2086,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"\\u00d8stfold\"]"
+    }
+  }
+]
