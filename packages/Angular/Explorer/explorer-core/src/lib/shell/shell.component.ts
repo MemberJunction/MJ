@@ -2470,6 +2470,13 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
 
     LogStatus(`App access check for "${appPath}": ${accessResult.status} - ${accessResult.message}`);
 
+    // For restricted apps (blocked by app filter), skip the dialog entirely
+    // and redirect immediately to the first available app
+    if (accessResult.status === 'restricted') {
+      this.redirectToFirstApp(availableApps);
+      return;
+    }
+
     const dialogConfig = this.mapAccessResultToDialogConfig(accessResult);
 
     // IMPORTANT: Keep loading screen visible while dialog is shown
@@ -2517,6 +2524,13 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       case 'disabled':
         return {
           type: 'disabled',
+          appName: accessResult.appName,
+          appId: accessResult.appId
+        };
+
+      case 'restricted':
+        return {
+          type: 'no_access',
           appName: accessResult.appName,
           appId: accessResult.appId
         };

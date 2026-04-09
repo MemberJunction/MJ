@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
+import { map } from 'rxjs/operators';
 import { MJGlobal, MJEventType, UUIDsEqual } from '@memberjunction/global';
 import { Metadata, ApplicationInfo, LogError, LogStatus, StartupManager } from '@memberjunction/core';
 import { MJUserApplicationEntity, UserInfoEngine } from '@memberjunction/core-entities';
@@ -33,6 +34,9 @@ export class ApplicationManager {
   private loading$ = new BehaviorSubject<boolean>(false);
   private initialized = false;
 
+  private _appFilter: ((app: BaseApplication) => boolean) | null = null;
+  private _allowAppConfiguration = true;
+
   /** Resolves when loadApplications() has completed successfully */
   private _readyResolve!: () => void;
   private _readyPromise = new Promise<void>(resolve => { this._readyResolve = resolve; });
@@ -46,10 +50,11 @@ export class ApplicationManager {
   }
 
   /**
-   * Observable of user's active applications (filtered and ordered by UserApplication)
+   * Observable of user's active applications (filtered and ordered by UserApplication).
+   * If an app filter is registered, it is applied on every emission.
    */
   get Applications(): Observable<BaseApplication[]> {
-    return this.applications$.asObservable();
+    return this.applications$.pipe(map(apps => this.applyAppFilter(apps)));
   }
 
   /**
@@ -84,7 +89,7 @@ export class ApplicationManager {
    * Get user's active applications synchronously (filtered and ordered)
    */
   GetAllApps(): BaseApplication[] {
-    return this.applications$.value;
+    return this.applyAppFilter(this.applications$.value);
   }
 
   /**
@@ -106,6 +111,37 @@ export class ApplicationManager {
    */
   GetActiveApp(): BaseApplication | null {
     return this.activeApp$.value;
+  }
+
+  /**
+   * Whether users are allowed to add/remove/reorder applications via the configuration dialog.
+   * Consuming applications can set this to false to lock the app list for certain users.
+   */
+  get AllowAppConfiguration(): boolean {
+    return this._allowAppConfiguration;
+  }
+
+  set AllowAppConfiguration(value: boolean) {
+    this._allowAppConfiguration = value;
+  }
+
+  /**
+   * Register a filter callback to control which applications are visible to the current user.
+   * The filter is applied whenever the app list is loaded or refreshed (including engine syncs).
+   * Pass null to remove the filter and restore the full app list.
+   */
+  SetAppFilter(filter: ((app: BaseApplication) => boolean) | null): void {
+    this._appFilter = filter;
+    // Force re-emission so existing subscribers (e.g. the shell) pick up the new filter.
+    // The Applications observable applies the filter via pipe(map), so re-emitting
+    // the raw list causes subscribers to receive the newly filtered result.
+    if (this.initialized) {
+      this.applications$.next(this.applications$.value);
+    }
+  }
+
+  private applyAppFilter(apps: BaseApplication[]): BaseApplication[] {
+    return this._appFilter ? apps.filter(this._appFilter) : apps;
   }
 
   constructor() {
@@ -294,10 +330,11 @@ export class ApplicationManager {
 
     let userApps: MJUserApplicationEntity[] = engine.UserApplications;
 
-    // Self-healing: If user has no UserApplication records, create from DefaultForNewUser apps
-    if (userApps.length === 0) {
-      LogStatus(`User ${md.CurrentUser.Name} has no UserApplication records, creating from DefaultForNewUser apps`);
-      userApps = await this.createDefaultUserApplications();
+    // Self-healing: Ensure all DefaultForNewUser apps are provisioned.
+    // The engine method checks for existing records and only creates missing ones.
+    const newApps = await this.createDefaultUserApplications();
+    if (newApps.length > 0) {
+      userApps = engine.UserApplications; // Refresh after new records were created
     }
 
     // Build user's filtered and ordered app list
@@ -360,14 +397,14 @@ export class ApplicationManager {
    * Get application by ID
    */
   GetAppById(appId: string): BaseApplication | undefined {
-    return this.applications$.value.find(a => UUIDsEqual(a.ID, appId));
+    return this.applyAppFilter(this.applications$.value).find(a => UUIDsEqual(a.ID, appId));
   }
 
   /**
    * Get application by name
    */
   GetAppByName(name: string): BaseApplication | undefined {
-    return this.applications$.value.find(a => a.Name === name);
+    return this.applyAppFilter(this.applications$.value).find(a => a.Name === name);
   }
 
   /**
@@ -377,9 +414,10 @@ export class ApplicationManager {
    */
   GetAppByPath(path: string): BaseApplication | undefined {
     const normalizedPath = path.trim().toLowerCase();
+    const apps = this.applyAppFilter(this.applications$.value);
 
     // First try exact path match
-    const pathMatch = this.applications$.value.find(a =>
+    const pathMatch = apps.find(a =>
       a.Path?.toLowerCase() === normalizedPath
     );
 
@@ -388,7 +426,7 @@ export class ApplicationManager {
     }
 
     // Fallback: try matching by name (for backwards compatibility with old URLs)
-    return this.applications$.value.find(a =>
+    return apps.find(a =>
       a.Name.trim().toLowerCase() === normalizedPath
     );
   }
@@ -398,7 +436,7 @@ export class ApplicationManager {
    * filtered by TopNavLocation.
    */
   GetNavBarApps(location: 'Left of App Switcher' | 'Left of User Menu'): BaseApplication[] {
-    return this.applications$.value.filter(app =>
+    return this.applyAppFilter(this.applications$.value).filter(app =>
       (app.NavigationStyle === 'Nav Bar' || app.NavigationStyle === 'Both') &&
       app.TopNavLocation === location
     );
@@ -408,7 +446,7 @@ export class ApplicationManager {
    * Get applications that should appear in the App Switcher (NavigationStyle = 'App Switcher' or 'Both')
    */
   GetAppSwitcherApps(): BaseApplication[] {
-    return this.applications$.value.filter(app =>
+    return this.applyAppFilter(this.applications$.value).filter(app =>
       app.NavigationStyle === 'App Switcher' || app.NavigationStyle === 'Both'
     );
   }
@@ -474,7 +512,22 @@ export class ApplicationManager {
       };
     }
 
-    // Step 3: Check user's access status via engine
+    // Step 3: Check if app filter blocks this app (before checking install status,
+    // so restricted apps can't be installed/enabled to bypass the filter)
+    if (this._appFilter) {
+      const allApps = this.allApplications$.value;
+      const targetApp = allApps.find(a => UUIDsEqual(a.ID, appInfo.ID));
+      if (targetApp && !this._appFilter(targetApp)) {
+        return {
+          status: 'restricted',
+          message: `You don't have permission to access "${appInfo.Name}".`,
+          appName: appInfo.Name,
+          appId: appInfo.ID
+        };
+      }
+    }
+
+    // Step 4: Check user's access status via engine
     const accessStatus = engine.CheckUserApplicationAccess(appInfo.ID);
 
     switch (accessStatus) {
@@ -562,7 +615,7 @@ export class ApplicationManager {
  */
 export interface AppAccessResult {
   /** Status of the access check */
-  status: 'accessible' | 'not_found' | 'inactive' | 'not_installed' | 'disabled';
+  status: 'accessible' | 'not_found' | 'inactive' | 'not_installed' | 'disabled' | 'restricted';
   /** Human-readable message describing the access status */
   message: string;
   /** Name of the application (if found) */

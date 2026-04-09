@@ -4,6 +4,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { BaseNavigationComponent } from '@memberjunction/ng-shared';
+import { ApplicationManager } from '@memberjunction/ng-base-application';
 
 export interface SettingsTab {
   id: string;
@@ -139,12 +140,16 @@ export class SettingsComponent extends BaseNavigationComponent implements OnInit
 
   private destroy$ = new Subject<void>();
 
-  constructor(private location: Location, private cdr: ChangeDetectorRef, private ngZone: NgZone) {
+  constructor(private location: Location, private cdr: ChangeDetectorRef, private ngZone: NgZone, private appManager: ApplicationManager) {
     super();
     window.addEventListener('resize', this.handleResize.bind(this));
   }
 
   ngOnInit(): void {
+    // Hide the Applications tab when app configuration is disabled
+    if (!this.appManager.AllowAppConfiguration) {
+      this.tabs = this.tabs.filter(t => t.id !== 'applications');
+    }
     this.filteredTabs = [...this.tabs];
     this.setupSearchFilter();
     this.loadInitialData();

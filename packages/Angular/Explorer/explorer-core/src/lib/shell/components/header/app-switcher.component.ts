@@ -96,6 +96,14 @@ export class AppSwitcherComponent {
   }
 
   /**
+   * Whether the Configure button should be shown.
+   * Controlled by ApplicationManager.AllowAppConfiguration.
+   */
+  get showConfigure(): boolean {
+    return this.appManager.AllowAppConfiguration;
+  }
+
+  /**
    * Handle when config is saved - reload the app list
    */
   onConfigSaved(): void {

@@ -33,12 +33,14 @@
           </div>
         }
       </div>
-      <!-- Divider + Configure pinned at bottom -->
-      <div class="app-switcher-divider"></div>
-      <div class="app-switcher-item configure-item" (click)="openConfigDialog()">
-        <i class="fa-solid fa-gear"></i>
-        <span>Configure...</span>
-      </div>
+      <!-- Divider + Configure pinned at bottom (hidden when app configuration is disabled) -->
+      @if (showConfigure) {
+        <div class="app-switcher-divider"></div>
+        <div class="app-switcher-item configure-item" (click)="openConfigDialog()">
+          <i class="fa-solid fa-gear"></i>
+          <span>Configure...</span>
+        </div>
+      }
     </div>
   }
 </div>
