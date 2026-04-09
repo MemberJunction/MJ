@@ -115,6 +115,9 @@
                       {{ getUserDisplayInfo()?.email }}
                     </span>
                   }
+                  @if (getUserDisplayInfo()?.subtitle) {
+                    <span class="user-subtitle">{{ getUserDisplayInfo()?.subtitle }}</span>
+                  }
                 </div>
               </div>
               <div class="user-menu-divider"></div>
