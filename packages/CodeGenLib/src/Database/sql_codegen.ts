@@ -1294,7 +1294,8 @@ export class SQLCodeGenBase {
         const relatedFieldsJoinString: string = this.generateBaseViewJoins(entity, entity.Fields);
 
         // Geo support: add __mj_Latitude and __mj_Longitude virtual fields for geo-enabled entities
-        if (entity.SupportsGeoCoding) {
+        // Skip for Record Geo Codes itself to avoid circular self-reference in the view
+        if (entity.SupportsGeoCoding && entity.Name.trim().toLowerCase() !== 'mj: record geo codes') {
             const qi = this._dbProvider.Dialect.QuoteIdentifier.bind(this._dbProvider.Dialect);
             const geoFieldsSelect = this.hasNativeGeoFields(entity.Fields)
                 ? this.generateNativeGeoFields(entity.Fields, classNameFirstChar, qi)
@@ -1354,8 +1355,9 @@ export class SQLCodeGenBase {
         }
 
         // Geo support: add LEFT JOIN to vwRecordGeoCodes for entities with SupportsGeoCoding = 1
-        // that don't have native GeoLatitude/GeoLongitude fields (those get aliased directly)
-        if (entity.SupportsGeoCoding && !this.hasNativeGeoFields(entityFields)) {
+        // that don't have native GeoLatitude/GeoLongitude fields (those get aliased directly).
+        // Skip for Record Geo Codes itself to avoid circular self-reference in the view.
+        if (entity.SupportsGeoCoding && !this.hasNativeGeoFields(entityFields) && entity.Name.trim().toLowerCase() !== 'mj: record geo codes') {
             const qi = this._dbProvider.Dialect.QuoteIdentifier.bind(this._dbProvider.Dialect);
             const qs = this._dbProvider.Dialect.QuoteSchema.bind(this._dbProvider.Dialect);
             sOutput += (sOutput === '' ? '' : '\n');
