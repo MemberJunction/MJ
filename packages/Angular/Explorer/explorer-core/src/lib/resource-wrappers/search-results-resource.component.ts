@@ -1,6 +1,6 @@
 import { Component, ChangeDetectorRef, inject } from '@angular/core';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
-import { CompositeKey } from '@memberjunction/core';
+import { CompositeKey, Metadata, RunView } from '@memberjunction/core';
 import { ResourceData } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import {
@@ -12,6 +12,7 @@ import {
     SearchResponse,
     SearchResultSelectedEvent,
 } from '@memberjunction/ng-search';
+import { WordCloudItem, WordCloudItemEvent } from '@memberjunction/ng-word-cloud';
 
 @RegisterClass(BaseResourceComponent, 'SearchResultsResource')
 @Component({
@@ -58,6 +59,23 @@ import {
                             <option value="entity">Sort: Entity</option>
                         </select>
                     }
+                    <!-- View mode toggle -->
+                    @if (TotalCount > 0) {
+                        <div class="sr-view-toggle">
+                            <button class="sr-icon-btn"
+                                    [class.sr-view-active]="ViewMode === 'list'"
+                                    title="List view"
+                                    (click)="SetViewMode('list')">
+                                <i class="fa-solid fa-list"></i>
+                            </button>
+                            <button class="sr-icon-btn"
+                                    [class.sr-view-active]="ViewMode === 'cloud'"
+                                    title="Tag cloud view"
+                                    (click)="SetViewMode('cloud')">
+                                <i class="fa-solid fa-cloud"></i>
+                            </button>
+                        </div>
+                    }
                     <!-- Refresh -->
                     <button class="sr-icon-btn" title="Refresh search" (click)="OnRefresh()" [disabled]="IsSearching">
                         <i class="fa-solid fa-arrows-rotate" [class.fa-spin]="IsSearching"></i>
@@ -82,30 +100,46 @@ import {
                     </div>
                 }
                 @if (TotalCount > 0) {
-                    <div class="search-body">
-                        @if (ShowFilterPanel) {
-                            <mj-search-filter
-                                [Filters]="Filters"
-                                [ActiveFilters]="ActiveFilters"
-                                [ShowRelevanceSlider]="true"
-                                [MinScorePercent]="MinScorePercent"
-                                (FilterChanged)="OnFilterChanged($event)"
-                                (FiltersCleared)="OnFiltersCleared()"
-                                (CloseRequested)="ToggleFilterPanel()"
-                                (MinScoreChanged)="OnMinScoreChanged($any($event))">
-                            </mj-search-filter>
-                        }
-                        <mj-search-results
-                            [FlatResults]="FilteredResults"
-                            [HighlightText]="ClientFilterText"
-                            [ShowScores]="true"
-                            [ShowTags]="true"
-                            [ShowSummary]="false"
-                            [PageSize]="20"
-                            (ResultSelected)="OnResultSelected($event)"
-                            (OpenRecordRequested)="OnOpenRecord($event)">
-                        </mj-search-results>
-                    </div>
+                    @if (ViewMode === 'cloud') {
+                        <div class="search-cloud-wrapper">
+                            @if (IsLoadingCloud) {
+                                <mj-loading text="Loading tag cloud..." size="medium"></mj-loading>
+                            } @else {
+                                <mj-word-cloud
+                                    [Items]="CloudItems"
+                                    [MaxItems]="80"
+                                    ColorMode="weight-gradient"
+                                    [Interactive]="true"
+                                    (ItemClick)="OnCloudItemClick($event)">
+                                </mj-word-cloud>
+                            }
+                        </div>
+                    } @else {
+                        <div class="search-body">
+                            @if (ShowFilterPanel) {
+                                <mj-search-filter
+                                    [Filters]="Filters"
+                                    [ActiveFilters]="ActiveFilters"
+                                    [ShowRelevanceSlider]="true"
+                                    [MinScorePercent]="MinScorePercent"
+                                    (FilterChanged)="OnFilterChanged($event)"
+                                    (FiltersCleared)="OnFiltersCleared()"
+                                    (CloseRequested)="ToggleFilterPanel()"
+                                    (MinScoreChanged)="OnMinScoreChanged($any($event))">
+                                </mj-search-filter>
+                            }
+                            <mj-search-results
+                                [FlatResults]="FilteredResults"
+                                [HighlightText]="ClientFilterText"
+                                [ShowScores]="true"
+                                [ShowTags]="true"
+                                [ShowSummary]="false"
+                                [PageSize]="20"
+                                (ResultSelected)="OnResultSelected($event)"
+                                (OpenRecordRequested)="OnOpenRecord($event)">
+                            </mj-search-results>
+                        </div>
+                    }
                 }
             }
         </div>
@@ -236,6 +270,40 @@ import {
             font-size: 14px;
             margin: 0;
         }
+        .sr-view-toggle {
+            display: flex;
+            gap: 2px;
+            border: 1px solid var(--mj-border-default);
+            border-radius: 6px;
+            padding: 2px;
+            background: var(--mj-bg-surface-sunken);
+        }
+        .sr-view-toggle .sr-icon-btn {
+            border: none;
+            border-radius: 4px;
+            width: 28px;
+            height: 26px;
+            font-size: 12px;
+            background: transparent;
+        }
+        .sr-view-toggle .sr-icon-btn.sr-view-active {
+            background: var(--mj-bg-surface);
+            color: var(--mj-brand-primary);
+            box-shadow: 0 1px 2px color-mix(in srgb, var(--mj-text-primary) 10%, transparent);
+        }
+        .search-cloud-wrapper {
+            flex: 1;
+            padding: 24px;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .search-cloud-wrapper mj-word-cloud {
+            width: 100%;
+            height: 100%;
+            max-height: 600px;
+        }
     `]
 })
 export class SearchResultsResource extends BaseResourceComponent {
@@ -255,6 +323,9 @@ export class SearchResultsResource extends BaseResourceComponent {
     ShowFilterPanel = true;
     SortField: 'score' | 'title' | 'entity' = 'score';
     ClientFilterText = '';
+    ViewMode: 'list' | 'cloud' = 'list';
+    CloudItems: WordCloudItem[] = [];
+    IsLoadingCloud = false;
 
     /** All results from the last search (before client-side filtering) */
     private allResults: SearchResultItem[] = [];
@@ -275,6 +346,8 @@ export class SearchResultsResource extends BaseResourceComponent {
     }
 
     private async loadFromData(): Promise<void> {
+        this.registerAgentTools();
+
         // Load filter panel preference
         try {
             const { UserInfoEngine } = require('@memberjunction/core-entities');
@@ -373,6 +446,20 @@ export class SearchResultsResource extends BaseResourceComponent {
         this.applyClientFilters();
     }
 
+    SetViewMode(mode: 'list' | 'cloud'): void {
+        this.ViewMode = mode;
+        if (mode === 'cloud') {
+            this.buildCloudItems();
+        }
+        this.emitAgentContext();
+        this.cdr.detectChanges();
+    }
+
+    OnCloudItemClick(_event: WordCloudItemEvent): void {
+        // No-op for now — tag filtering in the filter panel is not yet implemented.
+        // Future: clicking a tag could filter results to only those with that tag.
+    }
+
     private navigateToRecord(entityName: string, recordID: string): void {
         if (entityName && recordID) {
             const pkey = new CompositeKey([{ FieldName: 'ID', Value: recordID }]);
@@ -403,6 +490,7 @@ export class SearchResultsResource extends BaseResourceComponent {
 
         this.IsSearching = false;
         this.HasSearched = true;
+        this.emitAgentContext();
         this.cdr.detectChanges();
     }
 
@@ -450,6 +538,7 @@ export class SearchResultsResource extends BaseResourceComponent {
         }
 
         this.FilteredResults = results;
+        this.emitAgentContext();
         this.cdr.detectChanges();
     }
 
@@ -474,6 +563,211 @@ export class SearchResultsResource extends BaseResourceComponent {
         }
 
         return true;
+    }
+
+    /**
+     * Build WordCloudItem[] from search results by extracting entity names and tags,
+     * weighted by their frequency across all results.
+     */
+    /**
+     * Build word cloud items from MJ: Tagged Items linked to the search results.
+     * Queries the TaggedItem entity for all records in the result set, aggregates
+     * tag names by count and weight, and builds WordCloudItem[] for the cloud.
+     */
+    private async buildCloudItems(): Promise<void> {
+        this.IsLoadingCloud = true;
+        this.cdr.detectChanges();
+
+        try {
+            // Group results by entity to build efficient queries
+            const byEntity = new Map<string, string[]>();
+            for (const result of this.allResults) {
+                const md = new Metadata();
+                const entity = md.Entities.find(e => e.Name === result.EntityName);
+                if (!entity) continue;
+                const list = byEntity.get(entity.ID) || [];
+                list.push(result.RecordID);
+                byEntity.set(entity.ID, list);
+            }
+
+            // Query Tagged Items for all record IDs across all entities
+            const tagAggregates = new Map<string, { count: number; totalWeight: number }>();
+            const rv = new RunView();
+
+            for (const [entityID, recordIDs] of byEntity) {
+                if (recordIDs.length === 0) continue;
+
+                // Build IN clause (batch in groups of 50 to avoid huge queries)
+                for (let i = 0; i < recordIDs.length; i += 50) {
+                    const batch = recordIDs.slice(i, i + 50);
+                    const inClause = batch.map(id => `'${id.replace(/'/g, "''")}'`).join(',');
+
+                    const result = await rv.RunView<{ Tag: string; Weight: number }>({
+                        EntityName: 'MJ: Tagged Items',
+                        ExtraFilter: `EntityID = '${entityID}' AND RecordID IN (${inClause})`,
+                        Fields: ['Tag', 'Weight'],
+                        ResultType: 'simple'
+                    });
+
+                    if (result.Success && result.Results) {
+                        for (const row of result.Results) {
+                            const tagName = row.Tag;
+                            if (!tagName) continue;
+                            const existing = tagAggregates.get(tagName) || { count: 0, totalWeight: 0 };
+                            existing.count++;
+                            existing.totalWeight += (row.Weight ?? 1);
+                            tagAggregates.set(tagName, existing);
+                        }
+                    }
+                }
+            }
+
+            // Build cloud items from aggregated tags
+            if (tagAggregates.size === 0) {
+                this.CloudItems = [{ Text: 'No tags found', Weight: 1, Category: 'empty' }];
+            } else {
+                const maxWeight = Math.max(...Array.from(tagAggregates.values()).map(v => v.totalWeight), 1);
+                this.CloudItems = Array.from(tagAggregates.entries())
+                    .sort((a, b) => b[1].totalWeight - a[1].totalWeight)
+                    .map(([tagName, agg]) => ({
+                        Text: tagName,
+                        Weight: agg.totalWeight / maxWeight,
+                        Category: 'tag',
+                        Metadata: { type: 'tag', count: agg.count, totalWeight: agg.totalWeight }
+                    }));
+            }
+        } catch (err) {
+            this.CloudItems = [{ Text: 'Error loading tags', Weight: 1, Category: 'error' }];
+        }
+
+        this.IsLoadingCloud = false;
+        this.cdr.detectChanges();
+    }
+
+    /** Report current search state to the AI agent */
+    private emitAgentContext(): void {
+        this.navigationService.SetAgentContext(this, {
+            CurrentQuery: this.CurrentQuery || null,
+            ResultCount: this.TotalCount,
+            FilteredCount: this.FilteredResults.length,
+            ElapsedMs: this.ElapsedMs,
+            HasSearched: this.HasSearched,
+            ShowFilterPanel: this.ShowFilterPanel,
+            ViewMode: this.ViewMode,
+            SortField: this.SortField,
+            MinScorePercent: this.MinScorePercent,
+            ClientFilterText: this.ClientFilterText,
+            ActiveFilterCount: Object.values(this.ActiveFilters).filter(v => v.length > 0).length,
+            TopResults: this.FilteredResults.slice(0, 50).map(r => ({
+                Title: r.Title || r.RecordName,
+                EntityName: r.EntityName,
+                RecordID: r.RecordID,
+                Score: Math.round(r.Score * 100),
+                SourceType: r.SourceType,
+                Snippet: r.Snippet?.substring(0, 100)
+            })),
+        });
+    }
+
+    /** Register client tools the agent can invoke on the search results */
+    private registerAgentTools(): void {
+        this.navigationService.SetAgentClientTools(this, [
+            {
+                Name: 'RunSearch',
+                Description: 'Execute a search query and display results',
+                ParameterSchema: {
+                    type: 'object',
+                    properties: {
+                        query: { type: 'string', description: 'The search query text' }
+                    },
+                    required: ['query']
+                },
+                Handler: async (params: Record<string, unknown>) => {
+                    const query = String(params['query'] ?? '');
+                    this.CurrentQuery = query;
+                    await this.ExecuteSearch(query);
+                    return { Success: true, Data: { ResultCount: this.TotalCount, ElapsedMs: this.ElapsedMs } };
+                }
+            },
+            {
+                Name: 'SortResults',
+                Description: 'Change the sort order of search results',
+                ParameterSchema: {
+                    type: 'object',
+                    properties: {
+                        field: { type: 'string', enum: ['score', 'title', 'entity'], description: 'Sort field' }
+                    },
+                    required: ['field']
+                },
+                Handler: async (params: Record<string, unknown>) => {
+                    this.OnSortChange(String(params['field']));
+                    return { Success: true, Data: { SortField: this.SortField } };
+                }
+            },
+            {
+                Name: 'FilterWithinResults',
+                Description: 'Filter the current results by a keyword (client-side text filter)',
+                ParameterSchema: {
+                    type: 'object',
+                    properties: {
+                        text: { type: 'string', description: 'Filter text (empty string to clear)' }
+                    },
+                    required: ['text']
+                },
+                Handler: async (params: Record<string, unknown>) => {
+                    this.OnClientFilterTextChange(String(params['text'] ?? ''));
+                    return { Success: true, Data: { FilteredCount: this.FilteredResults.length } };
+                }
+            },
+            {
+                Name: 'SetViewMode',
+                Description: 'Switch between list view and tag cloud visualization',
+                ParameterSchema: {
+                    type: 'object',
+                    properties: {
+                        mode: { type: 'string', enum: ['list', 'cloud'], description: 'View mode' }
+                    },
+                    required: ['mode']
+                },
+                Handler: async (params: Record<string, unknown>) => {
+                    this.SetViewMode((params['mode'] as 'list' | 'cloud') ?? 'list');
+                    return { Success: true, Data: { ViewMode: this.ViewMode } };
+                }
+            },
+            {
+                Name: 'ToggleFilterPanel',
+                Description: 'Show or hide the filter panel on the left',
+                ParameterSchema: { type: 'object', properties: {} },
+                Handler: async () => {
+                    this.ToggleFilterPanel();
+                    return { Success: true, Data: { ShowFilterPanel: this.ShowFilterPanel } };
+                }
+            },
+            {
+                Name: 'SetMinRelevance',
+                Description: 'Set the minimum relevance score filter (0-100 percent)',
+                ParameterSchema: {
+                    type: 'object',
+                    properties: {
+                        percent: { type: 'number', description: 'Minimum relevance percentage (0-100)' }
+                    },
+                    required: ['percent']
+                },
+                Handler: async (params: Record<string, unknown>) => {
+                    this.OnMinScoreChanged(Number(params['percent'] ?? 0));
+                    return { Success: true, Data: { MinScorePercent: this.MinScorePercent, FilteredCount: this.FilteredResults.length } };
+                }
+            },
+            {
+                Name: 'RefreshSearch',
+                Description: 'Re-execute the current search query',
+                ParameterSchema: { type: 'object', properties: {} },
+                Handler: async () => {
+                    await this.OnRefresh();
+                    return { Success: true, Data: { ResultCount: this.TotalCount, ElapsedMs: this.ElapsedMs } };
+                }
+            }
+        ]);
     }
 }
 
