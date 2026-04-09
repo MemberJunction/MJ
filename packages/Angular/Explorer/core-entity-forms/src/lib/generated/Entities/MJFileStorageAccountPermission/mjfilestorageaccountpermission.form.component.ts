@@ -15,8 +15,8 @@ export class MJFileStorageAccountPermissionFormComponent extends BaseFormCompone
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'accessRights', sectionName: 'Access Rights', isExpanded: true },
-            { sectionKey: 'granteeDetails', sectionName: 'Grantee Details', isExpanded: true },
+            { sectionKey: 'accountPermissions', sectionName: 'Account Permissions', isExpanded: true },
+            { sectionKey: 'granteeInformation', sectionName: 'Grantee Information', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

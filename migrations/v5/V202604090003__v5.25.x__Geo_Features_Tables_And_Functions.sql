@@ -5,6 +5,11 @@
 --              and adds SupportsGeoCoding / AutoUpdateSupportsGeoCoding to Entity table and
 --              AutoUpdateExtendedType to EntityField table.
 
+
+-- fix a stale view 
+EXEC sp_refreshview '${flyway:defaultSchema}.vwApplicationEntities';
+
+
 -- ============================================================================
 -- Table 1: Country
 -- Reference table for countries with ISO codes, centroids, and boundary GeoJSON.
@@ -249,41 +254,104 @@ EXEC sp_addextendedproperty @name=N'MS_Description', @value=N'How this geocode w
     @level1type=N'TABLE',  @level1name=N'RecordGeoCode',
     @level2type=N'COLUMN', @level2name=N'GeocodingSource';
 
+GO
 
--- ============================================================================
--- ALTER Entity: Add SupportsGeoCoding and AutoUpdateSupportsGeoCoding columns
--- ============================================================================
-ALTER TABLE ${flyway:defaultSchema}.Entity
-ADD SupportsGeoCoding BIT NOT NULL DEFAULT 0,
-    AutoUpdateSupportsGeoCoding BIT NOT NULL DEFAULT 1;
+-- Function: fn_MJ_GeoDistance (Scalar — Haversine formula)
+-- Returns the great-circle distance between two lat/lng points.
+-- Unit: 'mi' for miles, 'km' for kilometers.
+CREATE FUNCTION ${flyway:defaultSchema}.fn_MJ_GeoDistance(
+    @Lat1 DECIMAL(10,6),
+    @Lng1 DECIMAL(10,6),
+    @Lat2 DECIMAL(10,6),
+    @Lng2 DECIMAL(10,6),
+    @Unit NVARCHAR(2)
+)
+RETURNS FLOAT
+AS
+BEGIN
+    DECLARE @R FLOAT = CASE WHEN @Unit = 'km' THEN 6371.0 ELSE 3959.0 END;
+    IF @Lat1 IS NULL OR @Lng1 IS NULL OR @Lat2 IS NULL OR @Lng2 IS NULL
+        RETURN NULL;
+    DECLARE @Lat1Rad FLOAT = RADIANS(CAST(@Lat1 AS FLOAT));
+    DECLARE @Lat2Rad FLOAT = RADIANS(CAST(@Lat2 AS FLOAT));
+    DECLARE @DeltaLat FLOAT = RADIANS(CAST(@Lat2 - @Lat1 AS FLOAT));
+    DECLARE @DeltaLng FLOAT = RADIANS(CAST(@Lng2 - @Lng1 AS FLOAT));
+    DECLARE @A FLOAT = SIN(@DeltaLat / 2.0) * SIN(@DeltaLat / 2.0)
+                     + COS(@Lat1Rad) * COS(@Lat2Rad)
+                     * SIN(@DeltaLng / 2.0) * SIN(@DeltaLng / 2.0);
+    DECLARE @C FLOAT = 2.0 * ATN2(SQRT(@A), SQRT(1.0 - @A));
+    RETURN @R * @C;
+END
 
-EXEC sp_addextendedproperty @name=N'MS_Description', @value=N'When true, CodeGen generates geo-aware subclass code, adds __mj_Latitude/__mj_Longitude virtual fields to the base view, and the UI shows a map view toggle. Auto-set by CodeGen when LLM detects geo-capable fields (address, lat/lng, etc.).',
+GO
+
+EXEC sp_addextendedproperty @name=N'MS_Description', @value=N'Calculates great-circle distance between two geographic points using the Haversine formula. Returns distance in miles (unit="mi") or kilometers (unit="km"). Baseline MJ geo infrastructure.',
     @level0type=N'SCHEMA', @level0name=N'${flyway:defaultSchema}',
-    @level1type=N'TABLE',  @level1name=N'Entity',
-    @level2type=N'COLUMN', @level2name=N'SupportsGeoCoding';
+    @level1type=N'FUNCTION', @level1name=N'fn_MJ_GeoDistance';
 
-EXEC sp_addextendedproperty @name=N'MS_Description', @value=N'When true (default), CodeGen can automatically set SupportsGeoCoding based on LLM analysis of entity fields. Set to 0 to lock the value and prevent CodeGen from changing it.',
+GO
+
+-- Function: fn_MJ_GeoRecordsNear (Inline Table-Valued Function)
+-- Returns RecordGeoCode rows within a given radius of a center point.
+-- Uses bounding box pre-filter for index usage, then Haversine for precision.
+CREATE FUNCTION ${flyway:defaultSchema}.fn_MJ_GeoRecordsNear(
+    @EntityName NVARCHAR(500),
+    @CenterLat DECIMAL(10,6),
+    @CenterLng DECIMAL(10,6),
+    @Radius FLOAT,
+    @Unit NVARCHAR(2)
+)
+RETURNS TABLE
+AS
+RETURN (
+    WITH BoundingBox AS (
+        SELECT
+            @Radius / (CASE WHEN @Unit = 'km' THEN 111.0 ELSE 69.0 END) AS LatDelta,
+            @Radius / (CASE WHEN @Unit = 'km' THEN 111.0 ELSE 69.0 END
+                        * COS(RADIANS(CAST(@CenterLat AS FLOAT)))) AS LngDelta
+    )
+    SELECT
+        rgc.ID,
+        rgc.EntityID,
+        rgc.RecordID,
+        rgc.LocationType,
+        rgc.Latitude,
+        rgc.Longitude,
+        rgc.Precision,
+        rgc.CountryID,
+        rgc.StateProvinceID,
+        rgc.Status,
+        rgc.GeocodingSource,
+        ${flyway:defaultSchema}.fn_MJ_GeoDistance(
+            rgc.Latitude, rgc.Longitude,
+            @CenterLat, @CenterLng,
+            @Unit
+        ) AS Distance
+    FROM ${flyway:defaultSchema}.RecordGeoCode rgc
+    INNER JOIN ${flyway:defaultSchema}.Entity e ON e.ID = rgc.EntityID
+    CROSS JOIN BoundingBox bb
+    WHERE e.Name = @EntityName
+      AND rgc.Status = 'success'
+      AND rgc.Latitude IS NOT NULL
+      AND rgc.Longitude IS NOT NULL
+      AND rgc.Latitude  BETWEEN @CenterLat - bb.LatDelta AND @CenterLat + bb.LatDelta
+      AND rgc.Longitude BETWEEN @CenterLng - bb.LngDelta AND @CenterLng + bb.LngDelta
+      AND ${flyway:defaultSchema}.fn_MJ_GeoDistance(
+              rgc.Latitude, rgc.Longitude,
+              @CenterLat, @CenterLng,
+              @Unit
+          ) <= @Radius
+)
+
+GO
+
+EXEC sp_addextendedproperty @name=N'MS_Description', @value=N'Inline table-valued function that returns RecordGeoCode rows within a given radius of a center point. Uses bounding box pre-filter for index utilization, then Haversine for precision. Takes Entity Name (unique string) for readability. Baseline MJ geo infrastructure.',
     @level0type=N'SCHEMA', @level0name=N'${flyway:defaultSchema}',
-    @level1type=N'TABLE',  @level1name=N'Entity',
-    @level2type=N'COLUMN', @level2name=N'AutoUpdateSupportsGeoCoding';
+    @level1type=N'FUNCTION', @level1name=N'fn_MJ_GeoRecordsNear';
 
 
--- ============================================================================
--- ALTER EntityField: Add AutoUpdateExtendedType column + update ExtendedType CHECK constraint
--- ============================================================================
-ALTER TABLE ${flyway:defaultSchema}.EntityField
-ADD AutoUpdateExtendedType BIT NOT NULL DEFAULT 1;
 
--- Update the CHECK constraint to include new Geo* ExtendedType values
-ALTER TABLE ${flyway:defaultSchema}.EntityField DROP CONSTRAINT CK_EntityField_ExtendedType;
-ALTER TABLE ${flyway:defaultSchema}.EntityField ADD CONSTRAINT CK_EntityField_ExtendedType CHECK (
-    ExtendedType IN ('Code', 'Email', 'FaceTime', 'Geo', 'GeoLatitude', 'GeoLongitude', 'GeoCountry', 'GeoStateProvince', 'GeoCity', 'GeoPostalCode', 'GeoAddress', 'MSTeams', 'Other', 'SIP', 'SMS', 'Skype', 'Tel', 'URL', 'WhatsApp', 'ZoomMtg')
-);
 
-EXEC sp_addextendedproperty @name=N'MS_Description', @value=N'When true (default), CodeGen can automatically suggest and apply ExtendedType values (GeoLatitude, GeoLongitude, GeoAddress, etc.) during LLM field categorization. Set to 0 to lock admin-specified ExtendedType.',
-    @level0type=N'SCHEMA', @level0name=N'${flyway:defaultSchema}',
-    @level1type=N'TABLE',  @level1name=N'EntityField',
-    @level2type=N'COLUMN', @level2name=N'AutoUpdateExtendedType';
 
 
 
@@ -317,60 +385,16 @@ EXEC sp_addextendedproperty @name=N'MS_Description', @value=N'When true (default
 
 
 
--- REFRESH METADATA AND RECOMPILE OBJECTS BEFORE RUNNING CODE GEN'S EMITTED OUTPUT
 
-/* SQL text to recompile all views */
-EXEC [${flyway:defaultSchema}].spRecompileAllViews
 
-/* SQL text to update existing entities from schema */
-EXEC [${flyway:defaultSchema}].spUpdateExistingEntitiesFromSchema @ExcludedSchemaNames='sys,staging'
 
-/* SQL text to sync schema info from database schemas */
-EXEC [${flyway:defaultSchema}].spUpdateSchemaInfoFromDatabase @ExcludedSchemaNames='sys,staging'
 
-/* SQL text to delete unneeded entity fields */
-EXEC [${flyway:defaultSchema}].spDeleteUnneededEntityFields @ExcludedSchemaNames='sys,staging'
 
-/* SQL text to update existing entity fields from schema */
-EXEC [${flyway:defaultSchema}].spUpdateExistingEntityFieldsFromSchema @ExcludedSchemaNames='sys,staging'
 
-/* SQL text to set default column width where needed */
-EXEC [${flyway:defaultSchema}].spSetDefaultColumnWidthWhereNeeded @ExcludedSchemaNames='sys,staging'
 
-/* SQL text to recompile all stored procedures in dependency order */
-EXEC [${flyway:defaultSchema}].spRecompileAllProceduresInDependencyOrder @ExcludedSchemaNames='sys,staging', @LogOutput=0, @ContinueOnError=1
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
--- ================================================================
--- CODEGEN OUTPUT
--- Auto-generated by MJ CodeGen. Do not manually edit below this line.
--- This includes: views, stored procedures, entity metadata, field
--- metadata, permissions, and other generated database objects for
--- the Country, StateProvince, and RecordGeoCode entities, plus
--- updated Entity and EntityField metadata for new columns.
--- Appended on: 2026-04-07
--- ================================================================
+-- CODE GEN RUN
 /* SQL generated to create new entity MJ: Countries */
 
       INSERT INTO [${flyway:defaultSchema}].[Entity] (
@@ -396,7 +420,7 @@ EXEC [${flyway:defaultSchema}].spRecompileAllProceduresInDependencyOrder @Exclud
          , [__mj_UpdatedAt]
       )
       VALUES (
-         'fa590c2b-ac93-4705-b77f-e29199f18b2b',
+         '3bfe55c1-8fd5-44a4-accb-dabb4e8428e2',
          'MJ: Countries',
          'Countries',
          'Reference table for countries with ISO 3166-1 codes, geographic centroids, and optional medium-resolution boundary GeoJSON for choropleth rendering. Seeded with ~250 countries.',
@@ -422,22 +446,22 @@ EXEC [${flyway:defaultSchema}].spRecompileAllProceduresInDependencyOrder @Exclud
 /* SQL generated to add new entity MJ: Countries to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
 INSERT INTO [${flyway:defaultSchema}].[ApplicationEntity]
                                        ([ApplicationID], [EntityID], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', 'fa590c2b-ac93-4705-b77f-e29199f18b2b', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE())
+                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '3bfe55c1-8fd5-44a4-accb-dabb4e8428e2', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE())
 
 /* SQL generated to add new permission for entity MJ: Countries for role UI */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('fa590c2b-ac93-4705-b77f-e29199f18b2b', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE())
+                                                   ('3bfe55c1-8fd5-44a4-accb-dabb4e8428e2', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE())
 
 /* SQL generated to add new permission for entity MJ: Countries for role Developer */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('fa590c2b-ac93-4705-b77f-e29199f18b2b', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0, GETUTCDATE(), GETUTCDATE())
+                                                   ('3bfe55c1-8fd5-44a4-accb-dabb4e8428e2', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0, GETUTCDATE(), GETUTCDATE())
 
 /* SQL generated to add new permission for entity MJ: Countries for role Integration */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('fa590c2b-ac93-4705-b77f-e29199f18b2b', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE())
+                                                   ('3bfe55c1-8fd5-44a4-accb-dabb4e8428e2', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE())
 
 /* SQL generated to create new entity MJ: State Provinces */
 
@@ -464,7 +488,7 @@ INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
          , [__mj_UpdatedAt]
       )
       VALUES (
-         '3532d81d-9f69-4e5f-8c08-0e5612e0ec84',
+         '12c21789-12cc-4a8c-81ed-ffcbc1d69336',
          'MJ: State Provinces',
          'State Provinces',
          'Reference table for states, provinces, and first-level administrative divisions. Linked to Country via FK. Seeded with ~5,000 records with ISO 3166-2 codes, centroids, and optional boundary GeoJSON.',
@@ -490,22 +514,22 @@ INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
 /* SQL generated to add new entity MJ: State Provinces to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
 INSERT INTO [${flyway:defaultSchema}].[ApplicationEntity]
                                        ([ApplicationID], [EntityID], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '3532d81d-9f69-4e5f-8c08-0e5612e0ec84', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE())
+                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '12c21789-12cc-4a8c-81ed-ffcbc1d69336', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE())
 
 /* SQL generated to add new permission for entity MJ: State Provinces for role UI */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('3532d81d-9f69-4e5f-8c08-0e5612e0ec84', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE())
+                                                   ('12c21789-12cc-4a8c-81ed-ffcbc1d69336', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE())
 
 /* SQL generated to add new permission for entity MJ: State Provinces for role Developer */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('3532d81d-9f69-4e5f-8c08-0e5612e0ec84', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0, GETUTCDATE(), GETUTCDATE())
+                                                   ('12c21789-12cc-4a8c-81ed-ffcbc1d69336', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0, GETUTCDATE(), GETUTCDATE())
 
 /* SQL generated to add new permission for entity MJ: State Provinces for role Integration */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('3532d81d-9f69-4e5f-8c08-0e5612e0ec84', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE())
+                                                   ('12c21789-12cc-4a8c-81ed-ffcbc1d69336', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE())
 
 /* SQL generated to create new entity MJ: Record Geo Codes */
 
@@ -532,7 +556,7 @@ INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
          , [__mj_UpdatedAt]
       )
       VALUES (
-         'c1f5719c-3545-41f5-a99e-b8497b50279b',
+         '54ef915a-9902-4958-8e09-ae6e7b525e97',
          'MJ: Record Geo Codes',
          'Record Geo Codes',
          'Polymorphic table storing persisted geocoding results for any MJ entity record. Each row maps an entity record + location type to a lat/lng coordinate, with optional country/state references for choropleth grouping. Supports multi-location entities via LocationType discriminator.',
@@ -558,98 +582,122 @@ INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
 /* SQL generated to add new entity MJ: Record Geo Codes to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
 INSERT INTO [${flyway:defaultSchema}].[ApplicationEntity]
                                        ([ApplicationID], [EntityID], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', 'c1f5719c-3545-41f5-a99e-b8497b50279b', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE())
+                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '54ef915a-9902-4958-8e09-ae6e7b525e97', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE())
 
 /* SQL generated to add new permission for entity MJ: Record Geo Codes for role UI */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('c1f5719c-3545-41f5-a99e-b8497b50279b', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE())
+                                                   ('54ef915a-9902-4958-8e09-ae6e7b525e97', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE())
 
 /* SQL generated to add new permission for entity MJ: Record Geo Codes for role Developer */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('c1f5719c-3545-41f5-a99e-b8497b50279b', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0, GETUTCDATE(), GETUTCDATE())
+                                                   ('54ef915a-9902-4958-8e09-ae6e7b525e97', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0, GETUTCDATE(), GETUTCDATE())
 
 /* SQL generated to add new permission for entity MJ: Record Geo Codes for role Integration */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('c1f5719c-3545-41f5-a99e-b8497b50279b', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE())
-
-/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.StateProvince */
-ALTER TABLE [${flyway:defaultSchema}].[StateProvince] ADD [__mj_CreatedAt] DATETIMEOFFSET NULL
-
-/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.StateProvince */
-UPDATE [${flyway:defaultSchema}].[StateProvince] SET [__mj_CreatedAt] = GETUTCDATE() WHERE [__mj_CreatedAt] IS NULL
-
-/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.StateProvince */
-ALTER TABLE [${flyway:defaultSchema}].[StateProvince] ALTER COLUMN [__mj_CreatedAt] DATETIMEOFFSET NOT NULL
-
-/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.StateProvince */
-ALTER TABLE [${flyway:defaultSchema}].[StateProvince] ADD CONSTRAINT [DF___mj_StateProvince___mj_CreatedAt] DEFAULT GETUTCDATE() FOR [__mj_CreatedAt]
-
-/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.StateProvince */
-ALTER TABLE [${flyway:defaultSchema}].[StateProvince] ADD [__mj_UpdatedAt] DATETIMEOFFSET NULL
-
-/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.StateProvince */
-UPDATE [${flyway:defaultSchema}].[StateProvince] SET [__mj_UpdatedAt] = GETUTCDATE() WHERE [__mj_UpdatedAt] IS NULL
-
-/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.StateProvince */
-ALTER TABLE [${flyway:defaultSchema}].[StateProvince] ALTER COLUMN [__mj_UpdatedAt] DATETIMEOFFSET NOT NULL
-
-/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.StateProvince */
-ALTER TABLE [${flyway:defaultSchema}].[StateProvince] ADD CONSTRAINT [DF___mj_StateProvince___mj_UpdatedAt] DEFAULT GETUTCDATE() FOR [__mj_UpdatedAt]
+                                                   ('54ef915a-9902-4958-8e09-ae6e7b525e97', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE())
 
 /* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.RecordGeoCode */
 ALTER TABLE [${flyway:defaultSchema}].[RecordGeoCode] ADD [__mj_CreatedAt] DATETIMEOFFSET NULL
+GO
 
 /* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.RecordGeoCode */
 UPDATE [${flyway:defaultSchema}].[RecordGeoCode] SET [__mj_CreatedAt] = GETUTCDATE() WHERE [__mj_CreatedAt] IS NULL
+GO
 
 /* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.RecordGeoCode */
 ALTER TABLE [${flyway:defaultSchema}].[RecordGeoCode] ALTER COLUMN [__mj_CreatedAt] DATETIMEOFFSET NOT NULL
+GO
 
 /* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.RecordGeoCode */
 ALTER TABLE [${flyway:defaultSchema}].[RecordGeoCode] ADD CONSTRAINT [DF___mj_RecordGeoCode___mj_CreatedAt] DEFAULT GETUTCDATE() FOR [__mj_CreatedAt]
+GO
 
 /* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.RecordGeoCode */
 ALTER TABLE [${flyway:defaultSchema}].[RecordGeoCode] ADD [__mj_UpdatedAt] DATETIMEOFFSET NULL
+GO
 
 /* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.RecordGeoCode */
 UPDATE [${flyway:defaultSchema}].[RecordGeoCode] SET [__mj_UpdatedAt] = GETUTCDATE() WHERE [__mj_UpdatedAt] IS NULL
+GO
 
 /* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.RecordGeoCode */
 ALTER TABLE [${flyway:defaultSchema}].[RecordGeoCode] ALTER COLUMN [__mj_UpdatedAt] DATETIMEOFFSET NOT NULL
+GO
 
 /* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.RecordGeoCode */
 ALTER TABLE [${flyway:defaultSchema}].[RecordGeoCode] ADD CONSTRAINT [DF___mj_RecordGeoCode___mj_UpdatedAt] DEFAULT GETUTCDATE() FOR [__mj_UpdatedAt]
+GO
 
 /* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.Country */
 ALTER TABLE [${flyway:defaultSchema}].[Country] ADD [__mj_CreatedAt] DATETIMEOFFSET NULL
+GO
 
 /* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.Country */
 UPDATE [${flyway:defaultSchema}].[Country] SET [__mj_CreatedAt] = GETUTCDATE() WHERE [__mj_CreatedAt] IS NULL
+GO
 
 /* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.Country */
 ALTER TABLE [${flyway:defaultSchema}].[Country] ALTER COLUMN [__mj_CreatedAt] DATETIMEOFFSET NOT NULL
+GO
 
 /* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.Country */
 ALTER TABLE [${flyway:defaultSchema}].[Country] ADD CONSTRAINT [DF___mj_Country___mj_CreatedAt] DEFAULT GETUTCDATE() FOR [__mj_CreatedAt]
+GO
 
 /* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.Country */
 ALTER TABLE [${flyway:defaultSchema}].[Country] ADD [__mj_UpdatedAt] DATETIMEOFFSET NULL
+GO
 
 /* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.Country */
 UPDATE [${flyway:defaultSchema}].[Country] SET [__mj_UpdatedAt] = GETUTCDATE() WHERE [__mj_UpdatedAt] IS NULL
+GO
 
 /* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.Country */
 ALTER TABLE [${flyway:defaultSchema}].[Country] ALTER COLUMN [__mj_UpdatedAt] DATETIMEOFFSET NOT NULL
+GO
 
 /* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.Country */
 ALTER TABLE [${flyway:defaultSchema}].[Country] ADD CONSTRAINT [DF___mj_Country___mj_UpdatedAt] DEFAULT GETUTCDATE() FOR [__mj_UpdatedAt]
+GO
+
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.StateProvince */
+ALTER TABLE [${flyway:defaultSchema}].[StateProvince] ADD [__mj_CreatedAt] DATETIMEOFFSET NULL
+GO
+
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.StateProvince */
+UPDATE [${flyway:defaultSchema}].[StateProvince] SET [__mj_CreatedAt] = GETUTCDATE() WHERE [__mj_CreatedAt] IS NULL
+GO
+
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.StateProvince */
+ALTER TABLE [${flyway:defaultSchema}].[StateProvince] ALTER COLUMN [__mj_CreatedAt] DATETIMEOFFSET NOT NULL
+GO
+
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.StateProvince */
+ALTER TABLE [${flyway:defaultSchema}].[StateProvince] ADD CONSTRAINT [DF___mj_StateProvince___mj_CreatedAt] DEFAULT GETUTCDATE() FOR [__mj_CreatedAt]
+GO
+
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.StateProvince */
+ALTER TABLE [${flyway:defaultSchema}].[StateProvince] ADD [__mj_UpdatedAt] DATETIMEOFFSET NULL
+GO
+
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.StateProvince */
+UPDATE [${flyway:defaultSchema}].[StateProvince] SET [__mj_UpdatedAt] = GETUTCDATE() WHERE [__mj_UpdatedAt] IS NULL
+GO
+
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.StateProvince */
+ALTER TABLE [${flyway:defaultSchema}].[StateProvince] ALTER COLUMN [__mj_UpdatedAt] DATETIMEOFFSET NOT NULL
+GO
+
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.StateProvince */
+ALTER TABLE [${flyway:defaultSchema}].[StateProvince] ADD CONSTRAINT [DF___mj_StateProvince___mj_UpdatedAt] DEFAULT GETUTCDATE() FOR [__mj_UpdatedAt]
+GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '4e122e0d-cebd-4e4a-bcff-a9218aa6dc52' OR (EntityID = '3532D81D-9F69-4E5F-8C08-0E5612E0EC84' AND Name = 'ID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '797360ef-109d-4a8f-b040-5b2141db37c5' OR (EntityID = '54EF915A-9902-4958-8E09-AE6E7B525E97' AND Name = 'ID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -681,8 +729,8 @@ ALTER TABLE [${flyway:defaultSchema}].[Country] ADD CONSTRAINT [DF___mj_Country_
          )
          VALUES
          (
-            '4e122e0d-cebd-4e4a-bcff-a9218aa6dc52',
-            '3532D81D-9F69-4E5F-8C08-0E5612E0EC84', -- Entity: MJ: State Provinces
+            '797360ef-109d-4a8f-b040-5b2141db37c5',
+            '54EF915A-9902-4958-8E09-AE6E7B525E97', -- Entity: MJ: Record Geo Codes
             100001,
             'ID',
             'ID',
@@ -712,7 +760,7 @@ ALTER TABLE [${flyway:defaultSchema}].[Country] ADD CONSTRAINT [DF___mj_Country_
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '39404160-26bf-43cc-96bb-7c44d77112f9' OR (EntityID = '3532D81D-9F69-4E5F-8C08-0E5612E0EC84' AND Name = 'CountryID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '2174c80e-d364-4dba-92f6-eeaada410bd7' OR (EntityID = '54EF915A-9902-4958-8E09-AE6E7B525E97' AND Name = 'EntityID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -744,890 +792,8 @@ ALTER TABLE [${flyway:defaultSchema}].[Country] ADD CONSTRAINT [DF___mj_Country_
          )
          VALUES
          (
-            '39404160-26bf-43cc-96bb-7c44d77112f9',
-            '3532D81D-9F69-4E5F-8C08-0E5612E0EC84', -- Entity: MJ: State Provinces
-            100002,
-            'CountryID',
-            'Country ID',
-            'Foreign key to Country. Establishes the parent country for this state/province.',
-            'uniqueidentifier',
-            16,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            'FA590C2B-AC93-4705-B77F-E29199F18B2B',
-            'ID',
-            0,
-            0,
-            1,
-            0,
-            0,
-            1,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'd00bb1fc-b852-4fdf-8b80-1189f6f1955c' OR (EntityID = '3532D81D-9F69-4E5F-8C08-0E5612E0EC84' AND Name = 'Name')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'd00bb1fc-b852-4fdf-8b80-1189f6f1955c',
-            '3532D81D-9F69-4E5F-8C08-0E5612E0EC84', -- Entity: MJ: State Provinces
-            100003,
-            'Name',
-            'Name',
-            'Full state/province name (e.g., "California", "Ontario").',
-            'nvarchar',
-            400,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            NULL,
-            NULL,
-            1,
-            1,
-            0,
-            1,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'f87d7ef9-5da3-477e-8737-3d92fb239418' OR (EntityID = '3532D81D-9F69-4E5F-8C08-0E5612E0EC84' AND Name = 'Code')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'f87d7ef9-5da3-477e-8737-3d92fb239418',
-            '3532D81D-9F69-4E5F-8C08-0E5612E0EC84', -- Entity: MJ: State Provinces
-            100004,
-            'Code',
-            'Code',
-            'Short code within the country (e.g., "CA", "ON"). Unique per country via compound constraint.',
-            'nvarchar',
-            20,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            1,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '1063afa6-4bc5-4401-8a1b-cd16ea61ac16' OR (EntityID = '3532D81D-9F69-4E5F-8C08-0E5612E0EC84' AND Name = 'ISO3166_2')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '1063afa6-4bc5-4401-8a1b-cd16ea61ac16',
-            '3532D81D-9F69-4E5F-8C08-0E5612E0EC84', -- Entity: MJ: State Provinces
-            100005,
-            'ISO3166_2',
-            'Iso 31662',
-            'ISO 3166-2 subdivision code (e.g., "US-CA", "CA-ON"). Globally unique.',
-            'nvarchar',
-            20,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            1,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '73be71e9-bdbf-4718-b66b-eea8bc7416d7' OR (EntityID = '3532D81D-9F69-4E5F-8C08-0E5612E0EC84' AND Name = 'Latitude')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '73be71e9-bdbf-4718-b66b-eea8bc7416d7',
-            '3532D81D-9F69-4E5F-8C08-0E5612E0EC84', -- Entity: MJ: State Provinces
-            100006,
-            'Latitude',
-            'Latitude',
-            'Geographic centroid latitude. Used as fallback point for state-level geocoding.',
-            'decimal',
-            9,
-            10,
-            6,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '788a8200-303e-4ac3-b718-d15bf686a245' OR (EntityID = '3532D81D-9F69-4E5F-8C08-0E5612E0EC84' AND Name = 'Longitude')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '788a8200-303e-4ac3-b718-d15bf686a245',
-            '3532D81D-9F69-4E5F-8C08-0E5612E0EC84', -- Entity: MJ: State Provinces
-            100007,
-            'Longitude',
-            'Longitude',
-            'Geographic centroid longitude. Used as fallback point for state-level geocoding.',
-            'decimal',
-            9,
-            10,
-            6,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'e789ba5e-ba34-4d8d-b5d9-76dfe1335bdb' OR (EntityID = '3532D81D-9F69-4E5F-8C08-0E5612E0EC84' AND Name = 'BoundaryGeoJSON')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'e789ba5e-ba34-4d8d-b5d9-76dfe1335bdb',
-            '3532D81D-9F69-4E5F-8C08-0E5612E0EC84', -- Entity: MJ: State Provinces
-            100008,
-            'BoundaryGeoJSON',
-            'Boundary Geo JSON',
-            'Medium-resolution (~50m) GeoJSON boundary polygon for choropleth map rendering. Nullable. Total ~15-20MB for all states/provinces worldwide.',
-            'nvarchar',
-            -1,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'b8e3f19b-806f-4f59-b24a-3f18c51dc1a6' OR (EntityID = '3532D81D-9F69-4E5F-8C08-0E5612E0EC84' AND Name = 'CommonAliases')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'b8e3f19b-806f-4f59-b24a-3f18c51dc1a6',
-            '3532D81D-9F69-4E5F-8C08-0E5612E0EC84', -- Entity: MJ: State Provinces
-            100009,
-            'CommonAliases',
-            'Common Aliases',
-            'JSON array of common aliases (e.g., ["Calif.","California","Cal"]). Used by GeoResolver for fuzzy text-to-state matching.',
-            'nvarchar',
-            -1,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '2ee0e3b3-f786-4d5d-b948-cecdd2072a09' OR (EntityID = '3532D81D-9F69-4E5F-8C08-0E5612E0EC84' AND Name = '__mj_CreatedAt')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '2ee0e3b3-f786-4d5d-b948-cecdd2072a09',
-            '3532D81D-9F69-4E5F-8C08-0E5612E0EC84', -- Entity: MJ: State Provinces
-            100010,
-            '__mj_CreatedAt',
-            'Created At',
-            NULL,
-            'datetimeoffset',
-            10,
-            34,
-            7,
-            0,
-            'getutcdate()',
-            0,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '7ff623ea-64bc-4381-aabd-9989dc3ac67b' OR (EntityID = '3532D81D-9F69-4E5F-8C08-0E5612E0EC84' AND Name = '__mj_UpdatedAt')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '7ff623ea-64bc-4381-aabd-9989dc3ac67b',
-            '3532D81D-9F69-4E5F-8C08-0E5612E0EC84', -- Entity: MJ: State Provinces
-            100011,
-            '__mj_UpdatedAt',
-            'Updated At',
-            NULL,
-            'datetimeoffset',
-            10,
-            34,
-            7,
-            0,
-            'getutcdate()',
-            0,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '74fd4a57-66ad-4e7a-95e1-6181b8a8a9d5' OR (EntityID = 'DF238F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'AutoUpdateExtendedType')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '74fd4a57-66ad-4e7a-95e1-6181b8a8a9d5',
-            'DF238F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: MJ: Entity Fields
-            100133,
-            'AutoUpdateExtendedType',
-            'Auto Update Extended Type',
-            'When true (default), CodeGen can automatically suggest and apply ExtendedType values (GeoLatitude, GeoLongitude, GeoAddress, etc.) during LLM field categorization. Set to 0 to lock admin-specified ExtendedType.',
-            'bit',
-            1,
-            1,
-            0,
-            0,
-            '(1)',
-            0,
-            1,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '323e1914-aef1-4a6e-908b-2ca0376933f4' OR (EntityID = 'E0238F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'SupportsGeoCoding')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '323e1914-aef1-4a6e-908b-2ca0376933f4',
-            'E0238F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: MJ: Entities
-            100125,
-            'SupportsGeoCoding',
-            'Supports Geo Coding',
-            'When true, CodeGen generates geo-aware subclass code, adds ${flyway:defaultSchema}_Latitude/${flyway:defaultSchema}_Longitude virtual fields to the base view, and the UI shows a map view toggle. Auto-set by CodeGen when LLM detects geo-capable fields (address, lat/lng, etc.).',
-            'bit',
-            1,
-            1,
-            0,
-            0,
-            '(0)',
-            0,
-            1,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'e5ac48a3-b0be-4d33-b702-0421886b116a' OR (EntityID = 'E0238F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'AutoUpdateSupportsGeoCoding')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'e5ac48a3-b0be-4d33-b702-0421886b116a',
-            'E0238F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: MJ: Entities
-            100126,
-            'AutoUpdateSupportsGeoCoding',
-            'Auto Update Supports Geo Coding',
-            'When true (default), CodeGen can automatically set SupportsGeoCoding based on LLM analysis of entity fields. Set to 0 to lock the value and prevent CodeGen from changing it.',
-            'bit',
-            1,
-            1,
-            0,
-            0,
-            '(1)',
-            0,
-            1,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '940da78d-40cf-4d2b-b01a-08872f05fe8f' OR (EntityID = 'C1F5719C-3545-41F5-A99E-B8497B50279B' AND Name = 'ID')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '940da78d-40cf-4d2b-b01a-08872f05fe8f',
-            'C1F5719C-3545-41F5-A99E-B8497B50279B', -- Entity: MJ: Record Geo Codes
-            100001,
-            'ID',
-            'ID',
-            NULL,
-            'uniqueidentifier',
-            16,
-            0,
-            0,
-            0,
-            'newsequentialid()',
-            0,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            1,
-            1,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '80b13af6-7a9c-4357-9b28-de17273105da' OR (EntityID = 'C1F5719C-3545-41F5-A99E-B8497B50279B' AND Name = 'EntityID')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '80b13af6-7a9c-4357-9b28-de17273105da',
-            'C1F5719C-3545-41F5-A99E-B8497B50279B', -- Entity: MJ: Record Geo Codes
+            '2174c80e-d364-4dba-92f6-eeaada410bd7',
+            '54EF915A-9902-4958-8E09-AE6E7B525E97', -- Entity: MJ: Record Geo Codes
             100002,
             'EntityID',
             'Entity ID',
@@ -1657,7 +823,7 @@ ALTER TABLE [${flyway:defaultSchema}].[Country] ADD CONSTRAINT [DF___mj_Country_
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'eeab97a2-d639-4a76-a016-c23b352e82ab' OR (EntityID = 'C1F5719C-3545-41F5-A99E-B8497B50279B' AND Name = 'RecordID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'f51815bb-b7f2-476f-b0b4-8119eeede33b' OR (EntityID = '54EF915A-9902-4958-8E09-AE6E7B525E97' AND Name = 'RecordID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1689,8 +855,8 @@ ALTER TABLE [${flyway:defaultSchema}].[Country] ADD CONSTRAINT [DF___mj_Country_
          )
          VALUES
          (
-            'eeab97a2-d639-4a76-a016-c23b352e82ab',
-            'C1F5719C-3545-41F5-A99E-B8497B50279B', -- Entity: MJ: Record Geo Codes
+            'f51815bb-b7f2-476f-b0b4-8119eeede33b',
+            '54EF915A-9902-4958-8E09-AE6E7B525E97', -- Entity: MJ: Record Geo Codes
             100003,
             'RecordID',
             'Record ID',
@@ -1720,7 +886,7 @@ ALTER TABLE [${flyway:defaultSchema}].[Country] ADD CONSTRAINT [DF___mj_Country_
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '680300a6-31e0-43e3-a328-465e7a041801' OR (EntityID = 'C1F5719C-3545-41F5-A99E-B8497B50279B' AND Name = 'LocationType')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'f3e3af4a-10e0-443a-a744-c6cd004c5c31' OR (EntityID = '54EF915A-9902-4958-8E09-AE6E7B525E97' AND Name = 'LocationType')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1752,8 +918,8 @@ ALTER TABLE [${flyway:defaultSchema}].[Country] ADD CONSTRAINT [DF___mj_Country_
          )
          VALUES
          (
-            '680300a6-31e0-43e3-a328-465e7a041801',
-            'C1F5719C-3545-41F5-A99E-B8497B50279B', -- Entity: MJ: Record Geo Codes
+            'f3e3af4a-10e0-443a-a744-c6cd004c5c31',
+            '54EF915A-9902-4958-8E09-AE6E7B525E97', -- Entity: MJ: Record Geo Codes
             100004,
             'LocationType',
             'Location Type',
@@ -1783,7 +949,7 @@ ALTER TABLE [${flyway:defaultSchema}].[Country] ADD CONSTRAINT [DF___mj_Country_
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '6f7f00e3-2d99-4eea-b0ab-8e475511ea1f' OR (EntityID = 'C1F5719C-3545-41F5-A99E-B8497B50279B' AND Name = 'Latitude')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'bad1868e-5d5a-4287-afcf-352c2a3e6699' OR (EntityID = '54EF915A-9902-4958-8E09-AE6E7B525E97' AND Name = 'Latitude')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1815,8 +981,8 @@ ALTER TABLE [${flyway:defaultSchema}].[Country] ADD CONSTRAINT [DF___mj_Country_
          )
          VALUES
          (
-            '6f7f00e3-2d99-4eea-b0ab-8e475511ea1f',
-            'C1F5719C-3545-41F5-A99E-B8497B50279B', -- Entity: MJ: Record Geo Codes
+            'bad1868e-5d5a-4287-afcf-352c2a3e6699',
+            '54EF915A-9902-4958-8E09-AE6E7B525E97', -- Entity: MJ: Record Geo Codes
             100005,
             'Latitude',
             'Latitude',
@@ -1846,7 +1012,7 @@ ALTER TABLE [${flyway:defaultSchema}].[Country] ADD CONSTRAINT [DF___mj_Country_
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '76b9122b-4892-4f9f-8509-5b76efc7beaf' OR (EntityID = 'C1F5719C-3545-41F5-A99E-B8497B50279B' AND Name = 'Longitude')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'ec46b3e9-73ab-48cd-b231-4d7312badbbe' OR (EntityID = '54EF915A-9902-4958-8E09-AE6E7B525E97' AND Name = 'Longitude')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1878,8 +1044,8 @@ ALTER TABLE [${flyway:defaultSchema}].[Country] ADD CONSTRAINT [DF___mj_Country_
          )
          VALUES
          (
-            '76b9122b-4892-4f9f-8509-5b76efc7beaf',
-            'C1F5719C-3545-41F5-A99E-B8497B50279B', -- Entity: MJ: Record Geo Codes
+            'ec46b3e9-73ab-48cd-b231-4d7312badbbe',
+            '54EF915A-9902-4958-8E09-AE6E7B525E97', -- Entity: MJ: Record Geo Codes
             100006,
             'Longitude',
             'Longitude',
@@ -1909,7 +1075,7 @@ ALTER TABLE [${flyway:defaultSchema}].[Country] ADD CONSTRAINT [DF___mj_Country_
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'd833416b-295b-4d37-99a8-a51b972b36dd' OR (EntityID = 'C1F5719C-3545-41F5-A99E-B8497B50279B' AND Name = 'Precision')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '4ccd7fd8-7341-499f-b199-4d65d87203db' OR (EntityID = '54EF915A-9902-4958-8E09-AE6E7B525E97' AND Name = 'Precision')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1941,8 +1107,8 @@ ALTER TABLE [${flyway:defaultSchema}].[Country] ADD CONSTRAINT [DF___mj_Country_
          )
          VALUES
          (
-            'd833416b-295b-4d37-99a8-a51b972b36dd',
-            'C1F5719C-3545-41F5-A99E-B8497B50279B', -- Entity: MJ: Record Geo Codes
+            '4ccd7fd8-7341-499f-b199-4d65d87203db',
+            '54EF915A-9902-4958-8E09-AE6E7B525E97', -- Entity: MJ: Record Geo Codes
             100007,
             'Precision',
             'Precision',
@@ -1972,7 +1138,7 @@ ALTER TABLE [${flyway:defaultSchema}].[Country] ADD CONSTRAINT [DF___mj_Country_
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '87afa08f-7884-4a02-a60c-f8c3925e73eb' OR (EntityID = 'C1F5719C-3545-41F5-A99E-B8497B50279B' AND Name = 'CountryID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '82f838dd-b57b-4aad-aef1-04e381e2971f' OR (EntityID = '54EF915A-9902-4958-8E09-AE6E7B525E97' AND Name = 'CountryID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2004,8 +1170,8 @@ ALTER TABLE [${flyway:defaultSchema}].[Country] ADD CONSTRAINT [DF___mj_Country_
          )
          VALUES
          (
-            '87afa08f-7884-4a02-a60c-f8c3925e73eb',
-            'C1F5719C-3545-41F5-A99E-B8497B50279B', -- Entity: MJ: Record Geo Codes
+            '82f838dd-b57b-4aad-aef1-04e381e2971f',
+            '54EF915A-9902-4958-8E09-AE6E7B525E97', -- Entity: MJ: Record Geo Codes
             100008,
             'CountryID',
             'Country ID',
@@ -2019,7 +1185,7 @@ ALTER TABLE [${flyway:defaultSchema}].[Country] ADD CONSTRAINT [DF___mj_Country_
             0,
             1,
             0,
-            'FA590C2B-AC93-4705-B77F-E29199F18B2B',
+            '3BFE55C1-8FD5-44A4-ACCB-DABB4E8428E2',
             'ID',
             0,
             0,
@@ -2035,7 +1201,7 @@ ALTER TABLE [${flyway:defaultSchema}].[Country] ADD CONSTRAINT [DF___mj_Country_
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'ff275a36-0084-4833-a9be-3c15f79c9fc2' OR (EntityID = 'C1F5719C-3545-41F5-A99E-B8497B50279B' AND Name = 'StateProvinceID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '73458121-bbfc-40fa-a093-d2b939839211' OR (EntityID = '54EF915A-9902-4958-8E09-AE6E7B525E97' AND Name = 'StateProvinceID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2067,8 +1233,8 @@ ALTER TABLE [${flyway:defaultSchema}].[Country] ADD CONSTRAINT [DF___mj_Country_
          )
          VALUES
          (
-            'ff275a36-0084-4833-a9be-3c15f79c9fc2',
-            'C1F5719C-3545-41F5-A99E-B8497B50279B', -- Entity: MJ: Record Geo Codes
+            '73458121-bbfc-40fa-a093-d2b939839211',
+            '54EF915A-9902-4958-8E09-AE6E7B525E97', -- Entity: MJ: Record Geo Codes
             100009,
             'StateProvinceID',
             'State Province ID',
@@ -2082,7 +1248,7 @@ ALTER TABLE [${flyway:defaultSchema}].[Country] ADD CONSTRAINT [DF___mj_Country_
             0,
             1,
             0,
-            '3532D81D-9F69-4E5F-8C08-0E5612E0EC84',
+            '12C21789-12CC-4A8C-81ED-FFCBC1D69336',
             'ID',
             0,
             0,
@@ -2098,7 +1264,7 @@ ALTER TABLE [${flyway:defaultSchema}].[Country] ADD CONSTRAINT [DF___mj_Country_
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '28ec2154-1a69-4eda-b27b-ccf22899d1de' OR (EntityID = 'C1F5719C-3545-41F5-A99E-B8497B50279B' AND Name = 'Status')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '32396f7d-f786-4612-ba91-78006867fc63' OR (EntityID = '54EF915A-9902-4958-8E09-AE6E7B525E97' AND Name = 'Status')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2130,8 +1296,8 @@ ALTER TABLE [${flyway:defaultSchema}].[Country] ADD CONSTRAINT [DF___mj_Country_
          )
          VALUES
          (
-            '28ec2154-1a69-4eda-b27b-ccf22899d1de',
-            'C1F5719C-3545-41F5-A99E-B8497B50279B', -- Entity: MJ: Record Geo Codes
+            '32396f7d-f786-4612-ba91-78006867fc63',
+            '54EF915A-9902-4958-8E09-AE6E7B525E97', -- Entity: MJ: Record Geo Codes
             100010,
             'Status',
             'Status',
@@ -2161,7 +1327,7 @@ ALTER TABLE [${flyway:defaultSchema}].[Country] ADD CONSTRAINT [DF___mj_Country_
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'c64890cc-e01f-4d25-9ba3-056c32078605' OR (EntityID = 'C1F5719C-3545-41F5-A99E-B8497B50279B' AND Name = 'ErrorMessage')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '2b5fe6b9-b64f-401b-aef2-1613456109e5' OR (EntityID = '54EF915A-9902-4958-8E09-AE6E7B525E97' AND Name = 'ErrorMessage')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2193,8 +1359,8 @@ ALTER TABLE [${flyway:defaultSchema}].[Country] ADD CONSTRAINT [DF___mj_Country_
          )
          VALUES
          (
-            'c64890cc-e01f-4d25-9ba3-056c32078605',
-            'C1F5719C-3545-41F5-A99E-B8497B50279B', -- Entity: MJ: Record Geo Codes
+            '2b5fe6b9-b64f-401b-aef2-1613456109e5',
+            '54EF915A-9902-4958-8E09-AE6E7B525E97', -- Entity: MJ: Record Geo Codes
             100011,
             'ErrorMessage',
             'Error Message',
@@ -2224,7 +1390,7 @@ ALTER TABLE [${flyway:defaultSchema}].[Country] ADD CONSTRAINT [DF___mj_Country_
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '293f1a7c-3d11-4c48-9fec-7b2d39646693' OR (EntityID = 'C1F5719C-3545-41F5-A99E-B8497B50279B' AND Name = 'RetryCount')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '4dae2800-36fc-49c5-8d3e-64eaf15708a0' OR (EntityID = '54EF915A-9902-4958-8E09-AE6E7B525E97' AND Name = 'RetryCount')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2256,8 +1422,8 @@ ALTER TABLE [${flyway:defaultSchema}].[Country] ADD CONSTRAINT [DF___mj_Country_
          )
          VALUES
          (
-            '293f1a7c-3d11-4c48-9fec-7b2d39646693',
-            'C1F5719C-3545-41F5-A99E-B8497B50279B', -- Entity: MJ: Record Geo Codes
+            '4dae2800-36fc-49c5-8d3e-64eaf15708a0',
+            '54EF915A-9902-4958-8E09-AE6E7B525E97', -- Entity: MJ: Record Geo Codes
             100012,
             'RetryCount',
             'Retry Count',
@@ -2287,7 +1453,7 @@ ALTER TABLE [${flyway:defaultSchema}].[Country] ADD CONSTRAINT [DF___mj_Country_
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '7dc337d1-3aa2-45aa-bf8e-81ab60686783' OR (EntityID = 'C1F5719C-3545-41F5-A99E-B8497B50279B' AND Name = 'SourceFieldHash')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'b1b38354-d8a9-4079-a15f-8eccfd558576' OR (EntityID = '54EF915A-9902-4958-8E09-AE6E7B525E97' AND Name = 'SourceFieldHash')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2319,8 +1485,8 @@ ALTER TABLE [${flyway:defaultSchema}].[Country] ADD CONSTRAINT [DF___mj_Country_
          )
          VALUES
          (
-            '7dc337d1-3aa2-45aa-bf8e-81ab60686783',
-            'C1F5719C-3545-41F5-A99E-B8497B50279B', -- Entity: MJ: Record Geo Codes
+            'b1b38354-d8a9-4079-a15f-8eccfd558576',
+            '54EF915A-9902-4958-8E09-AE6E7B525E97', -- Entity: MJ: Record Geo Codes
             100013,
             'SourceFieldHash',
             'Source Field Hash',
@@ -2350,7 +1516,7 @@ ALTER TABLE [${flyway:defaultSchema}].[Country] ADD CONSTRAINT [DF___mj_Country_
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'a5988729-8ed4-4f23-8f09-5d27508d0dfa' OR (EntityID = 'C1F5719C-3545-41F5-A99E-B8497B50279B' AND Name = 'GeocodedAt')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '46621b92-adb4-4206-a660-2d93b634e7a4' OR (EntityID = '54EF915A-9902-4958-8E09-AE6E7B525E97' AND Name = 'GeocodedAt')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2382,8 +1548,8 @@ ALTER TABLE [${flyway:defaultSchema}].[Country] ADD CONSTRAINT [DF___mj_Country_
          )
          VALUES
          (
-            'a5988729-8ed4-4f23-8f09-5d27508d0dfa',
-            'C1F5719C-3545-41F5-A99E-B8497B50279B', -- Entity: MJ: Record Geo Codes
+            '46621b92-adb4-4206-a660-2d93b634e7a4',
+            '54EF915A-9902-4958-8E09-AE6E7B525E97', -- Entity: MJ: Record Geo Codes
             100014,
             'GeocodedAt',
             'Geocoded At',
@@ -2413,7 +1579,7 @@ ALTER TABLE [${flyway:defaultSchema}].[Country] ADD CONSTRAINT [DF___mj_Country_
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'da098a87-ace1-450f-a552-06f276a9ba70' OR (EntityID = 'C1F5719C-3545-41F5-A99E-B8497B50279B' AND Name = 'GeocodingSource')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'bca87cf8-5989-4a92-ba21-3b3b409401ab' OR (EntityID = '54EF915A-9902-4958-8E09-AE6E7B525E97' AND Name = 'GeocodingSource')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2445,8 +1611,8 @@ ALTER TABLE [${flyway:defaultSchema}].[Country] ADD CONSTRAINT [DF___mj_Country_
          )
          VALUES
          (
-            'da098a87-ace1-450f-a552-06f276a9ba70',
-            'C1F5719C-3545-41F5-A99E-B8497B50279B', -- Entity: MJ: Record Geo Codes
+            'bca87cf8-5989-4a92-ba21-3b3b409401ab',
+            '54EF915A-9902-4958-8E09-AE6E7B525E97', -- Entity: MJ: Record Geo Codes
             100015,
             'GeocodingSource',
             'Geocoding Source',
@@ -2476,7 +1642,7 @@ ALTER TABLE [${flyway:defaultSchema}].[Country] ADD CONSTRAINT [DF___mj_Country_
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '2086c872-dc3f-4008-8645-5c27b4b45e1f' OR (EntityID = 'C1F5719C-3545-41F5-A99E-B8497B50279B' AND Name = '__mj_CreatedAt')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '04104288-e86f-4f22-a8cf-3a6ae181311e' OR (EntityID = '54EF915A-9902-4958-8E09-AE6E7B525E97' AND Name = '__mj_CreatedAt')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2508,8 +1674,8 @@ ALTER TABLE [${flyway:defaultSchema}].[Country] ADD CONSTRAINT [DF___mj_Country_
          )
          VALUES
          (
-            '2086c872-dc3f-4008-8645-5c27b4b45e1f',
-            'C1F5719C-3545-41F5-A99E-B8497B50279B', -- Entity: MJ: Record Geo Codes
+            '04104288-e86f-4f22-a8cf-3a6ae181311e',
+            '54EF915A-9902-4958-8E09-AE6E7B525E97', -- Entity: MJ: Record Geo Codes
             100016,
             '__mj_CreatedAt',
             'Created At',
@@ -2539,7 +1705,7 @@ ALTER TABLE [${flyway:defaultSchema}].[Country] ADD CONSTRAINT [DF___mj_Country_
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'b06ac02d-e218-4b19-b105-86eb56a9071e' OR (EntityID = 'C1F5719C-3545-41F5-A99E-B8497B50279B' AND Name = '__mj_UpdatedAt')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '731bba14-51fc-47dd-9240-62cb3ec58af6' OR (EntityID = '54EF915A-9902-4958-8E09-AE6E7B525E97' AND Name = '__mj_UpdatedAt')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2571,8 +1737,8 @@ ALTER TABLE [${flyway:defaultSchema}].[Country] ADD CONSTRAINT [DF___mj_Country_
          )
          VALUES
          (
-            'b06ac02d-e218-4b19-b105-86eb56a9071e',
-            'C1F5719C-3545-41F5-A99E-B8497B50279B', -- Entity: MJ: Record Geo Codes
+            '731bba14-51fc-47dd-9240-62cb3ec58af6',
+            '54EF915A-9902-4958-8E09-AE6E7B525E97', -- Entity: MJ: Record Geo Codes
             100017,
             '__mj_UpdatedAt',
             'Updated At',
@@ -2602,7 +1768,7 @@ ALTER TABLE [${flyway:defaultSchema}].[Country] ADD CONSTRAINT [DF___mj_Country_
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '50ebd8b7-3396-49d3-b99c-e8936a69f8cf' OR (EntityID = 'FA590C2B-AC93-4705-B77F-E29199F18B2B' AND Name = 'ID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'c45f5a7d-ab58-482e-9a71-1997f54736c4' OR (EntityID = '3BFE55C1-8FD5-44A4-ACCB-DABB4E8428E2' AND Name = 'ID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2634,8 +1800,8 @@ ALTER TABLE [${flyway:defaultSchema}].[Country] ADD CONSTRAINT [DF___mj_Country_
          )
          VALUES
          (
-            '50ebd8b7-3396-49d3-b99c-e8936a69f8cf',
-            'FA590C2B-AC93-4705-B77F-E29199F18B2B', -- Entity: MJ: Countries
+            'c45f5a7d-ab58-482e-9a71-1997f54736c4',
+            '3BFE55C1-8FD5-44A4-ACCB-DABB4E8428E2', -- Entity: MJ: Countries
             100001,
             'ID',
             'ID',
@@ -2665,7 +1831,7 @@ ALTER TABLE [${flyway:defaultSchema}].[Country] ADD CONSTRAINT [DF___mj_Country_
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '392ebbf7-ba6f-4a22-80bb-23b55860476d' OR (EntityID = 'FA590C2B-AC93-4705-B77F-E29199F18B2B' AND Name = 'Name')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'ff0e4edf-1d03-40d5-bfac-659fea2d4047' OR (EntityID = '3BFE55C1-8FD5-44A4-ACCB-DABB4E8428E2' AND Name = 'Name')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2697,8 +1863,8 @@ ALTER TABLE [${flyway:defaultSchema}].[Country] ADD CONSTRAINT [DF___mj_Country_
          )
          VALUES
          (
-            '392ebbf7-ba6f-4a22-80bb-23b55860476d',
-            'FA590C2B-AC93-4705-B77F-E29199F18B2B', -- Entity: MJ: Countries
+            'ff0e4edf-1d03-40d5-bfac-659fea2d4047',
+            '3BFE55C1-8FD5-44A4-ACCB-DABB4E8428E2', -- Entity: MJ: Countries
             100002,
             'Name',
             'Name',
@@ -2728,7 +1894,7 @@ ALTER TABLE [${flyway:defaultSchema}].[Country] ADD CONSTRAINT [DF___mj_Country_
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'f2a05a69-5588-4b17-8759-c84f9619ba69' OR (EntityID = 'FA590C2B-AC93-4705-B77F-E29199F18B2B' AND Name = 'ISO2')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '1ec04f8e-5f7b-4d54-9cfa-3eddece50637' OR (EntityID = '3BFE55C1-8FD5-44A4-ACCB-DABB4E8428E2' AND Name = 'ISO2')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2760,8 +1926,8 @@ ALTER TABLE [${flyway:defaultSchema}].[Country] ADD CONSTRAINT [DF___mj_Country_
          )
          VALUES
          (
-            'f2a05a69-5588-4b17-8759-c84f9619ba69',
-            'FA590C2B-AC93-4705-B77F-E29199F18B2B', -- Entity: MJ: Countries
+            '1ec04f8e-5f7b-4d54-9cfa-3eddece50637',
+            '3BFE55C1-8FD5-44A4-ACCB-DABB4E8428E2', -- Entity: MJ: Countries
             100003,
             'ISO2',
             'Iso 2',
@@ -2791,7 +1957,7 @@ ALTER TABLE [${flyway:defaultSchema}].[Country] ADD CONSTRAINT [DF___mj_Country_
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '37db373f-4804-40d9-a453-70ceb99f2057' OR (EntityID = 'FA590C2B-AC93-4705-B77F-E29199F18B2B' AND Name = 'ISO3')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '3ae14f22-8e67-4428-a540-7210fd37d4f3' OR (EntityID = '3BFE55C1-8FD5-44A4-ACCB-DABB4E8428E2' AND Name = 'ISO3')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2823,8 +1989,8 @@ ALTER TABLE [${flyway:defaultSchema}].[Country] ADD CONSTRAINT [DF___mj_Country_
          )
          VALUES
          (
-            '37db373f-4804-40d9-a453-70ceb99f2057',
-            'FA590C2B-AC93-4705-B77F-E29199F18B2B', -- Entity: MJ: Countries
+            '3ae14f22-8e67-4428-a540-7210fd37d4f3',
+            '3BFE55C1-8FD5-44A4-ACCB-DABB4E8428E2', -- Entity: MJ: Countries
             100004,
             'ISO3',
             'Iso 3',
@@ -2854,7 +2020,7 @@ ALTER TABLE [${flyway:defaultSchema}].[Country] ADD CONSTRAINT [DF___mj_Country_
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '8bc83d44-6dee-474e-9b91-32cfac4a02dd' OR (EntityID = 'FA590C2B-AC93-4705-B77F-E29199F18B2B' AND Name = 'NumericCode')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'ac735dfc-8a31-4450-a0bd-eb42dc50f4dd' OR (EntityID = '3BFE55C1-8FD5-44A4-ACCB-DABB4E8428E2' AND Name = 'NumericCode')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2886,8 +2052,8 @@ ALTER TABLE [${flyway:defaultSchema}].[Country] ADD CONSTRAINT [DF___mj_Country_
          )
          VALUES
          (
-            '8bc83d44-6dee-474e-9b91-32cfac4a02dd',
-            'FA590C2B-AC93-4705-B77F-E29199F18B2B', -- Entity: MJ: Countries
+            'ac735dfc-8a31-4450-a0bd-eb42dc50f4dd',
+            '3BFE55C1-8FD5-44A4-ACCB-DABB4E8428E2', -- Entity: MJ: Countries
             100005,
             'NumericCode',
             'Numeric Code',
@@ -2917,7 +2083,7 @@ ALTER TABLE [${flyway:defaultSchema}].[Country] ADD CONSTRAINT [DF___mj_Country_
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '99c6ab05-ca29-4152-85e7-b5b4796d9a90' OR (EntityID = 'FA590C2B-AC93-4705-B77F-E29199F18B2B' AND Name = 'Latitude')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'e9de72d2-0320-42d6-b367-512ea1fb6a61' OR (EntityID = '3BFE55C1-8FD5-44A4-ACCB-DABB4E8428E2' AND Name = 'Latitude')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2949,8 +2115,8 @@ ALTER TABLE [${flyway:defaultSchema}].[Country] ADD CONSTRAINT [DF___mj_Country_
          )
          VALUES
          (
-            '99c6ab05-ca29-4152-85e7-b5b4796d9a90',
-            'FA590C2B-AC93-4705-B77F-E29199F18B2B', -- Entity: MJ: Countries
+            'e9de72d2-0320-42d6-b367-512ea1fb6a61',
+            '3BFE55C1-8FD5-44A4-ACCB-DABB4E8428E2', -- Entity: MJ: Countries
             100006,
             'Latitude',
             'Latitude',
@@ -2980,7 +2146,7 @@ ALTER TABLE [${flyway:defaultSchema}].[Country] ADD CONSTRAINT [DF___mj_Country_
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'f28aefd3-49b0-43c1-9954-508310eb91a1' OR (EntityID = 'FA590C2B-AC93-4705-B77F-E29199F18B2B' AND Name = 'Longitude')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'd0b9cd33-3b5d-48d5-9e0c-979d906a89a7' OR (EntityID = '3BFE55C1-8FD5-44A4-ACCB-DABB4E8428E2' AND Name = 'Longitude')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -3012,8 +2178,8 @@ ALTER TABLE [${flyway:defaultSchema}].[Country] ADD CONSTRAINT [DF___mj_Country_
          )
          VALUES
          (
-            'f28aefd3-49b0-43c1-9954-508310eb91a1',
-            'FA590C2B-AC93-4705-B77F-E29199F18B2B', -- Entity: MJ: Countries
+            'd0b9cd33-3b5d-48d5-9e0c-979d906a89a7',
+            '3BFE55C1-8FD5-44A4-ACCB-DABB4E8428E2', -- Entity: MJ: Countries
             100007,
             'Longitude',
             'Longitude',
@@ -3043,7 +2209,7 @@ ALTER TABLE [${flyway:defaultSchema}].[Country] ADD CONSTRAINT [DF___mj_Country_
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '33d12898-aef1-40f1-b5e1-aaa080c7716b' OR (EntityID = 'FA590C2B-AC93-4705-B77F-E29199F18B2B' AND Name = 'BoundaryGeoJSON')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '16649f72-2bc6-4849-9f04-ed5152af4973' OR (EntityID = '3BFE55C1-8FD5-44A4-ACCB-DABB4E8428E2' AND Name = 'BoundaryGeoJSON')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -3075,8 +2241,8 @@ ALTER TABLE [${flyway:defaultSchema}].[Country] ADD CONSTRAINT [DF___mj_Country_
          )
          VALUES
          (
-            '33d12898-aef1-40f1-b5e1-aaa080c7716b',
-            'FA590C2B-AC93-4705-B77F-E29199F18B2B', -- Entity: MJ: Countries
+            '16649f72-2bc6-4849-9f04-ed5152af4973',
+            '3BFE55C1-8FD5-44A4-ACCB-DABB4E8428E2', -- Entity: MJ: Countries
             100008,
             'BoundaryGeoJSON',
             'Boundary Geo JSON',
@@ -3106,7 +2272,7 @@ ALTER TABLE [${flyway:defaultSchema}].[Country] ADD CONSTRAINT [DF___mj_Country_
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'b418cfea-ae3a-494d-9f59-e2d511098754' OR (EntityID = 'FA590C2B-AC93-4705-B77F-E29199F18B2B' AND Name = 'CommonAliases')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '5c2d067e-8e65-4734-8aa6-d15a4616423f' OR (EntityID = '3BFE55C1-8FD5-44A4-ACCB-DABB4E8428E2' AND Name = 'CommonAliases')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -3138,8 +2304,8 @@ ALTER TABLE [${flyway:defaultSchema}].[Country] ADD CONSTRAINT [DF___mj_Country_
          )
          VALUES
          (
-            'b418cfea-ae3a-494d-9f59-e2d511098754',
-            'FA590C2B-AC93-4705-B77F-E29199F18B2B', -- Entity: MJ: Countries
+            '5c2d067e-8e65-4734-8aa6-d15a4616423f',
+            '3BFE55C1-8FD5-44A4-ACCB-DABB4E8428E2', -- Entity: MJ: Countries
             100009,
             'CommonAliases',
             'Common Aliases',
@@ -3169,7 +2335,7 @@ ALTER TABLE [${flyway:defaultSchema}].[Country] ADD CONSTRAINT [DF___mj_Country_
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '97c534bb-0d12-4bc2-8c40-a2039b377abd' OR (EntityID = 'FA590C2B-AC93-4705-B77F-E29199F18B2B' AND Name = '__mj_CreatedAt')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '2fab840e-b124-4da6-8b93-83e04e1ccec5' OR (EntityID = '3BFE55C1-8FD5-44A4-ACCB-DABB4E8428E2' AND Name = '__mj_CreatedAt')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -3201,8 +2367,8 @@ ALTER TABLE [${flyway:defaultSchema}].[Country] ADD CONSTRAINT [DF___mj_Country_
          )
          VALUES
          (
-            '97c534bb-0d12-4bc2-8c40-a2039b377abd',
-            'FA590C2B-AC93-4705-B77F-E29199F18B2B', -- Entity: MJ: Countries
+            '2fab840e-b124-4da6-8b93-83e04e1ccec5',
+            '3BFE55C1-8FD5-44A4-ACCB-DABB4E8428E2', -- Entity: MJ: Countries
             100010,
             '__mj_CreatedAt',
             'Created At',
@@ -3232,7 +2398,7 @@ ALTER TABLE [${flyway:defaultSchema}].[Country] ADD CONSTRAINT [DF___mj_Country_
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '354e90a5-333a-42ae-b8b4-b5c9ff916d0d' OR (EntityID = 'FA590C2B-AC93-4705-B77F-E29199F18B2B' AND Name = '__mj_UpdatedAt')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '547f24f8-8693-44aa-94a3-46d9d920b538' OR (EntityID = '3BFE55C1-8FD5-44A4-ACCB-DABB4E8428E2' AND Name = '__mj_UpdatedAt')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -3264,8 +2430,8 @@ ALTER TABLE [${flyway:defaultSchema}].[Country] ADD CONSTRAINT [DF___mj_Country_
          )
          VALUES
          (
-            '354e90a5-333a-42ae-b8b4-b5c9ff916d0d',
-            'FA590C2B-AC93-4705-B77F-E29199F18B2B', -- Entity: MJ: Countries
+            '547f24f8-8693-44aa-94a3-46d9d920b538',
+            '3BFE55C1-8FD5-44A4-ACCB-DABB4E8428E2', -- Entity: MJ: Countries
             100011,
             '__mj_UpdatedAt',
             'Updated At',
@@ -3293,146 +2459,1090 @@ ALTER TABLE [${flyway:defaultSchema}].[Country] ADD CONSTRAINT [DF___mj_Country_
          )
       END
 
-/* SQL text to insert entity field value with ID df9ec577-0330-4c67-889e-d53ac35510df */
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'd152568a-2ade-444c-b90d-25e0ea572e5d' OR (EntityID = '12C21789-12CC-4A8C-81ED-FFCBC1D69336' AND Name = 'ID')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'd152568a-2ade-444c-b90d-25e0ea572e5d',
+            '12C21789-12CC-4A8C-81ED-FFCBC1D69336', -- Entity: MJ: State Provinces
+            100001,
+            'ID',
+            'ID',
+            NULL,
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            0,
+            'newsequentialid()',
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            1,
+            1,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '91bf2a06-1c23-46f9-8d79-a81015836573' OR (EntityID = '12C21789-12CC-4A8C-81ED-FFCBC1D69336' AND Name = 'CountryID')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '91bf2a06-1c23-46f9-8d79-a81015836573',
+            '12C21789-12CC-4A8C-81ED-FFCBC1D69336', -- Entity: MJ: State Provinces
+            100002,
+            'CountryID',
+            'Country ID',
+            'Foreign key to Country. Establishes the parent country for this state/province.',
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            '3BFE55C1-8FD5-44A4-ACCB-DABB4E8428E2',
+            'ID',
+            0,
+            0,
+            1,
+            0,
+            0,
+            1,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '22834f17-39bf-4b4f-bb12-ac82b5d27812' OR (EntityID = '12C21789-12CC-4A8C-81ED-FFCBC1D69336' AND Name = 'Name')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '22834f17-39bf-4b4f-bb12-ac82b5d27812',
+            '12C21789-12CC-4A8C-81ED-FFCBC1D69336', -- Entity: MJ: State Provinces
+            100003,
+            'Name',
+            'Name',
+            'Full state/province name (e.g., "California", "Ontario").',
+            'nvarchar',
+            400,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            1,
+            1,
+            0,
+            1,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '67b42824-236e-4d32-a44e-ba69b2675d85' OR (EntityID = '12C21789-12CC-4A8C-81ED-FFCBC1D69336' AND Name = 'Code')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '67b42824-236e-4d32-a44e-ba69b2675d85',
+            '12C21789-12CC-4A8C-81ED-FFCBC1D69336', -- Entity: MJ: State Provinces
+            100004,
+            'Code',
+            'Code',
+            'Short code within the country (e.g., "CA", "ON"). Unique per country via compound constraint.',
+            'nvarchar',
+            20,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'a32988c3-192d-4cc2-a84a-2080546bc47d' OR (EntityID = '12C21789-12CC-4A8C-81ED-FFCBC1D69336' AND Name = 'ISO3166_2')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'a32988c3-192d-4cc2-a84a-2080546bc47d',
+            '12C21789-12CC-4A8C-81ED-FFCBC1D69336', -- Entity: MJ: State Provinces
+            100005,
+            'ISO3166_2',
+            'Iso 31662',
+            'ISO 3166-2 subdivision code (e.g., "US-CA", "CA-ON"). Globally unique.',
+            'nvarchar',
+            20,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'f53e01c8-6574-4ae2-9bce-6b4872e4e768' OR (EntityID = '12C21789-12CC-4A8C-81ED-FFCBC1D69336' AND Name = 'Latitude')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'f53e01c8-6574-4ae2-9bce-6b4872e4e768',
+            '12C21789-12CC-4A8C-81ED-FFCBC1D69336', -- Entity: MJ: State Provinces
+            100006,
+            'Latitude',
+            'Latitude',
+            'Geographic centroid latitude. Used as fallback point for state-level geocoding.',
+            'decimal',
+            9,
+            10,
+            6,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '69d0fb57-2826-4db9-a4f9-8f5f1eae68a1' OR (EntityID = '12C21789-12CC-4A8C-81ED-FFCBC1D69336' AND Name = 'Longitude')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '69d0fb57-2826-4db9-a4f9-8f5f1eae68a1',
+            '12C21789-12CC-4A8C-81ED-FFCBC1D69336', -- Entity: MJ: State Provinces
+            100007,
+            'Longitude',
+            'Longitude',
+            'Geographic centroid longitude. Used as fallback point for state-level geocoding.',
+            'decimal',
+            9,
+            10,
+            6,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '1e447afd-91e9-4d6b-9ec7-d1a55b82145b' OR (EntityID = '12C21789-12CC-4A8C-81ED-FFCBC1D69336' AND Name = 'BoundaryGeoJSON')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '1e447afd-91e9-4d6b-9ec7-d1a55b82145b',
+            '12C21789-12CC-4A8C-81ED-FFCBC1D69336', -- Entity: MJ: State Provinces
+            100008,
+            'BoundaryGeoJSON',
+            'Boundary Geo JSON',
+            'Medium-resolution (~50m) GeoJSON boundary polygon for choropleth map rendering. Nullable. Total ~15-20MB for all states/provinces worldwide.',
+            'nvarchar',
+            -1,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '1614c4f0-7ec6-440b-835f-6a5d826e4eb8' OR (EntityID = '12C21789-12CC-4A8C-81ED-FFCBC1D69336' AND Name = 'CommonAliases')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '1614c4f0-7ec6-440b-835f-6a5d826e4eb8',
+            '12C21789-12CC-4A8C-81ED-FFCBC1D69336', -- Entity: MJ: State Provinces
+            100009,
+            'CommonAliases',
+            'Common Aliases',
+            'JSON array of common aliases (e.g., ["Calif.","California","Cal"]). Used by GeoResolver for fuzzy text-to-state matching.',
+            'nvarchar',
+            -1,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'dce8dadc-f9ff-4cf7-bb42-5e361dd4a582' OR (EntityID = '12C21789-12CC-4A8C-81ED-FFCBC1D69336' AND Name = '__mj_CreatedAt')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'dce8dadc-f9ff-4cf7-bb42-5e361dd4a582',
+            '12C21789-12CC-4A8C-81ED-FFCBC1D69336', -- Entity: MJ: State Provinces
+            100010,
+            '__mj_CreatedAt',
+            'Created At',
+            NULL,
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            0,
+            'getutcdate()',
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '9e6c31e8-d3ab-478b-8a5e-639a60ca0fd1' OR (EntityID = '12C21789-12CC-4A8C-81ED-FFCBC1D69336' AND Name = '__mj_UpdatedAt')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '9e6c31e8-d3ab-478b-8a5e-639a60ca0fd1',
+            '12C21789-12CC-4A8C-81ED-FFCBC1D69336', -- Entity: MJ: State Provinces
+            100011,
+            '__mj_UpdatedAt',
+            'Updated At',
+            NULL,
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            0,
+            'getutcdate()',
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END
+
+/* SQL text to insert entity field value with ID 4fc56d01-b080-4ea7-850d-3ca91a48ee9f */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('df9ec577-0330-4c67-889e-d53ac35510df', 'D833416B-295B-4D37-99A8-A51B972B36DD', 1, 'city', 'city', GETUTCDATE(), GETUTCDATE())
+                                       ('4fc56d01-b080-4ea7-850d-3ca91a48ee9f', '4CCD7FD8-7341-499F-B199-4D65D87203DB', 1, 'city', 'city', GETUTCDATE(), GETUTCDATE())
 
-/* SQL text to insert entity field value with ID f9b61e52-263d-4ac9-912a-2619a10c9105 */
+/* SQL text to insert entity field value with ID f79b8613-89e5-431a-94ea-bd13f5007f59 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('f9b61e52-263d-4ac9-912a-2619a10c9105', 'D833416B-295B-4D37-99A8-A51B972B36DD', 2, 'country', 'country', GETUTCDATE(), GETUTCDATE())
+                                       ('f79b8613-89e5-431a-94ea-bd13f5007f59', '4CCD7FD8-7341-499F-B199-4D65D87203DB', 2, 'country', 'country', GETUTCDATE(), GETUTCDATE())
 
-/* SQL text to insert entity field value with ID afc6bafc-564e-4983-9109-b3779a88950b */
+/* SQL text to insert entity field value with ID ec878e18-0a70-4d2c-aa1e-75ff460787c9 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('afc6bafc-564e-4983-9109-b3779a88950b', 'D833416B-295B-4D37-99A8-A51B972B36DD', 3, 'county', 'county', GETUTCDATE(), GETUTCDATE())
+                                       ('ec878e18-0a70-4d2c-aa1e-75ff460787c9', '4CCD7FD8-7341-499F-B199-4D65D87203DB', 3, 'county', 'county', GETUTCDATE(), GETUTCDATE())
 
-/* SQL text to insert entity field value with ID 3bb927aa-65a4-47d7-b78a-d4cb819a17d2 */
+/* SQL text to insert entity field value with ID db0047cf-7899-4465-aaed-7123f4d8a49f */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('3bb927aa-65a4-47d7-b78a-d4cb819a17d2', 'D833416B-295B-4D37-99A8-A51B972B36DD', 4, 'exact', 'exact', GETUTCDATE(), GETUTCDATE())
+                                       ('db0047cf-7899-4465-aaed-7123f4d8a49f', '4CCD7FD8-7341-499F-B199-4D65D87203DB', 4, 'exact', 'exact', GETUTCDATE(), GETUTCDATE())
 
-/* SQL text to insert entity field value with ID b5562532-9407-4ea3-9dca-4431f66e365f */
+/* SQL text to insert entity field value with ID faf85ba4-421e-45c5-964a-107ba06ef68f */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('b5562532-9407-4ea3-9dca-4431f66e365f', 'D833416B-295B-4D37-99A8-A51B972B36DD', 5, 'postal_code', 'postal_code', GETUTCDATE(), GETUTCDATE())
+                                       ('faf85ba4-421e-45c5-964a-107ba06ef68f', '4CCD7FD8-7341-499F-B199-4D65D87203DB', 5, 'postal_code', 'postal_code', GETUTCDATE(), GETUTCDATE())
 
-/* SQL text to insert entity field value with ID bfaad537-a684-441e-aafa-1ab4c3c188ec */
+/* SQL text to insert entity field value with ID 862d3ae5-ee6c-424f-b1d4-1de629cfb84a */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('bfaad537-a684-441e-aafa-1ab4c3c188ec', 'D833416B-295B-4D37-99A8-A51B972B36DD', 6, 'state_province', 'state_province', GETUTCDATE(), GETUTCDATE())
+                                       ('862d3ae5-ee6c-424f-b1d4-1de629cfb84a', '4CCD7FD8-7341-499F-B199-4D65D87203DB', 6, 'state_province', 'state_province', GETUTCDATE(), GETUTCDATE())
 
-/* SQL text to update ValueListType for entity field ID D833416B-295B-4D37-99A8-A51B972B36DD */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='D833416B-295B-4D37-99A8-A51B972B36DD'
+/* SQL text to update ValueListType for entity field ID 4CCD7FD8-7341-499F-B199-4D65D87203DB */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='4CCD7FD8-7341-499F-B199-4D65D87203DB'
 
-/* SQL text to insert entity field value with ID e113498e-07c1-4cad-ab3c-3580e657bd54 */
+/* SQL text to insert entity field value with ID b7b9d7b7-fb1e-470b-bdf9-7591a51d70c1 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('e113498e-07c1-4cad-ab3c-3580e657bd54', '28EC2154-1A69-4EDA-B27B-CCF22899D1DE', 1, 'failed', 'failed', GETUTCDATE(), GETUTCDATE())
+                                       ('b7b9d7b7-fb1e-470b-bdf9-7591a51d70c1', '32396F7D-F786-4612-BA91-78006867FC63', 1, 'failed', 'failed', GETUTCDATE(), GETUTCDATE())
 
-/* SQL text to insert entity field value with ID fb2e5b1a-ad5d-4c60-afd2-0a73d0585c06 */
+/* SQL text to insert entity field value with ID 25692691-a9ce-45b1-b77e-0cf4f027d95b */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('fb2e5b1a-ad5d-4c60-afd2-0a73d0585c06', '28EC2154-1A69-4EDA-B27B-CCF22899D1DE', 2, 'pending', 'pending', GETUTCDATE(), GETUTCDATE())
+                                       ('25692691-a9ce-45b1-b77e-0cf4f027d95b', '32396F7D-F786-4612-BA91-78006867FC63', 2, 'pending', 'pending', GETUTCDATE(), GETUTCDATE())
 
-/* SQL text to insert entity field value with ID a68a4402-c46c-4024-a845-4b246627950c */
+/* SQL text to insert entity field value with ID 357b6064-947e-4a81-a78b-df0cc42d0cf9 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('a68a4402-c46c-4024-a845-4b246627950c', '28EC2154-1A69-4EDA-B27B-CCF22899D1DE', 3, 'success', 'success', GETUTCDATE(), GETUTCDATE())
+                                       ('357b6064-947e-4a81-a78b-df0cc42d0cf9', '32396F7D-F786-4612-BA91-78006867FC63', 3, 'success', 'success', GETUTCDATE(), GETUTCDATE())
 
-/* SQL text to update ValueListType for entity field ID 28EC2154-1A69-4EDA-B27B-CCF22899D1DE */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='28EC2154-1A69-4EDA-B27B-CCF22899D1DE'
+/* SQL text to update ValueListType for entity field ID 32396F7D-F786-4612-BA91-78006867FC63 */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='32396F7D-F786-4612-BA91-78006867FC63'
 
-/* SQL text to insert entity field value with ID 98a7f852-a482-4992-9daf-e0ad89dae605 */
+/* SQL text to insert entity field value with ID 13834a14-5c08-4125-bd68-46cf939850b3 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('98a7f852-a482-4992-9daf-e0ad89dae605', 'DA098A87-ACE1-450F-A552-06F276A9BA70', 1, 'google', 'google', GETUTCDATE(), GETUTCDATE())
+                                       ('13834a14-5c08-4125-bd68-46cf939850b3', 'BCA87CF8-5989-4A92-BA21-3B3B409401AB', 1, 'google', 'google', GETUTCDATE(), GETUTCDATE())
 
-/* SQL text to insert entity field value with ID ead6b823-259d-42e7-afca-a79d3bb1577f */
+/* SQL text to insert entity field value with ID 86d9583e-8de4-436f-905a-61572273bdb7 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('ead6b823-259d-42e7-afca-a79d3bb1577f', 'DA098A87-ACE1-450F-A552-06F276A9BA70', 2, 'ip_geolocation', 'ip_geolocation', GETUTCDATE(), GETUTCDATE())
+                                       ('86d9583e-8de4-436f-905a-61572273bdb7', 'BCA87CF8-5989-4A92-BA21-3B3B409401AB', 2, 'ip_geolocation', 'ip_geolocation', GETUTCDATE(), GETUTCDATE())
 
-/* SQL text to insert entity field value with ID 32ff613b-aff3-41b9-82ff-8b8ec667bf86 */
+/* SQL text to insert entity field value with ID 19ffd25e-c31f-4d80-9523-e4ffe623c1e7 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('32ff613b-aff3-41b9-82ff-8b8ec667bf86', 'DA098A87-ACE1-450F-A552-06F276A9BA70', 3, 'manual', 'manual', GETUTCDATE(), GETUTCDATE())
+                                       ('19ffd25e-c31f-4d80-9523-e4ffe623c1e7', 'BCA87CF8-5989-4A92-BA21-3B3B409401AB', 3, 'manual', 'manual', GETUTCDATE(), GETUTCDATE())
 
-/* SQL text to insert entity field value with ID 04718486-5761-4417-ba84-df2399da5303 */
+/* SQL text to insert entity field value with ID e8e2a502-5c51-4937-af6e-9d13e3a3735c */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('04718486-5761-4417-ba84-df2399da5303', 'DA098A87-ACE1-450F-A552-06F276A9BA70', 4, 'native', 'native', GETUTCDATE(), GETUTCDATE())
+                                       ('e8e2a502-5c51-4937-af6e-9d13e3a3735c', 'BCA87CF8-5989-4A92-BA21-3B3B409401AB', 4, 'native', 'native', GETUTCDATE(), GETUTCDATE())
 
-/* SQL text to insert entity field value with ID deeab784-fe17-487c-b1ed-f0ffd64d057b */
+/* SQL text to insert entity field value with ID 786b8847-be88-4460-bcff-5aa41afce2ff */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('deeab784-fe17-487c-b1ed-f0ffd64d057b', 'DA098A87-ACE1-450F-A552-06F276A9BA70', 5, 'reference_data', 'reference_data', GETUTCDATE(), GETUTCDATE())
+                                       ('786b8847-be88-4460-bcff-5aa41afce2ff', 'BCA87CF8-5989-4A92-BA21-3B3B409401AB', 5, 'reference_data', 'reference_data', GETUTCDATE(), GETUTCDATE())
 
-/* SQL text to insert entity field value with ID 38e38abc-37d5-484f-b247-28f93bf8a4f9 */
+/* SQL text to insert entity field value with ID d12f1417-677f-46f9-a337-d9d002ce2b2e */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('38e38abc-37d5-484f-b247-28f93bf8a4f9', 'DA098A87-ACE1-450F-A552-06F276A9BA70', 6, 'reverse', 'reverse', GETUTCDATE(), GETUTCDATE())
+                                       ('d12f1417-677f-46f9-a337-d9d002ce2b2e', 'BCA87CF8-5989-4A92-BA21-3B3B409401AB', 6, 'reverse', 'reverse', GETUTCDATE(), GETUTCDATE())
 
-/* SQL text to update ValueListType for entity field ID DA098A87-ACE1-450F-A552-06F276A9BA70 */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='DA098A87-ACE1-450F-A552-06F276A9BA70'
-
-
-/* Create Entity Relationship: MJ: State Provinces -> MJ: Record Geo Codes (One To Many via StateProvinceID) */
-   IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '0958885b-74ac-42df-8f4e-5d3c6548e990'
-   )
-   BEGIN
-      INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('0958885b-74ac-42df-8f4e-5d3c6548e990', '3532D81D-9F69-4E5F-8C08-0E5612E0EC84', 'C1F5719C-3545-41F5-A99E-B8497B50279B', 'StateProvinceID', 'One To Many', 1, 1, 1, GETUTCDATE(), GETUTCDATE())
-   END;
-                    
+/* SQL text to update ValueListType for entity field ID BCA87CF8-5989-4A92-BA21-3B3B409401AB */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='BCA87CF8-5989-4A92-BA21-3B3B409401AB'
 
 
 /* Create Entity Relationship: MJ: Entities -> MJ: Record Geo Codes (One To Many via EntityID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'e1904a9b-26ab-441a-994f-b13a21a83c09'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'dbc9cb91-f2de-4e75-a4a6-4390e8ae7015'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('e1904a9b-26ab-441a-994f-b13a21a83c09', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', 'C1F5719C-3545-41F5-A99E-B8497B50279B', 'EntityID', 'One To Many', 1, 1, 2, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('dbc9cb91-f2de-4e75-a4a6-4390e8ae7015', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', '54EF915A-9902-4958-8E09-AE6E7B525E97', 'EntityID', 'One To Many', 1, 1, 1, GETUTCDATE(), GETUTCDATE())
    END;
                     
 
 
-/* Create Entity Relationship: MJ: Countries -> MJ: State Provinces (One To Many via CountryID) */
-   IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'ca8832fc-67d5-4dc1-a59e-5772ab9c6824'
-   )
-   BEGIN
-      INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('ca8832fc-67d5-4dc1-a59e-5772ab9c6824', 'FA590C2B-AC93-4705-B77F-E29199F18B2B', '3532D81D-9F69-4E5F-8C08-0E5612E0EC84', 'CountryID', 'One To Many', 1, 1, 1, GETUTCDATE(), GETUTCDATE())
-   END;
-                    
 /* Create Entity Relationship: MJ: Countries -> MJ: Record Geo Codes (One To Many via CountryID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '2f49f786-995c-458d-a3e9-578075ac38cc'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'd55a888d-11b0-47c0-89bc-b90aed85ad00'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('2f49f786-995c-458d-a3e9-578075ac38cc', 'FA590C2B-AC93-4705-B77F-E29199F18B2B', 'C1F5719C-3545-41F5-A99E-B8497B50279B', 'CountryID', 'One To Many', 1, 1, 3, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('d55a888d-11b0-47c0-89bc-b90aed85ad00', '3BFE55C1-8FD5-44A4-ACCB-DABB4E8428E2', '54EF915A-9902-4958-8E09-AE6E7B525E97', 'CountryID', 'One To Many', 1, 1, 2, GETUTCDATE(), GETUTCDATE())
    END;
                     
+/* Create Entity Relationship: MJ: Countries -> MJ: State Provinces (One To Many via CountryID) */
+   IF NOT EXISTS (
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'c8d7452a-bf0b-4697-92c9-e5242fc5dcde'
+   )
+   BEGIN
+      INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
+                    VALUES ('c8d7452a-bf0b-4697-92c9-e5242fc5dcde', '3BFE55C1-8FD5-44A4-ACCB-DABB4E8428E2', '12C21789-12CC-4A8C-81ED-FFCBC1D69336', 'CountryID', 'One To Many', 1, 1, 1, GETUTCDATE(), GETUTCDATE())
+   END;
+                    
+
+
+/* Create Entity Relationship: MJ: State Provinces -> MJ: Record Geo Codes (One To Many via StateProvinceID) */
+   IF NOT EXISTS (
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '61911e66-8e4d-4eb3-82aa-80234bc9e6e6'
+   )
+   BEGIN
+      INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
+                    VALUES ('61911e66-8e4d-4eb3-82aa-80234bc9e6e6', '12C21789-12CC-4A8C-81ED-FFCBC1D69336', '54EF915A-9902-4958-8E09-AE6E7B525E97', 'StateProvinceID', 'One To Many', 1, 1, 3, GETUTCDATE(), GETUTCDATE())
+   END;
+                    
+
+/* Index for Foreign Keys for ApplicationEntity */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Application Entities
+-- Item: Index for Foreign Keys
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+-- Index for foreign key ApplicationID in table ApplicationEntity
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_ApplicationEntity_ApplicationID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[ApplicationEntity]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_ApplicationEntity_ApplicationID ON [${flyway:defaultSchema}].[ApplicationEntity] ([ApplicationID]);
+
+-- Index for foreign key EntityID in table ApplicationEntity
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_ApplicationEntity_EntityID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[ApplicationEntity]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_ApplicationEntity_EntityID ON [${flyway:defaultSchema}].[ApplicationEntity] ([EntityID]);
+
+/* Base View Permissions SQL for MJ: Application Entities */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Application Entities
+-- Item: Permissions for vwApplicationEntities
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+GRANT SELECT ON [${flyway:defaultSchema}].[vwApplicationEntities] TO [cdp_Developer], [cdp_Integration], [cdp_UI]
+
+/* spCreate SQL for MJ: Application Entities */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Application Entities
+-- Item: spCreateApplicationEntity
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- CREATE PROCEDURE FOR ApplicationEntity
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spCreateApplicationEntity]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spCreateApplicationEntity];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateApplicationEntity]
+    @ID uniqueidentifier = NULL,
+    @ApplicationID uniqueidentifier,
+    @EntityID uniqueidentifier,
+    @Sequence int,
+    @DefaultForNewUser bit = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    
+    IF @ID IS NOT NULL
+    BEGIN
+        -- User provided a value, use it
+        INSERT INTO [${flyway:defaultSchema}].[ApplicationEntity]
+            (
+                [ID],
+                [ApplicationID],
+                [EntityID],
+                [Sequence],
+                [DefaultForNewUser]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @ID,
+                @ApplicationID,
+                @EntityID,
+                @Sequence,
+                ISNULL(@DefaultForNewUser, 1)
+            )
+    END
+    ELSE
+    BEGIN
+        -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
+        INSERT INTO [${flyway:defaultSchema}].[ApplicationEntity]
+            (
+                [ApplicationID],
+                [EntityID],
+                [Sequence],
+                [DefaultForNewUser]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @ApplicationID,
+                @EntityID,
+                @Sequence,
+                ISNULL(@DefaultForNewUser, 1)
+            )
+    END
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [${flyway:defaultSchema}].[vwApplicationEntities] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateApplicationEntity] TO [cdp_Developer], [cdp_Integration]
+    
+
+/* spCreate Permissions for MJ: Application Entities */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateApplicationEntity] TO [cdp_Developer], [cdp_Integration]
+
+
+
+/* spUpdate SQL for MJ: Application Entities */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Application Entities
+-- Item: spUpdateApplicationEntity
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- UPDATE PROCEDURE FOR ApplicationEntity
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spUpdateApplicationEntity]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spUpdateApplicationEntity];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateApplicationEntity]
+    @ID uniqueidentifier,
+    @ApplicationID uniqueidentifier,
+    @EntityID uniqueidentifier,
+    @Sequence int,
+    @DefaultForNewUser bit
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[ApplicationEntity]
+    SET
+        [ApplicationID] = @ApplicationID,
+        [EntityID] = @EntityID,
+        [Sequence] = @Sequence,
+        [DefaultForNewUser] = @DefaultForNewUser
+    WHERE
+        [ID] = @ID
+
+    -- Check if the update was successful
+    IF @@ROWCOUNT = 0
+        -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
+        SELECT TOP 0 * FROM [${flyway:defaultSchema}].[vwApplicationEntities] WHERE 1=0
+    ELSE
+        -- Return the updated record so the caller can see the updated values and any calculated fields
+        SELECT
+                                        *
+                                    FROM
+                                        [${flyway:defaultSchema}].[vwApplicationEntities]
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateApplicationEntity] TO [cdp_Developer], [cdp_Integration]
+GO
+
+------------------------------------------------------------
+----- TRIGGER FOR __mj_UpdatedAt field for the ApplicationEntity table
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[trgUpdateApplicationEntity]', 'TR') IS NOT NULL
+    DROP TRIGGER [${flyway:defaultSchema}].[trgUpdateApplicationEntity];
+GO
+CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateApplicationEntity
+ON [${flyway:defaultSchema}].[ApplicationEntity]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[ApplicationEntity]
+    SET
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM
+        [${flyway:defaultSchema}].[ApplicationEntity] AS _organicTable
+    INNER JOIN
+        INSERTED AS I ON
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+        
+
+/* spUpdate Permissions for MJ: Application Entities */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateApplicationEntity] TO [cdp_Developer], [cdp_Integration]
+
+
+
+/* spDelete SQL for MJ: Application Entities */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Application Entities
+-- Item: spDeleteApplicationEntity
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- DELETE PROCEDURE FOR ApplicationEntity
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spDeleteApplicationEntity]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spDeleteApplicationEntity];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteApplicationEntity]
+    @ID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM
+        [${flyway:defaultSchema}].[ApplicationEntity]
+    WHERE
+        [ID] = @ID
+
+
+    -- Check if the delete was successful
+    IF @@ROWCOUNT = 0
+        SELECT NULL AS [ID] -- Return NULL for all primary key fields to indicate no record was deleted
+    ELSE
+        SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteApplicationEntity] TO [cdp_Developer], [cdp_Integration]
+    
+
+/* spDelete Permissions for MJ: Application Entities */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteApplicationEntity] TO [cdp_Developer], [cdp_Integration]
+
+
 
 /* Index for Foreign Keys for Country */
 -----------------------------------------------------------------
@@ -3726,110 +3836,60 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteCountry] TO [cdp_Integration
 
 
 
-/* Index for Foreign Keys for Entity */
+/* Index for Foreign Keys for EntityFieldValue */
 -----------------------------------------------------------------
 -- SQL Code Generation
--- Entity: MJ: Entities
+-- Entity: MJ: Entity Field Values
 -- Item: Index for Foreign Keys
 --
 -- This was generated by the MemberJunction CodeGen tool.
 -- This file should NOT be edited by hand.
 -----------------------------------------------------------------
--- Index for foreign key ParentID in table Entity
+-- Index for foreign key EntityFieldID in table EntityFieldValue
 IF NOT EXISTS (
     SELECT 1
     FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_Entity_ParentID' 
-    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[Entity]')
+    WHERE name = 'IDX_AUTO_MJ_FKEY_EntityFieldValue_EntityFieldID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[EntityFieldValue]')
 )
-CREATE INDEX IDX_AUTO_MJ_FKEY_Entity_ParentID ON [${flyway:defaultSchema}].[Entity] ([ParentID]);
+CREATE INDEX IDX_AUTO_MJ_FKEY_EntityFieldValue_EntityFieldID ON [${flyway:defaultSchema}].[EntityFieldValue] ([EntityFieldID]);
 
-/* Base View Permissions SQL for MJ: Entities */
+/* Base View Permissions SQL for MJ: Entity Field Values */
 -----------------------------------------------------------------
 -- SQL Code Generation
--- Entity: MJ: Entities
--- Item: Permissions for vwEntities
+-- Entity: MJ: Entity Field Values
+-- Item: Permissions for vwEntityFieldValues
 --
 -- This was generated by the MemberJunction CodeGen tool.
 -- This file should NOT be edited by hand.
 -----------------------------------------------------------------
 
-GRANT SELECT ON [${flyway:defaultSchema}].[vwEntities] TO [cdp_Developer], [cdp_Integration], [cdp_UI]
+GRANT SELECT ON [${flyway:defaultSchema}].[vwEntityFieldValues] TO [cdp_Developer], [cdp_UI], [cdp_Integration]
 
-/* spCreate SQL for MJ: Entities */
+/* spCreate SQL for MJ: Entity Field Values */
 -----------------------------------------------------------------
 -- SQL Code Generation
--- Entity: MJ: Entities
--- Item: spCreateEntity
+-- Entity: MJ: Entity Field Values
+-- Item: spCreateEntityFieldValue
 --
 -- This was generated by the MemberJunction CodeGen tool.
 -- This file should NOT be edited by hand.
 -----------------------------------------------------------------
 
 ------------------------------------------------------------
------ CREATE PROCEDURE FOR Entity
+----- CREATE PROCEDURE FOR EntityFieldValue
 ------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[spCreateEntity]', 'P') IS NOT NULL
-    DROP PROCEDURE [${flyway:defaultSchema}].[spCreateEntity];
+IF OBJECT_ID('[${flyway:defaultSchema}].[spCreateEntityFieldValue]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spCreateEntityFieldValue];
 GO
 
-CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateEntity]
+CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateEntityFieldValue]
     @ID uniqueidentifier = NULL,
-    @ParentID uniqueidentifier,
-    @Name nvarchar(255),
-    @NameSuffix nvarchar(255),
-    @Description nvarchar(MAX),
-    @AutoUpdateDescription bit = NULL,
-    @BaseView nvarchar(255),
-    @BaseViewGenerated bit = NULL,
-    @VirtualEntity bit = NULL,
-    @TrackRecordChanges bit = NULL,
-    @AuditRecordAccess bit = NULL,
-    @AuditViewRuns bit = NULL,
-    @IncludeInAPI bit = NULL,
-    @AllowAllRowsAPI bit = NULL,
-    @AllowUpdateAPI bit = NULL,
-    @AllowCreateAPI bit = NULL,
-    @AllowDeleteAPI bit = NULL,
-    @CustomResolverAPI bit = NULL,
-    @AllowUserSearchAPI bit = NULL,
-    @FullTextSearchEnabled bit = NULL,
-    @FullTextCatalog nvarchar(255),
-    @FullTextCatalogGenerated bit = NULL,
-    @FullTextIndex nvarchar(255),
-    @FullTextIndexGenerated bit = NULL,
-    @FullTextSearchFunction nvarchar(255),
-    @FullTextSearchFunctionGenerated bit = NULL,
-    @UserViewMaxRows int,
-    @spCreate nvarchar(255),
-    @spUpdate nvarchar(255),
-    @spDelete nvarchar(255),
-    @spCreateGenerated bit = NULL,
-    @spUpdateGenerated bit = NULL,
-    @spDeleteGenerated bit = NULL,
-    @CascadeDeletes bit = NULL,
-    @DeleteType nvarchar(10) = NULL,
-    @AllowRecordMerge bit = NULL,
-    @spMatch nvarchar(255),
-    @RelationshipDefaultDisplayType nvarchar(20) = NULL,
-    @UserFormGenerated bit = NULL,
-    @EntityObjectSubclassName nvarchar(255),
-    @EntityObjectSubclassImport nvarchar(255),
-    @PreferredCommunicationField nvarchar(255),
-    @Icon nvarchar(500),
-    @ScopeDefault nvarchar(100),
-    @RowsToPackWithSchema nvarchar(20) = NULL,
-    @RowsToPackSampleMethod nvarchar(20) = NULL,
-    @RowsToPackSampleCount int = NULL,
-    @RowsToPackSampleOrder nvarchar(MAX),
-    @AutoRowCountFrequency int,
-    @RowCount bigint,
-    @RowCountRunAt datetimeoffset,
-    @Status nvarchar(25) = NULL,
-    @DisplayName nvarchar(255),
-    @AllowMultipleSubtypes bit = NULL,
-    @SupportsGeoCoding bit = NULL,
-    @AutoUpdateSupportsGeoCoding bit = NULL
+    @EntityFieldID uniqueidentifier,
+    @Sequence int,
+    @Value nvarchar(255),
+    @Code nvarchar(50),
+    @Description nvarchar(MAX)
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -3838,435 +3898,132 @@ BEGIN
     IF @ID IS NOT NULL
     BEGIN
         -- User provided a value, use it
-        INSERT INTO [${flyway:defaultSchema}].[Entity]
+        INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
             (
                 [ID],
-                [ParentID],
-                [Name],
-                [NameSuffix],
-                [Description],
-                [AutoUpdateDescription],
-                [BaseView],
-                [BaseViewGenerated],
-                [VirtualEntity],
-                [TrackRecordChanges],
-                [AuditRecordAccess],
-                [AuditViewRuns],
-                [IncludeInAPI],
-                [AllowAllRowsAPI],
-                [AllowUpdateAPI],
-                [AllowCreateAPI],
-                [AllowDeleteAPI],
-                [CustomResolverAPI],
-                [AllowUserSearchAPI],
-                [FullTextSearchEnabled],
-                [FullTextCatalog],
-                [FullTextCatalogGenerated],
-                [FullTextIndex],
-                [FullTextIndexGenerated],
-                [FullTextSearchFunction],
-                [FullTextSearchFunctionGenerated],
-                [UserViewMaxRows],
-                [spCreate],
-                [spUpdate],
-                [spDelete],
-                [spCreateGenerated],
-                [spUpdateGenerated],
-                [spDeleteGenerated],
-                [CascadeDeletes],
-                [DeleteType],
-                [AllowRecordMerge],
-                [spMatch],
-                [RelationshipDefaultDisplayType],
-                [UserFormGenerated],
-                [EntityObjectSubclassName],
-                [EntityObjectSubclassImport],
-                [PreferredCommunicationField],
-                [Icon],
-                [ScopeDefault],
-                [RowsToPackWithSchema],
-                [RowsToPackSampleMethod],
-                [RowsToPackSampleCount],
-                [RowsToPackSampleOrder],
-                [AutoRowCountFrequency],
-                [RowCount],
-                [RowCountRunAt],
-                [Status],
-                [DisplayName],
-                [AllowMultipleSubtypes],
-                [SupportsGeoCoding],
-                [AutoUpdateSupportsGeoCoding]
+                [EntityFieldID],
+                [Sequence],
+                [Value],
+                [Code],
+                [Description]
             )
         OUTPUT INSERTED.[ID] INTO @InsertedRow
         VALUES
             (
                 @ID,
-                @ParentID,
-                @Name,
-                @NameSuffix,
-                @Description,
-                ISNULL(@AutoUpdateDescription, 1),
-                @BaseView,
-                ISNULL(@BaseViewGenerated, 1),
-                ISNULL(@VirtualEntity, 0),
-                ISNULL(@TrackRecordChanges, 1),
-                ISNULL(@AuditRecordAccess, 1),
-                ISNULL(@AuditViewRuns, 1),
-                ISNULL(@IncludeInAPI, 0),
-                ISNULL(@AllowAllRowsAPI, 0),
-                ISNULL(@AllowUpdateAPI, 0),
-                ISNULL(@AllowCreateAPI, 0),
-                ISNULL(@AllowDeleteAPI, 0),
-                ISNULL(@CustomResolverAPI, 0),
-                ISNULL(@AllowUserSearchAPI, 0),
-                ISNULL(@FullTextSearchEnabled, 0),
-                @FullTextCatalog,
-                ISNULL(@FullTextCatalogGenerated, 1),
-                @FullTextIndex,
-                ISNULL(@FullTextIndexGenerated, 1),
-                @FullTextSearchFunction,
-                ISNULL(@FullTextSearchFunctionGenerated, 1),
-                @UserViewMaxRows,
-                @spCreate,
-                @spUpdate,
-                @spDelete,
-                ISNULL(@spCreateGenerated, 1),
-                ISNULL(@spUpdateGenerated, 1),
-                ISNULL(@spDeleteGenerated, 1),
-                ISNULL(@CascadeDeletes, 0),
-                ISNULL(@DeleteType, 'Hard'),
-                ISNULL(@AllowRecordMerge, 0),
-                @spMatch,
-                ISNULL(@RelationshipDefaultDisplayType, 'Search'),
-                ISNULL(@UserFormGenerated, 1),
-                @EntityObjectSubclassName,
-                @EntityObjectSubclassImport,
-                @PreferredCommunicationField,
-                @Icon,
-                @ScopeDefault,
-                ISNULL(@RowsToPackWithSchema, 'None'),
-                ISNULL(@RowsToPackSampleMethod, 'random'),
-                ISNULL(@RowsToPackSampleCount, 0),
-                @RowsToPackSampleOrder,
-                @AutoRowCountFrequency,
-                @RowCount,
-                @RowCountRunAt,
-                ISNULL(@Status, 'Active'),
-                @DisplayName,
-                ISNULL(@AllowMultipleSubtypes, 0),
-                ISNULL(@SupportsGeoCoding, 0),
-                ISNULL(@AutoUpdateSupportsGeoCoding, 1)
+                @EntityFieldID,
+                @Sequence,
+                @Value,
+                @Code,
+                @Description
             )
     END
     ELSE
     BEGIN
         -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
-        INSERT INTO [${flyway:defaultSchema}].[Entity]
+        INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
             (
-                [ParentID],
-                [Name],
-                [NameSuffix],
-                [Description],
-                [AutoUpdateDescription],
-                [BaseView],
-                [BaseViewGenerated],
-                [VirtualEntity],
-                [TrackRecordChanges],
-                [AuditRecordAccess],
-                [AuditViewRuns],
-                [IncludeInAPI],
-                [AllowAllRowsAPI],
-                [AllowUpdateAPI],
-                [AllowCreateAPI],
-                [AllowDeleteAPI],
-                [CustomResolverAPI],
-                [AllowUserSearchAPI],
-                [FullTextSearchEnabled],
-                [FullTextCatalog],
-                [FullTextCatalogGenerated],
-                [FullTextIndex],
-                [FullTextIndexGenerated],
-                [FullTextSearchFunction],
-                [FullTextSearchFunctionGenerated],
-                [UserViewMaxRows],
-                [spCreate],
-                [spUpdate],
-                [spDelete],
-                [spCreateGenerated],
-                [spUpdateGenerated],
-                [spDeleteGenerated],
-                [CascadeDeletes],
-                [DeleteType],
-                [AllowRecordMerge],
-                [spMatch],
-                [RelationshipDefaultDisplayType],
-                [UserFormGenerated],
-                [EntityObjectSubclassName],
-                [EntityObjectSubclassImport],
-                [PreferredCommunicationField],
-                [Icon],
-                [ScopeDefault],
-                [RowsToPackWithSchema],
-                [RowsToPackSampleMethod],
-                [RowsToPackSampleCount],
-                [RowsToPackSampleOrder],
-                [AutoRowCountFrequency],
-                [RowCount],
-                [RowCountRunAt],
-                [Status],
-                [DisplayName],
-                [AllowMultipleSubtypes],
-                [SupportsGeoCoding],
-                [AutoUpdateSupportsGeoCoding]
+                [EntityFieldID],
+                [Sequence],
+                [Value],
+                [Code],
+                [Description]
             )
         OUTPUT INSERTED.[ID] INTO @InsertedRow
         VALUES
             (
-                @ParentID,
-                @Name,
-                @NameSuffix,
-                @Description,
-                ISNULL(@AutoUpdateDescription, 1),
-                @BaseView,
-                ISNULL(@BaseViewGenerated, 1),
-                ISNULL(@VirtualEntity, 0),
-                ISNULL(@TrackRecordChanges, 1),
-                ISNULL(@AuditRecordAccess, 1),
-                ISNULL(@AuditViewRuns, 1),
-                ISNULL(@IncludeInAPI, 0),
-                ISNULL(@AllowAllRowsAPI, 0),
-                ISNULL(@AllowUpdateAPI, 0),
-                ISNULL(@AllowCreateAPI, 0),
-                ISNULL(@AllowDeleteAPI, 0),
-                ISNULL(@CustomResolverAPI, 0),
-                ISNULL(@AllowUserSearchAPI, 0),
-                ISNULL(@FullTextSearchEnabled, 0),
-                @FullTextCatalog,
-                ISNULL(@FullTextCatalogGenerated, 1),
-                @FullTextIndex,
-                ISNULL(@FullTextIndexGenerated, 1),
-                @FullTextSearchFunction,
-                ISNULL(@FullTextSearchFunctionGenerated, 1),
-                @UserViewMaxRows,
-                @spCreate,
-                @spUpdate,
-                @spDelete,
-                ISNULL(@spCreateGenerated, 1),
-                ISNULL(@spUpdateGenerated, 1),
-                ISNULL(@spDeleteGenerated, 1),
-                ISNULL(@CascadeDeletes, 0),
-                ISNULL(@DeleteType, 'Hard'),
-                ISNULL(@AllowRecordMerge, 0),
-                @spMatch,
-                ISNULL(@RelationshipDefaultDisplayType, 'Search'),
-                ISNULL(@UserFormGenerated, 1),
-                @EntityObjectSubclassName,
-                @EntityObjectSubclassImport,
-                @PreferredCommunicationField,
-                @Icon,
-                @ScopeDefault,
-                ISNULL(@RowsToPackWithSchema, 'None'),
-                ISNULL(@RowsToPackSampleMethod, 'random'),
-                ISNULL(@RowsToPackSampleCount, 0),
-                @RowsToPackSampleOrder,
-                @AutoRowCountFrequency,
-                @RowCount,
-                @RowCountRunAt,
-                ISNULL(@Status, 'Active'),
-                @DisplayName,
-                ISNULL(@AllowMultipleSubtypes, 0),
-                ISNULL(@SupportsGeoCoding, 0),
-                ISNULL(@AutoUpdateSupportsGeoCoding, 1)
+                @EntityFieldID,
+                @Sequence,
+                @Value,
+                @Code,
+                @Description
             )
     END
     -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [${flyway:defaultSchema}].[vwEntities] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+    SELECT * FROM [${flyway:defaultSchema}].[vwEntityFieldValues] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
 END
 GO
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateEntity] TO [cdp_Developer], [cdp_Integration]
     
 
-/* spCreate Permissions for MJ: Entities */
-
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateEntity] TO [cdp_Developer], [cdp_Integration]
+/* spCreate Permissions for MJ: Entity Field Values */
 
 
 
-/* spUpdate SQL for MJ: Entities */
+
+/* spUpdate SQL for MJ: Entity Field Values */
 -----------------------------------------------------------------
 -- SQL Code Generation
--- Entity: MJ: Entities
--- Item: spUpdateEntity
+-- Entity: MJ: Entity Field Values
+-- Item: spUpdateEntityFieldValue
 --
 -- This was generated by the MemberJunction CodeGen tool.
 -- This file should NOT be edited by hand.
 -----------------------------------------------------------------
 
 ------------------------------------------------------------
------ UPDATE PROCEDURE FOR Entity
+----- UPDATE PROCEDURE FOR EntityFieldValue
 ------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[spUpdateEntity]', 'P') IS NOT NULL
-    DROP PROCEDURE [${flyway:defaultSchema}].[spUpdateEntity];
+IF OBJECT_ID('[${flyway:defaultSchema}].[spUpdateEntityFieldValue]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spUpdateEntityFieldValue];
 GO
 
-CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateEntity]
+CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateEntityFieldValue]
     @ID uniqueidentifier,
-    @ParentID uniqueidentifier,
-    @Name nvarchar(255),
-    @NameSuffix nvarchar(255),
-    @Description nvarchar(MAX),
-    @AutoUpdateDescription bit,
-    @BaseView nvarchar(255),
-    @BaseViewGenerated bit,
-    @VirtualEntity bit,
-    @TrackRecordChanges bit,
-    @AuditRecordAccess bit,
-    @AuditViewRuns bit,
-    @IncludeInAPI bit,
-    @AllowAllRowsAPI bit,
-    @AllowUpdateAPI bit,
-    @AllowCreateAPI bit,
-    @AllowDeleteAPI bit,
-    @CustomResolverAPI bit,
-    @AllowUserSearchAPI bit,
-    @FullTextSearchEnabled bit,
-    @FullTextCatalog nvarchar(255),
-    @FullTextCatalogGenerated bit,
-    @FullTextIndex nvarchar(255),
-    @FullTextIndexGenerated bit,
-    @FullTextSearchFunction nvarchar(255),
-    @FullTextSearchFunctionGenerated bit,
-    @UserViewMaxRows int,
-    @spCreate nvarchar(255),
-    @spUpdate nvarchar(255),
-    @spDelete nvarchar(255),
-    @spCreateGenerated bit,
-    @spUpdateGenerated bit,
-    @spDeleteGenerated bit,
-    @CascadeDeletes bit,
-    @DeleteType nvarchar(10),
-    @AllowRecordMerge bit,
-    @spMatch nvarchar(255),
-    @RelationshipDefaultDisplayType nvarchar(20),
-    @UserFormGenerated bit,
-    @EntityObjectSubclassName nvarchar(255),
-    @EntityObjectSubclassImport nvarchar(255),
-    @PreferredCommunicationField nvarchar(255),
-    @Icon nvarchar(500),
-    @ScopeDefault nvarchar(100),
-    @RowsToPackWithSchema nvarchar(20),
-    @RowsToPackSampleMethod nvarchar(20),
-    @RowsToPackSampleCount int,
-    @RowsToPackSampleOrder nvarchar(MAX),
-    @AutoRowCountFrequency int,
-    @RowCount bigint,
-    @RowCountRunAt datetimeoffset,
-    @Status nvarchar(25),
-    @DisplayName nvarchar(255),
-    @AllowMultipleSubtypes bit,
-    @SupportsGeoCoding bit,
-    @AutoUpdateSupportsGeoCoding bit
+    @EntityFieldID uniqueidentifier,
+    @Sequence int,
+    @Value nvarchar(255),
+    @Code nvarchar(50),
+    @Description nvarchar(MAX)
 AS
 BEGIN
     SET NOCOUNT ON;
     UPDATE
-        [${flyway:defaultSchema}].[Entity]
+        [${flyway:defaultSchema}].[EntityFieldValue]
     SET
-        [ParentID] = @ParentID,
-        [Name] = @Name,
-        [NameSuffix] = @NameSuffix,
-        [Description] = @Description,
-        [AutoUpdateDescription] = @AutoUpdateDescription,
-        [BaseView] = @BaseView,
-        [BaseViewGenerated] = @BaseViewGenerated,
-        [VirtualEntity] = @VirtualEntity,
-        [TrackRecordChanges] = @TrackRecordChanges,
-        [AuditRecordAccess] = @AuditRecordAccess,
-        [AuditViewRuns] = @AuditViewRuns,
-        [IncludeInAPI] = @IncludeInAPI,
-        [AllowAllRowsAPI] = @AllowAllRowsAPI,
-        [AllowUpdateAPI] = @AllowUpdateAPI,
-        [AllowCreateAPI] = @AllowCreateAPI,
-        [AllowDeleteAPI] = @AllowDeleteAPI,
-        [CustomResolverAPI] = @CustomResolverAPI,
-        [AllowUserSearchAPI] = @AllowUserSearchAPI,
-        [FullTextSearchEnabled] = @FullTextSearchEnabled,
-        [FullTextCatalog] = @FullTextCatalog,
-        [FullTextCatalogGenerated] = @FullTextCatalogGenerated,
-        [FullTextIndex] = @FullTextIndex,
-        [FullTextIndexGenerated] = @FullTextIndexGenerated,
-        [FullTextSearchFunction] = @FullTextSearchFunction,
-        [FullTextSearchFunctionGenerated] = @FullTextSearchFunctionGenerated,
-        [UserViewMaxRows] = @UserViewMaxRows,
-        [spCreate] = @spCreate,
-        [spUpdate] = @spUpdate,
-        [spDelete] = @spDelete,
-        [spCreateGenerated] = @spCreateGenerated,
-        [spUpdateGenerated] = @spUpdateGenerated,
-        [spDeleteGenerated] = @spDeleteGenerated,
-        [CascadeDeletes] = @CascadeDeletes,
-        [DeleteType] = @DeleteType,
-        [AllowRecordMerge] = @AllowRecordMerge,
-        [spMatch] = @spMatch,
-        [RelationshipDefaultDisplayType] = @RelationshipDefaultDisplayType,
-        [UserFormGenerated] = @UserFormGenerated,
-        [EntityObjectSubclassName] = @EntityObjectSubclassName,
-        [EntityObjectSubclassImport] = @EntityObjectSubclassImport,
-        [PreferredCommunicationField] = @PreferredCommunicationField,
-        [Icon] = @Icon,
-        [ScopeDefault] = @ScopeDefault,
-        [RowsToPackWithSchema] = @RowsToPackWithSchema,
-        [RowsToPackSampleMethod] = @RowsToPackSampleMethod,
-        [RowsToPackSampleCount] = @RowsToPackSampleCount,
-        [RowsToPackSampleOrder] = @RowsToPackSampleOrder,
-        [AutoRowCountFrequency] = @AutoRowCountFrequency,
-        [RowCount] = @RowCount,
-        [RowCountRunAt] = @RowCountRunAt,
-        [Status] = @Status,
-        [DisplayName] = @DisplayName,
-        [AllowMultipleSubtypes] = @AllowMultipleSubtypes,
-        [SupportsGeoCoding] = @SupportsGeoCoding,
-        [AutoUpdateSupportsGeoCoding] = @AutoUpdateSupportsGeoCoding
+        [EntityFieldID] = @EntityFieldID,
+        [Sequence] = @Sequence,
+        [Value] = @Value,
+        [Code] = @Code,
+        [Description] = @Description
     WHERE
         [ID] = @ID
 
     -- Check if the update was successful
     IF @@ROWCOUNT = 0
         -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
-        SELECT TOP 0 * FROM [${flyway:defaultSchema}].[vwEntities] WHERE 1=0
+        SELECT TOP 0 * FROM [${flyway:defaultSchema}].[vwEntityFieldValues] WHERE 1=0
     ELSE
         -- Return the updated record so the caller can see the updated values and any calculated fields
         SELECT
                                         *
                                     FROM
-                                        [${flyway:defaultSchema}].[vwEntities]
+                                        [${flyway:defaultSchema}].[vwEntityFieldValues]
                                     WHERE
                                         [ID] = @ID
                                     
 END
 GO
 
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateEntity] TO [cdp_Developer], [cdp_Integration]
 GO
 
 ------------------------------------------------------------
------ TRIGGER FOR __mj_UpdatedAt field for the Entity table
+----- TRIGGER FOR __mj_UpdatedAt field for the EntityFieldValue table
 ------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[trgUpdateEntity]', 'TR') IS NOT NULL
-    DROP TRIGGER [${flyway:defaultSchema}].[trgUpdateEntity];
+IF OBJECT_ID('[${flyway:defaultSchema}].[trgUpdateEntityFieldValue]', 'TR') IS NOT NULL
+    DROP TRIGGER [${flyway:defaultSchema}].[trgUpdateEntityFieldValue];
 GO
-CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateEntity
-ON [${flyway:defaultSchema}].[Entity]
+CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateEntityFieldValue
+ON [${flyway:defaultSchema}].[EntityFieldValue]
 AFTER UPDATE
 AS
 BEGIN
     SET NOCOUNT ON;
     UPDATE
-        [${flyway:defaultSchema}].[Entity]
+        [${flyway:defaultSchema}].[EntityFieldValue]
     SET
         __mj_UpdatedAt = GETUTCDATE()
     FROM
-        [${flyway:defaultSchema}].[Entity] AS _organicTable
+        [${flyway:defaultSchema}].[EntityFieldValue] AS _organicTable
     INNER JOIN
         INSERTED AS I ON
         _organicTable.[ID] = I.[ID];
@@ -4274,37 +4031,36 @@ END;
 GO
         
 
-/* spUpdate Permissions for MJ: Entities */
-
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateEntity] TO [cdp_Developer], [cdp_Integration]
+/* spUpdate Permissions for MJ: Entity Field Values */
 
 
 
-/* spDelete SQL for MJ: Entities */
+
+/* spDelete SQL for MJ: Entity Field Values */
 -----------------------------------------------------------------
 -- SQL Code Generation
--- Entity: MJ: Entities
--- Item: spDeleteEntity
+-- Entity: MJ: Entity Field Values
+-- Item: spDeleteEntityFieldValue
 --
 -- This was generated by the MemberJunction CodeGen tool.
 -- This file should NOT be edited by hand.
 -----------------------------------------------------------------
 
 ------------------------------------------------------------
------ DELETE PROCEDURE FOR Entity
+----- DELETE PROCEDURE FOR EntityFieldValue
 ------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[spDeleteEntity]', 'P') IS NOT NULL
-    DROP PROCEDURE [${flyway:defaultSchema}].[spDeleteEntity];
+IF OBJECT_ID('[${flyway:defaultSchema}].[spDeleteEntityFieldValue]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spDeleteEntityFieldValue];
 GO
 
-CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteEntity]
+CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteEntityFieldValue]
     @ID uniqueidentifier
 AS
 BEGIN
     SET NOCOUNT ON;
 
     DELETE FROM
-        [${flyway:defaultSchema}].[Entity]
+        [${flyway:defaultSchema}].[EntityFieldValue]
     WHERE
         [ID] = @ID
 
@@ -4316,566 +4072,10 @@ BEGIN
         SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
 END
 GO
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteEntity] TO [cdp_Developer], [cdp_Integration]
     
 
-/* spDelete Permissions for MJ: Entities */
+/* spDelete Permissions for MJ: Entity Field Values */
 
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteEntity] TO [cdp_Developer], [cdp_Integration]
-
-
-
-/* Index for Foreign Keys for EntityField */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: Entity Fields
--- Item: Index for Foreign Keys
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
--- Index for foreign key EntityID in table EntityField
-IF NOT EXISTS (
-    SELECT 1
-    FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_EntityField_EntityID' 
-    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[EntityField]')
-)
-CREATE INDEX IDX_AUTO_MJ_FKEY_EntityField_EntityID ON [${flyway:defaultSchema}].[EntityField] ([EntityID]);
-
--- Index for foreign key RelatedEntityID in table EntityField
-IF NOT EXISTS (
-    SELECT 1
-    FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_EntityField_RelatedEntityID' 
-    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[EntityField]')
-)
-CREATE INDEX IDX_AUTO_MJ_FKEY_EntityField_RelatedEntityID ON [${flyway:defaultSchema}].[EntityField] ([RelatedEntityID]);
-
--- Index for foreign key EncryptionKeyID in table EntityField
-IF NOT EXISTS (
-    SELECT 1
-    FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_EntityField_EncryptionKeyID' 
-    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[EntityField]')
-)
-CREATE INDEX IDX_AUTO_MJ_FKEY_EntityField_EncryptionKeyID ON [${flyway:defaultSchema}].[EntityField] ([EncryptionKeyID]);
-
-/* Base View Permissions SQL for MJ: Entity Fields */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: Entity Fields
--- Item: Permissions for vwEntityFields
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-GRANT SELECT ON [${flyway:defaultSchema}].[vwEntityFields] TO [cdp_UI], [cdp_Integration], [cdp_Developer]
-
-/* spCreate SQL for MJ: Entity Fields */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: Entity Fields
--- Item: spCreateEntityField
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-------------------------------------------------------------
------ CREATE PROCEDURE FOR EntityField
-------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[spCreateEntityField]', 'P') IS NOT NULL
-    DROP PROCEDURE [${flyway:defaultSchema}].[spCreateEntityField];
-GO
-
-CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateEntityField]
-    @ID uniqueidentifier = NULL,
-    @DisplayName nvarchar(255),
-    @Description nvarchar(MAX),
-    @AutoUpdateDescription bit = NULL,
-    @IsPrimaryKey bit = NULL,
-    @IsUnique bit = NULL,
-    @Category nvarchar(255),
-    @ValueListType nvarchar(20) = NULL,
-    @ExtendedType nvarchar(50),
-    @CodeType nvarchar(50),
-    @DefaultInView bit = NULL,
-    @ViewCellTemplate nvarchar(MAX),
-    @DefaultColumnWidth int,
-    @AllowUpdateAPI bit = NULL,
-    @AllowUpdateInView bit = NULL,
-    @IncludeInUserSearchAPI bit = NULL,
-    @FullTextSearchEnabled bit = NULL,
-    @UserSearchParamFormatAPI nvarchar(500),
-    @IncludeInGeneratedForm bit = NULL,
-    @GeneratedFormSection nvarchar(10) = NULL,
-    @IsNameField bit = NULL,
-    @RelatedEntityID uniqueidentifier,
-    @RelatedEntityFieldName nvarchar(255),
-    @IncludeRelatedEntityNameFieldInBaseView bit = NULL,
-    @RelatedEntityNameFieldMap nvarchar(255),
-    @RelatedEntityDisplayType nvarchar(20) = NULL,
-    @EntityIDFieldName nvarchar(100),
-    @ScopeDefault nvarchar(100),
-    @AutoUpdateRelatedEntityInfo bit = NULL,
-    @ValuesToPackWithSchema nvarchar(10) = NULL,
-    @Status nvarchar(25) = NULL,
-    @AutoUpdateIsNameField bit = NULL,
-    @AutoUpdateDefaultInView bit = NULL,
-    @AutoUpdateCategory bit = NULL,
-    @AutoUpdateDisplayName bit = NULL,
-    @AutoUpdateIncludeInUserSearchAPI bit = NULL,
-    @Encrypt bit = NULL,
-    @EncryptionKeyID uniqueidentifier,
-    @AllowDecryptInAPI bit = NULL,
-    @SendEncryptedValue bit = NULL,
-    @IsSoftPrimaryKey bit = NULL,
-    @IsSoftForeignKey bit = NULL,
-    @RelatedEntityJoinFields nvarchar(MAX),
-    @JSONType nvarchar(255),
-    @JSONTypeIsArray bit = NULL,
-    @JSONTypeDefinition nvarchar(MAX),
-    @AutoUpdateExtendedType bit = NULL
-AS
-BEGIN
-    SET NOCOUNT ON;
-    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
-    
-    IF @ID IS NOT NULL
-    BEGIN
-        -- User provided a value, use it
-        INSERT INTO [${flyway:defaultSchema}].[EntityField]
-            (
-                [ID],
-                [DisplayName],
-                [Description],
-                [AutoUpdateDescription],
-                [IsPrimaryKey],
-                [IsUnique],
-                [Category],
-                [ValueListType],
-                [ExtendedType],
-                [CodeType],
-                [DefaultInView],
-                [ViewCellTemplate],
-                [DefaultColumnWidth],
-                [AllowUpdateAPI],
-                [AllowUpdateInView],
-                [IncludeInUserSearchAPI],
-                [FullTextSearchEnabled],
-                [UserSearchParamFormatAPI],
-                [IncludeInGeneratedForm],
-                [GeneratedFormSection],
-                [IsNameField],
-                [RelatedEntityID],
-                [RelatedEntityFieldName],
-                [IncludeRelatedEntityNameFieldInBaseView],
-                [RelatedEntityNameFieldMap],
-                [RelatedEntityDisplayType],
-                [EntityIDFieldName],
-                [ScopeDefault],
-                [AutoUpdateRelatedEntityInfo],
-                [ValuesToPackWithSchema],
-                [Status],
-                [AutoUpdateIsNameField],
-                [AutoUpdateDefaultInView],
-                [AutoUpdateCategory],
-                [AutoUpdateDisplayName],
-                [AutoUpdateIncludeInUserSearchAPI],
-                [Encrypt],
-                [EncryptionKeyID],
-                [AllowDecryptInAPI],
-                [SendEncryptedValue],
-                [IsSoftPrimaryKey],
-                [IsSoftForeignKey],
-                [RelatedEntityJoinFields],
-                [JSONType],
-                [JSONTypeIsArray],
-                [JSONTypeDefinition],
-                [AutoUpdateExtendedType]
-            )
-        OUTPUT INSERTED.[ID] INTO @InsertedRow
-        VALUES
-            (
-                @ID,
-                @DisplayName,
-                @Description,
-                ISNULL(@AutoUpdateDescription, 1),
-                ISNULL(@IsPrimaryKey, 0),
-                ISNULL(@IsUnique, 0),
-                @Category,
-                ISNULL(@ValueListType, 'None'),
-                @ExtendedType,
-                @CodeType,
-                ISNULL(@DefaultInView, 0),
-                @ViewCellTemplate,
-                @DefaultColumnWidth,
-                ISNULL(@AllowUpdateAPI, 1),
-                ISNULL(@AllowUpdateInView, 1),
-                ISNULL(@IncludeInUserSearchAPI, 0),
-                ISNULL(@FullTextSearchEnabled, 0),
-                @UserSearchParamFormatAPI,
-                ISNULL(@IncludeInGeneratedForm, 1),
-                ISNULL(@GeneratedFormSection, 'Details'),
-                ISNULL(@IsNameField, 0),
-                @RelatedEntityID,
-                @RelatedEntityFieldName,
-                ISNULL(@IncludeRelatedEntityNameFieldInBaseView, 1),
-                @RelatedEntityNameFieldMap,
-                ISNULL(@RelatedEntityDisplayType, 'Search'),
-                @EntityIDFieldName,
-                @ScopeDefault,
-                ISNULL(@AutoUpdateRelatedEntityInfo, 1),
-                ISNULL(@ValuesToPackWithSchema, 'Auto'),
-                ISNULL(@Status, 'Active'),
-                ISNULL(@AutoUpdateIsNameField, 1),
-                ISNULL(@AutoUpdateDefaultInView, 1),
-                ISNULL(@AutoUpdateCategory, 1),
-                ISNULL(@AutoUpdateDisplayName, 1),
-                ISNULL(@AutoUpdateIncludeInUserSearchAPI, 1),
-                ISNULL(@Encrypt, 0),
-                @EncryptionKeyID,
-                ISNULL(@AllowDecryptInAPI, 0),
-                ISNULL(@SendEncryptedValue, 0),
-                ISNULL(@IsSoftPrimaryKey, 0),
-                ISNULL(@IsSoftForeignKey, 0),
-                @RelatedEntityJoinFields,
-                @JSONType,
-                ISNULL(@JSONTypeIsArray, 0),
-                @JSONTypeDefinition,
-                ISNULL(@AutoUpdateExtendedType, 1)
-            )
-    END
-    ELSE
-    BEGIN
-        -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
-        INSERT INTO [${flyway:defaultSchema}].[EntityField]
-            (
-                [DisplayName],
-                [Description],
-                [AutoUpdateDescription],
-                [IsPrimaryKey],
-                [IsUnique],
-                [Category],
-                [ValueListType],
-                [ExtendedType],
-                [CodeType],
-                [DefaultInView],
-                [ViewCellTemplate],
-                [DefaultColumnWidth],
-                [AllowUpdateAPI],
-                [AllowUpdateInView],
-                [IncludeInUserSearchAPI],
-                [FullTextSearchEnabled],
-                [UserSearchParamFormatAPI],
-                [IncludeInGeneratedForm],
-                [GeneratedFormSection],
-                [IsNameField],
-                [RelatedEntityID],
-                [RelatedEntityFieldName],
-                [IncludeRelatedEntityNameFieldInBaseView],
-                [RelatedEntityNameFieldMap],
-                [RelatedEntityDisplayType],
-                [EntityIDFieldName],
-                [ScopeDefault],
-                [AutoUpdateRelatedEntityInfo],
-                [ValuesToPackWithSchema],
-                [Status],
-                [AutoUpdateIsNameField],
-                [AutoUpdateDefaultInView],
-                [AutoUpdateCategory],
-                [AutoUpdateDisplayName],
-                [AutoUpdateIncludeInUserSearchAPI],
-                [Encrypt],
-                [EncryptionKeyID],
-                [AllowDecryptInAPI],
-                [SendEncryptedValue],
-                [IsSoftPrimaryKey],
-                [IsSoftForeignKey],
-                [RelatedEntityJoinFields],
-                [JSONType],
-                [JSONTypeIsArray],
-                [JSONTypeDefinition],
-                [AutoUpdateExtendedType]
-            )
-        OUTPUT INSERTED.[ID] INTO @InsertedRow
-        VALUES
-            (
-                @DisplayName,
-                @Description,
-                ISNULL(@AutoUpdateDescription, 1),
-                ISNULL(@IsPrimaryKey, 0),
-                ISNULL(@IsUnique, 0),
-                @Category,
-                ISNULL(@ValueListType, 'None'),
-                @ExtendedType,
-                @CodeType,
-                ISNULL(@DefaultInView, 0),
-                @ViewCellTemplate,
-                @DefaultColumnWidth,
-                ISNULL(@AllowUpdateAPI, 1),
-                ISNULL(@AllowUpdateInView, 1),
-                ISNULL(@IncludeInUserSearchAPI, 0),
-                ISNULL(@FullTextSearchEnabled, 0),
-                @UserSearchParamFormatAPI,
-                ISNULL(@IncludeInGeneratedForm, 1),
-                ISNULL(@GeneratedFormSection, 'Details'),
-                ISNULL(@IsNameField, 0),
-                @RelatedEntityID,
-                @RelatedEntityFieldName,
-                ISNULL(@IncludeRelatedEntityNameFieldInBaseView, 1),
-                @RelatedEntityNameFieldMap,
-                ISNULL(@RelatedEntityDisplayType, 'Search'),
-                @EntityIDFieldName,
-                @ScopeDefault,
-                ISNULL(@AutoUpdateRelatedEntityInfo, 1),
-                ISNULL(@ValuesToPackWithSchema, 'Auto'),
-                ISNULL(@Status, 'Active'),
-                ISNULL(@AutoUpdateIsNameField, 1),
-                ISNULL(@AutoUpdateDefaultInView, 1),
-                ISNULL(@AutoUpdateCategory, 1),
-                ISNULL(@AutoUpdateDisplayName, 1),
-                ISNULL(@AutoUpdateIncludeInUserSearchAPI, 1),
-                ISNULL(@Encrypt, 0),
-                @EncryptionKeyID,
-                ISNULL(@AllowDecryptInAPI, 0),
-                ISNULL(@SendEncryptedValue, 0),
-                ISNULL(@IsSoftPrimaryKey, 0),
-                ISNULL(@IsSoftForeignKey, 0),
-                @RelatedEntityJoinFields,
-                @JSONType,
-                ISNULL(@JSONTypeIsArray, 0),
-                @JSONTypeDefinition,
-                ISNULL(@AutoUpdateExtendedType, 1)
-            )
-    END
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [${flyway:defaultSchema}].[vwEntityFields] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
-END
-GO
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateEntityField] TO [cdp_Integration], [cdp_Developer]
-    
-
-/* spCreate Permissions for MJ: Entity Fields */
-
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateEntityField] TO [cdp_Integration], [cdp_Developer]
-
-
-
-/* spUpdate SQL for MJ: Entity Fields */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: Entity Fields
--- Item: spUpdateEntityField
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-------------------------------------------------------------
------ UPDATE PROCEDURE FOR EntityField
-------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[spUpdateEntityField]', 'P') IS NOT NULL
-    DROP PROCEDURE [${flyway:defaultSchema}].[spUpdateEntityField];
-GO
-
-CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateEntityField]
-    @ID uniqueidentifier,
-    @DisplayName nvarchar(255),
-    @Description nvarchar(MAX),
-    @AutoUpdateDescription bit,
-    @IsPrimaryKey bit,
-    @IsUnique bit,
-    @Category nvarchar(255),
-    @ValueListType nvarchar(20),
-    @ExtendedType nvarchar(50),
-    @CodeType nvarchar(50),
-    @DefaultInView bit,
-    @ViewCellTemplate nvarchar(MAX),
-    @DefaultColumnWidth int,
-    @AllowUpdateAPI bit,
-    @AllowUpdateInView bit,
-    @IncludeInUserSearchAPI bit,
-    @FullTextSearchEnabled bit,
-    @UserSearchParamFormatAPI nvarchar(500),
-    @IncludeInGeneratedForm bit,
-    @GeneratedFormSection nvarchar(10),
-    @IsNameField bit,
-    @RelatedEntityID uniqueidentifier,
-    @RelatedEntityFieldName nvarchar(255),
-    @IncludeRelatedEntityNameFieldInBaseView bit,
-    @RelatedEntityNameFieldMap nvarchar(255),
-    @RelatedEntityDisplayType nvarchar(20),
-    @EntityIDFieldName nvarchar(100),
-    @ScopeDefault nvarchar(100),
-    @AutoUpdateRelatedEntityInfo bit,
-    @ValuesToPackWithSchema nvarchar(10),
-    @Status nvarchar(25),
-    @AutoUpdateIsNameField bit,
-    @AutoUpdateDefaultInView bit,
-    @AutoUpdateCategory bit,
-    @AutoUpdateDisplayName bit,
-    @AutoUpdateIncludeInUserSearchAPI bit,
-    @Encrypt bit,
-    @EncryptionKeyID uniqueidentifier,
-    @AllowDecryptInAPI bit,
-    @SendEncryptedValue bit,
-    @IsSoftPrimaryKey bit,
-    @IsSoftForeignKey bit,
-    @RelatedEntityJoinFields nvarchar(MAX),
-    @JSONType nvarchar(255),
-    @JSONTypeIsArray bit,
-    @JSONTypeDefinition nvarchar(MAX),
-    @AutoUpdateExtendedType bit
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE
-        [${flyway:defaultSchema}].[EntityField]
-    SET
-        [DisplayName] = @DisplayName,
-        [Description] = @Description,
-        [AutoUpdateDescription] = @AutoUpdateDescription,
-        [IsPrimaryKey] = @IsPrimaryKey,
-        [IsUnique] = @IsUnique,
-        [Category] = @Category,
-        [ValueListType] = @ValueListType,
-        [ExtendedType] = @ExtendedType,
-        [CodeType] = @CodeType,
-        [DefaultInView] = @DefaultInView,
-        [ViewCellTemplate] = @ViewCellTemplate,
-        [DefaultColumnWidth] = @DefaultColumnWidth,
-        [AllowUpdateAPI] = @AllowUpdateAPI,
-        [AllowUpdateInView] = @AllowUpdateInView,
-        [IncludeInUserSearchAPI] = @IncludeInUserSearchAPI,
-        [FullTextSearchEnabled] = @FullTextSearchEnabled,
-        [UserSearchParamFormatAPI] = @UserSearchParamFormatAPI,
-        [IncludeInGeneratedForm] = @IncludeInGeneratedForm,
-        [GeneratedFormSection] = @GeneratedFormSection,
-        [IsNameField] = @IsNameField,
-        [RelatedEntityID] = @RelatedEntityID,
-        [RelatedEntityFieldName] = @RelatedEntityFieldName,
-        [IncludeRelatedEntityNameFieldInBaseView] = @IncludeRelatedEntityNameFieldInBaseView,
-        [RelatedEntityNameFieldMap] = @RelatedEntityNameFieldMap,
-        [RelatedEntityDisplayType] = @RelatedEntityDisplayType,
-        [EntityIDFieldName] = @EntityIDFieldName,
-        [ScopeDefault] = @ScopeDefault,
-        [AutoUpdateRelatedEntityInfo] = @AutoUpdateRelatedEntityInfo,
-        [ValuesToPackWithSchema] = @ValuesToPackWithSchema,
-        [Status] = @Status,
-        [AutoUpdateIsNameField] = @AutoUpdateIsNameField,
-        [AutoUpdateDefaultInView] = @AutoUpdateDefaultInView,
-        [AutoUpdateCategory] = @AutoUpdateCategory,
-        [AutoUpdateDisplayName] = @AutoUpdateDisplayName,
-        [AutoUpdateIncludeInUserSearchAPI] = @AutoUpdateIncludeInUserSearchAPI,
-        [Encrypt] = @Encrypt,
-        [EncryptionKeyID] = @EncryptionKeyID,
-        [AllowDecryptInAPI] = @AllowDecryptInAPI,
-        [SendEncryptedValue] = @SendEncryptedValue,
-        [IsSoftPrimaryKey] = @IsSoftPrimaryKey,
-        [IsSoftForeignKey] = @IsSoftForeignKey,
-        [RelatedEntityJoinFields] = @RelatedEntityJoinFields,
-        [JSONType] = @JSONType,
-        [JSONTypeIsArray] = @JSONTypeIsArray,
-        [JSONTypeDefinition] = @JSONTypeDefinition,
-        [AutoUpdateExtendedType] = @AutoUpdateExtendedType
-    WHERE
-        [ID] = @ID
-
-    -- Check if the update was successful
-    IF @@ROWCOUNT = 0
-        -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
-        SELECT TOP 0 * FROM [${flyway:defaultSchema}].[vwEntityFields] WHERE 1=0
-    ELSE
-        -- Return the updated record so the caller can see the updated values and any calculated fields
-        SELECT
-                                        *
-                                    FROM
-                                        [${flyway:defaultSchema}].[vwEntityFields]
-                                    WHERE
-                                        [ID] = @ID
-                                    
-END
-GO
-
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateEntityField] TO [cdp_Integration], [cdp_Developer]
-GO
-
-------------------------------------------------------------
------ TRIGGER FOR __mj_UpdatedAt field for the EntityField table
-------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[trgUpdateEntityField]', 'TR') IS NOT NULL
-    DROP TRIGGER [${flyway:defaultSchema}].[trgUpdateEntityField];
-GO
-CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateEntityField
-ON [${flyway:defaultSchema}].[EntityField]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE
-        [${flyway:defaultSchema}].[EntityField]
-    SET
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM
-        [${flyway:defaultSchema}].[EntityField] AS _organicTable
-    INNER JOIN
-        INSERTED AS I ON
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-        
-
-/* spUpdate Permissions for MJ: Entity Fields */
-
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateEntityField] TO [cdp_Integration], [cdp_Developer]
-
-
-
-/* spDelete SQL for MJ: Entity Fields */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: Entity Fields
--- Item: spDeleteEntityField
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-------------------------------------------------------------
------ DELETE PROCEDURE FOR EntityField
-------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[spDeleteEntityField]', 'P') IS NOT NULL
-    DROP PROCEDURE [${flyway:defaultSchema}].[spDeleteEntityField];
-GO
-
-CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteEntityField]
-    @ID uniqueidentifier
-AS
-BEGIN
-    SET NOCOUNT ON;
-
-    DELETE FROM
-        [${flyway:defaultSchema}].[EntityField]
-    WHERE
-        [ID] = @ID
-
-
-    -- Check if the delete was successful
-    IF @@ROWCOUNT = 0
-        SELECT NULL AS [ID] -- Return NULL for all primary key fields to indicate no record was deleted
-    ELSE
-        SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
-END
-GO
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteEntityField] TO [cdp_Integration], [cdp_Developer]
-    
-
-/* spDelete Permissions for MJ: Entity Fields */
-
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteEntityField] TO [cdp_Integration], [cdp_Developer]
 
 
 
@@ -4915,14 +4115,14 @@ IF NOT EXISTS (
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_RecordGeoCode_StateProvinceID ON [${flyway:defaultSchema}].[RecordGeoCode] ([StateProvinceID]);
 
-/* SQL text to update entity field related entity name field map for entity field ID 80B13AF6-7A9C-4357-9B28-DE17273105DA */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='80B13AF6-7A9C-4357-9B28-DE17273105DA', @RelatedEntityNameFieldMap='Entity'
+/* SQL text to update entity field related entity name field map for entity field ID 2174C80E-D364-4DBA-92F6-EEAADA410BD7 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='2174C80E-D364-4DBA-92F6-EEAADA410BD7', @RelatedEntityNameFieldMap='Entity'
 
-/* SQL text to update entity field related entity name field map for entity field ID 87AFA08F-7884-4A02-A60C-F8C3925E73EB */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='87AFA08F-7884-4A02-A60C-F8C3925E73EB', @RelatedEntityNameFieldMap='Country'
+/* SQL text to update entity field related entity name field map for entity field ID 82F838DD-B57B-4AAD-AEF1-04E381E2971F */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='82F838DD-B57B-4AAD-AEF1-04E381E2971F', @RelatedEntityNameFieldMap='Country'
 
-/* SQL text to update entity field related entity name field map for entity field ID FF275A36-0084-4833-A9BE-3C15F79C9FC2 */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='FF275A36-0084-4833-A9BE-3C15F79C9FC2', @RelatedEntityNameFieldMap='StateProvince'
+/* SQL text to update entity field related entity name field map for entity field ID 73458121-BBFC-40FA-A093-D2B939839211 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='73458121-BBFC-40FA-A093-D2B939839211', @RelatedEntityNameFieldMap='StateProvince'
 
 /* Base View SQL for MJ: Record Geo Codes */
 -----------------------------------------------------------------
@@ -5280,8 +4480,8 @@ IF NOT EXISTS (
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_StateProvince_CountryID ON [${flyway:defaultSchema}].[StateProvince] ([CountryID]);
 
-/* SQL text to update entity field related entity name field map for entity field ID 39404160-26BF-43CC-96BB-7C44D77112F9 */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='39404160-26BF-43CC-96BB-7C44D77112F9', @RelatedEntityNameFieldMap='Country'
+/* SQL text to update entity field related entity name field map for entity field ID 91BF2A06-1C23-46F9-8D79-A81015836573 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='91BF2A06-1C23-46F9-8D79-A81015836573', @RelatedEntityNameFieldMap='Country'
 
 /* Base View SQL for MJ: State Provinces */
 -----------------------------------------------------------------
@@ -5569,7 +4769,996 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteStateProvince] TO [cdp_Integ
 
 
 
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '419bc535-b734-4b60-8fa6-ca0406b40463' OR (EntityID = '54EF915A-9902-4958-8E09-AE6E7B525E97' AND Name = 'Entity')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '419bc535-b734-4b60-8fa6-ca0406b40463',
+            '54EF915A-9902-4958-8E09-AE6E7B525E97', -- Entity: MJ: Record Geo Codes
+            100035,
+            'Entity',
+            'Entity',
+            NULL,
+            'nvarchar',
+            510,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            0,
+            1,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'dd63ac51-ece5-44af-a737-8dd9398237f1' OR (EntityID = '54EF915A-9902-4958-8E09-AE6E7B525E97' AND Name = 'Country')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'dd63ac51-ece5-44af-a737-8dd9398237f1',
+            '54EF915A-9902-4958-8E09-AE6E7B525E97', -- Entity: MJ: Record Geo Codes
+            100036,
+            'Country',
+            'Country',
+            NULL,
+            'nvarchar',
+            400,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            0,
+            1,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'e32baf2a-fb99-44f7-a9d3-1f437e44d2ae' OR (EntityID = '54EF915A-9902-4958-8E09-AE6E7B525E97' AND Name = 'StateProvince')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'e32baf2a-fb99-44f7-a9d3-1f437e44d2ae',
+            '54EF915A-9902-4958-8E09-AE6E7B525E97', -- Entity: MJ: Record Geo Codes
+            100037,
+            'StateProvince',
+            'State Province',
+            NULL,
+            'nvarchar',
+            400,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            0,
+            1,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '900a7d60-efc9-4174-b614-74ad4709962a' OR (EntityID = '12C21789-12CC-4A8C-81ED-FFCBC1D69336' AND Name = 'Country')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '900a7d60-efc9-4174-b614-74ad4709962a',
+            '12C21789-12CC-4A8C-81ED-FFCBC1D69336', -- Entity: MJ: State Provinces
+            100023,
+            'Country',
+            'Country',
+            NULL,
+            'nvarchar',
+            400,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            0,
+            1,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END
+
+/* Set field properties for entity */
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET IncludeInUserSearchAPI = 1
+               WHERE ID = 'AD4217F0-6F36-EF11-86D4-6045BDEE16E6'
+               AND AutoUpdateIncludeInUserSearchAPI = 1
+            
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET IncludeInUserSearchAPI = 1
+               WHERE ID = 'AE4217F0-6F36-EF11-86D4-6045BDEE16E6'
+               AND AutoUpdateIncludeInUserSearchAPI = 1
+            
+
+/* Set field properties for entity */
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET IsNameField = 1
+               WHERE ID = '419BC535-B734-4B60-8FA6-CA0406B40463'
+               AND AutoUpdateIsNameField = 1
+            
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET IsNameField = 1
+               WHERE ID = 'F51815BB-B7F2-476F-B0B4-8119EEEDE33B'
+               AND AutoUpdateIsNameField = 1
+            
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET IsNameField = 1
+               WHERE ID = 'F3E3AF4A-10E0-443A-A744-C6CD004C5C31'
+               AND AutoUpdateIsNameField = 1
+            
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = 'F51815BB-B7F2-476F-B0B4-8119EEEDE33B'
+               AND AutoUpdateDefaultInView = 1
+            
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = 'F3E3AF4A-10E0-443A-A744-C6CD004C5C31'
+               AND AutoUpdateDefaultInView = 1
+            
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = '4CCD7FD8-7341-499F-B199-4D65D87203DB'
+               AND AutoUpdateDefaultInView = 1
+            
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = '32396F7D-F786-4612-BA91-78006867FC63'
+               AND AutoUpdateDefaultInView = 1
+            
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = '419BC535-B734-4B60-8FA6-CA0406B40463'
+               AND AutoUpdateDefaultInView = 1
+            
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = 'DD63AC51-ECE5-44AF-A737-8DD9398237F1'
+               AND AutoUpdateDefaultInView = 1
+            
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = 'E32BAF2A-FB99-44F7-A9D3-1F437E44D2AE'
+               AND AutoUpdateDefaultInView = 1
+            
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET IncludeInUserSearchAPI = 1
+               WHERE ID = 'F51815BB-B7F2-476F-B0B4-8119EEEDE33B'
+               AND AutoUpdateIncludeInUserSearchAPI = 1
+            
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET IncludeInUserSearchAPI = 1
+               WHERE ID = 'F3E3AF4A-10E0-443A-A744-C6CD004C5C31'
+               AND AutoUpdateIncludeInUserSearchAPI = 1
+            
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET IncludeInUserSearchAPI = 1
+               WHERE ID = '419BC535-B734-4B60-8FA6-CA0406B40463'
+               AND AutoUpdateIncludeInUserSearchAPI = 1
+            
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET IncludeInUserSearchAPI = 1
+               WHERE ID = 'DD63AC51-ECE5-44AF-A737-8DD9398237F1'
+               AND AutoUpdateIncludeInUserSearchAPI = 1
+            
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET IncludeInUserSearchAPI = 1
+               WHERE ID = 'E32BAF2A-FB99-44F7-A9D3-1F437E44D2AE'
+               AND AutoUpdateIncludeInUserSearchAPI = 1
+            
+
+/* Set field properties for entity */
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET IsNameField = 1
+               WHERE ID = '524E17F0-6F36-EF11-86D4-6045BDEE16E6'
+               AND AutoUpdateIsNameField = 1
+            
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET IsNameField = 1
+               WHERE ID = '204F17F0-6F36-EF11-86D4-6045BDEE16E6'
+               AND AutoUpdateIsNameField = 1
+            
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET IncludeInUserSearchAPI = 1
+               WHERE ID = '524E17F0-6F36-EF11-86D4-6045BDEE16E6'
+               AND AutoUpdateIncludeInUserSearchAPI = 1
+            
+
+/* Set field properties for entity */
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = '1EC04F8E-5F7B-4D54-9CFA-3EDDECE50637'
+               AND AutoUpdateDefaultInView = 1
+            
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = '3AE14F22-8E67-4428-A540-7210FD37D4F3'
+               AND AutoUpdateDefaultInView = 1
+            
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = 'AC735DFC-8A31-4450-A0BD-EB42DC50F4DD'
+               AND AutoUpdateDefaultInView = 1
+            
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET IncludeInUserSearchAPI = 1
+               WHERE ID = '1EC04F8E-5F7B-4D54-9CFA-3EDDECE50637'
+               AND AutoUpdateIncludeInUserSearchAPI = 1
+            
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET IncludeInUserSearchAPI = 1
+               WHERE ID = '3AE14F22-8E67-4428-A540-7210FD37D4F3'
+               AND AutoUpdateIncludeInUserSearchAPI = 1
+            
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET IncludeInUserSearchAPI = 1
+               WHERE ID = '5C2D067E-8E65-4734-8AA6-D15A4616423F'
+               AND AutoUpdateIncludeInUserSearchAPI = 1
+            
+
+/* Set field properties for entity */
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = '67B42824-236E-4D32-A44E-BA69B2675D85'
+               AND AutoUpdateDefaultInView = 1
+            
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = 'A32988C3-192D-4CC2-A84A-2080546BC47D'
+               AND AutoUpdateDefaultInView = 1
+            
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = '900A7D60-EFC9-4174-B614-74AD4709962A'
+               AND AutoUpdateDefaultInView = 1
+            
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET IncludeInUserSearchAPI = 1
+               WHERE ID = '67B42824-236E-4D32-A44E-BA69B2675D85'
+               AND AutoUpdateIncludeInUserSearchAPI = 1
+            
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET IncludeInUserSearchAPI = 1
+               WHERE ID = 'A32988C3-192D-4CC2-A84A-2080546BC47D'
+               AND AutoUpdateIncludeInUserSearchAPI = 1
+            
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET IncludeInUserSearchAPI = 1
+               WHERE ID = '1614C4F0-7EC6-440B-835F-6A5D826E4EB8'
+               AND AutoUpdateIncludeInUserSearchAPI = 1
+            
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET IncludeInUserSearchAPI = 1
+               WHERE ID = '900A7D60-EFC9-4174-B614-74AD4709962A'
+               AND AutoUpdateIncludeInUserSearchAPI = 1
+            
+
+/* Set categories for 20 fields */
+
+-- UPDATE Entity Field Category Info MJ: Record Geo Codes.EntityID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Record Mapping',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Entity',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '2174C80E-D364-4DBA-92F6-EEAADA410BD7' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Record Geo Codes.RecordID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Record Mapping',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Record',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'F51815BB-B7F2-476F-B0B4-8119EEEDE33B' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Record Geo Codes.Entity 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Record Mapping',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Entity Name',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '419BC535-B734-4B60-8FA6-CA0406B40463' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Record Geo Codes.LocationType 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Record Mapping',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'F3E3AF4A-10E0-443A-A744-C6CD004C5C31' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Record Geo Codes.SourceFieldHash 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Record Mapping',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'B1B38354-D8A9-4079-A15F-8ECCFD558576' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Record Geo Codes.Latitude 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Geocoding Results',
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'Geo',
+   CodeType = NULL
+WHERE 
+   ID = 'BAD1868E-5D5A-4287-AFCF-352C2A3E6699' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Record Geo Codes.Longitude 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Geocoding Results',
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'Geo',
+   CodeType = NULL
+WHERE 
+   ID = 'EC46B3E9-73AB-48CD-B231-4D7312BADBBE' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Record Geo Codes.Precision 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Geocoding Results',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '4CCD7FD8-7341-499F-B199-4D65D87203DB' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Record Geo Codes.CountryID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Geocoding Results',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Country',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '82F838DD-B57B-4AAD-AEF1-04E381E2971F' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Record Geo Codes.StateProvinceID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Geocoding Results',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'State Province',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '73458121-BBFC-40FA-A093-D2B939839211' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Record Geo Codes.Country 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Geocoding Results',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Country Name',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'DD63AC51-ECE5-44AF-A737-8DD9398237F1' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Record Geo Codes.StateProvince 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Geocoding Results',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'State Province Name',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'E32BAF2A-FB99-44F7-A9D3-1F437E44D2AE' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Record Geo Codes.Status 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Processing Status',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '32396F7D-F786-4612-BA91-78006867FC63' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Record Geo Codes.GeocodingSource 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Processing Status',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'BCA87CF8-5989-4A92-BA21-3B3B409401AB' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Record Geo Codes.GeocodedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Processing Status',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '46621B92-ADB4-4206-A660-2D93B634E7A4' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Record Geo Codes.RetryCount 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Processing Status',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '4DAE2800-36FC-49C5-8D3E-64EAF15708A0' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Record Geo Codes.ErrorMessage 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Processing Status',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '2B5FE6B9-B64F-401B-AEF2-1613456109E5' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Record Geo Codes.ID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'System Metadata',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '797360EF-109D-4A8F-B040-5B2141DB37C5' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Record Geo Codes.__mj_CreatedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'System Metadata',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '04104288-E86F-4F22-A8CF-3A6AE181311E' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Record Geo Codes.__mj_UpdatedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'System Metadata',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '731BBA14-51FC-47DD-9240-62CB3EC58AF6' AND AutoUpdateCategory = 1
+
+/* Set entity icon to fa fa-map-marked-alt */
+
+               UPDATE [${flyway:defaultSchema}].[Entity]
+               SET Icon = 'fa fa-map-marked-alt', __mj_UpdatedAt = GETUTCDATE()
+               WHERE ID = '54EF915A-9902-4958-8E09-AE6E7B525E97'
+            
+
+/* Insert FieldCategoryInfo setting for entity */
+
+               INSERT INTO [${flyway:defaultSchema}].[EntitySetting] (ID, EntityID, Name, Value, __mj_CreatedAt, __mj_UpdatedAt)
+               VALUES ('2aca268b-65ec-4042-b994-feff632b6ac3', '54EF915A-9902-4958-8E09-AE6E7B525E97', 'FieldCategoryInfo', '{"Record Mapping":{"icon":"fa fa-link","description":"Information linking the geocode to its source entity and record"},"Geocoding Results":{"icon":"fa fa-map-marker-alt","description":"The resulting coordinates and geographic regional classifications"},"Processing Status":{"icon":"fa fa-sync","description":"Technical status, error logs, and metadata for the geocoding process"},"System Metadata":{"icon":"fa fa-cog","description":"Internal system identifiers and audit timestamps"}}', GETUTCDATE(), GETUTCDATE())
+            
+
+/* Insert FieldCategoryIcons setting (legacy) */
+
+               INSERT INTO [${flyway:defaultSchema}].[EntitySetting] (ID, EntityID, Name, Value, __mj_CreatedAt, __mj_UpdatedAt)
+               VALUES ('3d5f5205-de54-499d-9d7e-c0e44841db6e', '54EF915A-9902-4958-8E09-AE6E7B525E97', 'FieldCategoryIcons', '{"Record Mapping":"fa fa-link","Geocoding Results":"fa fa-map-marker-alt","Processing Status":"fa fa-sync","System Metadata":"fa fa-cog"}', GETUTCDATE(), GETUTCDATE())
+            
+
+/* Set DefaultForNewUser=0 for NEW entity (category: system, confidence: high) */
+
+         UPDATE [${flyway:defaultSchema}].[ApplicationEntity]
+         SET DefaultForNewUser = 0, __mj_UpdatedAt = GETUTCDATE()
+         WHERE EntityID = '54EF915A-9902-4958-8E09-AE6E7B525E97'
+      
+
+/* Set categories for 12 fields */
+
+-- UPDATE Entity Field Category Info MJ: State Provinces.ID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'System Metadata',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'D152568A-2ADE-444C-B90D-25E0EA572E5D' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: State Provinces.CountryID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Administrative Details',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Country',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '91BF2A06-1C23-46F9-8D79-A81015836573' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: State Provinces.Name 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Administrative Details',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '22834F17-39BF-4B4F-BB12-AC82B5D27812' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: State Provinces.Code 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Administrative Details',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'State Code',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '67B42824-236E-4D32-A44E-BA69B2675D85' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: State Provinces.ISO3166_2 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Administrative Details',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'ISO 3166-2 Code',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'A32988C3-192D-4CC2-A84A-2080546BC47D' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: State Provinces.Country 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Administrative Details',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Country Name',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '900A7D60-EFC9-4174-B614-74AD4709962A' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: State Provinces.Latitude 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Geospatial Information',
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'Geo',
+   CodeType = NULL
+WHERE 
+   ID = 'F53E01C8-6574-4AE2-9BCE-6B4872E4E768' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: State Provinces.Longitude 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Geospatial Information',
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'Geo',
+   CodeType = NULL
+WHERE 
+   ID = '69D0FB57-2826-4DB9-A4F9-8F5F1EAE68A1' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: State Provinces.BoundaryGeoJSON 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Geospatial Information',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Boundary GeoJSON',
+   ExtendedType = 'Code',
+   CodeType = 'Other'
+WHERE 
+   ID = '1E447AFD-91E9-4D6B-9EC7-D1A55B82145B' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: State Provinces.CommonAliases 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Geospatial Information',
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'Code',
+   CodeType = 'Other'
+WHERE 
+   ID = '1614C4F0-7EC6-440B-835F-6A5D826E4EB8' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: State Provinces.__mj_CreatedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'System Metadata',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'DCE8DADC-F9FF-4CF7-BB42-5E361DD4A582' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: State Provinces.__mj_UpdatedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'System Metadata',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '9E6C31E8-D3AB-478B-8A5E-639A60CA0FD1' AND AutoUpdateCategory = 1
+
+/* Set entity icon to fa fa-map */
+
+               UPDATE [${flyway:defaultSchema}].[Entity]
+               SET Icon = 'fa fa-map', __mj_UpdatedAt = GETUTCDATE()
+               WHERE ID = '12C21789-12CC-4A8C-81ED-FFCBC1D69336'
+            
+
+/* Insert FieldCategoryInfo setting for entity */
+
+               INSERT INTO [${flyway:defaultSchema}].[EntitySetting] (ID, EntityID, Name, Value, __mj_CreatedAt, __mj_UpdatedAt)
+               VALUES ('94b1acee-2f0b-4e01-a0a9-2b1c5dbcb7f8', '12C21789-12CC-4A8C-81ED-FFCBC1D69336', 'FieldCategoryInfo', '{"Administrative Details":{"icon":"fa fa-id-card","description":"Core identification, names, and standardized codes for the administrative division."},"Geospatial Information":{"icon":"fa fa-globe-americas","description":"Coordinates, boundary data, and aliases used for mapping and geographic resolution."},"System Metadata":{"icon":"fa fa-cog","description":"System-managed identifiers and audit timestamps."}}', GETUTCDATE(), GETUTCDATE())
+            
+
+/* Insert FieldCategoryIcons setting (legacy) */
+
+               INSERT INTO [${flyway:defaultSchema}].[EntitySetting] (ID, EntityID, Name, Value, __mj_CreatedAt, __mj_UpdatedAt)
+               VALUES ('eff0ea3f-936c-4aa9-acc9-984cef72a06f', '12C21789-12CC-4A8C-81ED-FFCBC1D69336', 'FieldCategoryIcons', '{"Administrative Details":"fa fa-id-card","Geospatial Information":"fa fa-globe-americas","System Metadata":"fa fa-cog"}', GETUTCDATE(), GETUTCDATE())
+            
+
+/* Set DefaultForNewUser=0 for NEW entity (category: reference, confidence: high) */
+
+         UPDATE [${flyway:defaultSchema}].[ApplicationEntity]
+         SET DefaultForNewUser = 0, __mj_UpdatedAt = GETUTCDATE()
+         WHERE EntityID = '12C21789-12CC-4A8C-81ED-FFCBC1D69336'
+      
+
+/* Set categories for 11 fields */
+
+-- UPDATE Entity Field Category Info MJ: Countries.ID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'System Metadata',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'C45F5A7D-AB58-482E-9A71-1997F54736C4' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Countries.Name 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Country Identification',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'FF0E4EDF-1D03-40D5-BFAC-659FEA2D4047' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Countries.ISO2 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Country Identification',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'ISO 2',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '1EC04F8E-5F7B-4D54-9CFA-3EDDECE50637' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Countries.ISO3 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Country Identification',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'ISO 3',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '3AE14F22-8E67-4428-A540-7210FD37D4F3' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Countries.NumericCode 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Country Identification',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'AC735DFC-8A31-4450-A0BD-EB42DC50F4DD' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Countries.CommonAliases 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Country Identification',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '5C2D067E-8E65-4734-8AA6-D15A4616423F' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Countries.Latitude 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Geographic Data',
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'Geo',
+   CodeType = NULL
+WHERE 
+   ID = 'E9DE72D2-0320-42D6-B367-512EA1FB6A61' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Countries.Longitude 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Geographic Data',
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'Geo',
+   CodeType = NULL
+WHERE 
+   ID = 'D0B9CD33-3B5D-48D5-9E0C-979D906A89A7' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Countries.BoundaryGeoJSON 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Geographic Data',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Boundary GeoJSON',
+   ExtendedType = 'Code',
+   CodeType = 'Other'
+WHERE 
+   ID = '16649F72-2BC6-4849-9F04-ED5152AF4973' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Countries.__mj_CreatedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'System Metadata',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '2FAB840E-B124-4DA6-8B93-83E04E1CCEC5' AND AutoUpdateCategory = 1
+
+-- UPDATE Entity Field Category Info MJ: Countries.__mj_UpdatedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'System Metadata',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '547F24F8-8693-44AA-94A3-46D9D920B538' AND AutoUpdateCategory = 1
+
+/* Set entity icon to fa fa-globe-americas */
+
+               UPDATE [${flyway:defaultSchema}].[Entity]
+               SET Icon = 'fa fa-globe-americas', __mj_UpdatedAt = GETUTCDATE()
+               WHERE ID = '3BFE55C1-8FD5-44A4-ACCB-DABB4E8428E2'
+            
+
+/* Insert FieldCategoryInfo setting for entity */
+
+               INSERT INTO [${flyway:defaultSchema}].[EntitySetting] (ID, EntityID, Name, Value, __mj_CreatedAt, __mj_UpdatedAt)
+               VALUES ('ebb4fc21-b341-4f6a-b5fe-a1a15e73e8af', '3BFE55C1-8FD5-44A4-ACCB-DABB4E8428E2', 'FieldCategoryInfo', '{"Country Identification":{"icon":"fa fa-id-card","description":"Official names, standard ISO codes, and common aliases used to identify countries."},"Geographic Data":{"icon":"fa fa-map-marked-alt","description":"Centroid coordinates and spatial boundary data for mapping and geocoding."},"System Metadata":{"icon":"fa fa-cog","description":"System-managed audit fields and technical identifiers."}}', GETUTCDATE(), GETUTCDATE())
+            
+
+/* Insert FieldCategoryIcons setting (legacy) */
+
+               INSERT INTO [${flyway:defaultSchema}].[EntitySetting] (ID, EntityID, Name, Value, __mj_CreatedAt, __mj_UpdatedAt)
+               VALUES ('17d67c26-f2f6-4b83-a0be-d5e6226a2174', '3BFE55C1-8FD5-44A4-ACCB-DABB4E8428E2', 'FieldCategoryIcons', '{"Country Identification":"fa fa-id-card","Geographic Data":"fa fa-map-marked-alt","System Metadata":"fa fa-cog"}', GETUTCDATE(), GETUTCDATE())
+            
+
+/* Set DefaultForNewUser=0 for NEW entity (category: reference, confidence: high) */
+
+         UPDATE [${flyway:defaultSchema}].[ApplicationEntity]
+         SET DefaultForNewUser = 0, __mj_UpdatedAt = GETUTCDATE()
+         WHERE EntityID = '3BFE55C1-8FD5-44A4-ACCB-DABB4E8428E2'
+      
+
 /* Refresh custom base views for modified entities so schema changes are picked up */
-EXEC sp_refreshview '${flyway:defaultSchema}.vwEntities';
-EXEC sp_refreshview '${flyway:defaultSchema}.vwEntityFields';
+EXEC sp_refreshview '${flyway:defaultSchema}.vwApplicationEntities';
+EXEC sp_refreshview '${flyway:defaultSchema}.vwEntityFieldValues';
 

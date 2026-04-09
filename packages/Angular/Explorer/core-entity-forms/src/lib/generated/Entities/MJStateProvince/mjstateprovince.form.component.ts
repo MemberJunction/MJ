@@ -16,7 +16,9 @@ export class MJStateProvinceFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
+            { sectionKey: 'administrativeDetails', sectionName: 'Administrative Details', isExpanded: true },
+            { sectionKey: 'geospatialInformation', sectionName: 'Geospatial Information', isExpanded: true },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJRecordGeoCodes', sectionName: 'Record Geo Codes', isExpanded: false }
         ]);
     }
