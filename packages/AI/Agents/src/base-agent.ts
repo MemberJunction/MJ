@@ -13,7 +13,7 @@
 
 import { MJAIAgentTypeEntity,  MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, FileStorageEngine } from '@memberjunction/core-entities';
 import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptEntityExtended, MJAIAgentEntityExtended } from "@memberjunction/ai-core-plus";
-import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider } from '@memberjunction/core';
+import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider, IRunViewProvider } from '@memberjunction/core';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
@@ -45,6 +45,7 @@ import {
     ActionChangeScope,
     MediaOutput,
     FileOutputRef,
+    parseFileOutputRef,
     SecondaryScopeConfig,
     SecondaryScopeValue,
     AgentResponseForm,
@@ -370,33 +371,25 @@ export class BaseAgent {
     private static readonly LARGE_BINARY_THRESHOLD = 10000;
 
     /**
-     * Inspects a set of action output params for a `FileOutput` structured param and returns
-     * a FileOutputRef if one is found. Returns null if the action did not produce a file.
+     * Inspects a set of action output params for any value matching the FileOutputRef shape
+     * (an object with `fileName`, `mimeType`, and either `fileData` or `fileId`).
+     * Returns all matching FileOutputRef values found across all output params.
+     *
+     * Detection is shape-based, not name-based — actions can name their file output
+     * parameter anything and it will still be detected.
      *
      * @param outputParams - The output parameters from an action result
      * @private
      * @since 5.22.0
      */
-    private detectFileOutput(outputParams: ActionParam[]): FileOutputRef | null {
-        const raw = outputParams.find(p => p.Name?.toLowerCase() === 'fileoutput')?.Value;
-        if (!raw) return null;
-
-        const fo = (typeof raw === 'string' ? JSON.parse(raw) : raw) as Record<string, unknown>;
-        const fileName = fo['fileName'] as string | undefined;
-        const mimeType = fo['mimeType'] as string | undefined;
-        if (!fileName || !mimeType) return null;
-
-        const fileData = fo['fileData'] as string | undefined;
-        const fileId = fo['fileId'] as string | undefined;
-        if (!fileData && !fileId) return null;
-
-        return {
-            fileName,
-            mimeType,
-            fileData,
-            fileId,
-            sizeBytes: fo['sizeBytes'] as number | undefined
-        };
+    private detectFileOutputs(outputParams: ActionParam[]): FileOutputRef[] {
+        const results: FileOutputRef[] = [];
+        for (const param of outputParams) {
+            if (param.Value == null) continue;
+            const ref = parseFileOutputRef(param.Value);
+            if (ref) results.push(ref);
+        }
+        return results;
     }
 
     /**
@@ -7184,8 +7177,8 @@ The context is now within limits. Please retry your request with the recovered c
                 const sanitizedParams = this.interceptLargeBinaryContent(outputParams, result.actionEntity);
 
                 // Collect file outputs (PDF, Excel, Word, etc.) for post-run artifact processing
-                const fileOutput = this.detectFileOutput(outputParams);
-                if (fileOutput) this._fileOutputs.push(fileOutput);
+                const fileOutputs = this.detectFileOutputs(outputParams);
+                this._fileOutputs.push(...fileOutputs);
 
                 return {
                     actionName: result.action.name,
@@ -7699,7 +7692,7 @@ The context is now within limits. Please retry your request with the recovered c
      */
     private async ensureCategoryCacheLoaded(params: ExecuteAgentParams): Promise<void> {
         if (!this._categoryCache) {
-            const rv = new RunView();
+            const rv = new RunView(<IRunViewProvider><any>(params.provider || this._activeProvider));
             const result = await rv.RunView<{ ID: string; Name: string; ParentID: string | null; AssignmentStrategy: string | null; DefaultStorageAccountID: string | null }>({
                 EntityName: 'MJ: AI Agent Categories',
                 Fields: ['ID', 'Name', 'ParentID', 'AssignmentStrategy', 'DefaultStorageAccountID'],

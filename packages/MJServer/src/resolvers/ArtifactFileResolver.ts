@@ -1,9 +1,10 @@
 import { Resolver, Query, Arg, Ctx } from 'type-graphql';
-import { Metadata, RunView } from '@memberjunction/core';
+import { Metadata, RunView, IMetadataProvider, IRunViewProvider } from '@memberjunction/core';
 import { MJArtifactVersionEntity, MJFileEntity, MJFileStorageAccountEntity, MJFileStorageProviderEntity } from '@memberjunction/core-entities';
 import { initializeDriverWithAccountCredentials } from '@memberjunction/storage';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { AppContext } from '../types.js';
+import { GetReadWriteProvider } from '../util.js';
 
 /**
  * GraphQL resolver that produces a short-lived download URL for an artifact version
@@ -25,10 +26,10 @@ export class ArtifactFileResolver extends ResolverBase {
             throw new Error('Unauthorized');
         }
 
-        const md = new Metadata();
+        const p = GetReadWriteProvider(context.providers);
 
         // Load the artifact version
-        const artifactVersion = await md.GetEntityObject<MJArtifactVersionEntity>('MJ: Artifact Versions', user);
+        const artifactVersion = await p.GetEntityObject<MJArtifactVersionEntity>('MJ: Artifact Versions', user);
         const loaded = await artifactVersion.Load(artifactVersionId);
         if (!loaded) {
             throw new Error(`Artifact version ${artifactVersionId} not found`);
@@ -42,26 +43,26 @@ export class ArtifactFileResolver extends ResolverBase {
             throw new Error(`Artifact version ${artifactVersionId} has no associated file`);
         }
 
-        return this.buildDownloadUrl(artifactVersion.FileID, user, md);
+        return this.buildDownloadUrl(artifactVersion.FileID, user, p);
     }
 
     /** Load the File + its storage account/provider and generate a signed URL. */
     private async buildDownloadUrl(
         fileId: string,
         user: ReturnType<ResolverBase['GetUserFromPayload']>,
-        md: Metadata,
+        provider: IMetadataProvider,
     ): Promise<string> {
-        const fileEntity = await md.GetEntityObject<MJFileEntity>('MJ: Files', user);
+        const fileEntity = await provider.GetEntityObject<MJFileEntity>('MJ: Files', user);
         const fileLoaded = await fileEntity.Load(fileId);
         if (!fileLoaded) {
             throw new Error(`File record ${fileId} not found`);
         }
 
-        const providerEntity = await md.GetEntityObject<MJFileStorageProviderEntity>('MJ: File Storage Providers', user);
+        const providerEntity = await provider.GetEntityObject<MJFileStorageProviderEntity>('MJ: File Storage Providers', user);
         await providerEntity.Load(fileEntity.ProviderID);
 
         // Load the storage account so we can use the credential engine for OAuth providers (e.g. Box)
-        const rv = new RunView();
+        const rv = new RunView(<IRunViewProvider><any>provider);
         const accountResult = await rv.RunView<MJFileStorageAccountEntity>({
             EntityName: 'MJ: File Storage Accounts',
             ExtraFilter: `ProviderID = '${fileEntity.ProviderID}'`,

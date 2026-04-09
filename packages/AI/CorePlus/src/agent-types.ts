@@ -18,6 +18,7 @@ import { AgentPayloadChangeRequest } from './agent-payload-change-request';
 import { AgentScratchpad } from './agent-scratchpad';
 import { AIAPIKey } from '@memberjunction/ai';
 import { AgentResponseForm } from './response-forms';
+import { ActionParam } from '@memberjunction/actions-base';
 import { ActionableCommand, AutomaticCommand } from './ui-commands';
 import { AgentRequestAssignmentStrategy } from './assignment-strategy';
 import { MJAIAgentRunEntityExtended } from './MJAIAgentRunEntityExtended';
@@ -240,6 +241,42 @@ export interface FileOutputRef {
     fileId?: string;
     /** File size in bytes */
     sizeBytes?: number;
+}
+
+/**
+ * Attempts to parse an unknown value as a FileOutputRef by checking its shape.
+ * Returns null if the value doesn't have the required fields (fileName, mimeType,
+ * and either fileData or fileId).
+ *
+ * Detection is shape-based, not name-based — works regardless of what the action
+ * named its output parameter.
+ *
+ * @since 5.22.0
+ */
+export function parseFileOutputRef(raw: unknown): FileOutputRef | null {
+    let fo: Record<string, unknown> | null = null;
+    if (typeof raw === 'string') {
+        try { fo = JSON.parse(raw) as Record<string, unknown>; } catch { return null; }
+    } else if (raw && typeof raw === 'object') {
+        fo = raw as Record<string, unknown>;
+    }
+    if (!fo) return null;
+
+    const fileName = fo['fileName'];
+    const mimeType = fo['mimeType'];
+    if (typeof fileName !== 'string' || typeof mimeType !== 'string') return null;
+
+    const fileData = typeof fo['fileData'] === 'string' ? fo['fileData'] : undefined;
+    const fileId = typeof fo['fileId'] === 'string' ? fo['fileId'] : undefined;
+    if (!fileData && !fileId) return null;
+
+    return {
+        fileName,
+        mimeType,
+        fileData,
+        fileId,
+        sizeBytes: typeof fo['sizeBytes'] === 'number' ? fo['sizeBytes'] : undefined
+    };
 }
 
 /**
@@ -1496,4 +1533,17 @@ export interface ActionChange {
     actionLimits?: Record<string, number>;
 }
 
+// ── Types for action-step output parsing (used by AgentRunner reprocessing) ──
 
+/** Typed shape of the OutputData JSON written by base-agent for action steps */
+export interface ActionStepOutputData {
+    actionResult?: {
+        parameters?: ActionParam[];
+    };
+}
+
+/** Minimal read-only shape loaded from MJ: AI Agent Run Steps for reprocessing */
+export interface ActionStepSummary {
+    ID: string;
+    OutputData: string | null;
+}
