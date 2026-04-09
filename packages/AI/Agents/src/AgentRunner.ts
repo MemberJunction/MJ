@@ -357,7 +357,10 @@ export class AgentRunner {
                     // Update the agent response detail with progress message
                     if (agentResponseDetail && progress.message) {
                         agentResponseDetail.Message = progress.message;
-                        await agentResponseDetail.Save();
+                        const saved = await agentResponseDetail.Save();
+                        if (!saved) {
+                            LogError('Failed to save agent response detail progress update');
+                        }
                     }
                     // Call original callback if provided
                     if (originalOnProgress) {
@@ -418,7 +421,10 @@ export class AgentRunner {
                     LogStatus('Updating agent response detail with final result');
 
                     // Reload to get any updates from agent execution
-                    await agentResponseDetail.Load(agentResponseDetailId);
+                    const loaded = await agentResponseDetail.Load(agentResponseDetailId);
+                    if (!loaded) {
+                        LogError(`Failed to reload agent response detail ${agentResponseDetailId}`);
+                    }
 
                     agentResponseDetail.Message = agentResult.agentRun?.Message ||
                                                  (agentResult.success
@@ -437,7 +443,10 @@ export class AgentRunner {
                         agentResponseDetail.AutomaticCommands = JSON.stringify(agentResult.automaticCommands);
                     }
 
-                    await agentResponseDetail.Save();
+                    const saved = await agentResponseDetail.Save();
+                    if (!saved) {
+                        LogError(`Failed to save agent response detail ${agentResponseDetailId} with final status`);
+                    }
                     LogStatus(`Updated agent response detail ${agentResponseDetailId} with final status: ${agentResponseDetail.Status}`);
                 }
             })();

@@ -5738,9 +5738,7 @@ The context is now within limits. Please retry your request with the recovered c
             }
 
             // Execute artifact tool calls if provided (zero turn cost — processed inline)
-            // artifactToolCalls is on LoopAgentResponse but not yet on BaseAgentNextStep
-            // (which lives in ai-core-plus). Access via the raw parsed step.
-            const artifactToolCalls = (initialNextStep as Record<string, unknown>)['artifactToolCalls'] as ArtifactToolCall[] | undefined;
+            const artifactToolCalls = initialNextStep.artifactToolCalls as ArtifactToolCall[] | undefined;
             if (artifactToolCalls?.length) {
                 await this._artifactToolManager.ExecuteToolCalls(artifactToolCalls);
             }

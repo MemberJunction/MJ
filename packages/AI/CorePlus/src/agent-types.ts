@@ -448,6 +448,12 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
      */
     scratchpad?: AgentScratchpad;
     /**
+     * Artifact tool calls from the agent's response.
+     * Each entry identifies an artifact and the tool to execute against it.
+     * Processed inline (zero turn cost) alongside payload and scratchpad changes.
+     */
+    artifactToolCalls?: { artifactId: string; tool: string; input: Record<string, unknown> }[];
+    /**
      * Media outputs to promote to the agent's final outputs.
      * When set, these media items will be added to the agent's mediaOutputs collection
      * and stored in AIAgentRunMedia.
