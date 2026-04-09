@@ -42,7 +42,7 @@
     {
       "name": "renderMode",
       "type": "string",
-      "description": "Map rendering mode.",
+      "description": "Map rendering mode: 'point' for individual markers with clustering, 'heatmap' for density circles via spatial clustering, 'choropleth' for GeoJSON country polygons loaded from MJ: Countries entity.",
       "required": false,
       "defaultValue": "point",
       "possibleValues": ["point", "choropleth", "heatmap"]
@@ -50,9 +50,16 @@
     {
       "name": "clusterMarkers",
       "type": "boolean",
-      "description": "Enable marker clustering in point mode.",
+      "description": "Enable marker clustering in point mode via L.markerClusterGroup when available.",
       "required": false,
       "defaultValue": true
+    },
+    {
+      "name": "clusterRadius",
+      "type": "number",
+      "description": "Radius in degrees for spatial clustering in heatmap mode. Larger values produce fewer, larger clusters.",
+      "required": false,
+      "defaultValue": 2.0
     },
     {
       "name": "height",
@@ -88,38 +95,53 @@
     {
       "name": "colors",
       "type": "array",
-      "description": "Custom color palette for choropleth gradient.",
+      "description": "Custom color palette for choropleth regions. Array of hex color strings.",
       "required": false
+    },
+    {
+      "name": "countryField",
+      "type": "string",
+      "description": "Field name used to group records by country in choropleth mode.",
+      "required": false,
+      "defaultValue": "Country"
+    },
+    {
+      "name": "maxPopupRecords",
+      "type": "number",
+      "description": "Maximum number of records to show as clickable links in cluster/region popups before showing 'and X more...' overflow text.",
+      "required": false,
+      "defaultValue": 5
     }
   ],
   "events": [
     {
       "name": "onMarkerClick",
-      "description": "Fired when a map marker is clicked. Emits record data and coordinates.",
+      "description": "Fired when a map marker or popup record link is clicked. In point mode, clicking a marker or its popup link triggers this. Calls callbacks.OpenEntityRecord when entityName and entityPrimaryKeys are provided.",
       "parameters": [
         { "name": "record", "type": "object", "description": "The data record associated with the marker" },
         { "name": "lat", "type": "number", "description": "Latitude of the clicked marker" },
         { "name": "lng", "type": "number", "description": "Longitude of the clicked marker" },
-        { "name": "entityName", "type": "string", "description": "Entity name if provided" }
+        { "name": "entityName", "type": "string", "description": "Entity name if provided" },
+        { "name": "recordId", "type": "string", "description": "Composite primary key string (fields joined by ||)" }
       ]
     },
     {
       "name": "onRegionClick",
-      "description": "Fired when a choropleth region is clicked. Emits all records in that region.",
+      "description": "Fired when a choropleth region polygon or heatmap density circle is clicked. Emits all records within that region/cluster.",
       "parameters": [
-        { "name": "region", "type": "string", "description": "Region name (country or state)" },
-        { "name": "records", "type": "array", "description": "Records within the clicked region" },
-        { "name": "groupBy", "type": "string", "description": "Grouping level (country or state_province)" },
+        { "name": "region", "type": "string", "description": "Region or cluster name (country name or 'Cluster (N records)')" },
+        { "name": "records", "type": "array", "description": "All records within the clicked region" },
+        { "name": "groupBy", "type": "string", "description": "Grouping level: 'country' for choropleth, 'state_province' for heatmap clusters" },
         { "name": "count", "type": "number", "description": "Number of records in the region" }
       ]
     },
     {
       "name": "onMapRendered",
-      "description": "Fired after the map finishes rendering.",
+      "description": "Fired after the map finishes rendering markers, heatmap circles, or choropleth polygons.",
       "parameters": [
-        { "name": "renderMode", "type": "string", "description": "Current render mode" },
-        { "name": "markerCount", "type": "number", "description": "Number of markers rendered" },
-        { "name": "bounds", "type": "object", "description": "Map bounds { north, south, east, west }" }
+        { "name": "renderMode", "type": "string", "description": "Current render mode (point, heatmap, choropleth)" },
+        { "name": "markerCount", "type": "number", "description": "Number of records with valid coordinates rendered" },
+        { "name": "bounds", "type": "object", "description": "Map bounds as { north, south, east, west }" }
       ]
     }
   ],
@@ -131,5 +153,5 @@
     }
   ],
   "code": "@file:../../code/generic/simple-map.js",
-  "exampleUsage": "React.createElement(SimpleMap, { data: records, entityName: 'Organizations', height: 500 })"
+  "exampleUsage": "React.createElement(SimpleMap, { data: records, entityName: 'Organizations', entityPrimaryKeys: ['ID'], renderMode: 'choropleth', height: 500, utilities: utilities, callbacks: callbacks })"
 }

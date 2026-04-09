@@ -5,32 +5,49 @@
 - Default field names: `__mj_Latitude`, `__mj_Longitude` (MJ geo virtual fields)
 - Overridable via `latitudeField` / `longitudeField` props
 - Gracefully skips records with null/missing coordinates
+- Supports both BaseEntity objects (with .Get()) and plain JavaScript objects
 
 ## Rendering Modes
 - **Point Map** (default): Individual markers at each record's coordinates
   - Auto-fits map bounds to encompass all markers
-  - Marker clustering when dense (via leaflet.markercluster)
-  - Click marker to view popup with record summary
-- **Choropleth**: Color regions by record count or metric
-  - Group by country or state_province
-  - Loads BoundaryGeoJSON from Country/StateProvince entities via utilities.rv.RunView()
-  - Click region to emit records within that region
-- **Heat Map**: Density visualization using lat/lng points
-  - Good for large datasets (1000+ records)
+  - Marker clustering via L.markerClusterGroup when available and enabled
+  - Click marker popup link to open entity record via callbacks.OpenEntityRecord
+- **Heatmap**: Density visualization using spatial clustering
+  - Groups nearby records within configurable lat/lng radius (default 2.0 degrees)
+  - Renders colored circle markers sized and shaded by cluster density
+  - Larger/more opaque circles where records cluster together
+  - Click a cluster bubble to see matching records in a popup
+- **Choropleth / Regions**: Shaded geographic regions using GeoJSON boundaries
+  - Groups records by country field (configurable via `countryField` prop)
+  - Loads Country boundary data from MJ: Countries entity via utilities.rv.RunView
+  - FindCountryMatch logic matches free-text country names via Name, ISO2, and CommonAliases
+  - Renders shaded L.geoJSON polygons for countries with boundary data
+  - Falls back to colored circle markers for countries without GeoJSON boundaries
+  - Falls back to spatial clustering if boundary loading fails entirely
 
 ## Interactivity
-- Marker click → emits `onMarkerClick` with record data, coordinates
-- Region click (choropleth) → emits `onRegionClick` with all records in region
-- Map rendered → emits `onMapRendered` with marker count and bounds
-- OpenEntityRecord integration when entityName + entityPrimaryKeys provided
+- **Clickable popup cards**: Show first N records as clickable blue links, "and X more..." for overflow
+  - Record clicks call callbacks.OpenEntityRecord with entity name and primary key pairs
+  - maxPopupRecords controls how many records show before overflow text
+- Marker click / popup link click → calls callbacks.OpenEntityRecord
+- Region click (choropleth) → emits onRegionClick with all records in region
+- Map rendered → emits onMapRendered with marker count and bounds
 
 ## Entity Metadata Integration
-- When `entityName` provided: uses `utilities.md.Entities` for smart field formatting in popups
-- Auto-detects popup fields from entity metadata if `popupFields` not specified
-- Primary key extraction for OpenEntityRecord callback
+- When `entityName` provided: uses `utilities.md.Entities` for smart name field detection in popups
+- Auto-detects record name from entity NameField metadata
+- Primary key extraction for OpenEntityRecord callback via entityPrimaryKeys
+
+## Deferred Initialization
+- IntersectionObserver defers Leaflet map initialization until container is visible
+- Prevents wasted resources when map is in a hidden tab or below the fold
+- Handles re-visibility by invalidating map size and rendering pending changes
 
 ## Appearance
 - Title rendered above map when provided
 - Height configurable (default 400px)
+- Compact attribution (copyright OSM, not the full Leaflet attribution text)
+- Toolbar with mode toggle buttons and marker/location count
+- Loading indicator while map initializes
 - Clean marker icons with Leaflet defaults
 - OSM tile layer (free, no API key)

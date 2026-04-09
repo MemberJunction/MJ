@@ -82663,25 +82663,6 @@ export class MJTestOrganizationEntity extends BaseEntity<MJTestOrganizationEntit
     }
 
     /**
-     * CodeGen-generated geo field mappings for geocoding.
-     * Defines which entity fields contribute to each location type.
-     */
-    get GeoFieldMappings(): { LocationType: string; Fields: string[] }[] {
-        return [
-        {
-                LocationType: "Primary",
-                Fields: [
-                        "Address",
-                        "City",
-                        "State",
-                        "PostalCode",
-                        "Country"
-                ]
-        }
-];
-    }
-
-    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
