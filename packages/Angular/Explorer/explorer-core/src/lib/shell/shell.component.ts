@@ -109,7 +109,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   @ViewChild('searchInput') searchInput!: ElementRef<HTMLInputElement>;
 
   // Universal search bar
-  @ViewChild('shellSearchComposite') shellSearchComposite: { Focus?(): void } | undefined;
+  @ViewChild('shellSearchComposite') shellSearchComposite: { Focus?(): void; MinRelevancePercent?: number } | undefined;
 
   // Instance configuration feature flags
   get ShowSearchBar(): boolean {
@@ -1182,17 +1182,27 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           }
           break;
 
-        case 'search results':
-          // /app/:appName/search/:searchInput?Entity=...
+        case 'search results': {
+          // /app/:appName/search/:searchInput?minRelevance=...&Entity=...
           const searchInput = config['SearchInput'] as string | undefined;
           if (searchInput) {
             let url = `/app/${encodeURIComponent(appPath)}/search/${encodeURIComponent(searchInput)}`;
+            const searchParams = new URLSearchParams();
             if (entityName) {
-              url += `?Entity=${encodeURIComponent(entityName)}`;
+              searchParams.set('Entity', entityName);
+            }
+            if (queryParams) {
+              for (const [key, value] of Object.entries(queryParams)) {
+                if (value != null) searchParams.set(key, value);
+              }
+            }
+            if (searchParams.toString()) {
+              url += `?${searchParams.toString()}`;
             }
             return url;
           }
           break;
+        }
       }
     }
 
@@ -2420,7 +2430,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
 
   OnSearchSubmitted(query: string): void {
       if (query && query.trim().length >= 2) {
-          this.navigationService.OpenSearch(query);
+          const minRelevance = this.shellSearchComposite?.MinRelevancePercent;
+          this.navigationService.OpenSearch(query, minRelevance ? { minRelevance } : undefined);
       }
   }
 

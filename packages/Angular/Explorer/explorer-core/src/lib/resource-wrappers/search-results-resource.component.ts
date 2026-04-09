@@ -413,6 +413,17 @@ export class SearchResultsResource extends BaseResourceComponent {
             this.CurrentQuery = config.SearchInput as string;
         }
 
+        // Apply min relevance from the search bar dropdown if provided
+        if (config?.MinRelevance != null) {
+            const mr = Number(config.MinRelevance);
+            if (!isNaN(mr) && mr >= 0 && mr <= 100) {
+                this.MinScorePercent = mr;
+            }
+        }
+
+        // Sync min relevance to URL query param
+        this.navigationService.UpdateActiveTabQueryParams({ minRelevance: String(this.MinScorePercent) });
+
         if (this.CurrentQuery) {
             await this.ExecuteSearch(this.CurrentQuery);
         }
@@ -449,11 +460,13 @@ export class SearchResultsResource extends BaseResourceComponent {
     OnFiltersCleared(): void {
         this.ActiveFilters = {};
         this.MinScorePercent = 30;
+        this.navigationService.UpdateActiveTabQueryParams({ minRelevance: '30' });
         this.applyClientFilters();
     }
 
     OnMinScoreChanged(percent: number): void {
         this.MinScorePercent = percent;
+        this.navigationService.UpdateActiveTabQueryParams({ minRelevance: String(percent) });
         if (percent < this.serverMinScorePercent && this.CurrentQuery) {
             // User lowered below what server filtered — need to re-query with lower threshold
             this.ExecuteSearch(this.CurrentQuery);

@@ -7,7 +7,9 @@
 
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Subject } from 'rxjs';
-import { Metadata } from '@memberjunction/core';
+import { Metadata, StartupManager } from '@memberjunction/core';
+import { UserInfoEngine } from '@memberjunction/core-entities';
+import { MJEventType, MJGlobal } from '@memberjunction/global';
 import {
     GraphQLSearchClient,
     GraphQLDataProvider,
@@ -48,10 +50,20 @@ const SOURCE_TYPE_LABELS: Record<string, string> = {
     'storage': 'File Storage',
 };
 
+/** User setting key for persisting recent searches */
+const RECENT_SEARCHES_KEY = 'search.recentSearches';
+
 /** Recent search entry for history */
 export interface RecentSearch {
     Query: string;
     Timestamp: Date;
+    ResultCount: number;
+}
+
+/** JSON-safe shape for persistence (Date → ISO string) */
+interface RecentSearchJson {
+    Query: string;
+    Timestamp: string;
     ResultCount: number;
 }
 
@@ -63,13 +75,14 @@ export class SearchService {
     /** Whether a search is in progress */
     public IsSearching$ = new BehaviorSubject<boolean>(false);
 
-    /** Recent search history (kept in memory, max 20 entries) */
+    /** Recent search history (persisted via UserInfoEngine, max 20 entries) */
     public RecentSearches$ = new BehaviorSubject<RecentSearch[]>([]);
 
     /** Error stream */
     public Errors$ = new Subject<string>();
 
     private readonly maxRecentSearches = 20;
+    private recentSearchesLoaded = false;
 
     /**
      * Execute a search request via the SearchKnowledge GraphQL mutation.
@@ -127,9 +140,10 @@ export class SearchService {
         this.SearchResults$.next(null);
     }
 
-    /** Clear recent search history */
+    /** Clear recent search history (memory and persisted) */
     public ClearRecentSearches(): void {
         this.RecentSearches$.next([]);
+        this.persistRecentSearches([]);
     }
 
     /**
@@ -264,6 +278,41 @@ export class SearchService {
         return { Category: 'Tags', Options: options, MultiSelect: true };
     }
 
+    /**
+     * Load persisted recent searches from UserInfoEngine.
+     * Safe to call multiple times — only loads once.
+     */
+    public async LoadRecentSearches(): Promise<void> {
+        if (this.recentSearchesLoaded) return;
+
+        try {
+            MJGlobal.Instance.GetEventListener(true).subscribe(async (event) => {
+                if (event.event === MJEventType.LoggedIn) {
+                    await StartupManager.Instance.Startup();
+
+                    const engine = UserInfoEngine.Instance;
+                    console.log('[SearchService] After Startup — engine.Loaded:', engine.Loaded, 'UserSettings count:', engine.UserSettings.length);
+
+                    const json = engine.GetSetting(RECENT_SEARCHES_KEY);
+                    console.log('[SearchService] GetSetting("' + RECENT_SEARCHES_KEY + '"):', json?.substring(0, 100));
+
+                    if (json) {
+                        const parsed = JSON.parse(json) as RecentSearchJson[];
+                        const searches: RecentSearch[] = parsed.map(s => ({
+                            Query: s.Query,
+                            Timestamp: new Date(s.Timestamp),
+                            ResultCount: s.ResultCount
+                        }));
+                        this.RecentSearches$.next(searches);
+                    }
+                }
+            });
+        } catch (err) {
+            console.error('[SearchService] LoadRecentSearches error:', err);
+        }
+        this.recentSearchesLoaded = true;
+    }
+
     private addToRecentSearches(query: string, resultCount: number): void {
         const current = this.RecentSearches$.value;
         const filtered = current.filter(s => s.Query !== query);
@@ -272,6 +321,20 @@ export class SearchService {
             ...filtered
         ].slice(0, this.maxRecentSearches);
         this.RecentSearches$.next(updated);
+        this.persistRecentSearches(updated);
+    }
+
+    private persistRecentSearches(searches: RecentSearch[]): void {
+        try {
+            const json: RecentSearchJson[] = searches.map(s => ({
+                Query: s.Query,
+                Timestamp: s.Timestamp.toISOString(),
+                ResultCount: s.ResultCount
+            }));
+            UserInfoEngine.Instance.SetSettingDebounced(RECENT_SEARCHES_KEY, JSON.stringify(json));
+        } catch {
+            // Silently fail if UserInfoEngine not available
+        }
     }
 
     private createEmptyResponse(errorMessage?: string): SearchResponse {

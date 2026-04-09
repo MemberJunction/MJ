@@ -142,6 +142,13 @@ export class SearchInputComponent implements OnInit, OnDestroy {
         this.cdr.detectChanges();
     }
 
+    /** Handle click — re-opens suggest when input already has focus */
+    public OnClick(): void {
+        if (this.IsFocused) {
+            this.InputFocused.emit();
+        }
+    }
+
     /** Handle blur event */
     public OnBlur(): void {
         this.IsFocused = false;
