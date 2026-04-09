@@ -17,6 +17,13 @@
       "InjectExamples": true,
       "MaxExamplesToInject": 5,
       "ExampleInjectionStrategy": "Semantic",
+      "AgentTypePromptParams": {
+        "includeForEachDocs": false,
+        "includeWhileDocs": false,
+        "includeVariableRefsDocs": false,
+        "includeScratchpadDocs": true,
+        "includeMessageExpansionDocs": false
+      },
       "RerankerConfiguration": {
         "enabled": true,
         "rerankerModelId": "@lookup:MJ: AI Models.Name=rerank-v3.5",
@@ -472,6 +479,67 @@
           "sync": {
             "lastModified": "2026-04-04T01:10:00.988Z",
             "checksum": "42b7f6eb38b3173ecf36e7ef03b7340fff28fa548ae6ceda43791d093a2e390c"
+          }
+        }
+      ],
+      "MJ: AI Agents": [
+        {
+          "fields": {
+            "ParentID": "@parent:ID",
+            "Name": "Workflow Planner",
+            "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Assistant",
+            "Description": "Specialist sub-agent that designs and orchestrates multi-agent task graphs for complex requests requiring multiple agents working together with dependencies. Handles agent selection via Find Candidate Agents, builds dependency chains, and manages user confirmation before execution.",
+            "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+            "Status": "Active",
+            "ExecutionOrder": 0,
+            "ModelSelectionMode": "Agent",
+            "ArtifactCreationMode": "None",
+            "ExposeAsAction": false,
+            "AgentTypePromptParams": {
+              "includeForEachDocs": false,
+              "includeWhileDocs": false,
+              "includeScratchpadDocs": true,
+              "includeMessageExpansionDocs": false
+            }
+          },
+          "relatedEntities": {
+            "MJ: AI Agent Prompts": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "PromptID": "@lookup:MJ: AI Prompts.Name=Workflow Planner - System Prompt",
+                  "ExecutionOrder": 0,
+                  "Status": "Active"
+                }
+              }
+            ],
+            "MJ: AI Agent Actions": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:MJ: Actions.Name=Find Candidate Agents",
+                  "Status": "Active"
+                }
+              }
+            ],
+            "MJ: AI Agent Modalities": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ModalityID": "@lookup:MJ: AI Modalities.Name=Text",
+                  "Direction": "Input",
+                  "IsAllowed": true
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ModalityID": "@lookup:MJ: AI Modalities.Name=Text",
+                  "Direction": "Output",
+                  "IsAllowed": true
+                }
+              }
+            ]
           }
         }
       ]
