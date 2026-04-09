@@ -16,16 +16,27 @@ import { BaseEmbeddings, GetAIAPIKey } from '@memberjunction/ai';
 import { VectorDBBase, BaseResponse } from '@memberjunction/ai-vectordb';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { ISearchProvider } from './ISearchProvider';
-import { SearchSource, SearchFilters, SearchResultItem } from './search.types';
+import { SearchSource, SearchFilters, SearchResultItem, SearchResultType } from './search.types';
 
 /**
  * Provides vector similarity search across all configured vector indexes.
  * Handles multiple embedding models and vector databases transparently.
  */
+/** Shape of a cached embedding entry */
+interface EmbeddingCacheEntry {
+    vector: number[];
+    timestamp: number;
+}
+
 export class VectorSearchProvider implements ISearchProvider {
     public readonly SourceType: SearchSource = 'vector';
 
     private available = false;
+
+    /** LRU cache for query embeddings. Key = `${modelDriverClass}::${query}`, Value = embedding vector */
+    private static EmbeddingCache = new Map<string, EmbeddingCacheEntry>();
+    private static readonly CACHE_MAX_SIZE = 200;
+    private static readonly CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
     /**
      * Check and cache availability. Requires at least one vector index to be
@@ -93,6 +104,34 @@ export class VectorSearchProvider implements ISearchProvider {
     }
 
     // ────────────────────────────────────────────────────────────────
+    // Embedding cache helpers
+    // ────────────────────────────────────────────────────────────────
+
+    /** Retrieve a cached embedding if present and not expired, promoting it for LRU */
+    private getCachedEmbedding(key: string): number[] | null {
+        const entry = VectorSearchProvider.EmbeddingCache.get(key);
+        if (entry && (Date.now() - entry.timestamp) < VectorSearchProvider.CACHE_TTL_MS) {
+            // Promote to most-recently-used by re-inserting
+            VectorSearchProvider.EmbeddingCache.delete(key);
+            VectorSearchProvider.EmbeddingCache.set(key, entry);
+            return entry.vector;
+        }
+        // Expired or not found — clean up stale entry if present
+        if (entry) VectorSearchProvider.EmbeddingCache.delete(key);
+        return null;
+    }
+
+    /** Store an embedding in the cache, evicting the oldest entry if at capacity */
+    private setCachedEmbedding(key: string, vector: number[]): void {
+        // Evict least-recently-used (first key in insertion order) if at capacity
+        if (VectorSearchProvider.EmbeddingCache.size >= VectorSearchProvider.CACHE_MAX_SIZE) {
+            const oldestKey = VectorSearchProvider.EmbeddingCache.keys().next().value;
+            if (oldestKey !== undefined) VectorSearchProvider.EmbeddingCache.delete(oldestKey);
+        }
+        VectorSearchProvider.EmbeddingCache.set(key, { vector, timestamp: Date.now() });
+    }
+
+    // ────────────────────────────────────────────────────────────────
     // Private helpers
     // ────────────────────────────────────────────────────────────────
 
@@ -130,22 +169,33 @@ export class VectorSearchProvider implements ISearchProvider {
             }
 
             const apiKey = GetAIAPIKey(model.DriverClass);
-            const embedding = MJGlobal.Instance.ClassFactory.CreateInstance<BaseEmbeddings>(
-                BaseEmbeddings, model.DriverClass, apiKey
-            );
-            if (!embedding) {
-                LogError(`VectorSearchProvider: Failed to create embedding for ${model.DriverClass}`);
-                return [];
-            }
+            // Check embedding cache before calling the model
+            const cacheKey = `${model.DriverClass}::${query}`;
+            let queryVector = this.getCachedEmbedding(cacheKey);
 
-            const embedResult = await embedding.EmbedText({ text: query, model: '' });
-            if (!embedResult?.vector?.length) {
-                LogError(`VectorSearchProvider: Failed to embed with ${model.Name}`);
-                return [];
+            if (queryVector) {
+                LogStatus(`VectorSearchProvider: Embedding cache hit for model ${model.Name}`);
+            } else {
+                const embeddingInstance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseEmbeddings>(
+                    BaseEmbeddings, model.DriverClass, apiKey
+                );
+                if (!embeddingInstance) {
+                    LogError(`VectorSearchProvider: Failed to create embedding for ${model.DriverClass}`);
+                    return [];
+                }
+
+                const embedResult = await embeddingInstance.EmbedText({ text: query, model: '' });
+                if (!embedResult?.vector?.length) {
+                    LogError(`VectorSearchProvider: Failed to embed with ${model.Name}`);
+                    return [];
+                }
+
+                queryVector = embedResult.vector;
+                this.setCachedEmbedding(cacheKey, queryVector);
             }
 
             const indexPromises = indexes.map(vectorIndex =>
-                this.queryOneIndex(vectorIndex, embedResult.vector, topK, filter, contextUser)
+                this.queryOneIndex(vectorIndex, queryVector, topK, filter, contextUser)
                     .catch(error => {
                         LogError(`VectorSearchProvider: Error querying index "${vectorIndex.Name}": ${error}`);
                         return [] as SearchResultItem[];
@@ -235,6 +285,7 @@ export class VectorSearchProvider implements ISearchProvider {
                 EntityName: entityName,
                 RecordID: recordID,
                 SourceType: 'vector',
+                ResultType: 'entity-record' as SearchResultType,
                 Title: title,
                 Snippet: snippet,
                 Score: rawScore,

@@ -158,6 +158,7 @@ export class SearchFusion {
             EntityName: 'Unknown',
             RecordID: candidate.ID,
             SourceType: 'fused',
+            ResultType: 'entity-record',
             Title: 'Unknown',
             Snippet: '',
             Score: candidate.Score,

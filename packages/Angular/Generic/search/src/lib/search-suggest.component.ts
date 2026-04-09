@@ -10,12 +10,22 @@ import {
     Component,
     EventEmitter,
     Input,
+    OnInit,
     Output,
     ChangeDetectorRef,
     inject
 } from '@angular/core';
+import { StartupManager } from '@memberjunction/core';
+import { UserInfoEngine } from '@memberjunction/core-entities';
 import { SearchResultItem } from './search-types';
 import { RecentSearch } from './search.service';
+import { MJEventType, MJGlobal } from '@memberjunction/global';
+
+/** User setting key for persisting the preview min relevance threshold */
+const PREVIEW_MIN_RELEVANCE_KEY = 'search.previewMinRelevance';
+
+/** Preset options for the min relevance filter */
+const MIN_RELEVANCE_OPTIONS = [0, 15, 30, 50, 70];
 
 @Component({
     standalone: false,
@@ -23,7 +33,7 @@ import { RecentSearch } from './search.service';
     templateUrl: './search-suggest.component.html',
     styleUrls: ['./search-suggest.component.css']
 })
-export class SearchSuggestComponent {
+export class SearchSuggestComponent implements OnInit {
     private cdr = inject(ChangeDetectorRef);
 
     // --- Configuration Inputs ---
@@ -66,10 +76,28 @@ export class SearchSuggestComponent {
     /** Emitted when the user clicks "See all N results" */
     @Output() SeeAllRequested = new EventEmitter<string>();
 
+    /** Emitted when the user clicks "Clear" on recent searches */
+    @Output() ClearRecentRequested = new EventEmitter<void>();
+
     // --- Internal state ---
 
     /** Currently keyboard-highlighted index (-1 for none) */
     public HighlightedIndex = -1;
+
+    /** Min relevance percentage (0-100) for filtering preview results */
+    public MinRelevancePercent = 0;
+
+    /** Whether the filter popover is open */
+    public IsFilterOpen = false;
+
+    /** Available min relevance presets */
+    public readonly MinRelevanceOptions = MIN_RELEVANCE_OPTIONS;
+
+    // --- Lifecycle ---
+
+    async ngOnInit(): Promise<void> {
+        await this.loadMinRelevanceSetting();
+    }
 
     // --- Public Methods ---
 
@@ -154,9 +182,11 @@ export class SearchSuggestComponent {
         return this.RecentSearches.slice(0, 5);
     }
 
-    /** Visible preview results sorted by score descending, capped at MaxPreviewResults */
+    /** Visible preview results filtered by min relevance, sorted by score descending, capped at MaxPreviewResults */
     public get VisiblePreviewResults(): SearchResultItem[] {
+        const minScore = this.MinRelevancePercent / 100;
         return [...this.PreviewResults]
+            .filter(r => r.Score >= minScore)
             .sort((a, b) => b.Score - a.Score)
             .slice(0, this.MaxPreviewResults);
     }
@@ -178,6 +208,13 @@ export class SearchSuggestComponent {
         this.SeeAllRequested.emit(this.Query);
     }
 
+    /** Handle clicking "Clear" on recent searches */
+    public OnClearRecentClick(event: MouseEvent): void {
+        event.stopPropagation();
+        event.preventDefault();
+        this.ClearRecentRequested.emit();
+    }
+
     /** Check if an item at the given index is highlighted */
     public IsHighlighted(index: number): boolean {
         return this.HighlightedIndex === index;
@@ -186,6 +223,41 @@ export class SearchSuggestComponent {
     /** Format a score value as a percentage */
     public FormatScore(score: number): string {
         return `${Math.round(score * 100)}%`;
+    }
+
+    /** Get the CSS class for a score value: high (green), medium (amber), low (gray) */
+    public GetScoreClass(score: number): string {
+        if (score >= 0.40) return 'suggest-score-high';
+        if (score >= 0.15) return 'suggest-score-medium';
+        return 'suggest-score-low';
+    }
+
+    /** Toggle the filter popover */
+    public ToggleFilter(event: MouseEvent): void {
+        event.stopPropagation();
+        event.preventDefault();
+        this.IsFilterOpen = !this.IsFilterOpen;
+        this.cdr.detectChanges();
+    }
+
+    /** Set the min relevance and persist */
+    public SetMinRelevance(percent: number, event: MouseEvent): void {
+        event.stopPropagation();
+        event.preventDefault();
+        this.MinRelevancePercent = percent;
+        this.IsFilterOpen = false;
+        this.persistMinRelevanceSetting(percent);
+        this.cdr.detectChanges();
+    }
+
+    /** Whether a given option is the currently selected min relevance */
+    public IsSelectedRelevance(percent: number): boolean {
+        return this.MinRelevancePercent === percent;
+    }
+
+    /** Format a relevance option for display */
+    public FormatRelevanceOption(percent: number): string {
+        return percent === 0 ? 'Show all' : `≥ ${percent}%`;
     }
 
     // --- Private ---
@@ -202,5 +274,39 @@ export class SearchSuggestComponent {
             }
         }
         return count;
+    }
+
+    private async loadMinRelevanceSetting(): Promise<void> {
+        try {
+            // Wait for all startup engines (including UserInfoEngine) to finish loading
+            MJGlobal.Instance.GetEventListener(true).subscribe( async (event) => {
+                switch (event.event) {
+                    case MJEventType.LoggedIn:
+                        // Wait for StartupManager to complete before refreshing 
+                        await StartupManager.Instance.Startup();
+
+                        const engine = UserInfoEngine.Instance;
+                        const saved = engine.GetSetting(PREVIEW_MIN_RELEVANCE_KEY);
+
+                        if (saved != null) {
+                            const parsed = parseInt(saved, 10);
+                            if (!isNaN(parsed) && parsed >= 0 && parsed <= 100) {
+                                this.MinRelevancePercent = parsed;
+                                this.cdr.detectChanges();
+                            }
+                        }
+                    }
+            });
+        } catch (err) {
+            console.error('[SearchSuggest] loadMinRelevanceSetting error:', err);
+        }
+    }
+
+    private persistMinRelevanceSetting(percent: number): void {
+        try {
+            UserInfoEngine.Instance.SetSettingDebounced(PREVIEW_MIN_RELEVANCE_KEY, String(percent));
+        } catch {
+            // Silently fail if UserInfoEngine not available
+        }
     }
 }

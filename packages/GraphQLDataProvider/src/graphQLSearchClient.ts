@@ -92,6 +92,10 @@ export interface SearchClientResultItem {
     RecordName?: string;
     /** ISO timestamp of when the match was found */
     MatchedAt: string;
+    /** Discriminator for UI rendering: 'entity-record', 'storage-file', or 'content-item' */
+    ResultType: string;
+    /** Raw metadata JSON from the search provider (e.g., storage account ID, file path) */
+    RawMetadata?: string;
 }
 
 /**
@@ -139,6 +143,7 @@ interface SearchResultItemResponse {
     EntityName: string;
     RecordID: string;
     SourceType: string;
+    ResultType: string;
     Title: string;
     Snippet: string;
     Score: number;
@@ -147,6 +152,7 @@ interface SearchResultItemResponse {
     EntityIcon?: string;
     RecordName?: string;
     MatchedAt: string;
+    RawMetadata?: string;
 }
 
 /**
@@ -308,14 +314,15 @@ export class GraphQLSearchClient {
      */
     private buildSearchKnowledgeMutation(): string {
         return gql`
-            mutation SearchKnowledge($input: SearchKnowledgeInput!) {
-                SearchKnowledge(input: $input) {
+            mutation SearchKnowledge($query: String!, $maxResults: Float, $filters: SearchFiltersInput, $minScore: Float) {
+                SearchKnowledge(query: $query, maxResults: $maxResults, filters: $filters, minScore: $minScore) {
                     Success
                     Results {
                         ID
                         EntityName
                         RecordID
                         SourceType
+                        ResultType
                         Title
                         Snippet
                         Score
@@ -329,6 +336,7 @@ export class GraphQLSearchClient {
                         EntityIcon
                         RecordName
                         MatchedAt
+                        RawMetadata
                     }
                     TotalCount
                     ElapsedMs
@@ -352,14 +360,15 @@ export class GraphQLSearchClient {
      */
     private buildPreviewSearchMutation(): string {
         return gql`
-            mutation PreviewSearch($input: PreviewSearchInput!) {
-                PreviewSearch(input: $input) {
+            mutation PreviewSearch($query: String!, $maxResults: Float) {
+                PreviewSearch(query: $query, maxResults: $maxResults) {
                     Success
                     Results {
                         ID
                         EntityName
                         RecordID
                         SourceType
+                        ResultType
                         Title
                         Snippet
                         Score
@@ -373,6 +382,7 @@ export class GraphQLSearchClient {
                         EntityIcon
                         RecordName
                         MatchedAt
+                        RawMetadata
                     }
                     TotalCount
                     ElapsedMs
@@ -398,22 +408,22 @@ export class GraphQLSearchClient {
      * @returns The formatted variables object for the GraphQL request
      * @private
      */
-    private prepareSearchVariables(params: SearchClientParams): { input: Record<string, unknown> } {
-        const input: Record<string, unknown> = {
-            Query: params.Query
+    private prepareSearchVariables(params: SearchClientParams): Record<string, unknown> {
+        const variables: Record<string, unknown> = {
+            query: params.Query
         };
 
         if (params.MaxResults !== undefined) {
-            input.MaxResults = params.MaxResults;
+            variables.maxResults = params.MaxResults;
         }
         if (params.MinScore !== undefined) {
-            input.MinScore = params.MinScore;
+            variables.minScore = params.MinScore;
         }
         if (params.Filters !== undefined) {
-            input.Filters = this.prepareFilters(params.Filters);
+            variables.filters = this.prepareFilters(params.Filters);
         }
 
-        return { input };
+        return variables;
     }
 
     /**
@@ -445,16 +455,16 @@ export class GraphQLSearchClient {
      * @returns The formatted variables object for the GraphQL request
      * @private
      */
-    private preparePreviewVariables(query: string, maxResults?: number): { input: Record<string, unknown> } {
-        const input: Record<string, unknown> = {
-            Query: query
+    private preparePreviewVariables(query: string, maxResults?: number): Record<string, unknown> {
+        const variables: Record<string, unknown> = {
+            query: query
         };
 
         if (maxResults !== undefined) {
-            input.MaxResults = maxResults;
+            variables.maxResults = maxResults;
         }
 
-        return { input };
+        return variables;
     }
 
     // =========================================================================
@@ -521,6 +531,7 @@ export class GraphQLSearchClient {
             EntityName: item.EntityName,
             RecordID: item.RecordID,
             SourceType: item.SourceType,
+            ResultType: item.ResultType,
             Title: item.Title,
             Snippet: item.Snippet,
             Score: item.Score,
@@ -528,7 +539,8 @@ export class GraphQLSearchClient {
             Tags: item.Tags || [],
             EntityIcon: item.EntityIcon,
             RecordName: item.RecordName,
-            MatchedAt: item.MatchedAt
+            MatchedAt: item.MatchedAt,
+            RawMetadata: item.RawMetadata
         };
     }
 
