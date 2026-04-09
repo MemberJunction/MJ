@@ -1227,7 +1227,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         let cachedResult: RunViewResult | undefined;
         let fingerprint: string | undefined;
 
-        if ((params.CacheLocal || this.TrustLocalCacheCompletely) && LocalCacheManager.Instance.IsInitialized) {
+        const entityCacheAllowed = this.IsServerCacheAllowedForEntity(params);
+        if ((params.CacheLocal || this.TrustLocalCacheCompletely) && entityCacheAllowed && LocalCacheManager.Instance.IsInitialized) {
             fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params, this.InstanceConnectionString);
             const cached = await LocalCacheManager.Instance.GetRunViewResult(fingerprint);
             if (cached) {
@@ -1814,7 +1815,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // with circular subscriber references that break JSON.stringify.
         // On cache read, TransformSimpleObjectToEntityObject is called to restore
         // entity objects when ResultType === 'entity_object'.
-        if ((params.CacheLocal || this.TrustLocalCacheCompletely) && result.Success && preResult.fingerprint && LocalCacheManager.Instance.IsInitialized) {
+        const postEntityCacheAllowed = this.IsServerCacheAllowedForEntity(params);
+        if ((params.CacheLocal || this.TrustLocalCacheCompletely) && postEntityCacheAllowed && result.Success && preResult.fingerprint && LocalCacheManager.Instance.IsInitialized) {
             const maxUpdatedAt = this.extractMaxUpdatedAt(result.Results);
             await LocalCacheManager.Instance.SetRunViewResult(
                 preResult.fingerprint,
@@ -1893,7 +1895,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             }
 
             const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params[i], this.InstanceConnectionString);
-            if ((params[i].CacheLocal || this.TrustLocalCacheCompletely) && results[i].Success && LocalCacheManager.Instance.IsInitialized) {
+            const batchEntityCacheAllowed = this.IsServerCacheAllowedForEntity(params[i]);
+            if ((params[i].CacheLocal || this.TrustLocalCacheCompletely) && batchEntityCacheAllowed && results[i].Success && LocalCacheManager.Instance.IsInitialized) {
                 const maxUpdatedAt = this.extractMaxUpdatedAt(results[i].Results);
                 cachePromises.push(LocalCacheManager.Instance.SetRunViewResult(
                     fingerprint,
@@ -2068,11 +2071,32 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * - No `ExtraFilter` (empty or undefined)
      * - No `OrderBy` (empty or undefined)
      */
+    /**
+     * Checks whether server-side caching is allowed for the entity in the given RunViewParams.
+     * Returns false for entities that have TrustServerCacheCompletely = false, or for
+     * Record Changes which is always exempt (rows are created via raw SQL side-effects,
+     * not BaseEntity.Save(), so cache invalidation events never fire).
+     */
+    protected IsServerCacheAllowedForEntity(params: RunViewParams): boolean {
+        if (!params.EntityName) return true; // View-based queries without entity name — allow caching
+        const entity = this.EntityByName(params.EntityName);
+        if (!entity) return true; // Entity not found — allow caching (will fail later anyway)
+
+        // Always exempt Record Changes — rows are created via spCreateRecordChange_Internal
+        // inside save SQL batches, never through BaseEntity.Save(), so the cache is never
+        // invalidated by entity events. Even if TrustServerCacheCompletely is accidentally
+        // set to true, we still skip caching for this entity.
+        if (entity.Name === 'MJ: Record Changes') return false;
+
+        return entity.TrustServerCacheCompletely !== false;
+    }
+
     protected shouldAutoCache(params: RunViewParams, result: RunViewResult): boolean {
         if (!this.TrustLocalCacheCompletely) return false;
         if (params.CacheLocal) return false; // already handled
         if (!LocalCacheManager.Instance.IsInitialized) return false;
         if (!result.Success) return false;
+        if (!this.IsServerCacheAllowedForEntity(params)) return false;
         if (ProviderBase.ServerAutoCacheMaxRows <= 0) return false;
         if ((result.Results?.length ?? 0) > ProviderBase.ServerAutoCacheMaxRows) return false;
 

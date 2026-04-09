@@ -1,4 +1,5 @@
 import { EntityInfo } from '@memberjunction/core';
+import { MapRenderMode } from '@memberjunction/ng-map-view';
 
 /**
  * Filter configuration for the Data Explorer
@@ -52,7 +53,7 @@ export interface BreadcrumbItem {
 /**
  * View mode options for the Data Explorer
  */
-export type DataExplorerViewMode = 'grid' | 'cards' | 'timeline';
+export type DataExplorerViewMode = 'grid' | 'cards' | 'timeline' | 'map';
 
 /**
  * Timeline orientation options
@@ -178,6 +179,12 @@ export interface DataExplorerState {
   timelineDateFieldName: string | null;
   timelineSortOrder: 'asc' | 'desc';
 
+  // Map configuration (persisted across page reloads)
+  mapRenderMode: MapRenderMode;
+  mapZoom: number | null;
+  mapCenterLat: number | null;
+  mapCenterLng: number | null;
+
   // Detail panel
   detailPanelOpen: boolean;
   detailPanelWidth: number;
@@ -279,6 +286,10 @@ export const DEFAULT_EXPLORER_STATE: DataExplorerState = {
   timelineOrientation: 'vertical',
   timelineDateFieldName: null,
   timelineSortOrder: 'desc',
+  mapRenderMode: 'point',
+  mapZoom: null,
+  mapCenterLat: null,
+  mapCenterLng: null,
   detailPanelOpen: false,
   detailPanelWidth: 400,
   selectedRecordId: null,

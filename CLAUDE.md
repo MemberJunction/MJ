@@ -4,6 +4,9 @@ Don't say "You're absolutely right" each time I correct you. Mix it up, that's s
 ## Claude Code Fast Mode
 To enable fast mode (2.5x faster Opus 4.6 responses), add `"fastMode": true` to `~/.claude/settings.json`. This is the reliable way to enable it in the **VSCode IDE extension** — the `/fast` slash command only works consistently in CLI mode. The setting persists across sessions. Note: fast mode bills to extra usage at a higher per-token rate.
 
+## Full Autonomy Development (Sandboxed Environments Only)
+See **[claude-full-auto.md](claude-full-auto.md)** for the full-autonomy development guide — used when Claude operates as an independent developer on sandboxed/air-gapped machines with full database, build, and testing access. **Not for regular development machines.**
+
 # MemberJunction Development Guide
 
 ## 🚨 CRITICAL RULES - VIOLATIONS ARE UNACCEPTABLE 🚨

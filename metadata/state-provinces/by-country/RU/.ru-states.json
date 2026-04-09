@@ -1,0 +1,998 @@
+[
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Adygea",
+      "Code": "AD",
+      "ISO3166_2": "RU-AD",
+      "Latitude": 44.6939,
+      "Longitude": 40.152,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Adygea\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Altai",
+      "Code": "ALT",
+      "ISO3166_2": "RU-ALT",
+      "Latitude": 50.7114,
+      "Longitude": 86.8572,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Altai\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Altai",
+      "Code": "AL",
+      "ISO3166_2": "RU-AL",
+      "Latitude": 50.7114,
+      "Longitude": 86.8572,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Altai\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Amur",
+      "Code": "AMU",
+      "ISO3166_2": "RU-AMU",
+      "Latitude": 52.8032,
+      "Longitude": 128.4373,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Amur\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Arkhangelsk",
+      "Code": "ARK",
+      "ISO3166_2": "RU-ARK",
+      "Latitude": 64.5459,
+      "Longitude": 40.5506,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Arkhangelsk\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Astrakhan",
+      "Code": "AST",
+      "ISO3166_2": "RU-AST",
+      "Latitude": 46.3498,
+      "Longitude": 48.0326,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Astrakhan\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Bashkortostan",
+      "Code": "BA",
+      "ISO3166_2": "RU-BA",
+      "Latitude": 54.4748,
+      "Longitude": 55.9785,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Bashkortostan\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Belgorod",
+      "Code": "BEL",
+      "ISO3166_2": "RU-BEL",
+      "Latitude": 50.708,
+      "Longitude": 37.5838,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Belgorod\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Bryansk",
+      "Code": "BRY",
+      "ISO3166_2": "RU-BRY",
+      "Latitude": 53.2424,
+      "Longitude": 34.3668,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Bryansk\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Buryatia",
+      "Code": "BU",
+      "ISO3166_2": "RU-BU",
+      "Latitude": 52.7182,
+      "Longitude": 109.4921,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Buryatia\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Chechen",
+      "Code": "CE",
+      "ISO3166_2": "RU-CE",
+      "Latitude": 43.4,
+      "Longitude": 45.7,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Chechen\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Chelyabinsk",
+      "Code": "CHE",
+      "ISO3166_2": "RU-CHE",
+      "Latitude": 55.1559,
+      "Longitude": 61.4013,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Chelyabinsk\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Chukotka",
+      "Code": "CHU",
+      "ISO3166_2": "RU-CHU",
+      "Latitude": 66.0006,
+      "Longitude": 169.4901,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Chukotka\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Chuvash",
+      "Code": "CU",
+      "ISO3166_2": "RU-CU",
+      "Latitude": 55.426,
+      "Longitude": 47.0849,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Chuvash\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Dagestan",
+      "Code": "DA",
+      "ISO3166_2": "RU-DA",
+      "Latitude": 43.0,
+      "Longitude": 47.0,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Dagestan\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Ingushetia",
+      "Code": "IN",
+      "ISO3166_2": "RU-IN",
+      "Latitude": 43.1655,
+      "Longitude": 44.9797,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Ingushetia\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Irkutsk",
+      "Code": "IRK",
+      "ISO3166_2": "RU-IRK",
+      "Latitude": 52.2855,
+      "Longitude": 104.289,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Irkutsk\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Ivanovo",
+      "Code": "IVA",
+      "ISO3166_2": "RU-IVA",
+      "Latitude": 56.9957,
+      "Longitude": 40.9812,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Ivanovo\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Jewish",
+      "Code": "YEV",
+      "ISO3166_2": "RU-YEV",
+      "Latitude": 48.5602,
+      "Longitude": 132.2776,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Jewish\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Kabardino-Balkar",
+      "Code": "KB",
+      "ISO3166_2": "RU-KB",
+      "Latitude": 43.4428,
+      "Longitude": 43.4205,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Kabardino-Balkar\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Kaliningrad",
+      "Code": "KGD",
+      "ISO3166_2": "RU-KGD",
+      "Latitude": 54.7104,
+      "Longitude": 20.4522,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Kaliningrad\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Kalmykia",
+      "Code": "KL",
+      "ISO3166_2": "RU-KL",
+      "Latitude": 46.9017,
+      "Longitude": 45.2492,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Kalmykia\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Kaluga",
+      "Code": "KLU",
+      "ISO3166_2": "RU-KLU",
+      "Latitude": 54.4383,
+      "Longitude": 35.5273,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Kaluga\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Kamchatka",
+      "Code": "KAM",
+      "ISO3166_2": "RU-KAM",
+      "Latitude": 57.1915,
+      "Longitude": 160.0384,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Kamchatka\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Karachay-Cherkess",
+      "Code": "KC",
+      "ISO3166_2": "RU-KC",
+      "Latitude": 43.7368,
+      "Longitude": 41.7268,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Karachay-Cherkess\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Karelia",
+      "Code": "KR",
+      "ISO3166_2": "RU-KR",
+      "Latitude": 62.6194,
+      "Longitude": 33.492,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Karelia\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Kemerovo",
+      "Code": "KEM",
+      "ISO3166_2": "RU-KEM",
+      "Latitude": 54.5336,
+      "Longitude": 87.3429,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Kemerovo\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Khabarovsk",
+      "Code": "KHA",
+      "ISO3166_2": "RU-KHA",
+      "Latitude": 51.6313,
+      "Longitude": 136.1215,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Khabarovsk\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Khakassia",
+      "Code": "KK",
+      "ISO3166_2": "RU-KK",
+      "Latitude": 53.4399,
+      "Longitude": 90.0664,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Khakassia\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Khanty-Mansi",
+      "Code": "KHM",
+      "ISO3166_2": "RU-KHM",
+      "Latitude": 61.8793,
+      "Longitude": 68.6418,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Khanty-Mansi\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Kirov",
+      "Code": "KIR",
+      "ISO3166_2": "RU-KIR",
+      "Latitude": 58.6036,
+      "Longitude": 49.6666,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Kirov\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Komi",
+      "Code": "KO",
+      "ISO3166_2": "RU-KO",
+      "Latitude": 63.9881,
+      "Longitude": 54.3326,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Komi\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Kostroma",
+      "Code": "KOS",
+      "ISO3166_2": "RU-KOS",
+      "Latitude": 58.6044,
+      "Longitude": 41.5889,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Kostroma\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Krasnodar",
+      "Code": "KDA",
+      "ISO3166_2": "RU-KDA",
+      "Latitude": 45.7684,
+      "Longitude": 39.0261,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Krasnodar\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Krasnoyarsk",
+      "Code": "KYA",
+      "ISO3166_2": "RU-KYA",
+      "Latitude": 63.3234,
+      "Longitude": 97.098,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Krasnoyarsk\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Kurgan",
+      "Code": "KGN",
+      "ISO3166_2": "RU-KGN",
+      "Latitude": 55.4409,
+      "Longitude": 65.3421,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Kurgan\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Kursk",
+      "Code": "KRS",
+      "ISO3166_2": "RU-KRS",
+      "Latitude": 51.7309,
+      "Longitude": 36.1923,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Kursk\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Leningrad",
+      "Code": "LEN",
+      "ISO3166_2": "RU-LEN",
+      "Latitude": 60.1853,
+      "Longitude": 32.3925,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Leningrad\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Lipetsk",
+      "Code": "LIP",
+      "ISO3166_2": "RU-LIP",
+      "Latitude": 52.6935,
+      "Longitude": 39.1123,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Lipetsk\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Magadan",
+      "Code": "MAG",
+      "ISO3166_2": "RU-MAG",
+      "Latitude": 63.5515,
+      "Longitude": 154.0147,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Magadan\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Mari El",
+      "Code": "ME",
+      "ISO3166_2": "RU-ME",
+      "Latitude": 56.5768,
+      "Longitude": 47.8818,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Mari El\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Mordovia",
+      "Code": "MO",
+      "ISO3166_2": "RU-MO",
+      "Latitude": 54.442,
+      "Longitude": 44.4661,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Mordovia\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Moscow",
+      "Code": "MOS",
+      "ISO3166_2": "RU-MOS",
+      "Latitude": 55.6256,
+      "Longitude": 37.6064,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Moscow\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Moscow",
+      "Code": "MOW",
+      "ISO3166_2": "RU-MOW",
+      "Latitude": 55.6256,
+      "Longitude": 37.6064,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Moscow\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Murmansk",
+      "Code": "MUR",
+      "ISO3166_2": "RU-MUR",
+      "Latitude": 68.0,
+      "Longitude": 33.9999,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Murmansk\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Nenets",
+      "Code": "NEN",
+      "ISO3166_2": "RU-NEN",
+      "Latitude": 67.6783,
+      "Longitude": 57.0627,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Nenets\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Nizhny Novgorod",
+      "Code": "NIZ",
+      "ISO3166_2": "RU-NIZ",
+      "Latitude": 56.2769,
+      "Longitude": 43.9213,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Nizhny Novgorod\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "North Ossetia-Alania",
+      "Code": "SE",
+      "ISO3166_2": "RU-SE",
+      "Latitude": 42.9921,
+      "Longitude": 44.2636,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"North Ossetia-Alania\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Novgorod",
+      "Code": "NGR",
+      "ISO3166_2": "RU-NGR",
+      "Latitude": 58.521,
+      "Longitude": 31.2758,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Novgorod\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Novosibirsk",
+      "Code": "NVS",
+      "ISO3166_2": "RU-NVS",
+      "Latitude": 54.9678,
+      "Longitude": 82.9516,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Novosibirsk\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Omsk",
+      "Code": "OMS",
+      "ISO3166_2": "RU-OMS",
+      "Latitude": 54.9914,
+      "Longitude": 73.3715,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Omsk\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Orenburg",
+      "Code": "ORE",
+      "ISO3166_2": "RU-ORE",
+      "Latitude": 52.0269,
+      "Longitude": 54.7277,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Orenburg\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Oryol",
+      "Code": "ORL",
+      "ISO3166_2": "RU-ORL",
+      "Latitude": 52.8393,
+      "Longitude": 36.4252,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Oryol\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Penza",
+      "Code": "PNZ",
+      "ISO3166_2": "RU-PNZ",
+      "Latitude": 53.1655,
+      "Longitude": 44.7879,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Penza\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Perm",
+      "Code": "PER",
+      "ISO3166_2": "RU-PER",
+      "Latitude": 58.5952,
+      "Longitude": 56.316,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Perm\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Primorsky",
+      "Code": "PRI",
+      "ISO3166_2": "RU-PRI",
+      "Latitude": 45.0819,
+      "Longitude": 134.7266,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Primorsky\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Pskov",
+      "Code": "PSK",
+      "ISO3166_2": "RU-PSK",
+      "Latitude": 57.5359,
+      "Longitude": 28.8587,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Pskov\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Rostov",
+      "Code": "ROS",
+      "ISO3166_2": "RU-ROS",
+      "Latitude": 47.6222,
+      "Longitude": 40.7958,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Rostov\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Ryazan",
+      "Code": "RYA",
+      "ISO3166_2": "RU-RYA",
+      "Latitude": 54.6296,
+      "Longitude": 39.7425,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Ryazan\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Saint Petersburg",
+      "Code": "SPE",
+      "ISO3166_2": "RU-SPE",
+      "Latitude": 59.9387,
+      "Longitude": 30.3162,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Saint Petersburg\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Sakha",
+      "Code": "SA",
+      "ISO3166_2": "RU-SA",
+      "Latitude": 66.9416,
+      "Longitude": 129.6424,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Sakha\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Sakhalin",
+      "Code": "SAK",
+      "ISO3166_2": "RU-SAK",
+      "Latitude": 50.1595,
+      "Longitude": 143.0264,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Sakhalin\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Samara",
+      "Code": "SAM",
+      "ISO3166_2": "RU-SAM",
+      "Latitude": 53.1956,
+      "Longitude": 50.1015,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Samara\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Saratov",
+      "Code": "SAR",
+      "ISO3166_2": "RU-SAR",
+      "Latitude": 51.53,
+      "Longitude": 46.0347,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Saratov\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Smolensk",
+      "Code": "SMO",
+      "ISO3166_2": "RU-SMO",
+      "Latitude": 55.0343,
+      "Longitude": 33.0192,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Smolensk\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Stavropol",
+      "Code": "STA",
+      "ISO3166_2": "RU-STA",
+      "Latitude": 44.8633,
+      "Longitude": 43.4407,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Stavropol\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Sverdlovsk",
+      "Code": "SVE",
+      "ISO3166_2": "RU-SVE",
+      "Latitude": 56.8391,
+      "Longitude": 60.6082,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Sverdlovsk\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Tambov",
+      "Code": "TAM",
+      "ISO3166_2": "RU-TAM",
+      "Latitude": 52.7216,
+      "Longitude": 41.4524,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Tambov\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Tatarstan",
+      "Code": "TA",
+      "ISO3166_2": "RU-TA",
+      "Latitude": 55.4482,
+      "Longitude": 50.4764,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Tatarstan\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Tomsk",
+      "Code": "TOM",
+      "ISO3166_2": "RU-TOM",
+      "Latitude": 58.6124,
+      "Longitude": 82.0475,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Tomsk\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Tula",
+      "Code": "TUL",
+      "ISO3166_2": "RU-TUL",
+      "Latitude": 54.193,
+      "Longitude": 37.6175,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Tula\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Tuva",
+      "Code": "TY",
+      "ISO3166_2": "RU-TY",
+      "Latitude": 51.4017,
+      "Longitude": 93.8583,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Tuva\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Tver",
+      "Code": "TVE",
+      "ISO3166_2": "RU-TVE",
+      "Latitude": 57.1134,
+      "Longitude": 35.1744,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Tver\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Tyumen",
+      "Code": "TYU",
+      "ISO3166_2": "RU-TYU",
+      "Latitude": 57.1535,
+      "Longitude": 65.5423,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Tyumen\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Udmurt",
+      "Code": "UD",
+      "ISO3166_2": "RU-UD",
+      "Latitude": 57.1961,
+      "Longitude": 52.696,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Udmurt\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Ulyanovsk",
+      "Code": "ULY",
+      "ISO3166_2": "RU-ULY",
+      "Latitude": 54.1463,
+      "Longitude": 47.2325,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Ulyanovsk\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Vladimir",
+      "Code": "VLA",
+      "ISO3166_2": "RU-VLA",
+      "Latitude": 56.1289,
+      "Longitude": 40.4075,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Vladimir\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Volgograd Oblast",
+      "Code": "VGG",
+      "ISO3166_2": "RU-VGG",
+      "Latitude": 49.6048,
+      "Longitude": 44.2904,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Volgograd Oblast\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Vologda",
+      "Code": "VLG",
+      "ISO3166_2": "RU-VLG",
+      "Latitude": 59.2265,
+      "Longitude": 39.8722,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Vologda\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Voronezh",
+      "Code": "VOR",
+      "ISO3166_2": "RU-VOR",
+      "Latitude": 51.6606,
+      "Longitude": 39.2006,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Voronezh\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Yamalo-Nenets",
+      "Code": "YAN",
+      "ISO3166_2": "RU-YAN",
+      "Latitude": 67.1472,
+      "Longitude": 74.3415,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Yamalo-Nenets\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Yaroslavl",
+      "Code": "YAR",
+      "ISO3166_2": "RU-YAR",
+      "Latitude": 57.6508,
+      "Longitude": 39.8719,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Yaroslavl\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "RU",
+      "Name": "Zabaykalsky",
+      "Code": "ZAB",
+      "ISO3166_2": "RU-ZAB",
+      "Latitude": 52.2485,
+      "Longitude": 115.9563,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Zabaykalsky\"]"
+    }
+  }
+]

@@ -1,0 +1,98 @@
+[
+  {
+    "fields": {
+      "_CountryISO2": "AU",
+      "Name": "Australian Capital Territory",
+      "Code": "ACT",
+      "ISO3166_2": "AU-ACT",
+      "Latitude": -35.4884,
+      "Longitude": 149.0027,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Australian Capital Territory\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "AU",
+      "Name": "New South Wales",
+      "Code": "NSW",
+      "ISO3166_2": "AU-NSW",
+      "Latitude": -31.876,
+      "Longitude": 147.2869,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"New South Wales\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "AU",
+      "Name": "Northern Territory",
+      "Code": "NT",
+      "ISO3166_2": "AU-NT",
+      "Latitude": -19.8516,
+      "Longitude": 133.2303,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Northern Territory\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "AU",
+      "Name": "Queensland",
+      "Code": "QLD",
+      "ISO3166_2": "AU-QLD",
+      "Latitude": -22.1647,
+      "Longitude": 144.5845,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Queensland\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "AU",
+      "Name": "South Australia",
+      "Code": "SA",
+      "ISO3166_2": "AU-SA",
+      "Latitude": -30.5344,
+      "Longitude": 135.6301,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"South Australia\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "AU",
+      "Name": "Tasmania",
+      "Code": "TAS",
+      "ISO3166_2": "AU-TAS",
+      "Latitude": -42.0351,
+      "Longitude": 146.6367,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Tasmania\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "AU",
+      "Name": "Victoria",
+      "Code": "VIC",
+      "ISO3166_2": "AU-VIC",
+      "Latitude": -36.5986,
+      "Longitude": 144.678,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Victoria\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "AU",
+      "Name": "Western Australia",
+      "Code": "WA",
+      "ISO3166_2": "AU-WA",
+      "Latitude": -25.2303,
+      "Longitude": 121.0187,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Western Australia\"]"
+    }
+  }
+]

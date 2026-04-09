@@ -2126,5 +2126,17 @@
       "lastModified": "2026-02-13T21:09:36.609Z",
       "checksum": "4818700c92fe722d865d41210d2a7cda6ac4ac9b886d5a7b08db5a7e0ae06ffb"
     }
+  },
+  {
+    "fields": {
+      "Name": "SimpleMap",
+      "Namespace": "Generic/UI/Map",
+      "Title": "Simple Map",
+      "Type": "Map",
+      "Version": "1.0.0",
+      "VersionSequence": 1,
+      "Status": "Published",
+      "Specification": "@file:spec/generic/simple-map.spec.json"
+    }
   }
 ]

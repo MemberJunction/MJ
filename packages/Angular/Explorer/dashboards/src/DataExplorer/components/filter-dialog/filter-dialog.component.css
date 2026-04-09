@@ -6,7 +6,7 @@
   right: 0;
   bottom: 0;
   background: var(--mj-bg-overlay);
-  z-index: 1000;
+  z-index: 2000; /* Above view-config-panel (1201) and Leaflet map (1000) */
   animation: fadeIn 0.15s ease;
 }
 
@@ -22,7 +22,7 @@
   background: var(--mj-bg-surface);
   border-radius: 12px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-  z-index: 1001;
+  z-index: 2001; /* Above backdrop (2000) */
   display: flex;
   flex-direction: column;
   animation: slideIn 0.2s ease;

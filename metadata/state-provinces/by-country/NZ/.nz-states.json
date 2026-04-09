@@ -1,0 +1,206 @@
+[
+  {
+    "fields": {
+      "_CountryISO2": "NZ",
+      "Name": "Auckland",
+      "Code": "AUK",
+      "ISO3166_2": "NZ-AUK",
+      "Latitude": -36.8521,
+      "Longitude": 174.7632,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Auckland\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "NZ",
+      "Name": "Bay of Plenty",
+      "Code": "BOP",
+      "ISO3166_2": "NZ-BOP",
+      "Latitude": -37.4969,
+      "Longitude": 176.9228,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Bay of Plenty\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "NZ",
+      "Name": "Canterbury",
+      "Code": "CAN",
+      "ISO3166_2": "NZ-CAN",
+      "Latitude": -43.4942,
+      "Longitude": 171.8098,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Canterbury\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "NZ",
+      "Name": "Chatham Islands",
+      "Code": "CIT",
+      "ISO3166_2": "NZ-CIT",
+      "Latitude": -43.9175,
+      "Longitude": -176.1873,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Chatham Islands\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "NZ",
+      "Name": "Gisborne",
+      "Code": "GIS",
+      "ISO3166_2": "NZ-GIS",
+      "Latitude": -38.1532,
+      "Longitude": 178.1368,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Gisborne\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "NZ",
+      "Name": "Hawke's Bay",
+      "Code": "HKB",
+      "ISO3166_2": "NZ-HKB",
+      "Latitude": -39.5257,
+      "Longitude": 176.7611,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Hawke's Bay\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "NZ",
+      "Name": "Manawatu-Whanganui",
+      "Code": "MWT",
+      "ISO3166_2": "NZ-MWT",
+      "Latitude": -39.6408,
+      "Longitude": 175.5714,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Manawatu-Whanganui\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "NZ",
+      "Name": "Marlborough",
+      "Code": "MBH",
+      "ISO3166_2": "NZ-MBH",
+      "Latitude": -41.4745,
+      "Longitude": 173.833,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Marlborough\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "NZ",
+      "Name": "Nelson",
+      "Code": "NSN",
+      "ISO3166_2": "NZ-NSN",
+      "Latitude": -41.2711,
+      "Longitude": 173.2837,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Nelson\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "NZ",
+      "Name": "Northland",
+      "Code": "NTL",
+      "ISO3166_2": "NZ-NTL",
+      "Latitude": -35.3755,
+      "Longitude": 173.947,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Northland\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "NZ",
+      "Name": "Otago",
+      "Code": "OTA",
+      "ISO3166_2": "NZ-OTA",
+      "Latitude": -45.3975,
+      "Longitude": 170.1779,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Otago\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "NZ",
+      "Name": "Southland",
+      "Code": "STL",
+      "ISO3166_2": "NZ-STL",
+      "Latitude": -45.9254,
+      "Longitude": 167.6068,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Southland\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "NZ",
+      "Name": "Taranaki",
+      "Code": "TKI",
+      "ISO3166_2": "NZ-TKI",
+      "Latitude": -39.3848,
+      "Longitude": 174.1974,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Taranaki\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "NZ",
+      "Name": "Tasman",
+      "Code": "TAS",
+      "ISO3166_2": "NZ-TAS",
+      "Latitude": -41.3022,
+      "Longitude": 172.8945,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Tasman\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "NZ",
+      "Name": "Waikato",
+      "Code": "WKO",
+      "ISO3166_2": "NZ-WKO",
+      "Latitude": -37.7792,
+      "Longitude": 175.201,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Waikato\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "NZ",
+      "Name": "Wellington",
+      "Code": "WGN",
+      "ISO3166_2": "NZ-WGN",
+      "Latitude": -41.2235,
+      "Longitude": 175.4158,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Wellington\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "NZ",
+      "Name": "West Coast",
+      "Code": "WTC",
+      "ISO3166_2": "NZ-WTC",
+      "Latitude": -42.5639,
+      "Longitude": 171.4523,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"West Coast\"]"
+    }
+  }
+]
