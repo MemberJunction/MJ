@@ -358,6 +358,7 @@ export class SearchService {
             EntityIcon: r.EntityIcon,
             RecordName: r.RecordName,
             MatchedAt: new Date(r.MatchedAt),
+            RawMetadata: r.RawMetadata,
         };
     }
 

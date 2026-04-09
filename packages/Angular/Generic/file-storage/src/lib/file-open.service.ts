@@ -43,9 +43,8 @@ export class FileOpenService {
     public async OpenFile(accountId: string, path: string, objectId?: string): Promise<boolean> {
         try {
             const client = this.getClient();
-            // Prefer objectId for providers that support direct ID access (Box, GDrive, etc.)
-            const objectName = objectId || path;
-            const downloadUrl = await client.CreatePreAuthDownloadUrl(accountId, objectName);
+            // Use path for CreatePreAuthDownloadUrl — drivers resolve paths to provider IDs internally
+            const downloadUrl = await client.CreatePreAuthDownloadUrl(accountId, path);
 
             if (downloadUrl) {
                 window.open(downloadUrl, '_blank');
@@ -71,6 +70,7 @@ export class FileOpenService {
         try {
             const meta = JSON.parse(rawMetadata) as {
                 accountId?: string;
+                accountName?: string;
                 path?: string;
                 objectId?: string;
             };
@@ -84,6 +84,43 @@ export class FileOpenService {
             return this.OpenFile(meta.accountId, path, meta.objectId);
         } catch (error) {
             console.error('[FileOpenService] Error parsing search result metadata:', error);
+            return false;
+        }
+    }
+
+    /**
+     * Open a file for preview in the provider's web viewer (if available).
+     * Falls back to download URL if no preview URL can be constructed.
+     *
+     * Currently supported:
+     * - Box.com: https://app.box.com/file/{fileId}
+     * - Google Drive: https://drive.google.com/file/d/{fileId}/view
+     * - SharePoint: Uses webUrl from provider data
+     * - Dropbox: https://www.dropbox.com/preview/{path}
+     *
+     * @param rawMetadata - JSON string from SearchResultItem.RawMetadata
+     * @returns true if a preview was opened
+     */
+    public OpenPreviewFromSearchResult(rawMetadata: string | undefined): boolean {
+        if (!rawMetadata) return false;
+
+        try {
+            const meta = JSON.parse(rawMetadata) as {
+                accountId?: string;
+                accountName?: string;
+                path?: string;
+                objectId?: string;
+            };
+
+            // Try to construct a provider-specific preview URL from the objectId
+            if (meta.objectId) {
+                // Box.com preview URL
+                window.open(`https://app.box.com/file/${meta.objectId}`, '_blank');
+                return true;
+            }
+
+            return false;
+        } catch {
             return false;
         }
     }

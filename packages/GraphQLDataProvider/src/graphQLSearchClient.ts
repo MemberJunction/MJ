@@ -94,6 +94,8 @@ export interface SearchClientResultItem {
     MatchedAt: string;
     /** Discriminator for UI rendering: 'entity-record', 'storage-file', or 'content-item' */
     ResultType: string;
+    /** Raw metadata JSON from the search provider (e.g., storage account ID, file path) */
+    RawMetadata?: string;
 }
 
 /**
@@ -150,6 +152,7 @@ interface SearchResultItemResponse {
     EntityIcon?: string;
     RecordName?: string;
     MatchedAt: string;
+    RawMetadata?: string;
 }
 
 /**
@@ -333,6 +336,7 @@ export class GraphQLSearchClient {
                         EntityIcon
                         RecordName
                         MatchedAt
+                        RawMetadata
                     }
                     TotalCount
                     ElapsedMs
@@ -378,6 +382,7 @@ export class GraphQLSearchClient {
                         EntityIcon
                         RecordName
                         MatchedAt
+                        RawMetadata
                     }
                     TotalCount
                     ElapsedMs
@@ -534,7 +539,8 @@ export class GraphQLSearchClient {
             Tags: item.Tags || [],
             EntityIcon: item.EntityIcon,
             RecordName: item.RecordName,
-            MatchedAt: item.MatchedAt
+            MatchedAt: item.MatchedAt,
+            RawMetadata: item.RawMetadata
         };
     }
 

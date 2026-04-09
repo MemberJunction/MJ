@@ -525,7 +525,10 @@ export class SearchResultsResource extends BaseResourceComponent {
      */
     private navigateToResult(result: SearchResultItem): void {
         if (result.ResultType === 'storage-file') {
-            this.fileOpenService.OpenFileFromSearchResult(result.RawMetadata);
+            // Try preview first (opens in provider's web viewer), fall back to download
+            if (!this.fileOpenService.OpenPreviewFromSearchResult(result.RawMetadata)) {
+                this.fileOpenService.OpenFileFromSearchResult(result.RawMetadata);
+            }
             return;
         }
 

@@ -2405,7 +2405,9 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
 
   OnSearchResultSelected(result: { EntityName: string; RecordID: string; ResultType?: string; RawMetadata?: string }): void {
       if (result.ResultType === 'storage-file') {
-          this.fileOpenService.OpenFileFromSearchResult(result.RawMetadata);
+          if (!this.fileOpenService.OpenPreviewFromSearchResult(result.RawMetadata)) {
+              this.fileOpenService.OpenFileFromSearchResult(result.RawMetadata);
+          }
           return;
       }
 
