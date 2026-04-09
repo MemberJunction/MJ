@@ -132,7 +132,7 @@ export class PreflightPhase {
 
     emitter.Emit('step:progress', { Type: 'step:progress', Phase: 'preflight', Message: 'Checking port availability...' });
     const apiPort = context.Config.APIPort ?? 4000;
-    const explorerPort = context.Config.ExplorerPort ?? 4201;
+    const explorerPort = context.Config.ExplorerPort ?? 4200;
     const apiPortCheck = await this.checkPort(apiPort, 'API');
     const explorerPortCheck = await this.checkPort(explorerPort, 'Explorer');
     diagnostics.AddCheck(apiPortCheck);
