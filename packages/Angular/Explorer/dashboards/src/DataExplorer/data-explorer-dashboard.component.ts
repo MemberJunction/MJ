@@ -1817,6 +1817,32 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   }
 
   /**
+   * Get the current map display state for passing to the EntityViewer/MapView.
+   */
+  get mapDisplayState(): { RenderMode: string; ZoomLevel: number; CenterLat: number; CenterLng: number } | null {
+    if (this.state.mapZoom == null) return null;
+    return {
+      RenderMode: this.state.mapRenderMode || 'point',
+      ZoomLevel: this.state.mapZoom,
+      CenterLat: this.state.mapCenterLat ?? 20,
+      CenterLng: this.state.mapCenterLng ?? 0
+    };
+  }
+
+  /**
+   * Handle map display state changes from the map component.
+   * Persists zoom, center, and render mode across page reloads.
+   */
+  public onMapDisplayStateChange(state: { RenderMode?: string; ZoomLevel?: number; CenterLat?: number; CenterLng?: number }): void {
+    this.stateService.updateState({
+      mapRenderMode: (state.RenderMode as 'point' | 'choropleth' | 'heatmap') || 'point',
+      mapZoom: state.ZoomLevel ?? null,
+      mapCenterLat: state.CenterLat ?? null,
+      mapCenterLng: state.CenterLng ?? null
+    });
+  }
+
+  /**
    * Handle smart filter change from dashboard header
    */
   public onSmartFilterChanged(prompt: string): void {

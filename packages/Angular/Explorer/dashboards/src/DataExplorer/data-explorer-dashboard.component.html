@@ -498,7 +498,9 @@
           (filteredCountChanged)="onFilteredCountChanged($event)"
           (gridStateChanged)="onGridStateChanged($event)"
           (selectionChanged)="onSelectionChanged($event)"
-          (addToListRequested)="onAddToListRequested($event)">
+          (addToListRequested)="onAddToListRequested($event)"
+          [mapDisplayState]="mapDisplayState"
+          (mapDisplayStateChange)="onMapDisplayStateChange($event)">
         </mj-entity-viewer>
       }
     </div>

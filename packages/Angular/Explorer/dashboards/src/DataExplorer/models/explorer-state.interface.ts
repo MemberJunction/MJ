@@ -178,6 +178,12 @@ export interface DataExplorerState {
   timelineDateFieldName: string | null;
   timelineSortOrder: 'asc' | 'desc';
 
+  // Map configuration (persisted across page reloads)
+  mapRenderMode: 'point' | 'choropleth' | 'heatmap';
+  mapZoom: number | null;
+  mapCenterLat: number | null;
+  mapCenterLng: number | null;
+
   // Detail panel
   detailPanelOpen: boolean;
   detailPanelWidth: number;
@@ -279,6 +285,10 @@ export const DEFAULT_EXPLORER_STATE: DataExplorerState = {
   timelineOrientation: 'vertical',
   timelineDateFieldName: null,
   timelineSortOrder: 'desc',
+  mapRenderMode: 'point',
+  mapZoom: null,
+  mapCenterLat: null,
+  mapCenterLng: null,
   detailPanelOpen: false,
   detailPanelWidth: 400,
   selectedRecordId: null,

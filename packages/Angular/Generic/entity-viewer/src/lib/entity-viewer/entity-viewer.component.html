@@ -200,7 +200,9 @@
         [hidden]="effectiveViewMode !== 'map'"
         [Entity]="effectiveEntity!"
         [Records]="filteredRecords"
-        (MarkerClick)="onMapMarkerClick($event)">
+        [DisplayState]="mapDisplayState"
+        (MarkerClick)="onMapMarkerClick($event)"
+        (DisplayStateChange)="onMapDisplayStateChange($event)">
       </mj-map-view>
     }
   </div>

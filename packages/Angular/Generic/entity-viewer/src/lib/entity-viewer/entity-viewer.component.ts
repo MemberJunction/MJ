@@ -7,6 +7,7 @@ import { MJUserViewEntityExtended } from '@memberjunction/core-entities';
 import { buildCompositeKey, buildPkString, computeFieldsList } from '../utils/record.util';
 import { PageChangeEvent } from '@memberjunction/ng-pagination';
 import { TimelineGroup, TimeSegmentGrouping, TimelineSortOrder, AfterEventClickArgs } from '@memberjunction/ng-timeline';
+import { MapDisplayState } from '@memberjunction/ng-map-view';
 import {
   EntityViewMode,
   EntityViewerConfig,
@@ -1477,6 +1478,19 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
         compositeKey: buildCompositeKey(event.Record, entity)
       });
     }
+  }
+
+  /** Map display state — passed from parent for persistence across reloads. */
+  @Input() mapDisplayState: Partial<MapDisplayState> | null = null;
+
+  /** Emitted when the map's display state changes (zoom, center, render mode). */
+  @Output() mapDisplayStateChange = new EventEmitter<MapDisplayState>();
+
+  /**
+   * Handle map display state changes — bubble up to parent for persistence.
+   */
+  onMapDisplayStateChange(state: MapDisplayState): void {
+    this.mapDisplayStateChange.emit(state);
   }
 
   /**
