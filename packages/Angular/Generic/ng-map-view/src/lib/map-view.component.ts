@@ -208,10 +208,19 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
     }
 
     /**
-     * Point mode: individual markers at each record's coordinates.
+     * Point mode: individual markers with marker clustering for dense areas.
+     * Uses leaflet.markercluster when available, falls back to plain markers.
      */
     private RenderPointMarkers(): void {
         const bounds: L.LatLng[] = [];
+
+        // Use marker cluster group if available (loaded via CDN)
+        const useCluster = typeof L.markerClusterGroup === 'function';
+        const clusterGroup = useCluster ? L.markerClusterGroup({
+            maxClusterRadius: 50,
+            spiderfyOnMaxZoom: true,
+            showCoverageOnHover: false
+        }) : null;
 
         for (const record of this.Records) {
             const lat = this.GetField(record, this.LatitudeField) as number;
@@ -239,7 +248,15 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
                 });
             });
 
-            this.markerLayer!.addLayer(marker);
+            if (clusterGroup) {
+                clusterGroup.addLayer(marker);
+            } else {
+                this.markerLayer!.addLayer(marker);
+            }
+        }
+
+        if (clusterGroup) {
+            this.markerLayer!.addLayer(clusterGroup as unknown as L.Marker);
         }
 
         this.MarkerCount = bounds.length;

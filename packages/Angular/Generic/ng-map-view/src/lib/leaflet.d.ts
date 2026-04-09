@@ -15,6 +15,10 @@ declare namespace L {
 
     interface CircleMarker extends Marker {}
 
+    function markerClusterGroup(options?: Record<string, unknown>): MarkerClusterGroup;
+
+    interface MarkerClusterGroup extends LayerGroup {}
+
     interface GeoJSONLayer {
         addTo(map: Map): GeoJSONLayer;
         getBounds(): LatLngBounds;
