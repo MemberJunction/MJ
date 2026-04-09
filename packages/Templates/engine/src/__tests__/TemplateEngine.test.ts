@@ -415,10 +415,11 @@ describe('TemplateEngineServer', () => {
             expect(result.Message).toContain('Invalid type for age');
         });
 
-        it('should skip validation when SkipValidation is true', async () => {
+        it('should skip validation when SkipValidation is true but log warnings by default', async () => {
             const templateEntity = {
                 ID: 't-1',
-                ValidateTemplateInput: vi.fn(),
+                Name: 'TestTemplate',
+                ValidateTemplateInput: vi.fn().mockReturnValue({ Success: true, Errors: [] }),
                 GetParametersForContent: vi.fn().mockReturnValue([]),
             };
             const templateContent = { ID: 'tc-1', TemplateText: 'Hello {{ name }}' };
@@ -428,6 +429,29 @@ describe('TemplateEngineServer', () => {
                 templateContent as never,
                 { name: 'World' },
                 true // SkipValidation
+            );
+
+            expect(result.Success).toBe(true);
+            // With SkipValidation=true and SuppressWarnings defaulting to false,
+            // ValidateTemplateInput IS called for non-fatal warning logging
+            expect(templateEntity.ValidateTemplateInput).toHaveBeenCalled();
+        });
+
+        it('should suppress warnings when both SkipValidation and SuppressWarnings are true', async () => {
+            const templateEntity = {
+                ID: 't-1',
+                Name: 'TestTemplate',
+                ValidateTemplateInput: vi.fn(),
+                GetParametersForContent: vi.fn().mockReturnValue([]),
+            };
+            const templateContent = { ID: 'tc-1', TemplateText: 'Hello {{ name }}' };
+
+            const result = await engine.RenderTemplate(
+                templateEntity as never,
+                templateContent as never,
+                { name: 'World' },
+                true, // SkipValidation
+                true  // SuppressWarnings
             );
 
             expect(result.Success).toBe(true);

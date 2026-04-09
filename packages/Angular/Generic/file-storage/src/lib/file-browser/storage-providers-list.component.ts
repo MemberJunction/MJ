@@ -59,7 +59,8 @@ export class StorageProvidersListComponent implements OnInit {
       const engine = FileStorageEngine.Instance;
       await engine.Config(false);  // Use cached data if available
 
-      this.accounts = engine.AccountsWithProviders;
+      // Only show accounts whose provider is active
+      this.accounts = engine.AccountsWithProviders.filter(a => a.provider.IsActive);
 
       console.log('[StorageAccountsList] Loaded accounts:', this.accounts.map(a => ({
         name: a.account.Name,

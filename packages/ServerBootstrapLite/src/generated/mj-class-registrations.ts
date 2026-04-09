@@ -443,6 +443,7 @@ import {
     ReverseGeocodeAction,
     RunAdhocQueryAction,
     RunStoredQueryAction,
+    SearchAction,
     SearchQueryCatalogAction,
     SearchStorageFilesAction,
     SendSingleMessageAction,
@@ -465,7 +466,7 @@ import {
     XMLParserAction,
 } from '@memberjunction/core-actions';
 
-// @memberjunction/core-entities (308 classes)
+// @memberjunction/core-entities (310 classes)
 import {
     MJAIActionEntity,
     MJAIAgentActionEntity,
@@ -651,9 +652,11 @@ import {
     MJFileEntity,
     MJFileEntityRecordLinkEntity,
     MJFileStorageAccountEntity,
+    MJFileStorageAccountPermissionEntity,
     MJFileStorageProviderEntity,
     MJGeneratedCodeCategoryEntity,
     MJGeneratedCodeEntity,
+    MJInstanceConfigurationEntity,
     MJIntegrationEntity,
     MJIntegrationObjectEntity,
     MJIntegrationObjectFieldEntity,
@@ -1136,6 +1139,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     ReverseGeocodeAction,
     RunAdhocQueryAction,
     RunStoredQueryAction,
+    SearchAction,
     SearchQueryCatalogAction,
     SearchStorageFilesAction,
     SendSingleMessageAction,
@@ -1340,9 +1344,11 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJFileEntity,
     MJFileEntityRecordLinkEntity,
     MJFileStorageAccountEntity,
+    MJFileStorageAccountPermissionEntity,
     MJFileStorageProviderEntity,
     MJGeneratedCodeCategoryEntity,
     MJGeneratedCodeEntity,
+    MJInstanceConfigurationEntity,
     MJIntegrationEntity,
     MJIntegrationObjectEntity,
     MJIntegrationObjectFieldEntity,
@@ -1509,6 +1515,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
+export const CLASS_REGISTRATIONS_COUNT = 641;
 export const CLASS_REGISTRATIONS_COUNT = 641;
 
 /** Packages imported by this manifest */

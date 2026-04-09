@@ -115,9 +115,24 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
     public EditDocAIModelID = '';
     public EditDocVectorIndexID = '';
     public EditDocStatus = '';
+    public EditDocTemplate = '';
+    public IsEditRegenerating = false;
+
+    /** Parse {{ FieldName }} patterns from the edit panel's template */
+    public get EditDocSelectedFields(): string[] {
+        if (!this.EditDocTemplate) return [];
+        const matches = this.EditDocTemplate.match(/\{\{\s*(\w+(?:\.\w+)*)\s*\}\}/g);
+        if (!matches) return [];
+        return [...new Set(
+            matches.map(m => m.replace(/\{\{\s*/, '').replace(/\s*\}\}/, ''))
+        )];
+    }
+
+    // --- Zero Vector Indexes Warning ---
+    public ShowNoIndexWarning = false;
 
     /** Open the edit panel for an entity document */
-    public OpenEditPanel(entityDocumentId: string): void {
+    public async OpenEditPanel(entityDocumentId: string): Promise<void> {
         const doc = this.entityDocuments.find(d => UUIDsEqual(d.ID, entityDocumentId));
         if (!doc) return;
         this.EditDocID = doc.ID;
@@ -127,8 +142,35 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         this.EditDocAIModelID = doc.AIModelID;
         this.EditDocVectorIndexID = doc.VectorIndexID || '';
         this.EditDocStatus = doc.Status;
+        this.EditDocTemplate = '';
+        this.IsEditRegenerating = false;
         this.ShowEditPanel = true;
         this.cdr.detectChanges();
+
+        // Load the template text from Template Contents
+        await this.loadEditDocTemplate(doc.TemplateID);
+    }
+
+    /** Load the template text for the edit panel from the associated Template Contents record */
+    private async loadEditDocTemplate(templateId: string): Promise<void> {
+        if (!templateId) return;
+        try {
+            const rv = new RunView();
+            const result = await rv.RunView<{ TemplateText: string }>({
+                EntityName: 'MJ: Template Contents',
+                ExtraFilter: `TemplateID='${templateId}'`,
+                Fields: ['TemplateText'],
+                ResultType: 'simple',
+                OrderBy: 'Priority ASC',
+                MaxRows: 1,
+            });
+            if (result.Success && result.Results.length > 0 && result.Results[0].TemplateText) {
+                this.EditDocTemplate = result.Results[0].TemplateText;
+                this.cdr.detectChanges();
+            }
+        } catch (error) {
+            console.warn('[VectorManagement] Could not load template text:', error);
+        }
     }
 
     public CloseEditPanel(): void {
@@ -153,6 +195,8 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
 
             const saved = await doc.Save();
             if (saved) {
+                // Also save updated template text if changed
+                await this.saveEditDocTemplate(doc.TemplateID);
                 MJNotificationService.Instance.CreateSimpleNotification('Entity document updated', 'success', 2500);
                 this.ShowEditPanel = false;
                 await this.LoadData();
@@ -167,6 +211,58 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
             this.IsEditSaving = false;
             this.cdr.detectChanges();
         }
+    }
+
+    /** Save the edited template text back to the Template Contents record */
+    private async saveEditDocTemplate(templateId: string): Promise<void> {
+        if (!templateId || !this.EditDocTemplate) return;
+        try {
+            const rv = new RunView();
+            const result = await rv.RunView<MJTemplateContentEntity>({
+                EntityName: 'MJ: Template Contents',
+                ExtraFilter: `TemplateID='${templateId}'`,
+                ResultType: 'entity_object',
+                OrderBy: 'Priority ASC',
+                MaxRows: 1,
+            });
+            if (result.Success && result.Results.length > 0) {
+                const content = result.Results[0];
+                content.TemplateText = this.EditDocTemplate;
+                await content.Save();
+            }
+        } catch (error) {
+            console.warn('[VectorManagement] Could not save template text:', error);
+        }
+    }
+
+    /** Regenerate the template using AI for the current edit panel entity */
+    public async RegenerateTemplate(): Promise<void> {
+        if (!this.EditDocEntityName || this.IsEditRegenerating) return;
+
+        this.IsEditRegenerating = true;
+        this.cdr.detectChanges();
+
+        try {
+            const result = await this.callSuggestionPrompt(this.EditDocEntityName, 'duplicate detection');
+            if (result) {
+                this.EditDocTemplate = result.template;
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    'Template regenerated with AI. Review and save to apply.',
+                    'info', 3000
+                );
+            }
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            MJNotificationService.Instance.CreateSimpleNotification(`Regeneration failed: ${msg}`, 'error', 5000);
+        } finally {
+            this.IsEditRegenerating = false;
+            this.cdr.detectChanges();
+        }
+    }
+
+    /** Handle template edits from the edit panel's code editor */
+    public OnEditTemplateChange(newValue: string): void {
+        this.EditDocTemplate = newValue;
     }
 
     public async DeleteEntityDocument(): Promise<void> {
@@ -609,8 +705,14 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         }
     }
 
-    /** Opens the AI suggestion dialog */
+    /** Opens the AI suggestion dialog, or shows a warning if no vector indexes exist */
     public OpenSuggestDialog(): void {
+        if (this.vectorIndexes.length === 0 && this.vectorDatabases.length === 0) {
+            this.ShowNoIndexWarning = true;
+            this.cdr.detectChanges();
+            return;
+        }
+
         this.SuggestionResult = null;
         this.SuggestEntityName = '';
         this.SuggestUseCase = 'duplicate detection';
@@ -621,6 +723,20 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         this.loadEntityGroups();
         this.ShowSuggestDialog = true;
         this.cdr.detectChanges();
+    }
+
+    /** Close the no-index warning dialog */
+    public CloseNoIndexWarning(): void {
+        this.ShowNoIndexWarning = false;
+        this.cdr.detectChanges();
+    }
+
+    /** Navigate to the Configuration section from the no-index warning */
+    public async GoToConfiguration(): Promise<void> {
+        this.ShowNoIndexWarning = false;
+        this.cdr.detectChanges();
+        // Attempt to open the Config nav item in the current app
+        await this.navigationService.OpenNavItemByName('Config');
     }
 
     /** Select an entity from the grouped picker */

@@ -624,21 +624,21 @@ export class ResourceResolver implements Resolve<void> {
     }
 
     if (route.params['searchInput'] !== undefined) {
-      // /resource/search/:searchInput
       const searchInput = decodeURIComponent(route.params['searchInput']);
-      const entityName = route.queryParams['Entity'] || '';
 
-      // Queue tab request via TabService
+      // Unified search route: always use SearchResultsResource
+      // Pass Query for the ng-search service, and legacy SearchInput for backward compat
       this.tabService.OpenTab({
         ApplicationId: SYSTEM_APP_ID,
         Title: `Search: ${searchInput}`,
         Configuration: {
-          resourceType: 'Search Results',
-          Entity: entityName,
+          resourceType: 'Custom',
+          driverClass: 'SearchResultsResource',
+          Query: searchInput,
           SearchInput: searchInput,
-          recordId: searchInput
+          recordId: `search-${searchInput}`
         },
-        ResourceRecordId: searchInput,
+        ResourceRecordId: `search-${searchInput}`,
         IsPinned: false
       });
       return;
@@ -737,7 +737,7 @@ const routes: Routes = [
     resolve: { data: ResourceResolver },
     canActivate: [AuthGuard],
     component: SingleRecordComponent,
-  } 
+  }
 ];
 
 interface DetachedRouteHandleExt extends DetachedRouteHandle {

@@ -8,18 +8,11 @@
     "DefaultSequence": 1010,
     "DefaultNavItems": [
       {
-        "Label": "Search",
-        "Icon": "fa-solid fa-magnifying-glass",
-        "ResourceType": "Custom",
-        "DriverClass": "KnowledgeSearchResource",
-        "isDefault": true
-      },
-      {
         "Label": "Classify",
         "Icon": "fa-solid fa-tags",
         "ResourceType": "Custom",
         "DriverClass": "AutotaggingPipelineResource",
-        "isDefault": false
+        "isDefault": true
       },
       {
         "Label": "Clusters",
@@ -65,7 +58,7 @@
     "ID": "796EB8B2-B392-428B-839C-E9637C3D7EDB"
   },
   "sync": {
-    "lastModified": "2026-04-06T11:01:37.978Z",
-    "checksum": "e24bd79312848a246e85d687ff7acf0d3085ce1b6fb0f1e626bd725bdb1b1639"
+    "lastModified": "2026-04-09T00:51:02.235Z",
+    "checksum": "44e3fe98472c42f46cf825e1d39ebc5259ac86646aa6f92972e0d88a33726fb1"
   }
 }

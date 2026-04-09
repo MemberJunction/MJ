@@ -15,12 +15,22 @@ produces dramatically better similarity matches than:
 The template you generate will be rendered with Nunjucks for every record in the entity, then embedded into a vector database. High-quality natural language = high-quality similarity matching.
 
 ## Template Convention
-- Main entity fields are TOP-LEVEL Nunjucks variables: `{{FieldName}}`
-- Related entities use their RELATIONSHIP NAME as prefix: `{{RelationshipName.FieldName}}`
+- Main entity fields are TOP-LEVEL Nunjucks variables: {% raw %}`{{ FieldName }}`{% endraw %}
+- Related entities use their RELATIONSHIP NAME as prefix: {% raw %}`{{ RelationshipName.FieldName }}`{% endraw %}
 - **Output must be 1-4 natural language sentences** that describe the record as a human would
 - Use connecting words: "is a", "works at", "located in", "specializing in", "with", etc.
 - Group semantically related fields into coherent phrases
-- Use Nunjucks conditionals for nullable fields: `{% if FieldName %}...{% endif %}`
+- Use Nunjucks conditionals for nullable fields: {% raw %}`{% if FieldName %}...{% endif %}`{% endraw %}
+
+{%raw%}
+## ⚠️ CRITICAL: Nunjucks Syntax Rules
+- Variable output uses DOUBLE CURLY BRACES: `{{ FieldName }}`
+- Control flow (if/for/etc.) uses CURLY-PERCENT: `{% if FieldName %}...{% endif %}`
+- NEVER use `{{ if ... }}` or `{{ endif }}` — those are WRONG and will cause rendering errors
+- NEVER use `{{ else }}` — use `{% else %}`
+- Correct: `{% if City %}Located in {{ City }}{% endif %}`
+- WRONG: `{{ if City }}Located in {{ City }}{{ endif }}`
+{% endraw %}
 
 ## Input
 Entity: {{EntityName}}
@@ -43,10 +53,10 @@ Entity: {{EntityName}}
 
 2. **Include related entity fields** that add meaningful context (e.g., Organization name for a Member, Category for a Product, Type for a Model).
 
-3. **Generate the template as natural language sentences**, for example:
-   - For a Member entity: `{{FirstName}} {{LastName}} is a {{JobTitle}}{% if Organization %} at {{Organization.Name}}{% endif %}{% if City %}, located in {{City}}, {{State}}{% endif %}.{% if Email %} Contact: {{Email}}.{% endif %}{% if Skills %} Specializes in {{Skills}}.{% endif %}`
-   - For an AI Model: `{{Name}} is a {{AIModelType}} model developed by {{Vendor}}.{% if Description %} {{Description}}{% endif %} It supports {{SupportedResponseFormats}} with an input limit of {{InputTokenLimit}} tokens.`
-   - For a Product: `{{Name}} is a {{Category.Name}} product.{% if Description %} {{Description}}{% endif %}{% if Price %} Priced at ${{Price}}.{% endif %}`
+{% raw %}3. **Generate the template as natural language sentences**, for example:
+   - For a Member entity: `{{ FirstName }} {{ LastName }} is a {{ JobTitle }}{% if Organization %} at {{ Organization.Name }}{% endif %}{% if City %}, located in {{ City }}, {{ State }}{% endif %}.{% if Email %} Contact: {{ Email }}.{% endif %}{% if Skills %} Specializes in {{ Skills }}.{% endif %}`
+   - For an AI Model: `{{ Name }} is a {{ AIModelType }} model developed by {{ Vendor }}.{% if Description %} {{ Description }}{% endif %} It supports {{ SupportedResponseFormats }} with an input limit of {{ InputTokenLimit }} tokens.`
+   - For a Product: `{{ Name }} is a {{ Category.Name }} product.{% if Description %} {{ Description }}{% endif %}{% if Price %} Priced at ${{ Price }}.{% endif %}`{% endraw %}
 
 4. **Suggest thresholds** based on entity type:
    - `potentialMatchThreshold`: Score above which records are flagged as potential matches (typically 0.65-0.80)

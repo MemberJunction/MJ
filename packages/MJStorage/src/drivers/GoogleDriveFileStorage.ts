@@ -1349,18 +1349,22 @@ export class GoogleDriveFileStorage extends FileStorageBase {
       const response = await this._drive.files.list({
         q: finalQuery,
         pageSize: maxResults,
-        fields: 'nextPageToken, files(id, name, mimeType, size, modifiedTime, parents, properties)',
+        fields: 'nextPageToken, files(id, name, mimeType, size, modifiedTime, parents, properties, webViewLink, thumbnailLink, description, owners, starred)',
         orderBy: 'modifiedTime desc',
       });
 
       const files = response.data.files || [];
       const results: FileSearchResult[] = [];
+      const totalFiles = files.length;
 
-      for (const file of files) {
+      for (let i = 0; i < totalFiles; i++) {
+        const file = files[i];
         const path = await this._getFilePathFromId(file.id!);
         const pathParts = path.split('/');
         const fileName = pathParts.pop() || file.name!;
-        const parentPath = pathParts.join('/');
+
+        // Google Drive results are ordered by relevance; use rank-based scoring
+        const relevance = totalFiles === 1 ? 0.95 : Math.max(0.1, 0.95 - i * 0.05);
 
         results.push({
           path,
@@ -1369,9 +1373,17 @@ export class GoogleDriveFileStorage extends FileStorageBase {
           contentType: file.mimeType!,
           lastModified: new Date(file.modifiedTime!),
           objectId: file.id || '', // Google Drive file ID for direct access
+          relevance,
           matchInFilename: file.name!.toLowerCase().includes(query.toLowerCase()),
-          customMetadata: file.properties as Record<string, string>,
-          providerData: { driveFileId: file.id },
+          customMetadata: file.properties as Record<string, string> | undefined,
+          providerData: {
+            driveFileId: file.id,
+            webViewLink: file.webViewLink,
+            thumbnailLink: file.thumbnailLink,
+            description: file.description,
+            owners: file.owners?.map((o) => ({ displayName: o.displayName, emailAddress: o.emailAddress })),
+            starred: file.starred,
+          },
         });
       }
 

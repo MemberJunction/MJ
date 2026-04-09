@@ -26,8 +26,9 @@ import { LoadingTheme, LoadingAnimationType, AnimationStep, getActiveTheme } fro
 import { AppAccessDialogComponent, AppAccessDialogConfig, AppAccessDialogResult } from './components/dialogs/app-access-dialog.component';
 import { TabContainerComponent } from './components/tabs/tab-container.component';
 import { BaseUserMenu, UserMenuElement, UserMenuItem, UserMenuContext, isUserMenuDivider, ApplicationInfoRef } from '../user-menu';
-import { MJUserEntity } from '@memberjunction/core-entities';
+import { MJUserEntity, InstanceConfigEngine } from '@memberjunction/core-entities';
 import { CommandPaletteService } from '../command-palette/command-palette.service';
+import { FileOpenService } from '@memberjunction/ng-file-storage';
 
 /**
  * Main shell component for the new Explorer UX.
@@ -107,6 +108,17 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   selectedEntity: EntityInfo | null = null;
   @ViewChild('searchInput') searchInput!: ElementRef<HTMLInputElement>;
 
+  // Universal search bar
+  @ViewChild('shellSearchComposite') shellSearchComposite: { Focus?(): void; MinRelevancePercent?: number } | undefined;
+
+  // Instance configuration feature flags
+  get ShowSearchBar(): boolean {
+      return InstanceConfigEngine.Instance.GetBoolean('Shell.SearchBar.Enabled', true);
+  }
+  get ShowSearchPreview(): boolean {
+      return InstanceConfigEngine.Instance.GetBoolean('Shell.SearchBar.EnablePreview', true);
+  }
+
   // Tab container reference for thumbnail capture
   @ViewChild(TabContainerComponent) tabContainerRef!: TabContainerComponent;
 
@@ -149,7 +161,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     public developerModeService: DeveloperModeService,
     private commandPaletteService: CommandPaletteService,
     private themeService: ThemeService,
-    private homePinService: HomeAppPinService
+    private homePinService: HomeAppPinService,
+    private fileOpenService: FileOpenService
   ) {
     // Initialize theme immediately so loading UI shows correct colors from the start
     this.activeTheme = getActiveTheme();
@@ -213,6 +226,11 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     this.appManager.Initialize();
 
     await StartupManager.Instance.Startup();
+
+    // Initialize instance configuration for feature flags
+    await InstanceConfigEngine.Instance.Config(false).catch(() => {
+        LogStatus('InstanceConfigEngine initialization skipped (not critical)');
+    });
 
     // Get current user
     const md = new Metadata();
@@ -661,6 +679,14 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       if (appReportMatch) {
         const reportId = appReportMatch[2];
         this.navigationService.OpenReport(reportId, 'Report');
+        return;
+      }
+
+      // Check for app-scoped search URL: /app/:appName/search/:searchInput
+      const appSearchMatch = urlPath.match(/^\/app\/([^\/]+)\/search\/(.+)$/);
+      if (appSearchMatch) {
+        const searchInput = decodeURIComponent(appSearchMatch[2]);
+        this.navigationService.OpenSearch(searchInput);
         return;
       }
 
@@ -1156,17 +1182,27 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           }
           break;
 
-        case 'search results':
-          // /app/:appName/search/:searchInput?Entity=...
+        case 'search results': {
+          // /app/:appName/search/:searchInput?minRelevance=...&Entity=...
           const searchInput = config['SearchInput'] as string | undefined;
           if (searchInput) {
             let url = `/app/${encodeURIComponent(appPath)}/search/${encodeURIComponent(searchInput)}`;
+            const searchParams = new URLSearchParams();
             if (entityName) {
-              url += `?Entity=${encodeURIComponent(entityName)}`;
+              searchParams.set('Entity', entityName);
+            }
+            if (queryParams) {
+              for (const [key, value] of Object.entries(queryParams)) {
+                if (value != null) searchParams.set(key, value);
+              }
+            }
+            if (searchParams.toString()) {
+              url += `?${searchParams.toString()}`;
             }
             return url;
           }
           break;
+        }
       }
     }
 
@@ -2356,6 +2392,51 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         }
       });
     }
+  }
+
+  // ========================================
+  // UNIVERSAL SEARCH EVENT HANDLERS
+  // ========================================
+
+  @HostListener('document:keydown', ['$event'])
+  OnGlobalKeydown(event: KeyboardEvent): void {
+      const target = event.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return;
+      const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+      const isCtrlOrCmd = isMac ? event.metaKey : event.ctrlKey;
+      if (isCtrlOrCmd && event.key === 'k') {
+          event.preventDefault();
+          event.stopPropagation();
+          if (this.shellSearchComposite?.Focus) {
+              this.shellSearchComposite.Focus();
+          }
+      }
+  }
+
+  OnSearchResultSelected(result: { EntityName: string; RecordID: string; ResultType?: string; RawMetadata?: string }): void {
+      if (result.ResultType === 'storage-file') {
+          if (!this.fileOpenService.OpenPreviewFromSearchResult(result.RawMetadata)) {
+              this.fileOpenService.OpenFileFromSearchResult(result.RawMetadata);
+          }
+          return;
+      }
+
+      if (!result.EntityName || !result.RecordID) return;
+
+      // Entity records — open via NavigationService
+      const pkey = new CompositeKey([{ FieldName: 'ID', Value: result.RecordID }]);
+      this.navigationService.OpenEntityRecord(result.EntityName, pkey);
+  }
+
+  OnSearchSubmitted(query: string): void {
+      if (query && query.trim().length >= 2) {
+          const minRelevance = this.shellSearchComposite?.MinRelevancePercent;
+          this.navigationService.OpenSearch(query, minRelevance ? { minRelevance } : undefined);
+      }
+  }
+
+  OnSeeAllSearch(query: string): void {
+      this.OnSearchSubmitted(query);
   }
 
   // ========================================

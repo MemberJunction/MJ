@@ -41,7 +41,7 @@ import {
     MJCommunicationProviderEntityExtended,
 } from '@memberjunction/communication-types';
 
-// @memberjunction/core-entities (308 classes)
+// @memberjunction/core-entities (310 classes)
 import {
     MJAIActionEntity,
     MJAIAgentActionEntity,
@@ -227,9 +227,11 @@ import {
     MJFileEntity,
     MJFileEntityRecordLinkEntity,
     MJFileStorageAccountEntity,
+    MJFileStorageAccountPermissionEntity,
     MJFileStorageProviderEntity,
     MJGeneratedCodeCategoryEntity,
     MJGeneratedCodeEntity,
+    MJInstanceConfigurationEntity,
     MJIntegrationEntity,
     MJIntegrationObjectEntity,
     MJIntegrationObjectFieldEntity,
@@ -635,9 +637,11 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJFileEntity,
     MJFileEntityRecordLinkEntity,
     MJFileStorageAccountEntity,
+    MJFileStorageAccountPermissionEntity,
     MJFileStorageProviderEntity,
     MJGeneratedCodeCategoryEntity,
     MJGeneratedCodeEntity,
+    MJInstanceConfigurationEntity,
     MJIntegrationEntity,
     MJIntegrationObjectEntity,
     MJIntegrationObjectFieldEntity,

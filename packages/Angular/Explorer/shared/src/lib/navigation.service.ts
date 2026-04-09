@@ -166,7 +166,6 @@ export class NavigationService implements OnDestroy {
    *   should know about. Each dashboard defines its own shape.
    */
   public SetAgentContext(caller: BaseResourceComponent, context: Record<string, unknown>): void {
-    console.log(`[AgentContext] SetAgentContext from ${caller.constructor.name}:`, Object.keys(context));
     this.AgentContextUpdated$.next({ Caller: caller, AgentContext: context });
   }
 
@@ -186,7 +185,6 @@ export class NavigationService implements OnDestroy {
     ParameterSchema: Record<string, unknown>;
     Handler: (params: Record<string, unknown>) => Promise<unknown>;
   }>): void {
-    console.log(`[AgentContext] SetAgentClientTools from ${caller.constructor.name}: [${tools.map(t => t.Name).join(', ')}]`);
     this.AgentContextUpdated$.next({ Caller: caller, AgentClientTools: tools });
   }
 
@@ -622,6 +620,51 @@ export class NavigationService implements OnDestroy {
       },
       ResourceRecordId: '',  // Empty for new records
       IsPinned: options?.pinTab || false
+    };
+
+    // Handle transition from single-resource mode
+    this.handleSingleResourceModeTransition(forceNew, request);
+
+    if (forceNew) {
+      return this.workspaceManager.OpenTabForced(request, appColor);
+    } else {
+      return this.workspaceManager.OpenTab(request, appColor);
+    }
+  }
+
+  /**
+   * Open a universal search results tab for the given query.
+   * This is the primary way to open search results from anywhere in the application.
+   *
+   * @param query The search query text
+   * @param searchOptions Optional search-specific options (e.g., minRelevance)
+   * @param options Navigation options
+   */
+  public OpenSearch(
+    query: string,
+    searchOptions?: { minRelevance?: number },
+    options?: NavigationOptions
+  ): string {
+    const appId = this.getDefaultApplicationId();
+    const appColor = this.getDefaultAppColor();
+    const forceNew = this.shouldForceNewTab(options);
+
+    const config: Record<string, unknown> = {
+      resourceType: 'Search Results',
+      Query: query,
+      SearchInput: query,
+      recordId: `search-${query}`
+    };
+    if (searchOptions?.minRelevance != null) {
+      config['MinRelevance'] = searchOptions.minRelevance;
+    }
+
+    const request: TabRequest = {
+      ApplicationId: appId,
+      Title: `Search: ${query}`,
+      Configuration: config,
+      ResourceRecordId: `search-${query}`,
+      IsPinned: false
     };
 
     // Handle transition from single-resource mode

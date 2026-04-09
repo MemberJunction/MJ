@@ -100,6 +100,7 @@ export class MJUserFormComponent extends BaseFormComponent {
             { sectionKey: 'mJMCPServerConnectionPermissions', sectionName: 'MCP Server Connection Permissions', isExpanded: false },
             { sectionKey: 'mJVersionLabels', sectionName: 'Version Labels', isExpanded: false },
             { sectionKey: 'mJDuplicateRunsApprovedByUserID', sectionName: 'Duplicate Runs (Approved By)', isExpanded: false },
+            { sectionKey: 'mJFileStorageAccountPermissions', sectionName: 'File Storage Account Permissions', isExpanded: false },
             { sectionKey: 'mJAIAgentRuns', sectionName: 'AI Agent Runs', isExpanded: false },
             { sectionKey: 'mJAIAgentPermissions', sectionName: 'AI Agent Permissions', isExpanded: false },
             { sectionKey: 'mJCollectionPermissionsSharedByUserID', sectionName: 'Collection Permissions (Shared By User ID)', isExpanded: false },
