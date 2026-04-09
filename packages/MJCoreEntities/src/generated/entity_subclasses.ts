@@ -11202,6 +11202,69 @@ export const MJConversationSchema = z.object({
 export type MJConversationEntityType = z.infer<typeof MJConversationSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Countries
+ */
+export const MJCountrySchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Full country name (e.g., "United States", "Canada").`),
+    ISO2: z.string().describe(`
+        * * Field Name: ISO2
+        * * Display Name: Iso 2
+        * * SQL Data Type: nvarchar(2)
+        * * Description: ISO 3166-1 alpha-2 code (e.g., "US", "CA"). Unique business key for lookups.`),
+    ISO3: z.string().describe(`
+        * * Field Name: ISO3
+        * * Display Name: Iso 3
+        * * SQL Data Type: nvarchar(3)
+        * * Description: ISO 3166-1 alpha-3 code (e.g., "USA", "CAN"). Unique business key for lookups.`),
+    NumericCode: z.number().nullable().describe(`
+        * * Field Name: NumericCode
+        * * Display Name: Numeric Code
+        * * SQL Data Type: int
+        * * Description: ISO 3166-1 numeric code (e.g., 840 for US, 124 for Canada).`),
+    Latitude: z.number().nullable().describe(`
+        * * Field Name: Latitude
+        * * Display Name: Latitude
+        * * SQL Data Type: decimal(10, 6)
+        * * Description: Geographic centroid latitude. Used as fallback point for country-level geocoding.`),
+    Longitude: z.number().nullable().describe(`
+        * * Field Name: Longitude
+        * * Display Name: Longitude
+        * * SQL Data Type: decimal(10, 6)
+        * * Description: Geographic centroid longitude. Used as fallback point for country-level geocoding.`),
+    BoundaryGeoJSON: z.string().nullable().describe(`
+        * * Field Name: BoundaryGeoJSON
+        * * Display Name: Boundary Geo JSON
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Medium-resolution (~50m) GeoJSON boundary polygon for choropleth map rendering. Nullable — point map falls back to centroid if absent. Total ~3MB for all countries.`),
+    CommonAliases: z.string().nullable().describe(`
+        * * Field Name: CommonAliases
+        * * Display Name: Common Aliases
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of common aliases and alternate names (e.g., ["United States","USA","U.S.","America"]). Used by GeoResolver for fuzzy text-to-country matching.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type MJCountryEntityType = z.infer<typeof MJCountrySchema>;
+
+/**
  * zod schema definition for the entity MJ: Credential Categories
  */
 export const MJCredentialCategorySchema = z.object({
@@ -13329,24 +13392,18 @@ export const MJEntitySchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: When false (default), child types are disjoint - a record can only be one child type at a time. When true, a record can simultaneously exist as multiple child types (e.g., a Person can be both a Member and a Volunteer).`),
-    AutoUpdateFullTextSearch: z.boolean().describe(`
-        * * Field Name: AutoUpdateFullTextSearch
-        * * Display Name: Auto Update Full-Text Search
+    SupportsGeoCoding: z.boolean().describe(`
+        * * Field Name: SupportsGeoCoding
+        * * Display Name: Supports Geo Coding
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When true, CodeGen generates geo-aware subclass code, adds __mj_Latitude/__mj_Longitude virtual fields to the base view, and the UI shows a map view toggle. Auto-set by CodeGen when LLM detects geo-capable fields (address, lat/lng, etc.).`),
+    AutoUpdateSupportsGeoCoding: z.boolean().describe(`
+        * * Field Name: AutoUpdateSupportsGeoCoding
+        * * Display Name: Auto Update Supports Geo Coding
         * * SQL Data Type: bit
         * * Default Value: 1
-        * * Description: When true, CodeGen LLM can auto-configure full-text search settings (FullTextSearchEnabled, catalog, index, function) during code generation runs.`),
-    AutoUpdateAllowUserSearchAPI: z.boolean().describe(`
-        * * Field Name: AutoUpdateAllowUserSearchAPI
-        * * Display Name: Auto Update User Search API
-        * * SQL Data Type: bit
-        * * Default Value: 1
-        * * Description: When true, CodeGen LLM can auto-set AllowUserSearchAPI during code generation runs.`),
-    TrustServerCacheCompletely: z.boolean().describe(`
-        * * Field Name: TrustServerCacheCompletely
-        * * Display Name: Trust Server Cache Completely
-        * * SQL Data Type: bit
-        * * Default Value: 1
-        * * Description: When true (default), the server-side RunView cache will store and return cached results for this entity, trusting that all mutations flow through BaseEntity.Save() which fires cache invalidation events. Set to false for entities whose rows are created as side-effects of other operations via raw SQL (e.g., Record Changes created by spCreateRecordChange_Internal), since those inserts bypass BaseEntity and never trigger cache invalidation.`),
+        * * Description: When true (default), CodeGen can automatically set SupportsGeoCoding based on LLM analysis of entity fields. Set to 0 to lock the value and prevent CodeGen from changing it.`),
     CodeName: z.string().nullable().describe(`
         * * Field Name: CodeName
         * * Display Name: Code Name
@@ -13373,6 +13430,24 @@ export const MJEntitySchema = z.object({
         * * Field Name: ParentBaseView
         * * Display Name: Parent Base View
         * * SQL Data Type: nvarchar(255)`),
+    AutoUpdateFullTextSearch: z.boolean().describe(`
+        * * Field Name: AutoUpdateFullTextSearch
+        * * Display Name: Auto Update Full-Text Search
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When true, CodeGen LLM can auto-configure full-text search settings (FullTextSearchEnabled, catalog, index, function) during code generation runs.`),
+    AutoUpdateAllowUserSearchAPI: z.boolean().describe(`
+        * * Field Name: AutoUpdateAllowUserSearchAPI
+        * * Display Name: Auto Update User Search API
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When true, CodeGen LLM can auto-set AllowUserSearchAPI during code generation runs.`),
+    TrustServerCacheCompletely: z.boolean().describe(`
+        * * Field Name: TrustServerCacheCompletely
+        * * Display Name: Trust Server Cache Completely
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When true (default), the server-side RunView cache will store and return cached results for this entity, trusting that all mutations flow through BaseEntity.Save() which fires cache invalidation events. Set to false for entities whose rows are created as side-effects of other operations via raw SQL (e.g., Record Changes created by spCreateRecordChange_Internal), since those inserts bypass BaseEntity and never trigger cache invalidation.`),
 });
 
 export type MJEntityEntityType = z.infer<typeof MJEntitySchema>;
@@ -14236,7 +14311,7 @@ export const MJEntityFieldSchema = z.object({
     *   * ListOrUserEntry
     *   * None
         * * Description: Possible Values of None, List, ListOrUserEntry - the last option meaning that the list of possible values are options, but a user can enter anything else desired too.`),
-    ExtendedType: z.union([z.literal('Code'), z.literal('Email'), z.literal('FaceTime'), z.literal('Geo'), z.literal('MSTeams'), z.literal('Other'), z.literal('SIP'), z.literal('SMS'), z.literal('Skype'), z.literal('Tel'), z.literal('URL'), z.literal('WhatsApp'), z.literal('ZoomMtg')]).nullable().describe(`
+    ExtendedType: z.union([z.literal('Code'), z.literal('Email'), z.literal('FaceTime'), z.literal('Geo'), z.literal('GeoAddress'), z.literal('GeoCity'), z.literal('GeoCountry'), z.literal('GeoLatitude'), z.literal('GeoLongitude'), z.literal('GeoPostalCode'), z.literal('GeoStateProvince'), z.literal('MSTeams'), z.literal('Other'), z.literal('SIP'), z.literal('SMS'), z.literal('Skype'), z.literal('Tel'), z.literal('URL'), z.literal('WhatsApp'), z.literal('ZoomMtg')]).nullable().describe(`
         * * Field Name: ExtendedType
         * * Display Name: Extended Type
         * * SQL Data Type: nvarchar(50)
@@ -14246,6 +14321,13 @@ export const MJEntityFieldSchema = z.object({
     *   * Email
     *   * FaceTime
     *   * Geo
+    *   * GeoAddress
+    *   * GeoCity
+    *   * GeoCountry
+    *   * GeoLatitude
+    *   * GeoLongitude
+    *   * GeoPostalCode
+    *   * GeoStateProvince
     *   * MSTeams
     *   * Other
     *   * SIP
@@ -14505,24 +14587,12 @@ export const MJEntityFieldSchema = z.object({
         * * Display Name: JSON Type Definition
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Raw TypeScript code emitted by CodeGen above the entity class definition. Typically contains the interface/type definition referenced by JSONType. Can include imports, multiple types, or any valid TypeScript.`),
-    UserSearchPredicateAPI: z.string().describe(`
-        * * Field Name: UserSearchPredicateAPI
-        * * Display Name: User Search Predicate
-        * * SQL Data Type: nvarchar(20)
-        * * Default Value: Contains
-        * * Description: Search predicate controlling how user search queries match against this field. Valid values: BeginsWith, Contains, EndsWith, Exact.`),
-    AutoUpdateUserSearchPredicate: z.boolean().describe(`
-        * * Field Name: AutoUpdateUserSearchPredicate
-        * * Display Name: Auto Update User Search Predicate
+    AutoUpdateExtendedType: z.boolean().describe(`
+        * * Field Name: AutoUpdateExtendedType
+        * * Display Name: Auto Update Extended Type
         * * SQL Data Type: bit
         * * Default Value: 1
-        * * Description: When true, CodeGen LLM can auto-set the UserSearchPredicateAPI value during code generation runs.`),
-    AutoUpdateFullTextSearch: z.boolean().describe(`
-        * * Field Name: AutoUpdateFullTextSearch
-        * * Display Name: Auto Update Full Text Search
-        * * SQL Data Type: bit
-        * * Default Value: 1
-        * * Description: When true, CodeGen LLM can auto-set the FullTextSearchEnabled value during code generation runs.`),
+        * * Description: When true (default), CodeGen can automatically suggest and apply ExtendedType values (GeoLatitude, GeoLongitude, GeoAddress, etc.) during LLM field categorization. Set to 0 to lock admin-specified ExtendedType.`),
     FieldCodeName: z.string().nullable().describe(`
         * * Field Name: FieldCodeName
         * * Display Name: Field Code Name
@@ -14575,6 +14645,24 @@ export const MJEntityFieldSchema = z.object({
         * * Field Name: RelatedEntityClassName
         * * Display Name: Related Entity Class Name
         * * SQL Data Type: nvarchar(MAX)`),
+    UserSearchPredicateAPI: z.string().describe(`
+        * * Field Name: UserSearchPredicateAPI
+        * * Display Name: User Search Predicate
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Contains
+        * * Description: Search predicate controlling how user search queries match against this field. Valid values: BeginsWith, Contains, EndsWith, Exact.`),
+    AutoUpdateUserSearchPredicate: z.boolean().describe(`
+        * * Field Name: AutoUpdateUserSearchPredicate
+        * * Display Name: Auto Update User Search Predicate
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When true, CodeGen LLM can auto-set the UserSearchPredicateAPI value during code generation runs.`),
+    AutoUpdateFullTextSearch: z.boolean().describe(`
+        * * Field Name: AutoUpdateFullTextSearch
+        * * Display Name: Auto Update Full Text Search
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When true, CodeGen LLM can auto-set the FullTextSearchEnabled value during code generation runs.`),
 });
 
 export type MJEntityFieldEntityType = z.infer<typeof MJEntityFieldSchema>;
@@ -15614,12 +15702,6 @@ export const MJFileStorageAccountSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    IncludeInGlobalSearch: z.boolean().describe(`
-        * * Field Name: IncludeInGlobalSearch
-        * * Display Name: Include In Global Search
-        * * SQL Data Type: bit
-        * * Default Value: 0
-        * * Description: When true, this storage account is included in universal/global search results. Only effective if the associated provider supports search (SupportsSearch = 1).`),
     Provider: z.string().describe(`
         * * Field Name: Provider
         * * Display Name: Provider Name
@@ -15628,6 +15710,12 @@ export const MJFileStorageAccountSchema = z.object({
         * * Field Name: Credential
         * * Display Name: Credential Name
         * * SQL Data Type: nvarchar(200)`),
+    IncludeInGlobalSearch: z.boolean().describe(`
+        * * Field Name: IncludeInGlobalSearch
+        * * Display Name: Include In Global Search
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When true, this storage account is included in universal/global search results. Only effective if the associated provider supports search (SupportsSearch = 1).`),
 });
 
 export type MJFileStorageAccountEntityType = z.infer<typeof MJFileStorageAccountSchema>;
@@ -19674,6 +19762,138 @@ export const MJRecordChangeSchema = z.object({
 export type MJRecordChangeEntityType = z.infer<typeof MJRecordChangeSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Record Geo Codes
+ */
+export const MJRecordGeoCodeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    EntityID: z.string().describe(`
+        * * Field Name: EntityID
+        * * Display Name: Entity ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+        * * Description: Foreign key to Entity. Identifies which entity this geocode belongs to.`),
+    RecordID: z.string().describe(`
+        * * Field Name: RecordID
+        * * Display Name: Record ID
+        * * SQL Data Type: nvarchar(450)
+        * * Description: MJ composite primary key format string identifying the source record (e.g., "ID|<uuid>"). Max 450 chars for SQL Server index support.`),
+    LocationType: z.string().describe(`
+        * * Field Name: LocationType
+        * * Display Name: Location Type
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: Primary
+        * * Description: Discriminator for multi-location entities. Default "Primary" for single-address entities. Multi-address examples: "Home", "Business", "Mailing", "PO Box".`),
+    Latitude: z.number().nullable().describe(`
+        * * Field Name: Latitude
+        * * Display Name: Latitude
+        * * SQL Data Type: decimal(10, 6)
+        * * Description: Geocoded latitude coordinate. NULL when Status is "pending" or "failed".`),
+    Longitude: z.number().nullable().describe(`
+        * * Field Name: Longitude
+        * * Display Name: Longitude
+        * * SQL Data Type: decimal(10, 6)
+        * * Description: Geocoded longitude coordinate. NULL when Status is "pending" or "failed".`),
+    Precision: z.union([z.literal('city'), z.literal('country'), z.literal('county'), z.literal('exact'), z.literal('postal_code'), z.literal('state_province')]).nullable().describe(`
+        * * Field Name: Precision
+        * * Display Name: Precision
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * city
+    *   * country
+    *   * county
+    *   * exact
+    *   * postal_code
+    *   * state_province
+        * * Description: Precision level of the geocoded result: exact (street address), postal_code, city, county, state_province, or country.`),
+    CountryID: z.string().nullable().describe(`
+        * * Field Name: CountryID
+        * * Display Name: Country ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Countries (vwCountries.ID)
+        * * Description: Optional FK to Country reference table. Populated alongside lat/lng to enable choropleth grouping without reverse-geocoding at render time.`),
+    StateProvinceID: z.string().nullable().describe(`
+        * * Field Name: StateProvinceID
+        * * Display Name: State Province ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: State Provinces (vwStateProvinces.ID)
+        * * Description: Optional FK to StateProvince reference table. Populated alongside lat/lng to enable state-level choropleth grouping.`),
+    Status: z.union([z.literal('failed'), z.literal('pending'), z.literal('success')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * failed
+    *   * pending
+    *   * success
+        * * Description: Current geocoding status: "pending" (awaiting geocode), "success" (geocoded), or "failed" (geocoding error). Used by scheduled job for retry logic.`),
+    ErrorMessage: z.string().nullable().describe(`
+        * * Field Name: ErrorMessage
+        * * Display Name: Error Message
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Error details when Status is "failed". Captures API error messages, rate limit info, etc. for debugging.`),
+    RetryCount: z.number().describe(`
+        * * Field Name: RetryCount
+        * * Display Name: Retry Count
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Number of geocoding attempts. Used for exponential backoff in the scheduled retry job. Stops retrying at configurable maxRetries (default 3).`),
+    SourceFieldHash: z.string().nullable().describe(`
+        * * Field Name: SourceFieldHash
+        * * Display Name: Source Field Hash
+        * * SQL Data Type: nvarchar(64)
+        * * Description: SHA-256 hash of the source field values that produced this geocode. When source fields change on save, the hash won't match and re-geocoding is triggered. Format: SHA-256(concat(field1, "|", field2, ...)).`),
+    GeocodedAt: z.date().nullable().describe(`
+        * * Field Name: GeocodedAt
+        * * Display Name: Geocoded At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Timestamp of when geocoding was last attempted (success or failure).`),
+    GeocodingSource: z.union([z.literal('google'), z.literal('ip_geolocation'), z.literal('manual'), z.literal('native'), z.literal('reference_data'), z.literal('reverse')]).nullable().describe(`
+        * * Field Name: GeocodingSource
+        * * Display Name: Geocoding Source
+        * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * google
+    *   * ip_geolocation
+    *   * manual
+    *   * native
+    *   * reference_data
+    *   * reverse
+        * * Description: How this geocode was produced: google (Google Geocoding API), reference_data (resolved via Country/StateProvince tables), manual (user-entered), ip_geolocation (IP lookup), native (copied from entity lat/lng fields), reverse (reverse geocode from coordinates).`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Entity: z.string().describe(`
+        * * Field Name: Entity
+        * * Display Name: Entity
+        * * SQL Data Type: nvarchar(255)`),
+    Country: z.string().nullable().describe(`
+        * * Field Name: Country
+        * * Display Name: Country
+        * * SQL Data Type: nvarchar(200)`),
+    StateProvince: z.string().nullable().describe(`
+        * * Field Name: StateProvince
+        * * Display Name: State Province
+        * * SQL Data Type: nvarchar(200)`),
+});
+
+export type MJRecordGeoCodeEntityType = z.infer<typeof MJRecordGeoCodeSchema>;
+
+/**
  * zod schema definition for the entity MJ: Record Links
  */
 export const MJRecordLinkSchema = z.object({
@@ -21271,6 +21491,74 @@ export const MJSQLDialectSchema = z.object({
 export type MJSQLDialectEntityType = z.infer<typeof MJSQLDialectSchema>;
 
 /**
+ * zod schema definition for the entity MJ: State Provinces
+ */
+export const MJStateProvinceSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    CountryID: z.string().describe(`
+        * * Field Name: CountryID
+        * * Display Name: Country ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Countries (vwCountries.ID)
+        * * Description: Foreign key to Country. Establishes the parent country for this state/province.`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Full state/province name (e.g., "California", "Ontario").`),
+    Code: z.string().describe(`
+        * * Field Name: Code
+        * * Display Name: Code
+        * * SQL Data Type: nvarchar(10)
+        * * Description: Short code within the country (e.g., "CA", "ON"). Unique per country via compound constraint.`),
+    ISO3166_2: z.string().describe(`
+        * * Field Name: ISO3166_2
+        * * Display Name: Iso 31662
+        * * SQL Data Type: nvarchar(10)
+        * * Description: ISO 3166-2 subdivision code (e.g., "US-CA", "CA-ON"). Globally unique.`),
+    Latitude: z.number().nullable().describe(`
+        * * Field Name: Latitude
+        * * Display Name: Latitude
+        * * SQL Data Type: decimal(10, 6)
+        * * Description: Geographic centroid latitude. Used as fallback point for state-level geocoding.`),
+    Longitude: z.number().nullable().describe(`
+        * * Field Name: Longitude
+        * * Display Name: Longitude
+        * * SQL Data Type: decimal(10, 6)
+        * * Description: Geographic centroid longitude. Used as fallback point for state-level geocoding.`),
+    BoundaryGeoJSON: z.string().nullable().describe(`
+        * * Field Name: BoundaryGeoJSON
+        * * Display Name: Boundary Geo JSON
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Medium-resolution (~50m) GeoJSON boundary polygon for choropleth map rendering. Nullable. Total ~15-20MB for all states/provinces worldwide.`),
+    CommonAliases: z.string().nullable().describe(`
+        * * Field Name: CommonAliases
+        * * Display Name: Common Aliases
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of common aliases (e.g., ["Calif.","California","Cal"]). Used by GeoResolver for fuzzy text-to-state matching.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Country: z.string().describe(`
+        * * Field Name: Country
+        * * Display Name: Country
+        * * SQL Data Type: nvarchar(200)`),
+});
+
+export type MJStateProvinceEntityType = z.infer<typeof MJStateProvinceSchema>;
+
+/**
  * zod schema definition for the entity MJ: Tag Audit Logs
  */
 export const MJTagAuditLogSchema = z.object({
@@ -22088,6 +22376,115 @@ export const MJTemplateSchema = z.object({
 });
 
 export type MJTemplateEntityType = z.infer<typeof MJTemplateSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Test Geo Composite Keys
+ */
+export const MJTestGeoCompositeKeySchema = z.object({
+    RegionCode: z.string().describe(`
+        * * Field Name: RegionCode
+        * * Display Name: Region Code
+        * * SQL Data Type: nvarchar(10)`),
+    LocationCode: z.string().describe(`
+        * * Field Name: LocationCode
+        * * Display Name: Location Code
+        * * SQL Data Type: nvarchar(10)`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(200)`),
+    Address: z.string().nullable().describe(`
+        * * Field Name: Address
+        * * Display Name: Address
+        * * SQL Data Type: nvarchar(500)`),
+    City: z.string().nullable().describe(`
+        * * Field Name: City
+        * * Display Name: City
+        * * SQL Data Type: nvarchar(100)`),
+    State: z.string().nullable().describe(`
+        * * Field Name: State
+        * * Display Name: State
+        * * SQL Data Type: nvarchar(100)`),
+    Country: z.string().nullable().describe(`
+        * * Field Name: Country
+        * * Display Name: Country
+        * * SQL Data Type: nvarchar(100)`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type MJTestGeoCompositeKeyEntityType = z.infer<typeof MJTestGeoCompositeKeySchema>;
+
+/**
+ * zod schema definition for the entity MJ: Test Organizations
+ */
+export const MJTestOrganizationSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(200)`),
+    Address: z.string().nullable().describe(`
+        * * Field Name: Address
+        * * Display Name: Address
+        * * SQL Data Type: nvarchar(500)`),
+    City: z.string().nullable().describe(`
+        * * Field Name: City
+        * * Display Name: City
+        * * SQL Data Type: nvarchar(100)`),
+    State: z.string().nullable().describe(`
+        * * Field Name: State
+        * * Display Name: State
+        * * SQL Data Type: nvarchar(100)`),
+    PostalCode: z.string().nullable().describe(`
+        * * Field Name: PostalCode
+        * * Display Name: Postal Code
+        * * SQL Data Type: nvarchar(20)`),
+    Country: z.string().nullable().describe(`
+        * * Field Name: Country
+        * * Display Name: Country
+        * * SQL Data Type: nvarchar(100)`),
+    Phone: z.string().nullable().describe(`
+        * * Field Name: Phone
+        * * Display Name: Phone
+        * * SQL Data Type: nvarchar(50)`),
+    Website: z.string().nullable().describe(`
+        * * Field Name: Website
+        * * Display Name: Website
+        * * SQL Data Type: nvarchar(500)`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_Latitude: z.number().nullable().describe(`
+        * * Field Name: __mj_Latitude
+        * * Display Name: Latitude
+        * * SQL Data Type: decimal(10, 6)`),
+    __mj_Longitude: z.number().nullable().describe(`
+        * * Field Name: __mj_Longitude
+        * * Display Name: Longitude
+        * * SQL Data Type: decimal(10, 6)`),
+});
+
+export type MJTestOrganizationEntityType = z.infer<typeof MJTestOrganizationSchema>;
 
 /**
  * zod schema definition for the entity MJ: Test Rubrics
@@ -43525,7 +43922,7 @@ export class MJApplicationEntity extends BaseEntity<MJApplicationEntityType> {
     * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get DefaultNavItemsObject(): Array<MJApplicationEntity_IDefaultNavItem> | null {
-        const raw = this.DefaultNavItems;
+        const raw = this.Get('DefaultNavItems');
         if (raw !== this._DefaultNavItemsObject_lastRaw) {
             this._DefaultNavItemsObject_cached = raw ? JSON.parse(raw) : null;
             this._DefaultNavItemsObject_lastRaw = raw;
@@ -43534,7 +43931,7 @@ export class MJApplicationEntity extends BaseEntity<MJApplicationEntityType> {
     }
     set DefaultNavItemsObject(value: Array<MJApplicationEntity_IDefaultNavItem> | null) {
         const raw = value ? JSON.stringify(value) : null;
-        this.DefaultNavItems = raw;
+        this.Set('DefaultNavItems', raw);
         this._DefaultNavItemsObject_cached = value;
         this._DefaultNavItemsObject_lastRaw = raw;
     }
@@ -51361,7 +51758,7 @@ export class MJContentProcessRunEntity extends BaseEntity<MJContentProcessRunEnt
     * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get ConfigurationObject(): MJContentProcessRunEntity_IContentProcessRunConfiguration | null {
-        const raw = this.Configuration;
+        const raw = this.Get('Configuration');
         if (raw !== this._ConfigurationObject_lastRaw) {
             this._ConfigurationObject_cached = raw ? JSON.parse(raw) : null;
             this._ConfigurationObject_lastRaw = raw;
@@ -51370,7 +51767,7 @@ export class MJContentProcessRunEntity extends BaseEntity<MJContentProcessRunEnt
     }
     set ConfigurationObject(value: MJContentProcessRunEntity_IContentProcessRunConfiguration | null) {
         const raw = value ? JSON.stringify(value) : null;
-        this.Configuration = raw;
+        this.Set('Configuration', raw);
         this._ConfigurationObject_cached = value;
         this._ConfigurationObject_lastRaw = raw;
     }
@@ -51823,7 +52220,7 @@ export class MJContentSourceTypeEntity extends BaseEntity<MJContentSourceTypeEnt
     * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get ConfigurationObject(): MJContentSourceTypeEntity_IContentSourceTypeConfiguration | null {
-        const raw = this.Configuration;
+        const raw = this.Get('Configuration');
         if (raw !== this._ConfigurationObject_lastRaw) {
             this._ConfigurationObject_cached = raw ? JSON.parse(raw) : null;
             this._ConfigurationObject_lastRaw = raw;
@@ -51832,7 +52229,7 @@ export class MJContentSourceTypeEntity extends BaseEntity<MJContentSourceTypeEnt
     }
     set ConfigurationObject(value: MJContentSourceTypeEntity_IContentSourceTypeConfiguration | null) {
         const raw = value ? JSON.stringify(value) : null;
-        this.Configuration = raw;
+        this.Set('Configuration', raw);
         this._ConfigurationObject_cached = value;
         this._ConfigurationObject_lastRaw = raw;
     }
@@ -52051,7 +52448,7 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
     * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get ConfigurationObject(): MJContentSourceEntity_IContentSourceConfiguration | null {
-        const raw = this.Configuration;
+        const raw = this.Get('Configuration');
         if (raw !== this._ConfigurationObject_lastRaw) {
             this._ConfigurationObject_cached = raw ? JSON.parse(raw) : null;
             this._ConfigurationObject_lastRaw = raw;
@@ -52060,7 +52457,7 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
     }
     set ConfigurationObject(value: MJContentSourceEntity_IContentSourceConfiguration | null) {
         const raw = value ? JSON.stringify(value) : null;
-        this.Configuration = raw;
+        this.Set('Configuration', raw);
         this._ConfigurationObject_cached = value;
         this._ConfigurationObject_lastRaw = raw;
     }
@@ -52486,7 +52883,7 @@ export class MJContentTypeEntity extends BaseEntity<MJContentTypeEntityType> {
     * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get ConfigurationObject(): MJContentTypeEntity_IContentTypeConfiguration | null {
-        const raw = this.Configuration;
+        const raw = this.Get('Configuration');
         if (raw !== this._ConfigurationObject_lastRaw) {
             this._ConfigurationObject_cached = raw ? JSON.parse(raw) : null;
             this._ConfigurationObject_lastRaw = raw;
@@ -52495,7 +52892,7 @@ export class MJContentTypeEntity extends BaseEntity<MJContentTypeEntityType> {
     }
     set ConfigurationObject(value: MJContentTypeEntity_IContentTypeConfiguration | null) {
         const raw = value ? JSON.stringify(value) : null;
-        this.Configuration = raw;
+        this.Set('Configuration', raw);
         this._ConfigurationObject_cached = value;
         this._ConfigurationObject_lastRaw = raw;
     }
@@ -54522,6 +54919,175 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
     */
     get TestRun(): string | null {
         return this.Get('TestRun');
+    }
+}
+
+
+/**
+ * MJ: Countries - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: Country
+ * * Base View: vwCountries
+ * * @description Reference table for countries with ISO 3166-1 codes, geographic centroids, and optional medium-resolution boundary GeoJSON for choropleth rendering. Seeded with ~250 countries.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Countries')
+export class MJCountryEntity extends BaseEntity<MJCountryEntityType> {
+    /**
+    * Loads the MJ: Countries record from the database
+    * @param ID: string - primary key value to load the MJ: Countries record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJCountryEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Full country name (e.g., "United States", "Canada").
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: ISO2
+    * * Display Name: Iso 2
+    * * SQL Data Type: nvarchar(2)
+    * * Description: ISO 3166-1 alpha-2 code (e.g., "US", "CA"). Unique business key for lookups.
+    */
+    get ISO2(): string {
+        return this.Get('ISO2');
+    }
+    set ISO2(value: string) {
+        this.Set('ISO2', value);
+    }
+
+    /**
+    * * Field Name: ISO3
+    * * Display Name: Iso 3
+    * * SQL Data Type: nvarchar(3)
+    * * Description: ISO 3166-1 alpha-3 code (e.g., "USA", "CAN"). Unique business key for lookups.
+    */
+    get ISO3(): string {
+        return this.Get('ISO3');
+    }
+    set ISO3(value: string) {
+        this.Set('ISO3', value);
+    }
+
+    /**
+    * * Field Name: NumericCode
+    * * Display Name: Numeric Code
+    * * SQL Data Type: int
+    * * Description: ISO 3166-1 numeric code (e.g., 840 for US, 124 for Canada).
+    */
+    get NumericCode(): number | null {
+        return this.Get('NumericCode');
+    }
+    set NumericCode(value: number | null) {
+        this.Set('NumericCode', value);
+    }
+
+    /**
+    * * Field Name: Latitude
+    * * Display Name: Latitude
+    * * SQL Data Type: decimal(10, 6)
+    * * Description: Geographic centroid latitude. Used as fallback point for country-level geocoding.
+    */
+    get Latitude(): number | null {
+        return this.Get('Latitude');
+    }
+    set Latitude(value: number | null) {
+        this.Set('Latitude', value);
+    }
+
+    /**
+    * * Field Name: Longitude
+    * * Display Name: Longitude
+    * * SQL Data Type: decimal(10, 6)
+    * * Description: Geographic centroid longitude. Used as fallback point for country-level geocoding.
+    */
+    get Longitude(): number | null {
+        return this.Get('Longitude');
+    }
+    set Longitude(value: number | null) {
+        this.Set('Longitude', value);
+    }
+
+    /**
+    * * Field Name: BoundaryGeoJSON
+    * * Display Name: Boundary Geo JSON
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Medium-resolution (~50m) GeoJSON boundary polygon for choropleth map rendering. Nullable — point map falls back to centroid if absent. Total ~3MB for all countries.
+    */
+    get BoundaryGeoJSON(): string | null {
+        return this.Get('BoundaryGeoJSON');
+    }
+    set BoundaryGeoJSON(value: string | null) {
+        this.Set('BoundaryGeoJSON', value);
+    }
+
+    /**
+    * * Field Name: CommonAliases
+    * * Display Name: Common Aliases
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of common aliases and alternate names (e.g., ["United States","USA","U.S.","America"]). Used by GeoResolver for fuzzy text-to-country matching.
+    */
+    get CommonAliases(): string | null {
+        return this.Get('CommonAliases');
+    }
+    set CommonAliases(value: string | null) {
+        this.Set('CommonAliases', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
     }
 }
 
@@ -59894,45 +60460,31 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
     }
 
     /**
-    * * Field Name: AutoUpdateFullTextSearch
-    * * Display Name: Auto Update Full-Text Search
+    * * Field Name: SupportsGeoCoding
+    * * Display Name: Supports Geo Coding
     * * SQL Data Type: bit
-    * * Default Value: 1
-    * * Description: When true, CodeGen LLM can auto-configure full-text search settings (FullTextSearchEnabled, catalog, index, function) during code generation runs.
+    * * Default Value: 0
+    * * Description: When true, CodeGen generates geo-aware subclass code, adds __mj_Latitude/__mj_Longitude virtual fields to the base view, and the UI shows a map view toggle. Auto-set by CodeGen when LLM detects geo-capable fields (address, lat/lng, etc.).
     */
-    get AutoUpdateFullTextSearch(): boolean {
-        return this.Get('AutoUpdateFullTextSearch');
+    get SupportsGeoCoding(): boolean {
+        return this.Get('SupportsGeoCoding');
     }
-    set AutoUpdateFullTextSearch(value: boolean) {
-        this.Set('AutoUpdateFullTextSearch', value);
+    set SupportsGeoCoding(value: boolean) {
+        this.Set('SupportsGeoCoding', value);
     }
 
     /**
-    * * Field Name: AutoUpdateAllowUserSearchAPI
-    * * Display Name: Auto Update User Search API
+    * * Field Name: AutoUpdateSupportsGeoCoding
+    * * Display Name: Auto Update Supports Geo Coding
     * * SQL Data Type: bit
     * * Default Value: 1
-    * * Description: When true, CodeGen LLM can auto-set AllowUserSearchAPI during code generation runs.
+    * * Description: When true (default), CodeGen can automatically set SupportsGeoCoding based on LLM analysis of entity fields. Set to 0 to lock the value and prevent CodeGen from changing it.
     */
-    get AutoUpdateAllowUserSearchAPI(): boolean {
-        return this.Get('AutoUpdateAllowUserSearchAPI');
+    get AutoUpdateSupportsGeoCoding(): boolean {
+        return this.Get('AutoUpdateSupportsGeoCoding');
     }
-    set AutoUpdateAllowUserSearchAPI(value: boolean) {
-        this.Set('AutoUpdateAllowUserSearchAPI', value);
-    }
-
-    /**
-    * * Field Name: TrustServerCacheCompletely
-    * * Display Name: Trust Server Cache Completely
-    * * SQL Data Type: bit
-    * * Default Value: 1
-    * * Description: When true (default), the server-side RunView cache will store and return cached results for this entity, trusting that all mutations flow through BaseEntity.Save() which fires cache invalidation events. Set to false for entities whose rows are created as side-effects of other operations via raw SQL (e.g., Record Changes created by spCreateRecordChange_Internal), since those inserts bypass BaseEntity and never trigger cache invalidation.
-    */
-    get TrustServerCacheCompletely(): boolean {
-        return this.Get('TrustServerCacheCompletely');
-    }
-    set TrustServerCacheCompletely(value: boolean) {
-        this.Set('TrustServerCacheCompletely', value);
+    set AutoUpdateSupportsGeoCoding(value: boolean) {
+        this.Set('AutoUpdateSupportsGeoCoding', value);
     }
 
     /**
@@ -59989,6 +60541,48 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
     */
     get ParentBaseView(): string | null {
         return this.Get('ParentBaseView');
+    }
+
+    /**
+    * * Field Name: AutoUpdateFullTextSearch
+    * * Display Name: Auto Update Full-Text Search
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When true, CodeGen LLM can auto-configure full-text search settings (FullTextSearchEnabled, catalog, index, function) during code generation runs.
+    */
+    get AutoUpdateFullTextSearch(): boolean {
+        return this.Get('AutoUpdateFullTextSearch');
+    }
+    set AutoUpdateFullTextSearch(value: boolean) {
+        this.Set('AutoUpdateFullTextSearch', value);
+    }
+
+    /**
+    * * Field Name: AutoUpdateAllowUserSearchAPI
+    * * Display Name: Auto Update User Search API
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When true, CodeGen LLM can auto-set AllowUserSearchAPI during code generation runs.
+    */
+    get AutoUpdateAllowUserSearchAPI(): boolean {
+        return this.Get('AutoUpdateAllowUserSearchAPI');
+    }
+    set AutoUpdateAllowUserSearchAPI(value: boolean) {
+        this.Set('AutoUpdateAllowUserSearchAPI', value);
+    }
+
+    /**
+    * * Field Name: TrustServerCacheCompletely
+    * * Display Name: Trust Server Cache Completely
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When true (default), the server-side RunView cache will store and return cached results for this entity, trusting that all mutations flow through BaseEntity.Save() which fires cache invalidation events. Set to false for entities whose rows are created as side-effects of other operations via raw SQL (e.g., Record Changes created by spCreateRecordChange_Internal), since those inserts bypass BaseEntity and never trigger cache invalidation.
+    */
+    get TrustServerCacheCompletely(): boolean {
+        return this.Get('TrustServerCacheCompletely');
+    }
+    set TrustServerCacheCompletely(value: boolean) {
+        this.Set('TrustServerCacheCompletely', value);
     }
 }
 
@@ -62208,6 +62802,13 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
     *   * Email
     *   * FaceTime
     *   * Geo
+    *   * GeoAddress
+    *   * GeoCity
+    *   * GeoCountry
+    *   * GeoLatitude
+    *   * GeoLongitude
+    *   * GeoPostalCode
+    *   * GeoStateProvince
     *   * MSTeams
     *   * Other
     *   * SIP
@@ -62219,10 +62820,10 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
     *   * ZoomMtg
     * * Description: Defines extended behaviors for a field such as for Email, Web URLs, Code, etc.
     */
-    get ExtendedType(): 'Code' | 'Email' | 'FaceTime' | 'Geo' | 'MSTeams' | 'Other' | 'SIP' | 'SMS' | 'Skype' | 'Tel' | 'URL' | 'WhatsApp' | 'ZoomMtg' | null {
+    get ExtendedType(): 'Code' | 'Email' | 'FaceTime' | 'Geo' | 'GeoAddress' | 'GeoCity' | 'GeoCountry' | 'GeoLatitude' | 'GeoLongitude' | 'GeoPostalCode' | 'GeoStateProvince' | 'MSTeams' | 'Other' | 'SIP' | 'SMS' | 'Skype' | 'Tel' | 'URL' | 'WhatsApp' | 'ZoomMtg' | null {
         return this.Get('ExtendedType');
     }
-    set ExtendedType(value: 'Code' | 'Email' | 'FaceTime' | 'Geo' | 'MSTeams' | 'Other' | 'SIP' | 'SMS' | 'Skype' | 'Tel' | 'URL' | 'WhatsApp' | 'ZoomMtg' | null) {
+    set ExtendedType(value: 'Code' | 'Email' | 'FaceTime' | 'Geo' | 'GeoAddress' | 'GeoCity' | 'GeoCountry' | 'GeoLatitude' | 'GeoLongitude' | 'GeoPostalCode' | 'GeoStateProvince' | 'MSTeams' | 'Other' | 'SIP' | 'SMS' | 'Skype' | 'Tel' | 'URL' | 'WhatsApp' | 'ZoomMtg' | null) {
         this.Set('ExtendedType', value);
     }
 
@@ -62787,45 +63388,17 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
     }
 
     /**
-    * * Field Name: UserSearchPredicateAPI
-    * * Display Name: User Search Predicate
-    * * SQL Data Type: nvarchar(20)
-    * * Default Value: Contains
-    * * Description: Search predicate controlling how user search queries match against this field. Valid values: BeginsWith, Contains, EndsWith, Exact.
-    */
-    get UserSearchPredicateAPI(): string {
-        return this.Get('UserSearchPredicateAPI');
-    }
-    set UserSearchPredicateAPI(value: string) {
-        this.Set('UserSearchPredicateAPI', value);
-    }
-
-    /**
-    * * Field Name: AutoUpdateUserSearchPredicate
-    * * Display Name: Auto Update User Search Predicate
+    * * Field Name: AutoUpdateExtendedType
+    * * Display Name: Auto Update Extended Type
     * * SQL Data Type: bit
     * * Default Value: 1
-    * * Description: When true, CodeGen LLM can auto-set the UserSearchPredicateAPI value during code generation runs.
+    * * Description: When true (default), CodeGen can automatically suggest and apply ExtendedType values (GeoLatitude, GeoLongitude, GeoAddress, etc.) during LLM field categorization. Set to 0 to lock admin-specified ExtendedType.
     */
-    get AutoUpdateUserSearchPredicate(): boolean {
-        return this.Get('AutoUpdateUserSearchPredicate');
+    get AutoUpdateExtendedType(): boolean {
+        return this.Get('AutoUpdateExtendedType');
     }
-    set AutoUpdateUserSearchPredicate(value: boolean) {
-        this.Set('AutoUpdateUserSearchPredicate', value);
-    }
-
-    /**
-    * * Field Name: AutoUpdateFullTextSearch
-    * * Display Name: Auto Update Full Text Search
-    * * SQL Data Type: bit
-    * * Default Value: 1
-    * * Description: When true, CodeGen LLM can auto-set the FullTextSearchEnabled value during code generation runs.
-    */
-    get AutoUpdateFullTextSearch(): boolean {
-        return this.Get('AutoUpdateFullTextSearch');
-    }
-    set AutoUpdateFullTextSearch(value: boolean) {
-        this.Set('AutoUpdateFullTextSearch', value);
+    set AutoUpdateExtendedType(value: boolean) {
+        this.Set('AutoUpdateExtendedType', value);
     }
 
     /**
@@ -62943,6 +63516,48 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
     */
     get RelatedEntityClassName(): string | null {
         return this.Get('RelatedEntityClassName');
+    }
+
+    /**
+    * * Field Name: UserSearchPredicateAPI
+    * * Display Name: User Search Predicate
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Contains
+    * * Description: Search predicate controlling how user search queries match against this field. Valid values: BeginsWith, Contains, EndsWith, Exact.
+    */
+    get UserSearchPredicateAPI(): string {
+        return this.Get('UserSearchPredicateAPI');
+    }
+    set UserSearchPredicateAPI(value: string) {
+        this.Set('UserSearchPredicateAPI', value);
+    }
+
+    /**
+    * * Field Name: AutoUpdateUserSearchPredicate
+    * * Display Name: Auto Update User Search Predicate
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When true, CodeGen LLM can auto-set the UserSearchPredicateAPI value during code generation runs.
+    */
+    get AutoUpdateUserSearchPredicate(): boolean {
+        return this.Get('AutoUpdateUserSearchPredicate');
+    }
+    set AutoUpdateUserSearchPredicate(value: boolean) {
+        this.Set('AutoUpdateUserSearchPredicate', value);
+    }
+
+    /**
+    * * Field Name: AutoUpdateFullTextSearch
+    * * Display Name: Auto Update Full Text Search
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When true, CodeGen LLM can auto-set the FullTextSearchEnabled value during code generation runs.
+    */
+    get AutoUpdateFullTextSearch(): boolean {
+        return this.Get('AutoUpdateFullTextSearch');
+    }
+    set AutoUpdateFullTextSearch(value: boolean) {
+        this.Set('AutoUpdateFullTextSearch', value);
     }
 }
 
@@ -65708,20 +66323,6 @@ export class MJFileStorageAccountEntity extends BaseEntity<MJFileStorageAccountE
     }
 
     /**
-    * * Field Name: IncludeInGlobalSearch
-    * * Display Name: Include In Global Search
-    * * SQL Data Type: bit
-    * * Default Value: 0
-    * * Description: When true, this storage account is included in universal/global search results. Only effective if the associated provider supports search (SupportsSearch = 1).
-    */
-    get IncludeInGlobalSearch(): boolean {
-        return this.Get('IncludeInGlobalSearch');
-    }
-    set IncludeInGlobalSearch(value: boolean) {
-        this.Set('IncludeInGlobalSearch', value);
-    }
-
-    /**
     * * Field Name: Provider
     * * Display Name: Provider Name
     * * SQL Data Type: nvarchar(50)
@@ -65737,6 +66338,20 @@ export class MJFileStorageAccountEntity extends BaseEntity<MJFileStorageAccountE
     */
     get Credential(): string {
         return this.Get('Credential');
+    }
+
+    /**
+    * * Field Name: IncludeInGlobalSearch
+    * * Display Name: Include In Global Search
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When true, this storage account is included in universal/global search results. Only effective if the associated provider supports search (SupportsSearch = 1).
+    */
+    get IncludeInGlobalSearch(): boolean {
+        return this.Get('IncludeInGlobalSearch');
+    }
+    set IncludeInGlobalSearch(value: boolean) {
+        this.Set('IncludeInGlobalSearch', value);
     }
 }
 
@@ -76182,6 +76797,307 @@ export class MJRecordChangeEntity extends BaseEntity<MJRecordChangeEntityType> {
 
 
 /**
+ * MJ: Record Geo Codes - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: RecordGeoCode
+ * * Base View: vwRecordGeoCodes
+ * * @description Polymorphic table storing persisted geocoding results for any MJ entity record. Each row maps an entity record + location type to a lat/lng coordinate, with optional country/state references for choropleth grouping. Supports multi-location entities via LocationType discriminator.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Record Geo Codes')
+export class MJRecordGeoCodeEntity extends BaseEntity<MJRecordGeoCodeEntityType> {
+    /**
+    * Loads the MJ: Record Geo Codes record from the database
+    * @param ID: string - primary key value to load the MJ: Record Geo Codes record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJRecordGeoCodeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: EntityID
+    * * Display Name: Entity ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * Description: Foreign key to Entity. Identifies which entity this geocode belongs to.
+    */
+    get EntityID(): string {
+        return this.Get('EntityID');
+    }
+    set EntityID(value: string) {
+        this.Set('EntityID', value);
+    }
+
+    /**
+    * * Field Name: RecordID
+    * * Display Name: Record ID
+    * * SQL Data Type: nvarchar(450)
+    * * Description: MJ composite primary key format string identifying the source record (e.g., "ID|<uuid>"). Max 450 chars for SQL Server index support.
+    */
+    get RecordID(): string {
+        return this.Get('RecordID');
+    }
+    set RecordID(value: string) {
+        this.Set('RecordID', value);
+    }
+
+    /**
+    * * Field Name: LocationType
+    * * Display Name: Location Type
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: Primary
+    * * Description: Discriminator for multi-location entities. Default "Primary" for single-address entities. Multi-address examples: "Home", "Business", "Mailing", "PO Box".
+    */
+    get LocationType(): string {
+        return this.Get('LocationType');
+    }
+    set LocationType(value: string) {
+        this.Set('LocationType', value);
+    }
+
+    /**
+    * * Field Name: Latitude
+    * * Display Name: Latitude
+    * * SQL Data Type: decimal(10, 6)
+    * * Description: Geocoded latitude coordinate. NULL when Status is "pending" or "failed".
+    */
+    get Latitude(): number | null {
+        return this.Get('Latitude');
+    }
+    set Latitude(value: number | null) {
+        this.Set('Latitude', value);
+    }
+
+    /**
+    * * Field Name: Longitude
+    * * Display Name: Longitude
+    * * SQL Data Type: decimal(10, 6)
+    * * Description: Geocoded longitude coordinate. NULL when Status is "pending" or "failed".
+    */
+    get Longitude(): number | null {
+        return this.Get('Longitude');
+    }
+    set Longitude(value: number | null) {
+        this.Set('Longitude', value);
+    }
+
+    /**
+    * * Field Name: Precision
+    * * Display Name: Precision
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * city
+    *   * country
+    *   * county
+    *   * exact
+    *   * postal_code
+    *   * state_province
+    * * Description: Precision level of the geocoded result: exact (street address), postal_code, city, county, state_province, or country.
+    */
+    get Precision(): 'city' | 'country' | 'county' | 'exact' | 'postal_code' | 'state_province' | null {
+        return this.Get('Precision');
+    }
+    set Precision(value: 'city' | 'country' | 'county' | 'exact' | 'postal_code' | 'state_province' | null) {
+        this.Set('Precision', value);
+    }
+
+    /**
+    * * Field Name: CountryID
+    * * Display Name: Country ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Countries (vwCountries.ID)
+    * * Description: Optional FK to Country reference table. Populated alongside lat/lng to enable choropleth grouping without reverse-geocoding at render time.
+    */
+    get CountryID(): string | null {
+        return this.Get('CountryID');
+    }
+    set CountryID(value: string | null) {
+        this.Set('CountryID', value);
+    }
+
+    /**
+    * * Field Name: StateProvinceID
+    * * Display Name: State Province ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: State Provinces (vwStateProvinces.ID)
+    * * Description: Optional FK to StateProvince reference table. Populated alongside lat/lng to enable state-level choropleth grouping.
+    */
+    get StateProvinceID(): string | null {
+        return this.Get('StateProvinceID');
+    }
+    set StateProvinceID(value: string | null) {
+        this.Set('StateProvinceID', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * failed
+    *   * pending
+    *   * success
+    * * Description: Current geocoding status: "pending" (awaiting geocode), "success" (geocoded), or "failed" (geocoding error). Used by scheduled job for retry logic.
+    */
+    get Status(): 'failed' | 'pending' | 'success' {
+        return this.Get('Status');
+    }
+    set Status(value: 'failed' | 'pending' | 'success') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: ErrorMessage
+    * * Display Name: Error Message
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Error details when Status is "failed". Captures API error messages, rate limit info, etc. for debugging.
+    */
+    get ErrorMessage(): string | null {
+        return this.Get('ErrorMessage');
+    }
+    set ErrorMessage(value: string | null) {
+        this.Set('ErrorMessage', value);
+    }
+
+    /**
+    * * Field Name: RetryCount
+    * * Display Name: Retry Count
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Number of geocoding attempts. Used for exponential backoff in the scheduled retry job. Stops retrying at configurable maxRetries (default 3).
+    */
+    get RetryCount(): number {
+        return this.Get('RetryCount');
+    }
+    set RetryCount(value: number) {
+        this.Set('RetryCount', value);
+    }
+
+    /**
+    * * Field Name: SourceFieldHash
+    * * Display Name: Source Field Hash
+    * * SQL Data Type: nvarchar(64)
+    * * Description: SHA-256 hash of the source field values that produced this geocode. When source fields change on save, the hash won't match and re-geocoding is triggered. Format: SHA-256(concat(field1, "|", field2, ...)).
+    */
+    get SourceFieldHash(): string | null {
+        return this.Get('SourceFieldHash');
+    }
+    set SourceFieldHash(value: string | null) {
+        this.Set('SourceFieldHash', value);
+    }
+
+    /**
+    * * Field Name: GeocodedAt
+    * * Display Name: Geocoded At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp of when geocoding was last attempted (success or failure).
+    */
+    get GeocodedAt(): Date | null {
+        return this.Get('GeocodedAt');
+    }
+    set GeocodedAt(value: Date | null) {
+        this.Set('GeocodedAt', value);
+    }
+
+    /**
+    * * Field Name: GeocodingSource
+    * * Display Name: Geocoding Source
+    * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * google
+    *   * ip_geolocation
+    *   * manual
+    *   * native
+    *   * reference_data
+    *   * reverse
+    * * Description: How this geocode was produced: google (Google Geocoding API), reference_data (resolved via Country/StateProvince tables), manual (user-entered), ip_geolocation (IP lookup), native (copied from entity lat/lng fields), reverse (reverse geocode from coordinates).
+    */
+    get GeocodingSource(): 'google' | 'ip_geolocation' | 'manual' | 'native' | 'reference_data' | 'reverse' | null {
+        return this.Get('GeocodingSource');
+    }
+    set GeocodingSource(value: 'google' | 'ip_geolocation' | 'manual' | 'native' | 'reference_data' | 'reverse' | null) {
+        this.Set('GeocodingSource', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Entity
+    * * Display Name: Entity
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Entity(): string {
+        return this.Get('Entity');
+    }
+
+    /**
+    * * Field Name: Country
+    * * Display Name: Country
+    * * SQL Data Type: nvarchar(200)
+    */
+    get Country(): string | null {
+        return this.Get('Country');
+    }
+
+    /**
+    * * Field Name: StateProvince
+    * * Display Name: State Province
+    * * SQL Data Type: nvarchar(200)
+    */
+    get StateProvince(): string | null {
+        return this.Get('StateProvince');
+    }
+}
+
+
+/**
  * MJ: Record Links - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: RecordLink
@@ -80483,6 +81399,185 @@ export class MJSQLDialectEntity extends BaseEntity<MJSQLDialectEntityType> {
 
 
 /**
+ * MJ: State Provinces - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: StateProvince
+ * * Base View: vwStateProvinces
+ * * @description Reference table for states, provinces, and first-level administrative divisions. Linked to Country via FK. Seeded with ~5,000 records with ISO 3166-2 codes, centroids, and optional boundary GeoJSON.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: State Provinces')
+export class MJStateProvinceEntity extends BaseEntity<MJStateProvinceEntityType> {
+    /**
+    * Loads the MJ: State Provinces record from the database
+    * @param ID: string - primary key value to load the MJ: State Provinces record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJStateProvinceEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: CountryID
+    * * Display Name: Country ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Countries (vwCountries.ID)
+    * * Description: Foreign key to Country. Establishes the parent country for this state/province.
+    */
+    get CountryID(): string {
+        return this.Get('CountryID');
+    }
+    set CountryID(value: string) {
+        this.Set('CountryID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Full state/province name (e.g., "California", "Ontario").
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Code
+    * * Display Name: Code
+    * * SQL Data Type: nvarchar(10)
+    * * Description: Short code within the country (e.g., "CA", "ON"). Unique per country via compound constraint.
+    */
+    get Code(): string {
+        return this.Get('Code');
+    }
+    set Code(value: string) {
+        this.Set('Code', value);
+    }
+
+    /**
+    * * Field Name: ISO3166_2
+    * * Display Name: Iso 31662
+    * * SQL Data Type: nvarchar(10)
+    * * Description: ISO 3166-2 subdivision code (e.g., "US-CA", "CA-ON"). Globally unique.
+    */
+    get ISO3166_2(): string {
+        return this.Get('ISO3166_2');
+    }
+    set ISO3166_2(value: string) {
+        this.Set('ISO3166_2', value);
+    }
+
+    /**
+    * * Field Name: Latitude
+    * * Display Name: Latitude
+    * * SQL Data Type: decimal(10, 6)
+    * * Description: Geographic centroid latitude. Used as fallback point for state-level geocoding.
+    */
+    get Latitude(): number | null {
+        return this.Get('Latitude');
+    }
+    set Latitude(value: number | null) {
+        this.Set('Latitude', value);
+    }
+
+    /**
+    * * Field Name: Longitude
+    * * Display Name: Longitude
+    * * SQL Data Type: decimal(10, 6)
+    * * Description: Geographic centroid longitude. Used as fallback point for state-level geocoding.
+    */
+    get Longitude(): number | null {
+        return this.Get('Longitude');
+    }
+    set Longitude(value: number | null) {
+        this.Set('Longitude', value);
+    }
+
+    /**
+    * * Field Name: BoundaryGeoJSON
+    * * Display Name: Boundary Geo JSON
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Medium-resolution (~50m) GeoJSON boundary polygon for choropleth map rendering. Nullable. Total ~15-20MB for all states/provinces worldwide.
+    */
+    get BoundaryGeoJSON(): string | null {
+        return this.Get('BoundaryGeoJSON');
+    }
+    set BoundaryGeoJSON(value: string | null) {
+        this.Set('BoundaryGeoJSON', value);
+    }
+
+    /**
+    * * Field Name: CommonAliases
+    * * Display Name: Common Aliases
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of common aliases (e.g., ["Calif.","California","Cal"]). Used by GeoResolver for fuzzy text-to-state matching.
+    */
+    get CommonAliases(): string | null {
+        return this.Get('CommonAliases');
+    }
+    set CommonAliases(value: string | null) {
+        this.Set('CommonAliases', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Country
+    * * Display Name: Country
+    * * SQL Data Type: nvarchar(200)
+    */
+    get Country(): string {
+        return this.Get('Country');
+    }
+}
+
+
+/**
  * MJ: Tag Audit Logs - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: TagAuditLog
@@ -82597,6 +83692,323 @@ export class MJTemplateEntity extends BaseEntity<MJTemplateEntityType> {
     */
     get User(): string {
         return this.Get('User');
+    }
+}
+
+
+/**
+ * MJ: Test Geo Composite Keys - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: TestGeoCompositeKey
+ * * Base View: vwTestGeoCompositeKeys
+ * * @description Test entity with composite primary key for geo features validation.
+ * * Primary Keys: RegionCode, LocationCode
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Test Geo Composite Keys')
+export class MJTestGeoCompositeKeyEntity extends BaseEntity<MJTestGeoCompositeKeyEntityType> {
+    /**
+    * Loads the MJ: Test Geo Composite Keys record from the database
+    * @param RegionCode: string - primary key value to load the MJ: Test Geo Composite Keys record.
+    * @param LocationCode: string - primary key value to load the MJ: Test Geo Composite Keys record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJTestGeoCompositeKeyEntity
+    * @method
+    * @override
+    */
+    public async Load(RegionCode: string, LocationCode: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'RegionCode', Value: RegionCode });
+        compositeKey.KeyValuePairs.push({ FieldName: 'LocationCode', Value: LocationCode });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: RegionCode
+    * * Display Name: Region Code
+    * * SQL Data Type: nvarchar(10)
+    */
+    get RegionCode(): string {
+        return this.Get('RegionCode');
+    }
+    set RegionCode(value: string) {
+        this.Set('RegionCode', value);
+    }
+
+    /**
+    * * Field Name: LocationCode
+    * * Display Name: Location Code
+    * * SQL Data Type: nvarchar(10)
+    */
+    get LocationCode(): string {
+        return this.Get('LocationCode');
+    }
+    set LocationCode(value: string) {
+        this.Set('LocationCode', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(200)
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Address
+    * * Display Name: Address
+    * * SQL Data Type: nvarchar(500)
+    */
+    get Address(): string | null {
+        return this.Get('Address');
+    }
+    set Address(value: string | null) {
+        this.Set('Address', value);
+    }
+
+    /**
+    * * Field Name: City
+    * * Display Name: City
+    * * SQL Data Type: nvarchar(100)
+    */
+    get City(): string | null {
+        return this.Get('City');
+    }
+    set City(value: string | null) {
+        this.Set('City', value);
+    }
+
+    /**
+    * * Field Name: State
+    * * Display Name: State
+    * * SQL Data Type: nvarchar(100)
+    */
+    get State(): string | null {
+        return this.Get('State');
+    }
+    set State(value: string | null) {
+        this.Set('State', value);
+    }
+
+    /**
+    * * Field Name: Country
+    * * Display Name: Country
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Country(): string | null {
+        return this.Get('Country');
+    }
+    set Country(value: string | null) {
+        this.Set('Country', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: Test Organizations - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: TestOrganization
+ * * Base View: vwTestOrganizations
+ * * @description Test entity for geo features validation. Has address fields that CodeGen should auto-detect for geocoding support.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Test Organizations')
+export class MJTestOrganizationEntity extends BaseEntity<MJTestOrganizationEntityType> {
+    /**
+    * Loads the MJ: Test Organizations record from the database
+    * @param ID: string - primary key value to load the MJ: Test Organizations record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJTestOrganizationEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(200)
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Address
+    * * Display Name: Address
+    * * SQL Data Type: nvarchar(500)
+    */
+    get Address(): string | null {
+        return this.Get('Address');
+    }
+    set Address(value: string | null) {
+        this.Set('Address', value);
+    }
+
+    /**
+    * * Field Name: City
+    * * Display Name: City
+    * * SQL Data Type: nvarchar(100)
+    */
+    get City(): string | null {
+        return this.Get('City');
+    }
+    set City(value: string | null) {
+        this.Set('City', value);
+    }
+
+    /**
+    * * Field Name: State
+    * * Display Name: State
+    * * SQL Data Type: nvarchar(100)
+    */
+    get State(): string | null {
+        return this.Get('State');
+    }
+    set State(value: string | null) {
+        this.Set('State', value);
+    }
+
+    /**
+    * * Field Name: PostalCode
+    * * Display Name: Postal Code
+    * * SQL Data Type: nvarchar(20)
+    */
+    get PostalCode(): string | null {
+        return this.Get('PostalCode');
+    }
+    set PostalCode(value: string | null) {
+        this.Set('PostalCode', value);
+    }
+
+    /**
+    * * Field Name: Country
+    * * Display Name: Country
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Country(): string | null {
+        return this.Get('Country');
+    }
+    set Country(value: string | null) {
+        this.Set('Country', value);
+    }
+
+    /**
+    * * Field Name: Phone
+    * * Display Name: Phone
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Phone(): string | null {
+        return this.Get('Phone');
+    }
+    set Phone(value: string | null) {
+        this.Set('Phone', value);
+    }
+
+    /**
+    * * Field Name: Website
+    * * Display Name: Website
+    * * SQL Data Type: nvarchar(500)
+    */
+    get Website(): string | null {
+        return this.Get('Website');
+    }
+    set Website(value: string | null) {
+        this.Set('Website', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_Latitude
+    * * Display Name: Latitude
+    * * SQL Data Type: decimal(10, 6)
+    */
+    get __mj_Latitude(): number | null {
+        return this.Get('__mj_Latitude');
+    }
+
+    /**
+    * * Field Name: __mj_Longitude
+    * * Display Name: Longitude
+    * * SQL Data Type: decimal(10, 6)
+    */
+    get __mj_Longitude(): number | null {
+        return this.Get('__mj_Longitude');
     }
 }
 
@@ -87441,7 +88853,7 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
     * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get GridStateObject(): MJUserViewEntity_IGridState | null {
-        const raw = this.GridState;
+        const raw = this.Get('GridState');
         if (raw !== this._GridStateObject_lastRaw) {
             this._GridStateObject_cached = raw ? JSON.parse(raw) : null;
             this._GridStateObject_lastRaw = raw;
@@ -87450,7 +88862,7 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
     }
     set GridStateObject(value: MJUserViewEntity_IGridState | null) {
         const raw = value ? JSON.stringify(value) : null;
-        this.GridState = raw;
+        this.Set('GridState', raw);
         this._GridStateObject_cached = value;
         this._GridStateObject_lastRaw = raw;
     }
@@ -87476,7 +88888,7 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
     * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get FilterStateObject(): MJUserViewEntity_IFilterState | null {
-        const raw = this.FilterState;
+        const raw = this.Get('FilterState');
         if (raw !== this._FilterStateObject_lastRaw) {
             this._FilterStateObject_cached = raw ? JSON.parse(raw) : null;
             this._FilterStateObject_lastRaw = raw;
@@ -87485,7 +88897,7 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
     }
     set FilterStateObject(value: MJUserViewEntity_IFilterState | null) {
         const raw = value ? JSON.stringify(value) : null;
-        this.FilterState = raw;
+        this.Set('FilterState', raw);
         this._FilterStateObject_cached = value;
         this._FilterStateObject_lastRaw = raw;
     }
@@ -87605,7 +89017,7 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
     * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get SortStateObject(): Array<MJUserViewEntity_ISortStateItem> | null {
-        const raw = this.SortState;
+        const raw = this.Get('SortState');
         if (raw !== this._SortStateObject_lastRaw) {
             this._SortStateObject_cached = raw ? JSON.parse(raw) : null;
             this._SortStateObject_lastRaw = raw;
@@ -87614,7 +89026,7 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
     }
     set SortStateObject(value: Array<MJUserViewEntity_ISortStateItem> | null) {
         const raw = value ? JSON.stringify(value) : null;
-        this.SortState = raw;
+        this.Set('SortState', raw);
         this._SortStateObject_cached = value;
         this._SortStateObject_lastRaw = raw;
     }
@@ -87673,7 +89085,7 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
     * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get CardStateObject(): MJUserViewEntity_ICardState | null {
-        const raw = this.CardState;
+        const raw = this.Get('CardState');
         if (raw !== this._CardStateObject_lastRaw) {
             this._CardStateObject_cached = raw ? JSON.parse(raw) : null;
             this._CardStateObject_lastRaw = raw;
@@ -87682,7 +89094,7 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
     }
     set CardStateObject(value: MJUserViewEntity_ICardState | null) {
         const raw = value ? JSON.stringify(value) : null;
-        this.CardState = raw;
+        this.Set('CardState', raw);
         this._CardStateObject_cached = value;
         this._CardStateObject_lastRaw = raw;
     }
@@ -87708,7 +89120,7 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
     * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get DisplayStateObject(): MJUserViewEntity_IDisplayState | null {
-        const raw = this.DisplayState;
+        const raw = this.Get('DisplayState');
         if (raw !== this._DisplayStateObject_lastRaw) {
             this._DisplayStateObject_cached = raw ? JSON.parse(raw) : null;
             this._DisplayStateObject_lastRaw = raw;
@@ -87717,7 +89129,7 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
     }
     set DisplayStateObject(value: MJUserViewEntity_IDisplayState | null) {
         const raw = value ? JSON.stringify(value) : null;
-        this.DisplayState = raw;
+        this.Set('DisplayState', raw);
         this._DisplayStateObject_cached = value;
         this._DisplayStateObject_lastRaw = raw;
     }
