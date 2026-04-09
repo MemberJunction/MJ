@@ -24,6 +24,7 @@ import { SearchEnricher } from './SearchEnricher';
 import { VectorSearchProvider } from './VectorSearchProvider';
 import { FullTextSearchProvider } from './FullTextSearchProvider';
 import { EntitySearchProvider } from './EntitySearchProvider';
+import { StorageSearchProvider } from './StorageSearchProvider';
 
 /**
  * Configuration options for the SearchEngine.
@@ -37,6 +38,8 @@ export interface SearchEngineConfig {
     EnableFullTextSearch?: boolean;
     /** Whether to include vector search (default: true, but gracefully skipped if unavailable) */
     EnableVectorSearch?: boolean;
+    /** Whether to include file storage search (default: true, but gracefully skipped if unavailable) */
+    EnableStorageSearch?: boolean;
 }
 
 /**
@@ -116,6 +119,18 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             const entityProvider = new EntitySearchProvider();
             this._providers.push(entityProvider);
             LogStatus('SearchEngine: Entity search provider enabled');
+        }
+
+        const enableStorage = config.EnableStorageSearch !== false;
+        if (enableStorage) {
+            const storageProvider = new StorageSearchProvider();
+            await storageProvider.CheckAvailability(contextUser);
+            if (storageProvider.IsAvailable()) {
+                this._providers.push(storageProvider);
+                LogStatus('SearchEngine: Storage search provider enabled');
+            } else {
+                LogStatus('SearchEngine: Storage search provider not available (no searchable accounts configured)');
+            }
         }
 
         this._configured = true;
@@ -254,8 +269,8 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
     /**
      * Count results contributed by each source before fusion.
      */
-    private countSources(lists: LabeledResultList[]): { Vector: number; FullText: number; Entity: number } {
-        const counts = { Vector: 0, FullText: 0, Entity: 0 };
+    private countSources(lists: LabeledResultList[]): { Vector: number; FullText: number; Entity: number; Storage: number } {
+        const counts = { Vector: 0, FullText: 0, Entity: 0, Storage: 0 };
         for (const list of lists) {
             switch (list.Source) {
                 case 'vector':
@@ -266,6 +281,9 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
                     break;
                 case 'entity':
                     counts.Entity = list.Results.length;
+                    break;
+                case 'storage':
+                    counts.Storage = list.Results.length;
                     break;
             }
         }
@@ -425,7 +443,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             Results: [],
             TotalCount: 0,
             ElapsedMs: Date.now() - startTime,
-            SourceCounts: { Vector: 0, FullText: 0, Entity: 0 },
+            SourceCounts: { Vector: 0, FullText: 0, Entity: 0, Storage: 0 },
             ErrorMessage: message,
         };
     }

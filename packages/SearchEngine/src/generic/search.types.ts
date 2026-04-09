@@ -11,7 +11,7 @@
 /**
  * Source types that can contribute to search results.
  */
-export type SearchSource = 'vector' | 'fulltext' | 'entity';
+export type SearchSource = 'vector' | 'fulltext' | 'entity' | 'storage';
 
 /**
  * Search modes that control the level of enrichment applied to results.
@@ -30,6 +30,8 @@ export interface SearchScoreBreakdown {
     FullText?: number;
     /** Score from entity LIKE-based search */
     Entity?: number;
+    /** Score from file storage search */
+    Storage?: number;
 }
 
 /**
@@ -109,6 +111,7 @@ export interface SearchResult {
         Vector: number;
         FullText: number;
         Entity: number;
+        Storage: number;
     };
     /** Error message if Success is false */
     ErrorMessage?: string;

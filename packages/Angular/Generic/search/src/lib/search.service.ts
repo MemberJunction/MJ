@@ -9,6 +9,12 @@ import { Injectable } from '@angular/core';
 import { BehaviorSubject, Subject } from 'rxjs';
 import { Metadata } from '@memberjunction/core';
 import {
+    GraphQLSearchClient,
+    GraphQLDataProvider,
+    SearchClientResponse,
+    SearchClientResultItem
+} from '@memberjunction/graphql-dataprovider';
+import {
     SearchRequest,
     SearchResponse,
     SearchResultItem,
@@ -28,6 +34,7 @@ const SOURCE_TYPE_ICONS: Record<string, string> = {
     'content-item': 'fa-solid fa-file-lines',
     'file': 'fa-solid fa-file',
     'web-page': 'fa-solid fa-globe',
+    'storage': 'fa-solid fa-folder-open',
 };
 
 /** Default labels for source types */
@@ -38,6 +45,7 @@ const SOURCE_TYPE_LABELS: Record<string, string> = {
     'content-item': 'Content Items',
     'file': 'Documents',
     'web-page': 'Web Pages',
+    'storage': 'File Storage',
 };
 
 /** Recent search entry for history */
@@ -96,13 +104,18 @@ export class SearchService {
      */
     public async PreviewSearch(query: string, maxResults: number = 8): Promise<SearchResponse> {
         try {
-            return await this.executeGraphQLSearch({
-                Query: query,
-                MaxResults: maxResults,
-                ActiveFilters: {},
-                IncludeSources: ['vector', 'fulltext', 'entity'],
-                MinScore: 0
-            });
+            if (!query.trim()) {
+                return this.createEmptyResponse();
+            }
+
+            const provider = Metadata.Provider;
+            if (!(provider instanceof GraphQLDataProvider)) {
+                return this.createEmptyResponse('GraphQL provider not available');
+            }
+
+            const client = new GraphQLSearchClient(provider);
+            const clientResponse = await client.PreviewSearch(query, maxResults);
+            return this.mapClientResponseToSearchResponse(clientResponse);
         } catch (err) {
             const errorMessage = err instanceof Error ? err.message : 'Preview search failed';
             return this.createEmptyResponse(errorMessage);
@@ -230,88 +243,68 @@ export class SearchService {
             Filters: [],
             TotalCount: 0,
             ElapsedMs: 0,
-            SourceCounts: { Vector: 0, FullText: 0, Entity: 0 },
+            SourceCounts: { Vector: 0, FullText: 0, Entity: 0, Storage: 0 },
             ErrorMessage: errorMessage
         };
     }
 
     /**
-     * Execute search via the SearchKnowledge GraphQL mutation.
+     * Execute search via the GraphQLSearchClient.
      */
     private async executeGraphQLSearch(request: SearchRequest): Promise<SearchResponse> {
         if (!request.Query.trim()) {
             return this.createEmptyResponse();
         }
 
-        const provider = Metadata.Provider as { ExecuteGQL?: (query: string, variables: Record<string, unknown>) => Promise<Record<string, unknown>> };
-        if (!provider?.ExecuteGQL) {
+        const provider = Metadata.Provider;
+        if (!(provider instanceof GraphQLDataProvider)) {
             return this.createEmptyResponse('GraphQL provider not available');
         }
 
-        const mutation = `
-            mutation SearchKnowledge($query: String!, $maxResults: Float, $filters: SearchFiltersInput, $minScore: Float) {
-                SearchKnowledge(query: $query, maxResults: $maxResults, filters: $filters, minScore: $minScore) {
-                    Success
-                    TotalCount
-                    ElapsedMs
-                    ErrorMessage
-                    SourceCounts {
-                        Vector
-                        FullText
-                        Entity
-                    }
-                    Results {
-                        ID
-                        EntityName
-                        RecordID
-                        SourceType
-                        Title
-                        Snippet
-                        Score
-                        ScoreBreakdown {
-                            Vector
-                            FullText
-                            Entity
-                        }
-                        Tags
-                        EntityIcon
-                        RecordName
-                        MatchedAt
-                        RawMetadata
-                    }
-                }
-            }
-        `;
-
-        const filtersInput = this.buildFiltersInput(request);
+        const client = new GraphQLSearchClient(provider);
+        const filters = this.buildClientFilters(request);
         const minScore = request.MinScore ?? DEFAULT_MIN_SCORE;
-        const variables: Record<string, unknown> = {
-            query: request.Query,
-            maxResults: request.MaxResults || 20,
-            filters: filtersInput,
-            minScore: minScore > 0 ? minScore : undefined,
-        };
 
-        const gqlResult = await provider.ExecuteGQL(mutation, variables);
-        const data = (gqlResult as Record<string, unknown>)['SearchKnowledge'] as {
-            Success: boolean;
-            Results: Array<{
-                ID: string; EntityName: string; RecordID: string; SourceType: string;
-                Title: string; Snippet: string; Score: number;
-                ScoreBreakdown: { Vector?: number; FullText?: number; Entity?: number };
-                Tags: string[]; EntityIcon?: string; RecordName?: string; MatchedAt: string; RawMetadata?: string;
-            }>;
-            TotalCount: number;
-            ElapsedMs: number;
-            SourceCounts: { Vector: number; FullText: number; Entity: number };
-            ErrorMessage?: string;
-        };
+        const clientResponse = await client.ExecuteSearch({
+            Query: request.Query,
+            MaxResults: request.MaxResults || 20,
+            MinScore: minScore > 0 ? minScore : undefined,
+            Filters: filters
+        });
 
-        if (!data?.Success) {
-            return this.createEmptyResponse(data?.ErrorMessage ?? 'Search failed');
+        return this.mapClientResponseToSearchResponse(clientResponse);
+    }
+
+    /** Convert a SearchClientResponse into the SearchResponse shape used by this service */
+    private mapClientResponseToSearchResponse(clientResponse: SearchClientResponse): SearchResponse {
+        if (!clientResponse.Success) {
+            return this.createEmptyResponse(clientResponse.ErrorMessage ?? 'Search failed');
         }
 
-        const results: SearchResultItem[] = (data.Results ?? []).map(r => ({
+        const results: SearchResultItem[] = (clientResponse.Results ?? []).map(r => this.mapClientResultItem(r));
+
+        const groups = this.GroupResults(results);
+        const filters = this.BuildFilters(results);
+
+        return {
+            Success: true,
+            Results: results,
+            Groups: groups,
+            Filters: filters,
+            TotalCount: clientResponse.TotalCount,
+            ElapsedMs: clientResponse.ElapsedMs,
+            SourceCounts: {
+                Vector: clientResponse.SourceCounts.Vector,
+                FullText: clientResponse.SourceCounts.FullText,
+                Entity: clientResponse.SourceCounts.Entity,
+                Storage: clientResponse.SourceCounts.Storage
+            },
+        };
+    }
+
+    /** Map a single SearchClientResultItem to a SearchResultItem */
+    private mapClientResultItem(r: SearchClientResultItem): SearchResultItem {
+        return {
             ID: r.ID,
             Title: r.RecordName || r.Title,
             Snippet: r.Snippet,
@@ -325,27 +318,13 @@ export class SearchService {
             EntityIcon: r.EntityIcon,
             RecordName: r.RecordName,
             MatchedAt: new Date(r.MatchedAt),
-            RawMetadata: r.RawMetadata,
-        }));
-
-        const groups = this.GroupResults(results);
-        const filters = this.BuildFilters(results);
-
-        return {
-            Success: true,
-            Results: results,
-            Groups: groups,
-            Filters: filters,
-            TotalCount: data.TotalCount,
-            ElapsedMs: data.ElapsedMs,
-            SourceCounts: data.SourceCounts,
         };
     }
 
-    /** Build the GraphQL filters input from active filter selections */
-    private buildFiltersInput(request: SearchRequest): { EntityNames?: string[]; SourceTypes?: string[]; Tags?: string[] } | null {
+    /** Build the client filters from active filter selections */
+    private buildClientFilters(request: SearchRequest): { EntityNames?: string[]; SourceTypes?: string[]; Tags?: string[] } | undefined {
         if (!request.ActiveFilters || Object.keys(request.ActiveFilters).length === 0) {
-            return null;
+            return undefined;
         }
 
         const result: { EntityNames?: string[]; SourceTypes?: string[]; Tags?: string[] } = {};
@@ -365,6 +344,6 @@ export class SearchService {
             result.Tags = tagFilters;
         }
 
-        return Object.keys(result).length > 0 ? result : null;
+        return Object.keys(result).length > 0 ? result : undefined;
     }
 }

@@ -16,6 +16,9 @@ export class SearchScoreBreakdown {
 
     @Field(() => Float, { nullable: true })
     Entity?: number;
+
+    @Field(() => Float, { nullable: true })
+    Storage?: number;
 }
 
 @ObjectType()
@@ -71,6 +74,9 @@ export class SearchSourceCounts {
 
     @Field()
     Entity: number;
+
+    @Field()
+    Storage: number;
 }
 
 @ObjectType()
@@ -159,7 +165,8 @@ export class SearchKnowledgeResolver extends ResolverBase {
                 SourceCounts: {
                     Vector: result.SourceCounts['vector'] ?? result.SourceCounts['Vector'] ?? 0,
                     FullText: result.SourceCounts['fulltext'] ?? result.SourceCounts['FullText'] ?? 0,
-                    Entity: result.SourceCounts['entity'] ?? result.SourceCounts['Entity'] ?? 0
+                    Entity: result.SourceCounts['entity'] ?? result.SourceCounts['Entity'] ?? 0,
+                    Storage: result.SourceCounts['storage'] ?? result.SourceCounts['Storage'] ?? 0
                 },
                 ErrorMessage: result.ErrorMessage
             };
@@ -207,7 +214,8 @@ export class SearchKnowledgeResolver extends ResolverBase {
                 SourceCounts: {
                     Vector: result.SourceCounts['vector'] ?? 0,
                     FullText: result.SourceCounts['fulltext'] ?? 0,
-                    Entity: result.SourceCounts['entity'] ?? 0
+                    Entity: result.SourceCounts['entity'] ?? 0,
+                    Storage: result.SourceCounts['storage'] ?? 0
                 },
                 ErrorMessage: result.ErrorMessage
             };
@@ -224,7 +232,7 @@ export class SearchKnowledgeResolver extends ResolverBase {
             Results: [],
             TotalCount: 0,
             ElapsedMs: Date.now() - startTime,
-            SourceCounts: { Vector: 0, FullText: 0, Entity: 0 },
+            SourceCounts: { Vector: 0, FullText: 0, Entity: 0, Storage: 0 },
             ErrorMessage: message
         };
     }

@@ -115,7 +115,7 @@ export interface SearchResponse {
     /** Time taken in milliseconds */
     ElapsedMs: number;
     /** Count of results from each source */
-    SourceCounts: { Vector: number; FullText: number; Entity: number };
+    SourceCounts: { Vector: number; FullText: number; Entity: number; Storage: number };
     /** Error message if Success is false */
     ErrorMessage?: string;
 }

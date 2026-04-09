@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Metadata } from '@memberjunction/core';
+import { GraphQLDataProvider, GraphQLSearchClient } from '@memberjunction/graphql-dataprovider';
 import { SearchService, RecentSearch } from '../lib/search.service';
 import {
     SearchRequest,
@@ -9,19 +10,28 @@ import {
     SearchFilter
 } from '../lib/search-types';
 
-/** Installs a fake Metadata.Provider with a mock ExecuteGQL that returns empty success */
+/**
+ * Installs a fake Metadata.Provider that passes the `instanceof GraphQLDataProvider` check
+ * and stubs GraphQLSearchClient.ExecuteSearch to return empty success.
+ */
 function installMockProvider(): ReturnType<typeof vi.fn> {
-    const mockExecuteGQL = vi.fn().mockResolvedValue({
-        SearchKnowledge: {
-            Success: true,
-            Results: [],
-            TotalCount: 0,
-            ElapsedMs: 1,
-            SourceCounts: { Vector: 0, FullText: 0, Entity: 0 },
-        }
+    const mockExecuteSearch = vi.fn().mockResolvedValue({
+        Success: true,
+        Results: [],
+        TotalCount: 0,
+        ElapsedMs: 1,
+        SourceCounts: { Vector: 0, FullText: 0, Entity: 0, Storage: 0 },
     });
-    (Metadata as unknown as Record<string, unknown>)['Provider'] = { ExecuteGQL: mockExecuteGQL };
-    return mockExecuteGQL;
+
+    // Create a mock that passes `instanceof GraphQLDataProvider`
+    const mockProvider = Object.create(GraphQLDataProvider.prototype);
+    (Metadata as unknown as Record<string, unknown>)['Provider'] = mockProvider;
+
+    // Stub GraphQLSearchClient.prototype so the service's `new GraphQLSearchClient(provider)` works
+    vi.spyOn(GraphQLSearchClient.prototype, 'ExecuteSearch').mockImplementation(mockExecuteSearch);
+    vi.spyOn(GraphQLSearchClient.prototype, 'PreviewSearch').mockImplementation(mockExecuteSearch);
+
+    return mockExecuteSearch;
 }
 
 describe('SearchService', () => {

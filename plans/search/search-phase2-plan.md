@@ -133,8 +133,8 @@ All 5 priorities will be implemented in this phase:
 
 | Priority | Status | Notes |
 |----------|--------|-------|
-| 1. CodeGen FTS | Not started | |
-| 2. Unit Tests | Not started | |
-| 3. Storage Search | Not started | |
-| 4. SearchService Refactor | Not started | |
-| 5. Performance & Polish | Not started | |
+| 1. CodeGen FTS | Complete | LLM prompt extended, type/SQL generation, 378 CodeGenLib tests pass |
+| 2. Unit Tests | Complete | 45 new tests for SearchFusion, EntitySearchProvider, VectorSearchProvider |
+| 3. Storage Search | Complete | StorageSearchProvider with permissions, driver init, UI integration |
+| 4. SearchService Refactor | Complete | Inline GQL replaced with GraphQLSearchClient, 61 ng-search tests pass |
+| 5. Performance & Polish | Complete | LRU embedding cache (200 entries, 5-min TTL) |
