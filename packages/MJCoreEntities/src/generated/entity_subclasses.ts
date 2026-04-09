@@ -986,7 +986,7 @@ export const MJAIAgentCategorySchema = z.object({
         * * Description: Optional description explaining the purpose and scope of this category.`),
     ParentID: z.string().nullable().describe(`
         * * Field Name: ParentID
-        * * Display Name: Parent ID
+        * * Display Name: Parent
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agent Categories (vwAIAgentCategories.ID)
         * * Description: Self-referencing foreign key to the parent category, forming a tree hierarchy. NULL for root categories.`),
@@ -1024,7 +1024,7 @@ export const MJAIAgentCategorySchema = z.object({
         * * Description: Default file storage account for agents in this category. Inherited by child categories that do not define their own value — resolution walks up the ParentID tree until a non-null value is found. Overrides the Type-level default. FK to FileStorageAccount.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
-        * * Display Name: Parent Name
+        * * Display Name: Parent
         * * SQL Data Type: nvarchar(200)`),
     DefaultStorageAccount: z.string().nullable().describe(`
         * * Field Name: DefaultStorageAccount
@@ -1032,7 +1032,7 @@ export const MJAIAgentCategorySchema = z.object({
         * * SQL Data Type: nvarchar(200)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
-        * * Display Name: Root Parent ID
+        * * Display Name: Root Parent
         * * SQL Data Type: uniqueidentifier`),
 });
 
@@ -2628,7 +2628,7 @@ export const MJAIAgentRunStepSchema = z.object({
         * * Description: JSON serialization of the Payload state at the end of this step`),
     FinalPayloadValidationResult: z.union([z.literal('Fail'), z.literal('Fail'), z.literal('Pass'), z.literal('Pass'), z.literal('Retry'), z.literal('Retry'), z.literal('Warn'), z.literal('Warn')]).nullable().describe(`
         * * Field Name: FinalPayloadValidationResult
-        * * Display Name: Final Payload Validation Result
+        * * Display Name: Validation Result
         * * SQL Data Type: nvarchar(25)
     * * Value List Type: List
     * * Possible Values 
@@ -2645,13 +2645,13 @@ validation, Retry means validation failed but will retry, Fail means validation 
 permanently, Warn means validation failed but execution continues.`),
     FinalPayloadValidationMessages: z.string().nullable().describe(`
         * * Field Name: FinalPayloadValidationMessages
-        * * Display Name: Final Payload Validation Messages
+        * * Display Name: Validation Messages
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Validation error messages or warnings from final payload validation. Contains
 detailed information about what validation rules failed.`),
     ParentID: z.string().nullable().describe(`
         * * Field Name: ParentID
-        * * Display Name: Parent
+        * * Display Name: Parent Step
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agent Run Steps (vwAIAgentRunSteps.ID)
         * * Description: Optional reference to parent step for tracking hierarchical relationships like code->test->fix->code cycles`),
@@ -2666,11 +2666,11 @@ detailed information about what validation rules failed.`),
         * * SQL Data Type: nvarchar(255)`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
-        * * Display Name: Parent
+        * * Display Name: Parent Step
         * * SQL Data Type: nvarchar(255)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
-        * * Display Name: Root Parent
+        * * Display Name: Root Parent Step
         * * SQL Data Type: uniqueidentifier`),
 });
 
@@ -3309,7 +3309,7 @@ export const MJAIAgentTypeSchema = z.object({
         * * Description: JSON-serialized AgentRequestAssignmentStrategy defining the default assignment strategy for all agents of this type. Overridden by per-invocation or category-level strategies in the resolution chain.`),
     DefaultStorageAccountID: z.string().nullable().describe(`
         * * Field Name: DefaultStorageAccountID
-        * * Display Name: Default Storage Account ID
+        * * Display Name: Default Storage Account
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: File Storage Accounts (vwFileStorageAccounts.ID)
         * * Description: Default file storage account for agents of this type. Lowest priority in the resolution chain (Type → Category tree → Agent → Runtime override). When set, all agents of this type use this storage account unless overridden at a more specific level. FK to FileStorageAccount.`),
@@ -3319,7 +3319,7 @@ export const MJAIAgentTypeSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
     DefaultStorageAccount: z.string().nullable().describe(`
         * * Field Name: DefaultStorageAccount
-        * * Display Name: Default Storage Account
+        * * Display Name: Default Storage Account Name
         * * SQL Data Type: nvarchar(200)`),
 });
 
@@ -3411,7 +3411,7 @@ export const MJAIAgentSchema = z.object({
         * * Description: Number of recent messages to keep uncompressed when context compression is applied.`),
     TypeID: z.string().nullable().describe(`
         * * Field Name: TypeID
-        * * Display Name: Agent Type
+        * * Display Name: Type
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agent Types (vwAIAgentTypes.ID)
         * * Description: Reference to the AIAgentType that defines the category and system-level behavior for this agent. Cannot be null.`),
@@ -3749,7 +3749,7 @@ if this limit is exceeded.`),
         * * SQL Data Type: nvarchar(255)`),
     ContextCompressionPrompt: z.string().nullable().describe(`
         * * Field Name: ContextCompressionPrompt
-        * * Display Name: Context Compression Prompt Name
+        * * Display Name: Context Compression Prompt
         * * SQL Data Type: nvarchar(255)`),
     Type: z.string().nullable().describe(`
         * * Field Name: Type
@@ -10789,11 +10789,11 @@ export const MJConversationDetailArtifactSchema = z.object({
         * * Default Value: getutcdate()`),
     ConversationDetail: z.string().describe(`
         * * Field Name: ConversationDetail
-        * * Display Name: Conversation Detail
+        * * Display Name: Conversation Detail Summary
         * * SQL Data Type: nvarchar(MAX)`),
     ArtifactVersion: z.string().nullable().describe(`
         * * Field Name: ArtifactVersion
-        * * Display Name: Artifact Version
+        * * Display Name: Artifact Version Summary
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -11250,7 +11250,7 @@ export const MJConversationSchema = z.object({
         * * Description: Optional Foreign Key - Links this conversation to a test run if this conversation was generated as part of a test. Enables tracking test conversations separately from production conversations.`),
     User: z.string().describe(`
         * * Field Name: User
-        * * Display Name: User
+        * * Display Name: User Name
         * * SQL Data Type: nvarchar(100)`),
     LinkedEntity: z.string().nullable().describe(`
         * * Field Name: LinkedEntity
@@ -11258,19 +11258,19 @@ export const MJConversationSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
     DataContext: z.string().nullable().describe(`
         * * Field Name: DataContext
-        * * Display Name: Data Context
+        * * Display Name: Data Context Name
         * * SQL Data Type: nvarchar(255)`),
     Environment: z.string().describe(`
         * * Field Name: Environment
-        * * Display Name: Environment
+        * * Display Name: Environment Name
         * * SQL Data Type: nvarchar(255)`),
     Project: z.string().nullable().describe(`
         * * Field Name: Project
-        * * Display Name: Project
+        * * Display Name: Project Name
         * * SQL Data Type: nvarchar(255)`),
     TestRun: z.string().nullable().describe(`
         * * Field Name: TestRun
-        * * Display Name: Test Run
+        * * Display Name: Test Run Name
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -12474,7 +12474,7 @@ export const MJDuplicateRunDetailSchema = z.object({
         * * Description: When processing completed for this specific record during duplicate detection.`),
     DuplicateRun: z.string().describe(`
         * * Field Name: DuplicateRun
-        * * Display Name: Duplicate Run
+        * * Display Name: Run Name
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -12653,11 +12653,11 @@ export const MJEmployeeCompanyIntegrationSchema = z.object({
         * * Default Value: getutcdate()`),
     Employee: z.string().nullable().describe(`
         * * Field Name: Employee
-        * * Display Name: Employee
+        * * Display Name: Employee Name
         * * SQL Data Type: nvarchar(81)`),
     CompanyIntegration: z.string().describe(`
         * * Field Name: CompanyIntegration
-        * * Display Name: Company Integration
+        * * Display Name: Integration Name
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -12694,11 +12694,11 @@ export const MJEmployeeRoleSchema = z.object({
         * * Default Value: getutcdate()`),
     Employee: z.string().nullable().describe(`
         * * Field Name: Employee
-        * * Display Name: Employee
+        * * Display Name: Employee Name
         * * SQL Data Type: nvarchar(81)`),
     Role: z.string().describe(`
         * * Field Name: Role
-        * * Display Name: Role
+        * * Display Name: Role Name
         * * SQL Data Type: nvarchar(50)`),
 });
 
@@ -12735,7 +12735,7 @@ export const MJEmployeeSkillSchema = z.object({
         * * Default Value: getutcdate()`),
     Employee: z.string().nullable().describe(`
         * * Field Name: Employee
-        * * Display Name: Employee
+        * * Display Name: Employee Name
         * * SQL Data Type: nvarchar(81)`),
     Skill: z.string().describe(`
         * * Field Name: Skill
@@ -13493,11 +13493,11 @@ export const MJEntityActionFilterSchema = z.object({
         * * Default Value: getutcdate()`),
     EntityAction: z.string().describe(`
         * * Field Name: EntityAction
-        * * Display Name: Entity Action
+        * * Display Name: Entity Action Name
         * * SQL Data Type: nvarchar(425)`),
     ActionFilter: z.string().describe(`
         * * Field Name: ActionFilter
-        * * Display Name: Action Filter
+        * * Display Name: Action Filter Name
         * * SQL Data Type: nvarchar(MAX)`),
 });
 
@@ -13584,11 +13584,11 @@ export const MJEntityActionInvocationSchema = z.object({
         * * Default Value: getutcdate()`),
     EntityAction: z.string().describe(`
         * * Field Name: EntityAction
-        * * Display Name: Entity Action
+        * * Display Name: Entity Action Name
         * * SQL Data Type: nvarchar(425)`),
     InvocationType: z.string().describe(`
         * * Field Name: InvocationType
-        * * Display Name: Invocation Type
+        * * Display Name: Invocation Type Name
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -13605,7 +13605,7 @@ export const MJEntityActionParamSchema = z.object({
         * * Default Value: newsequentialid()`),
     EntityActionID: z.string().describe(`
         * * Field Name: EntityActionID
-        * * Display Name: Entity Action
+        * * Display Name: Entity Action ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entity Actions (vwEntityActions.ID)`),
     ActionParamID: z.string().describe(`
@@ -13852,7 +13852,7 @@ export const MJEntityCommunicationFieldSchema = z.object({
         * * Default Value: getutcdate()`),
     EntityCommunicationMessageType: z.string().describe(`
         * * Field Name: EntityCommunicationMessageType
-        * * Display Name: Entity Communication Message Type
+        * * Display Name: Message Type Name
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -15343,22 +15343,22 @@ export const MJErrorLogSchema = z.object({
         * * Default Value: newsequentialid()`),
     CompanyIntegrationRunID: z.string().nullable().describe(`
         * * Field Name: CompanyIntegrationRunID
-        * * Display Name: Company Integration Run
+        * * Display Name: Company Integration Run ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Company Integration Runs (vwCompanyIntegrationRuns.ID)`),
     CompanyIntegrationRunDetailID: z.string().nullable().describe(`
         * * Field Name: CompanyIntegrationRunDetailID
-        * * Display Name: Company Integration Run Detail
+        * * Display Name: Company Integration Run Detail ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Company Integration Run Details (vwCompanyIntegrationRunDetails.ID)`),
     Code: z.string().nullable().describe(`
         * * Field Name: Code
-        * * Display Name: Code
+        * * Display Name: Error Code
         * * SQL Data Type: nchar(20)
         * * Description: Error code for categorizing and handling specific error types.`),
     Message: z.string().nullable().describe(`
         * * Field Name: Message
-        * * Display Name: Message
+        * * Display Name: Error Message
         * * SQL Data Type: nvarchar(MAX)
         * * Description: The primary error message describing what went wrong.`),
     CreatedBy: z.string().nullable().describe(`
@@ -15378,7 +15378,7 @@ export const MJErrorLogSchema = z.object({
         * * Description: High-level category for grouping related errors (Database, API, Validation, etc.).`),
     Details: z.string().nullable().describe(`
         * * Field Name: Details
-        * * Display Name: Details
+        * * Display Name: Error Details
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Full error details including stack trace, inner exceptions, and context data.`),
     __mj_CreatedAt: z.date().describe(`
@@ -17093,12 +17093,12 @@ export const MJMCPServerConnectionToolSchema = z.object({
         * * Default Value: newsequentialid()`),
     MCPServerConnectionID: z.string().describe(`
         * * Field Name: MCPServerConnectionID
-        * * Display Name: MCP Server Connection
+        * * Display Name: Connection
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: MCP Server Connections (vwMCPServerConnections.ID)`),
     MCPServerToolID: z.string().describe(`
         * * Field Name: MCPServerToolID
-        * * Display Name: MCP Server Tool
+        * * Display Name: Tool
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: MCP Server Tools (vwMCPServerTools.ID)`),
     IsEnabled: z.boolean().describe(`
@@ -17129,11 +17129,11 @@ export const MJMCPServerConnectionToolSchema = z.object({
         * * Default Value: getutcdate()`),
     MCPServerConnection: z.string().describe(`
         * * Field Name: MCPServerConnection
-        * * Display Name: MCP Server Connection
+        * * Display Name: Connection Name
         * * SQL Data Type: nvarchar(255)`),
     MCPServerTool: z.string().nullable().describe(`
         * * Field Name: MCPServerTool
-        * * Display Name: MCP Server Tool
+        * * Display Name: Tool Name
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -17501,12 +17501,12 @@ export const MJMCPToolExecutionLogSchema = z.object({
         * * Default Value: newsequentialid()`),
     MCPServerConnectionID: z.string().describe(`
         * * Field Name: MCPServerConnectionID
-        * * Display Name: MCP Server Connection
+        * * Display Name: Connection ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: MCP Server Connections (vwMCPServerConnections.ID)`),
     MCPServerToolID: z.string().nullable().describe(`
         * * Field Name: MCPServerToolID
-        * * Display Name: MCP Server Tool
+        * * Display Name: Tool ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: MCP Server Tools (vwMCPServerTools.ID)
         * * Description: FK to MCP Server Tool (null if tool not cached)`),
@@ -17517,7 +17517,7 @@ export const MJMCPToolExecutionLogSchema = z.object({
         * * Description: Tool name (stored directly for resilience)`),
     UserID: z.string().describe(`
         * * Field Name: UserID
-        * * Display Name: User
+        * * Display Name: User ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
         * * Description: FK to User who initiated the call`),
@@ -17572,11 +17572,11 @@ export const MJMCPToolExecutionLogSchema = z.object({
         * * Default Value: getutcdate()`),
     MCPServerConnection: z.string().describe(`
         * * Field Name: MCPServerConnection
-        * * Display Name: MCP Server Connection
+        * * Display Name: Connection
         * * SQL Data Type: nvarchar(255)`),
     MCPServerTool: z.string().nullable().describe(`
         * * Field Name: MCPServerTool
-        * * Display Name: MCP Server Tool
+        * * Display Name: Tool
         * * SQL Data Type: nvarchar(255)`),
     User: z.string().describe(`
         * * Field Name: User
@@ -19376,7 +19376,7 @@ export const MJRecommendationItemSchema = z.object({
         * * Default Value: newsequentialid()`),
     RecommendationID: z.string().describe(`
         * * Field Name: RecommendationID
-        * * Display Name: Recommendation ID
+        * * Display Name: Recommendation
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Recommendations (vwRecommendations.ID)`),
     DestinationEntityID: z.string().describe(`
@@ -19677,7 +19677,7 @@ export const MJRecordChangeSchema = z.object({
         * * Description: A generated, human-readable description of what was changed.`),
     FullRecordJSON: z.string().describe(`
         * * Field Name: FullRecordJSON
-        * * Display Name: Full Record JSON
+        * * Display Name: Full Record Snapshot
         * * SQL Data Type: nvarchar(MAX)
         * * Description: A complete snapshot of the record AFTER the change was applied in a JSON format that can be parsed.`),
     Status: z.union([z.literal('Complete'), z.literal('Error'), z.literal('Pending')]).describe(`
@@ -19819,12 +19819,12 @@ export const MJRecordMergeDeletionLogSchema = z.object({
         * * Default Value: newsequentialid()`),
     RecordMergeLogID: z.string().describe(`
         * * Field Name: RecordMergeLogID
-        * * Display Name: Record Merge Log ID
+        * * Display Name: Record Merge Log
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Record Merge Logs (vwRecordMergeLogs.ID)`),
     DeletedRecordID: z.string().describe(`
         * * Field Name: DeletedRecordID
-        * * Display Name: Deleted Record ID
+        * * Display Name: Deleted Record
         * * SQL Data Type: nvarchar(750)
         * * Description: Field DeletedRecordID for entity Record Merge Deletion Logs.`),
     Status: z.union([z.literal('Complete'), z.literal('Error'), z.literal('Pending')]).describe(`
@@ -19854,7 +19854,7 @@ export const MJRecordMergeDeletionLogSchema = z.object({
         * * Default Value: getutcdate()`),
     RecordMergeLog: z.string().describe(`
         * * Field Name: RecordMergeLog
-        * * Display Name: Record Merge Log
+        * * Display Name: Merge Log Summary
         * * SQL Data Type: nvarchar(450)`),
 });
 
@@ -20283,7 +20283,7 @@ export const MJReportSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
     ConversationDetail: z.string().nullable().describe(`
         * * Field Name: ConversationDetail
-        * * Display Name: Conversation Detail
+        * * Display Name: Conversation Detail Name
         * * SQL Data Type: nvarchar(MAX)`),
     DataContext: z.string().nullable().describe(`
         * * Field Name: DataContext
@@ -21711,7 +21711,7 @@ export const MJTaskSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
     ConversationDetail: z.string().nullable().describe(`
         * * Field Name: ConversationDetail
-        * * Display Name: Conversation Detail
+        * * Display Name: Conversation Detail Name
         * * SQL Data Type: nvarchar(MAX)`),
     User: z.string().nullable().describe(`
         * * Field Name: User
@@ -21934,7 +21934,7 @@ export const MJTemplateParamSchema = z.object({
         * * Description: Default value of the parameter`),
     IsRequired: z.boolean().describe(`
         * * Field Name: IsRequired
-        * * Display Name: Is Required
+        * * Display Name: Required
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Whether this parameter must be provided when using the template.`),
@@ -21960,7 +21960,7 @@ export const MJTemplateParamSchema = z.object({
         * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)`),
     RecordID: z.string().nullable().describe(`
         * * Field Name: RecordID
-        * * Display Name: Record
+        * * Display Name: Record ID
         * * SQL Data Type: nvarchar(2000)
         * * Description: Record ID, used only when Type is Record and a specific hardcoded record ID is desired, this is an uncommon use case, helpful for pulling in static types and metadata in some cases.`),
     __mj_CreatedAt: z.date().describe(`
@@ -21986,15 +21986,15 @@ export const MJTemplateParamSchema = z.object({
         * * Description: Optional reference to a specific template content. When NULL, this parameter applies to all content items within the template. When set, this parameter applies only to the specified template content.`),
     Template: z.string().describe(`
         * * Field Name: Template
-        * * Display Name: Template
+        * * Display Name: Template Name
         * * SQL Data Type: nvarchar(255)`),
     Entity: z.string().nullable().describe(`
         * * Field Name: Entity
-        * * Display Name: Entity
+        * * Display Name: Entity Name
         * * SQL Data Type: nvarchar(255)`),
     TemplateContent: z.string().nullable().describe(`
         * * Field Name: TemplateContent
-        * * Display Name: Template Content
+        * * Display Name: Template Content Name
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -27368,7 +27368,7 @@ export class MJAIAgentCategoryEntity extends BaseEntity<MJAIAgentCategoryEntityT
 
     /**
     * * Field Name: ParentID
-    * * Display Name: Parent ID
+    * * Display Name: Parent
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Agent Categories (vwAIAgentCategories.ID)
     * * Description: Self-referencing foreign key to the parent category, forming a tree hierarchy. NULL for root categories.
@@ -27448,7 +27448,7 @@ export class MJAIAgentCategoryEntity extends BaseEntity<MJAIAgentCategoryEntityT
 
     /**
     * * Field Name: Parent
-    * * Display Name: Parent Name
+    * * Display Name: Parent
     * * SQL Data Type: nvarchar(200)
     */
     get Parent(): string | null {
@@ -27466,7 +27466,7 @@ export class MJAIAgentCategoryEntity extends BaseEntity<MJAIAgentCategoryEntityT
 
     /**
     * * Field Name: RootParentID
-    * * Display Name: Root Parent ID
+    * * Display Name: Root Parent
     * * SQL Data Type: uniqueidentifier
     */
     get RootParentID(): string | null {
@@ -31616,7 +31616,7 @@ export class MJAIAgentRunStepEntity extends BaseEntity<MJAIAgentRunStepEntityTyp
 
     /**
     * * Field Name: FinalPayloadValidationResult
-    * * Display Name: Final Payload Validation Result
+    * * Display Name: Validation Result
     * * SQL Data Type: nvarchar(25)
     * * Value List Type: List
     * * Possible Values 
@@ -31641,7 +31641,7 @@ permanently, Warn means validation failed but execution continues.
 
     /**
     * * Field Name: FinalPayloadValidationMessages
-    * * Display Name: Final Payload Validation Messages
+    * * Display Name: Validation Messages
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Validation error messages or warnings from final payload validation. Contains
 detailed information about what validation rules failed.
@@ -31655,7 +31655,7 @@ detailed information about what validation rules failed.
 
     /**
     * * Field Name: ParentID
-    * * Display Name: Parent
+    * * Display Name: Parent Step
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Agent Run Steps (vwAIAgentRunSteps.ID)
     * * Description: Optional reference to parent step for tracking hierarchical relationships like code->test->fix->code cycles
@@ -31691,7 +31691,7 @@ detailed information about what validation rules failed.
 
     /**
     * * Field Name: Parent
-    * * Display Name: Parent
+    * * Display Name: Parent Step
     * * SQL Data Type: nvarchar(255)
     */
     get Parent(): string | null {
@@ -31700,7 +31700,7 @@ detailed information about what validation rules failed.
 
     /**
     * * Field Name: RootParentID
-    * * Display Name: Root Parent
+    * * Display Name: Root Parent Step
     * * SQL Data Type: uniqueidentifier
     */
     get RootParentID(): string | null {
@@ -33434,7 +33434,7 @@ export class MJAIAgentTypeEntity extends BaseEntity<MJAIAgentTypeEntityType> {
 
     /**
     * * Field Name: DefaultStorageAccountID
-    * * Display Name: Default Storage Account ID
+    * * Display Name: Default Storage Account
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: File Storage Accounts (vwFileStorageAccounts.ID)
     * * Description: Default file storage account for agents of this type. Lowest priority in the resolution chain (Type → Category tree → Agent → Runtime override). When set, all agents of this type use this storage account unless overridden at a more specific level. FK to FileStorageAccount.
@@ -33457,7 +33457,7 @@ export class MJAIAgentTypeEntity extends BaseEntity<MJAIAgentTypeEntityType> {
 
     /**
     * * Field Name: DefaultStorageAccount
-    * * Display Name: Default Storage Account
+    * * Display Name: Default Storage Account Name
     * * SQL Data Type: nvarchar(200)
     */
     get DefaultStorageAccount(): string | null {
@@ -33841,7 +33841,7 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
 
     /**
     * * Field Name: TypeID
-    * * Display Name: Agent Type
+    * * Display Name: Type
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Agent Types (vwAIAgentTypes.ID)
     * * Description: Reference to the AIAgentType that defines the category and system-level behavior for this agent. Cannot be null.
@@ -34584,7 +34584,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: ContextCompressionPrompt
-    * * Display Name: Context Compression Prompt Name
+    * * Display Name: Context Compression Prompt
     * * SQL Data Type: nvarchar(255)
     */
     get ContextCompressionPrompt(): string | null {
@@ -53318,7 +53318,7 @@ export class MJConversationDetailArtifactEntity extends BaseEntity<MJConversatio
 
     /**
     * * Field Name: ConversationDetail
-    * * Display Name: Conversation Detail
+    * * Display Name: Conversation Detail Summary
     * * SQL Data Type: nvarchar(MAX)
     */
     get ConversationDetail(): string {
@@ -53327,7 +53327,7 @@ export class MJConversationDetailArtifactEntity extends BaseEntity<MJConversatio
 
     /**
     * * Field Name: ArtifactVersion
-    * * Display Name: Artifact Version
+    * * Display Name: Artifact Version Summary
     * * SQL Data Type: nvarchar(255)
     */
     get ArtifactVersion(): string | null {
@@ -54622,7 +54622,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: User
-    * * Display Name: User
+    * * Display Name: User Name
     * * SQL Data Type: nvarchar(100)
     */
     get User(): string {
@@ -54640,7 +54640,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: DataContext
-    * * Display Name: Data Context
+    * * Display Name: Data Context Name
     * * SQL Data Type: nvarchar(255)
     */
     get DataContext(): string | null {
@@ -54649,7 +54649,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: Environment
-    * * Display Name: Environment
+    * * Display Name: Environment Name
     * * SQL Data Type: nvarchar(255)
     */
     get Environment(): string {
@@ -54658,7 +54658,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: Project
-    * * Display Name: Project
+    * * Display Name: Project Name
     * * SQL Data Type: nvarchar(255)
     */
     get Project(): string | null {
@@ -54667,7 +54667,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: TestRun
-    * * Display Name: Test Run
+    * * Display Name: Test Run Name
     * * SQL Data Type: nvarchar(255)
     */
     get TestRun(): string | null {
@@ -57731,7 +57731,7 @@ export class MJDuplicateRunDetailEntity extends BaseEntity<MJDuplicateRunDetailE
 
     /**
     * * Field Name: DuplicateRun
-    * * Display Name: Duplicate Run
+    * * Display Name: Run Name
     * * SQL Data Type: nvarchar(255)
     */
     get DuplicateRun(): string {
@@ -58171,7 +58171,7 @@ export class MJEmployeeCompanyIntegrationEntity extends BaseEntity<MJEmployeeCom
 
     /**
     * * Field Name: Employee
-    * * Display Name: Employee
+    * * Display Name: Employee Name
     * * SQL Data Type: nvarchar(81)
     */
     get Employee(): string | null {
@@ -58180,7 +58180,7 @@ export class MJEmployeeCompanyIntegrationEntity extends BaseEntity<MJEmployeeCom
 
     /**
     * * Field Name: CompanyIntegration
-    * * Display Name: Company Integration
+    * * Display Name: Integration Name
     * * SQL Data Type: nvarchar(255)
     */
     get CompanyIntegration(): string {
@@ -58280,7 +58280,7 @@ export class MJEmployeeRoleEntity extends BaseEntity<MJEmployeeRoleEntityType> {
 
     /**
     * * Field Name: Employee
-    * * Display Name: Employee
+    * * Display Name: Employee Name
     * * SQL Data Type: nvarchar(81)
     */
     get Employee(): string | null {
@@ -58289,7 +58289,7 @@ export class MJEmployeeRoleEntity extends BaseEntity<MJEmployeeRoleEntityType> {
 
     /**
     * * Field Name: Role
-    * * Display Name: Role
+    * * Display Name: Role Name
     * * SQL Data Type: nvarchar(50)
     */
     get Role(): string {
@@ -58389,7 +58389,7 @@ export class MJEmployeeSkillEntity extends BaseEntity<MJEmployeeSkillEntityType>
 
     /**
     * * Field Name: Employee
-    * * Display Name: Employee
+    * * Display Name: Employee Name
     * * SQL Data Type: nvarchar(81)
     */
     get Employee(): string | null {
@@ -60252,7 +60252,7 @@ export class MJEntityActionFilterEntity extends BaseEntity<MJEntityActionFilterE
 
     /**
     * * Field Name: EntityAction
-    * * Display Name: Entity Action
+    * * Display Name: Entity Action Name
     * * SQL Data Type: nvarchar(425)
     */
     get EntityAction(): string {
@@ -60261,7 +60261,7 @@ export class MJEntityActionFilterEntity extends BaseEntity<MJEntityActionFilterE
 
     /**
     * * Field Name: ActionFilter
-    * * Display Name: Action Filter
+    * * Display Name: Action Filter Name
     * * SQL Data Type: nvarchar(MAX)
     */
     get ActionFilter(): string {
@@ -60485,7 +60485,7 @@ export class MJEntityActionInvocationEntity extends BaseEntity<MJEntityActionInv
 
     /**
     * * Field Name: EntityAction
-    * * Display Name: Entity Action
+    * * Display Name: Entity Action Name
     * * SQL Data Type: nvarchar(425)
     */
     get EntityAction(): string {
@@ -60494,7 +60494,7 @@ export class MJEntityActionInvocationEntity extends BaseEntity<MJEntityActionInv
 
     /**
     * * Field Name: InvocationType
-    * * Display Name: Invocation Type
+    * * Display Name: Invocation Type Name
     * * SQL Data Type: nvarchar(255)
     */
     get InvocationType(): string {
@@ -60548,7 +60548,7 @@ export class MJEntityActionParamEntity extends BaseEntity<MJEntityActionParamEnt
 
     /**
     * * Field Name: EntityActionID
-    * * Display Name: Entity Action
+    * * Display Name: Entity Action ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Entity Actions (vwEntityActions.ID)
     */
@@ -61156,7 +61156,7 @@ export class MJEntityCommunicationFieldEntity extends BaseEntity<MJEntityCommuni
 
     /**
     * * Field Name: EntityCommunicationMessageType
-    * * Display Name: Entity Communication Message Type
+    * * Display Name: Message Type Name
     * * SQL Data Type: nvarchar(100)
     */
     get EntityCommunicationMessageType(): string {
@@ -64885,7 +64885,7 @@ export class MJErrorLogEntity extends BaseEntity<MJErrorLogEntityType> {
 
     /**
     * * Field Name: CompanyIntegrationRunID
-    * * Display Name: Company Integration Run
+    * * Display Name: Company Integration Run ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Company Integration Runs (vwCompanyIntegrationRuns.ID)
     */
@@ -64898,7 +64898,7 @@ export class MJErrorLogEntity extends BaseEntity<MJErrorLogEntityType> {
 
     /**
     * * Field Name: CompanyIntegrationRunDetailID
-    * * Display Name: Company Integration Run Detail
+    * * Display Name: Company Integration Run Detail ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Company Integration Run Details (vwCompanyIntegrationRunDetails.ID)
     */
@@ -64911,7 +64911,7 @@ export class MJErrorLogEntity extends BaseEntity<MJErrorLogEntityType> {
 
     /**
     * * Field Name: Code
-    * * Display Name: Code
+    * * Display Name: Error Code
     * * SQL Data Type: nchar(20)
     * * Description: Error code for categorizing and handling specific error types.
     */
@@ -64924,7 +64924,7 @@ export class MJErrorLogEntity extends BaseEntity<MJErrorLogEntityType> {
 
     /**
     * * Field Name: Message
-    * * Display Name: Message
+    * * Display Name: Error Message
     * * SQL Data Type: nvarchar(MAX)
     * * Description: The primary error message describing what went wrong.
     */
@@ -64976,7 +64976,7 @@ export class MJErrorLogEntity extends BaseEntity<MJErrorLogEntityType> {
 
     /**
     * * Field Name: Details
-    * * Display Name: Details
+    * * Display Name: Error Details
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Full error details including stack trace, inner exceptions, and context data.
     */
@@ -69423,7 +69423,7 @@ export class MJMCPServerConnectionToolEntity extends BaseEntity<MJMCPServerConne
 
     /**
     * * Field Name: MCPServerConnectionID
-    * * Display Name: MCP Server Connection
+    * * Display Name: Connection
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: MCP Server Connections (vwMCPServerConnections.ID)
     */
@@ -69436,7 +69436,7 @@ export class MJMCPServerConnectionToolEntity extends BaseEntity<MJMCPServerConne
 
     /**
     * * Field Name: MCPServerToolID
-    * * Display Name: MCP Server Tool
+    * * Display Name: Tool
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: MCP Server Tools (vwMCPServerTools.ID)
     */
@@ -69509,7 +69509,7 @@ export class MJMCPServerConnectionToolEntity extends BaseEntity<MJMCPServerConne
 
     /**
     * * Field Name: MCPServerConnection
-    * * Display Name: MCP Server Connection
+    * * Display Name: Connection Name
     * * SQL Data Type: nvarchar(255)
     */
     get MCPServerConnection(): string {
@@ -69518,7 +69518,7 @@ export class MJMCPServerConnectionToolEntity extends BaseEntity<MJMCPServerConne
 
     /**
     * * Field Name: MCPServerTool
-    * * Display Name: MCP Server Tool
+    * * Display Name: Tool Name
     * * SQL Data Type: nvarchar(255)
     */
     get MCPServerTool(): string | null {
@@ -70480,7 +70480,7 @@ export class MJMCPToolExecutionLogEntity extends BaseEntity<MJMCPToolExecutionLo
 
     /**
     * * Field Name: MCPServerConnectionID
-    * * Display Name: MCP Server Connection
+    * * Display Name: Connection ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: MCP Server Connections (vwMCPServerConnections.ID)
     */
@@ -70493,7 +70493,7 @@ export class MJMCPToolExecutionLogEntity extends BaseEntity<MJMCPToolExecutionLo
 
     /**
     * * Field Name: MCPServerToolID
-    * * Display Name: MCP Server Tool
+    * * Display Name: Tool ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: MCP Server Tools (vwMCPServerTools.ID)
     * * Description: FK to MCP Server Tool (null if tool not cached)
@@ -70520,7 +70520,7 @@ export class MJMCPToolExecutionLogEntity extends BaseEntity<MJMCPToolExecutionLo
 
     /**
     * * Field Name: UserID
-    * * Display Name: User
+    * * Display Name: User ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     * * Description: FK to User who initiated the call
@@ -70657,7 +70657,7 @@ export class MJMCPToolExecutionLogEntity extends BaseEntity<MJMCPToolExecutionLo
 
     /**
     * * Field Name: MCPServerConnection
-    * * Display Name: MCP Server Connection
+    * * Display Name: Connection
     * * SQL Data Type: nvarchar(255)
     */
     get MCPServerConnection(): string {
@@ -70666,7 +70666,7 @@ export class MJMCPToolExecutionLogEntity extends BaseEntity<MJMCPToolExecutionLo
 
     /**
     * * Field Name: MCPServerTool
-    * * Display Name: MCP Server Tool
+    * * Display Name: Tool
     * * SQL Data Type: nvarchar(255)
     */
     get MCPServerTool(): string | null {
@@ -72128,34 +72128,36 @@ export class MJOpenAppEntity extends BaseEntity<MJOpenAppEntityType> {
 
     /**
     * Validate() method override for MJ: Open Apps entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * Name: Name can only contain lowercase letters, numbers, and hyphens; any other characters are not allowed.
+    * * Name: The name must consist only of lowercase letters, numbers, and hyphens to ensure it is compatible with system naming standards.
     * @public
     * @method
     * @override
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
-        this.ValidateNameAllowedCharacters(result);
+        this.ValidateNameAlphanumericHyphenOnly(result);
         result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
     }
 
     /**
-    * Name can only contain lowercase letters, numbers, and hyphens; any other characters are not allowed.
+    * The name must consist only of lowercase letters, numbers, and hyphens to ensure it is compatible with system naming standards.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-    public ValidateNameAllowedCharacters(result: ValidationResult) {
-        if (this.Name != null && /[^a-z0-9-]/.test(this.Name)) {
-            result.Errors.push(new ValidationErrorInfo(
-                "Name",
-                "Name can only contain lowercase letters, numbers, and hyphens.",
-                this.Name,
-                ValidationErrorType.Failure
-            ));
-        }
+    public ValidateNameAlphanumericHyphenOnly(result: ValidationResult) {
+    	// The regex checks that the entire string consists only of lowercase letters, digits, or hyphens
+    	const regex = /^[a-z0-9-]+$/;
+    	if (this.Name != null && !regex.test(this.Name)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"Name",
+    			"The name must only contain lowercase letters, numbers, and hyphens.",
+    			this.Name,
+    			ValidationErrorType.Failure
+    		));
+    	}
     }
 
     /**
@@ -75412,7 +75414,7 @@ export class MJRecommendationItemEntity extends BaseEntity<MJRecommendationItemE
 
     /**
     * * Field Name: RecommendationID
-    * * Display Name: Recommendation ID
+    * * Display Name: Recommendation
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Recommendations (vwRecommendations.ID)
     */
@@ -76174,7 +76176,7 @@ export class MJRecordChangeEntity extends BaseEntity<MJRecordChangeEntityType> {
 
     /**
     * * Field Name: FullRecordJSON
-    * * Display Name: Full Record JSON
+    * * Display Name: Full Record Snapshot
     * * SQL Data Type: nvarchar(MAX)
     * * Description: A complete snapshot of the record AFTER the change was applied in a JSON format that can be parsed.
     */
@@ -76534,7 +76536,7 @@ export class MJRecordMergeDeletionLogEntity extends BaseEntity<MJRecordMergeDele
 
     /**
     * * Field Name: RecordMergeLogID
-    * * Display Name: Record Merge Log ID
+    * * Display Name: Record Merge Log
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Record Merge Logs (vwRecordMergeLogs.ID)
     */
@@ -76547,7 +76549,7 @@ export class MJRecordMergeDeletionLogEntity extends BaseEntity<MJRecordMergeDele
 
     /**
     * * Field Name: DeletedRecordID
-    * * Display Name: Deleted Record ID
+    * * Display Name: Deleted Record
     * * SQL Data Type: nvarchar(750)
     * * Description: Field DeletedRecordID for entity Record Merge Deletion Logs.
     */
@@ -76611,7 +76613,7 @@ export class MJRecordMergeDeletionLogEntity extends BaseEntity<MJRecordMergeDele
 
     /**
     * * Field Name: RecordMergeLog
-    * * Display Name: Record Merge Log
+    * * Display Name: Merge Log Summary
     * * SQL Data Type: nvarchar(450)
     */
     get RecordMergeLog(): string {
@@ -77773,7 +77775,7 @@ export class MJReportEntity extends BaseEntity<MJReportEntityType> {
 
     /**
     * * Field Name: ConversationDetail
-    * * Display Name: Conversation Detail
+    * * Display Name: Conversation Detail Name
     * * SQL Data Type: nvarchar(MAX)
     */
     get ConversationDetail(): string | null {
@@ -81588,7 +81590,7 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
 
     /**
     * * Field Name: ConversationDetail
-    * * Display Name: Conversation Detail
+    * * Display Name: Conversation Detail Name
     * * SQL Data Type: nvarchar(MAX)
     */
     get ConversationDetail(): string | null {
@@ -82150,7 +82152,7 @@ export class MJTemplateParamEntity extends BaseEntity<MJTemplateParamEntityType>
 
     /**
     * * Field Name: IsRequired
-    * * Display Name: Is Required
+    * * Display Name: Required
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Whether this parameter must be provided when using the template.
@@ -82216,7 +82218,7 @@ export class MJTemplateParamEntity extends BaseEntity<MJTemplateParamEntityType>
 
     /**
     * * Field Name: RecordID
-    * * Display Name: Record
+    * * Display Name: Record ID
     * * SQL Data Type: nvarchar(2000)
     * * Description: Record ID, used only when Type is Record and a specific hardcoded record ID is desired, this is an uncommon use case, helpful for pulling in static types and metadata in some cases.
     */
@@ -82276,7 +82278,7 @@ export class MJTemplateParamEntity extends BaseEntity<MJTemplateParamEntityType>
 
     /**
     * * Field Name: Template
-    * * Display Name: Template
+    * * Display Name: Template Name
     * * SQL Data Type: nvarchar(255)
     */
     get Template(): string {
@@ -82285,7 +82287,7 @@ export class MJTemplateParamEntity extends BaseEntity<MJTemplateParamEntityType>
 
     /**
     * * Field Name: Entity
-    * * Display Name: Entity
+    * * Display Name: Entity Name
     * * SQL Data Type: nvarchar(255)
     */
     get Entity(): string | null {
@@ -82294,7 +82296,7 @@ export class MJTemplateParamEntity extends BaseEntity<MJTemplateParamEntityType>
 
     /**
     * * Field Name: TemplateContent
-    * * Display Name: Template Content
+    * * Display Name: Template Content Name
     * * SQL Data Type: nvarchar(255)
     */
     get TemplateContent(): string | null {

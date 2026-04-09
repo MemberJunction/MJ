@@ -44535,8 +44535,17 @@ export class MJFileStorageAccount_ {
     @MaxLength(200)
     Credential: string;
         
+    @Field(() => [MJAIAgentType_])
+    MJAIAgentTypes_DefaultStorageAccountIDArray: MJAIAgentType_[]; // Link to MJAIAgentTypes
+    
     @Field(() => [MJFileStorageAccountPermission_])
     MJFileStorageAccountPermissions_FileStorageAccountIDArray: MJFileStorageAccountPermission_[]; // Link to MJFileStorageAccountPermissions
+    
+    @Field(() => [MJAIAgentCategory_])
+    MJAIAgentCategories_DefaultStorageAccountIDArray: MJAIAgentCategory_[]; // Link to MJAIAgentCategories
+    
+    @Field(() => [MJAIAgent_])
+    MJAIAgents_DefaultStorageAccountIDArray: MJAIAgent_[]; // Link to MJAIAgents
     
 }
 
@@ -44649,6 +44658,16 @@ export class MJFileStorageAccountResolver extends ResolverBase {
         return result;
     }
     
+    @FieldResolver(() => [MJAIAgentType_])
+    async MJAIAgentTypes_DefaultStorageAccountIDArray(@Root() mjfilestorageaccount_: MJFileStorageAccount_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Agent Types', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIAgentTypes')} WHERE ${provider.QuoteIdentifier('DefaultStorageAccountID')}='${mjfilestorageaccount_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Types', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Types', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
     @FieldResolver(() => [MJFileStorageAccountPermission_])
     async MJFileStorageAccountPermissions_FileStorageAccountIDArray(@Root() mjfilestorageaccount_: MJFileStorageAccount_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: File Storage Account Permissions', userPayload);
@@ -44656,6 +44675,26 @@ export class MJFileStorageAccountResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwFileStorageAccountPermissions')} WHERE ${provider.QuoteIdentifier('FileStorageAccountID')}='${mjfilestorageaccount_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: File Storage Account Permissions', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: File Storage Account Permissions', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJAIAgentCategory_])
+    async MJAIAgentCategories_DefaultStorageAccountIDArray(@Root() mjfilestorageaccount_: MJFileStorageAccount_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Agent Categories', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIAgentCategories')} WHERE ${provider.QuoteIdentifier('DefaultStorageAccountID')}='${mjfilestorageaccount_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Categories', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Categories', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJAIAgent_])
+    async MJAIAgents_DefaultStorageAccountIDArray(@Root() mjfilestorageaccount_: MJFileStorageAccount_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Agents', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIAgents')} WHERE ${provider.QuoteIdentifier('DefaultStorageAccountID')}='${mjfilestorageaccount_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agents', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Agents', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
