@@ -120,6 +120,18 @@ export class RecordChangesComponent implements OnInit {
     }
   }
 
+  /**
+   * Reloads the record changes list from the database.
+   * Called by the parent container after a save completes while the drawer is open.
+   */
+  public Refresh(): void {
+    if (this.record) {
+      this.IsLoading = true;
+      this.cdr.markForCheck();
+      this.LoadRecordChanges(this.record.PrimaryKey, '', this.record.EntityInfo.Name);
+    }
+  }
+
   public OnClose(): void {
     this.IsVisible = false;
     this.cdr.markForCheck();
