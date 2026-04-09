@@ -6,12 +6,18 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { SearchOverlayComponent } from './search-overlay.component';
 import { SearchResultsComponent } from './search-results.component';
 import { SearchFilterComponent } from './search-filter.component';
+import { SearchInputComponent } from './search-input.component';
+import { SearchSuggestComponent } from './search-suggest.component';
+import { SearchCompositeComponent } from './search-composite.component';
 
 @NgModule({
     declarations: [
         SearchOverlayComponent,
         SearchResultsComponent,
-        SearchFilterComponent
+        SearchFilterComponent,
+        SearchInputComponent,
+        SearchSuggestComponent,
+        SearchCompositeComponent
     ],
     imports: [
         CommonModule,
@@ -21,7 +27,10 @@ import { SearchFilterComponent } from './search-filter.component';
     exports: [
         SearchOverlayComponent,
         SearchResultsComponent,
-        SearchFilterComponent
+        SearchFilterComponent,
+        SearchInputComponent,
+        SearchSuggestComponent,
+        SearchCompositeComponent
     ]
 })
 export class SearchModule { }

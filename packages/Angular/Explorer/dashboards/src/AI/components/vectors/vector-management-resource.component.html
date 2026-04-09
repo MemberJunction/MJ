@@ -188,6 +188,45 @@
               <label class="suggest-label">Entity</label>
               <span class="edit-readonly-value">{{ EditDocEntityName }}</span>
             </div>
+
+            <!-- Template Section -->
+            <div class="suggest-field">
+              <div class="edit-template-header">
+                <label class="suggest-label">Template</label>
+                <button class="edit-regenerate-btn"
+                        [disabled]="IsEditRegenerating"
+                        (click)="RegenerateTemplate()"
+                        title="Regenerate template using AI">
+                  @if (IsEditRegenerating) {
+                    <i class="fa-solid fa-spinner fa-spin"></i> Regenerating...
+                  } @else {
+                    <i class="fa-solid fa-wand-magic-sparkles"></i> Regenerate with AI
+                  }
+                </button>
+              </div>
+              <div class="template-editor-wrapper">
+                <mj-code-editor
+                  [value]="EditDocTemplate"
+                  language="markdown"
+                  [readonly]="false"
+                  [lineWrapping]="true"
+                  (change)="OnEditTemplateChange($event)">
+                </mj-code-editor>
+              </div>
+            </div>
+
+            <!-- Selected Fields (parsed from template) -->
+            @if (EditDocSelectedFields.length > 0) {
+              <div class="suggest-field">
+                <label class="suggest-label">Selected Fields</label>
+                <div class="result-tags">
+                  @for (field of EditDocSelectedFields; track field) {
+                    <span class="result-tag">{{ field }}</span>
+                  }
+                </div>
+              </div>
+            }
+
             <div class="suggest-field">
               <label class="suggest-label">Document Name</label>
               <input class="suggest-input" type="text" [(ngModel)]="EditDocName" />
@@ -299,6 +338,30 @@
               }
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- No Vector Index Warning Dialog -->
+  @if (ShowNoIndexWarning) {
+    <div class="slide-panel-overlay" (click)="CloseNoIndexWarning()">
+      <div class="no-index-warning-dialog" (click)="$event.stopPropagation()">
+        <div class="no-index-warning-icon">
+          <i class="fa-solid fa-triangle-exclamation"></i>
+        </div>
+        <h3 class="no-index-warning-title">Vector Index Required</h3>
+        <p class="no-index-warning-message">
+          You need to create at least one vector database and index before creating entity documents.
+          Go to the Configuration section to set up a vector database and create an index.
+        </p>
+        <div class="no-index-warning-actions">
+          <button class="suggest-submit-btn" (click)="GoToConfiguration()">
+            <i class="fa-solid fa-gear"></i> Go to Configuration
+          </button>
+          <button class="suggest-close-action" (click)="CloseNoIndexWarning()">
+            Close
+          </button>
         </div>
       </div>
     </div>

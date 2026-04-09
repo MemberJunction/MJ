@@ -273,6 +273,12 @@ mj-tab-container ::ng-deep .lm_stack {
   color: var(--mj-text-muted);
 }
 
+.user-menu-header .user-subtitle {
+  font-size: 11px;
+  color: var(--mj-text-muted);
+  font-style: italic;
+}
+
 /* User Context Menu */
 .user-context-menu {
   position: absolute;
@@ -723,6 +729,21 @@ mj-tab-container ::ng-deep .lm_stack {
 ::ng-deep .settings-fullscreen-window .k-window-titlebar-action .k-i-window-maximize,
 ::ng-deep .settings-fullscreen-window .k-window-titlebar-action .k-i-window {
   display: none !important;
+}
+
+/* ========================================
+   UNIVERSAL SEARCH BAR
+   ======================================== */
+.shell-search-bar {
+    flex: 0 1 420px;
+    min-width: 200px;
+    max-width: 520px;
+    margin: 0 12px;
+    position: relative;
+    z-index: 100;
+}
+@media (max-width: 768px) {
+    .shell-search-bar { display: none; }
 }
 
 /* ========================================
