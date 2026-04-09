@@ -28,6 +28,7 @@ import { TabContainerComponent } from './components/tabs/tab-container.component
 import { BaseUserMenu, UserMenuElement, UserMenuItem, UserMenuContext, isUserMenuDivider, ApplicationInfoRef } from '../user-menu';
 import { MJUserEntity, InstanceConfigEngine } from '@memberjunction/core-entities';
 import { CommandPaletteService } from '../command-palette/command-palette.service';
+import { FileOpenService } from '@memberjunction/ng-file-storage';
 
 /**
  * Main shell component for the new Explorer UX.
@@ -160,7 +161,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     public developerModeService: DeveloperModeService,
     private commandPaletteService: CommandPaletteService,
     private themeService: ThemeService,
-    private homePinService: HomeAppPinService
+    private homePinService: HomeAppPinService,
+    private fileOpenService: FileOpenService
   ) {
     // Initialize theme immediately so loading UI shows correct colors from the start
     this.activeTheme = getActiveTheme();
@@ -2401,14 +2403,13 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       }
   }
 
-  OnSearchResultSelected(result: { EntityName: string; RecordID: string; ResultType?: string }): void {
-      if (!result.EntityName || !result.RecordID) return;
-
+  OnSearchResultSelected(result: { EntityName: string; RecordID: string; ResultType?: string; RawMetadata?: string }): void {
       if (result.ResultType === 'storage-file') {
-          // Storage files — open in new tab (placeholder for future file viewer)
-          window.open(`about:blank#storage-file:${result.RecordID}`, '_blank');
+          this.fileOpenService.OpenFileFromSearchResult(result.RawMetadata);
           return;
       }
+
+      if (!result.EntityName || !result.RecordID) return;
 
       // Entity records — open via NavigationService
       const pkey = new CompositeKey([{ FieldName: 'ID', Value: result.RecordID }]);

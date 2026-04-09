@@ -291,10 +291,11 @@ export class StorageSearchProvider implements ISearchProvider {
                 RecordName: file.name,
                 MatchedAt: file.lastModified ?? new Date(),
                 RawMetadata: JSON.stringify({
+                    accountId: account.ID,
+                    accountName: account.Name,
                     path: file.path,
                     size: file.size,
                     contentType: file.contentType,
-                    provider: account.Name,
                     objectId: file.objectId
                 })
             };

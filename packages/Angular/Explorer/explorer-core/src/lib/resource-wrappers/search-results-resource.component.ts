@@ -3,6 +3,7 @@ import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-sha
 import { CompositeKey, Metadata, RunView } from '@memberjunction/core';
 import { ResourceData } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
+import { FileOpenService } from '@memberjunction/ng-file-storage';
 import {
     SearchService,
     SearchResultItem,
@@ -354,6 +355,7 @@ export class SearchResultsResource extends BaseResourceComponent {
     private cdr = inject(ChangeDetectorRef);
     private navigationService = inject(NavigationService);
     private searchService = inject(SearchService);
+    private fileOpenService = inject(FileOpenService);
 
     CurrentQuery = '';
     IsSearching = false;
@@ -518,17 +520,16 @@ export class SearchResultsResource extends BaseResourceComponent {
     /**
      * Navigate to a search result based on its ResultType discriminator.
      * - entity-record: opens the MJ entity record viewer
-     * - storage-file: opens a new browser tab (placeholder for future file viewer)
+     * - storage-file: opens the file via pre-authenticated URL in new tab
      * - content-item: opens the MJ entity record viewer (content items are entity records)
      */
     private navigateToResult(result: SearchResultItem): void {
-        if (!result.EntityName || !result.RecordID) return;
-
         if (result.ResultType === 'storage-file') {
-            // Storage files are not MJ entity records — open externally
-            window.open(`about:blank#storage-file:${result.RecordID}`, '_blank');
+            this.fileOpenService.OpenFileFromSearchResult(result.RawMetadata);
             return;
         }
+
+        if (!result.EntityName || !result.RecordID) return;
 
         // entity-record, content-item, or unset — navigate to entity record
         const pkey = new CompositeKey([{ FieldName: 'ID', Value: result.RecordID }]);
