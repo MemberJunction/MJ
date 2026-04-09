@@ -2,7 +2,7 @@
   {
     "fields": {
       "Name": "CodeGen: Smart Field Identification",
-      "Description": "Analyzes entity structure to intelligently identify name fields and default view fields",
+      "Description": "Analyzes entity structure to intelligently identify name fields, default view fields, search predicates, entity-level search eligibility, and full-text search configuration",
       "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
       "TemplateText": "@file:templates/codegen/smart-field-identification.template.md",
       "Status": "Active",
@@ -87,6 +87,21 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "Priority": 9
+          },
+          "primaryKey": {
+            "ID": "4ACF758C-A505-4785-89CA-DC0A7BA6C2C6"
+          },
+          "sync": {
+            "lastModified": "2026-04-09T12:00:28.578Z",
+            "checksum": "a08c3ad07525e9d7816e797f52917f4ab7520cb7508936dcaef1d31c89029256"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
             "ModelID": "@lookup:MJ: AI Models.Name=GPT 5-nano",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
             "Priority": 1
@@ -105,8 +120,8 @@
       "ID": "7FF02D68-02AE-49A1-AA5E-843D52367D57"
     },
     "sync": {
-      "lastModified": "2026-04-06T11:01:25.962Z",
-      "checksum": "327180282db23fb857c3a4858cff952364d089d26eb1cf939ff77d7bd97c0dba"
+      "lastModified": "2026-04-09T11:59:33.899Z",
+      "checksum": "7aff699db6cfd76d63816715ea46adb6a584e90533de0bd1b69c39f4980a6033"
     }
   }
 ]
