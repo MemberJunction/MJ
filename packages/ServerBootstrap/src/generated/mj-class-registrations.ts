@@ -506,7 +506,7 @@ import {
     XMLParserAction,
 } from '@memberjunction/core-actions';
 
-// @memberjunction/core-entities (312 classes)
+// @memberjunction/core-entities (310 classes)
 import {
     MJAIActionEntity,
     MJAIAgentActionEntity,
@@ -634,7 +634,6 @@ import {
     MJConversationDetailEntity,
     MJConversationDetailRatingEntity,
     MJConversationEntity,
-    MJCountryEntity,
     MJCredentialCategoryEntity,
     MJCredentialEntity,
     MJCredentialTypeEntity,
@@ -693,9 +692,11 @@ import {
     MJFileEntity,
     MJFileEntityRecordLinkEntity,
     MJFileStorageAccountEntity,
+    MJFileStorageAccountPermissionEntity,
     MJFileStorageProviderEntity,
     MJGeneratedCodeCategoryEntity,
     MJGeneratedCodeEntity,
+    MJInstanceConfigurationEntity,
     MJIntegrationEntity,
     MJIntegrationObjectEntity,
     MJIntegrationObjectFieldEntity,
@@ -745,7 +746,6 @@ import {
     MJRecommendationRunEntity,
     MJRecordChangeEntity,
     MJRecordChangeReplayRunEntity,
-    MJRecordGeoCodeEntity,
     MJRecordLinkEntity,
     MJRecordMergeDeletionLogEntity,
     MJRecordMergeLogEntity,
@@ -769,7 +769,6 @@ import {
     MJScheduledJobTypeEntity,
     MJSchemaInfoEntity,
     MJSkillEntity,
-    MJStateProvinceEntity,
     MJTagAuditLogEntity,
     MJTagCoOccurrenceEntity,
     MJTagEntity,
@@ -784,7 +783,6 @@ import {
     MJTemplateEntityExtended,
     MJTemplateParamEntity,
     MJTestEntity,
-    MJTestOrganizationEntity,
     MJTestRubricEntity,
     MJTestRunEntity,
     MJTestRunFeedbackEntity,
@@ -1392,7 +1390,6 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJConversationDetailEntity,
     MJConversationDetailRatingEntity,
     MJConversationEntity,
-    MJCountryEntity,
     MJCredentialCategoryEntity,
     MJCredentialEntity,
     MJCredentialTypeEntity,
@@ -1451,9 +1448,11 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJFileEntity,
     MJFileEntityRecordLinkEntity,
     MJFileStorageAccountEntity,
+    MJFileStorageAccountPermissionEntity,
     MJFileStorageProviderEntity,
     MJGeneratedCodeCategoryEntity,
     MJGeneratedCodeEntity,
+    MJInstanceConfigurationEntity,
     MJIntegrationEntity,
     MJIntegrationObjectEntity,
     MJIntegrationObjectFieldEntity,
@@ -1503,7 +1502,6 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJRecommendationRunEntity,
     MJRecordChangeEntity,
     MJRecordChangeReplayRunEntity,
-    MJRecordGeoCodeEntity,
     MJRecordLinkEntity,
     MJRecordMergeDeletionLogEntity,
     MJRecordMergeLogEntity,
@@ -1527,7 +1525,6 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJScheduledJobTypeEntity,
     MJSchemaInfoEntity,
     MJSkillEntity,
-    MJStateProvinceEntity,
     MJTagAuditLogEntity,
     MJTagCoOccurrenceEntity,
     MJTagEntity,
@@ -1542,7 +1539,6 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJTemplateEntityExtended,
     MJTemplateParamEntity,
     MJTestEntity,
-    MJTestOrganizationEntity,
     MJTestRubricEntity,
     MJTestRunEntity,
     MJTestRunFeedbackEntity,
@@ -1647,7 +1643,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 682;
+export const CLASS_REGISTRATIONS_COUNT = 680;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

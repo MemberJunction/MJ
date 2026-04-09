@@ -11,6 +11,7 @@ import { CommandPaletteService } from '../command-palette/command-palette.servic
 import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { MJDropdownComponent } from '@memberjunction/ng-ui-components';
+import { SearchModule } from '@memberjunction/ng-search';
 
 @NgModule({
   declarations: [
@@ -26,7 +27,8 @@ import { MJDropdownComponent } from '@memberjunction/ng-ui-components';
     FormsModule,
     MJDropdownComponent,
     ExplorerSettingsModule,
-    SharedGenericModule
+    SharedGenericModule,
+    SearchModule
   ],
   providers: [
     CommandPaletteService

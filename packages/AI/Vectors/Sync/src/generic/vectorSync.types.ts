@@ -62,6 +62,8 @@ export type VectorizeProgressUpdate = {
     PercentComplete: number;
     /** Elapsed time in ms since pipeline start */
     ElapsedMs: number;
+    /** Records that failed template rendering, if any. Populated at 'complete' stage. */
+    Errors?: { RecordID: string; Message: string }[];
 }
 
 export type VectorizeEntityResponse = {

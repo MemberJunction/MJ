@@ -45,6 +45,8 @@ export interface ScaffoldContext {
   Yes: boolean;
   /** Event emitter for progress, prompt, and log events. */
   Emitter: InstallerEventEmitter;
+  /** Installation mode — controls whether the bootstrap ZIP or full monorepo is downloaded. */
+  InstallMode?: 'distribution' | 'monorepo';
 }
 
 /**
@@ -75,7 +77,7 @@ export interface ScaffoldResult {
  * ```
  */
 export class ScaffoldPhase {
-  private github = new GitHubReleaseProvider();
+  private github!: GitHubReleaseProvider;
   private fileSystem = new FileSystemAdapter();
 
   /**
@@ -91,6 +93,8 @@ export class ScaffoldPhase {
    */
   async Run(context: ScaffoldContext): Promise<ScaffoldResult> {
     const { Emitter: emitter } = context;
+    const mode = context.InstallMode ?? 'distribution';
+    this.github = new GitHubReleaseProvider(undefined, undefined, mode);
 
     // Step 1: Resolve version
     const version = context.Tag

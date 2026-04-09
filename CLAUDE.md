@@ -347,6 +347,28 @@ MemberJunction uses `@RegisterClass` decorators with a dynamic class factory (`M
   - Always use hardcoded UUIDs (not NEWID())
   - Never insert __mj timestamp columns
   - Use `${flyway:defaultSchema}` placeholder
+  - **Consolidate ALTER TABLE statements**: When adding multiple columns to the same table, use a SINGLE `ALTER TABLE` with multiple `ADD` clauses separated by commas — never multiple separate `ALTER TABLE` statements for the same table. This is more efficient and cleaner.
+    ```sql
+    -- ✅ CORRECT - Single ALTER TABLE with multiple columns
+    ALTER TABLE ${flyway:defaultSchema}.EntityField ADD
+        UserSearchPredicateAPI NVARCHAR(20) NOT NULL DEFAULT 'Contains',
+        AutoUpdateUserSearchPredicate BIT NOT NULL DEFAULT 1,
+        AutoUpdateFullTextSearch BIT NOT NULL DEFAULT 1;
+
+    -- ❌ WRONG - Separate ALTER TABLEs for the same table
+    ALTER TABLE ${flyway:defaultSchema}.EntityField ADD UserSearchPredicateAPI NVARCHAR(20) NOT NULL DEFAULT 'Contains';
+    ALTER TABLE ${flyway:defaultSchema}.EntityField ADD AutoUpdateUserSearchPredicate BIT NOT NULL DEFAULT 1;
+    ALTER TABLE ${flyway:defaultSchema}.EntityField ADD AutoUpdateFullTextSearch BIT NOT NULL DEFAULT 1;
+    ```
+  - **Always add `sp_addextendedproperty`** for every new column (except primary keys and foreign keys which CodeGen handles). This provides descriptions that CodeGen uses:
+    ```sql
+    EXEC sp_addextendedproperty
+        @name = N'MS_Description',
+        @value = N'Description of what this column does',
+        @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+        @level1type = N'TABLE',  @level1name = N'TableName',
+        @level2type = N'COLUMN', @level2name = N'ColumnName';
+    ```
 
 ### 🚨 CRITICAL: CodeGen Handles These Automatically
 **NEVER include the following in migration CREATE TABLE statements - CodeGen generates them:**
