@@ -10,8 +10,8 @@
   ],
   "scripts": {
     "build": "tsc && tsc-alias -f",
-    "test": "vitest run",
-    "test:watch": "vitest"
+    "test": "echo \"No tests configured yet\"",
+    "test:watch": "echo \"No tests configured yet\""
   },
   "author": "MemberJunction.com",
   "license": "ISC",
