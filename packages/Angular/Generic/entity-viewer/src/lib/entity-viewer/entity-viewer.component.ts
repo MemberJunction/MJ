@@ -1462,6 +1462,7 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
     const newValue = !!(entity && entity.SupportsGeoCoding);
     if (newValue !== this.HasGeoCoding) {
       this.HasGeoCoding = newValue;
+      this.fallbackFromMapIfNeeded();
       this.cdr.detectChanges();
     }
   }
@@ -1590,6 +1591,16 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
    */
   private fallbackFromTimelineIfNeeded(): void {
     if (this.effectiveViewMode === 'timeline' && !this.hasDateFields) {
+      this.setViewMode('grid');
+    }
+  }
+
+  /**
+   * If currently on map view but geocoding is no longer available,
+   * fall back to grid view
+   */
+  private fallbackFromMapIfNeeded(): void {
+    if (this.effectiveViewMode === 'map' && !this.HasGeoCoding) {
       this.setViewMode('grid');
     }
   }
