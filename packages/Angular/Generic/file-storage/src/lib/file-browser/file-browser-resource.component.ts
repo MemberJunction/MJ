@@ -58,16 +58,10 @@ export class FileBrowserResource extends BaseResourceComponent {
    * In future phases, this could pass configuration from ResourceData
    */
   private async loadFileBrowser(): Promise<void> {
-    this.NotifyLoadStarted();
-
-    try {
-      // File browser loads immediately
-      // In future, could pass provider selection or folder path from Data.Configuration
-      this.NotifyLoadComplete();
-    } catch (error) {
-      console.error('Error loading file browser:', error);
-      this.NotifyLoadComplete();
-    }
+    // Defer to next microtask so the shell's LoadCompleteEvent callback
+    // is wired before we fire NotifyLoadComplete
+    await Promise.resolve();
+    this.NotifyLoadComplete();
   }
 
   /**

@@ -8,6 +8,9 @@ Analyze the provided entity structure and determine:
 1. Which field(s) should be the **Name Fields** (primary human-readable identifier) — **ONE OR MORE FIELDS**
 2. Which fields should be **Default in View** (shown in dropdowns/lists) — **ONE OR MORE FIELDS**
 3. Which fields should be **Searchable** (included in user search API) — **ONE OR MORE FIELDS**
+4. Whether this entity should be **searchable by users** (AllowUserSearchAPI)
+5. What **search predicate** each searchable field should use (BeginsWith, Contains, EndsWith, Exact)
+6. Whether **full-text search** should be enabled, and which fields to include
 
 ## Entity Information
 
@@ -127,6 +130,55 @@ Do NOT include:
 - **Boolean fields** — Not searchable by text
 - **Date fields** — Users filter by date, not search
 
+### Entity-Level Search Configuration (allowUserSearch)
+
+Decide whether this entity should be searchable by users. This controls `AllowUserSearchAPI` on the entity.
+
+**Set to `true` for:**
+- Entities with meaningful, user-facing data (Contacts, Products, Events, Documents, Companies)
+- Entities users would naturally want to find by typing in a search box
+- Entities with good name/title/identifier fields
+
+**Set to `false` for:**
+- System/metadata tables (configuration, settings, internal state)
+- Junction/linking tables (only contain foreign key pairs)
+- Audit/log tables (not user-searchable content)
+- Tables with only numeric, boolean, or foreign key columns
+- Tables with very few text fields (e.g., only IDs and dates)
+
+### Search Predicate Selection (searchPredicates)
+
+For each field in `searchableFields`, specify the optimal search predicate. This controls how the search API matches user input against the field value.
+
+- **`BeginsWith`** (default, fastest — uses index seek): Name, Title, Code, FirstName, LastName, City, State, CompanyName. Best for fields where users type the beginning of the value.
+- **`Contains`** (slower — requires scan): Description, Notes, Bio, Content, Address, Comments. Best for fields where the search term may appear anywhere in the value.
+- **`Exact`** (fastest — direct equality): Email, SKU, OrderNumber, AccountNumber, SSN, PhoneNumber, ZipCode. Best for unique identifiers and codes that users type in full.
+- **`EndsWith`** (rare): Domain names, file extensions. Rarely used.
+
+Rules:
+- Every field in `searchableFields` MUST have exactly one entry in `searchPredicates`
+- Default to `BeginsWith` when in doubt — it is the most performant
+
+### Full-Text Search Configuration (enableFullTextSearch, fullTextSearchFields)
+
+Decide whether full-text search (FTS) should be enabled for this entity. FTS provides advanced linguistic matching (stemming, inflections, proximity) for text-heavy content.
+
+**Enable FTS when:**
+- Entity has one or more text fields with MaxLength > 200 or MaxLength = -1 (MAX)
+- Fields contain natural language content (descriptions, notes, bios, articles, comments)
+- Users would benefit from fuzzy/linguistic matching beyond simple string comparison
+
+**Do NOT enable FTS when:**
+- Entity only has short text fields (names, codes, identifiers with MaxLength < 100)
+- Entity is a lookup/reference/junction table
+- Entity has no text-heavy content fields
+- All text fields are structured data (emails, phone numbers, codes)
+
+**fullTextSearchFields** — Which fields to include in the FTS index:
+- Text fields with MaxLength > 100 that contain searchable natural language content
+- NOT: IDs, codes, short enums, binary fields, foreign key fields
+- NOT: Fields that are already well-served by the standard search predicates (exact email matches, etc.)
+
 ## Output Format
 
 Return a JSON object with this exact structure:
@@ -139,6 +191,17 @@ Return a JSON object with this exact structure:
   "defaultInViewReason": "Brief explanation of why these fields should appear in grids/lists",
   "searchableFields": ["FieldName1", "FieldName2", "FieldName3"],
   "searchableFieldsReason": "Brief explanation of why these fields should be included in user search",
+  "allowUserSearch": true,
+  "allowUserSearchReason": "Brief explanation of why this entity should or should not be user-searchable",
+  "searchPredicates": [
+    { "field": "FieldName1", "predicate": "BeginsWith" },
+    { "field": "FieldName2", "predicate": "Contains" },
+    { "field": "FieldName3", "predicate": "Exact" }
+  ],
+  "searchPredicatesReason": "Brief explanation of predicate choices",
+  "enableFullTextSearch": false,
+  "fullTextSearchFields": [],
+  "fullTextSearchReason": "Brief explanation of FTS decision",
   "confidence": "high|medium|low"
 }
 ```
@@ -147,6 +210,8 @@ Return a JSON object with this exact structure:
 - `nameFields` is an **array of strings** — one or more fields that together form the display name
 - `defaultInView` is an **array of strings** (one or more fields)
 - `searchableFields` is an **array of strings** (one or more fields)
+- `searchPredicates` must have exactly one entry per field in `searchableFields`
+- `fullTextSearchFields` should only contain fields with MaxLength > 100 and natural language content
 - Return name fields in display order (e.g., FirstName before LastName)
 
 ### Confidence Levels
@@ -177,6 +242,21 @@ For entity "Members" with fields: ID (uniqueidentifier), FirstName (nvarchar, Ma
   "defaultInViewReason": "Name fields for recognition, Email for contact, Title for role context, JoinDate and EngagementScore for quick reference, OrganizationName for affiliation",
   "searchableFields": ["FirstName", "LastName", "Email", "Phone", "Title", "OrganizationName", "City"],
   "searchableFieldsReason": "Users search members by name, email, phone, title, company, or city. Excludes Bio (too long), EngagementScore (numeric), JoinDate (date), and system fields",
+  "allowUserSearch": true,
+  "allowUserSearchReason": "Members are core user-facing records that users frequently search for by name, email, or company",
+  "searchPredicates": [
+    { "field": "FirstName", "predicate": "BeginsWith" },
+    { "field": "LastName", "predicate": "BeginsWith" },
+    { "field": "Email", "predicate": "Exact" },
+    { "field": "Phone", "predicate": "Exact" },
+    { "field": "Title", "predicate": "BeginsWith" },
+    { "field": "OrganizationName", "predicate": "BeginsWith" },
+    { "field": "City", "predicate": "BeginsWith" }
+  ],
+  "searchPredicatesReason": "Names and titles use BeginsWith for fast prefix matching; Email and Phone use Exact since users type the full value; City uses BeginsWith for prefix lookup",
+  "enableFullTextSearch": true,
+  "fullTextSearchFields": ["Bio"],
+  "fullTextSearchReason": "Bio is a MAX-length natural language field that benefits from linguistic FTS matching (stemming, proximity). Short fields like names and emails are better served by standard predicates",
   "confidence": "high"
 }
 ```
@@ -193,6 +273,16 @@ For entity "Products" with fields: ID (uniqueidentifier), Name (nvarchar, MaxLen
   "defaultInViewReason": "Name for identification, SKU for lookup, Price for quick reference, Status for filtering",
   "searchableFields": ["Name", "SKU"],
   "searchableFieldsReason": "Users search products by name or SKU code. Excludes Description (too long), Price (numeric), CategoryID (FK UUID)",
+  "allowUserSearch": true,
+  "allowUserSearchReason": "Products are core catalog items that users search for frequently",
+  "searchPredicates": [
+    { "field": "Name", "predicate": "BeginsWith" },
+    { "field": "SKU", "predicate": "Exact" }
+  ],
+  "searchPredicatesReason": "Name uses BeginsWith for fast prefix matching; SKU is an exact code users type in full",
+  "enableFullTextSearch": true,
+  "fullTextSearchFields": ["Description"],
+  "fullTextSearchReason": "Description is a MAX-length field with natural language product details that benefits from FTS linguistic matching",
   "confidence": "high"
 }
 ```
@@ -209,6 +299,38 @@ For entity "Orders" with fields: ID (uniqueidentifier), OrderNumber (nvarchar, M
   "defaultInViewReason": "OrderNumber for identification, OrderDate for timeline, TotalAmount for value, Status for workflow state",
   "searchableFields": ["OrderNumber"],
   "searchableFieldsReason": "Users search orders by number. Other fields are better accessed via filters than text search",
+  "allowUserSearch": true,
+  "allowUserSearchReason": "Orders are user-facing transactional records that users search for by order number",
+  "searchPredicates": [
+    { "field": "OrderNumber", "predicate": "Exact" }
+  ],
+  "searchPredicatesReason": "OrderNumber is a unique identifier that users type in full for exact lookup",
+  "enableFullTextSearch": false,
+  "fullTextSearchFields": [],
+  "fullTextSearchReason": "Notes is the only text-heavy field but it is rarely searched. Order lookup is best done by exact OrderNumber matching",
+  "confidence": "high"
+}
+```
+
+### Example 4: System/Junction Table (Not Searchable)
+
+For entity "User Roles" with fields: ID (uniqueidentifier), UserID (uniqueidentifier, FK → Users), RoleID (uniqueidentifier, FK → Roles), __mj_CreatedAt (datetimeoffset), __mj_UpdatedAt (datetimeoffset)
+
+```json
+{
+  "nameFields": ["UserID"],
+  "nameFieldsReason": "Junction table with no natural name field — UserID is the closest identifier",
+  "defaultInView": ["UserID", "RoleID"],
+  "defaultInViewReason": "Both FK fields are needed to identify the relationship",
+  "searchableFields": [],
+  "searchableFieldsReason": "Junction table with only FK UUID columns — no text content to search",
+  "allowUserSearch": false,
+  "allowUserSearchReason": "Junction table connecting Users to Roles — no user-facing search content, only foreign key pairs",
+  "searchPredicates": [],
+  "searchPredicatesReason": "No searchable fields, so no predicates needed",
+  "enableFullTextSearch": false,
+  "fullTextSearchFields": [],
+  "fullTextSearchReason": "No text content fields in this junction table",
   "confidence": "high"
 }
 ```

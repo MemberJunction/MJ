@@ -22,6 +22,17 @@ export type SmartFieldIdentificationResult = {
     defaultInViewReason: string;
     searchableFields: string[];
     searchableFieldsReason: string;
+    /** Whether this entity should be searchable by users via the search API */
+    allowUserSearch?: boolean;
+    allowUserSearchReason?: string;
+    /** Per-field search predicate recommendations (BeginsWith, Contains, EndsWith, Exact) */
+    searchPredicates?: Array<{ field: string; predicate: 'BeginsWith' | 'Contains' | 'EndsWith' | 'Exact' }>;
+    searchPredicatesReason?: string;
+    /** Whether full-text search should be enabled for this entity */
+    enableFullTextSearch?: boolean;
+    /** Which fields should be included in the full-text search index */
+    fullTextSearchFields?: string[];
+    fullTextSearchReason?: string;
     confidence: 'high' | 'medium' | 'low';
 }
 
@@ -80,7 +91,7 @@ export type FormLayoutResult = {
         category: string;
         reason: string;
         displayName: string;
-        extendedType: 'Code' | 'Email' | 'FaceTime' | 'Geo' | 'MSTeams' | 'SIP' | 'SMS' | 'Skype' | 'Tel' | 'URL' | 'WhatsApp' | 'ZoomMtg' | null;
+        extendedType: 'Code' | 'Email' | 'FaceTime' | 'Geo' | 'GeoLatitude' | 'GeoLongitude' | 'GeoCountry' | 'GeoStateProvince' | 'GeoCity' | 'GeoPostalCode' | 'GeoAddress' | 'MSTeams' | 'SIP' | 'SMS' | 'Skype' | 'Tel' | 'URL' | 'WhatsApp' | 'ZoomMtg' | null;
         codeType: 'CSS' | 'HTML' | 'JavaScript' | 'SQL' | 'TypeScript' | 'Other' | null;
     }>;
     /** @deprecated Use categoryInfo instead */

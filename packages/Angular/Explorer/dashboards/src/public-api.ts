@@ -32,10 +32,6 @@ export {
 
 // Knowledge Hub components
 export {
-  KnowledgeSearchResourceComponent,
-  LoadKnowledgeSearchResource
-} from './KnowledgeHub/components/search/knowledge-search-resource.component';
-export {
   KnowledgeConfigResourceComponent,
   LoadKnowledgeConfigResource
 } from './KnowledgeHub/components/config/knowledge-config-resource.component';

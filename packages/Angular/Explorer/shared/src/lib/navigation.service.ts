@@ -637,25 +637,32 @@ export class NavigationService implements OnDestroy {
    * This is the primary way to open search results from anywhere in the application.
    *
    * @param query The search query text
+   * @param searchOptions Optional search-specific options (e.g., minRelevance)
    * @param options Navigation options
    */
   public OpenSearch(
     query: string,
+    searchOptions?: { minRelevance?: number },
     options?: NavigationOptions
   ): string {
     const appId = this.getDefaultApplicationId();
     const appColor = this.getDefaultAppColor();
     const forceNew = this.shouldForceNewTab(options);
 
+    const config: Record<string, unknown> = {
+      resourceType: 'Search Results',
+      Query: query,
+      SearchInput: query,
+      recordId: `search-${query}`
+    };
+    if (searchOptions?.minRelevance != null) {
+      config['MinRelevance'] = searchOptions.minRelevance;
+    }
+
     const request: TabRequest = {
       ApplicationId: appId,
       Title: `Search: ${query}`,
-      Configuration: {
-        resourceType: 'Search Results',
-        Query: query,
-        SearchInput: query,
-        recordId: `search-${query}`
-      },
+      Configuration: config,
       ResourceRecordId: `search-${query}`,
       IsPinned: false
     };

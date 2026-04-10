@@ -1,0 +1,22 @@
+import { Component } from '@angular/core';
+import { MJSearchProviderEntity } from '@memberjunction/core-entities';
+import { RegisterClass } from '@memberjunction/global';
+import { BaseFormComponent } from '@memberjunction/ng-base-forms';
+
+@RegisterClass(BaseFormComponent, 'MJ: Search Providers') // Tell MemberJunction about this class
+@Component({
+    standalone: false,
+    selector: 'gen-mjsearchprovider-form',
+    templateUrl: './mjsearchprovider.form.component.html'
+})
+export class MJSearchProviderFormComponent extends BaseFormComponent {
+    public record!: MJSearchProviderEntity;
+
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true }
+        ]);
+    }
+}
+

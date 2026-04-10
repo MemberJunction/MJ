@@ -1,0 +1,326 @@
+[
+  {
+    "fields": {
+      "_CountryISO2": "BR",
+      "Name": "Acre",
+      "Code": "AC",
+      "ISO3166_2": "BR-AC",
+      "Latitude": -9.0479,
+      "Longitude": -70.5265,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Acre\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "BR",
+      "Name": "Alagoas",
+      "Code": "AL",
+      "ISO3166_2": "BR-AL",
+      "Latitude": -9.6612,
+      "Longitude": -36.6502,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Alagoas\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "BR",
+      "Name": "Amapá",
+      "Code": "AP",
+      "ISO3166_2": "BR-AP",
+      "Latitude": 1.3545,
+      "Longitude": -51.9162,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Amap\\u00e1\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "BR",
+      "Name": "Amazonas",
+      "Code": "AM",
+      "ISO3166_2": "BR-AM",
+      "Latitude": -3.2002,
+      "Longitude": -59.4989,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Amazonas\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "BR",
+      "Name": "Bahia",
+      "Code": "BA",
+      "ISO3166_2": "BR-BA",
+      "Latitude": -12.2853,
+      "Longitude": -41.9295,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Bahia\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "BR",
+      "Name": "Ceará",
+      "Code": "CE",
+      "ISO3166_2": "BR-CE",
+      "Latitude": -5.3265,
+      "Longitude": -39.7156,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Cear\\u00e1\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "BR",
+      "Name": "Distrito Federal",
+      "Code": "DF",
+      "ISO3166_2": "BR-DF",
+      "Latitude": -15.7754,
+      "Longitude": -47.7971,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Distrito Federal\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "BR",
+      "Name": "Espírito Santo",
+      "Code": "ES",
+      "ISO3166_2": "BR-ES",
+      "Latitude": -19.5688,
+      "Longitude": -40.1722,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Esp\\u00edrito Santo\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "BR",
+      "Name": "Goiás",
+      "Code": "GO",
+      "ISO3166_2": "BR-GO",
+      "Latitude": -15.9324,
+      "Longitude": -50.1393,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Goi\\u00e1s\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "BR",
+      "Name": "Maranhão",
+      "Code": "MA",
+      "ISO3166_2": "BR-MA",
+      "Latitude": -5.2086,
+      "Longitude": -45.393,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Maranh\\u00e3o\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "BR",
+      "Name": "Mato Grosso",
+      "Code": "MT",
+      "ISO3166_2": "BR-MT",
+      "Latitude": -12.2115,
+      "Longitude": -55.5717,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Mato Grosso\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "BR",
+      "Name": "Mato Grosso do Sul",
+      "Code": "MS",
+      "ISO3166_2": "BR-MS",
+      "Latitude": -19.5853,
+      "Longitude": -54.4795,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Mato Grosso do Sul\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "BR",
+      "Name": "Minas Gerais",
+      "Code": "MG",
+      "ISO3166_2": "BR-MG",
+      "Latitude": -18.5265,
+      "Longitude": -44.1589,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Minas Gerais\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "BR",
+      "Name": "Paraná",
+      "Code": "PR",
+      "ISO3166_2": "BR-PR",
+      "Latitude": -24.4842,
+      "Longitude": -51.8149,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Paran\\u00e1\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "BR",
+      "Name": "Paraíba",
+      "Code": "PB",
+      "ISO3166_2": "BR-PB",
+      "Latitude": -7.1219,
+      "Longitude": -36.7247,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Para\\u00edba\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "BR",
+      "Name": "Pará",
+      "Code": "PA",
+      "ISO3166_2": "BR-PA",
+      "Latitude": -4.7494,
+      "Longitude": -52.8973,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Par\\u00e1\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "BR",
+      "Name": "Pernambuco",
+      "Code": "PE",
+      "ISO3166_2": "BR-PE",
+      "Latitude": -8.4116,
+      "Longitude": -37.592,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Pernambuco\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "BR",
+      "Name": "Piauí",
+      "Code": "PI",
+      "ISO3166_2": "BR-PI",
+      "Latitude": -7.6993,
+      "Longitude": -42.5044,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Piau\\u00ed\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "BR",
+      "Name": "Rio Grande do Norte",
+      "Code": "RN",
+      "ISO3166_2": "BR-RN",
+      "Latitude": -5.6781,
+      "Longitude": -36.4782,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Rio Grande do Norte\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "BR",
+      "Name": "Rio Grande do Sul",
+      "Code": "RS",
+      "ISO3166_2": "BR-RS",
+      "Latitude": -29.8425,
+      "Longitude": -53.7681,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Rio Grande do Sul\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "BR",
+      "Name": "Rio de Janeiro",
+      "Code": "RJ",
+      "ISO3166_2": "BR-RJ",
+      "Latitude": -22.911,
+      "Longitude": -43.2094,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Rio de Janeiro\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "BR",
+      "Name": "Rondônia",
+      "Code": "RO",
+      "ISO3166_2": "BR-RO",
+      "Latitude": -10.9431,
+      "Longitude": -62.8278,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Rond\\u00f4nia\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "BR",
+      "Name": "Roraima",
+      "Code": "RR",
+      "ISO3166_2": "BR-RR",
+      "Latitude": 2.1351,
+      "Longitude": -61.3632,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Roraima\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "BR",
+      "Name": "Santa Catarina",
+      "Code": "SC",
+      "ISO3166_2": "BR-SC",
+      "Latitude": -27.0628,
+      "Longitude": -51.115,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Santa Catarina\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "BR",
+      "Name": "Sergipe",
+      "Code": "SE",
+      "ISO3166_2": "BR-SE",
+      "Latitude": -10.6744,
+      "Longitude": -37.3774,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Sergipe\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "BR",
+      "Name": "São Paulo",
+      "Code": "SP",
+      "ISO3166_2": "BR-SP",
+      "Latitude": -23.5505,
+      "Longitude": -46.6333,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"S\\u00e3o Paulo\"]"
+    }
+  },
+  {
+    "fields": {
+      "_CountryISO2": "BR",
+      "Name": "Tocantins",
+      "Code": "TO",
+      "ISO3166_2": "BR-TO",
+      "Latitude": -10.8855,
+      "Longitude": -48.3717,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": "[\"Tocantins\"]"
+    }
+  }
+]

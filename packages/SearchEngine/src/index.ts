@@ -5,4 +5,5 @@ export * from './generic/SearchEnricher';
 export * from './generic/EntitySearchProvider';
 export * from './generic/VectorSearchProvider';
 export * from './generic/FullTextSearchProvider';
+export * from './generic/StorageSearchProvider';
 export * from './generic/SearchEngine';

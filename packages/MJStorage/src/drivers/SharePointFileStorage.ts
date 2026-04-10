@@ -1557,13 +1557,20 @@ export class SharePointFileStorage extends FileStorageBase {
         hasMore = hitsContainer.moreResultsAvailable || false;
 
         if (hitsContainer.hits && hitsContainer.hits.length > 0) {
-          for (const hit of hitsContainer.hits) {
+          const totalHits = hitsContainer.hits.length;
+
+          for (let i = 0; i < totalHits; i++) {
+            const hit = hitsContainer.hits[i];
             const resource = hit.resource;
 
             // Skip if not a file (e.g., folders)
             if (!resource || resource.folder) {
               continue;
             }
+
+            // SharePoint rank is a position-based integer (lower = more relevant).
+            // Use rank-based scoring consistent with other drivers: first result = 0.95, decreasing by 0.05.
+            const relevance = results.length === 0 ? 0.95 : Math.max(0.1, 0.95 - results.length * 0.05);
 
             // Extract file information
             const result: FileSearchResult = {
@@ -1573,7 +1580,7 @@ export class SharePointFileStorage extends FileStorageBase {
               contentType: resource.file?.mimeType || mime.lookup(resource.name) || 'application/octet-stream',
               lastModified: resource.lastModifiedDateTime ? new Date(resource.lastModifiedDateTime) : new Date(),
               objectId: resource.id || '', // SharePoint item ID for direct access
-              relevance: hit.rank ? hit.rank / 100.0 : undefined,
+              relevance,
               excerpt: hit.summary || undefined,
               matchInFilename: this.determineMatchLocation(hit),
               providerData: {
@@ -1581,6 +1588,7 @@ export class SharePointFileStorage extends FileStorageBase {
                 webUrl: resource.webUrl,
                 driveId: this._driveId,
                 siteId: this._siteId,
+                rank: hit.rank,
               },
             };
 

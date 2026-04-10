@@ -372,38 +372,104 @@ export class DependencyPhase {
   // ---------------------------------------------------------------------------
 
   /**
-   * Verify `@memberjunction/cli` is present in the root `package.json`.
+   * Ensure `@memberjunction/cli` is in the root `package.json` devDependencies.
    *
-   * In the monorepo layout, the CLI is a workspace package and should already
-   * be declared. This method just logs a warning if it's missing.
+   * In monorepo mode, the CLI is already a workspace package. In distribution
+   * mode, it needs to be pinned to the correct npm version.
    */
   private async ensureCliDependency(
     dir: string,
-    _tag: string,
+    tag: string,
     emitter: InstallerEventEmitter
   ): Promise<void> {
     const pkgPath = path.join(dir, 'package.json');
     const pkg = await this.fileSystem.ReadJSON<Record<string, Record<string, string>>>(pkgPath);
 
-    const hasCli = pkg['devDependencies']?.['@memberjunction/cli'] || pkg['dependencies']?.['@memberjunction/cli'];
-    if (!hasCli) {
-      emitter.Emit('warn', {
-        Type: 'warn',
-        Phase: 'dependencies',
-        Message: '@memberjunction/cli not found in root package.json — mj commands may not work. Expected it as a workspace dependency.',
-      });
+    // If CLI is already a workspace dependency (monorepo), skip version pinning
+    const existing = pkg['devDependencies']?.['@memberjunction/cli'] ?? pkg['dependencies']?.['@memberjunction/cli'];
+    if (existing && (existing.startsWith('workspace:') || existing.startsWith('file:'))) {
+      return;
     }
+
+    const npmVersion = tag.startsWith('v') ? tag.slice(1) : tag;
+
+    if (!pkg['devDependencies']) {
+      pkg['devDependencies'] = {};
+    }
+
+    if (existing === npmVersion) {
+      return;
+    }
+
+    pkg['devDependencies']['@memberjunction/cli'] = npmVersion;
+    await this.fileSystem.WriteJSON(pkgPath, pkg);
+
+    emitter.Emit('step:progress', {
+      Type: 'step:progress',
+      Phase: 'dependencies',
+      Message: `Added @memberjunction/cli@${npmVersion} to devDependencies`,
+    });
   }
 
+  // ---------------------------------------------------------------------------
+  // Dependency hoisting
+  // ---------------------------------------------------------------------------
+
   /**
-   * No-op in monorepo mode. Workspace resolution handles hoisting automatically.
-   * Retained for interface compatibility.
+   * Packages that must be hoisted to the root `node_modules` to avoid duplicate-
+   * instance problems with Angular's DI system and MJ's ClassFactory.
+   * Only applicable for distribution installs.
+   */
+  private static readonly HOISTED_PACKAGES: ReadonlyArray<{
+    Name: string;
+    Section: 'dependencies' | 'devDependencies';
+  }> = [
+    { Name: '@memberjunction/ng-auth-services', Section: 'dependencies' },
+  ];
+
+  /**
+   * Ensure packages that require hoisting are listed in the root package.json.
+   * In monorepo mode, workspace resolution handles this automatically.
    */
   private async ensureHoistedDependencies(
-    _dir: string,
-    _tag: string,
-    _emitter: InstallerEventEmitter
+    dir: string,
+    tag: string,
+    emitter: InstallerEventEmitter
   ): Promise<void> {
-    // Monorepo workspace resolution handles hoisting via npm workspaces
+    // Check if this is a monorepo layout — if so, skip hoisting
+    const monorepoMarker = path.join(dir, 'packages', 'MJCoreEntities');
+    if (await this.fileSystem.DirectoryExists(monorepoMarker)) {
+      return;
+    }
+
+    const pkgPath = path.join(dir, 'package.json');
+    const pkg = await this.fileSystem.ReadJSON<Record<string, Record<string, string>>>(pkgPath);
+    const npmVersion = tag.startsWith('v') ? tag.slice(1) : tag;
+
+    let modified = false;
+
+    for (const { Name, Section } of DependencyPhase.HOISTED_PACKAGES) {
+      if (!pkg[Section]) {
+        pkg[Section] = {};
+      }
+
+      const existing = pkg[Section][Name];
+      if (existing === npmVersion) {
+        continue;
+      }
+
+      pkg[Section][Name] = npmVersion;
+      modified = true;
+
+      emitter.Emit('step:progress', {
+        Type: 'step:progress',
+        Phase: 'dependencies',
+        Message: `Added ${Name}@${npmVersion} to ${Section} (hoisting fix)`,
+      });
+    }
+
+    if (modified) {
+      await this.fileSystem.WriteJSON(pkgPath, pkg);
+    }
   }
 }

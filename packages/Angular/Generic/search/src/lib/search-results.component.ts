@@ -68,7 +68,7 @@ export class SearchResultsComponent {
     @Output() ResultSelected = new EventEmitter<SearchResultSelectedEvent>();
 
     /** Emitted when user clicks "Open Record" — parent handles navigation */
-    @Output() OpenRecordRequested = new EventEmitter<{ EntityName: string; RecordID: string }>();
+    @Output() OpenRecordRequested = new EventEmitter<SearchResultItem>();
 
     /** Emitted when user clicks "See Similar Items" — parent runs a "more like this" search */
     @Output() MoreLikeThisRequested = new EventEmitter<SearchResultItem>();
@@ -179,10 +179,7 @@ export class SearchResultsComponent {
     /** Handle "Open Record" button click */
     public OnOpenRecord(result: SearchResultItem, event: MouseEvent): void {
         event.stopPropagation();
-        this.OpenRecordRequested.emit({
-            EntityName: result.EntityName,
-            RecordID: result.RecordID
-        });
+        this.OpenRecordRequested.emit(result);
     }
 
     /** Handle "See Similar Items" button click — emits the result for a "more like this" search */
