@@ -96,7 +96,8 @@ describe('Search Types', () => {
                 Filters: [],
                 TotalCount: 42,
                 ElapsedMs: 150,
-                SourceCounts: { Vector: 20, FullText: 15, Entity: 7, Storage: 0 }
+                SourceCounts: { Vector: 20, FullText: 15, Entity: 7, Storage: 0 },
+                Providers: []
             };
 
             expect(response.Success).toBe(true);
@@ -112,6 +113,7 @@ describe('Search Types', () => {
                 TotalCount: 0,
                 ElapsedMs: 0,
                 SourceCounts: { Vector: 0, FullText: 0, Entity: 0, Storage: 0 },
+                Providers: [],
                 ErrorMessage: 'Search service unavailable'
             };
 

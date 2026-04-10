@@ -102,6 +102,12 @@ export interface SearchResultItem {
     RawMetadata?: string;
     /** Discriminator for UI rendering: entity-record, storage-file, or content-item */
     ResultType: SearchResultType;
+    /** ID of the SearchProvider metadata record that produced this result */
+    ProviderId?: string;
+    /** Display label from the SearchProvider metadata (e.g., "Database", "Semantic Search") */
+    ProviderLabel?: string;
+    /** Font Awesome icon class from the SearchProvider metadata (e.g., "fa-solid fa-brain") */
+    ProviderIcon?: string;
 }
 
 /**
@@ -123,8 +129,28 @@ export interface SearchResult {
         Entity: number;
         Storage: number;
     };
+    /** Metadata for all active search providers (for UI filter facets and labels) */
+    Providers: SearchProviderInfo[];
     /** Error message if Success is false */
     ErrorMessage?: string;
+}
+
+/**
+ * Metadata about an active search provider, sent to the client for UI rendering.
+ */
+export interface SearchProviderInfo {
+    /** SearchProvider record ID */
+    ID: string;
+    /** Provider name from metadata */
+    Name: string;
+    /** UI display label (falls back to Name if null) */
+    DisplayName: string;
+    /** Font Awesome icon class */
+    Icon: string;
+    /** The SourceType key this provider uses */
+    SourceType: string;
+    /** Priority (lower = higher) */
+    Priority: number;
 }
 
 /**
