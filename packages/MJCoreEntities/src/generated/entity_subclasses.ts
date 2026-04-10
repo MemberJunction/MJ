@@ -54855,22 +54855,6 @@ export class MJCountryEntity extends BaseEntity<MJCountryEntityType> {
     }
 
     /**
-     * CodeGen-generated geo field mappings for geocoding.
-     * Defines which entity fields contribute to each location type.
-     */
-    get GeoFieldMappings(): { LocationType: 'Primary'; Fields: string[] }[] {
-        return [
-        {
-                LocationType: "Primary",
-                Fields: [
-                        "Latitude",
-                        "Longitude"
-                ]
-        }
-];
-    }
-
-    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -76720,22 +76704,6 @@ export class MJRecordGeoCodeEntity extends BaseEntity<MJRecordGeoCodeEntityType>
     }
 
     /**
-     * CodeGen-generated geo field mappings for geocoding.
-     * Defines which entity fields contribute to each location type.
-     */
-    get GeoFieldMappings(): { LocationType: 'Primary'; Fields: string[] }[] {
-        return [
-        {
-                LocationType: "Primary",
-                Fields: [
-                        "Latitude",
-                        "Longitude"
-                ]
-        }
-];
-    }
-
-    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -81361,22 +81329,6 @@ export class MJStateProvinceEntity extends BaseEntity<MJStateProvinceEntityType>
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-     * CodeGen-generated geo field mappings for geocoding.
-     * Defines which entity fields contribute to each location type.
-     */
-    get GeoFieldMappings(): { LocationType: 'Primary'; Fields: string[] }[] {
-        return [
-        {
-                LocationType: "Primary",
-                Fields: [
-                        "Latitude",
-                        "Longitude"
-                ]
-        }
-];
     }
 
     /**
