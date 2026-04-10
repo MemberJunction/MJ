@@ -533,7 +533,7 @@ export const DEFAULT_CODEGEN_CONFIG: Partial<ConfigInfo> = {
     AllowCreateAPI: true,
     AllowUpdateAPI: true,
     AllowDeleteAPI: true,
-    AllowUserSearchAPI: false,
+    AllowUserSearchAPI: true,
     CascadeDeletes: false,
     UserViewMaxRows: 1000,
     AddToApplicationWithSchemaName: true,
