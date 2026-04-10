@@ -289,6 +289,50 @@ export class SQLCodeGenBase {
             }
             // no logStatus/timer for this because manageEntityFields() has its own internal logging for this including the total, so it is redundant to log it here
 
+            // STEP 3.5 - Late-phase view regeneration
+            // Some late-phase changes (e.g., SupportsGeoCoding toggled during advanced generation)
+            // affect view structure but happen AFTER views were already generated in Step 2.
+            // Regenerate ONLY those entities' views, then re-sync their fields to pick up new virtual columns.
+            const regenList = ManageMetadataBase.EntitiesRequiringViewRegen;
+            if (regenList.length > 0) {
+                startSpinner(`Regenerating ${regenList.length} entities with late-phase view changes...`);
+
+                // Refresh metadata to pick up DB changes from Step 3 (e.g., SupportsGeoCoding = 1)
+                const regenMd = new Metadata();
+                await regenMd.Refresh();
+
+                // Resolve entity names to EntityInfo objects from the refreshed metadata
+                const entitiesToRegen = regenList
+                    .map(name => { try { return regenMd.EntityByName(name); } catch { return null; } })
+                    .filter((e): e is EntityInfo => e !== null);
+
+                if (entitiesToRegen.length > 0) {
+                    // Regenerate views + SPs for affected entities only
+                    const regenResult = await this.generateAndExecuteEntitySQLToSeparateFiles({
+                        pool,
+                        entities: entitiesToRegen,
+                        directory,
+                        onlyPermissions: false,
+                        skipExecution: false,
+                        writeFiles: true,
+                        batchSize: 1,
+                        enableSQLLoggingForNewOrModifiedEntities: true
+                    });
+
+                    if (regenResult.Success) {
+                        // Re-sync entity fields to pick up new virtual columns (e.g., __mj_Latitude, __mj_Longitude)
+                        // No LLM needed — just detect new/changed fields from the regenerated views
+                        await manageMD.manageEntityFields(pool, configInfo.excludeSchemas, true, true, currentUser, true, false);
+                        succeedSpinner(`Regenerated ${entitiesToRegen.length} late-phase entities`);
+                    } else {
+                        failSpinner('Late-phase view regeneration failed');
+                        overallSuccess = false;
+                    }
+                } else {
+                    succeedSpinner('No valid entities to regenerate');
+                }
+            }
+
             // STEP 4- Apply permissions, executing all .permissions files
             startSpinner('Applying permissions...');
             const step4StartTime: Date = new Date();

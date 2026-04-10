@@ -388,6 +388,19 @@ export class ManageMetadataBase {
    public static get modifiedEntityList(): string[] {
       return this._modifiedEntityList;
    }
+   private static _entitiesRequiringViewRegen: string[] = [];
+   /**
+    * Entities that had late-phase changes (e.g., SupportsGeoCoding toggled during advanced generation)
+    * requiring their base views to be regenerated after the main SQL generation pass.
+    */
+   public static get EntitiesRequiringViewRegen(): string[] {
+      return this._entitiesRequiringViewRegen;
+   }
+   public static AddEntityRequiringViewRegen(entityName: string): void {
+      if (!this._entitiesRequiringViewRegen.includes(entityName)) {
+         this._entitiesRequiringViewRegen.push(entityName);
+      }
+   }
    private static _generatedValidators: ValidatorResult[] = [];
    /**
     * Globally scoped list of validators that have been generated during the metadata management process.
@@ -4784,11 +4797,13 @@ export class ManageMetadataBase {
       entity: EntityInfo,
       fieldCategories: Array<{ fieldName: string; extendedType: EntityFieldExtendedType | null }>
    ): Promise<void> {
+      const schema = mj_core_schema();
+
       // Check if the entity's AutoUpdateSupportsGeoCoding flag allows us to modify it
       const autoUpdateResult = await pool.query(`
-         SELECT AutoUpdateSupportsGeoCoding, SupportsGeoCoding
-         FROM ${mj_core_schema()}.Entity
-         WHERE ID = '${entity.ID}'
+         SELECT ${this.qi('AutoUpdateSupportsGeoCoding')}, ${this.qi('SupportsGeoCoding')}
+         FROM ${this.qs(schema, 'Entity')}
+         WHERE ${this.qi('ID')} = '${entity.ID}'
       `);
       const row = autoUpdateResult?.recordset?.[0];
       if (!row || !row.AutoUpdateSupportsGeoCoding) {
@@ -4807,10 +4822,10 @@ export class ManageMetadataBase {
       // Also check existing fields in the database for Geo* ExtendedTypes
       // (in case the LLM didn't re-assign them this run but they were previously set)
       const existingGeoResult = await pool.query(`
-         SELECT COUNT(*) AS GeoFieldCount
-         FROM ${mj_core_schema()}.EntityField
-         WHERE EntityID = '${entity.ID}'
-           AND ExtendedType IN ('Geo', 'GeoLatitude', 'GeoLongitude', 'GeoCountry', 'GeoStateProvince', 'GeoCity', 'GeoPostalCode', 'GeoAddress')
+         SELECT COUNT(*) AS ${this.qi('GeoFieldCount')}
+         FROM ${this.qs(schema, 'EntityField')}
+         WHERE ${this.qi('EntityID')} = '${entity.ID}'
+           AND ${this.qi('ExtendedType')} IN ('Geo', 'GeoLatitude', 'GeoLongitude', 'GeoCountry', 'GeoStateProvince', 'GeoCity', 'GeoPostalCode', 'GeoAddress')
       `);
       const existingGeoCount = existingGeoResult?.recordset?.[0]?.GeoFieldCount ?? 0;
 
@@ -4818,12 +4833,15 @@ export class ManageMetadataBase {
       const currentValue = row.SupportsGeoCoding ? true : false;
 
       if (shouldSupportGeo !== currentValue) {
-         await pool.query(`
-            UPDATE ${mj_core_schema()}.Entity
-            SET SupportsGeoCoding = ${shouldSupportGeo ? 1 : 0}
-            WHERE ID = '${entity.ID}' AND AutoUpdateSupportsGeoCoding = 1
-         `);
+         await this.LogSQLAndExecute(pool, `
+            UPDATE ${this.qs(schema, 'Entity')}
+            SET ${this.qi('SupportsGeoCoding')} = ${shouldSupportGeo ? 1 : 0}
+            WHERE ${this.qi('ID')} = '${entity.ID}' AND ${this.qi('AutoUpdateSupportsGeoCoding')} = 1
+         `, `Set SupportsGeoCoding = ${shouldSupportGeo ? 1 : 0} for ${entity.Name}`);
          logStatus(`  Entity ${entity.Name}: SupportsGeoCoding = ${shouldSupportGeo ? 1 : 0} (auto-detected from ${hasGeoFields ? 'LLM' : 'existing'} geo fields)`);
+         // Queue for late-phase view regeneration — the view was already generated
+         // before this flag was set, so it needs to be regenerated with the geo JOIN
+         ManageMetadataBase.AddEntityRequiringViewRegen(entity.Name);
       }
    }
 
