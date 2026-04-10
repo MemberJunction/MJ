@@ -11,7 +11,7 @@
  * @since 2.76.0
  */
 
-import { RegisterClass, SafeExpressionEvaluator } from '@memberjunction/global';
+import { RegisterClass, SafeExpressionEvaluator, UUIDsEqual } from '@memberjunction/global';
 import { BaseAgentType } from './base-agent-type';
 import { AIPromptRunResult, BaseAgentNextStep, AIPromptParams, AgentPayloadChangeRequest, AgentAction, ExecuteAgentParams, AgentConfiguration, ForEachOperation, WhileOperation } from '@memberjunction/ai-core-plus';
 import { LogError, LogStatus, LogStatusEx, IsVerboseLoggingEnabled } from '@memberjunction/core';
@@ -621,7 +621,7 @@ export class FlowAgentType extends BaseAgentType {
     ): Promise<BaseAgentNextStep<P>> {
         // Check if this step should be skipped
         const flowParams = params.agentTypeParams as FlowAgentExecuteParams | undefined;
-        if (flowParams?.skipSteps && flowParams.skipSteps.some(s => s.ID === node.ID)) {
+        if (flowParams?.skipSteps && flowParams.skipSteps.some(s => UUIDsEqual(s.ID, node.ID))) {
             LogStatus(`Flow Agent: Skipping step '${node.Name}' (via agentTypeParams.skipSteps)`);
 
             // Update flow state to mark this as current step (for path evaluation)
@@ -787,17 +787,17 @@ export class FlowAgentType extends BaseAgentType {
      * @private
      */
     private async getActionName(actionId: string): Promise<string | null> {
-        const action = ActionEngineServer.Instance.Actions.find(a => a.ID === actionId);
+        const action = ActionEngineServer.Instance.Actions.find(a => UUIDsEqual(a.ID, actionId));
         return action?.Name || null;
     }
-    
+
     /**
      * Gets agent name by ID
-     * 
+     *
      * @private
      */
     private async getAgentName(agentId: string): Promise<string | null> {
-        const agent = AIEngine.Instance.Agents.find(a => a.ID === agentId);
+        const agent = AIEngine.Instance.Agents.find(a => UUIDsEqual(a.ID, agentId));
         return agent?.Name || null;
     }
     
@@ -1130,7 +1130,7 @@ export class FlowAgentType extends BaseAgentType {
         if (flowParams?.startAtStep) {
             // Validate the step belongs to this agent
             const agentSteps = AIEngine.Instance.GetAgentSteps(flowState.agentId);
-            const validStep = agentSteps.find(s => s.ID === flowParams.startAtStep!.ID);
+            const validStep = agentSteps.find(s => UUIDsEqual(s.ID, flowParams.startAtStep!.ID));
 
             if (!validStep) {
                 return this.createNextStep('Failed', {
@@ -1331,7 +1331,7 @@ export class FlowAgentType extends BaseAgentType {
             const promptId = flowDecision.flowPromptStepId;
             
             // Get the specific prompt from AIEngine (avoids database hit)
-            const promptEntity = AIEngine.Instance.Prompts.find(p => p.ID === promptId);
+            const promptEntity = AIEngine.Instance.Prompts.find(p => UUIDsEqual(p.ID, promptId));
             if (promptEntity) {
                 return promptEntity;
             } else {
@@ -1380,7 +1380,7 @@ export class FlowAgentType extends BaseAgentType {
 
         // Add action or subAgent based on LoopBodyType (using cached engine data - no await needed)
         if (node.LoopBodyType === 'Action') {
-            const action = AIEngine.Instance.Actions.find(a => a.ID === node.ActionID);
+            const action = AIEngine.Instance.Actions.find(a => UUIDsEqual(a.ID, node.ActionID));
             if (!action) {
                 return this.createNextStep('Failed', {
                     errorMessage: `Action not found for loop body: ${node.ActionID}`,
@@ -1395,7 +1395,7 @@ export class FlowAgentType extends BaseAgentType {
                 outputMapping: node.ActionOutputMapping || undefined
             };
         } else if (node.LoopBodyType === 'Sub-Agent') {
-            const subAgent = AIEngine.Instance.Agents.find(a => a.ID === node.SubAgentID);
+            const subAgent = AIEngine.Instance.Agents.find(a => UUIDsEqual(a.ID, node.SubAgentID));
             if (!subAgent) {
                 return this.createNextStep('Failed', {
                     errorMessage: `Sub-Agent not found for loop body: ${node.SubAgentID}`,
@@ -1464,7 +1464,7 @@ export class FlowAgentType extends BaseAgentType {
 
         // Add action or subAgent based on LoopBodyType
         if (node.LoopBodyType === 'Action') {
-            const action = AIEngine.Instance.Actions.find(a => a.ID === node.ActionID);
+            const action = AIEngine.Instance.Actions.find(a => UUIDsEqual(a.ID, node.ActionID));
             if (!action) {
                 return this.createNextStep('Failed', {
                     errorMessage: `Action not found for loop body: ${node.ActionID}`,
@@ -1479,7 +1479,7 @@ export class FlowAgentType extends BaseAgentType {
                 outputMapping: node.ActionOutputMapping || undefined
             };
         } else if (node.LoopBodyType === 'Sub-Agent') {
-            const subAgent = AIEngine.Instance.Agents.find(a => a.ID === node.SubAgentID);
+            const subAgent = AIEngine.Instance.Agents.find(a => UUIDsEqual(a.ID, node.SubAgentID));
             if (!subAgent) {
                 return this.createNextStep('Failed', {
                     errorMessage: `Sub-Agent not found for loop body: ${node.SubAgentID}`,

@@ -108,10 +108,10 @@
          RELATED ENTITY PANELS
          ======================================== -->
 
-    <!-- MJ: Conversation Artifact Permissions Section -->
+    <!-- Conversation Artifact Permissions Section -->
     <mj-collapsible-panel
         SectionKey="mJConversationArtifactPermissions"
-        SectionName="MJ: Conversation Artifact Permissions"
+        SectionName="Conversation Artifact Permissions"
         Icon="fa fa-lock"
         Variant="related-entity"
         [Form]="this"
@@ -133,10 +133,10 @@
         }
     </mj-collapsible-panel>
 
-    <!-- MJ: Conversation Artifact Versions Section -->
+    <!-- Conversation Artifact Versions Section -->
     <mj-collapsible-panel
         SectionKey="mJConversationArtifactVersions"
-        SectionName="MJ: Conversation Artifact Versions"
+        SectionName="Conversation Artifact Versions"
         Icon="fa fa-comment-dots"
         Variant="related-entity"
         [Form]="this"
@@ -160,23 +160,23 @@
 
     <!-- Conversation Details Section -->
     <mj-collapsible-panel
-        SectionKey="conversationDetails"
+        SectionKey="mJConversationDetails"
         SectionName="Conversation Details"
         Icon="fa fa-comments"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('conversationDetails')"
+        [BadgeCount]="GetSectionRowCount('mJConversationDetails')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Conversation Details','ArtifactID')"
                 [NewRecordValues]="NewRecordValues('MJ: Conversation Details')"
-                [AllowLoad]="IsSectionExpanded('conversationDetails')"
+                [AllowLoad]="IsSectionExpanded('mJConversationDetails')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('conversationDetails', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJConversationDetails', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

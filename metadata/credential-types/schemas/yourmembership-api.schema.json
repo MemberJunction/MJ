@@ -1,0 +1,28 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "clientId": {
+      "type": "integer",
+      "title": "Client ID",
+      "description": "YourMembership site Client ID (numeric identifier for your YM instance)",
+      "isSecret": false,
+      "order": 0
+    },
+    "apiKey": {
+      "type": "string",
+      "title": "API Key (License Key)",
+      "description": "YourMembership API license key, used as the UserName for session authentication",
+      "isSecret": true,
+      "order": 1
+    },
+    "apiPassword": {
+      "type": "string",
+      "title": "API Password",
+      "description": "YourMembership API password, used as the Password for session authentication",
+      "isSecret": true,
+      "order": 2
+    }
+  },
+  "required": ["clientId", "apiKey", "apiPassword"]
+}

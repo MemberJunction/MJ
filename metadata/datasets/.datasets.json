@@ -1,0 +1,544 @@
+[
+  {
+    "fields": {
+      "Name": "Communication_Metadata",
+      "Description": "Metadata cached for the Communication Framework"
+    },
+    "relatedEntities": {
+      "MJ: Dataset Items": [
+        {
+          "fields": {
+            "Code": "BaseMessageTypes",
+            "DatasetID": "@parent:ID",
+            "Sequence": 1,
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: Communication Base Message Types",
+            "DateFieldToCheck": "__mj_UpdatedAt"
+          },
+          "primaryKey": {
+            "ID": "A0B6433E-F36B-1410-867F-007B559E242F"
+          }
+        },
+        {
+          "fields": {
+            "Code": "Providers",
+            "DatasetID": "@parent:ID",
+            "Sequence": 2,
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: Communication Providers",
+            "DateFieldToCheck": "__mj_UpdatedAt"
+          },
+          "primaryKey": {
+            "ID": "A3B6433E-F36B-1410-867F-007B559E242F"
+          }
+        },
+        {
+          "fields": {
+            "Code": "ProviderMessageTypes",
+            "DatasetID": "@parent:ID",
+            "Sequence": 3,
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: Communication Provider Message Types",
+            "DateFieldToCheck": "__mj_UpdatedAt"
+          },
+          "primaryKey": {
+            "ID": "A6B6433E-F36B-1410-867F-007B559E242F"
+          }
+        },
+        {
+          "fields": {
+            "Code": "EntityCommunicationMessageTypes",
+            "DatasetID": "@parent:ID",
+            "Sequence": 4,
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: Entity Communication Message Types",
+            "DateFieldToCheck": "__mj_UpdatedAt"
+          },
+          "primaryKey": {
+            "ID": "A9B6433E-F36B-1410-867F-007B559E242F"
+          }
+        },
+        {
+          "fields": {
+            "Code": "EntityCommunicationFields",
+            "DatasetID": "@parent:ID",
+            "Sequence": 5,
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: Entity Communication Fields",
+            "DateFieldToCheck": "__mj_UpdatedAt"
+          },
+          "primaryKey": {
+            "ID": "ACB6433E-F36B-1410-867F-007B559E242F"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "E037040B-758B-4E11-820A-D501422A4C8E"
+    }
+  },
+  {
+    "fields": {
+      "Name": "MJ_Metadata",
+      "Description": "Core Metadata for MemberJunction"
+    },
+    "relatedEntities": {
+      "MJ: Dataset Items": [
+        {
+          "fields": {
+            "Code": "Applications",
+            "DatasetID": "@parent:ID",
+            "Sequence": 1,
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: Applications",
+            "DateFieldToCheck": "__mj_UpdatedAt"
+          },
+          "primaryKey": {
+            "ID": "830BA2FC-38DC-4B04-8A59-1AF39A09BF38"
+          }
+        },
+        {
+          "fields": {
+            "Code": "ApplicationEntities",
+            "DatasetID": "@parent:ID",
+            "Sequence": 2,
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: Application Entities",
+            "DateFieldToCheck": "__mj_UpdatedAt"
+          },
+          "primaryKey": {
+            "ID": "975DFA58-5BA3-4A63-9BCB-6A008B8CC7FD"
+          }
+        },
+        {
+          "fields": {
+            "Code": "ApplicationSettings",
+            "DatasetID": "@parent:ID",
+            "Sequence": 3,
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: Application Settings",
+            "DateFieldToCheck": "__mj_UpdatedAt"
+          },
+          "primaryKey": {
+            "ID": "A660F547-5EFE-43BB-AD27-47B26BFC0EED"
+          }
+        },
+        {
+          "fields": {
+            "Code": "Authorizations",
+            "DatasetID": "@parent:ID",
+            "Sequence": 4,
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: Authorizations",
+            "DateFieldToCheck": "__mj_UpdatedAt"
+          },
+          "primaryKey": {
+            "ID": "A55D25D3-2844-4BF9-AAAE-695DF02700D0"
+          }
+        },
+        {
+          "fields": {
+            "Code": "EntityDocumentTypes",
+            "DatasetID": "@parent:ID",
+            "Sequence": 6,
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: Entity Document Types",
+            "DateFieldToCheck": "__mj_UpdatedAt"
+          },
+          "primaryKey": {
+            "ID": "3E4FD103-F4D5-4456-9C92-051853064EC5"
+          }
+        },
+        {
+          "fields": {
+            "Code": "Entities",
+            "DatasetID": "@parent:ID",
+            "Sequence": 7,
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: Entities",
+            "DateFieldToCheck": "__mj_UpdatedAt"
+          },
+          "primaryKey": {
+            "ID": "C6CC3098-3EB0-4046-B547-C61A9BDCFF5F"
+          }
+        },
+        {
+          "fields": {
+            "Code": "EntityFields",
+            "DatasetID": "@parent:ID",
+            "Sequence": 8,
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: Entity Fields",
+            "DateFieldToCheck": "__mj_UpdatedAt"
+          },
+          "primaryKey": {
+            "ID": "125BB669-3119-4E00-9D60-4C4DAE2CEA08"
+          }
+        },
+        {
+          "fields": {
+            "Code": "EntityPermissions",
+            "DatasetID": "@parent:ID",
+            "Sequence": 9,
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: Entity Permissions",
+            "DateFieldToCheck": "__mj_UpdatedAt"
+          },
+          "primaryKey": {
+            "ID": "557EED35-E58B-4266-98D6-83B81A203DF4"
+          }
+        },
+        {
+          "fields": {
+            "Code": "EntityRelationships",
+            "DatasetID": "@parent:ID",
+            "Sequence": 10,
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: Entity Relationships",
+            "DateFieldToCheck": "__mj_UpdatedAt"
+          },
+          "primaryKey": {
+            "ID": "00BCCC05-BE51-4DF3-8840-85FC8A26EE5D"
+          }
+        },
+        {
+          "fields": {
+            "Code": "EntitySettings",
+            "DatasetID": "@parent:ID",
+            "Sequence": 12,
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: Entity Settings",
+            "DateFieldToCheck": "__mj_UpdatedAt"
+          },
+          "primaryKey": {
+            "ID": "C0D19A46-9EE4-4D92-884C-E375E26B0240"
+          }
+        },
+        {
+          "fields": {
+            "Code": "Roles",
+            "DatasetID": "@parent:ID",
+            "Sequence": 13,
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: Roles",
+            "DateFieldToCheck": "__mj_UpdatedAt"
+          },
+          "primaryKey": {
+            "ID": "DFD5B1AB-562F-4C11-A09F-B0C7758CE9B5"
+          }
+        },
+        {
+          "fields": {
+            "Code": "AuditLogTypes",
+            "DatasetID": "@parent:ID",
+            "Sequence": 14,
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: Audit Log Types",
+            "DateFieldToCheck": "__mj_UpdatedAt"
+          },
+          "primaryKey": {
+            "ID": "EACF81F4-4B89-4D7A-8E1A-EC63A26DCB00"
+          }
+        },
+        {
+          "fields": {
+            "Code": "RowLevelSecurityFilters",
+            "DatasetID": "@parent:ID",
+            "Sequence": 15,
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: Row Level Security Filters",
+            "DateFieldToCheck": "__mj_UpdatedAt"
+          },
+          "primaryKey": {
+            "ID": "96C993D1-D627-4F44-B2A1-EFDD29652640"
+          }
+        },
+        {
+          "fields": {
+            "Code": "EntityFieldValues",
+            "DatasetID": "@parent:ID",
+            "Sequence": 16,
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: Entity Field Values",
+            "DateFieldToCheck": "__mj_UpdatedAt"
+          },
+          "primaryKey": {
+            "ID": "EDBD8A42-B2AE-4BFE-A482-498956385F3D"
+          }
+        },
+        {
+          "fields": {
+            "Code": "Queries",
+            "DatasetID": "@parent:ID",
+            "Sequence": 17,
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: Queries",
+            "DateFieldToCheck": "__mj_UpdatedAt"
+          },
+          "primaryKey": {
+            "ID": "B1850EE9-5864-489F-A698-C2F5EF31248E"
+          }
+        },
+        {
+          "fields": {
+            "Code": "QueryCategories",
+            "DatasetID": "@parent:ID",
+            "Sequence": 18,
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: Query Categories",
+            "DateFieldToCheck": "__mj_UpdatedAt"
+          },
+          "primaryKey": {
+            "ID": "C4A82957-A8E7-49C8-94DD-03220455D778"
+          }
+        },
+        {
+          "fields": {
+            "Code": "QueryPermissions",
+            "DatasetID": "@parent:ID",
+            "Sequence": 19,
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: Query Permissions",
+            "DateFieldToCheck": "__mj_UpdatedAt"
+          },
+          "primaryKey": {
+            "ID": "699A0DAF-5F68-4F6D-AA67-36C36A77430F"
+          }
+        },
+        {
+          "fields": {
+            "Code": "QueryFields",
+            "DatasetID": "@parent:ID",
+            "Sequence": 20,
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: Query Fields",
+            "DateFieldToCheck": "__mj_UpdatedAt"
+          },
+          "primaryKey": {
+            "ID": "BC846D01-43CA-4FBE-BDCA-9962B843C0F3"
+          }
+        },
+        {
+          "fields": {
+            "Code": "Libraries",
+            "DatasetID": "@parent:ID",
+            "Sequence": 21,
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: Libraries",
+            "DateFieldToCheck": "__mj_UpdatedAt"
+          },
+          "primaryKey": {
+            "ID": "EDEE9474-ABF3-4E36-933E-5B6846DB875E"
+          }
+        },
+        {
+          "fields": {
+            "Code": "ExplorerNavigationItems",
+            "DatasetID": "@parent:ID",
+            "Sequence": 22,
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: Explorer Navigation Items",
+            "DateFieldToCheck": "__mj_UpdatedAt"
+          },
+          "primaryKey": {
+            "ID": "AABFEC9E-E93F-EF11-86D4-0022481D1B23"
+          }
+        },
+        {
+          "fields": {
+            "Code": "Dashboards",
+            "DatasetID": "@parent:ID",
+            "Sequence": 23,
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: Dashboards",
+            "DateFieldToCheck": "__mj_UpdatedAt"
+          },
+          "primaryKey": {
+            "ID": "74BF433E-F36B-1410-867F-007B559E242F"
+          }
+        },
+        {
+          "fields": {
+            "Code": "Dashboard_Categories",
+            "DatasetID": "@parent:ID",
+            "Sequence": 24,
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: Dashboard Categories",
+            "DateFieldToCheck": "__mj_UpdatedAt"
+          },
+          "primaryKey": {
+            "ID": "76BF433E-F36B-1410-867F-007B559E242F"
+          }
+        },
+        {
+          "fields": {
+            "Code": "QueryEntities",
+            "DatasetID": "@parent:ID",
+            "Sequence": 25,
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: Query Entities",
+            "DateFieldToCheck": "__mj_UpdatedAt"
+          },
+          "primaryKey": {
+            "ID": "E5A92B67-0A30-40DE-A710-016ED459B1DB"
+          }
+        },
+        {
+          "fields": {
+            "Code": "QueryParameters",
+            "DatasetID": "@parent:ID",
+            "Sequence": 26,
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: Query Parameters",
+            "DateFieldToCheck": "__mj_UpdatedAt"
+          },
+          "primaryKey": {
+            "ID": "57EDC5CF-6A10-4B82-9A4E-C10F3FC8992E"
+          }
+        },
+        {
+          "fields": {
+            "Code": "SQLDialects",
+            "DatasetID": "@parent:ID",
+            "Sequence": 27,
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: SQL Dialects",
+            "DateFieldToCheck": "__mj_UpdatedAt"
+          },
+          "primaryKey": {
+            "ID": "45B019E7-8C7F-4076-9FFE-66F3D6BF1638"
+          }
+        },
+        {
+          "fields": {
+            "Code": "QuerySQLs",
+            "DatasetID": "@parent:ID",
+            "Sequence": 28,
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: Query SQLs",
+            "DateFieldToCheck": "__mj_UpdatedAt"
+          },
+          "primaryKey": {
+            "ID": "846AE3C1-270D-4A2E-AF32-420B48937D9B"
+          }
+        },
+        {
+          "fields": {
+            "Code": "QueryDependencies",
+            "DatasetID": "@parent:ID",
+            "Sequence": 29,
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: Query Dependencies",
+            "DateFieldToCheck": "__mj_UpdatedAt"
+          },
+          "primaryKey": {
+            "ID": "8A8F77CA-96C7-4FB2-99F4-791658F0368A"
+          }
+        },
+        {
+          "fields": {
+            "Code": "EntityOrganicKeys",
+            "DatasetID": "@parent:ID",
+            "Sequence": 30,
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: Entity Organic Keys",
+            "DateFieldToCheck": "__mj_UpdatedAt",
+            "Description": "Organic key definitions for cross-entity matching by shared business data"
+          },
+          "primaryKey": {
+            "ID": "FDA602F1-FB81-41D3-854E-C0BB0A5A0E34"
+          },
+          "sync": {
+            "lastModified": "2026-03-22T19:49:21.832Z",
+            "checksum": "194649cfb8ddae880b5692d6b4b56ab90f81208a1d81c175579409d3a30c96b0"
+          }
+        },
+        {
+          "fields": {
+            "Code": "EntityOrganicKeyRelatedEntities",
+            "DatasetID": "@parent:ID",
+            "Sequence": 31,
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: Entity Organic Key Related Entities",
+            "DateFieldToCheck": "__mj_UpdatedAt",
+            "Description": "Related entity mappings for organic key matching"
+          },
+          "primaryKey": {
+            "ID": "8EEC4C73-929A-4120-B22E-30153B138A85"
+          },
+          "sync": {
+            "lastModified": "2026-03-22T19:49:21.847Z",
+            "checksum": "1af1d053d45c27f71bad52179986262c2557741a6d136fb00c8b0758d7d5907c"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "E4ADCCEC-6A37-EF11-86D4-000D3A4E707E"
+    }
+  },
+  {
+    "fields": {
+      "Name": "ResourceTypes",
+      "Description": "Metadata for Resource Types"
+    },
+    "relatedEntities": {
+      "MJ: Dataset Items": [
+        {
+          "fields": {
+            "Code": "ResourceTypes",
+            "DatasetID": "@parent:ID",
+            "Sequence": 1,
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: Resource Types",
+            "DateFieldToCheck": "__mj_UpdatedAt"
+          },
+          "primaryKey": {
+            "ID": "735FD146-5025-4011-8E42-DF9460799FD0"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "E5ADCCEC-6A37-EF11-86D4-000D3A4E707E"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Template_Metadata",
+      "Description": "Metadata cached for the Templates Framework"
+    },
+    "relatedEntities": {
+      "MJ: Dataset Items": [
+        {
+          "fields": {
+            "Code": "TemplateContentTypes",
+            "DatasetID": "@parent:ID",
+            "Sequence": 1,
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: Template Content Types",
+            "DateFieldToCheck": "__mj_UpdatedAt"
+          },
+          "primaryKey": {
+            "ID": "AFB6433E-F36B-1410-867F-007B559E242F"
+          }
+        },
+        {
+          "fields": {
+            "Code": "TemplateCategories",
+            "DatasetID": "@parent:ID",
+            "Sequence": 2,
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: Template Categories",
+            "DateFieldToCheck": "__mj_UpdatedAt"
+          },
+          "primaryKey": {
+            "ID": "B2B6433E-F36B-1410-867F-007B559E242F"
+          }
+        },
+        {
+          "fields": {
+            "Code": "Templates",
+            "DatasetID": "@parent:ID",
+            "Sequence": 3,
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: Templates",
+            "DateFieldToCheck": "__mj_UpdatedAt"
+          },
+          "primaryKey": {
+            "ID": "B5B6433E-F36B-1410-867F-007B559E242F"
+          }
+        },
+        {
+          "fields": {
+            "Code": "TemplateContents",
+            "DatasetID": "@parent:ID",
+            "Sequence": 4,
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: Template Contents",
+            "DateFieldToCheck": "__mj_UpdatedAt"
+          },
+          "primaryKey": {
+            "ID": "B8B6433E-F36B-1410-867F-007B559E242F"
+          }
+        },
+        {
+          "fields": {
+            "Code": "TemplateParams",
+            "DatasetID": "@parent:ID",
+            "Sequence": 5,
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: Template Params",
+            "DateFieldToCheck": "__mj_UpdatedAt"
+          },
+          "primaryKey": {
+            "ID": "BBB6433E-F36B-1410-867F-007B559E242F"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "B17BF510-E069-4C7F-AE7C-ECEFF6FEB9B2"
+    }
+  }
+]

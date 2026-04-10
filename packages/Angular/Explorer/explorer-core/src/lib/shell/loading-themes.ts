@@ -105,7 +105,7 @@ export const STANDARD_THEME: LoadingTheme = {
   staticColors: true, // Keep MJ blue the whole time
   animations: 'pulse', // Calm, professional pulse animation only
   colors: [
-    '#264FAF', // MJ Blue (only color used)
+    '', // Uses --mj-logo-color CSS variable (adapts to theme)
   ],
   messages: [
     'Loading workspace...',

@@ -1,4 +1,4 @@
-import sql from 'mssql';
+import { CodeGenConnection } from '../Database/codeGenDatabaseProvider';
 import { configInfo, mj_core_schema, SQLOutputConfig } from "../Config/config";
 import { logError, logStatus } from "./status_logging";
 import * as fs from 'fs';
@@ -88,7 +88,16 @@ export class SQLLogging {
      * @param isRecurringScript - if set to true tells the logger that the provided SQL represents a recurring script meaning it is something that is executed, generally, for all CodeGen runs. In these cases, the Config settings can result in omitting these recurring scripts from being logged because the configuration environment may have those recurring scripts already set to run after all run-specific migrations get run.
      * @returns
      */
-    public static async appendToSQLLogFile(contents: string, description?: string, isRecurringScript: boolean = false): Promise<void> {
+    /**
+     * Adds the provided SQL to the log file for the run
+     * @param contents - the executable SQL to log
+     * @param description - a description of what is being logged that will be emitted and wrapped in comments
+     * @param isRecurringScript - if set to true tells the logger that the provided SQL represents a recurring script meaning it is something that is executed, generally, for all CodeGen runs. In these cases, the Config settings can result in omitting these recurring scripts from being logged because the configuration environment may have those recurring scripts already set to run after all run-specific migrations get run.
+     * @param includeBatchSeparator - if true, appends a batch separator (e.g., GO for SQL Server) after the SQL. Use this when the next statement in the migration needs to reference schema changes made by this statement (e.g., ALTER TABLE ADD column followed by UPDATE referencing that column). Defaults to false.
+     * @param batchSeparator - the batch separator string to use (e.g., 'GO' for SQL Server). Only used when includeBatchSeparator is true.
+     * @returns
+     */
+    public static async appendToSQLLogFile(contents: string, description?: string, isRecurringScript: boolean = false, includeBatchSeparator: boolean = false, batchSeparator: string = 'GO'): Promise<void> {
         try{
             if (isRecurringScript && SQLLogging.OmitRecurringScriptsFromLog) {
                 return; // is a recurring script and the flag to omit recurring scripts is set
@@ -102,7 +111,9 @@ export class SQLLogging {
                 contents = `${comment}${contents}`;
             }
 
-            contents = `${contents}\n\n`;
+            contents = includeBatchSeparator
+                ? `${contents}\n${batchSeparator}\n\n`
+                : `${contents}\n\n`;
 
             fs.appendFileSync(SQLLogging.SQLLoggingFilePath, contents);
         }
@@ -121,9 +132,9 @@ export class SQLLogging {
     * @param isRecurringScript - if set to true tells the logger that the provided SQL represents a recurring script meaning it is something that is executed, generally, for all CodeGen runs. In these cases, the Config settings can result in omitting these recurring scripts from being logged because the configuration environment may have those recurring scripts already set to run after all run-specific migrations get run.
     * @returns - The result of the query execution.
     */
-    public static async LogSQLAndExecute(ds: sql.ConnectionPool, query: string, description?: string, isRecurringScript: boolean = false): Promise<any> {
-        SQLLogging.appendToSQLLogFile(query, description, isRecurringScript);
-        const result = await ds.request().query(query);
+    public static async LogSQLAndExecute(ds: CodeGenConnection, query: string, description?: string, isRecurringScript: boolean = false, includeBatchSeparator: boolean = false, batchSeparator: string = 'GO'): Promise<any> {
+        SQLLogging.appendToSQLLogFile(query, description, isRecurringScript, includeBatchSeparator, batchSeparator);
+        const result = await ds.query(query);
         return result.recordset;
     }
 

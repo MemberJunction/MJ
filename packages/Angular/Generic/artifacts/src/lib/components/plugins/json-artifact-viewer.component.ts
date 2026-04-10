@@ -74,17 +74,18 @@ import { MJArtifactVersionAttributeEntity } from '@memberjunction/core-entities'
       justify-content: flex-end;
       gap: 8px;
       padding: 8px;
-      background: #f8f9fa;
-      border-bottom: 1px solid #dee2e6;
+      background: var(--mj-bg-surface-sunken);
+      border-bottom: 1px solid var(--mj-border-default);
     }
 
     .btn-icon {
       padding: 6px 12px;
-      background: white;
-      border: 1px solid #ccc;
+      background: var(--mj-bg-surface);
+      border: 1px solid var(--mj-border-strong);
       border-radius: 4px;
       cursor: pointer;
       font-size: 12px;
+      color: var(--mj-text-secondary);
       display: flex;
       align-items: center;
       gap: 6px;
@@ -92,8 +93,8 @@ import { MJArtifactVersionAttributeEntity } from '@memberjunction/core-entities'
     }
 
     .btn-icon:hover {
-      background: #e9ecef;
-      border-color: #999;
+      background: var(--mj-bg-surface-sunken);
+      border-color: var(--mj-text-disabled);
     }
 
     .display-content {
@@ -107,7 +108,7 @@ import { MJArtifactVersionAttributeEntity } from '@memberjunction/core-entities'
     .html-iframe {
       width: 100%;
       border: none;
-      background: white;
+      background: var(--mj-bg-surface);
       display: block;
     }
 
@@ -116,7 +117,7 @@ import { MJArtifactVersionAttributeEntity } from '@memberjunction/core-entities'
       padding: 20px;
       overflow: auto;
       min-height: 0;
-      background: white;
+      background: var(--mj-bg-surface);
     }
 
     .json-editor-container {

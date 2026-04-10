@@ -32,7 +32,7 @@ export class DetachTagsAction extends LearnWorldsBaseAction {
 
     this.validatePathSegment(params.UserID, 'UserID');
 
-    const response = await this.makeLearnWorldsRequest<LWApiTagResponse>(`users/${params.UserID}/tags`, 'DELETE', { tags: params.Tags }, contextUser);
+    const response = await this.makeLearnWorldsRequest<LWApiTagResponse>(`users/${params.UserID}/tags`, 'PUT', { tags: params.Tags, action: 'detach' }, contextUser);
 
     return {
       Success: true,

@@ -21,7 +21,8 @@ import { DataExplorerFilter } from './models/explorer-state.interface';
                 [entityFilter]="entityFilter"
                 [contextName]="contextName"
                 [contextIcon]="contextIcon"
-                (OpenEntityRecord)="onOpenEntityRecord($event)">
+                (OpenEntityRecord)="onOpenEntityRecord($event)"
+                (DisplayNameChanged)="onDisplayNameChanged($event)">
             </mj-data-explorer-dashboard>
         </div>
     `,
@@ -68,8 +69,13 @@ export class DataExplorerResourceComponent extends BaseResourceComponent impleme
     // ========================================
 
     override set Data(value: ResourceData) {
+        const previousConfig = JSON.stringify(super.Data?.Configuration || {});
         super.Data = value;
-        if (!this._dataLoaded) {
+
+        const newConfig = JSON.stringify(value?.Configuration || {});
+
+        // Load on first set, or when the configuration has changed
+        if (!this._dataLoaded || previousConfig !== newConfig) {
             this._dataLoaded = true;
             this.loadConfiguration();
         }
@@ -152,5 +158,9 @@ export class DataExplorerResourceComponent extends BaseResourceComponent impleme
         if (event && event.EntityName && event.RecordPKey) {
             this.navigationService.OpenEntityRecord(event.EntityName, event.RecordPKey);
         }
+    }
+
+    public onDisplayNameChanged(name: string): void {
+        this.NotifyDisplayNameChanged(name);
     }
 }

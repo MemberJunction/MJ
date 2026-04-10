@@ -70,7 +70,7 @@ export class APIKeyListComponent implements OnInit, OnChanges {
     // Default UI config for categories without explicit configuration
     private readonly defaultUIConfig = {
         icon: 'fa-solid fa-ellipsis',
-        color: '#6b7280'
+        color: 'var(--mj-text-muted)'
     };
 
     // Dynamic category UI config built from root scopes

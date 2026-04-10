@@ -18,6 +18,7 @@ import jwt from 'jsonwebtoken';
 import type { JwtPayload, JwtHeader, SigningKeyCallback } from 'jsonwebtoken';
 import jwksClient from 'jwks-rsa';
 import type { UserInfo } from '@memberjunction/core';
+import { AuthProviderFactory } from '@memberjunction/auth-providers';
 import type { OAuthValidationResult, OAuthErrorCode, ProxyJWTClaims } from './types.js';
 
 /**
@@ -119,6 +120,8 @@ export async function validateProxyToken(token: string): Promise<OAuthValidation
 const azureAdV1JwksClients: Map<string, jwksClient.JwksClient> = new Map();
 
 // Type definitions for dynamically imported MJServer auth functions
+// Note: These must remain dynamic imports — @memberjunction/server reads process.env at module load
+// time (for DEFAULT_SERVER_CONFIG), and ESM hoists static imports before dotenv can run. See config.ts.
 type GetSigningKeysFn = (issuer: string) => (header: JwtHeader, cb: SigningKeyCallback) => void;
 type ExtractUserInfoFn = (payload: JwtPayload) => {
   email?: string;
@@ -135,25 +138,18 @@ type VerifyUserRecordFn = (
   dataSource?: unknown,
   attemptCacheUpdateIfNeeded?: boolean
 ) => Promise<UserInfo | undefined>;
-interface AuthProviderFactoryType {
-  getInstance(): {
-    getByIssuer(issuer: string): { issuer: string; audience: string } | undefined;
-    hasProviders(): boolean;
-    getAllProviders(): Array<{ name: string; issuer: string; audience: string }>;
-  };
-}
 
 // Dynamic imports to avoid initialization order issues with dotenv
 let getSigningKeys: GetSigningKeysFn;
 let extractUserInfoFromPayload: ExtractUserInfoFn;
 let verifyUserRecord: VerifyUserRecordFn;
-let AuthProviderFactory: AuthProviderFactoryType;
 
 let mjServerImported = false;
 
 /**
  * Ensures MJServer auth functions are imported.
- * Uses dynamic import to ensure proper initialization order.
+ * Uses dynamic import to ensure proper initialization order (dotenv must run before
+ * @memberjunction/server evaluates its module-level process.env reads).
  */
 async function ensureMJServerImported(): Promise<void> {
   if (mjServerImported) return;
@@ -162,7 +158,6 @@ async function ensureMJServerImported(): Promise<void> {
   getSigningKeys = authModule.getSigningKeys as GetSigningKeysFn;
   extractUserInfoFromPayload = authModule.extractUserInfoFromPayload as ExtractUserInfoFn;
   verifyUserRecord = authModule.verifyUserRecord as VerifyUserRecordFn;
-  AuthProviderFactory = authModule.AuthProviderFactory as unknown as AuthProviderFactoryType;
   mjServerImported = true;
 }
 
@@ -347,20 +342,22 @@ export async function validateBearerToken(token: string): Promise<OAuthValidatio
   // 3. Verify issuer matches a configured provider and get audience
   // For Azure AD, try both v1 and v2 issuer formats since the token might
   // use a different format than what the provider is configured with
-  const factory = AuthProviderFactory.getInstance();
+  const factory = AuthProviderFactory.Instance;
   const issuerVariants = getAzureAdIssuerVariants(issuer);
-  let provider: { issuer: string; audience: string } | undefined;
+  let allProviders: Array<{ issuer: string; audience: string }> = [];
 
   for (const variant of issuerVariants) {
-    provider = factory.getByIssuer(variant);
-    if (provider) {
+    allProviders = factory.getAllByIssuer(variant);
+    if (allProviders.length > 0) {
       break;
     }
   }
 
-  if (!provider) {
+  if (allProviders.length === 0) {
     return createError('unknown_issuer', `Unknown token issuer: ${issuer}`);
   }
+
+  const provider = allProviders[0];
 
   // Check if we matched via a variant (Azure AD v1/v2 normalization)
   const matchedViaVariant = issuer !== provider.issuer;
@@ -369,9 +366,10 @@ export async function validateBearerToken(token: string): Promise<OAuthValidatio
   const isV1Token = isAzureAdV1Issuer(issuer);
   const v1TenantId = isV1Token ? extractAzureAdTenantId(issuer) : null;
 
-  // Use provider's audience - same as MJExplorer
-  // For Azure AD: this is WEB_CLIENT_ID from environment
-  const expectedAudience = provider.audience;
+  // Aggregate unique audiences from all providers matching this issuer.
+  // jwt.verify() natively accepts string | string[].
+  const audiences = [...new Set(allProviders.map(p => p.audience))];
+  const expectedAudience: string | string[] = audiences.length === 1 ? audiences[0] : audiences;
 
   // 4. Verify signature using JWKS and validate audience
   // For Azure AD v1 tokens: use v1 JWKS endpoint directly
@@ -429,14 +427,21 @@ export async function validateBearerToken(token: string): Promise<OAuthValidatio
 async function verifyTokenSignature(
   token: string,
   providerIssuer: string,
-  audience: string,
+  audience: string | string[],
   skipIssuerValidation: boolean = false
 ): Promise<JwtPayload> {
   return new Promise((resolve, reject) => {
     const verifyOptions: jwt.VerifyOptions = {
-      audience,
       clockTolerance: 30, // Allow 30 seconds of clock skew
     };
+
+    // jwt.verify() natively accepts string | string[] for audience.
+    // VerifyOptions uses a non-empty tuple type, so we assign conditionally.
+    if (Array.isArray(audience)) {
+      verifyOptions.audience = audience as [string, ...string[]];
+    } else {
+      verifyOptions.audience = audience;
+    }
 
     // Only validate issuer if we haven't already done variant matching
     // When matching via variant, the token's issuer differs from provider's issuer
@@ -470,14 +475,19 @@ async function verifyTokenSignature(
 async function verifyTokenSignatureWithKeys(
   token: string,
   getKey: (header: JwtHeader, cb: SigningKeyCallback) => void,
-  audience: string
+  audience: string | string[]
 ): Promise<JwtPayload> {
   return new Promise((resolve, reject) => {
     const verifyOptions: jwt.VerifyOptions = {
-      audience,
       clockTolerance: 30, // Allow 30 seconds of clock skew
       // Don't validate issuer - we've already matched it
     };
+
+    if (Array.isArray(audience)) {
+      verifyOptions.audience = audience as [string, ...string[]];
+    } else {
+      verifyOptions.audience = audience;
+    }
 
     jwt.verify(
       token,
@@ -580,5 +590,5 @@ export async function resolveOAuthUser(
  */
 export async function hasAuthProviders(): Promise<boolean> {
   await ensureMJServerImported();
-  return AuthProviderFactory.getInstance().hasProviders();
+  return AuthProviderFactory.Instance.hasProviders();
 }

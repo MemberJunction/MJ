@@ -5,6 +5,7 @@ import { RunView } from '@memberjunction/core';
 import { MJAIAgentRunEntity, MJAIAgentRunStepEntity, MJActionExecutionLogEntity, MJAIPromptRunEntity } from '@memberjunction/core-entities';
 import { AIAgentRunDataHelper } from './ai-agent-run-data.service';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import { UUIDsEqual } from '@memberjunction/global';
 
 export interface TimelineItem {
   id: string;
@@ -53,7 +54,7 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
   
   timelineItems$!: Observable<TimelineItem[]>;
   
-  loading = false;
+  loading = true;
   error: string | null = null;
   selectedItem: TimelineItem | null = null;
   
@@ -71,14 +72,23 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
     this.actionLogs$ = this.dataHelper.actionLogs$;
     this.promptRuns$ = this.dataHelper.promptRuns$;
     
-    // Combine all data sources to build timeline
+    // Combine all data sources to build timeline.
+    // Skip emissions where steps are empty but data is still loading —
+    // the BehaviorSubjects initialise with [] so combineLatest fires
+    // immediately with an empty array before the real data arrives.
     this.timelineItems$ = combineLatest([
       this.steps$,
       this.subRuns$,
       this.actionLogs$,
-      this.promptRuns$
+      this.promptRuns$,
+      this.dataHelper.loading$
     ]).pipe(
-      map(([steps, subRuns, actionLogs, promptRuns]) => 
+      filter(([steps, _subRuns, _actionLogs, _promptRuns, isLoading]) => {
+        // While loading, suppress the empty-array emission so the
+        // template keeps showing the mj-loading indicator.
+        return !(isLoading && steps.length === 0);
+      }),
+      map(([steps, subRuns, actionLogs, promptRuns]) =>
         this.buildTimelineItems(steps, subRuns, actionLogs, promptRuns)
       ),
       shareReplay(1)
@@ -88,10 +98,12 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
     // Subscribe to loading state from helper
     this.dataHelper.loading$.pipe(takeUntil(this.destroy$)).subscribe(loading => {
       this.loading = loading;
+      this.cdr.markForCheck();
     });
-    
+
     this.dataHelper.error$.pipe(takeUntil(this.destroy$)).subscribe(error => {
       this.error = error;
+      this.cdr.markForCheck();
     });
     
     // Auto-refresh logic
@@ -226,7 +238,7 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
 
     // For prompt steps, try to find the associated prompt run to get model/vendor info
     if (step.StepType === 'Prompt' && step.TargetLogID && promptRuns) {
-      const promptRun = promptRuns.find(pr => pr.ID === step.TargetLogID);
+      const promptRun = promptRuns.find(pr => UUIDsEqual(pr.ID, step.TargetLogID));
       if (promptRun) {
         subtitle = `Model: ${promptRun.Model || 'Unknown'} | Vendor: ${promptRun.Vendor || 'Unknown'}`;
       }
@@ -258,7 +270,7 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
   private getStepIconInfo(step: MJAIAgentRunStepEntity): { icon: string; logoUrl?: string } {
     // For sub-agents, try to get agent-specific icon/logo
     if (step.StepType === 'Sub-Agent' && step.TargetID) {
-      const agent = AIEngineBase.Instance.Agents.find(a => a.ID === step.TargetID);
+      const agent = AIEngineBase.Instance.Agents.find(a => UUIDsEqual(a.ID, step.TargetID));
       if (agent) {
         // Prefer LogoURL - if present, use it with robot as fallback icon (icon won't be shown when logoUrl exists)
         if (agent.LogoURL) {

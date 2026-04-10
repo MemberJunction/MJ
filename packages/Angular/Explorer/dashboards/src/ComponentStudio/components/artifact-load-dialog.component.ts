@@ -1,5 +1,4 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
-import { DialogRef } from '@progress/kendo-angular-dialog';
+import { Component, OnInit, OnDestroy, Input, Output, EventEmitter } from '@angular/core';
 import { RunView, Metadata } from '@memberjunction/core';
 import {
   MJArtifactEntity,
@@ -9,6 +8,7 @@ import {
 } from '@memberjunction/core-entities';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 import { SkipAPIAnalysisCompleteResponse } from '@memberjunction/skip-types';
+import { UUIDsEqual } from '@memberjunction/global';
 import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 
@@ -27,6 +27,9 @@ export interface ArtifactLoadResult {
   styleUrl: './artifact-load-dialog.component.css'
 })
 export class ArtifactLoadDialogComponent implements OnInit, OnDestroy {
+  @Input() Visible = false;
+  @Output() Close = new EventEmitter<ArtifactLoadResult | undefined>();
+
   // Tab state
   activeTab = 0; // 0 = Artifacts, 1 = Collections
 
@@ -66,8 +69,6 @@ export class ArtifactLoadDialogComponent implements OnInit, OnDestroy {
   private metadata = new Metadata();
   private destroy$ = new Subject<void>();
   private searchSubject = new Subject<string>();
-
-  constructor(public dialog: DialogRef) {}
 
   async ngOnInit() {
     // Setup search debouncing
@@ -335,7 +336,7 @@ export class ArtifactLoadDialogComponent implements OnInit, OnDestroy {
   }
 
   cancel() {
-    this.dialog.close(undefined);
+    this.Close.emit(undefined);
   }
 
   load() {
@@ -349,7 +350,7 @@ export class ArtifactLoadDialogComponent implements OnInit, OnDestroy {
       artifactName: this.selectedArtifact!.Name
     };
 
-    this.dialog.close(result);
+    this.Close.emit(result);
   }
 
   onTabSelect(index: number) {
@@ -366,5 +367,20 @@ export class ArtifactLoadDialogComponent implements OnInit, OnDestroy {
 
   getPreviewJSON(): string {
     return this.previewSpec ? JSON.stringify(this.previewSpec, null, 2) : '';
+  }
+
+  /** Case-insensitive UUID check whether an artifact is the currently selected artifact. */
+  IsArtifactSelected(artifact: MJArtifactEntity): boolean {
+    return UUIDsEqual(this.selectedArtifact?.ID, artifact.ID);
+  }
+
+  /** Case-insensitive UUID check whether a collection is the currently selected collection. */
+  IsCollectionSelected(collection: MJCollectionEntity): boolean {
+    return UUIDsEqual(this.selectedCollection?.ID, collection.ID);
+  }
+
+  /** Case-insensitive UUID check whether a version is the currently selected version. */
+  IsVersionSelected(version: MJArtifactVersionEntity): boolean {
+    return UUIDsEqual(this.selectedVersion?.ID, version.ID);
   }
 }

@@ -1,0 +1,94 @@
+[
+  {
+    "fields": {
+      "Name": "Database",
+      "Description": "LIKE-based search across all database entities with AllowUserSearchAPI=true using RunView + UserSearchString. Always available as it uses the standard MJ provider infrastructure with no external dependencies.",
+      "DriverClass": "EntitySearchProvider",
+      "Status": "Active",
+      "Priority": 0,
+      "SupportsPreview": true,
+      "MaxResultsOverride": null,
+      "ProviderConfig": null,
+      "CredentialID": null,
+      "DisplayName": "Database",
+      "Icon": "fa-solid fa-database",
+      "Comments": "Built-in provider. Searches database entities using field-match relevance scoring with name field boost."
+    },
+    "primaryKey": {
+      "ID": "5D3F92FE-851A-4EB9-8764-0021753D869C"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:55:53.046Z",
+      "checksum": "8bff10d9877ad2bd711e046a5289eb56ec355408228eb67870ff4799874f9fc6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Database Full-Text",
+      "Description": "Database-native full-text search using SQL Server FREETEXT or PostgreSQL tsvector. Searches all FTS-enabled entities and enriches results with tags from the knowledge graph.",
+      "DriverClass": "FullTextSearchProvider",
+      "Status": "Active",
+      "Priority": 1,
+      "SupportsPreview": true,
+      "MaxResultsOverride": null,
+      "ProviderConfig": null,
+      "CredentialID": null,
+      "DisplayName": "Full-Text Search",
+      "Icon": "fa-solid fa-magnifying-glass",
+      "Comments": "Built-in provider. Requires FTS indexes to be configured on entities via CodeGen."
+    },
+    "primaryKey": {
+      "ID": "0DD5242D-6852-4E95-9CE2-44BCD5527CC3"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:55:53.063Z",
+      "checksum": "8dd3ed57d1aae13fc86b00a80d4527b61da602ce33d74d2390b825726959bd1f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Semantic",
+      "Description": "AI-powered semantic similarity search using vector embeddings. Embeds the search query using AI models, then finds semantically similar content across all configured vector indexes. Groups indexes by embedding model and queries in parallel with an LRU embedding cache for performance.",
+      "DriverClass": "VectorSearchProvider",
+      "Status": "Active",
+      "Priority": 2,
+      "SupportsPreview": true,
+      "MaxResultsOverride": null,
+      "ProviderConfig": null,
+      "CredentialID": null,
+      "DisplayName": "Semantic Search",
+      "Icon": "fa-solid fa-brain",
+      "Comments": "Built-in provider. Requires at least one vector index to be configured. Gracefully returns empty results when no indexes exist."
+    },
+    "primaryKey": {
+      "ID": "538CFEA3-62C0-4205-996A-199759BF2E28"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:55:53.080Z",
+      "checksum": "a7fbe9bba9eb89594bab0b770989c3d0dac67689cbafb25c156c7a42ea4cee58"
+    }
+  },
+  {
+    "fields": {
+      "Name": "File Storage",
+      "Description": "Searches files across MJ File Storage accounts (Box, Google Drive, SharePoint, Dropbox) that have IncludeInGlobalSearch=true, using each provider's native search API. Results are permission-checked against FileStorageAccountPermission.",
+      "DriverClass": "StorageSearchProvider",
+      "Status": "Active",
+      "Priority": 3,
+      "SupportsPreview": true,
+      "MaxResultsOverride": null,
+      "ProviderConfig": null,
+      "CredentialID": null,
+      "DisplayName": "File Storage",
+      "Icon": "fa-solid fa-folder-open",
+      "Comments": "Built-in provider. Requires at least one storage account with IncludeInGlobalSearch=true and a provider with SupportsSearch=true."
+    },
+    "primaryKey": {
+      "ID": "A3130198-1B7E-40D4-9D0C-0DB818451AFD"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:55:53.096Z",
+      "checksum": "aea546cc28930fe957c55ea603805767e2377d35b6ba8c943e39b98c42ba03cc"
+    }
+  }
+]

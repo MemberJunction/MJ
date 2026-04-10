@@ -194,12 +194,12 @@ export interface MatrixColumnClickEvent {
       justify-content: center;
       gap: 12px;
       padding: 60px 20px;
-      color: #64748b;
+      color: var(--mj-text-muted);
     }
 
     .loading-spinner {
       font-size: 32px;
-      color: #3b82f6;
+      color: var(--mj-brand-primary);
     }
 
     /* Empty State */
@@ -210,7 +210,7 @@ export interface MatrixColumnClickEvent {
       justify-content: center;
       padding: 60px 20px;
       text-align: center;
-      color: #64748b;
+      color: var(--mj-text-muted);
     }
 
     .empty-icon {
@@ -223,7 +223,7 @@ export interface MatrixColumnClickEvent {
       margin: 0 0 8px;
       font-size: 18px;
       font-weight: 600;
-      color: #1e293b;
+      color: var(--mj-text-primary);
     }
 
     .matrix-empty p {
@@ -234,9 +234,9 @@ export interface MatrixColumnClickEvent {
     /* Matrix Wrapper */
     .matrix-wrapper {
       overflow-x: auto;
-      border: 1px solid #e2e8f0;
+      border: 1px solid var(--mj-border-default);
       border-radius: 8px;
-      background: white;
+      background: var(--mj-bg-surface);
     }
 
     /* Matrix Table */
@@ -252,23 +252,23 @@ export interface MatrixColumnClickEvent {
       position: sticky;
       left: 0;
       z-index: 10;
-      background: white;
-      border-right: 2px solid #e2e8f0;
+      background: var(--mj-bg-surface);
+      border-right: 2px solid var(--mj-border-default);
     }
 
     /* Header Row */
     .header-row {
-      background: #f8fafc;
+      background: var(--mj-bg-surface-card);
     }
 
     .test-name-header {
       padding: 12px 16px;
       text-align: left;
       font-weight: 600;
-      color: #475569;
+      color: var(--mj-text-secondary);
       min-width: 200px;
       max-width: 250px;
-      background: #f8fafc;
+      background: var(--mj-bg-surface-card);
     }
 
     .header-content {
@@ -278,7 +278,7 @@ export interface MatrixColumnClickEvent {
     }
 
     .header-content i {
-      color: #94a3b8;
+      color: var(--mj-text-disabled);
     }
 
     /* Run Header (Column) */
@@ -289,13 +289,13 @@ export interface MatrixColumnClickEvent {
       text-align: center;
       cursor: pointer;
       transition: background-color 0.15s ease;
-      border-left: 1px solid #e2e8f0;
+      border-left: 1px solid var(--mj-border-default);
       vertical-align: bottom;
     }
 
     .run-header:hover,
     .run-header.highlighted {
-      background: #f1f5f9;
+      background: var(--mj-bg-surface-sunken);
     }
 
     .run-header-content {
@@ -316,8 +316,8 @@ export interface MatrixColumnClickEvent {
     .tag-chip {
       display: inline-block;
       padding: 2px 6px;
-      background: #e0f2fe;
-      color: #0369a1;
+      background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+      color: var(--mj-brand-primary);
       border-radius: 4px;
       font-size: 10px;
       font-weight: 500;
@@ -329,12 +329,12 @@ export interface MatrixColumnClickEvent {
 
     .tag-more {
       font-size: 10px;
-      color: #64748b;
+      color: var(--mj-text-muted);
     }
 
     .run-date {
       font-size: 11px;
-      color: #64748b;
+      color: var(--mj-text-muted);
       white-space: nowrap;
     }
 
@@ -350,18 +350,18 @@ export interface MatrixColumnClickEvent {
     }
 
     .pass-rate-value.high {
-      background: rgba(16, 185, 129, 0.1);
-      color: #10b981;
+      background: color-mix(in srgb, var(--mj-status-success) 10%, var(--mj-bg-surface));
+      color: var(--mj-status-success);
     }
 
     .pass-rate-value.medium {
-      background: rgba(245, 158, 11, 0.1);
-      color: #f59e0b;
+      background: color-mix(in srgb, var(--mj-status-warning) 10%, var(--mj-bg-surface));
+      color: var(--mj-status-warning);
     }
 
     .pass-rate-value.low {
-      background: rgba(239, 68, 68, 0.1);
-      color: #ef4444;
+      background: color-mix(in srgb, var(--mj-status-error) 10%, var(--mj-bg-surface));
+      color: var(--mj-status-error);
     }
 
     /* Data Rows */
@@ -371,23 +371,23 @@ export interface MatrixColumnClickEvent {
 
     .data-row:hover,
     .data-row.highlighted {
-      background: #f8fafc;
+      background: var(--mj-bg-surface-card);
     }
 
     .data-row:hover .sticky-col,
     .data-row.highlighted .sticky-col {
-      background: #f8fafc;
+      background: var(--mj-bg-surface-card);
     }
 
     /* Test Name Cell */
     .test-name-cell {
       padding: 8px 16px;
-      border-bottom: 1px solid #f1f5f9;
+      border-bottom: 1px solid var(--mj-bg-surface-sunken);
       cursor: pointer;
     }
 
     .test-name-cell:hover {
-      background: #f1f5f9;
+      background: var(--mj-bg-surface-sunken);
     }
 
     .test-name-content {
@@ -400,15 +400,15 @@ export interface MatrixColumnClickEvent {
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-      color: #334155;
+      color: var(--mj-text-secondary);
       font-weight: 500;
     }
 
     /* Result Cells */
     .result-cell {
       padding: 6px 8px;
-      border-bottom: 1px solid #f1f5f9;
-      border-left: 1px solid #f1f5f9;
+      border-bottom: 1px solid var(--mj-bg-surface-sunken);
+      border-left: 1px solid var(--mj-bg-surface-sunken);
       text-align: center;
       cursor: pointer;
       transition: all 0.15s ease;
@@ -417,11 +417,11 @@ export interface MatrixColumnClickEvent {
     .result-cell:hover {
       transform: scale(1.05);
       z-index: 5;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+      box-shadow: var(--mj-shadow-md);
     }
 
     .result-cell.highlighted {
-      background: rgba(59, 130, 246, 0.05);
+      background: color-mix(in srgb, var(--mj-brand-primary) 5%, var(--mj-bg-surface));
     }
 
     .cell-content {
@@ -448,38 +448,38 @@ export interface MatrixColumnClickEvent {
 
     /* Cell Status Colors */
     .cell-passed {
-      background: rgba(16, 185, 129, 0.15);
-      color: #10b981;
+      background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface));
+      color: var(--mj-status-success);
     }
 
     .cell-failed {
-      background: rgba(239, 68, 68, 0.15);
-      color: #ef4444;
+      background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
+      color: var(--mj-status-error);
     }
 
     .cell-error {
-      background: rgba(245, 158, 11, 0.15);
-      color: #f59e0b;
+      background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface));
+      color: var(--mj-status-warning);
     }
 
     .cell-skipped {
-      background: rgba(107, 114, 128, 0.15);
-      color: #6b7280;
+      background: color-mix(in srgb, var(--mj-text-muted) 15%, var(--mj-bg-surface));
+      color: var(--mj-text-muted);
     }
 
     .cell-pending {
-      background: rgba(139, 92, 246, 0.15);
-      color: #8b5cf6;
+      background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+      color: var(--mj-brand-primary);
     }
 
     .cell-running {
-      background: rgba(59, 130, 246, 0.15);
-      color: #3b82f6;
+      background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+      color: var(--mj-brand-primary);
     }
 
     .cell-none {
-      background: #f8fafc;
-      color: #cbd5e1;
+      background: var(--mj-bg-surface-card);
+      color: var(--mj-border-strong);
     }
 
     /* Legend */
@@ -489,7 +489,7 @@ export interface MatrixColumnClickEvent {
       gap: 16px;
       padding: 12px 16px;
       margin-top: 12px;
-      background: #f8fafc;
+      background: var(--mj-bg-surface-card);
       border-radius: 6px;
       font-size: 12px;
     }
@@ -498,19 +498,19 @@ export interface MatrixColumnClickEvent {
       display: flex;
       align-items: center;
       gap: 6px;
-      color: #64748b;
+      color: var(--mj-text-muted);
     }
 
     .legend-item i {
       font-size: 12px;
     }
 
-    .legend-item.passed i { color: #10b981; }
-    .legend-item.failed i { color: #ef4444; }
-    .legend-item.error i { color: #f59e0b; }
-    .legend-item.skipped i { color: #6b7280; }
-    .legend-item.pending i { color: #8b5cf6; }
-    .legend-item.none i { color: #cbd5e1; }
+    .legend-item.passed i { color: var(--mj-status-success); }
+    .legend-item.failed i { color: var(--mj-status-error); }
+    .legend-item.error i { color: var(--mj-status-warning); }
+    .legend-item.skipped i { color: var(--mj-text-muted); }
+    .legend-item.pending i { color: var(--mj-brand-primary); }
+    .legend-item.none i { color: var(--mj-border-strong); }
 
     /* Responsive adjustments */
     @media (max-width: 768px) {

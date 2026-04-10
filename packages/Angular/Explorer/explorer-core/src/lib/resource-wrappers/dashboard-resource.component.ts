@@ -1,9 +1,10 @@
-import { Component, ViewContainerRef, ComponentRef, ViewChild, ElementRef, ChangeDetectorRef } from '@angular/core';
+import { Component, ViewContainerRef, ComponentRef, ViewChild, ElementRef, ChangeDetectorRef, inject } from '@angular/core';
 import { BaseResourceComponent, NavigationService, BaseDashboard, DashboardConfig } from '@memberjunction/ng-shared';
 import { ResourceData, MJDashboardEntity, DashboardEngine, MJDashboardUserStateEntity, MJDashboardCategoryEntity, MJDashboardPartTypeEntity, DashboardUserPermissions } from '@memberjunction/core-entities';
-import { RegisterClass, MJGlobal, SafeJSONParse } from '@memberjunction/global';
+import { RegisterClass, MJGlobal, SafeJSONParse , UUIDsEqual } from '@memberjunction/global';
 import { Metadata, CompositeKey, RunView, LogError } from '@memberjunction/core';
-import { DataExplorerDashboardComponent, DataExplorerFilter, ShareDialogResult } from '@memberjunction/ng-dashboards';
+import type { DataExplorerFilter } from '@memberjunction/ng-dashboards/data-explorer-dashboards.module';
+import type { ShareDialogResult } from '@memberjunction/ng-dashboards/core-dashboards.module';
 import { DashboardViewerComponent, DashboardNavRequestEvent, PanelInteractionEvent, AddPanelResult, DashboardPanel } from '@memberjunction/ng-dashboard-viewer';
 /**
  * Dashboard Resource Wrapper - displays a single dashboard in a tab
@@ -141,8 +142,8 @@ import { DashboardViewerComponent, DashboardNavRequestEvent, PanelInteractionEve
             align-items: center;
             justify-content: space-between;
             padding: 12px 24px;
-            background: #fff;
-            border-bottom: 1px solid #e0e0e0;
+            background: var(--mj-bg-surface-card);
+            border-bottom: 1px solid var(--mj-border-default);
             gap: 16px;
         }
         .viewer-toolbar .toolbar-left {
@@ -153,13 +154,13 @@ import { DashboardViewerComponent, DashboardNavRequestEvent, PanelInteractionEve
         .viewer-toolbar .dashboard-title {
             font-size: 16px;
             font-weight: 500;
-            color: #333;
+            color: var(--mj-text-primary);
             display: flex;
             align-items: center;
             gap: 8px;
         }
         .viewer-toolbar .dashboard-title i {
-            color: #5c6bc0;
+            color: var(--mj-brand-primary);
         }
         .shared-indicator {
             display: flex;
@@ -168,8 +169,8 @@ import { DashboardViewerComponent, DashboardNavRequestEvent, PanelInteractionEve
             width: 24px;
             height: 24px;
             border-radius: 50%;
-            background: #e3f2fd;
-            color: #1976d2;
+            background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+            color: var(--mj-brand-primary);
             font-size: 11px;
         }
         .viewer-toolbar .toolbar-actions {
@@ -184,13 +185,13 @@ import { DashboardViewerComponent, DashboardNavRequestEvent, PanelInteractionEve
             align-items: center;
             justify-content: space-between;
             padding: 12px 24px;
-            background: #fff;
-            border-bottom: 1px solid #e0e0e0;
+            background: var(--mj-bg-surface-card);
+            border-bottom: 1px solid var(--mj-border-default);
             transition: background 0.2s, border-color 0.2s;
         }
         .viewer-header.editing {
-            background: linear-gradient(135deg, #e8eaf6 0%, #c5cae9 100%);
-            border-bottom: 2px solid #5c6bc0;
+            background: linear-gradient(135deg, color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface)) 0%, color-mix(in srgb, var(--mj-brand-primary) 25%, var(--mj-bg-surface)) 100%);
+            border-bottom: 2px solid var(--mj-brand-primary);
         }
         .viewer-header .header-left {
             display: flex;
@@ -212,8 +213,8 @@ import { DashboardViewerComponent, DashboardNavRequestEvent, PanelInteractionEve
             padding: 8px 16px;
             border: none;
             border-radius: 6px;
-            background: #5c6bc0;
-            color: #fff;
+            background: var(--mj-brand-primary);
+            color: var(--mj-text-inverse);
             font-size: 13px;
             font-weight: 500;
             cursor: pointer;
@@ -221,7 +222,7 @@ import { DashboardViewerComponent, DashboardNavRequestEvent, PanelInteractionEve
             box-shadow: 0 2px 4px rgba(92, 107, 192, 0.3);
         }
         .btn-add-part:hover {
-            background: #3f51b5;
+            background: var(--mj-brand-primary-hover);
             transform: translateY(-1px);
             box-shadow: 0 3px 6px rgba(92, 107, 192, 0.4);
         }
@@ -243,14 +244,14 @@ import { DashboardViewerComponent, DashboardNavRequestEvent, PanelInteractionEve
             padding: 10px 18px;
             border: none;
             border-radius: 6px;
-            background: #5c6bc0;
-            color: #fff;
+            background: var(--mj-brand-primary);
+            color: var(--mj-text-inverse);
             font-size: 14px;
             font-weight: 500;
             cursor: pointer;
             transition: background 0.2s;
         }
-        .btn-primary:hover { background: #3f51b5; }
+        .btn-primary:hover { background: var(--mj-brand-primary-hover); }
 
         .btn-icon {
             width: 36px;
@@ -258,32 +259,32 @@ import { DashboardViewerComponent, DashboardNavRequestEvent, PanelInteractionEve
             display: flex;
             align-items: center;
             justify-content: center;
-            border: 1px solid #e0e0e0;
+            border: 1px solid var(--mj-border-default);
             border-radius: 6px;
-            background: #fff;
-            color: #666;
+            background: var(--mj-bg-surface-card);
+            color: var(--mj-text-secondary);
             cursor: pointer;
             transition: all 0.2s;
         }
-        .btn-icon:hover { background: #f5f5f5; }
+        .btn-icon:hover { background: var(--mj-bg-surface-sunken); }
 
         .btn-cancel {
             display: flex;
             align-items: center;
             gap: 8px;
             padding: 10px 18px;
-            border: 1px solid #d0d0d0;
+            border: 1px solid var(--mj-border-default);
             border-radius: 6px;
-            background: #fff;
-            color: #666;
+            background: var(--mj-bg-surface-card);
+            color: var(--mj-text-secondary);
             font-size: 14px;
             cursor: pointer;
             transition: all 0.2s;
         }
         .btn-cancel:hover {
-            background: #f5f5f5;
-            border-color: #bbb;
-            color: #333;
+            background: var(--mj-bg-surface-sunken);
+            border-color: var(--mj-border-default);
+            color: var(--mj-text-primary);
         }
 
         /* Dashboard info inputs */
@@ -299,7 +300,7 @@ import { DashboardViewerComponent, DashboardNavRequestEvent, PanelInteractionEve
             padding: 6px 12px;
             font-size: 16px;
             font-weight: 500;
-            color: #333;
+            color: var(--mj-text-primary);
             background: rgba(255, 255, 255, 0.7);
             outline: none;
             min-width: 200px;
@@ -308,8 +309,8 @@ import { DashboardViewerComponent, DashboardNavRequestEvent, PanelInteractionEve
         }
         .dashboard-name-input:hover { background: rgba(255, 255, 255, 0.9); }
         .dashboard-name-input:focus {
-            background: #fff;
-            border-color: #5c6bc0;
+            background: var(--mj-bg-surface-card);
+            border-color: var(--mj-brand-primary);
             box-shadow: 0 0 0 2px rgba(92, 107, 192, 0.2);
         }
         .dashboard-description-input {
@@ -317,7 +318,7 @@ import { DashboardViewerComponent, DashboardNavRequestEvent, PanelInteractionEve
             border-radius: 4px;
             padding: 6px 12px;
             font-size: 13px;
-            color: #555;
+            color: var(--mj-text-secondary);
             background: rgba(255, 255, 255, 0.5);
             outline: none;
             flex: 1;
@@ -327,12 +328,12 @@ import { DashboardViewerComponent, DashboardNavRequestEvent, PanelInteractionEve
         }
         .dashboard-description-input:hover { background: rgba(255, 255, 255, 0.8); }
         .dashboard-description-input:focus {
-            background: #fff;
-            border-color: #5c6bc0;
+            background: var(--mj-bg-surface-card);
+            border-color: var(--mj-brand-primary);
             box-shadow: 0 0 0 2px rgba(92, 107, 192, 0.2);
         }
         .dashboard-description-input::placeholder {
-            color: #888;
+            color: var(--mj-text-muted);
             font-style: normal;
         }
 
@@ -345,7 +346,7 @@ import { DashboardViewerComponent, DashboardNavRequestEvent, PanelInteractionEve
             height: 100%;
             padding: 40px;
             text-align: center;
-            color: #424242;
+            color: var(--mj-text-secondary);
         }
         .error-icon {
             font-size: 64px;
@@ -357,17 +358,17 @@ import { DashboardViewerComponent, DashboardNavRequestEvent, PanelInteractionEve
             font-size: 24px;
             font-weight: 500;
             margin: 0 0 12px 0;
-            color: #212121;
+            color: var(--mj-text-primary);
         }
         .error-message {
             font-size: 16px;
-            color: #616161;
+            color: var(--mj-text-muted);
             margin: 0 0 24px 0;
             max-width: 500px;
             line-height: 1.5;
         }
         .error-details {
-            background: #f5f5f5;
+            background: var(--mj-bg-surface-sunken);
             border-radius: 8px;
             padding: 12px 16px;
             max-width: 600px;
@@ -377,7 +378,7 @@ import { DashboardViewerComponent, DashboardNavRequestEvent, PanelInteractionEve
         .error-details summary {
             cursor: pointer;
             font-weight: 500;
-            color: #757575;
+            color: var(--mj-text-muted);
             margin-bottom: 8px;
         }
         .error-details pre {
@@ -478,9 +479,22 @@ export class DashboardResource extends BaseResourceComponent {
     }
 
     override set Data(value: ResourceData) {
+        const previousRecordId = super.Data?.ResourceRecordID;
         super.Data = value;
-        if (!this.dataLoaded) {
+
+        const newRecordId = value?.ResourceRecordID;
+
+        // Load on first set, or when the dashboard has changed
+        if (!this.dataLoaded || newRecordId !== previousRecordId) {
             this.dataLoaded = true;
+            // Destroy previous component before loading new one
+            if (this.componentRef) {
+                this.componentRef.destroy();
+                this.componentRef = null;
+            }
+            this.clearError();
+            this.configDashboard = null;
+            this.viewerInstance = null;
             this.loadDashboard();
         }
     }
@@ -644,7 +658,7 @@ export class DashboardResource extends BaseResourceComponent {
             }
 
             await DashboardEngine.Instance.Config(false); // make sure it is configured, if already configured does nothing
-            const dashboard = DashboardEngine.Instance.Dashboards.find(d => d.ID === data.ResourceRecordID);
+            const dashboard = DashboardEngine.Instance.Dashboards.find(d => UUIDsEqual(d.ID, data.ResourceRecordID));
             if (!dashboard) {
                 throw new Error(`Dashboard with ID ${data.ResourceRecordID} not found.`);
             }
@@ -676,7 +690,8 @@ export class DashboardResource extends BaseResourceComponent {
         contextIcon?: string
     ): Promise<void> {
         try {
-            // Create the Data Explorer component directly (it's already registered)
+            // Lazy-load the Data Explorer component to keep it out of the initial bundle
+            const { DataExplorerDashboardComponent } = await import('@memberjunction/ng-dashboards/data-explorer-dashboards.module');
             this.containerElement.nativeElement.innerHTML = '';
             const componentRef = this.viewContainer.createComponent(DataExplorerDashboardComponent);
             this.componentRef = componentRef;
@@ -739,8 +754,8 @@ export class DashboardResource extends BaseResourceComponent {
                 throw new Error(`Dashboard '${dashboard.Name}' is marked as Code type but has no DriverClass specified`);
             }
 
-            // Look up the registered class using the DriverClass name
-            const classReg = MJGlobal.Instance.ClassFactory.GetRegistration(
+            // Look up the registered class using the DriverClass name (with lazy loading fallback via ClassFactory)
+            const classReg = await MJGlobal.Instance.ClassFactory.GetRegistrationAsync(
                 BaseDashboard,
                 dashboard.DriverClass
             );
@@ -808,7 +823,7 @@ export class DashboardResource extends BaseResourceComponent {
     protected async loadDashboardUserState(dashboardId: string): Promise<MJDashboardUserStateEntity> {
         // handle user state changes for the dashboard
         const md = new Metadata();
-        const stateResult = DashboardEngine.Instance.DashboardUserStates.filter(dus => dus.DashboardID === dashboardId && dus.UserID === md.CurrentUser.ID)
+        const stateResult = DashboardEngine.Instance.DashboardUserStates.filter(dus => UUIDsEqual(dus.DashboardID, dashboardId) && UUIDsEqual(dus.UserID, md.CurrentUser.ID));
         let stateObject: MJDashboardUserStateEntity;
         if (stateResult && stateResult.length > 0) {
             stateObject = stateResult[0];
@@ -912,7 +927,7 @@ export class DashboardResource extends BaseResourceComponent {
             case 'OpenDashboard': {
                 const dashRequest = request as { type: 'OpenDashboard'; dashboardId: string };
                 // Load dashboard name from engine cache
-                const targetDashboard = DashboardEngine.Instance.Dashboards.find(d => d.ID === dashRequest.dashboardId);
+                const targetDashboard = DashboardEngine.Instance.Dashboards.find(d => UUIDsEqual(d.ID, dashRequest.dashboardId));
                 const name = targetDashboard?.Name || 'Dashboard';
                 this.navigationService.OpenDashboard(dashRequest.dashboardId, name);
                 break;

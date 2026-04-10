@@ -18,10 +18,12 @@ export class MJIntegrationFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'integrationOverview', sectionName: 'Integration Overview', isExpanded: true },
             { sectionKey: 'technicalSettings', sectionName: 'Technical Settings', isExpanded: true },
+            { sectionKey: 'authenticationSecurity', sectionName: 'Authentication & Security', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'companyIntegrations', sectionName: 'Company Integrations', isExpanded: false },
-            { sectionKey: 'uRLFormats', sectionName: 'URL Formats', isExpanded: false },
-            { sectionKey: 'recordChanges', sectionName: 'Record Changes', isExpanded: false }
+            { sectionKey: 'mJIntegrationURLFormats', sectionName: 'URL Formats', isExpanded: false },
+            { sectionKey: 'mJCompanyIntegrations', sectionName: 'Company Integrations', isExpanded: false },
+            { sectionKey: 'mJRecordChanges', sectionName: 'Record Changes', isExpanded: false },
+            { sectionKey: 'mJIntegrationObjects', sectionName: 'Integration Objects', isExpanded: false }
         ]);
     }
 }

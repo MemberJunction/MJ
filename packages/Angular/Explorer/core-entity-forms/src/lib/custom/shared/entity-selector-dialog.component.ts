@@ -1,7 +1,7 @@
-import { Component, Input, OnInit } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit } from '@angular/core';
 import { SharedService } from '@memberjunction/ng-shared';
 import { RunView } from '@memberjunction/core';
-import { DialogRef } from '@progress/kendo-angular-dialog';
+import { UUIDsEqual } from '@memberjunction/global';
 
 export interface EntitySelectorConfig {
     entityName: string;
@@ -27,15 +27,10 @@ export interface EntitySelectorConfig {
           <div class="dialog-content">
             <!-- Search Bar -->
             <div class="search-bar">
-              <kendo-textbox
-                [(ngModel)]="searchText"
-                placeholder="Search..."
-                (valueChange)="onSearchChange()"
-                class="search-input">
-                <ng-template kendoTextBoxPrefixTemplate>
-                  <i class="fa-solid fa-search"></i>
-                </ng-template>
-              </kendo-textbox>
+              <div class="search-input-wrapper">
+                <i class="fa-solid fa-search search-icon"></i>
+                <input class="mj-input search-input" [(ngModel)]="searchText" placeholder="Search..." (ngModelChange)="onSearchChange()" />
+              </div>
             </div>
         
             <!-- Loading State -->
@@ -58,7 +53,7 @@ export interface EntitySelectorConfig {
                   <div class="entity-list">
                     @for (entity of filteredEntities; track entity.ID) {
                       <div class="entity-item"
-                        [class.selected]="selectedEntity?.ID === entity.ID"
+                        [class.selected]="IsEntitySelected(entity)"
                         (click)="selectEntity(entity)">
                         <div class="item-icon">
                           <i [class]="config.icon || 'fa-solid fa-file'"></i>
@@ -84,11 +79,11 @@ export interface EntitySelectorConfig {
             }
           </div>
           <div class="dialog-actions">
-            <button kendoButton themeColor="primary" (click)="createNew()">
+            <button mjButton variant="primary" (click)="createNew()">
               <i class="fa-solid fa-plus"></i> Create New
             </button>
-            <button kendoButton (click)="onCancel()">Cancel</button>
-            <button kendoButton themeColor="primary" [disabled]="!selectedEntity" (click)="onSelect()">Select</button>
+            <button mjButton (click)="onCancel()">Cancel</button>
+            <button mjButton variant="primary" [disabled]="!selectedEntity" (click)="onSelect()">Select</button>
           </div>
         </div>
         `,
@@ -102,7 +97,7 @@ export interface EntitySelectorConfig {
 
         .dialog-header {
             padding: 16px;
-            border-bottom: 1px solid #e0e6ed;
+            border-bottom: 1px solid var(--mj-border-default);
         }
 
         .dialog-header h3 {
@@ -123,7 +118,7 @@ export interface EntitySelectorConfig {
 
         .dialog-actions {
             padding: 16px;
-            border-top: 1px solid #e0e6ed;
+            border-top: 1px solid var(--mj-border-default);
             display: flex;
             gap: 8px;
             justify-content: flex-end;
@@ -134,8 +129,23 @@ export interface EntitySelectorConfig {
             gap: 12px;
         }
 
+        .search-input-wrapper {
+            flex: 1;
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 10px;
+            color: var(--mj-text-muted);
+            pointer-events: none;
+        }
+
         .search-input {
             flex: 1;
+            padding-left: 32px;
         }
 
         .loading-state,
@@ -145,22 +155,22 @@ export interface EntitySelectorConfig {
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            color: #6c757d;
+            color: var(--mj-text-muted);
             gap: 12px;
         }
 
         .loading-state i,
         .empty-state i {
             font-size: 48px;
-            color: #dee2e6;
+            color: var(--mj-border-default);
         }
 
         .entity-list-container {
             flex: 1;
             overflow-y: auto;
-            border: 1px solid #e0e6ed;
+            border: 1px solid var(--mj-border-default);
             border-radius: 8px;
-            background: #f8f9fa;
+            background: var(--mj-bg-surface-sunken);
         }
 
         .entity-list {
@@ -173,27 +183,27 @@ export interface EntitySelectorConfig {
             gap: 12px;
             padding: 12px;
             margin-bottom: 8px;
-            background: white;
-            border: 1px solid #e0e6ed;
+            background: var(--mj-bg-surface-card);
+            border: 1px solid var(--mj-border-default);
             border-radius: 8px;
             cursor: pointer;
             transition: all 0.2s ease;
         }
 
         .entity-item:hover {
-            border-color: #2196f3;
+            border-color: var(--mj-brand-primary);
             box-shadow: 0 2px 8px rgba(0,0,0,0.08);
         }
 
         .entity-item.selected {
-            background: #e3f2fd;
-            border-color: #2196f3;
+            background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+            border-color: var(--mj-brand-primary);
         }
 
         .item-icon {
             width: 36px;
             height: 36px;
-            background: #f0f4f8;
+            background: var(--mj-bg-surface-sunken);
             border-radius: 8px;
             display: flex;
             align-items: center;
@@ -202,7 +212,7 @@ export interface EntitySelectorConfig {
         }
 
         .item-icon i {
-            color: #2196f3;
+            color: var(--mj-brand-primary);
             font-size: 16px;
         }
 
@@ -213,13 +223,13 @@ export interface EntitySelectorConfig {
 
         .item-title {
             font-weight: 600;
-            color: #2c3e50;
+            color: var(--mj-text-primary);
             margin-bottom: 4px;
         }
 
         .item-description {
             font-size: 13px;
-            color: #6c757d;
+            color: var(--mj-text-muted);
             line-height: 1.4;
             display: -webkit-box;
             -webkit-line-clamp: 2;
@@ -235,8 +245,8 @@ export interface EntitySelectorConfig {
             font-size: 11px;
             padding: 2px 8px;
             border-radius: 12px;
-            background: #e9ecef;
-            color: #495057;
+            background: var(--mj-bg-surface-sunken);
+            color: var(--mj-text-secondary);
             font-weight: 500;
         }
 
@@ -255,9 +265,10 @@ export class EntitySelectorDialogComponent implements OnInit {
     public searchText: string = '';
     public isLoading: boolean = true;
 
+    @Output() DialogClosed = new EventEmitter<Record<string, unknown> | null>();
+
     constructor(
-        private sharedService: SharedService,
-        public dialogRef: DialogRef
+        private sharedService: SharedService
     ) {}
 
     async ngOnInit() {
@@ -305,15 +316,19 @@ export class EntitySelectorDialogComponent implements OnInit {
 
     onSelect() {
         if (this.selectedEntity) {
-            this.dialogRef.close({ entity: this.selectedEntity });
+            this.DialogClosed.emit({ entity: this.selectedEntity });
         }
     }
 
     createNew() {
-        this.dialogRef.close({ createNew: true });
+        this.DialogClosed.emit({ createNew: true });
+    }
+
+    IsEntitySelected(entity: Record<string, unknown>): boolean {
+        return UUIDsEqual(this.selectedEntity?.ID, entity.ID as string);
     }
 
     onCancel() {
-        this.dialogRef.close(null);
+        this.DialogClosed.emit(null);
     }
 }

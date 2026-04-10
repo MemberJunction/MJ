@@ -2,6 +2,7 @@
   {
     "fields": {
       "Name": "Infographic Agent",
+      "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Content Creation",
       "Description": "Specialized visualization expert that creates publication-quality SVG infographics from data and instructions. Composes multi-panel visualizations using charts, diagrams, networks, and word clouds. Can iterate to refine visualizations and intelligently assemble them into comprehensive infographics with professional layouts.",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
       "Status": "Active",
@@ -124,6 +125,10 @@
     },
     "primaryKey": {
       "ID": "06F07CDD-5021-4737-A5CB-019204ADE8A8"
+    },
+    "sync": {
+      "lastModified": "2026-03-13T19:10:49.107Z",
+      "checksum": "fbb5edbf4dd15476d04886c0daf27b32e9c4f1aaadf8b27d3dbafab51a176fae"
     }
   }
 ]

@@ -1,6 +1,6 @@
 import { Component, OnInit, OnDestroy, ViewChild, ChangeDetectorRef } from '@angular/core';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { Metadata, RunView } from '@memberjunction/core';
 import { MJAPIKeyEntity, MJAPIScopeEntity, MJAPIKeyUsageLogEntity, MJAPIApplicationEntity, ResourceData } from '@memberjunction/core-entities';
 import { APIKeysEngineBase, parseAPIScopeUIConfig } from '@memberjunction/api-keys-base';
@@ -91,7 +91,7 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
     // Default UI config for categories without explicit configuration
     private readonly defaultUIConfig = {
         icon: 'fa-solid fa-ellipsis',
-        color: '#6b7280'
+        color: 'var(--mj-text-muted)'
     };
 
     // Dynamic category UI configs built from root scopes
@@ -547,7 +547,7 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
      * View activity for a key
      */
     public onActivityClick(activity: ActivityItem): void {
-        const key = this.APIKeys.find(k => k.ID === activity.keyId);
+        const key = this.APIKeys.find(k => UUIDsEqual(k.ID, activity.keyId));
         if (key) {
             this.openEditPanel(key);
         }

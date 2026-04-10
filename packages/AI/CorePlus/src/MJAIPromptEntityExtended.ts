@@ -1,6 +1,6 @@
 import { BaseEntity, CompositeKey } from "@memberjunction/core";
 import { MJAIPromptEntity, MJTemplateParamEntity } from "@memberjunction/core-entities";
-import { compareStringsByLine, RegisterClass } from "@memberjunction/global";
+import { compareStringsByLine, RegisterClass, UUIDsEqual } from "@memberjunction/global";
 import { TemplateEngineBase } from "@memberjunction/templates-base-types";
 
 @RegisterClass(BaseEntity, "MJ: AI Prompts")
@@ -89,7 +89,7 @@ export class MJAIPromptEntityExtended extends MJAIPromptEntity {
     protected async LoadTemplateText() {
         if (this.TemplateID && !this.TemplateText) {
             // Use TemplateEngineBase's cached TemplateContents instead of RunView
-            const tcResult = TemplateEngineBase.Instance.TemplateContents.filter(tc => tc.TemplateID === this.TemplateID);
+            const tcResult = TemplateEngineBase.Instance.TemplateContents.filter(tc => UUIDsEqual(tc.TemplateID, this.TemplateID));
             if (tcResult && tcResult.length > 0) {
                 // Sort by __mj_CreatedAt ASC and take first row (oldest)
                 const sorted = tcResult.sort((a, b) => {
@@ -117,7 +117,7 @@ export class MJAIPromptEntityExtended extends MJAIPromptEntity {
     protected async LoadTemplateParams(): Promise<boolean> {
         if (this.TemplateID) {
             // Use TemplateEngineBase's cached TemplateParams instead of RunView
-            const params = TemplateEngineBase.Instance.TemplateParams.filter(tp => tp.TemplateID === this.TemplateID);
+            const params = TemplateEngineBase.Instance.TemplateParams.filter(tp => UUIDsEqual(tp.TemplateID, this.TemplateID));
             // Sort by Name ASC to match original behavior
             this._templateParams = params.sort((a, b) => (a.Name || '').localeCompare(b.Name || ''));
             return true;

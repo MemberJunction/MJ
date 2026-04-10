@@ -49,8 +49,8 @@ jobs:
       - name: Build packages
         run: npm run build
 
-      - name: Generate doumentation
-        run: npm run docs
+      - name: Generate documentation
+        run: npx typedoc
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

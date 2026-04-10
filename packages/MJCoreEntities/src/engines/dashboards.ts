@@ -1,4 +1,5 @@
 import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, IStartupSink, RegisterForStartup, UserInfo } from "@memberjunction/core";
+import { UUIDsEqual } from "@memberjunction/global";
 import { MJDashboardEntityExtended } from "../custom/MJDashboardEntityExtended";
 import {
     MJDashboardCategoryEntity,
@@ -173,7 +174,7 @@ export class DashboardEngine extends BaseEngine<DashboardEngine> {
      * @returns The effective permissions for the user on this dashboard
      */
     public GetDashboardPermissions(dashboardId: string, userId: string): DashboardUserPermissions {
-        const dashboard = this._dashboards.find(d => d.ID === dashboardId);
+        const dashboard = this._dashboards.find(d => UUIDsEqual(d.ID, dashboardId));
 
         // Default: no permissions
         const noPermissions: DashboardUserPermissions = {
@@ -191,7 +192,7 @@ export class DashboardEngine extends BaseEngine<DashboardEngine> {
         }
 
         // Check if user is the owner - owners have full permissions
-        if (dashboard.UserID === userId) {
+        if (UUIDsEqual(dashboard.UserID, userId)) {
             return {
                 DashboardID: dashboardId,
                 CanRead: true,
@@ -205,7 +206,7 @@ export class DashboardEngine extends BaseEngine<DashboardEngine> {
 
         // Check for direct dashboard permission
         const directPermission = this._dashboardPermissions.find(
-            p => p.DashboardID === dashboardId && p.UserID === userId
+            p => UUIDsEqual(p.DashboardID, dashboardId) && UUIDsEqual(p.UserID, userId)
         );
 
         if (directPermission) {
@@ -247,7 +248,7 @@ export class DashboardEngine extends BaseEngine<DashboardEngine> {
      * @returns The effective permissions for the user on this category
      */
     public GetCategoryPermissions(categoryId: string, userId: string): DashboardCategoryUserPermissions {
-        const category = this._dashboardCategories.find(c => c.ID === categoryId);
+        const category = this._dashboardCategories.find(c => UUIDsEqual(c.ID, categoryId));
 
         // Default: no permissions
         const noPermissions: DashboardCategoryUserPermissions = {
@@ -265,7 +266,7 @@ export class DashboardEngine extends BaseEngine<DashboardEngine> {
         }
 
         // Check if user is the owner - owners have full permissions
-        if (category.UserID === userId) {
+        if (UUIDsEqual(category.UserID, userId)) {
             return {
                 CategoryID: categoryId,
                 CanRead: true,
@@ -279,7 +280,7 @@ export class DashboardEngine extends BaseEngine<DashboardEngine> {
 
         // Check for direct category permission
         const directPermission = this._dashboardCategoryPermissions.find(
-            p => p.DashboardCategoryID === categoryId && p.UserID === userId
+            p => UUIDsEqual(p.DashboardCategoryID, categoryId) && UUIDsEqual(p.UserID, userId)
         );
 
         if (directPermission) {
@@ -354,7 +355,7 @@ export class DashboardEngine extends BaseEngine<DashboardEngine> {
      * @returns Array of category links for the user
      */
     public GetUserCategoryLinks(userId: string): MJDashboardCategoryLinkEntity[] {
-        return this._dashboardCategoryLinks.filter(link => link.UserID === userId);
+        return this._dashboardCategoryLinks.filter(link => UUIDsEqual(link.UserID, userId));
     }
 
     /**
@@ -365,7 +366,7 @@ export class DashboardEngine extends BaseEngine<DashboardEngine> {
     public GetSharedDashboards(userId: string): MJDashboardEntityExtended[] {
         return this._dashboards.filter(dashboard => {
             // Exclude owned dashboards
-            if (dashboard.UserID === userId) {
+            if (UUIDsEqual(dashboard.UserID, userId)) {
                 return false;
             }
             // Check if user has read permission
@@ -379,7 +380,7 @@ export class DashboardEngine extends BaseEngine<DashboardEngine> {
      * @returns Array of permission records for this dashboard
      */
     public GetDashboardShares(dashboardId: string): MJDashboardPermissionEntity[] {
-        return this._dashboardPermissions.filter(p => p.DashboardID === dashboardId);
+        return this._dashboardPermissions.filter(p => UUIDsEqual(p.DashboardID, dashboardId));
     }
 
     /**
@@ -388,7 +389,7 @@ export class DashboardEngine extends BaseEngine<DashboardEngine> {
      * @returns Array of permission records for this category
      */
     public GetCategoryShares(categoryId: string): MJDashboardCategoryPermissionEntity[] {
-        return this._dashboardCategoryPermissions.filter(p => p.DashboardCategoryID === categoryId);
+        return this._dashboardCategoryPermissions.filter(p => UUIDsEqual(p.DashboardCategoryID, categoryId));
     }
 
     /**

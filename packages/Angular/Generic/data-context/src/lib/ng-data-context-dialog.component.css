@@ -3,9 +3,9 @@
 }
 
 .data-context-window {
-    border-radius: 8px;
+    border-radius: var(--mj-radius-md);
     overflow: hidden;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+    box-shadow: var(--mj-shadow-lg);
 }
 
 /* Position the window properly */
@@ -27,14 +27,14 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 16px;
+    font-size: var(--mj-text-base);
     font-weight: 500;
-    color: #333333;
+    color: var(--mj-text-primary);
 }
 
 .title-icon {
-    color: #2196f3;
-    font-size: 18px;
+    color: var(--mj-brand-primary);
+    font-size: var(--mj-text-lg);
 }
 
 .window-actions {
@@ -48,20 +48,20 @@
     border: none;
     padding: 8px 10px;
     cursor: pointer;
-    color: #656565;
+    color: var(--mj-text-muted);
     transition: all 0.2s;
-    border-radius: 4px;
-    font-size: 14px;
+    border-radius: var(--mj-radius-sm);
+    font-size: var(--mj-text-sm);
 }
 
 .window-action-btn:hover {
-    background-color: #e3f2fd;
-    color: #2196f3;
+    background-color: var(--mj-brand-primary-subtle);
+    color: var(--mj-brand-primary);
 }
 
 .window-action-btn:last-child:hover {
-    background-color: #ffebee;
-    color: #f44336;
+    background-color: var(--mj-status-error-subtle);
+    color: var(--mj-status-error);
 }
 
 /* Dialog Content */
@@ -74,8 +74,8 @@
 
 /* Override Kendo Window Styles */
 :host ::ng-deep .k-window-titlebar {
-    background-color: #ffffff;
-    border-bottom: 1px solid #e2e8f0;
+    background-color: var(--mj-bg-surface);
+    border-bottom: 1px solid var(--mj-border-default);
     padding: 12px 16px;
     display: flex;
     align-items: center;

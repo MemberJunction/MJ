@@ -7,4 +7,3 @@ export * from './scheduling-activity-resource.component';
 export * from './scheduling-overview.component';
 export * from './scheduling-jobs.component';
 export * from './scheduling-activity.component';
-export * from './job-slideout.component';

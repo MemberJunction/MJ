@@ -17,6 +17,7 @@ import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import type { CallToolResult, Tool } from '@modelcontextprotocol/sdk/types.js';
 
 import { Metadata, RunView, UserInfo, LogError, LogStatus } from '@memberjunction/core';
+import { UUIDsEqual, BaseSingleton } from '@memberjunction/global';
 import { CredentialEngine } from '@memberjunction/credentials';
 import {
     MJMCPServerEntity,
@@ -90,10 +91,7 @@ import type {
  * await manager.disconnect('connection-id', { contextUser });
  * ```
  */
-export class MCPClientManager {
-    /** Singleton instance */
-    private static _instance: MCPClientManager | null = null;
-
+export class MCPClientManager extends BaseSingleton<MCPClientManager> {
     /** Active connections */
     private readonly connections: Map<string, MCPActiveConnection> = new Map();
 
@@ -134,10 +132,8 @@ export class MCPClientManager {
     private static readonly ENTITY_MCP_CONNECTION_TOOLS = 'MJ: MCP Server Connection Tools';
     private static readonly ENTITY_MCP_PERMISSIONS = 'MJ: MCP Server Connection Permissions';
 
-    /**
-     * Private constructor for singleton pattern
-     */
-    private constructor() {
+    public constructor() {
+        super();
         // Initialize event listener maps
         const eventTypes: MCPClientEventType[] = [
             'connected', 'disconnected', 'toolCalled', 'toolCallCompleted',
@@ -152,10 +148,7 @@ export class MCPClientManager {
      * Gets the singleton instance of MCPClientManager
      */
     public static get Instance(): MCPClientManager {
-        if (!MCPClientManager._instance) {
-            MCPClientManager._instance = new MCPClientManager();
-        }
-        return MCPClientManager._instance;
+        return MCPClientManager.getInstance<MCPClientManager>();
     }
 
     /**
@@ -1089,7 +1082,7 @@ export class MCPClientManager {
         }
 
         // Update the tool's GeneratedActionID and GeneratedActionCategoryID if needed
-        if (tool.GeneratedActionID !== action.ID || tool.GeneratedActionCategoryID !== categoryId) {
+        if (!UUIDsEqual(tool.GeneratedActionID, action.ID) || !UUIDsEqual(tool.GeneratedActionCategoryID, categoryId)) {
             const toolEntity = await md.GetEntityObject<MJMCPServerToolEntity>(
                 MCPClientManager.ENTITY_MCP_TOOLS,
                 contextUser

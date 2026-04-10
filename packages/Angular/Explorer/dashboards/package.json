@@ -1,14 +1,73 @@
 {
   "name": "@memberjunction/ng-dashboards",
-  "version": "5.3.1",
+  "version": "5.24.0",
   "description": "MemberJunction Dashboards",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/public-api.d.ts",
+      "default": "./dist/public-api.js"
+    },
+    "./core-dashboards.module": {
+      "types": "./dist/core-dashboards.module.d.ts",
+      "default": "./dist/core-dashboards.module.js"
+    },
+    "./ai-dashboards.module": {
+      "types": "./dist/ai-dashboards.module.d.ts",
+      "default": "./dist/ai-dashboards.module.js"
+    },
+    "./actions-dashboards.module": {
+      "types": "./dist/actions-dashboards.module.d.ts",
+      "default": "./dist/actions-dashboards.module.js"
+    },
+    "./testing-dashboards.module": {
+      "types": "./dist/testing-dashboards.module.d.ts",
+      "default": "./dist/testing-dashboards.module.js"
+    },
+    "./scheduling-dashboards.module": {
+      "types": "./dist/scheduling-dashboards.module.d.ts",
+      "default": "./dist/scheduling-dashboards.module.js"
+    },
+    "./communication-dashboards.module": {
+      "types": "./dist/communication-dashboards.module.d.ts",
+      "default": "./dist/communication-dashboards.module.js"
+    },
+    "./credentials-dashboards.module": {
+      "types": "./dist/credentials-dashboards.module.d.ts",
+      "default": "./dist/credentials-dashboards.module.js"
+    },
+    "./data-explorer-dashboards.module": {
+      "types": "./dist/data-explorer-dashboards.module.d.ts",
+      "default": "./dist/data-explorer-dashboards.module.js"
+    },
+    "./lists-dashboards.module": {
+      "types": "./dist/lists-dashboards.module.d.ts",
+      "default": "./dist/lists-dashboards.module.js"
+    },
+    "./component-studio-dashboards.module": {
+      "types": "./dist/component-studio-dashboards.module.d.ts",
+      "default": "./dist/component-studio-dashboards.module.js"
+    },
+    "./integration.module": {
+      "types": "./dist/Integration/integration.module.d.ts",
+      "default": "./dist/Integration/integration.module.js"
+    },
+    "./mcp.module": {
+      "types": "./dist/MCP/mcp.module.d.ts",
+      "default": "./dist/MCP/mcp.module.js"
+    },
+    "./module": {
+      "types": "./dist/module.d.ts",
+      "default": "./dist/module.js"
+    }
+  },
   "files": [
     "/dist"
   ],
   "scripts": {
-    "test": "echo \"No tests configured yet\"",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "build": "ngc"
   },
   "keywords": [],
@@ -33,54 +92,53 @@
     "@codemirror/merge": "^6.11.2",
     "@codemirror/state": "^6.5.4",
     "@codemirror/view": "^6.39.12",
-    "@memberjunction/actions-base": "5.3.1",
-    "@memberjunction/ai-engine-base": "5.3.1",
-    "@memberjunction/api-keys-base": "5.3.1",
-    "@memberjunction/ai-core-plus": "5.3.1",
-    "@memberjunction/core": "5.3.1",
-    "@memberjunction/export-engine": "5.3.1",
-    "@memberjunction/ng-entity-relationship-diagram": "5.3.1",
-    "@memberjunction/core-entities": "5.3.1",
-    "@memberjunction/global": "5.3.1",
-    "@memberjunction/graphql-dataprovider": "5.3.1",
-    "@memberjunction/interactive-component-types": "5.3.1",
-    "@memberjunction/ng-action-gallery": "5.3.1",
-    "@memberjunction/ng-actions": "5.3.1",
-    "@memberjunction/ng-agents": "5.3.1",
-    "@memberjunction/ng-ai-test-harness": "5.3.1",
-    "@memberjunction/ng-base-application": "5.3.1",
-    "@memberjunction/ng-code-editor": "5.3.1",
-    "@memberjunction/ng-container-directives": "5.3.1",
-    "@memberjunction/ng-core-entity-forms": "5.3.1",
-    "@memberjunction/ng-credentials": "5.3.1",
-    "@memberjunction/ng-dashboard-viewer": "5.3.1",
-    "@memberjunction/ng-entity-viewer": "5.3.1",
-    "@memberjunction/ng-export-service": "5.3.1",
-    "@memberjunction/ng-filter-builder": "5.3.1",
-    "@memberjunction/ng-list-management": "5.3.1",
-    "@memberjunction/ng-explorer-settings": "5.3.1",
-    "@memberjunction/ng-notifications": "5.3.1",
-    "@memberjunction/ng-query-viewer": "5.3.1",
-    "@memberjunction/ng-react": "5.3.1",
-    "@memberjunction/ng-shared": "5.3.1",
-    "@memberjunction/ng-shared-generic": "5.3.1",
-    "@memberjunction/ng-versions": "5.3.1",
-    "@memberjunction/ng-testing": "5.3.1",
-    "@memberjunction/skip-types": "5.3.1",
-    "@memberjunction/templates-base-types": "5.3.1",
-    "@memberjunction/testing-engine-base": "5.3.1",
-    "@memberjunction/ng-markdown": "5.3.1",
-    "@progress/kendo-angular-buttons": "22.0.1",
-    "@progress/kendo-angular-dateinputs": "22.0.1",
-    "@progress/kendo-angular-dialog": "22.0.1",
-    "@progress/kendo-angular-excel-export": "22.0.1",
-    "@progress/kendo-angular-dropdowns": "22.0.1",
-    "@progress/kendo-angular-grid": "22.0.1",
-    "@progress/kendo-angular-indicators": "22.0.1",
-    "@progress/kendo-angular-inputs": "22.0.1",
-    "@progress/kendo-angular-layout": "22.0.1",
-    "@progress/kendo-angular-navigation": "22.0.1",
-    "@progress/kendo-angular-treeview": "22.0.1",
+    "@memberjunction/ng-clustering": "5.24.0",
+    "@memberjunction/ng-word-cloud": "5.24.0",
+    "@memberjunction/actions-base": "5.24.0",
+    "@memberjunction/ai-core-plus": "5.24.0",
+    "@memberjunction/ai-engine-base": "5.24.0",
+    "@memberjunction/api-keys-base": "5.24.0",
+    "@memberjunction/core": "5.24.0",
+    "@memberjunction/core-entities": "5.24.0",
+    "@memberjunction/export-engine": "5.24.0",
+    "@memberjunction/global": "5.24.0",
+    "@memberjunction/graphql-dataprovider": "5.24.0",
+    "@memberjunction/integration-engine-base": "5.24.0",
+    "@memberjunction/interactive-component-types": "5.24.0",
+    "@memberjunction/ng-action-gallery": "5.24.0",
+    "@memberjunction/ng-actions": "5.24.0",
+    "@memberjunction/ng-agent-requests": "5.24.0",
+    "@memberjunction/ng-agents": "5.24.0",
+    "@memberjunction/ng-ai-test-harness": "5.24.0",
+    "@memberjunction/ng-base-application": "5.24.0",
+    "@memberjunction/ng-code-editor": "5.24.0",
+    "@memberjunction/ng-container-directives": "5.24.0",
+    "@memberjunction/ng-conversations": "5.24.0",
+    "@memberjunction/ng-core-entity-forms": "5.24.0",
+    "@memberjunction/ng-credentials": "5.24.0",
+    "@memberjunction/ng-dashboard-viewer": "5.24.0",
+    "@memberjunction/ng-entity-relationship-diagram": "5.24.0",
+    "@memberjunction/ng-entity-viewer": "5.24.0",
+    "@memberjunction/ng-explorer-settings": "5.24.0",
+    "@memberjunction/ng-export-service": "5.24.0",
+    "@memberjunction/ng-filter-builder": "5.24.0",
+    "@memberjunction/ng-list-management": "5.24.0",
+    "@memberjunction/ng-markdown": "5.24.0",
+    "@memberjunction/ng-notifications": "5.24.0",
+    "@memberjunction/ng-query-viewer": "5.24.0",
+    "@memberjunction/ng-react": "5.24.0",
+    "@memberjunction/ng-scheduling": "5.24.0",
+    "@memberjunction/ng-search": "5.24.0",
+    "@memberjunction/ng-shared": "5.24.0",
+    "@memberjunction/ng-shared-generic": "5.24.0",
+    "@memberjunction/ng-testing": "5.24.0",
+    "@memberjunction/ng-trees": "5.24.0",
+    "@memberjunction/ng-ui-components": "5.24.0",
+    "@memberjunction/ng-versions": "5.24.0",
+    "@memberjunction/skip-types": "5.24.0",
+    "@memberjunction/templates-base-types": "5.24.0",
+    "@memberjunction/testing-engine-base": "5.24.0",
+    "angular-split": "^20.0.0",
     "codemirror": "^6.0.2",
     "d3": "^7.8.5",
     "rxjs": "^7.8.2",

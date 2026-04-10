@@ -7,6 +7,7 @@ import {
     Metadata,
     UserInfo
 } from "@memberjunction/core";
+import { UUIDsEqual } from "@memberjunction/global";
 
 import {
     MJAuditLogEntity,
@@ -188,7 +189,7 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
         if (!credType) return undefined;
 
         return this._credentials.find(c =>
-            c.CredentialTypeID === credType.ID && c.IsDefault && c.IsActive
+            UUIDsEqual(c.CredentialTypeID, credType.ID) && c.IsDefault && c.IsActive
         );
     }
 
@@ -196,7 +197,7 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
      * Gets a credential by ID.
      */
     public getCredentialById(credentialId: string): MJCredentialEntity | undefined {
-        return this._credentials.find(c => c.ID === credentialId);
+        return this._credentials.find(c => UUIDsEqual(c.ID, credentialId));
     }
 
     /**
@@ -207,7 +208,7 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
         if (!credType) return undefined;
 
         return this._credentials.find(c =>
-            c.CredentialTypeID === credType.ID &&
+            UUIDsEqual(c.CredentialTypeID, credType.ID) &&
             c.Name.trim().toLowerCase() === credentialName.trim().toLowerCase() &&
             c.IsActive
         );
@@ -385,7 +386,7 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
         }
 
         // Get credential type for validation
-        const credType = this._credentialTypes.find(t => t.ID === credEntity.CredentialTypeID);
+        const credType = this._credentialTypes.find(t => UUIDsEqual(t.ID, credEntity.CredentialTypeID));
         if (credType) {
             // Apply default and const values from schema
             const valuesWithDefaults = this.applySchemaDefaults(values, credType.FieldSchema);
@@ -439,7 +440,7 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
         }
 
         // Get credential type for validation endpoint
-        const credType = this._credentialTypes.find(t => t.ID === credential.CredentialTypeID);
+        const credType = this._credentialTypes.find(t => UUIDsEqual(t.ID, credential.CredentialTypeID));
         if (!credType?.ValidationEndpoint) {
             return {
                 isValid: true,

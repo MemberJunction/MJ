@@ -1,5 +1,75 @@
 # Change Log - @memberjunction/global
 
+## 5.24.0
+
+## 5.23.0
+
+### Patch Changes
+
+- 247df16: Fix server-side RunView cache write asymmetry that caused repeated DB queries during metadata sync, add deterministic Nunjucks template parameter extraction via AST, support comma-delimited multi-value fields in validation, and redesign QueryPagingEngine to append paging directly instead of wrapping in CTEs (fixing ORDER BY on non-projected columns and apostrophe-in-comments bugs).
+
+## 5.22.0
+
+### Patch Changes
+
+- f2a6bec: Universal lazy loading via ClassFactory async API. Fixes HomeApplication being tree-shaken by moving lazy loading from consumer-specific retry patterns into ClassFactory itself with RegisterLazyLoader, CreateInstanceAsync, and GetRegistrationAsync. Lazy config now uses compound keys (BaseClassName::Key) to support any base class. Adds coverage audit to codegen to detect gaps.
+
+## 5.21.0
+
+## 5.20.0
+
+## 5.19.0
+
+## 5.18.0
+
+## 5.17.0
+
+## 5.16.0
+
+## 5.15.0
+
+## 5.14.0
+
+## 5.13.0
+
+### Patch Changes
+
+- f72b538: Replace HookRegistry and DynamicPackageLoader with @RegisterClass + ClassFactory middleware pattern, and add GetResolverPaths() to BaseServerMiddleware for auto-discovery of middleware-contributed GraphQL resolvers
+
+## 5.12.0
+
+## 5.11.0
+
+## 5.10.1
+
+## 5.10.0
+
+## 5.9.0
+
+### Patch Changes
+
+- 194ddf2: Add Redis-backed ILocalStorageProvider with cross-server cache invalidation via pub/sub
+
+## 5.8.0
+
+## 5.7.0
+
+## 5.6.0
+
+## 5.5.0
+
+### Minor Changes
+
+- ee9f788: migrations - postgres sql support!
+
+### Patch Changes
+
+- df2457c: no migration, just small code changes
+
+## 5.4.1
+
+## 5.4.0
+
 ## 5.3.1
 
 ## 5.3.0

@@ -13,6 +13,7 @@
 
 import { AIEngine } from '@memberjunction/aiengine';
 import { LogError, LogStatusEx, IsVerboseLoggingEnabled, RunView, RunQuery, UserInfo } from '@memberjunction/core';
+import { UUIDsEqual, BaseSingleton } from '@memberjunction/global';
 import { RunViewParams, RunQueryParams } from '@memberjunction/core';
 import { MJAIAgentDataSourceEntity } from '@memberjunction/core-entities'; 
 import _ from 'lodash';
@@ -68,9 +69,7 @@ interface CacheEntry {
  * // data = { ALL_ENTITIES: [...], MODEL_LIST: [...] }
  * ```
  */
-export class AgentDataPreloader {
-    private static _instance: AgentDataPreloader | null = null;
-
+export class AgentDataPreloader extends BaseSingleton<AgentDataPreloader> {
     /**
      * Per-agent cache (global, TTL-based)
      */
@@ -81,21 +80,15 @@ export class AgentDataPreloader {
      */
     private _perRunCache: Map<string, Map<string, unknown>> = new Map();
 
-    /**
-     * Private constructor for singleton pattern
-     */
-    private constructor() {
-        // Private to enforce singleton
+    public constructor() {
+        super();
     }
 
     /**
      * Gets the singleton instance of AgentDataPreloader
      */
     public static get Instance(): AgentDataPreloader {
-        if (!AgentDataPreloader._instance) {
-            AgentDataPreloader._instance = new AgentDataPreloader();
-        }
-        return AgentDataPreloader._instance;
+        return AgentDataPreloader.getInstance<AgentDataPreloader>();
     }
 
     /**
@@ -252,7 +245,7 @@ export class AgentDataPreloader {
     ): Promise<MJAIAgentDataSourceEntity[]> {
         // Ensure AIEngine is configured
         await AIEngine.Instance.Config(false, contextUser);
-        const data = AIEngine.Instance.AgentDataSources.filter(ads => ads.AgentID === agentId);
+        const data = AIEngine.Instance.AgentDataSources.filter(ads => UUIDsEqual(ads.AgentID, agentId) && ads.Status === 'Active');
         const sortedData = data.sort((a, b) => {
             if (a.ExecutionOrder === b.ExecutionOrder) {
                 return a.Name.localeCompare(b.Name);

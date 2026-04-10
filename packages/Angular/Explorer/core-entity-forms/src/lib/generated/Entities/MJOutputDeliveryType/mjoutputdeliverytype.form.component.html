@@ -66,23 +66,23 @@
 
     <!-- Reports Section -->
     <mj-collapsible-panel
-        SectionKey="reports"
+        SectionKey="mJReports"
         SectionName="Reports"
         Icon="fa-solid fa-chart-line"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('reports')"
+        [BadgeCount]="GetSectionRowCount('mJReports')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Reports','OutputDeliveryTypeID')"
                 [NewRecordValues]="NewRecordValues('MJ: Reports')"
-                [AllowLoad]="IsSectionExpanded('reports')"
+                [AllowLoad]="IsSectionExpanded('mJReports')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('reports', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJReports', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

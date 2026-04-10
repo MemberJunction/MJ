@@ -1,5 +1,155 @@
 # Change Log - @memberjunction/ai
 
+## 5.24.0
+
+### Patch Changes
+
+- @memberjunction/global@5.24.0
+
+## 5.23.0
+
+### Patch Changes
+
+- Updated dependencies [247df16]
+  - @memberjunction/global@5.23.0
+
+## 5.22.0
+
+### Patch Changes
+
+- Updated dependencies [f2a6bec]
+  - @memberjunction/global@5.22.0
+
+## 5.21.0
+
+### Patch Changes
+
+- @memberjunction/global@5.21.0
+
+## 5.20.0
+
+### Patch Changes
+
+- @memberjunction/global@5.20.0
+
+## 5.19.0
+
+### Patch Changes
+
+- @memberjunction/global@5.19.0
+
+## 5.18.0
+
+### Patch Changes
+
+- @memberjunction/global@5.18.0
+
+## 5.17.0
+
+### Patch Changes
+
+- @memberjunction/global@5.17.0
+
+## 5.16.0
+
+### Patch Changes
+
+- @memberjunction/global@5.16.0
+
+## 5.15.0
+
+### Minor Changes
+
+- c3e8b94: metadata updates and migration
+
+### Patch Changes
+
+- @memberjunction/global@5.15.0
+
+## 5.14.0
+
+### Patch Changes
+
+- @memberjunction/global@5.14.0
+
+## 5.13.0
+
+### Patch Changes
+
+- Updated dependencies [f72b538]
+  - @memberjunction/global@5.13.0
+
+## 5.12.0
+
+### Patch Changes
+
+- @memberjunction/global@5.12.0
+
+## 5.11.0
+
+### Patch Changes
+
+- @memberjunction/global@5.11.0
+
+## 5.10.1
+
+### Patch Changes
+
+- @memberjunction/global@5.10.1
+
+## 5.10.0
+
+### Patch Changes
+
+- @memberjunction/global@5.10.0
+
+## 5.9.0
+
+### Patch Changes
+
+- Updated dependencies [194ddf2]
+  - @memberjunction/global@5.9.0
+
+## 5.8.0
+
+### Patch Changes
+
+- @memberjunction/global@5.8.0
+
+## 5.7.0
+
+### Patch Changes
+
+- f52e156: Fix agent infinite retry loop and OOM crash when API credentials are missing by adding NoCredentials error classification, max consecutive failure safety net, and descriptive error propagation to the UI. Fix artifact collection removal UI update, artifact pane width reset on conversation switch, and component spec caching to survive render errors.
+  - @memberjunction/global@5.7.0
+
+## 5.6.0
+
+### Patch Changes
+
+- @memberjunction/global@5.6.0
+
+## 5.5.0
+
+### Patch Changes
+
+- df2457c: no migration, just small code changes
+- Updated dependencies [ee9f788]
+- Updated dependencies [df2457c]
+  - @memberjunction/global@5.5.0
+
+## 5.4.1
+
+### Patch Changes
+
+- @memberjunction/global@5.4.1
+
+## 5.4.0
+
+### Patch Changes
+
+- @memberjunction/global@5.4.0
+
 ## 5.3.1
 
 ### Patch Changes

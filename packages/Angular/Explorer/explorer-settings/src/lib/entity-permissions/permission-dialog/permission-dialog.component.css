@@ -521,7 +521,7 @@
 .alert.alert-error {
   background: var(--mj-color-error-100);
   border: 1px solid var(--mj-status-error);
-  color: var(--mj-color-error-700);
+  color: var(--mj-status-error);
 }
 
 .alert.alert-error i {

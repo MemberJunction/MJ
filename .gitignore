@@ -16,6 +16,12 @@ experiments/**/.angular/
 # Turbo local cache
 .turbo/
 
+# Test scripts (local-only, not part of the build)
+test-scripts/
+
+# SchemaEngine RSU test artifacts
+packages/SchemaEngine/migrations/rsu/
+
 # Node artifact files
 node_modules/
 dist/
@@ -73,6 +79,7 @@ Thumbs.db
 .vscode/chrome
 
 *.env
+.env.*
 mj server info.txt
 member_junction_code_for_documentation.pdf
 member_junction_code_for_documentation.txt
@@ -129,6 +136,8 @@ mj.config.ts
 packages/AI/MCPServer/build/Server.js
 
 **/.claude/settings.local.json
+**/.claude/settings.local.json.bak
+**/.claude/scheduled_tasks.lock
 sql_logging/
 .sql-log-push/
 .sql-log-watch/
@@ -155,3 +164,14 @@ coverage/
 docker/workbench/workspace/.env.database
 docker/workbench/workspace/screenshots/
 test-run-log.txt
+docker/workbench/.env.database
+
+# Integration e2e scripts (may contain secrets)
+packages/Integration/e2e/
+packages/Integration/e2e-screenshots/
+packages/MJExplorer/src/environments/environment.development.ts.msal.bak
+packages/DBAutoDoc/autocare-config.json
+
+# Local test/credential directories
+amith-sf/
+benchmark-*/

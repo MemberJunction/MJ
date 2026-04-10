@@ -1,10 +1,11 @@
-import { EntityInfo, EntityFieldInfo, GeneratedFormSectionType, EntityFieldTSType, EntityFieldValueListType, Metadata, UserInfo, EntityRelationshipInfo, FieldCategoryInfo } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, GeneratedFormSectionType, EntityFieldTSType, EntityFieldValueListType, Metadata, UserInfo, EntityRelationshipInfo, EntityOrganicKeyInfo, EntityOrganicKeyRelatedEntityInfo, FieldCategoryInfo } from '@memberjunction/core';
 import { logError, logStatus } from '../Misc/status_logging';
+import { UUIDsEqual } from '@memberjunction/global';
 import fs from 'fs';
 import path from 'path';
-import { mjCoreSchema, outputOptionValue, configInfo } from '../Config/config';
+import { mjCoreSchema, outputOptionValue, configInfo, resolveEntityPackageName } from '../Config/config';
 import { GenerationResult, RelatedEntityDisplayComponentGeneratorBase } from './related-entity-components';
-import { sortBySequenceAndCreatedAt } from '../Misc/util';
+import { sortBySequenceAndCreatedAt, sortRelatedEntities } from '../Misc/util';
 
 /**
  * Represents metadata about an Angular form section that is generated for an entity
@@ -205,7 +206,7 @@ export class AngularClientGeneratorBase {
                   const componentName: string = `${entity.ClassName}FormComponent`;
                   componentImports.push (`import { ${componentName} } from "./Entities/${entity.ClassName}/${entity.ClassName.toLowerCase()}.form.component";`);
                   const currentComponentDistinctRelatedEntityClassNames: {itemClassName: string, moduleClassName: string}[] = [];
-                  relatedEntitySections.forEach(s => s.GeneratedOutput!.Component!.ImportItems.forEach(i => {
+                  relatedEntitySections.filter(s => s.GeneratedOutput?.Component?.ImportItems).forEach(s => s.GeneratedOutput!.Component!.ImportItems.forEach(i => {
                     if (!currentComponentDistinctRelatedEntityClassNames.find(ii => ii.itemClassName === i.ClassName))
                         currentComponentDistinctRelatedEntityClassNames.push({itemClassName: i.ClassName, moduleClassName: i.ModuleName});
                   }))
@@ -216,7 +217,7 @@ export class AngularClientGeneratorBase {
                   });
 
                   // go through all related entities used by this component and add them to the relatedEntityModuleImports array, but distinct for the library and the module names within the library
-                  relatedEntitySections.forEach(s => {
+                  relatedEntitySections.filter(s => s.GeneratedOutput?.Component?.ImportPath).forEach(s => {
                     let match = relatedEntityModuleImports.find(m => m.library === s.GeneratedOutput!.Component!.ImportPath)
                       if (!match) {
                         match = {library: s.GeneratedOutput!.Component!.ImportPath, modules: []};
@@ -289,7 +290,6 @@ import { FormsModule } from '@angular/forms';
 import { BaseFormsModule } from '@memberjunction/ng-base-forms';
 import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
 import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
-import { LayoutModule } from '@progress/kendo-angular-layout';
 
 // Import Generated Components
 ${componentImports.join('\n')}
@@ -399,7 +399,6 @@ export class ${modulePrefix}GeneratedFormsModule { }`;
 imports: [
     CommonModule,
     FormsModule,
-    LayoutModule,
     BaseFormsModule,
     EntityViewerModule,
     LinkDirectivesModule${additionalModulesToImport.length > 0 ? ',\n    ' + additionalModulesToImport.join(',\n    ') : ''}
@@ -458,9 +457,16 @@ export class ${this.SubModuleBaseName}${moduleNumber} { }
         const sectionsWithoutTop = additionalSections.filter(s => s.Type !== GeneratedFormSectionType.Top && s.Name);
         const allSections = [...sectionsWithoutTop, ...relatedEntitySections];
 
-        // Assign unique keys to each section
+        // Assign unique keys to each section.
+        // Related entity sections already have UniqueKey pre-set (derived from entity name);
+        // field sections derive theirs from the display name here.
         const usedKeys = new Set<string>();
         allSections.forEach((s) => {
+            if (s.UniqueKey) {
+                // Already set (e.g. related entity tabs) — just register it
+                usedKeys.add(s.UniqueKey);
+                return;
+            }
             let sectionKey = this.camelCase(s.Name);
             // Ensure unique keys by tracking used keys and adding suffix for duplicates
             let suffix = 1;
@@ -468,10 +474,10 @@ export class ${this.SubModuleBaseName}${moduleNumber} { }
                 sectionKey = this.camelCase(s.Name) + suffix++;
             }
             usedKeys.add(sectionKey);
-            s.UniqueKey = sectionKey; // Store the unique key with the section
+            s.UniqueKey = sectionKey;
         });
 
-        // Now update all TabCode with the correct unique keys
+        // Now update all TabCode with the correct unique keys (for field sections that got deduped)
         allSections.forEach(s => {
             if (s.TabCode && s.UniqueKey) {
                 // Replace placeholder camelCase keys with actual unique keys in the HTML
@@ -495,9 +501,11 @@ export class ${this.SubModuleBaseName}${moduleNumber} { }
             ? `\n\n    override async ngOnInit() {\n        await super.ngOnInit();\n        this.initSections([\n${sectionInitEntries.join(',\n')}\n        ]);\n    }`
             : '';
 
-        const entityPackageName = configInfo.entityPackageName || 'mj_generatedentities';
+        const entityPkg = entity.SchemaName === mjCoreSchema
+            ? '@memberjunction/core-entities'
+            : resolveEntityPackageName(entity.SchemaName);
         return `import { Component } from '@angular/core';
-import { ${entityObjectClass}Entity } from '${entity.SchemaName === mjCoreSchema ? '@memberjunction/core-entities' : entityPackageName}';
+import { ${entityObjectClass}Entity } from '${entityPkg}';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 ${generationImports.length > 0 ? generationImports + '\n' : ''}
@@ -810,26 +818,27 @@ ${indentedFormHTML}
             return relatedEntity.DisplayName;
         }
         else {
-            let tabName = relatedEntity.RelatedEntity;
-            
-            // check to see if we have > 1 related entities for this entity for the current RelatedEntityID 
-            const relationships = sortedRelatedEntities.filter(re => re.RelatedEntityID === relatedEntity.RelatedEntityID);
+            // Use the entity's DisplayName (human-friendly) when available, falling back to the technical Name
+            const md = new Metadata();
+            const re = md.EntityByID(relatedEntity.RelatedEntityID);
+            let tabName = re ? re.DisplayNameOrName : relatedEntity.RelatedEntity;
+
+            // check to see if we have > 1 related entities for this entity for the current RelatedEntityID
+            const relationships = sortedRelatedEntities.filter(re => UUIDsEqual(re.RelatedEntityID, relatedEntity.RelatedEntityID));
             if (relationships.length > 1) {
                 // we have more than one related entity for this entity, so we need to append the field name to the tab name
                 let fkeyField = relatedEntity.RelatedEntityJoinField;
                 if (fkeyField) {
                     // if the fkeyField has wrapping [] then remove them
                     fkeyField = fkeyField.trim().replace('[', '').replace(']', '');
-    
+
                     // let's get the actual entityInfo for the related entity so we can get the field and see if it has a display name
-                    const md = new Metadata();
-                    const re = md.EntityByID(relatedEntity.RelatedEntityID);
-                    const f = re.Fields.find(f => f.Name.trim().toLowerCase() === fkeyField.trim().toLowerCase());
+                    const f = re?.Fields.find(f => f.Name.trim().toLowerCase() === fkeyField.trim().toLowerCase());
                     if (f)
                         tabName += ` (${f.DisplayNameOrName})`
                 }
             }
-            return tabName;    
+            return tabName;
         }
       }
       
@@ -847,15 +856,10 @@ ${indentedFormHTML}
         // can only have 0 or 1 records (disjoint subtypes), so a grid panel is redundant
         const isaChildIDs = new Set(entity.ChildEntities.map(c => c.ID));
 
-        // Sort related entities by Sequence (user's explicit ordering), then by RelatedEntity name (stable tiebreaker)
-        const sortedRelatedEntities = entity.RelatedEntities
-            .filter(re => re.DisplayInForm && !isaChildIDs.has(re.RelatedEntityID))
-            .sort((a, b) => {
-                if (a.Sequence !== b.Sequence) {
-                    return a.Sequence - b.Sequence;
-                }
-                return a.RelatedEntity.localeCompare(b.RelatedEntity);
-            });
+        // Sort related entities deterministically using the shared sort with cascading tiebreakers
+        const sortedRelatedEntities = sortRelatedEntities(
+            entity.RelatedEntities.filter(re => re.DisplayInForm && !isaChildIDs.has(re.RelatedEntityID))
+        );
         let index = startIndex;
         for (const relatedEntity of sortedRelatedEntities) {
             const tabName: string = this.generateRelatedEntityTabName(relatedEntity, sortedRelatedEntities)
@@ -870,7 +874,7 @@ ${indentedFormHTML}
             }
             // If no custom icon, try to use the related entity's icon
             else {
-                const re: EntityInfo | undefined = md.Entities.find(e => e.ID === relatedEntity.RelatedEntityID)
+                const re: EntityInfo | undefined = md.Entities.find(e => UUIDsEqual(e.ID, relatedEntity.RelatedEntityID))
                 if (re && re.Icon && re.Icon.length > 0) {
                     icon = `<span class="${re.Icon} tab-header-icon"></span>`;
                     iconClass = re.Icon;
@@ -881,8 +885,12 @@ ${indentedFormHTML}
                 }
             }
 
-            // Calculate section key before generation (may be replaced later if duplicate)
-            const sectionKey = this.camelCase(tabName);
+            // Build section key from the stable entity name (not the display name which can change).
+            // When multiple relationships point to the same entity, append the join field for uniqueness.
+            const sameEntityRelationships = sortedRelatedEntities.filter(re => UUIDsEqual(re.RelatedEntityID, relatedEntity.RelatedEntityID));
+            const sectionKey = sameEntityRelationships.length > 1
+                ? this.camelCase(relatedEntity.RelatedEntity + ' ' + relatedEntity.RelatedEntityJoinField)
+                : this.camelCase(relatedEntity.RelatedEntity);
 
             let generateResults: GenerationResult;
             try {
@@ -929,13 +937,96 @@ ${componentCodeWithIndent}
                 TabCode: tabCode,
                 GeneratedOutput: generateResults,
                 EntityClassName: entity.ClassName,
+                UniqueKey: sectionKey, // Pre-set from entity name so dedup logic doesn't re-derive from display name
             })
             index++;
         }
 
         return tabs;
       }
-      
+
+      /**
+       * Generates organic key tab sections for an entity form. Organic keys enable
+       * cross-entity relationships based on shared business data (email, phone, etc.).
+       * Each organic key related entity gets its own collapsible panel with an EntityDataGrid.
+       * @param entity The entity to generate organic key tabs for
+       * @param startIndex Starting index for tab ordering
+       * @returns Array of organic key tab sections
+       */
+      protected generateOrganicKeyTabs(entity: EntityInfo, startIndex: number): AngularFormSectionInfo[] {
+        const md = new Metadata();
+        const tabs: AngularFormSectionInfo[] = [];
+        const organicKeys = entity.OrganicKeys;
+
+        if (!organicKeys || organicKeys.length === 0) {
+            return tabs;
+        }
+
+        let index = startIndex;
+        for (const organicKey of organicKeys) {
+            for (const relatedEntity of organicKey.RelatedEntities) {
+                const tabName = relatedEntity.DisplayName || relatedEntity.RelatedEntity;
+
+                // Determine icon from the related entity
+                let iconClass = 'fa fa-link';
+                const re: EntityInfo | undefined = md.Entities.find(e => UUIDsEqual(e.ID, relatedEntity.RelatedEntityID));
+                if (re && re.Icon && re.Icon.length > 0) {
+                    iconClass = re.Icon;
+                }
+
+                // Build a unique section key
+                const sectionKey = this.camelCase('organic ' + organicKey.Name + ' ' + relatedEntity.RelatedEntity);
+
+                // Generate the EntityDataGrid template for this organic key match
+                const allowLoadCheck = `IsSectionExpanded('${sectionKey}')`;
+                const afterDataLoadEvent = `(AfterDataLoad)="SetSectionRowCount('${sectionKey}', $event.totalRowCount)"`;
+
+                // Use BuildOrganicKeyViewParamsByNames instead of BuildRelationshipViewParamsByEntityName
+                const template = `<mj-explorer-entity-data-grid
+    [Params]="BuildOrganicKeyViewParamsByNames('${organicKey.Name.replace(/'/g, "\\'")}','${relatedEntity.RelatedEntity.replace(/'/g, "\\'")}')"
+    [AllowLoad]="${allowLoadCheck}"
+    [ShowToolbar]="false"
+    (Navigate)="OnFormNavigate($event)"
+    ${afterDataLoadEvent}
+    >
+</mj-explorer-entity-data-grid>`;
+
+                const componentCodeWithIndent = template.split('\n').map(l => `            ${l}`).join('\n');
+                const relatedEntitySearchTerms = (relatedEntity.RelatedEntity + ' ' + organicKey.Name).toLowerCase();
+
+                const tabCode = `${index > 0 ? '\n' : ''}    <!-- Organic Key: ${organicKey.Name} → ${tabName} Section -->
+    <mj-collapsible-panel
+        SectionKey="${sectionKey}"
+        SectionName="${tabName}"
+        Icon="${iconClass}"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('${sectionKey}')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+${componentCodeWithIndent}
+        </div>
+        }
+    </mj-collapsible-panel>`;
+
+                tabs.push({
+                    Type: GeneratedFormSectionType.Category,
+                    IsRelatedEntity: true,
+                    RelatedEntityDisplayLocation: relatedEntity.DisplayLocation,
+                    Name: tabName,
+                    TabCode: tabCode,
+                    EntityClassName: entity.ClassName,
+                    UniqueKey: sectionKey,
+                });
+                index++;
+            }
+        }
+
+        return tabs;
+      }
+
       /**
        * Removes all whitespace from a string
        * @param s The string to process
@@ -1101,6 +1192,9 @@ ${componentCodeWithIndent}
           // calc ending index for additional sections so we can pass taht into the related entity tabs because they need to start incrementally up from there...
           const endingIndex = additionalSections && additionalSections.length ? (topArea && topArea.length > 0 ? additionalSections.length - 1 : additionalSections.length) : 0;
           const relatedEntitySections = await this.generateRelatedEntityTabs(entity, endingIndex, contextUser);
+          // Generate organic key tabs (cross-entity matching by shared business data)
+          const organicKeySections = this.generateOrganicKeyTabs(entity, endingIndex + relatedEntitySections.length);
+          relatedEntitySections.push(...organicKeySections);
           const htmlCode = topArea.length > 0 ? this.generateSingleEntityHTMLWithSplitterForAngular(topArea, additionalSections, relatedEntitySections) :
                                                 this.generateSingleEntityHTMLWithOUTSplitterForAngular(topArea, additionalSections, relatedEntitySections);
           return {htmlCode, additionalSections, relatedEntitySections};
@@ -1121,14 +1215,17 @@ ${componentCodeWithIndent}
     (FavoriteToggled)="OnFavoriteToggled()"
     (HistoryRequested)="OnHistoryRequested()"
     (ListManagementRequested)="OnListManagementRequested()">
-    <kendo-splitter orientation="vertical" (layoutChange)="splitterLayoutChange()">
-        <kendo-splitter-pane [collapsible]="true" [size]="TopAreaHeight">
+    <!-- TODO: Evaluate restoring resizable splitter between top/bottom areas.
+         Previously used kendo-splitter (fixed 300px top), then as-split (percentage-based).
+         as-split caused empty space on forms with few top-area fields (40% of nothing = blank).
+         Using plain divs for now until a better sizing strategy is determined.
+         See: angular-split (as-split) or CSS resize for future options. -->
+    <div class="form-top-area">
 ${this.innerTopAreaHTML(topArea)}
-        </kendo-splitter-pane>
-        <kendo-splitter-pane>
+    </div>
+    <div class="form-bottom-area">
 ${this.innerCollapsiblePanelsHTML(additionalSections, relatedEntitySections)}
-        </kendo-splitter-pane>
-    </kendo-splitter>
+    </div>
 </mj-record-form-container>
         `
           return htmlCode;

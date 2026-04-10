@@ -305,7 +305,7 @@ The formal JSON Schema for `mj-app.json` is at `schemas/mj-app.schema.json` in t
 
 - `name`: Pattern `^[a-z][a-z0-9-]{1,62}[a-z0-9]$` (3-64 chars, lowercase + hyphens)
 - `version`: Full semver regex including pre-release and build metadata
-- `schema.name`: Pattern `^[a-z][a-z0-9_]{1,126}[a-z0-9]$` (3-128 chars, lowercase + underscores)
+- `schema.name`: Pattern `^_{0,2}[a-z][a-z0-9_]{1,126}[a-z0-9]$` (3-128 chars, lowercase + underscores, optional __ prefix)
 - `color`: Pattern `^#[0-9a-fA-F]{6}$`
 - `repository`: Must match `^https://github\.com/.+/.+$`
 - `tags`: Each tag lowercase alphanumeric + hyphens, max 50 chars, max 20 tags
@@ -338,7 +338,7 @@ Examples: `acme_crm`, `acme_helpdesk`, `oss_analytics`
 
 Rules:
 - Lowercase alphanumeric + underscores only
-- Must not start with `__` (reserved for MJ system schemas)
+- May start with up to two underscores (e.g., `__bcsaas`) for system-level extensions. Three or more leading underscores are reserved.
 - Must not collide with SQL Server reserved schema names (`dbo`, `sys`, `guest`, etc.)
 - Max 128 characters
 

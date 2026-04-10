@@ -102,23 +102,23 @@
 
     <!-- Template Params Section -->
     <mj-collapsible-panel
-        SectionKey="templateParams"
+        SectionKey="mJTemplateParams"
         SectionName="Template Params"
         Icon="fa fa-cog"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('templateParams')"
+        [BadgeCount]="GetSectionRowCount('mJTemplateParams')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Template Params','TemplateContentID')"
                 [NewRecordValues]="NewRecordValues('MJ: Template Params')"
-                [AllowLoad]="IsSectionExpanded('templateParams')"
+                [AllowLoad]="IsSectionExpanded('mJTemplateParams')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('templateParams', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJTemplateParams', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

@@ -1,34 +1,44 @@
-<div > 
-    <kendo-listbox
-        class="list-box"
-        #unselected
-        kendoListBoxDataBinding
-        [data]="UnselectedRecords"
-        [textField]="DisplayField"
-        [connectedWith]="selected"
-        [toolbar]="ToolbarSettings"
-        (dblclick)="onDblClick($event, 'unselected')"
-    >
-        <ng-template kendoListBoxItemTemplate let-dataItem>
-            @if (this.DisplayIconField) {
-                <span [ngClass]="dataItem[this.DisplayIconField] + ' item-icon'"></span>
-            }
-            <span>{{ dataItem[DisplayField] }}</span>
-        </ng-template>
-    </kendo-listbox>
-    <kendo-listbox 
-        class="list-box"
-        #selected 
-        [data]="SelectedRecords" 
-        [textField]="DisplayField"
-        [toolbar]="false"
-        (dblclick)="onDblClick($event, 'selected')"
-    >
-        <ng-template kendoListBoxItemTemplate let-dataItem>
-            @if (this.DisplayIconField) {
-                <span [ngClass]="dataItem[this.DisplayIconField] + ' item-icon'"></span>
-            }
-            <span>{{ dataItem[DisplayField] }}</span>
-        </ng-template>
-    </kendo-listbox>
+<div class="record-selector">
+  <div class="record-selector-list unselected-list">
+    <div class="list-header">Available</div>
+    <div class="list-items">
+      @for (item of UnselectedRecords; track $index; let i = $index) {
+        <div class="list-item" [class.active]="SelectedUnselectedIndex === i" (click)="SelectedUnselectedIndex = i" (dblclick)="TransferToSelected(i)">
+          @if (DisplayIconField) {
+            <span [ngClass]="item.Get(DisplayIconField) + ' item-icon'"></span>
+          }
+          <span>{{ item.Get(DisplayField) }}</span>
+        </div>
+      }
+    </div>
+  </div>
+
+  <div class="transfer-buttons">
+    <button mjButton variant="flat" size="sm" (click)="TransferAllToSelected()" title="Transfer all to selected">
+      <i class="fa-solid fa-angles-right"></i>
+    </button>
+    <button mjButton variant="flat" size="sm" (click)="TransferToSelected()" title="Transfer to selected" [disabled]="SelectedUnselectedIndex < 0">
+      <i class="fa-solid fa-angle-right"></i>
+    </button>
+    <button mjButton variant="flat" size="sm" (click)="TransferToUnselected()" title="Transfer to available" [disabled]="SelectedSelectedIndex < 0">
+      <i class="fa-solid fa-angle-left"></i>
+    </button>
+    <button mjButton variant="flat" size="sm" (click)="TransferAllToUnselected()" title="Transfer all to available">
+      <i class="fa-solid fa-angles-left"></i>
+    </button>
+  </div>
+
+  <div class="record-selector-list selected-list">
+    <div class="list-header">Selected</div>
+    <div class="list-items">
+      @for (item of SelectedRecords; track $index; let i = $index) {
+        <div class="list-item" [class.active]="SelectedSelectedIndex === i" (click)="SelectedSelectedIndex = i" (dblclick)="TransferToUnselected(i)">
+          @if (DisplayIconField) {
+            <span [ngClass]="item.Get(DisplayIconField) + ' item-icon'"></span>
+          }
+          <span>{{ item.Get(DisplayField) }}</span>
+        </div>
+      }
+    </div>
+  </div>
 </div>

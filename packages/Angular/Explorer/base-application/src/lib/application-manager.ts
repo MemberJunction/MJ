@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
-import { MJGlobal, MJEventType } from '@memberjunction/global';
+import { MJGlobal, MJEventType, UUIDsEqual } from '@memberjunction/global';
 import { Metadata, ApplicationInfo, LogError, LogStatus, StartupManager } from '@memberjunction/core';
 import { MJUserApplicationEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { BaseApplication } from './base-application';
@@ -32,6 +32,18 @@ export class ApplicationManager {
   private activeApp$ = new BehaviorSubject<BaseApplication | null>(null);
   private loading$ = new BehaviorSubject<boolean>(false);
   private initialized = false;
+
+  /** Resolves when loadApplications() has completed successfully */
+  private _readyResolve!: () => void;
+  private _readyPromise = new Promise<void>(resolve => { this._readyResolve = resolve; });
+
+  /**
+   * Returns a promise that resolves when applications have been loaded and the manager is ready.
+   * Safe to call multiple times — returns the same promise.
+   */
+  WhenReady(): Promise<void> {
+    return this._readyPromise;
+  }
 
   /**
    * Observable of user's active applications (filtered and ordered by UserApplication)
@@ -227,10 +239,10 @@ export class ApplicationManager {
 
         let app: BaseApplication | null;
         if (appInfo.ClassName && appInfo.ClassName.trim().length > 0) {
-          app = MJGlobal.Instance.ClassFactory.CreateInstance<BaseApplication>(
+          app = await MJGlobal.Instance.ClassFactory.CreateInstanceAsync<BaseApplication>(
             BaseApplication,
             appInfo.ClassName,
-            args          
+            args
           );
         }
         else {
@@ -251,8 +263,11 @@ export class ApplicationManager {
       await this.loadUserApplicationConfig();
 
       this.initialized = true;
+      this._readyResolve();
 
     } catch (error) {
+      // Resolve even on failure so waiters don't hang forever — they'll see initialized=false
+      this._readyResolve();
       LogError('Failed to load applications:', undefined, error instanceof Error ? error.message : String(error));
       throw error;
     } finally {
@@ -321,13 +336,13 @@ export class ApplicationManager {
    */
   async SetActiveApp(appId: string): Promise<void> {
     const currentApp = this.activeApp$.value;
-    const newApp = this.applications$.value.find(a => a.ID === appId);
+    const newApp = this.applications$.value.find(a => UUIDsEqual(a.ID, appId));
 
     if (!newApp) {
       return;
     }
 
-    if (currentApp?.ID === appId) {
+    if (UUIDsEqual(currentApp?.ID, appId)) {
       return; // Already active
     }
 
@@ -345,7 +360,7 @@ export class ApplicationManager {
    * Get application by ID
    */
   GetAppById(appId: string): BaseApplication | undefined {
-    return this.applications$.value.find(a => a.ID === appId);
+    return this.applications$.value.find(a => UUIDsEqual(a.ID, appId));
   }
 
   /**
@@ -465,7 +480,7 @@ export class ApplicationManager {
     switch (accessStatus) {
       case 'installed_active': {
         // User has access - find the BaseApplication instance
-        const baseApp = this.applications$.value.find(a => a.ID === appInfo.ID);
+        const baseApp = this.applications$.value.find(a => UUIDsEqual(a.ID, appInfo.ID));
         return {
           status: 'accessible',
           message: 'User has access to this app',

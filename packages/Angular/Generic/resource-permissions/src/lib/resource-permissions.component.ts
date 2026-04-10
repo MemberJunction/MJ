@@ -1,6 +1,7 @@
 import { AfterViewInit, Component, Input } from '@angular/core';
 import { IMetadataProvider, IRunViewProvider, LogError, Metadata, RoleInfo, RunView } from '@memberjunction/core';
 import { ResourcePermissionEngine, MJResourcePermissionEntity, MJUserEntity } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
@@ -162,10 +163,10 @@ export class ResourcePermissionsComponent extends BaseAngularComponent implement
     // in our list of permissions
     for (const permission of this.resourcePermissions) {
       if (permission.Type === this.SelectedType) {
-        if (this.SelectedType === 'User' && permission.UserID === this.SelectedUser?.ID) {
+        if (this.SelectedType === 'User' && UUIDsEqual(permission.UserID, this.SelectedUser?.ID)) {
           return true;
         }
-        else if (this.SelectedType === 'Role' && permission.RoleID === this.SelectedRole?.ID) {
+        else if (this.SelectedType === 'Role' && UUIDsEqual(permission.RoleID, this.SelectedRole?.ID)) {
           return true;
         }
       }

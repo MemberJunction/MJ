@@ -16,6 +16,14 @@ echo "  MJ CLI:         ${MJ_VERSION}"
 echo "  Playwright CLI: ${PW_VERSION}"
 echo ""
 
+# ─── Ensure Playwright Chromium is installed ─────────────────────────────────
+# Chromium is installed at container start (not during docker build) to avoid
+# Docker build timeouts from CDN network issues.
+echo "Ensuring Playwright Chromium is installed..."
+cd /usr/local/lib/node_modules/@playwright/cli && npx playwright install --with-deps chromium 2>/dev/null || true
+cd /workspace
+echo ""
+
 # ─── Clone or update MJ repository ──────────────────────────────────────────
 FRESH_CLONE=false
 if [ ! -d "$MJ_DIR/.git" ]; then
@@ -179,5 +187,11 @@ ENVTS
     fi
 fi
 
-# ─── Drop into zsh ──────────────────────────────────────────────────────────
-exec /bin/zsh "$@"
+# ─── Drop into shell or keep alive ──────────────────────────────────────────
+if [ -t 0 ]; then
+    exec /bin/zsh "$@"
+else
+    # Non-interactive: keep container alive for docker exec
+    echo "Container ready. Use 'docker exec -it claude-dev zsh' to connect."
+    exec tail -f /dev/null
+fi

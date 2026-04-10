@@ -3,6 +3,7 @@
  */
 
 import { DatabaseDocumentation, AnalysisRun, ProcessingLogEntry } from '../types/state.js';
+import { TokenPricingConfig } from '../types/config.js';
 
 export class IterationTracker {
   /**
@@ -138,13 +139,24 @@ export class IterationTracker {
   }
 
   /**
-   * Add tokens to run total
+   * Add tokens to run total and calculate cost from pricing config if available
    */
-  public addTokenUsage(run: AnalysisRun, tokensUsed: number, cost?: number): void {
+  public addTokenUsage(run: AnalysisRun, tokensUsed: number, cost?: number, inputTokens?: number, outputTokens?: number, pricing?: TokenPricingConfig): void {
     run.totalTokensUsed += tokensUsed;
+    run.totalInputTokens = (run.totalInputTokens || 0) + (inputTokens || 0);
+    run.totalOutputTokens = (run.totalOutputTokens || 0) + (outputTokens || 0);
     if (cost) {
       run.estimatedCost += cost;
+    } else if (pricing && (inputTokens || outputTokens)) {
+      run.estimatedCost += IterationTracker.CalculateCost(inputTokens || 0, outputTokens || 0, pricing);
     }
+  }
+
+  /**
+   * Calculate cost from token counts and pricing config
+   */
+  public static CalculateCost(inputTokens: number, outputTokens: number, pricing: TokenPricingConfig): number {
+    return (inputTokens * pricing.inputCostPer1MTokens + outputTokens * pricing.outputCostPer1MTokens) / 1_000_000;
   }
 
   /**

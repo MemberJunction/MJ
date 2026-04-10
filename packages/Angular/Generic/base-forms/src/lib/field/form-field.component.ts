@@ -302,6 +302,11 @@ export class MjFormFieldComponent implements OnChanges, OnDestroy {
   get FKDisplayName(): string | null {
     if (!this.Record || !this.HasRelatedEntity) return null;
 
+    // If the FK value itself is null/empty, there's nothing to display
+    // (the joined name field may still hold a stale cached value from the view)
+    const fkValue = this.Value;
+    if (fkValue == null || fkValue === '') return null;
+
     // Fast path: name field is joined into our record's view
     const nameFieldMap = this.FieldInfo?.RelatedEntityNameFieldMap;
     if (nameFieldMap) {
@@ -577,6 +582,7 @@ export class MjFormFieldComponent implements OnChanges, OnDestroy {
 
   /**
    * Perform a RunView search on the related entity's name field.
+   * Falls back to searching by primary key when no NameField exists (single-field PKs only).
    */
   private async searchRelatedEntity(query: string): Promise<void> {
     const fieldInfo = this.FieldInfo;
@@ -584,10 +590,24 @@ export class MjFormFieldComponent implements OnChanges, OnDestroy {
 
     const md = new Metadata();
     const relatedEntity = md.Entities.find(e => e.Name === fieldInfo.RelatedEntity);
-    if (!relatedEntity?.NameField) return;
+    if (!relatedEntity) return;
 
-    const nameFieldName = relatedEntity.NameField.Name;
+    const nameField = relatedEntity.NameField;
+    const pkFields = relatedEntity.PrimaryKeys;
+
+    // If no NameField, fall back to PK — but only for single-field PKs
+    if (!nameField) {
+      if (!pkFields || pkFields.length !== 1) return;
+    }
+
+    const nameFieldName = nameField ? nameField.Name : pkFields[0].Name;
     const pkFieldName = fieldInfo.RelatedEntityFieldName || 'ID';
+
+    // Build Fields array, avoiding duplicates when nameField IS the PK
+    const fields = nameFieldName === pkFieldName
+      ? [pkFieldName]
+      : [pkFieldName, nameFieldName];
+
     const escapedQuery = query.replace(/'/g, "''");
 
     const rv = new RunView();
@@ -596,7 +616,7 @@ export class MjFormFieldComponent implements OnChanges, OnDestroy {
       ExtraFilter: `[${nameFieldName}] LIKE '%${escapedQuery}%'`,
       MaxRows: 20,
       ResultType: 'simple',
-      Fields: [pkFieldName, nameFieldName]
+      Fields: fields
     });
 
     if (result.Success) {

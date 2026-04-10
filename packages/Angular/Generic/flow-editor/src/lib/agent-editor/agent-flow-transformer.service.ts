@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { MJAIAgentStepEntity, MJAIAgentStepPathEntity } from '@memberjunction/core-entities';
 import { FlowNode, FlowConnection, FlowConnectionStyle, FlowNodeTypeConfig, FlowNodePort } from '../interfaces/flow-types';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /** Picker item shape for Actions with optional icon */
 export interface ActionPickerItem { ID: string; Name: string; IconClass?: string | null; }
@@ -204,12 +205,12 @@ export class AgentFlowTransformerService {
     const fallbackIcon = this.getIconForType(step.StepType);
 
     if (step.StepType === 'Action' && step.ActionID && actions) {
-      const action = actions.find(a => a.ID === step.ActionID);
+      const action = actions.find(a => UUIDsEqual(a.ID, step.ActionID));
       return { Icon: action?.IconClass || fallbackIcon };
     }
 
     if (step.StepType === 'Sub-Agent' && step.SubAgentID && agents) {
-      const agent = agents.find(a => a.ID === step.SubAgentID);
+      const agent = agents.find(a => UUIDsEqual(a.ID, step.SubAgentID));
       if (agent?.LogoURL) {
         return { Icon: agent.IconClass || fallbackIcon, LogoURL: agent.LogoURL };
       }
@@ -232,12 +233,12 @@ export class AgentFlowTransformerService {
     const fallbackIcon = this.getIconForType(step.StepType);
 
     if (step.LoopBodyType === 'Action' && step.ActionID && actions) {
-      const action = actions.find(a => a.ID === step.ActionID);
+      const action = actions.find(a => UUIDsEqual(a.ID, step.ActionID));
       if (action?.IconClass) return { Icon: fallbackIcon }; // Loop keeps its own icon; body icon handled separately
     }
 
     if (step.LoopBodyType === 'Sub-Agent' && step.SubAgentID && agents) {
-      const agent = agents.find(a => a.ID === step.SubAgentID);
+      const agent = agents.find(a => UUIDsEqual(a.ID, step.SubAgentID));
       if (agent?.LogoURL) return { Icon: fallbackIcon, LogoURL: agent.LogoURL };
     }
 
@@ -314,7 +315,7 @@ export class AgentFlowTransformerService {
     const isAlwaysPath = !hasCondition;
 
     // Analyze sibling paths from the same origin step
-    const siblingPaths = allPaths.filter(p => p.OriginStepID === path.OriginStepID);
+    const siblingPaths = allPaths.filter(p => UUIDsEqual(p.OriginStepID, path.OriginStepID));
     const isOnlyPath = siblingPaths.length === 1;
     const unconditionalSiblings = siblingPaths.filter(
       p => !p.Condition || p.Condition.trim().length === 0
@@ -413,7 +414,7 @@ export class AgentFlowTransformerService {
 
     // Store logo URL for loop body sub-agents
     if (bodyType === 'Sub-Agent' && step.SubAgentID && agents) {
-      const agent = agents.find(a => a.ID === step.SubAgentID);
+      const agent = agents.find(a => UUIDsEqual(a.ID, step.SubAgentID));
       if (agent?.LogoURL) {
         data['LoopBodyLogoURL'] = agent.LogoURL;
       }
@@ -436,11 +437,11 @@ export class AgentFlowTransformerService {
     const fallback = this.getBodyTypeIcon(bodyType ?? '');
 
     if (bodyType === 'Action' && step.ActionID && actions) {
-      const action = actions.find(a => a.ID === step.ActionID);
+      const action = actions.find(a => UUIDsEqual(a.ID, step.ActionID));
       return action?.IconClass || fallback;
     }
     if (bodyType === 'Sub-Agent' && step.SubAgentID && agents) {
-      const agent = agents.find(a => a.ID === step.SubAgentID);
+      const agent = agents.find(a => UUIDsEqual(a.ID, step.SubAgentID));
       return agent?.IconClass || fallback;
     }
     return fallback;

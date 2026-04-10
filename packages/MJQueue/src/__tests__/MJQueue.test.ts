@@ -57,16 +57,20 @@ vi.mock('@memberjunction/core-entities', () => {
   };
 });
 
-vi.mock('@memberjunction/global', () => ({
-  MJGlobal: {
-    Instance: {
-      GetGlobalObjectStore: vi.fn().mockReturnValue({}),
-      ClassFactory: {
-        CreateInstance: vi.fn(),
+vi.mock('@memberjunction/global', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@memberjunction/global')>();
+  return {
+    ...actual,
+    MJGlobal: {
+      Instance: {
+        GetGlobalObjectStore: vi.fn().mockReturnValue({}),
+        ClassFactory: {
+          CreateInstance: vi.fn(),
+        },
       },
     },
-  },
-}));
+  };
+});
 
 vi.mock('os', () => ({
   default: {

@@ -1,6 +1,7 @@
 export { gql } from 'graphql-request';
 export { setupGraphQLClient } from './config';
 export { GraphQLDataProvider, GraphQLProviderConfigData } from './graphQLDataProvider';
+export type { AuthenticationErrorCallback } from './graphQLDataProvider';
 export * from './graphQLTransactionGroup';
 export { FieldMapper } from './FieldMapper';
 export * from './rolesAndUsersType';
@@ -15,7 +16,11 @@ export type {
     ExecuteSimplePromptParams,
     SimplePromptResult,
     EmbedTextParams,
-    EmbedTextResult
+    EmbedTextResult,
+    RunAIAgentFromConversationDetailParams,
+    AutotagPipelineResult,
+    VectorizeEntityParams,
+    VectorizeEntityResult
 } from './graphQLAIClient';
 export { GraphQLTestingClient } from './graphQLTestingClient';
 export type {
@@ -25,6 +30,8 @@ export type {
     RunTestSuiteResult,
     TestExecutionProgress
 } from './graphQLTestingClient';
+export { FireAndForgetHelper } from './fireAndForgetHelper';
+export type { FireAndForgetConfig } from './fireAndForgetHelper';
 export { GraphQLComponentRegistryClient } from './GraphQLComponentRegistryClient';
 export type {
     GetRegistryComponentParams,
@@ -44,3 +51,31 @@ export type {
 export * from './graphQLFileStorageClient';
 
 export * from './storage-providers';
+
+export { GraphQLSearchClient } from './graphQLSearchClient';
+export type {
+    SearchClientParams,
+    SearchClientResponse,
+    SearchClientResultItem,
+    SearchClientFilters,
+    SearchSourceCounts,
+    SearchScoreBreakdown
+} from './graphQLSearchClient';
+
+export { GraphQLIntegrationClient } from './graphQLIntegrationClient';
+export type {
+    DiscoveredObjectResult,
+    DiscoveredFieldResult,
+    DiscoveryResult,
+    ConnectionTestGraphQLResult,
+    SchemaPreviewObjectInput,
+    SchemaPreviewFile,
+    SchemaPreviewResult,
+    PreviewRecordResult,
+    PreviewDataResult,
+    DefaultFieldMappingResult,
+    DefaultObjectConfigResult,
+    DefaultConfigResult,
+    ApplyAllEntityMapCreated,
+    ApplyAllResult
+} from './graphQLIntegrationClient';

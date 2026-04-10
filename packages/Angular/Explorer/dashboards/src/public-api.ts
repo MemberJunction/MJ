@@ -23,8 +23,27 @@ export {
   KPICardComponent,
   LiveExecutionWidgetComponent,
   TimeSeriesChartComponent,
-  PerformanceHeatmapComponent
+  PerformanceHeatmapComponent,
+  AgentRequestsResourceComponent,
+  AutotaggingPipelineResourceComponent,
+  VectorManagementResourceComponent,
+  DuplicateDetectionResourceComponent
 } from './AI/index';
+
+// Knowledge Hub components
+export {
+  KnowledgeConfigResourceComponent,
+  LoadKnowledgeConfigResource
+} from './KnowledgeHub/components/config/knowledge-config-resource.component';
+export { SearchResultDetailComponent } from './KnowledgeHub/components/results-detail/search-result-detail.component';
+export {
+  ClusterVisualizationResourceComponent,
+  LoadClusterVisualizationResource
+} from './KnowledgeHub/components/clusters/cluster-visualization-resource.component';
+export {
+  AnalyticsResourceComponent,
+  LoadAnalyticsResource
+} from './KnowledgeHub/components/analytics/analytics-resource.component';
 
 // Export Actions components as resources (BaseResourceComponent-based)
 export {
@@ -114,12 +133,24 @@ export { APIUsagePanelComponent } from './APIKeys/api-usage-panel.component';
 export * from './MCP';
 
 // Version History Dashboard Components
-export {
-  VersionHistoryLabelsResourceComponent,
-  VersionHistoryDiffResourceComponent,
-  VersionHistoryRestoreResourceComponent,
-  VersionHistoryGraphResourceComponent
-} from './VersionHistory';
+export * from './VersionHistory';
 
-// Module
-export * from './module';
+// Integration Dashboard
+export * from './Integration';
+
+// NOTE: DashboardsModule (backward-compatible wrapper that imports ALL feature modules) is
+// intentionally not re-exported from the barrel to enable ESBuild code splitting.
+// Consumers who need it: import { DashboardsModule } from '@memberjunction/ng-dashboards/module'
+
+// Feature modules for lazy loading
+export * from './core-dashboards.module';
+export * from './ai-dashboards.module';
+export * from './actions-dashboards.module';
+export * from './testing-dashboards.module';
+export * from './scheduling-dashboards.module';
+export * from './communication-dashboards.module';
+export * from './credentials-dashboards.module';
+export * from './data-explorer-dashboards.module';
+export * from './lists-dashboards.module';
+export * from './component-studio-dashboards.module';
+export * from './shared/shared-dashboard-widgets.module';

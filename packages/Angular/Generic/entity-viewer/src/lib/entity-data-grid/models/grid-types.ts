@@ -614,13 +614,13 @@ export const DEFAULT_VISUAL_CONFIG: Required<GridVisualConfig> = {
   clickableUrls: true,
 
   // Selection - mellow yellow accent (avoids conflict with blue hyperlinks)
-  selectionIndicatorColor: '#f9a825',
+  selectionIndicatorColor: '',  // Empty = use CSS variable --mj-status-warning
   selectionIndicatorWidth: 3,
-  selectionBackground: '#fff9e6',
+  selectionBackground: '',  // Empty = use CSS variable --mj-status-warning-bg
 
   // Checkbox - rounded style
   checkboxStyle: 'rounded',
-  checkboxColor: '#2196F3',
+  checkboxColor: '',  // Empty = use CSS variable --mj-brand-primary
 
   // Loading - skeleton for modern feel
   skeletonLoading: true,
@@ -631,5 +631,5 @@ export const DEFAULT_VISUAL_CONFIG: Required<GridVisualConfig> = {
   cellPadding: 'normal',
 
   // Accent color
-  accentColor: '#2196F3'
+  accentColor: ''  // Empty = use CSS variable --mj-brand-primary
 };

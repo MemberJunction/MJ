@@ -8,6 +8,7 @@ import { CollectionPermissionService, CollectionPermission } from '../../service
 import { ArtifactIconService } from '@memberjunction/ng-artifacts';
 import { Subject, takeUntil } from 'rxjs';
 import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSortOrder } from '../../models/collection-view.model';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Full-panel Collections view component
@@ -17,7 +18,7 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
   standalone: false,
   selector: 'mj-collections-full-view',
   template: `
-    <div class="collections-view" (keydown)="handleKeyboardShortcut($event)" kendoDialogContainer>
+    <div class="collections-view" (keydown)="handleKeyboardShortcut($event)">
       <!-- Mac Finder-style Header -->
       <div class="collections-header">
         <!-- Breadcrumb navigation -->
@@ -235,7 +236,7 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
               <div
                 class="grid-item"
                 [class.selected]="item.selected"
-                [class.active]="item.type === 'artifact' && item.artifact?.ID === activeArtifactId"
+                [class.active]="item.type === 'artifact' && IsArtifactActive(item)"
                 (click)="onItemClick(item, $event)"
                 (dblclick)="onItemDoubleClick(item, $event)"
                 (contextmenu)="onItemContextMenu(item, $event)">
@@ -369,7 +370,7 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
                   <tr
                     class="list-item"
                     [class.selected]="item.selected"
-                    [class.active]="item.type === 'artifact' && item.artifact?.ID === activeArtifactId"
+                    [class.active]="item.type === 'artifact' && IsArtifactActive(item)"
                     (click)="onItemClick(item, $event)"
                     (dblclick)="onItemDoubleClick(item, $event)"
                     (contextmenu)="onItemContextMenu(item, $event)">
@@ -505,7 +506,7 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
       display: flex;
       flex-direction: column;
       height: 100%;
-      background: #FAFAFA;
+      background: var(--mj-bg-surface-sunken);
       position: relative;
     }
 
@@ -514,9 +515,9 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
       display: flex;
       align-items: center;
       padding: 12px 20px;
-      border-bottom: 1px solid #E5E7EB;
+      border-bottom: 1px solid var(--mj-border-default);
       gap: 16px;
-      background: white;
+      background: var(--mj-bg-surface);
     }
 
     .collections-breadcrumb {
@@ -534,12 +535,12 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     }
 
     .breadcrumb-item i {
-      color: #6B7280;
+      color: var(--mj-text-muted);
       font-size: 14px;
     }
 
     .breadcrumb-link {
-      color: #111827;
+      color: var(--mj-text-primary);
       font-weight: 500;
       cursor: pointer;
       text-decoration: none;
@@ -549,11 +550,11 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     }
 
     .breadcrumb-link:hover {
-      color: #0076D6;
+      color: var(--mj-brand-primary);
     }
 
     .breadcrumb-link.active {
-      color: #6B7280;
+      color: var(--mj-text-muted);
       cursor: default;
     }
 
@@ -565,7 +566,7 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     }
 
     .breadcrumb-separator {
-      color: #D1D5DB;
+      color: var(--mj-border-strong);
       font-size: 10px;
     }
 
@@ -581,10 +582,10 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
       align-items: center;
       gap: 6px;
       padding: 6px 12px;
-      background: #007AFF;
+      background: var(--mj-brand-primary);
       border: none;
       border-radius: 6px;
-      color: white;
+      color: var(--mj-text-inverse);
       font-size: 13px;
       font-weight: 500;
       cursor: pointer;
@@ -592,7 +593,7 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     }
 
     .btn-primary:hover {
-      background: #0051D5;
+      background: var(--mj-brand-primary-hover);
     }
 
     .btn-primary i.fa-chevron-down {
@@ -603,10 +604,10 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     .btn-icon {
       padding: 6px 10px;
       background: transparent;
-      border: 1px solid #D1D5DB;
+      border: 1px solid var(--mj-border-strong);
       border-radius: 6px;
       cursor: pointer;
-      color: #6B7280;
+      color: var(--mj-text-muted);
       transition: all 150ms ease;
       display: flex;
       align-items: center;
@@ -614,19 +615,19 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     }
 
     .btn-icon:hover {
-      background: #F9FAFB;
-      color: #111827;
-      border-color: #9CA3AF;
+      background: var(--mj-bg-surface-sunken);
+      color: var(--mj-text-primary);
+      border-color: var(--mj-text-disabled);
     }
 
     .btn-icon.active {
-      background: #EFF6FF;
-      color: #007AFF;
-      border-color: #007AFF;
+      background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+      color: var(--mj-brand-primary);
+      border-color: var(--mj-brand-primary);
     }
 
     .btn-icon.active:hover {
-      background: #DBEAFE;
+      background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
     }
 
     /* Dropdown menus */
@@ -639,8 +640,8 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
       top: calc(100% + 4px);
       left: 0;
       min-width: 200px;
-      background: white;
-      border: 1px solid #E5E7EB;
+      background: var(--mj-bg-surface);
+      border: 1px solid var(--mj-border-default);
       border-radius: 8px;
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
       padding: 4px;
@@ -661,7 +662,7 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
       background: transparent;
       border: none;
       border-radius: 4px;
-      color: #111827;
+      color: var(--mj-text-primary);
       font-size: 13px;
       cursor: pointer;
       text-align: left;
@@ -669,7 +670,7 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     }
 
     .dropdown-item:hover:not(:disabled) {
-      background: #F3F4F6;
+      background: var(--mj-bg-surface-sunken);
     }
 
     .dropdown-item:disabled {
@@ -678,24 +679,24 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     }
 
     .dropdown-item.active {
-      background: #EFF6FF;
-      color: #007AFF;
+      background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+      color: var(--mj-brand-primary);
     }
 
     .dropdown-item i {
       font-size: 14px;
       width: 16px;
       text-align: center;
-      color: #6B7280;
+      color: var(--mj-text-muted);
     }
 
     .dropdown-item.active i {
-      color: #007AFF;
+      color: var(--mj-brand-primary);
     }
 
     .dropdown-divider {
       height: 1px;
-      background: #E5E7EB;
+      background: var(--mj-border-default);
       margin: 4px 0;
     }
 
@@ -710,7 +711,7 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     .search-container i.fa-search {
       position: absolute;
       left: 10px;
-      color: #9CA3AF;
+      color: var(--mj-text-disabled);
       font-size: 13px;
       pointer-events: none;
     }
@@ -718,7 +719,7 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     .search-input {
       width: 100%;
       padding: 6px 32px 6px 32px;
-      border: 1px solid #D1D5DB;
+      border: 1px solid var(--mj-border-strong);
       border-radius: 6px;
       font-size: 13px;
       outline: none;
@@ -726,8 +727,8 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     }
 
     .search-input:focus {
-      border-color: #007AFF;
-      box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
+      border-color: var(--mj-brand-primary);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
     }
 
     .search-clear {
@@ -736,7 +737,7 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
       padding: 4px;
       background: transparent;
       border: none;
-      color: #9CA3AF;
+      color: var(--mj-text-disabled);
       cursor: pointer;
       border-radius: 4px;
       display: flex;
@@ -745,8 +746,8 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     }
 
     .search-clear:hover {
-      background: #F3F4F6;
-      color: #6B7280;
+      background: var(--mj-bg-surface-sunken);
+      color: var(--mj-text-muted);
     }
 
     /* Selection toolbar */
@@ -755,8 +756,8 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
       align-items: center;
       justify-content: space-between;
       padding: 8px 20px;
-      background: #EFF6FF;
-      border-bottom: 1px solid #BFDBFE;
+      background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+      border-bottom: 1px solid color-mix(in srgb, var(--mj-brand-primary) 30%, var(--mj-bg-surface));
     }
 
     .selection-info {
@@ -768,7 +769,7 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     .selection-count {
       font-size: 13px;
       font-weight: 600;
-      color: #1E40AF;
+      color: var(--mj-brand-primary);
     }
 
     .selection-actions {
@@ -781,10 +782,10 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
       align-items: center;
       gap: 6px;
       padding: 6px 12px;
-      background: white;
-      border: 1px solid #D1D5DB;
+      background: var(--mj-bg-surface);
+      border: 1px solid var(--mj-border-strong);
       border-radius: 6px;
-      color: #374151;
+      color: var(--mj-text-secondary);
       font-size: 13px;
       font-weight: 500;
       cursor: pointer;
@@ -792,18 +793,18 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     }
 
     .btn-toolbar:hover {
-      background: #F9FAFB;
-      border-color: #9CA3AF;
+      background: var(--mj-bg-surface-sunken);
+      border-color: var(--mj-text-disabled);
     }
 
     .btn-toolbar.btn-danger {
-      color: #DC2626;
-      border-color: #FCA5A5;
+      color: var(--mj-status-error);
+      border-color: color-mix(in srgb, var(--mj-status-error) 30%, var(--mj-bg-surface));
     }
 
     .btn-toolbar.btn-danger:hover {
-      background: #FEE2E2;
-      border-color: #DC2626;
+      background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
+      border-color: var(--mj-status-error);
     }
 
     /* Content area */
@@ -823,7 +824,7 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
       justify-content: center;
       flex: 1;
       min-height: 0;
-      color: #9CA3AF;
+      color: var(--mj-text-disabled);
       text-align: center;
       padding: 24px;
     }
@@ -832,12 +833,12 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
       font-size: 64px;
       margin-bottom: 24px;
       opacity: 0.3;
-      color: #D1D5DB;
+      color: var(--mj-border-strong);
     }
 
     .empty-state h3 {
       margin: 0 0 8px 0;
-      color: #374151;
+      color: var(--mj-text-secondary);
       font-size: 18px;
       font-weight: 600;
     }
@@ -845,7 +846,7 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     .empty-state p {
       margin: 0 0 24px 0;
       font-size: 14px;
-      color: #6B7280;
+      color: var(--mj-text-muted);
     }
 
     .empty-state .empty-state-cta {
@@ -873,7 +874,7 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
       display: flex;
       flex-direction: column;
       padding: 12px;
-      background: white;
+      background: var(--mj-bg-surface);
       border: 2px solid transparent;
       border-radius: 8px;
       cursor: pointer;
@@ -883,23 +884,23 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     }
 
     .grid-item:hover {
-      background: #F9FAFB;
-      border-color: #D1D5DB;
+      background: var(--mj-bg-surface-sunken);
+      border-color: var(--mj-border-strong);
     }
 
     .grid-item.selected {
-      background: #EFF6FF;
-      border-color: #007AFF;
+      background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+      border-color: var(--mj-brand-primary);
     }
 
     .grid-item.active {
-      background: #FEF3C7;
-      border-color: #F59E0B;
-      box-shadow: 0 0 0 1px #F59E0B;
+      background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface));
+      border-color: var(--mj-status-warning);
+      box-shadow: 0 0 0 1px var(--mj-status-warning);
     }
 
     .grid-item.active:hover {
-      background: #FDE68A;
+      background: color-mix(in srgb, var(--mj-status-warning) 25%, var(--mj-bg-surface));
     }
 
     /* Select mode styling for grid */
@@ -908,8 +909,8 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     }
 
     .unified-grid.select-mode .grid-item:hover {
-      background: #EFF6FF;
-      border-color: #93C5FD;
+      background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+      border-color: color-mix(in srgb, var(--mj-brand-primary) 30%, var(--mj-bg-surface));
     }
 
     .item-checkbox {
@@ -927,13 +928,13 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
 
     .item-checkbox i {
       font-size: 16px;
-      color: #9CA3AF;
+      color: var(--mj-text-disabled);
       transition: color 150ms ease;
     }
 
     .grid-item.selected .item-checkbox i,
     .item-checkbox:hover i {
-      color: #007AFF;
+      color: var(--mj-brand-primary);
     }
 
     .grid-item-content {
@@ -954,21 +955,21 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     }
 
     .grid-icon.folder-icon {
-      background: linear-gradient(135deg, #60A5FA 0%, #3B82F6 100%);
+      background: var(--mj-brand-primary);
     }
 
     .grid-icon.folder-icon i {
       font-size: 36px;
-      color: white;
+      color: var(--mj-text-inverse);
     }
 
     .grid-icon.artifact-icon {
-      background: #F3F4F6;
+      background: var(--mj-bg-surface-sunken);
     }
 
     .grid-icon.artifact-icon i {
       font-size: 32px;
-      color: #6B7280;
+      color: var(--mj-text-muted);
     }
 
     .shared-badge {
@@ -977,17 +978,17 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
       right: -4px;
       width: 20px;
       height: 20px;
-      background: #10B981;
+      background: var(--mj-status-success);
       border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
-      border: 2px solid white;
+      border: 2px solid var(--mj-bg-surface);
     }
 
     .shared-badge i {
       font-size: 10px;
-      color: white;
+      color: var(--mj-text-inverse);
     }
 
     .grid-info {
@@ -998,7 +999,7 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     .grid-name {
       font-size: 13px;
       font-weight: 500;
-      color: #111827;
+      color: var(--mj-text-primary);
       line-height: 1.3;
       margin-bottom: 4px;
       /* Allow wrapping to 2 lines max */
@@ -1011,7 +1012,7 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
 
     .grid-description {
       font-size: 11px;
-      color: #6B7280;
+      color: var(--mj-text-muted);
       line-height: 1.3;
       margin-bottom: 4px;
       /* Allow wrapping to 2 lines max */
@@ -1024,13 +1025,13 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
 
     .grid-meta {
       font-size: 11px;
-      color: #6B7280;
+      color: var(--mj-text-muted);
       margin-top: 4px;
     }
 
     .grid-owner {
       font-size: 11px;
-      color: #6B7280;
+      color: var(--mj-text-muted);
       margin-top: 2px;
     }
 
@@ -1042,8 +1043,8 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     .version-badge {
       display: inline-block;
       padding: 2px 6px;
-      background: #FEF3C7;
-      color: #92400E;
+      background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface));
+      color: var(--mj-status-warning);
       border-radius: 3px;
       font-size: 10px;
       font-weight: 600;
@@ -1054,8 +1055,8 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     .artifact-type-badge {
       display: inline-block;
       padding: 2px 6px;
-      background: #DBEAFE;
-      color: #1E40AF;
+      background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+      color: var(--mj-brand-primary);
       border-radius: 3px;
       font-size: 10px;
       font-weight: 500;
@@ -1064,8 +1065,8 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
 
     /* List view */
     .unified-list {
-      background: white;
-      border: 1px solid #E5E7EB;
+      background: var(--mj-bg-surface);
+      border: 1px solid var(--mj-border-default);
       border-radius: 8px;
       overflow: hidden;
     }
@@ -1076,8 +1077,8 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     }
 
     .list-table thead {
-      background: #F9FAFB;
-      border-bottom: 1px solid #E5E7EB;
+      background: var(--mj-bg-surface-sunken);
+      border-bottom: 1px solid var(--mj-border-default);
     }
 
     .list-table th {
@@ -1085,7 +1086,7 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
       text-align: left;
       font-size: 12px;
       font-weight: 600;
-      color: #6B7280;
+      color: var(--mj-text-muted);
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
@@ -1097,7 +1098,7 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     }
 
     .list-table th.sortable:hover {
-      color: #007AFF;
+      color: var(--mj-brand-primary);
     }
 
     .list-table th.sortable span {
@@ -1115,7 +1116,7 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     }
 
     .list-table tbody tr {
-      border-bottom: 1px solid #F3F4F6;
+      border-bottom: 1px solid var(--mj-bg-surface-sunken);
       transition: background 150ms ease;
       cursor: pointer;
       user-select: none;
@@ -1126,26 +1127,26 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     }
 
     .list-table tbody tr:hover {
-      background: #F9FAFB;
+      background: var(--mj-bg-surface-sunken);
     }
 
     .list-table tbody tr.selected {
-      background: #EFF6FF;
+      background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
     }
 
     .list-table tbody tr.active {
-      background: #FEF3C7;
-      border-left: 3px solid #F59E0B;
+      background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface));
+      border-left: 3px solid var(--mj-status-warning);
     }
 
     .list-table tbody tr.active:hover {
-      background: #FDE68A;
+      background: color-mix(in srgb, var(--mj-status-warning) 25%, var(--mj-bg-surface));
     }
 
     .list-table td {
       padding: 12px 16px;
       font-size: 13px;
-      color: #374151;
+      color: var(--mj-text-secondary);
     }
 
     .col-checkbox {
@@ -1155,14 +1156,14 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
 
     .col-checkbox i {
       font-size: 16px;
-      color: #9CA3AF;
+      color: var(--mj-text-disabled);
       cursor: pointer;
       transition: color 150ms ease;
     }
 
     .col-checkbox i:hover,
     .list-table tbody tr.selected .col-checkbox i {
-      color: #007AFF;
+      color: var(--mj-brand-primary);
     }
 
     .col-name {
@@ -1177,18 +1178,18 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
 
     .list-name-cell i {
       font-size: 16px;
-      color: #6B7280;
+      color: var(--mj-text-muted);
       width: 20px;
       text-align: center;
     }
 
     .list-name-cell .fa-folder {
-      color: #3B82F6;
+      color: var(--mj-brand-primary);
     }
 
     .shared-indicator {
       font-size: 12px;
-      color: #10B981;
+      color: var(--mj-status-success);
       margin-left: auto;
     }
 
@@ -1208,7 +1209,7 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     .toolbar-separator {
       width: 1px;
       height: 24px;
-      background: #D1D5DB;
+      background: var(--mj-border-strong);
       margin: 0 4px;
     }
 
@@ -1219,14 +1220,14 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     }
 
     .btn-icon-danger {
-      color: #DC2626;
-      border-color: #FCA5A5;
+      color: var(--mj-status-error);
+      border-color: color-mix(in srgb, var(--mj-status-error) 30%, var(--mj-bg-surface));
     }
 
     .btn-icon-danger:hover {
-      background: #FEE2E2;
-      color: #DC2626;
-      border-color: #DC2626;
+      background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
+      color: var(--mj-status-error);
+      border-color: var(--mj-status-error);
     }
 
     /* Context menu */
@@ -1242,8 +1243,8 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     .context-menu {
       position: fixed;
       min-width: 180px;
-      background: white;
-      border: 1px solid #E5E7EB;
+      background: var(--mj-bg-surface);
+      border: 1px solid var(--mj-border-default);
       border-radius: 8px;
       box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
       padding: 4px;
@@ -1259,7 +1260,7 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
       background: transparent;
       border: none;
       border-radius: 4px;
-      color: #111827;
+      color: var(--mj-text-primary);
       font-size: 13px;
       cursor: pointer;
       text-align: left;
@@ -1267,31 +1268,31 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     }
 
     .context-menu-item:hover {
-      background: #F3F4F6;
+      background: var(--mj-bg-surface-sunken);
     }
 
     .context-menu-item i {
       font-size: 14px;
       width: 16px;
       text-align: center;
-      color: #6B7280;
+      color: var(--mj-text-muted);
     }
 
     .context-menu-danger {
-      color: #DC2626;
+      color: var(--mj-status-error);
     }
 
     .context-menu-danger i {
-      color: #DC2626;
+      color: var(--mj-status-error);
     }
 
     .context-menu-danger:hover {
-      background: #FEE2E2;
+      background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
     }
 
     .context-menu-divider {
       height: 1px;
-      background: #E5E7EB;
+      background: var(--mj-border-default);
       margin: 4px 0;
     }
   `]
@@ -1332,6 +1333,10 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
   public showSortDropdown: boolean = false;
   public activeArtifactId: string | null = null; // Track which artifact is currently being viewed
   public isSelectMode: boolean = false; // Toggle for selection mode
+
+  IsArtifactActive(item: CollectionViewItem): boolean {
+    return UUIDsEqual(item.artifact?.ID, this.activeArtifactId);
+  }
 
   // Context menu state
   public showContextMenu: boolean = false;
@@ -1859,6 +1864,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
             await joinRecord.Delete();
           }
           await this.loadArtifacts();
+          this.buildUnifiedItemList();
         } else {
           await this.dialogService.alert('Error', 'Collection artifact link not found.');
         }
@@ -1880,7 +1886,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     requiredPermission: 'edit' | 'delete' | 'share'
   ): Promise<boolean> {
     // Owner has all permissions (including backwards compatibility for null OwnerID)
-    if (!collection?.OwnerID || collection.OwnerID === this.currentUser.ID) {
+    if (!collection?.OwnerID || UUIDsEqual(collection.OwnerID, this.currentUser.ID)) {
       return true;
     }
 
@@ -1912,7 +1918,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
 
   canEdit(collection: MJCollectionEntity): boolean {
     // Backwards compatibility: treat null OwnerID as owned by current user
-    if (!collection.OwnerID || collection.OwnerID === this.currentUser.ID) return true;
+    if (!collection.OwnerID || UUIDsEqual(collection.OwnerID, this.currentUser.ID)) return true;
 
     // Check permission record
     const permission = this.userPermissions.get(collection.ID);
@@ -1921,7 +1927,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
 
   canDelete(collection: MJCollectionEntity): boolean {
     // Backwards compatibility: treat null OwnerID as owned by current user
-    if (!collection.OwnerID || collection.OwnerID === this.currentUser.ID) return true;
+    if (!collection.OwnerID || UUIDsEqual(collection.OwnerID, this.currentUser.ID)) return true;
 
     // Check permission record
     const permission = this.userPermissions.get(collection.ID);
@@ -1930,7 +1936,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
 
   canShare(collection: MJCollectionEntity): boolean {
     // Backwards compatibility: treat null OwnerID as owned by current user
-    if (!collection.OwnerID || collection.OwnerID === this.currentUser.ID) return true;
+    if (!collection.OwnerID || UUIDsEqual(collection.OwnerID, this.currentUser.ID)) return true;
 
     // Check permission record
     const permission = this.userPermissions.get(collection.ID);
@@ -1963,7 +1969,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
 
   isShared(collection: MJCollectionEntity): boolean {
     // Collection is shared if user is not the owner and OwnerID is set
-    return collection.OwnerID != null && collection.OwnerID !== this.currentUser.ID;
+    return collection.OwnerID != null && !UUIDsEqual(collection.OwnerID, this.currentUser.ID);
   }
 
   // Sharing methods

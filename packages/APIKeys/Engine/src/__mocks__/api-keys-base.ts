@@ -10,6 +10,7 @@ import {
     MJAPIKeyScopeEntity,
     MJAPIScopeEntity
 } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
 
 // ---- Configurable state ----
 let _scopes: MJAPIScopeEntity[] = [];
@@ -72,7 +73,7 @@ export class APIKeysEngineBase {
     }
 
     GetScopeById(id: string): MJAPIScopeEntity | undefined {
-        return _scopes.find(s => s.ID === id);
+        return _scopes.find(s => UUIDsEqual(s.ID, id));
     }
 
     GetApplicationByName(name: string): MJAPIApplicationEntity | undefined {
@@ -80,22 +81,22 @@ export class APIKeysEngineBase {
     }
 
     GetApplicationById(id: string): MJAPIApplicationEntity | undefined {
-        return _applications.find(a => a.ID === id);
+        return _applications.find(a => UUIDsEqual(a.ID, id));
     }
 
     GetApplicationScopeRules(applicationId: string, scopeId: string): MJAPIApplicationScopeEntity[] {
         return _applicationScopes.filter(
-            rule => rule.ApplicationID === applicationId && rule.ScopeID === scopeId
+            rule => UUIDsEqual(rule.ApplicationID, applicationId) && UUIDsEqual(rule.ScopeID, scopeId)
         );
     }
 
     GetKeyApplicationsByKeyId(apiKeyId: string): MJAPIKeyApplicationEntity[] {
-        return _keyApplications.filter(ka => ka.APIKeyID === apiKeyId);
+        return _keyApplications.filter(ka => UUIDsEqual(ka.APIKeyID, apiKeyId));
     }
 
     GetKeyScopeRules(apiKeyId: string, scopeId: string): MJAPIKeyScopeEntity[] {
         return _keyScopes.filter(
-            ks => ks.APIKeyID === apiKeyId && ks.ScopeID === scopeId
+            ks => UUIDsEqual(ks.APIKeyID, apiKeyId) && UUIDsEqual(ks.ScopeID, scopeId)
         );
     }
 }

@@ -100,23 +100,23 @@
 
     <!-- Communication Provider Message Types Section -->
     <mj-collapsible-panel
-        SectionKey="communicationProviderMessageTypes"
+        SectionKey="mJCommunicationProviderMessageTypes"
         SectionName="Communication Provider Message Types"
         Icon="fa fa-comment"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('communicationProviderMessageTypes')"
+        [BadgeCount]="GetSectionRowCount('mJCommunicationProviderMessageTypes')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Communication Provider Message Types','CommunicationBaseMessageTypeID')"
                 [NewRecordValues]="NewRecordValues('MJ: Communication Provider Message Types')"
-                [AllowLoad]="IsSectionExpanded('communicationProviderMessageTypes')"
+                [AllowLoad]="IsSectionExpanded('mJCommunicationProviderMessageTypes')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('communicationProviderMessageTypes', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJCommunicationProviderMessageTypes', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -125,23 +125,23 @@
 
     <!-- Entity Communication Message Types Section -->
     <mj-collapsible-panel
-        SectionKey="entityCommunicationMessageTypes"
+        SectionKey="mJEntityCommunicationMessageTypes"
         SectionName="Entity Communication Message Types"
         Icon="fa fa-comment-dots"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('entityCommunicationMessageTypes')"
+        [BadgeCount]="GetSectionRowCount('mJEntityCommunicationMessageTypes')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Entity Communication Message Types','BaseMessageTypeID')"
                 [NewRecordValues]="NewRecordValues('MJ: Entity Communication Message Types')"
-                [AllowLoad]="IsSectionExpanded('entityCommunicationMessageTypes')"
+                [AllowLoad]="IsSectionExpanded('mJEntityCommunicationMessageTypes')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('entityCommunicationMessageTypes', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJEntityCommunicationMessageTypes', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

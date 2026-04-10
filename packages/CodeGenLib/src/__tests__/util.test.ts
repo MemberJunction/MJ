@@ -39,7 +39,7 @@ vi.mock('../Misc/status_logging', () => ({
     logStatus: vi.fn()
 }));
 
-import { makeDir, makeDirs, logIf, sortBySequenceAndCreatedAt } from '../Misc/util';
+import { makeDir, makeDirs, logIf, sortBySequenceAndCreatedAt, sortRelatedEntities } from '../Misc/util';
 
 describe('makeDir', () => {
     beforeEach(() => {
@@ -177,13 +177,14 @@ describe('sortBySequenceAndCreatedAt', () => {
         expect(result[1].Name).toBe('NoDate');
     });
 
-    it('should maintain order for items with same sequence and no dates', () => {
+    it('should sort alphabetically by Name when sequence and dates match', () => {
         const items = [
-            { Sequence: 1, Name: 'First' },
-            { Sequence: 1, Name: 'Second' }
+            { Sequence: 1, Name: 'Zebra' },
+            { Sequence: 1, Name: 'Alpha' }
         ];
         const result = sortBySequenceAndCreatedAt(items);
-        expect(result).toHaveLength(2);
+        expect(result[0].Name).toBe('Alpha');
+        expect(result[1].Name).toBe('Zebra');
     });
 
     it('should sort correctly with mixed sequences', () => {
@@ -202,6 +203,26 @@ describe('sortBySequenceAndCreatedAt', () => {
         expect(result[4].Name).toBe('E'); // Seq 5
     });
 
+    it('should sort by RelatedEntityJoinField for EntityRelationshipInfo-like items', () => {
+        const items = [
+            { Sequence: 0, RelatedEntityJoinField: 'LastRunID', __mj_CreatedAt: new Date('2025-01-01') },
+            { Sequence: 0, RelatedEntityJoinField: 'ParentRunID', __mj_CreatedAt: new Date('2025-01-01') }
+        ];
+        const result = sortBySequenceAndCreatedAt(items);
+        expect(result[0].RelatedEntityJoinField).toBe('LastRunID');
+        expect(result[1].RelatedEntityJoinField).toBe('ParentRunID');
+    });
+
+    it('should use ID as last-resort tiebreaker', () => {
+        const items = [
+            { Sequence: 0, ID: 'BBB-222' },
+            { Sequence: 0, ID: 'AAA-111' }
+        ];
+        const result = sortBySequenceAndCreatedAt(items);
+        expect(result[0].ID).toBe('AAA-111');
+        expect(result[1].ID).toBe('BBB-222');
+    });
+
     it('should handle negative sequence numbers', () => {
         const items = [
             { Sequence: 0, Name: 'Zero' },
@@ -212,5 +233,75 @@ describe('sortBySequenceAndCreatedAt', () => {
         expect(result[0].Name).toBe('Negative');
         expect(result[1].Name).toBe('Zero');
         expect(result[2].Name).toBe('Positive');
+    });
+});
+
+describe('sortRelatedEntities', () => {
+    it('should sort by Sequence ascending', () => {
+        const items = [
+            { Sequence: 2, RelatedEntity: 'B', RelatedEntityJoinField: 'BID' },
+            { Sequence: 1, RelatedEntity: 'A', RelatedEntityJoinField: 'AID' }
+        ];
+        const result = sortRelatedEntities(items);
+        expect(result[0].RelatedEntity).toBe('A');
+        expect(result[1].RelatedEntity).toBe('B');
+    });
+
+    it('should use __mj_CreatedAt as secondary sort', () => {
+        const items = [
+            { Sequence: 1, RelatedEntity: 'B', RelatedEntityJoinField: 'BID', __mj_CreatedAt: new Date('2026-03-24') },
+            { Sequence: 1, RelatedEntity: 'A', RelatedEntityJoinField: 'AID', __mj_CreatedAt: new Date('2026-03-23') }
+        ];
+        const result = sortRelatedEntities(items);
+        expect(result[0].RelatedEntity).toBe('A');
+        expect(result[1].RelatedEntity).toBe('B');
+    });
+
+    it('should use RelatedEntity name as tiebreaker when Sequence and CreatedAt match', () => {
+        const sameDate = new Date('2026-03-23T16:36:28.223Z');
+        const items = [
+            { Sequence: 1, RelatedEntity: 'Entity Organic Key Related Entities', RelatedEntityJoinField: 'RelatedEntityID', __mj_CreatedAt: sameDate },
+            { Sequence: 1, RelatedEntity: 'Entity Organic Keys', RelatedEntityJoinField: 'EntityID', __mj_CreatedAt: sameDate }
+        ];
+        const result = sortRelatedEntities(items);
+        expect(result[0].RelatedEntity).toBe('Entity Organic Key Related Entities');
+        expect(result[1].RelatedEntity).toBe('Entity Organic Keys');
+    });
+
+    it('should use RelatedEntityJoinField after RelatedEntity when entity names also match', () => {
+        const sameDate = new Date('2026-03-23');
+        const items = [
+            { Sequence: 1, RelatedEntity: 'Same Entity', RelatedEntityJoinField: 'ParentRunID', __mj_CreatedAt: sameDate },
+            { Sequence: 1, RelatedEntity: 'Same Entity', RelatedEntityJoinField: 'LastRunID', __mj_CreatedAt: sameDate }
+        ];
+        const result = sortRelatedEntities(items);
+        expect(result[0].RelatedEntityJoinField).toBe('LastRunID');
+        expect(result[1].RelatedEntityJoinField).toBe('ParentRunID');
+    });
+
+    it('should use ID as last resort', () => {
+        const sameDate = new Date('2026-03-23');
+        const items = [
+            { Sequence: 1, RelatedEntity: 'Same', RelatedEntityJoinField: 'SameField', ID: 'ZZZ', __mj_CreatedAt: sameDate },
+            { Sequence: 1, RelatedEntity: 'Same', RelatedEntityJoinField: 'SameField', ID: 'AAA', __mj_CreatedAt: sameDate }
+        ];
+        const result = sortRelatedEntities(items);
+        expect(result[0].ID).toBe('AAA');
+        expect(result[1].ID).toBe('ZZZ');
+    });
+
+    it('should not mutate the original array', () => {
+        const items = [
+            { Sequence: 2, RelatedEntity: 'B', RelatedEntityJoinField: 'BID' },
+            { Sequence: 1, RelatedEntity: 'A', RelatedEntityJoinField: 'AID' }
+        ];
+        const original = [...items];
+        sortRelatedEntities(items);
+        expect(items[0]).toEqual(original[0]);
+    });
+
+    it('should handle empty array', () => {
+        const result = sortRelatedEntities([]);
+        expect(result).toEqual([]);
     });
 });

@@ -1,0 +1,2 @@
+# Allow the example file to be committed
+!.env.integration.example

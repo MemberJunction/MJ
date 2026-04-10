@@ -1,10 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock dependencies before importing the module under test
-vi.mock('@memberjunction/global', () => ({
-    RegisterClass: () => (target: unknown) => target,
-    MJGlobal: { Instance: { GetGlobalObjectStore: () => ({}) } },
-}));
+vi.mock('@memberjunction/global', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/global')>();
+    return {
+        ...actual,
+        RegisterClass: () => (target: unknown) => target,
+        MJGlobal: { Instance: { GetGlobalObjectStore: () => ({}) } },
+    };
+});
 
 vi.mock('@memberjunction/core', () => ({
     BaseEntity: class MockBaseEntity {},

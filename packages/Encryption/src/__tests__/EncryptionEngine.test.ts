@@ -1,13 +1,29 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as crypto from 'crypto';
 
+// Shared singleton store used by both BaseSingleton and FakeEncryptionEngineBase
+const singletonStore: Record<string, unknown> = {};
+
 // Mock all external MJ dependencies
 vi.mock('@memberjunction/global', () => {
     const ENCRYPTION_MARKER = '$ENC$';
     const ENCRYPTED_SENTINEL = '[!ENCRYPTED$]';
+
+    // Minimal BaseSingleton that EncryptionEngine extends
+    class BaseSingleton<T> {
+        protected static getInstance<T>(this: new () => T): T {
+            const key = this.name;
+            if (!singletonStore[key]) {
+                singletonStore[key] = new this();
+            }
+            return singletonStore[key] as T;
+        }
+    }
+
     return {
         ENCRYPTION_MARKER,
         ENCRYPTED_SENTINEL,
+        BaseSingleton,
         IsValueEncrypted: (value: string | null | undefined, marker?: string): boolean => {
             if (!value || typeof value !== 'string') return false;
             if (value === ENCRYPTED_SENTINEL) return true;
@@ -28,32 +44,20 @@ vi.mock('@memberjunction/core', () => ({
     IMetadataProvider: {},
     LogError: vi.fn(),
     UserInfo: class {},
-    BaseEngine: class {
-        static getInstance<T>(): T {
-            return (BaseEngine as Record<string, unknown>)._instance as T;
-        }
-        static _instance: unknown;
-        _loaded = false;
-        get Loaded() { return this._loaded; }
-        async Load() { this._loaded = true; }
-        async RefreshAllItems() {}
-    },
     RegisterForStartup: () => (target: Function) => target
 }));
 
 vi.mock('@memberjunction/core-entities', () => {
+    // Standalone fake that EncryptionEngine accesses via .Instance
     class FakeEncryptionEngineBase {
         static _singleton: FakeEncryptionEngineBase | null = null;
         _loaded = false;
 
-        static getInstance<T>(): T {
+        static get Instance(): FakeEncryptionEngineBase {
             if (!FakeEncryptionEngineBase._singleton) {
-                // Use `this` so the actual calling subclass (EncryptionEngine) is
-                // instantiated, mirroring how BaseEngine.getInstance() works.
-                const Ctor = this as { new(): FakeEncryptionEngineBase };
-                FakeEncryptionEngineBase._singleton = new Ctor();
+                FakeEncryptionEngineBase._singleton = new FakeEncryptionEngineBase();
             }
-            return FakeEncryptionEngineBase._singleton as T;
+            return FakeEncryptionEngineBase._singleton;
         }
 
         get Loaded() { return this._loaded; }
@@ -62,24 +66,34 @@ vi.mock('@memberjunction/core-entities', () => {
             this._loaded = true;
         }
 
-        async Load() {
-            this._loaded = true;
-        }
-
         async RefreshAllItems() {}
 
-        // Mock GetKeyConfiguration to return a valid configuration
-        GetKeyConfiguration(keyId: string): {
-            key: Record<string, unknown>;
-            algorithm: Record<string, unknown>;
-            source: Record<string, unknown>;
-        } | undefined {
+        GetKeyConfiguration(_keyId: string): Record<string, unknown> | undefined {
             return undefined; // Default - tests will override
         }
+
+        // Delegated property stubs
+        get EncryptionKeys() { return []; }
+        get ActiveEncryptionKeys() { return []; }
+        get EncryptionAlgorithms() { return []; }
+        get ActiveEncryptionAlgorithms() { return []; }
+        get EncryptionKeySources() { return []; }
+        get ActiveEncryptionKeySources() { return []; }
+        GetKeyByID() { return undefined; }
+        GetKeyByName() { return undefined; }
+        GetAlgorithmByID() { return undefined; }
+        GetAlgorithmByName() { return undefined; }
+        GetKeySourceByID() { return undefined; }
+        GetKeySourceByDriverClass() { return undefined; }
+        ValidateKey() { return { isValid: true }; }
+        GetKeyMarker() { return '$ENC$'; }
     }
 
     return {
-        EncryptionEngineBase: FakeEncryptionEngineBase
+        EncryptionEngineBase: FakeEncryptionEngineBase,
+        MJEncryptionKeyEntity: class {},
+        MJEncryptionAlgorithmEntity: class {},
+        MJEncryptionKeySourceEntity: class {}
     };
 });
 
@@ -301,6 +315,213 @@ describe('EncryptionEngine', () => {
                 'key-id'
             )).rejects.toThrow('Invalid lookup value');
         });
+    });
+
+    describe('ValidateAllKeys', () => {
+        it('should return empty array when no active keys exist', async () => {
+            vi.spyOn(engine as Record<string, Function>, 'ensureConfigured' as string).mockResolvedValue(undefined);
+            vi.spyOn(engine, 'ActiveEncryptionKeys', 'get').mockReturnValue([]);
+
+            const results = await engine.ValidateAllKeys();
+            expect(results).toEqual([]);
+        });
+
+        it('should delegate validation to the key source provider', async () => {
+            const mockValidateKeyAccessibility = vi.fn().mockResolvedValue({ IsAccessible: true });
+            const mockSource = {
+                ValidateKeyAccessibility: mockValidateKeyAccessibility,
+                Initialize: vi.fn(),
+                ValidateConfiguration: vi.fn().mockReturnValue(true),
+                SourceName: 'Mock Source'
+            };
+
+            vi.spyOn(engine as Record<string, Function>, 'ensureConfigured' as string).mockResolvedValue(undefined);
+            vi.spyOn(engine, 'ActiveEncryptionKeys', 'get').mockReturnValue([
+                { ID: 'key-1', Name: 'Test Key', KeyLookupValue: 'MY_KEY', IsActive: true } as Record<string, unknown>
+            ] as never);
+
+            vi.spyOn(engine as Record<string, Function>, 'buildKeyConfiguration' as string).mockReturnValue({
+                keyId: 'key-1',
+                keyVersion: '1',
+                marker: '$ENC$',
+                algorithm: { name: 'AES-256-GCM', keyLengthBits: 256 },
+                source: { driverClass: 'MockSource', lookupValue: 'MY_KEY' }
+            });
+
+            vi.spyOn(engine as Record<string, Function>, 'getOrCreateKeySource' as string).mockResolvedValue(mockSource);
+
+            const results = await engine.ValidateAllKeys();
+            expect(results).toHaveLength(1);
+            expect(results[0].IsAccessible).toBe(true);
+            expect(results[0].KeyName).toBe('Test Key');
+
+            // Verify the provider's ValidateKeyAccessibility was called with correct params
+            expect(mockValidateKeyAccessibility).toHaveBeenCalledWith('MY_KEY', '1', 32);
+        });
+
+        it('should propagate provider validation errors', async () => {
+            const mockSource = {
+                ValidateKeyAccessibility: vi.fn().mockResolvedValue({
+                    IsAccessible: false,
+                    Error: 'Environment variable "MY_KEY" is not set. Set it with: export MY_KEY=$(openssl rand -base64 32)'
+                }),
+                Initialize: vi.fn(),
+                ValidateConfiguration: vi.fn().mockReturnValue(true),
+                SourceName: 'Mock Source'
+            };
+
+            vi.spyOn(engine as Record<string, Function>, 'ensureConfigured' as string).mockResolvedValue(undefined);
+            vi.spyOn(engine, 'ActiveEncryptionKeys', 'get').mockReturnValue([
+                { ID: 'key-1', Name: 'Test Key', KeyLookupValue: 'MY_KEY', IsActive: true } as Record<string, unknown>
+            ] as never);
+            vi.spyOn(engine as Record<string, Function>, 'buildKeyConfiguration' as string).mockReturnValue({
+                keyId: 'key-1', keyVersion: '1', marker: '$ENC$',
+                algorithm: { name: 'AES-256-GCM', keyLengthBits: 256 },
+                source: { driverClass: 'MockSource', lookupValue: 'MY_KEY' }
+            });
+            vi.spyOn(engine as Record<string, Function>, 'getOrCreateKeySource' as string).mockResolvedValue(mockSource);
+
+            const results = await engine.ValidateAllKeys();
+            expect(results[0].IsAccessible).toBe(false);
+            expect(results[0].Error).toContain('MY_KEY');
+            expect(results[0].Error).toContain('not set');
+        });
+
+        it('should handle buildKeyConfiguration errors gracefully', async () => {
+            vi.spyOn(engine as Record<string, Function>, 'ensureConfigured' as string).mockResolvedValue(undefined);
+            vi.spyOn(engine, 'ActiveEncryptionKeys', 'get').mockReturnValue([
+                { ID: 'bad-key', Name: 'Bad Key', KeyLookupValue: 'X', IsActive: true } as Record<string, unknown>
+            ] as never);
+            vi.spyOn(engine as Record<string, Function>, 'buildKeyConfiguration' as string).mockImplementation(() => {
+                throw new Error('Encryption key not found: bad-key');
+            });
+
+            const results = await engine.ValidateAllKeys();
+            expect(results[0].IsAccessible).toBe(false);
+            expect(results[0].Error).toContain('bad-key');
+        });
+
+        it('engine should never receive key material during validation', async () => {
+            const mockSource = {
+                ValidateKeyAccessibility: vi.fn().mockResolvedValue({ IsAccessible: true }),
+                // GetKey should NOT be called by ValidateAllKeys
+                GetKey: vi.fn().mockRejectedValue(new Error('GetKey should not be called during validation')),
+                Initialize: vi.fn(),
+                ValidateConfiguration: vi.fn().mockReturnValue(true),
+                SourceName: 'Mock Source'
+            };
+
+            vi.spyOn(engine as Record<string, Function>, 'ensureConfigured' as string).mockResolvedValue(undefined);
+            vi.spyOn(engine, 'ActiveEncryptionKeys', 'get').mockReturnValue([
+                { ID: 'key-1', Name: 'Test Key', KeyLookupValue: 'MY_KEY', IsActive: true } as Record<string, unknown>
+            ] as never);
+            vi.spyOn(engine as Record<string, Function>, 'buildKeyConfiguration' as string).mockReturnValue({
+                keyId: 'key-1', keyVersion: '1', marker: '$ENC$',
+                algorithm: { name: 'AES-256-GCM', keyLengthBits: 256 },
+                source: { driverClass: 'MockSource', lookupValue: 'MY_KEY' }
+            });
+            vi.spyOn(engine as Record<string, Function>, 'getOrCreateKeySource' as string).mockResolvedValue(mockSource);
+
+            const results = await engine.ValidateAllKeys();
+            expect(results[0].IsAccessible).toBe(true);
+
+            // Verify GetKey was never called — engine should not touch key material
+            expect(mockSource.GetKey).not.toHaveBeenCalled();
+
+            // Verify ValidateKeyAccessibility was called instead
+            expect(mockSource.ValidateKeyAccessibility).toHaveBeenCalledOnce();
+        });
+    });
+});
+
+describe('EncryptionStartupValidator - BaseSingleton pattern', () => {
+    it('should use BaseSingleton (not manual static _instance)', async () => {
+        // Import the module to verify it compiles with BaseSingleton
+        const mod = await import('../EncryptionStartupValidator');
+        const ValidatorClass = mod.EncryptionStartupValidator;
+
+        // The Instance static getter should exist
+        expect(typeof ValidatorClass.Instance).not.toBe('undefined');
+
+        // Singleton should return the same instance
+        const a = ValidatorClass.Instance;
+        const b = ValidatorClass.Instance;
+        expect(a).toBe(b);
+    });
+});
+
+describe('EncryptionEngine - buffer zeroing security', () => {
+    let engine: EncryptionEngine;
+
+    beforeEach(() => {
+        engine = EncryptionEngine.Instance;
+    });
+
+    it('ClearCaches should zero all cached key material buffers', () => {
+        // Access private cache via bracket notation for testing
+        const cache = (engine as Record<string, unknown>)['_keyMaterialCache'] as Map<string, { value: Buffer; expiry: Date }>;
+
+        // Simulate cached key material
+        const keyBuf1 = Buffer.from('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'utf8');
+        const keyBuf2 = Buffer.from('bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', 'utf8');
+        cache.set('key1:1', { value: keyBuf1, expiry: new Date(Date.now() + 60000) });
+        cache.set('key2:1', { value: keyBuf2, expiry: new Date(Date.now() + 60000) });
+
+        // Verify buffers have non-zero content before clearing
+        expect(keyBuf1[0]).not.toBe(0);
+        expect(keyBuf2[0]).not.toBe(0);
+
+        engine.ClearCaches();
+
+        // Buffers should now be zeroed
+        expect(keyBuf1.every(b => b === 0)).toBe(true);
+        expect(keyBuf2.every(b => b === 0)).toBe(true);
+
+        // Cache should be empty
+        expect(cache.size).toBe(0);
+    });
+
+    it('ClearAllCaches should zero all cached key material buffers', async () => {
+        const cache = (engine as Record<string, unknown>)['_keyMaterialCache'] as Map<string, { value: Buffer; expiry: Date }>;
+
+        const keyBuf = Buffer.from('cccccccccccccccccccccccccccccccccc', 'utf8');
+        cache.set('key3:1', { value: keyBuf, expiry: new Date(Date.now() + 60000) });
+
+        await engine.ClearAllCaches();
+
+        expect(keyBuf.every(b => b === 0)).toBe(true);
+        expect(cache.size).toBe(0);
+    });
+
+    it('getKeyMaterial should zero stale buffer when replacing cache entry', async () => {
+        const staleBuf = Buffer.alloc(32, 0xAA);
+        const freshBuf = Buffer.alloc(32, 0xBB);
+
+        // Set up a stale cache entry (expired)
+        const cache = (engine as Record<string, unknown>)['_keyMaterialCache'] as Map<string, { value: Buffer; expiry: Date }>;
+        cache.set('key-stale:1', { value: staleBuf, expiry: new Date(Date.now() - 1000) }); // already expired
+
+        // Mock the internal methods so getKeyMaterial fetches a new key
+        vi.spyOn(engine as Record<string, Function>, 'getOrCreateKeySource' as string).mockResolvedValue({
+            GetKey: vi.fn().mockResolvedValue(freshBuf),
+            Initialize: vi.fn(),
+            ValidateConfiguration: vi.fn().mockReturnValue(true),
+        });
+
+        const config = {
+            keyId: 'key-stale',
+            keyVersion: '1',
+            marker: '$ENC$',
+            algorithm: { name: 'AES-256-GCM', nodeCryptoName: 'aes-256-gcm', keyLengthBits: 256, ivLengthBytes: 12, isAEAD: true },
+            source: { driverClass: 'MockSource', lookupValue: 'MY_KEY' }
+        };
+
+        // Call the private getKeyMaterial
+        const getKeyMaterial = (engine as Record<string, Function>)['getKeyMaterial'].bind(engine);
+        await getKeyMaterial(config);
+
+        // The stale buffer should be zeroed
+        expect(staleBuf.every(b => b === 0)).toBe(true);
     });
 });
 

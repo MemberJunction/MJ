@@ -23,7 +23,7 @@
  */
 
 import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, UserInfo, RegisterForStartup } from "@memberjunction/core";
-import { ENCRYPTION_MARKER } from "@memberjunction/global";
+import { ENCRYPTION_MARKER, UUIDsEqual } from "@memberjunction/global";
 import {
     MJEncryptionKeyEntity,
     MJEncryptionAlgorithmEntity,
@@ -216,7 +216,7 @@ export class EncryptionEngineBase extends BaseEngine<EncryptionEngineBase> {
      * ```
      */
     public GetKeyByID(keyId: string): MJEncryptionKeyEntity | undefined {
-        return this._encryptionKeys.find(k => k.ID === keyId);
+        return this._encryptionKeys.find(k => UUIDsEqual(k.ID, keyId));
     }
 
     /**
@@ -237,7 +237,7 @@ export class EncryptionEngineBase extends BaseEngine<EncryptionEngineBase> {
      * @returns The encryption algorithm entity, or undefined if not found
      */
     public GetAlgorithmByID(algorithmId: string): MJEncryptionAlgorithmEntity | undefined {
-        return this._encryptionAlgorithms.find(a => a.ID === algorithmId);
+        return this._encryptionAlgorithms.find(a => UUIDsEqual(a.ID, algorithmId));
     }
 
     /**
@@ -258,7 +258,7 @@ export class EncryptionEngineBase extends BaseEngine<EncryptionEngineBase> {
      * @returns The encryption key source entity, or undefined if not found
      */
     public GetKeySourceByID(sourceId: string): MJEncryptionKeySourceEntity | undefined {
-        return this._encryptionKeySources.find(s => s.ID === sourceId);
+        return this._encryptionKeySources.find(s => UUIDsEqual(s.ID, sourceId));
     }
 
     /**

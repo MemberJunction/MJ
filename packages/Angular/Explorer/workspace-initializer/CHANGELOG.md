@@ -1,5 +1,337 @@
 # @memberjunction/ng-workspace-initializer
 
+## 5.24.0
+
+### Patch Changes
+
+- Updated dependencies [c318a0c]
+- Updated dependencies [3a35955]
+- Updated dependencies [1912726]
+  - @memberjunction/ng-explorer-core@5.24.0
+  - @memberjunction/graphql-dataprovider@5.24.0
+  - @memberjunction/core@5.24.0
+  - @memberjunction/ng-auth-services@5.24.0
+  - @memberjunction/ng-shared@5.24.0
+  - @memberjunction/ng-shared-generic@5.24.0
+  - @memberjunction/global@5.24.0
+
+## 5.23.0
+
+### Patch Changes
+
+- Updated dependencies [247df16]
+- Updated dependencies [9250070]
+- Updated dependencies [513b20c]
+- Updated dependencies [44bc22b]
+- Updated dependencies [1d1e02e]
+  - @memberjunction/core@5.23.0
+  - @memberjunction/global@5.23.0
+  - @memberjunction/ng-explorer-core@5.23.0
+  - @memberjunction/graphql-dataprovider@5.23.0
+  - @memberjunction/ng-auth-services@5.23.0
+  - @memberjunction/ng-shared@5.23.0
+  - @memberjunction/ng-shared-generic@5.23.0
+
+## 5.22.0
+
+### Patch Changes
+
+- Updated dependencies [6a5093b]
+- Updated dependencies [e123e4b]
+- Updated dependencies [e5993ff]
+- Updated dependencies [f2a6bec]
+  - @memberjunction/core@5.22.0
+  - @memberjunction/ng-explorer-core@5.22.0
+  - @memberjunction/global@5.22.0
+  - @memberjunction/graphql-dataprovider@5.22.0
+  - @memberjunction/ng-auth-services@5.22.0
+  - @memberjunction/ng-shared@5.22.0
+  - @memberjunction/ng-shared-generic@5.22.0
+
+## 5.21.0
+
+### Patch Changes
+
+- Updated dependencies [c7dfb20]
+  - @memberjunction/core@5.21.0
+  - @memberjunction/ng-auth-services@5.21.0
+  - @memberjunction/ng-explorer-core@5.21.0
+  - @memberjunction/ng-shared@5.21.0
+  - @memberjunction/ng-shared-generic@5.21.0
+  - @memberjunction/graphql-dataprovider@5.21.0
+  - @memberjunction/global@5.21.0
+
+## 5.20.0
+
+### Patch Changes
+
+- Updated dependencies [2298f8a]
+  - @memberjunction/core@5.20.0
+  - @memberjunction/ng-auth-services@5.20.0
+  - @memberjunction/ng-explorer-core@5.20.0
+  - @memberjunction/ng-shared@5.20.0
+  - @memberjunction/ng-shared-generic@5.20.0
+  - @memberjunction/graphql-dataprovider@5.20.0
+  - @memberjunction/global@5.20.0
+
+## 5.19.0
+
+### Patch Changes
+
+- @memberjunction/ng-auth-services@5.19.0
+- @memberjunction/ng-explorer-core@5.19.0
+- @memberjunction/ng-shared@5.19.0
+- @memberjunction/ng-shared-generic@5.19.0
+- @memberjunction/graphql-dataprovider@5.19.0
+- @memberjunction/core@5.19.0
+- @memberjunction/global@5.19.0
+
+## 5.18.0
+
+### Patch Changes
+
+- @memberjunction/ng-explorer-core@5.18.0
+- @memberjunction/graphql-dataprovider@5.18.0
+- @memberjunction/ng-shared@5.18.0
+- @memberjunction/ng-auth-services@5.18.0
+- @memberjunction/ng-shared-generic@5.18.0
+- @memberjunction/core@5.18.0
+- @memberjunction/global@5.18.0
+
+## 5.17.0
+
+### Patch Changes
+
+- Updated dependencies [bbfbf5e]
+- Updated dependencies [9881045]
+  - @memberjunction/graphql-dataprovider@5.17.0
+  - @memberjunction/core@5.17.0
+  - @memberjunction/ng-explorer-core@5.17.0
+  - @memberjunction/ng-shared@5.17.0
+  - @memberjunction/ng-auth-services@5.17.0
+  - @memberjunction/ng-shared-generic@5.17.0
+  - @memberjunction/global@5.17.0
+
+## 5.16.0
+
+### Patch Changes
+
+- 179a4ce: Force re-authentication on irrecoverable JWT expiry mid-session with session-expired overlay UI and automatic logout
+- Updated dependencies [2387400]
+- Updated dependencies [179a4ce]
+- Updated dependencies [11dba07]
+  - @memberjunction/core@5.16.0
+  - @memberjunction/graphql-dataprovider@5.16.0
+  - @memberjunction/ng-auth-services@5.16.0
+  - @memberjunction/ng-explorer-core@5.16.0
+  - @memberjunction/ng-shared@5.16.0
+  - @memberjunction/ng-shared-generic@5.16.0
+  - @memberjunction/global@5.16.0
+
+## 5.15.0
+
+### Patch Changes
+
+- Updated dependencies [662d56b]
+- Updated dependencies [d01f697]
+  - @memberjunction/core@5.15.0
+  - @memberjunction/ng-auth-services@5.15.0
+  - @memberjunction/ng-explorer-core@5.15.0
+  - @memberjunction/ng-shared@5.15.0
+  - @memberjunction/ng-shared-generic@5.15.0
+  - @memberjunction/graphql-dataprovider@5.15.0
+  - @memberjunction/global@5.15.0
+
+## 5.14.0
+
+### Patch Changes
+
+- Updated dependencies [8fe1124]
+- Updated dependencies [69b5af4]
+- Updated dependencies [140fc6d]
+  - @memberjunction/ng-auth-services@5.14.0
+  - @memberjunction/core@5.14.0
+  - @memberjunction/graphql-dataprovider@5.14.0
+  - @memberjunction/ng-explorer-core@5.14.0
+  - @memberjunction/ng-shared@5.14.0
+  - @memberjunction/ng-shared-generic@5.14.0
+  - @memberjunction/global@5.14.0
+
+## 5.13.0
+
+### Patch Changes
+
+- Updated dependencies [f72b538]
+- Updated dependencies [1bb9b86]
+- Updated dependencies [d0d9eba]
+  - @memberjunction/core@5.13.0
+  - @memberjunction/global@5.13.0
+  - @memberjunction/ng-explorer-core@5.13.0
+  - @memberjunction/ng-auth-services@5.13.0
+  - @memberjunction/ng-shared@5.13.0
+  - @memberjunction/ng-shared-generic@5.13.0
+  - @memberjunction/graphql-dataprovider@5.13.0
+
+## 5.12.0
+
+### Patch Changes
+
+- Updated dependencies [05f19ff]
+- Updated dependencies [a57b8d5]
+- Updated dependencies [e87d153]
+- Updated dependencies [7def002]
+- Updated dependencies [d92502e]
+  - @memberjunction/core@5.12.0
+  - @memberjunction/ng-shared-generic@5.12.0
+  - @memberjunction/ng-explorer-core@5.12.0
+  - @memberjunction/graphql-dataprovider@5.12.0
+  - @memberjunction/ng-auth-services@5.12.0
+  - @memberjunction/ng-shared@5.12.0
+  - @memberjunction/global@5.12.0
+
+## 5.11.0
+
+### Patch Changes
+
+- Updated dependencies [a4c3c81]
+- Updated dependencies [fc2bd47]
+  - @memberjunction/graphql-dataprovider@5.11.0
+  - @memberjunction/core@5.11.0
+  - @memberjunction/ng-explorer-core@5.11.0
+  - @memberjunction/ng-shared@5.11.0
+  - @memberjunction/ng-auth-services@5.11.0
+  - @memberjunction/ng-shared-generic@5.11.0
+  - @memberjunction/global@5.11.0
+
+## 5.10.1
+
+### Patch Changes
+
+- @memberjunction/ng-auth-services@5.10.1
+- @memberjunction/ng-explorer-core@5.10.1
+- @memberjunction/ng-shared@5.10.1
+- @memberjunction/ng-shared-generic@5.10.1
+- @memberjunction/graphql-dataprovider@5.10.1
+- @memberjunction/core@5.10.1
+- @memberjunction/global@5.10.1
+
+## 5.10.0
+
+### Patch Changes
+
+- Updated dependencies [f2df653]
+- Updated dependencies [4e298b7]
+- Updated dependencies [5ce18ff]
+- Updated dependencies [75dd36b]
+  - @memberjunction/core@5.10.0
+  - @memberjunction/graphql-dataprovider@5.10.0
+  - @memberjunction/ng-auth-services@5.10.0
+  - @memberjunction/ng-explorer-core@5.10.0
+  - @memberjunction/ng-shared@5.10.0
+  - @memberjunction/ng-shared-generic@5.10.0
+  - @memberjunction/global@5.10.0
+
+## 5.9.0
+
+### Patch Changes
+
+- Updated dependencies [194ddf2]
+  - @memberjunction/global@5.9.0
+  - @memberjunction/core@5.9.0
+  - @memberjunction/ng-explorer-core@5.9.0
+  - @memberjunction/ng-shared@5.9.0
+  - @memberjunction/ng-shared-generic@5.9.0
+  - @memberjunction/graphql-dataprovider@5.9.0
+  - @memberjunction/ng-auth-services@5.9.0
+
+## 5.8.0
+
+### Patch Changes
+
+- Updated dependencies [de9f2c0]
+- Updated dependencies [0753249]
+  - @memberjunction/graphql-dataprovider@5.8.0
+  - @memberjunction/core@5.8.0
+  - @memberjunction/ng-explorer-core@5.8.0
+  - @memberjunction/ng-shared@5.8.0
+  - @memberjunction/ng-auth-services@5.8.0
+  - @memberjunction/ng-shared-generic@5.8.0
+  - @memberjunction/global@5.8.0
+
+## 5.7.0
+
+### Patch Changes
+
+- Updated dependencies [642c4df]
+  - @memberjunction/core@5.7.0
+  - @memberjunction/ng-explorer-core@5.7.0
+  - @memberjunction/ng-auth-services@5.7.0
+  - @memberjunction/ng-shared@5.7.0
+  - @memberjunction/ng-shared-generic@5.7.0
+  - @memberjunction/graphql-dataprovider@5.7.0
+  - @memberjunction/global@5.7.0
+
+## 5.6.0
+
+### Patch Changes
+
+- Updated dependencies [4547d05]
+- Updated dependencies [d24a7ff]
+- Updated dependencies [76eaabc]
+  - @memberjunction/core@5.6.0
+  - @memberjunction/ng-explorer-core@5.6.0
+  - @memberjunction/graphql-dataprovider@5.6.0
+  - @memberjunction/ng-auth-services@5.6.0
+  - @memberjunction/ng-shared@5.6.0
+  - @memberjunction/ng-shared-generic@5.6.0
+  - @memberjunction/global@5.6.0
+
+## 5.5.0
+
+### Patch Changes
+
+- df2457c: no migration, just small code changes
+- Updated dependencies [2b1d842]
+- Updated dependencies [a1648c5]
+- Updated dependencies [7ca2459]
+- Updated dependencies [ee9f788]
+- Updated dependencies [df2457c]
+  - @memberjunction/core@5.5.0
+  - @memberjunction/graphql-dataprovider@5.5.0
+  - @memberjunction/ng-explorer-core@5.5.0
+  - @memberjunction/global@5.5.0
+  - @memberjunction/ng-auth-services@5.5.0
+  - @memberjunction/ng-shared@5.5.0
+  - @memberjunction/ng-shared-generic@5.5.0
+
+## 5.4.1
+
+### Patch Changes
+
+- Updated dependencies [8789e86]
+  - @memberjunction/ng-shared@5.4.1
+  - @memberjunction/ng-explorer-core@5.4.1
+  - @memberjunction/ng-auth-services@5.4.1
+  - @memberjunction/ng-shared-generic@5.4.1
+  - @memberjunction/graphql-dataprovider@5.4.1
+  - @memberjunction/core@5.4.1
+  - @memberjunction/global@5.4.1
+
+## 5.4.0
+
+### Patch Changes
+
+- 6bcfa1c: unified design tokens
+- Updated dependencies [8a11457]
+- Updated dependencies [6bcfa1c]
+  - @memberjunction/graphql-dataprovider@5.4.0
+  - @memberjunction/ng-explorer-core@5.4.0
+  - @memberjunction/ng-shared@5.4.0
+  - @memberjunction/ng-shared-generic@5.4.0
+  - @memberjunction/ng-auth-services@5.4.0
+  - @memberjunction/core@5.4.0
+  - @memberjunction/global@5.4.0
+
 ## 5.3.1
 
 ### Patch Changes

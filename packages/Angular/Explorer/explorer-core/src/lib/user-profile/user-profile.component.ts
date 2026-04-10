@@ -6,6 +6,7 @@ import { Metadata } from '@memberjunction/core';
 import { SharedService } from '@memberjunction/ng-shared';
 import { Observable, Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
+import { UUIDsEqual } from '@memberjunction/global';
 
 interface NotificationSummary {
   InAppEnabled: boolean;
@@ -131,7 +132,7 @@ export class UserProfileComponent implements OnInit, OnDestroy {
           continue; // Skip locked types
         }
 
-        let pref = preferences.find(p => p.NotificationTypeID === type.ID);
+        let pref = preferences.find(p => UUIDsEqual(p.NotificationTypeID, type.ID));
 
         if (!pref) {
           // Create new preference record

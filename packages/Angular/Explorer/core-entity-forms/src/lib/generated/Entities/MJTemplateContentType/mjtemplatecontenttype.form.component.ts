@@ -19,7 +19,7 @@ export class MJTemplateContentTypeFormComponent extends BaseFormComponent {
             { sectionKey: 'technicalMetadata', sectionName: 'Technical Metadata', isExpanded: false },
             { sectionKey: 'templateDefinition', sectionName: 'Template Definition', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'templateContents', sectionName: 'Template Contents', isExpanded: false }
+            { sectionKey: 'mJTemplateContents', sectionName: 'Template Contents', isExpanded: false }
         ]);
     }
 }

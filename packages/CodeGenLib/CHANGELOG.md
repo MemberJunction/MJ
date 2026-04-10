@@ -1,5 +1,590 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 5.24.0
+
+### Minor Changes
+
+- c318a0c: metadata + migrations in this PR == minor
+
+### Patch Changes
+
+- Updated dependencies [c318a0c]
+- Updated dependencies [1912726]
+  - @memberjunction/ai-core-plus@5.24.0
+  - @memberjunction/ai-prompts@5.24.0
+  - @memberjunction/core@5.24.0
+  - @memberjunction/core-entities@5.24.0
+  - @memberjunction/core-entities-server@5.24.0
+  - @memberjunction/server-bootstrap-lite@5.24.0
+  - @memberjunction/aiengine@5.24.0
+  - @memberjunction/actions@5.24.0
+  - @memberjunction/sqlserver-dataprovider@5.24.0
+  - @memberjunction/ai-provider-bundle@5.24.0
+  - @memberjunction/actions-base@5.24.0
+  - @memberjunction/postgresql-dataprovider@5.24.0
+  - @memberjunction/ai@5.24.0
+  - @memberjunction/config@5.24.0
+  - @memberjunction/global@5.24.0
+  - @memberjunction/sql-dialect@5.24.0
+  - @memberjunction/sql-parser@5.24.0
+
+## 5.23.0
+
+### Minor Changes
+
+- 44bc22b: JSONType strong typing system: adds JSONType, JSONTypeIsArray, and JSONTypeDefinition metadata.
+
+### Patch Changes
+
+- 247df16: Fix server-side RunView cache write asymmetry that caused repeated DB queries during metadata sync, add deterministic Nunjucks template parameter extraction via AST, support comma-delimited multi-value fields in validation, and redesign QueryPagingEngine to append paging directly instead of wrapping in CTEs (fixing ORDER BY on non-projected columns and apostrophe-in-comments bugs).
+- 37dc301: Remove Kendo LayoutModule from CodeGen Angular form template, replace with angular-split
+- Updated dependencies [247df16]
+- Updated dependencies [9250070]
+- Updated dependencies [513b20c]
+- Updated dependencies [44bc22b]
+- Updated dependencies [1d1e02e]
+  - @memberjunction/core@5.23.0
+  - @memberjunction/global@5.23.0
+  - @memberjunction/core-entities-server@5.23.0
+  - @memberjunction/ai-prompts@5.23.0
+  - @memberjunction/sqlserver-dataprovider@5.23.0
+  - @memberjunction/core-entities@5.23.0
+  - @memberjunction/ai-core-plus@5.23.0
+  - @memberjunction/aiengine@5.23.0
+  - @memberjunction/actions-base@5.23.0
+  - @memberjunction/actions@5.23.0
+  - @memberjunction/postgresql-dataprovider@5.23.0
+  - @memberjunction/server-bootstrap-lite@5.23.0
+  - @memberjunction/ai@5.23.0
+  - @memberjunction/ai-provider-bundle@5.23.0
+  - @memberjunction/config@5.23.0
+  - @memberjunction/sql-dialect@5.23.0
+  - @memberjunction/sql-parser@5.23.0
+
+## 5.22.0
+
+### Patch Changes
+
+- f2a6bec: Universal lazy loading via ClassFactory async API. Fixes HomeApplication being tree-shaken by moving lazy loading from consumer-specific retry patterns into ClassFactory itself with RegisterLazyLoader, CreateInstanceAsync, and GetRegistrationAsync. Lazy config now uses compound keys (BaseClassName::Key) to support any base class. Adds coverage audit to codegen to detect gaps.
+- Updated dependencies [0b23772]
+- Updated dependencies [cf91278]
+- Updated dependencies [6a5093b]
+- Updated dependencies [e123e4b]
+- Updated dependencies [a42aba6]
+- Updated dependencies [f2a6bec]
+  - @memberjunction/ai-core-plus@5.22.0
+  - @memberjunction/ai-prompts@5.22.0
+  - @memberjunction/sql-parser@5.22.0
+  - @memberjunction/core@5.22.0
+  - @memberjunction/server-bootstrap-lite@5.22.0
+  - @memberjunction/global@5.22.0
+  - @memberjunction/aiengine@5.22.0
+  - @memberjunction/actions@5.22.0
+  - @memberjunction/core-entities-server@5.22.0
+  - @memberjunction/actions-base@5.22.0
+  - @memberjunction/core-entities@5.22.0
+  - @memberjunction/postgresql-dataprovider@5.22.0
+  - @memberjunction/sqlserver-dataprovider@5.22.0
+  - @memberjunction/ai-provider-bundle@5.22.0
+  - @memberjunction/ai@5.22.0
+  - @memberjunction/config@5.22.0
+  - @memberjunction/sql-dialect@5.22.0
+
+## 5.21.0
+
+### Patch Changes
+
+- Updated dependencies [c7dfb20]
+- Updated dependencies [76cd2bc]
+- Updated dependencies [845c980]
+  - @memberjunction/core@5.21.0
+  - @memberjunction/core-entities-server@5.21.0
+  - @memberjunction/ai-core-plus@5.21.0
+  - @memberjunction/ai-prompts@5.21.0
+  - @memberjunction/ai-provider-bundle@5.21.0
+  - @memberjunction/server-bootstrap-lite@5.21.0
+  - @memberjunction/sqlserver-dataprovider@5.21.0
+  - @memberjunction/aiengine@5.21.0
+  - @memberjunction/actions-base@5.21.0
+  - @memberjunction/actions@5.21.0
+  - @memberjunction/core-entities@5.21.0
+  - @memberjunction/postgresql-dataprovider@5.21.0
+  - @memberjunction/ai@5.21.0
+  - @memberjunction/config@5.21.0
+  - @memberjunction/global@5.21.0
+  - @memberjunction/sql-dialect@5.21.0
+  - @memberjunction/sql-parser@5.21.0
+
+## 5.20.0
+
+### Patch Changes
+
+- Updated dependencies [2298f8a]
+  - @memberjunction/core@5.20.0
+  - @memberjunction/core-entities-server@5.20.0
+  - @memberjunction/postgresql-dataprovider@5.20.0
+  - @memberjunction/sqlserver-dataprovider@5.20.0
+  - @memberjunction/server-bootstrap-lite@5.20.0
+  - @memberjunction/ai-core-plus@5.20.0
+  - @memberjunction/aiengine@5.20.0
+  - @memberjunction/ai-prompts@5.20.0
+  - @memberjunction/actions-base@5.20.0
+  - @memberjunction/actions@5.20.0
+  - @memberjunction/core-entities@5.20.0
+  - @memberjunction/ai-provider-bundle@5.20.0
+  - @memberjunction/ai@5.20.0
+  - @memberjunction/config@5.20.0
+  - @memberjunction/global@5.20.0
+  - @memberjunction/sql-dialect@5.20.0
+  - @memberjunction/sql-parser@5.20.0
+
+## 5.19.0
+
+### Patch Changes
+
+- @memberjunction/server-bootstrap-lite@5.19.0
+- @memberjunction/ai@5.19.0
+- @memberjunction/ai-core-plus@5.19.0
+- @memberjunction/aiengine@5.19.0
+- @memberjunction/ai-prompts@5.19.0
+- @memberjunction/ai-provider-bundle@5.19.0
+- @memberjunction/actions-base@5.19.0
+- @memberjunction/actions@5.19.0
+- @memberjunction/config@5.19.0
+- @memberjunction/core@5.19.0
+- @memberjunction/core-entities@5.19.0
+- @memberjunction/core-entities-server@5.19.0
+- @memberjunction/global@5.19.0
+- @memberjunction/postgresql-dataprovider@5.19.0
+- @memberjunction/sql-dialect@5.19.0
+- @memberjunction/sql-parser@5.19.0
+- @memberjunction/sqlserver-dataprovider@5.19.0
+
+## 5.18.0
+
+### Patch Changes
+
+- Updated dependencies [322dac6]
+- Updated dependencies [931740a]
+- Updated dependencies [48f7296]
+  - @memberjunction/ai-core-plus@5.18.0
+  - @memberjunction/sql-parser@5.18.0
+  - @memberjunction/core-entities-server@5.18.0
+  - @memberjunction/ai-prompts@5.18.0
+  - @memberjunction/server-bootstrap-lite@5.18.0
+  - @memberjunction/aiengine@5.18.0
+  - @memberjunction/actions@5.18.0
+  - @memberjunction/sqlserver-dataprovider@5.18.0
+  - @memberjunction/postgresql-dataprovider@5.18.0
+  - @memberjunction/ai-provider-bundle@5.18.0
+  - @memberjunction/ai@5.18.0
+  - @memberjunction/actions-base@5.18.0
+  - @memberjunction/config@5.18.0
+  - @memberjunction/core@5.18.0
+  - @memberjunction/core-entities@5.18.0
+  - @memberjunction/global@5.18.0
+  - @memberjunction/sql-dialect@5.18.0
+
+## 5.17.0
+
+### Patch Changes
+
+- 001fd3e: no migration
+- Updated dependencies [4b6fd2a]
+- Updated dependencies [9881045]
+  - @memberjunction/sql-parser@5.17.0
+  - @memberjunction/core-entities-server@5.17.0
+  - @memberjunction/core@5.17.0
+  - @memberjunction/postgresql-dataprovider@5.17.0
+  - @memberjunction/sqlserver-dataprovider@5.17.0
+  - @memberjunction/server-bootstrap-lite@5.17.0
+  - @memberjunction/ai-core-plus@5.17.0
+  - @memberjunction/aiengine@5.17.0
+  - @memberjunction/ai-prompts@5.17.0
+  - @memberjunction/actions-base@5.17.0
+  - @memberjunction/actions@5.17.0
+  - @memberjunction/core-entities@5.17.0
+  - @memberjunction/ai-provider-bundle@5.17.0
+  - @memberjunction/ai@5.17.0
+  - @memberjunction/config@5.17.0
+  - @memberjunction/global@5.17.0
+  - @memberjunction/sql-dialect@5.17.0
+
+## 5.16.0
+
+### Patch Changes
+
+- Updated dependencies [2387400]
+- Updated dependencies [11dba07]
+  - @memberjunction/core@5.16.0
+  - @memberjunction/ai-core-plus@5.16.0
+  - @memberjunction/aiengine@5.16.0
+  - @memberjunction/ai-prompts@5.16.0
+  - @memberjunction/actions-base@5.16.0
+  - @memberjunction/actions@5.16.0
+  - @memberjunction/core-entities@5.16.0
+  - @memberjunction/core-entities-server@5.16.0
+  - @memberjunction/postgresql-dataprovider@5.16.0
+  - @memberjunction/sqlserver-dataprovider@5.16.0
+  - @memberjunction/server-bootstrap-lite@5.16.0
+  - @memberjunction/ai-provider-bundle@5.16.0
+  - @memberjunction/ai@5.16.0
+  - @memberjunction/config@5.16.0
+  - @memberjunction/global@5.16.0
+  - @memberjunction/sql-dialect@5.16.0
+  - @memberjunction/sql-parser@5.16.0
+
+## 5.15.0
+
+### Patch Changes
+
+- d01f697: MJ SQL Parser: unified parser for SQL + Nunjucks templates + composition tokens. Replaces fragmented regex-based SQL parsing across 6 packages with a single MJSQLParser class providing AST-based tokenization, placeholder substitution, CTE extraction, ORDER BY remapping, and deterministic parameter/field extraction. Moves QueryPagingEngine from MJCore to GenericDatabaseProvider with AST-based paging. Fixes backtick quoting, table-qualified ORDER BY remapping, trailing semicolon, and FOR XML parsing bugs.
+- Updated dependencies [662d56b]
+- Updated dependencies [5e85b29]
+- Updated dependencies [d01f697]
+- Updated dependencies [c3e8b94]
+  - @memberjunction/core@5.15.0
+  - @memberjunction/sql-parser@5.15.0
+  - @memberjunction/core-entities-server@5.15.0
+  - @memberjunction/ai@5.15.0
+  - @memberjunction/ai-core-plus@5.15.0
+  - @memberjunction/ai-prompts@5.15.0
+  - @memberjunction/ai-provider-bundle@5.15.0
+  - @memberjunction/aiengine@5.15.0
+  - @memberjunction/actions-base@5.15.0
+  - @memberjunction/actions@5.15.0
+  - @memberjunction/core-entities@5.15.0
+  - @memberjunction/postgresql-dataprovider@5.15.0
+  - @memberjunction/sqlserver-dataprovider@5.15.0
+  - @memberjunction/server-bootstrap-lite@5.15.0
+  - @memberjunction/config@5.15.0
+  - @memberjunction/global@5.15.0
+  - @memberjunction/sql-dialect@5.15.0
+
+## 5.14.0
+
+### Patch Changes
+
+- Updated dependencies [69b5af4]
+- Updated dependencies [140fc6d]
+- Updated dependencies [6489cd8]
+  - @memberjunction/core@5.14.0
+  - @memberjunction/server-bootstrap-lite@5.14.0
+  - @memberjunction/actions-base@5.14.0
+  - @memberjunction/actions@5.14.0
+  - @memberjunction/ai-core-plus@5.14.0
+  - @memberjunction/aiengine@5.14.0
+  - @memberjunction/ai-prompts@5.14.0
+  - @memberjunction/core-entities@5.14.0
+  - @memberjunction/core-entities-server@5.14.0
+  - @memberjunction/postgresql-dataprovider@5.14.0
+  - @memberjunction/sqlserver-dataprovider@5.14.0
+  - @memberjunction/ai-provider-bundle@5.14.0
+  - @memberjunction/ai@5.14.0
+  - @memberjunction/config@5.14.0
+  - @memberjunction/global@5.14.0
+  - @memberjunction/sql-dialect@5.14.0
+  - @memberjunction/sql-parser@5.14.0
+
+## 5.13.0
+
+### Patch Changes
+
+- Updated dependencies [f72b538]
+- Updated dependencies [d0d9eba]
+  - @memberjunction/core@5.13.0
+  - @memberjunction/global@5.13.0
+  - @memberjunction/ai-core-plus@5.13.0
+  - @memberjunction/aiengine@5.13.0
+  - @memberjunction/ai-prompts@5.13.0
+  - @memberjunction/actions-base@5.13.0
+  - @memberjunction/actions@5.13.0
+  - @memberjunction/core-entities@5.13.0
+  - @memberjunction/core-entities-server@5.13.0
+  - @memberjunction/postgresql-dataprovider@5.13.0
+  - @memberjunction/sqlserver-dataprovider@5.13.0
+  - @memberjunction/server-bootstrap-lite@5.13.0
+  - @memberjunction/ai@5.13.0
+  - @memberjunction/ai-provider-bundle@5.13.0
+  - @memberjunction/config@5.13.0
+  - @memberjunction/sql-dialect@5.13.0
+
+## 5.12.0
+
+### Minor Changes
+
+- 257512b: feat: Integration scheduled job type, YM/HubSpot connector improvements, CodeGen custom view refresh
+  - Add ScheduledJobRunID FK to CompanyIntegrationRun and ScheduledJobID FK to CompanyIntegration (migration v5.12.x)
+  - Add Integration Sync scheduled job type metadata
+  - Pass contextUser through HubSpot credential loading for proper server-side data isolation
+  - Make YM connector performance defaults (retries, timeouts, batch size, throttle) overrideable per Configuration JSON
+  - CodeGen now auto-emits sp_refreshview for custom base views (BaseViewGenerated=false) so devs don't need to add it manually to migrations
+  - BaseIntegrationPointAction scaffold for future write-back actions
+
+- 1e5d181: migration
+
+### Patch Changes
+
+- 217bca4: no migration
+- 21a04c1: Support per-schema entity package resolution in CodeGen for OpenApp multi-package distribution
+- Updated dependencies [05f19ff]
+- Updated dependencies [7def002]
+- Updated dependencies [d92502e]
+- Updated dependencies [1567293]
+- Updated dependencies [8ca8698]
+- Updated dependencies [1e5d181]
+  - @memberjunction/core@5.12.0
+  - @memberjunction/core-entities-server@5.12.0
+  - @memberjunction/aiengine@5.12.0
+  - @memberjunction/server-bootstrap-lite@5.12.0
+  - @memberjunction/core-entities@5.12.0
+  - @memberjunction/postgresql-dataprovider@5.12.0
+  - @memberjunction/ai-core-plus@5.12.0
+  - @memberjunction/ai-prompts@5.12.0
+  - @memberjunction/actions-base@5.12.0
+  - @memberjunction/actions@5.12.0
+  - @memberjunction/sqlserver-dataprovider@5.12.0
+  - @memberjunction/ai-provider-bundle@5.12.0
+  - @memberjunction/ai@5.12.0
+  - @memberjunction/config@5.12.0
+  - @memberjunction/global@5.12.0
+  - @memberjunction/sql-dialect@5.12.0
+
+## 5.11.0
+
+### Patch Changes
+
+- Updated dependencies [a4c3c81]
+  - @memberjunction/core@5.11.0
+  - @memberjunction/postgresql-dataprovider@5.11.0
+  - @memberjunction/sqlserver-dataprovider@5.11.0
+  - @memberjunction/ai-core-plus@5.11.0
+  - @memberjunction/aiengine@5.11.0
+  - @memberjunction/ai-prompts@5.11.0
+  - @memberjunction/actions-base@5.11.0
+  - @memberjunction/actions@5.11.0
+  - @memberjunction/core-entities@5.11.0
+  - @memberjunction/core-entities-server@5.11.0
+  - @memberjunction/server-bootstrap-lite@5.11.0
+  - @memberjunction/ai-provider-bundle@5.11.0
+  - @memberjunction/ai@5.11.0
+  - @memberjunction/config@5.11.0
+  - @memberjunction/global@5.11.0
+  - @memberjunction/sql-dialect@5.11.0
+
+## 5.10.1
+
+### Patch Changes
+
+- a4ac83d: no migration
+  - @memberjunction/ai@5.10.1
+  - @memberjunction/ai-core-plus@5.10.1
+  - @memberjunction/aiengine@5.10.1
+  - @memberjunction/ai-prompts@5.10.1
+  - @memberjunction/ai-provider-bundle@5.10.1
+  - @memberjunction/actions-base@5.10.1
+  - @memberjunction/actions@5.10.1
+  - @memberjunction/config@5.10.1
+  - @memberjunction/core@5.10.1
+  - @memberjunction/core-entities@5.10.1
+  - @memberjunction/core-entities-server@5.10.1
+  - @memberjunction/global@5.10.1
+  - @memberjunction/postgresql-dataprovider@5.10.1
+  - @memberjunction/sql-dialect@5.10.1
+  - @memberjunction/sqlserver-dataprovider@5.10.1
+  - @memberjunction/server-bootstrap-lite@5.10.1
+
+## 5.10.0
+
+### Patch Changes
+
+- f2df653: Add ExternalReferenceID column to AIAgentRun for cross-system run correlation and wire it through Skip proxy. Fix CodeGen validator duplicate generation and cleanup existing duplicates.
+- Updated dependencies [f2df653]
+- Updated dependencies [98e9f15]
+- Updated dependencies [5ce18ff]
+- Updated dependencies [75dd36b]
+  - @memberjunction/core@5.10.0
+  - @memberjunction/core-entities@5.10.0
+  - @memberjunction/ai-core-plus@5.10.0
+  - @memberjunction/aiengine@5.10.0
+  - @memberjunction/ai-prompts@5.10.0
+  - @memberjunction/actions-base@5.10.0
+  - @memberjunction/actions@5.10.0
+  - @memberjunction/core-entities-server@5.10.0
+  - @memberjunction/postgresql-dataprovider@5.10.0
+  - @memberjunction/sqlserver-dataprovider@5.10.0
+  - @memberjunction/server-bootstrap-lite@5.10.0
+  - @memberjunction/ai-provider-bundle@5.10.0
+  - @memberjunction/ai@5.10.0
+  - @memberjunction/config@5.10.0
+  - @memberjunction/global@5.10.0
+  - @memberjunction/sql-dialect@5.10.0
+
+## 5.9.0
+
+### Patch Changes
+
+- f991f6d: Fix manifest generator to detect @RegisterClass in npm packages that only ship dist/ by falling back to scanning compiled JS files for \_\_decorate patterns
+- Updated dependencies [c6a0df2]
+- Updated dependencies [194ddf2]
+  - @memberjunction/core-entities@5.9.0
+  - @memberjunction/global@5.9.0
+  - @memberjunction/core@5.9.0
+  - @memberjunction/sqlserver-dataprovider@5.9.0
+  - @memberjunction/postgresql-dataprovider@5.9.0
+  - @memberjunction/server-bootstrap-lite@5.9.0
+  - @memberjunction/ai-core-plus@5.9.0
+  - @memberjunction/aiengine@5.9.0
+  - @memberjunction/ai-prompts@5.9.0
+  - @memberjunction/actions-base@5.9.0
+  - @memberjunction/actions@5.9.0
+  - @memberjunction/core-entities-server@5.9.0
+  - @memberjunction/ai@5.9.0
+  - @memberjunction/ai-provider-bundle@5.9.0
+  - @memberjunction/config@5.9.0
+  - @memberjunction/sql-dialect@5.9.0
+
+## 5.8.0
+
+### Patch Changes
+
+- 064cf3a: Make API key generation configurable via mj.config.cjs, fix codegen TVF sync and EntityRelationship deduplication, fix SQL logger post-processing, preserve version range prefixes in CLI bump command, and fix SkipProxyAgent crash on error responses
+- Updated dependencies [0753249]
+  - @memberjunction/core@5.8.0
+  - @memberjunction/postgresql-dataprovider@5.8.0
+  - @memberjunction/sqlserver-dataprovider@5.8.0
+  - @memberjunction/server-bootstrap-lite@5.8.0
+  - @memberjunction/ai-core-plus@5.8.0
+  - @memberjunction/aiengine@5.8.0
+  - @memberjunction/ai-prompts@5.8.0
+  - @memberjunction/actions-base@5.8.0
+  - @memberjunction/actions@5.8.0
+  - @memberjunction/core-entities@5.8.0
+  - @memberjunction/core-entities-server@5.8.0
+  - @memberjunction/ai-provider-bundle@5.8.0
+  - @memberjunction/ai@5.8.0
+  - @memberjunction/config@5.8.0
+  - @memberjunction/global@5.8.0
+  - @memberjunction/sql-dialect@5.8.0
+
+## 5.7.0
+
+### Patch Changes
+
+- Updated dependencies [f52e156]
+- Updated dependencies [642c4df]
+  - @memberjunction/ai@5.7.0
+  - @memberjunction/ai-prompts@5.7.0
+  - @memberjunction/core@5.7.0
+  - @memberjunction/ai-core-plus@5.7.0
+  - @memberjunction/aiengine@5.7.0
+  - @memberjunction/actions@5.7.0
+  - @memberjunction/core-entities@5.7.0
+  - @memberjunction/core-entities-server@5.7.0
+  - @memberjunction/sqlserver-dataprovider@5.7.0
+  - @memberjunction/server-bootstrap-lite@5.7.0
+  - @memberjunction/actions-base@5.7.0
+  - @memberjunction/postgresql-dataprovider@5.7.0
+  - @memberjunction/ai-provider-bundle@5.7.0
+  - @memberjunction/config@5.7.0
+  - @memberjunction/global@5.7.0
+  - @memberjunction/sql-dialect@5.7.0
+
+## 5.6.0
+
+### Patch Changes
+
+- Updated dependencies [4547d05]
+- Updated dependencies [76eaabc]
+  - @memberjunction/core@5.6.0
+  - @memberjunction/ai-core-plus@5.6.0
+  - @memberjunction/aiengine@5.6.0
+  - @memberjunction/ai-prompts@5.6.0
+  - @memberjunction/actions-base@5.6.0
+  - @memberjunction/actions@5.6.0
+  - @memberjunction/core-entities@5.6.0
+  - @memberjunction/core-entities-server@5.6.0
+  - @memberjunction/postgresql-dataprovider@5.6.0
+  - @memberjunction/sqlserver-dataprovider@5.6.0
+  - @memberjunction/server-bootstrap-lite@5.6.0
+  - @memberjunction/ai-provider-bundle@5.6.0
+  - @memberjunction/ai@5.6.0
+  - @memberjunction/config@5.6.0
+  - @memberjunction/global@5.6.0
+  - @memberjunction/sql-dialect@5.6.0
+
+## 5.5.0
+
+### Minor Changes
+
+- 6421543: migration
+
+### Patch Changes
+
+- bf2c142: no migration
+- df2457c: no migration, just small code changes
+- Updated dependencies [2b1d842]
+- Updated dependencies [a1648c5]
+- Updated dependencies [7ca2459]
+- Updated dependencies [ee9f788]
+- Updated dependencies [df2457c]
+  - @memberjunction/core@5.5.0
+  - @memberjunction/ai-provider-bundle@5.5.0
+  - @memberjunction/server-bootstrap-lite@5.5.0
+  - @memberjunction/sqlserver-dataprovider@5.5.0
+  - @memberjunction/core-entities@5.5.0
+  - @memberjunction/core-entities-server@5.5.0
+  - @memberjunction/global@5.5.0
+  - @memberjunction/postgresql-dataprovider@5.5.0
+  - @memberjunction/sql-dialect@5.5.0
+  - @memberjunction/ai@5.5.0
+  - @memberjunction/ai-core-plus@5.5.0
+  - @memberjunction/aiengine@5.5.0
+  - @memberjunction/ai-prompts@5.5.0
+  - @memberjunction/actions-base@5.5.0
+  - @memberjunction/actions@5.5.0
+  - @memberjunction/config@5.5.0
+
+## 5.4.1
+
+### Patch Changes
+
+- @memberjunction/ai@5.4.1
+- @memberjunction/ai-core-plus@5.4.1
+- @memberjunction/aiengine@5.4.1
+- @memberjunction/ai-prompts@5.4.1
+- @memberjunction/ai-provider-bundle@5.4.1
+- @memberjunction/actions-base@5.4.1
+- @memberjunction/actions@5.4.1
+- @memberjunction/config@5.4.1
+- @memberjunction/core@5.4.1
+- @memberjunction/core-entities@5.4.1
+- @memberjunction/core-entities-server@5.4.1
+- @memberjunction/global@5.4.1
+- @memberjunction/sqlserver-dataprovider@5.4.1
+- @memberjunction/server-bootstrap-lite@5.4.1
+
+## 5.4.0
+
+### Patch Changes
+
+- c9a760c: no migration
+- Updated dependencies [c9a760c]
+  - @memberjunction/core-entities@5.4.0
+  - @memberjunction/server-bootstrap-lite@5.4.0
+  - @memberjunction/ai-core-plus@5.4.0
+  - @memberjunction/aiengine@5.4.0
+  - @memberjunction/ai-prompts@5.4.0
+  - @memberjunction/actions-base@5.4.0
+  - @memberjunction/actions@5.4.0
+  - @memberjunction/core-entities-server@5.4.0
+  - @memberjunction/sqlserver-dataprovider@5.4.0
+  - @memberjunction/ai-provider-bundle@5.4.0
+  - @memberjunction/ai@5.4.0
+  - @memberjunction/config@5.4.0
+  - @memberjunction/core@5.4.0
+  - @memberjunction/global@5.4.0
+
 ## 5.3.1
 
 ### Patch Changes

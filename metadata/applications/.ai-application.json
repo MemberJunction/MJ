@@ -29,6 +29,13 @@
         "isDefault": false
       },
       {
+        "Label": "Agent Requests",
+        "Icon": "fa-solid fa-inbox",
+        "ResourceType": "Custom",
+        "DriverClass": "AIAgentRequestsResource",
+        "isDefault": false
+      },
+      {
         "Label": "Models",
         "Icon": "fa-solid fa-microchip",
         "ResourceType": "Custom",
@@ -58,7 +65,7 @@
     "ID": "7ACD423E-F36B-1410-8DAC-00021F8B792E"
   },
   "sync": {
-    "lastModified": "2026-02-02T17:57:24.916Z",
-    "checksum": "e7aaa3e7b91d09cbf19fa5555979e5ae29bf1cc4659a3c52cfd671d77f07b32b"
+    "lastModified": "2026-03-14T00:00:02.297Z",
+    "checksum": "5457ceb6cbdd2e471e613d35eb965cca71fefbafa760256b84676346954ddc76"
   }
 }

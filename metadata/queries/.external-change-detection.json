@@ -1,0 +1,107 @@
+[
+  {
+    "fields": {
+      "Name": "ExternalChangeDetection_DetectCreations",
+      "CategoryID": "@lookup:MJ: Query Categories.Name=MJ",
+      "Description": "Detects new records created in an external system by comparing base view rows to existing MJ record changes.",
+      "SQL": "@file:SQL/external-change-detection/detect-creations.sql",
+      "UsesTemplate": true,
+      "Status": "Approved"
+    },
+    "relatedEntities": {
+      "MJ: Query SQLs": [
+        {
+          "fields": {
+            "QueryID": "@parent:ID",
+            "SQLDialectID": "@lookup:MJ: SQL Dialects.PlatformKey=postgresql",
+            "SQL": "@file:SQL/external-change-detection/detect-creations.pg.sql"
+          },
+          "primaryKey": {
+            "ID": "D85DE0AD-5B5B-4EF4-82BC-C634CE39E836"
+          },
+          "sync": {
+            "lastModified": "2026-03-23T07:21:06.466Z",
+            "checksum": "bced5e54f6e29c6d29909b5821887b459d25cbc91317e2e1c4bd7efdaba03e0f"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "3366D42B-C3A1-4CE0-9F40-7FBE15F2EA57"
+    },
+    "sync": {
+      "lastModified": "2026-03-23T07:21:06.381Z",
+      "checksum": "a84b354734ab0c5749cce7a78d596b6735114c46a0e253ee4acf2d6ce5256756"
+    }
+  },
+  {
+    "fields": {
+      "Name": "ExternalChangeDetection_DetectUpdates",
+      "CategoryID": "@lookup:MJ: Query Categories.Name=MJ",
+      "Description": "Detects updated records in an external system by comparing UpdatedAt timestamps.",
+      "SQL": "@file:SQL/external-change-detection/detect-updates.sql",
+      "UsesTemplate": true,
+      "Status": "Approved"
+    },
+    "relatedEntities": {
+      "MJ: Query SQLs": [
+        {
+          "fields": {
+            "QueryID": "@parent:ID",
+            "SQLDialectID": "@lookup:MJ: SQL Dialects.PlatformKey=postgresql",
+            "SQL": "@file:SQL/external-change-detection/detect-updates.pg.sql"
+          },
+          "primaryKey": {
+            "ID": "565C5AF3-5F59-4531-B21D-53EBC884EF5B"
+          },
+          "sync": {
+            "lastModified": "2026-03-23T07:21:06.478Z",
+            "checksum": "a7ef023dc96f0291f02fabf336b839a54dde8fb425f19eab60ba468010948707"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "46A91235-2122-40E8-9289-20D04489CAC5"
+    },
+    "sync": {
+      "lastModified": "2026-03-23T07:21:00.940Z",
+      "checksum": "96f0424235394630e3ec31b2267d45ebde2715aa4778d2789c58d13e0574dd2c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "ExternalChangeDetection_DetectDeletions",
+      "CategoryID": "@lookup:MJ: Query Categories.Name=MJ",
+      "Description": "Detects deleted records in an external system by identifying MJ record changes with no matching rows in the base view.",
+      "SQL": "@file:SQL/external-change-detection/detect-deletions.sql",
+      "UsesTemplate": true,
+      "Status": "Approved"
+    },
+    "relatedEntities": {
+      "MJ: Query SQLs": [
+        {
+          "fields": {
+            "QueryID": "@parent:ID",
+            "SQLDialectID": "@lookup:MJ: SQL Dialects.PlatformKey=postgresql",
+            "SQL": "@file:SQL/external-change-detection/detect-deletions.pg.sql"
+          },
+          "primaryKey": {
+            "ID": "F325DCBE-347F-4F59-9A8A-A18706803C8B"
+          },
+          "sync": {
+            "lastModified": "2026-03-07T22:42:24.675Z",
+            "checksum": "c482cc5c58b9f4dd11646e2dbea7a2f59a34d106caa1ccd83ed7c200fb3db49a"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "028A39F6-2B38-4ED1-8235-4671B7CD330B"
+    },
+    "sync": {
+      "lastModified": "2026-03-07T22:42:23.362Z",
+      "checksum": "c47644c24a11f7c23074490bfb185be926656603c5163154bea963faecc471cd"
+    }
+  }
+]

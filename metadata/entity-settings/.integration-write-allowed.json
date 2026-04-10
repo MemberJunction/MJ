@@ -1,0 +1,62 @@
+[
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Lists",
+      "Name": "IntegrationWriteAllowed",
+      "Value": "true",
+      "Comments": "Allows integration sync to write records to this entity"
+    },
+    "primaryKey": {
+      "ID": "86C4A761-E0DB-4BBD-ADA1-6D019A82213E"
+    },
+    "sync": {
+      "lastModified": "2026-03-05T22:25:23.929Z",
+      "checksum": "fbc6d94b28dd4b9b5ed85b44c4e14f8407bc029642222451e98d565c7638fdf2"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: List Details",
+      "Name": "IntegrationWriteAllowed",
+      "Value": "true",
+      "Comments": "Allows integration sync to write records to this entity"
+    },
+    "primaryKey": {
+      "ID": "97872DB3-4A1E-47C4-A4DF-700861A2EBED"
+    },
+    "sync": {
+      "lastModified": "2026-03-05T22:25:23.944Z",
+      "checksum": "e0066779ff62b99e412fa452fa3813f42b0ccabc95ddc0ac462eefa4c27edbde"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Companies",
+      "Name": "IntegrationWriteAllowed",
+      "Value": "true",
+      "Comments": "Allows integration sync to write records to this entity"
+    },
+    "primaryKey": {
+      "ID": "9606C8F7-9337-4638-8B8D-F205E9377273"
+    },
+    "sync": {
+      "lastModified": "2026-03-05T22:25:23.957Z",
+      "checksum": "c134f5d687debcdb0c028b2df18c9cb809963b752120b3820d30eb03eeaef1bf"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Tags",
+      "Name": "IntegrationWriteAllowed",
+      "Value": "true",
+      "Comments": "Allows integration sync to write records to this entity"
+    },
+    "primaryKey": {
+      "ID": "451AAAB7-677F-4DE1-9B00-3D0D07BE1070"
+    },
+    "sync": {
+      "lastModified": "2026-03-05T22:25:23.970Z",
+      "checksum": "d9f22dc6c64348cdd2ff7bcc4d5fde3ca20d668e8e1b3641f9ca610ea13b031d"
+    }
+  }
+]

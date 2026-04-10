@@ -3,7 +3,7 @@
  * @module @memberjunction/scheduling-engine
  */
 
-import { RegisterClass, SafeJSONParse } from '@memberjunction/global';
+import { RegisterClass, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import { BaseScheduledJob, ScheduledJobExecutionContext } from '../BaseScheduledJob';
 import { ValidationResult, UserInfo, Metadata, ValidationErrorInfo, ValidationErrorType } from '@memberjunction/core';
 import { ActionEngineServer } from '@memberjunction/actions';
@@ -42,7 +42,7 @@ export class ActionScheduledJobDriver extends BaseScheduledJob {
 
         // Load the action
         await ActionEngineServer.Instance.Config(false, context.ContextUser);
-        const action = ActionEngineServer.Instance.Actions.find(a => a.ID === config.ActionID);
+        const action = ActionEngineServer.Instance.Actions.find(a => UUIDsEqual(a.ID, config.ActionID));
 
         if (!action) {
             throw new Error(`Action with ID ${config.ActionID} not found`);
@@ -173,7 +173,7 @@ export class ActionScheduledJobDriver extends BaseScheduledJob {
         const result: ActionParam[] = [];
 
         for (const param of params) {
-            const actionParam = allActionParams.find(p => p.ID === param.ActionParamID);
+            const actionParam = allActionParams.find(p => UUIDsEqual(p.ID, param.ActionParamID));
             if (!actionParam) {
                 this.logError(`Action param ${param.ActionParamID} not found`);
                 continue;

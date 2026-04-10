@@ -76,6 +76,8 @@ export class AdhocQueryResolver extends ResolverBase {
                 Results: JSON.stringify(result.recordset ?? []),
                 RowCount: result.recordset?.length ?? 0,
                 TotalRowCount: result.recordset?.length ?? 0,
+                PageNumber: undefined,
+                PageSize: undefined,
                 ExecutionTime: executionTimeMs,
                 ErrorMessage: ''
             };
@@ -92,6 +94,8 @@ export class AdhocQueryResolver extends ResolverBase {
                     Results: '[]',
                     RowCount: 0,
                     TotalRowCount: 0,
+                    PageNumber: undefined,
+                    PageSize: undefined,
                     ExecutionTime: executionTimeMs,
                     ErrorMessage: `Query execution exceeded ${input.TimeoutSeconds ?? 30} second timeout`
                 };
@@ -105,6 +109,8 @@ export class AdhocQueryResolver extends ResolverBase {
                 Results: '[]',
                 RowCount: 0,
                 TotalRowCount: 0,
+                PageNumber: undefined,
+                PageSize: undefined,
                 ExecutionTime: executionTimeMs,
                 ErrorMessage: `Query execution failed: ${errorMessage}`
             };
@@ -119,6 +125,8 @@ export class AdhocQueryResolver extends ResolverBase {
             Results: '[]',
             RowCount: 0,
             TotalRowCount: 0,
+            PageNumber: undefined,
+            PageSize: undefined,
             ExecutionTime: 0,
             ErrorMessage: errorMessage
         };

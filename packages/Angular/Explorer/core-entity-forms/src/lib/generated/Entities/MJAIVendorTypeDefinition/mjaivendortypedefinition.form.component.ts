@@ -18,8 +18,8 @@ export class MJAIVendorTypeDefinitionFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'vendorTypeInformation', sectionName: 'Vendor Type Information', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJAIModelVendors', sectionName: 'MJ: AI Model Vendors', isExpanded: false },
-            { sectionKey: 'mJAIVendorTypes', sectionName: 'MJ: AI Vendor Types', isExpanded: false }
+            { sectionKey: 'mJAIModelVendors', sectionName: 'AI Model Vendors', isExpanded: false },
+            { sectionKey: 'mJAIVendorTypes', sectionName: 'AI Vendor Types', isExpanded: false }
         ]);
     }
 }

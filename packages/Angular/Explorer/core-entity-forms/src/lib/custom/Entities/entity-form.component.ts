@@ -11,6 +11,8 @@ import {
     EntityInfo,
     EntityFieldInfo,
     EntityRelationshipInfo,
+    EntityOrganicKeyInfo,
+    EntityOrganicKeyRelatedEntityInfo,
     EntityPermissionInfo,
     Metadata,
     CompositeKey,
@@ -18,16 +20,19 @@ import {
 } from '@memberjunction/core';
 import { MJEntityEntity } from '@memberjunction/core-entities';
 import { ERDCompositeState } from '@memberjunction/ng-entity-relationship-diagram';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { SharedService } from '@memberjunction/ng-shared';
+import { RecordOpenedEvent } from '@memberjunction/ng-entity-viewer';
 import { MJEntityFormComponent } from '../../generated/Entities/MJEntity/mjentity.form.component';
 
 export type ExplorerSection =
     | 'overview'
     | 'fields'
     | 'relationships'
+    | 'organicKeys'
     | 'permissions'
+    | 'data'
     | 'lineage'
     | 'history'
     | 'settings';
@@ -108,6 +113,26 @@ export interface GroupedIncomingRelationship {
 }
 
 /**
+ * An organic key defined on THIS entity, with its related entity targets
+ */
+export interface OrganicKeyOutgoing {
+    OrganicKey: EntityOrganicKeyInfo;
+    RelatedEntities: { Info: EntityOrganicKeyRelatedEntityInfo; EntityName: string; EntityIcon: string }[];
+}
+
+/**
+ * An organic key on ANOTHER entity that targets THIS entity as a related entity
+ */
+export interface OrganicKeyIncoming {
+    SourceEntityID: string;
+    SourceEntityName: string;
+    SourceEntityIcon: string;
+    OrganicKey: EntityOrganicKeyInfo;
+    RelatedEntityConfig: EntityOrganicKeyRelatedEntityInfo;
+    MatchType: 'Direct' | 'Transitive';
+}
+
+/**
  * World-class Entity Explorer form component that provides an exploration-focused
  * interface for understanding entities in the MemberJunction system.
  *
@@ -156,7 +181,9 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
         { id: 'overview', icon: 'fa-solid fa-house', label: 'Overview' },
         { id: 'fields', icon: 'fa-solid fa-table-cells', label: 'Fields' },
         { id: 'relationships', icon: 'fa-solid fa-diagram-project', label: 'Relations' },
+        { id: 'organicKeys', icon: 'fa-solid fa-fingerprint', label: 'Organic Keys' },
         { id: 'permissions', icon: 'fa-solid fa-lock', label: 'Security' },
+        { id: 'data', icon: 'fa-solid fa-table-list', label: 'Data' },
         { id: 'lineage', icon: 'fa-solid fa-code-branch', label: 'Lineage' },
         { id: 'history', icon: 'fa-solid fa-clock-rotate-left', label: 'History' },
         { id: 'settings', icon: 'fa-solid fa-sliders', label: 'Settings' }
@@ -220,6 +247,12 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
     /** Grouped incoming relationships by source entity */
     public groupedIncomingRelationships: GroupedIncomingRelationship[] = [];
 
+    /** Outgoing organic keys (defined on THIS entity) */
+    public organicKeysOutgoing: OrganicKeyOutgoing[] = [];
+
+    /** Incoming organic keys (other entities targeting THIS entity) */
+    public organicKeysIncoming: OrganicKeyIncoming[] = [];
+
     /** Whether detail panel is open */
     public detailPanelOpen = false;
 
@@ -266,7 +299,7 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
 
             // Find the EntityInfo by the record's ID
             if (this.record?.ID) {
-                this.entity = this.allEntities.find(e => e.ID === this.record.ID) || null;
+                this.entity = this.allEntities.find(e => UUIDsEqual(e.ID, this.record.ID)) || null;
             }
 
             if (this.entity) {
@@ -274,6 +307,7 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
                 this.buildFieldGroups();
                 this.buildISAFieldGroups();
                 this.buildRelationships();
+                this.buildOrganicKeys();
                 this.updateNavBadges();
 
                 // Load row count asynchronously (don't block UI)
@@ -564,7 +598,7 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
                 if (existing) {
                     existing.fields.push(field);
                 } else {
-                    const relatedEntity = this.allEntities.find(e => e.ID === field.RelatedEntityID);
+                    const relatedEntity = this.allEntities.find(e => UUIDsEqual(e.ID, field.RelatedEntityID));
                     outgoingMap.set(field.RelatedEntityID, {
                         entityId: field.RelatedEntityID,
                         entityName: relatedEntity?.Name || field.RelatedEntity || 'Unknown',
@@ -607,6 +641,57 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
             .sort((a, b) => a.entityName.localeCompare(b.entityName));
     }
 
+    private buildOrganicKeys(): void {
+        if (!this.entity) return;
+
+        // Outgoing: organic keys defined ON this entity
+        this.organicKeysOutgoing = this.entity.OrganicKeys.map(ok => ({
+            OrganicKey: ok,
+            RelatedEntities: ok.RelatedEntities.map(re => {
+                const relEntity = this.allEntities.find(e => UUIDsEqual(e.ID, re.RelatedEntityID));
+                return {
+                    Info: re,
+                    EntityName: re.RelatedEntity || relEntity?.Name || 'Unknown',
+                    EntityIcon: relEntity?.Icon || 'fa-solid fa-table',
+                };
+            }),
+        }));
+
+        // Incoming: organic keys on OTHER entities that reference THIS entity
+        this.organicKeysIncoming = [];
+        for (const otherEntity of this.allEntities) {
+            if (UUIDsEqual(otherEntity.ID, this.entity.ID)) continue;
+            for (const ok of otherEntity.OrganicKeys) {
+                for (const re of ok.RelatedEntities) {
+                    if (UUIDsEqual(re.RelatedEntityID, this.entity.ID)) {
+                        this.organicKeysIncoming.push({
+                            SourceEntityID: otherEntity.ID,
+                            SourceEntityName: otherEntity.Name,
+                            SourceEntityIcon: otherEntity.Icon || 'fa-solid fa-table',
+                            OrganicKey: ok,
+                            RelatedEntityConfig: re,
+                            MatchType: re.IsTransitiveMatch ? 'Transitive' : 'Direct',
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Navigate to the Entity admin form for a given entity ID.
+     */
+    public NavigateToEntityByID(entityID: string): void {
+        const pkey = new CompositeKey([{ FieldName: 'ID', Value: entityID }]);
+        this.sharedService.OpenEntityRecord('MJ: Entities', pkey);
+    }
+
+    /** Total organic key connection count (outgoing targets + incoming sources) */
+    get OrganicKeyTotalCount(): number {
+        const outCount = this.organicKeysOutgoing.reduce((sum, ok) => sum + ok.RelatedEntities.length, 0);
+        return outCount + this.organicKeysIncoming.length;
+    }
+
     private updateNavBadges(): void {
         if (!this.entity) return;
 
@@ -616,6 +701,8 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
                     return { ...item, badge: this.stats.fieldCount };
                 case 'relationships':
                     return { ...item, badge: this.stats.relationshipCount };
+                case 'organicKeys':
+                    return { ...item, badge: this.OrganicKeyTotalCount > 0 ? this.OrganicKeyTotalCount : undefined };
                 case 'permissions':
                     return { ...item, badge: this.stats.permissionCount };
                 default:
@@ -630,6 +717,32 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
         this.activeSection = section;
         this.closeDetailPanel();
         this.cdr.markForCheck();
+    }
+
+    /**
+     * Handle record opened from the entity viewer (double-click or open button).
+     * Emits a Navigate event so the host app can open the record.
+     */
+    public OnRecordOpened(event: RecordOpenedEvent): void {
+        this.Navigate.emit({
+            Kind: 'record',
+            EntityName: event.entity.Name,
+            PrimaryKey: event.compositeKey
+        });
+    }
+
+    /**
+     * Handle add requested from the entity viewer toolbar.
+     * Emits a Navigate event to create a new record of this entity type.
+     */
+    public OnAddRequested(): void {
+        if (this.entity) {
+            this.Navigate.emit({
+                Kind: 'new-record',
+                EntityName: this.entity.Name,
+                DefaultValues: {}
+            });
+        }
     }
 
     public toggleFieldGroup(groupId: string): void {
@@ -711,7 +824,8 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
     private getFieldSortValue(field: EntityFieldInfo, column: string): string | number | boolean | null {
         switch (column) {
             case 'Sequence': return field.Sequence;
-            case 'Name': return field.DisplayName || field.Name;
+            case 'Name': return field.Name;
+            case 'DisplayName': return field.DisplayName || field.Name;
             case 'Type': return field.Type;
             case 'Length': return field.Length;
             case 'AllowsNull': return field.AllowsNull;
@@ -897,7 +1011,7 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
         };
         collectDescendants(this.entity);
         return md.Entities
-            .filter(e => !descendantIds.has(e.ID) && e.ID !== this.entity!.ID && !e.VirtualEntity)
+            .filter(e => !descendantIds.has(e.ID) && !UUIDsEqual(e.ID, this.entity!.ID) && !e.VirtualEntity)
             .sort((a, b) => a.Name.localeCompare(b.Name));
     }
 
@@ -905,7 +1019,7 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
     public get SiblingEntities(): EntityInfo[] {
         if (!this.IsChildType || !this.entity?.ParentEntityInfo) return [];
         return this.entity.ParentEntityInfo.ChildEntities
-            .filter(e => e.ID !== this.entity!.ID);
+            .filter(e => !UUIDsEqual(e.ID, this.entity!.ID));
     }
 
     public get statusClass(): string {
@@ -962,13 +1076,13 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
 
     public getRelatedEntityName(field: EntityFieldInfo): string | null {
         if (!field.RelatedEntityID) return null;
-        const related = this.allEntities.find(e => e.ID === field.RelatedEntityID);
+        const related = this.allEntities.find(e => UUIDsEqual(e.ID, field.RelatedEntityID));
         return related?.Name || null;
     }
 
     public getRelatedEntity(field: EntityFieldInfo): EntityInfo | null {
         if (!field.RelatedEntityID) return null;
-        return this.allEntities.find(e => e.ID === field.RelatedEntityID) || null;
+        return this.allEntities.find(e => UUIDsEqual(e.ID, field.RelatedEntityID)) || null;
     }
 
     public navigateToRelatedEntity(field: EntityFieldInfo): void {
@@ -1007,7 +1121,7 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
      */
     public getRoleName(perm: EntityPermissionInfo): string {
         if (!perm.RoleID) return 'Unknown';
-        const role = this._metadata.Roles.find(r => r.ID === perm.RoleID);
+        const role = this._metadata.Roles.find(r => UUIDsEqual(r.ID, perm.RoleID));
         return role?.Name || 'Unknown';
     }
 
@@ -1029,6 +1143,11 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
     /**
      * Formats a JSON string for display with proper indentation.
      */
+    /** Case-insensitive UUID check whether an entity field is the currently selected field. */
+    public IsFieldSelected(field: EntityFieldInfo): boolean {
+        return UUIDsEqual(this.selectedField?.ID, field.ID);
+    }
+
     public formatJsonValue(value: string): string {
         if (!value) return '';
         try {

@@ -14,16 +14,15 @@
  */
 
 // Design tokens (must be first - provides CSS custom properties)
-@import './styles/tokens';
+@import '@memberjunction/ng-shared-generic/dist/lib/tokens';
 @import './styles/md3-theme';
+
+// Global reset — previously provided by Kendo theme
+[hidden] { display: none !important; }
 
 // Core style imports
 @import './styles/variables';
 @import './styles/typography';
-
-// Import Kendo theme BEFORE our overrides
-// Using package resolution - works regardless of repository structure
-@import '@progress/kendo-theme-default/scss/all';
 
 // Import dhtmlx-gantt CSS for Gantt chart components
 @import 'dhtmlx-gantt/codebase/dhtmlxgantt.css';
@@ -40,23 +39,24 @@
 }
 
 // Apply our theme overrides to Kendo components
-@import './styles/kendo-theme-override';
 
 // Import remaining custom styles
 @import './styles/common';
 @import './styles/badges';
 @import './styles/utilities';
 
-// Ensure button groups have correct colors (override any conflicting styles)
-kendo-buttongroup button,
-kendo-buttongroup .k-button {
-    color: var(--navy) !important;
-
-    &[aria-pressed="true"],
-    &.k-selected {
-        color: var(--white-color) !important;
-    }
-}
+// MJ UI Components styles
+@import '@memberjunction/ng-ui-components/dist/lib/button/button';
+@import '@memberjunction/ng-ui-components/dist/lib/dialog/dialog';
+@import '@memberjunction/ng-ui-components/dist/lib/dropdown/dropdown';
+@import '@memberjunction/ng-ui-components/dist/lib/combobox/combobox';
+@import '@memberjunction/ng-ui-components/dist/lib/input/input';
+@import '@memberjunction/ng-ui-components/dist/lib/input/input-switch-progress';
+@import '@memberjunction/ng-ui-components/dist/lib/datepicker/datepicker';
+@import '@memberjunction/ng-ui-components/dist/lib/splitter/splitter';
+@import '@memberjunction/ng-ui-components/dist/lib/accordion/accordion';
+@import '@memberjunction/ng-ui-components/dist/lib/window/window';
+@import '@memberjunction/ng-ui-components/dist/lib/input/chip';
 
 .link-text {
     cursor: pointer;
@@ -74,7 +74,7 @@ kendo-buttongroup .k-button {
     background-position: center center;
     vertical-align: middle;
     line-height: 32px;
-    box-shadow: inset 0 0 1px #999, inset 0 0 10px rgba(0, 0, 0, 0.2);
+    box-shadow: inset 0 0 1px var(--mj-text-muted), inset 0 0 10px rgba(0, 0, 0, 0.2);
     margin-left: 5px;
 }
 
@@ -86,7 +86,7 @@ kendo-buttongroup .k-button {
 }
 
 .red {
-    color: #d9534f;
+    color: var(--mj-status-error);
 }
 
 // Chart
@@ -110,28 +110,8 @@ kendo-buttongroup .k-button {
     opacity: 0.5;
 }
 
-// Scheduler
-kendo-recurrence-frequency-editor .k-edit-label {
-    width: unset;
-    margin-right: 10px;
-}
-
-kendo-recurrence-frequency-editor .k-edit-field {
-    width: unset;
-    float: none;
-}
-
-.k-team-mark {
-    width: 1em;
-    height: 1em;
-    display: inline-block;
-    vertical-align: middle;
-    margin-right: 8px;
-}
-
 // Header
-.material-bg .k-input,
-.material-bg .k-dropdown-wrap .k-i-arrow-s {
+.material-bg {
     color: white;
 }
 
@@ -140,12 +120,12 @@ kendo-recurrence-frequency-editor .k-edit-field {
 }
 
 .material-bg .k-dropdown-wrap.k-state-focused {
-    border-color: #697bcf;
+    border-color: var(--mj-brand-primary);
     border-bottom-width: 2px;
 }
 
 .material-bg .k-dropdown-wrap:hover {
-    border-color: #2942bb;
+    border-color: var(--mj-brand-primary-hover);
     border-bottom-width: 2px;
 }
 
@@ -176,7 +156,7 @@ kendo-recurrence-frequency-editor .k-edit-field {
     #txtSearch {
         width: 300px;
         height: 30px;
-        border: 1px solid #ccc;
+        border: 1px solid var(--mj-border-default);
         border-radius: 5px;
         margin-right: 5px;
         margin-left: 10px;
@@ -184,7 +164,7 @@ kendo-recurrence-frequency-editor .k-edit-field {
 }
 
 .item {
-    border: 1px solid #e1e0e1;
+    border: 1px solid var(--mj-border-default);
     border-radius: 5px;
     padding: 12px 10px;
     font-size: 16px;
@@ -200,9 +180,9 @@ kendo-recurrence-frequency-editor .k-edit-field {
 
 .item.active,
 .employee.active {
-    background-color: #f55f54;
-    color: #fff;
-    border-color: #f55f54;
+    background-color: var(--mj-status-error);
+    color: var(--mj-text-inverse, white);
+    border-color: var(--mj-status-error);
     z-index: 10;
 }
 

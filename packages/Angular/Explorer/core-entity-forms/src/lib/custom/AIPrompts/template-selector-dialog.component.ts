@@ -1,11 +1,11 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
-import { DialogRef } from '@progress/kendo-angular-dialog';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, Output, EventEmitter } from '@angular/core';
 import { Subject, BehaviorSubject, debounceTime, distinctUntilChanged, takeUntil } from 'rxjs';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { CommonModule } from '@angular/common';
 import { RunView } from '@memberjunction/core';
 import { MJTemplateEntity, MJTemplateCategoryEntity } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { UUIDsEqual } from '@memberjunction/global';
 
 export interface TemplateSelectorConfig {
   /** Title for the dialog */
@@ -63,8 +63,9 @@ export class TemplateSelectorDialogComponent implements OnInit, OnDestroy {
   // View mode
   viewMode: 'grid' | 'list' = 'list';
 
+  @Output() DialogClose = new EventEmitter<void>();
+
   constructor(
-    private dialogRef: DialogRef,
     private cdr: ChangeDetectorRef
   ) {}
 
@@ -190,7 +191,7 @@ export class TemplateSelectorDialogComponent implements OnInit, OnDestroy {
     // Apply category filter
     if (this.selectedCategory) {
       filtered = filtered.filter(template => 
-        template.CategoryID === this.selectedCategory
+        UUIDsEqual(template.CategoryID, this.selectedCategory)
       );
     }
     
@@ -205,7 +206,7 @@ export class TemplateSelectorDialogComponent implements OnInit, OnDestroy {
   }
 
   getCategoryDisplayName(categoryId: string): string {
-    const category = this.categories$.value.find(c => c.ID === categoryId);
+    const category = this.categories$.value.find(c => UUIDsEqual(c.ID, categoryId));
     return category?.Name || 'Unknown Category';
   }
 
@@ -286,7 +287,7 @@ export class TemplateSelectorDialogComponent implements OnInit, OnDestroy {
     };
 
     this.result.next(result);
-    this.dialogRef.close();
+    this.DialogClose.emit();
   }
 
   createNew() {
@@ -296,11 +297,11 @@ export class TemplateSelectorDialogComponent implements OnInit, OnDestroy {
     };
 
     this.result.next(result);
-    this.dialogRef.close();
+    this.DialogClose.emit();
   }
 
   cancel() {
     this.result.next(null);
-    this.dialogRef.close();
+    this.DialogClose.emit();
   }
 }

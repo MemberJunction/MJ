@@ -1,6 +1,6 @@
 import { BaseEntity, DataObjectRelatedEntityParam, EntityInfo, LogError, Metadata, KeyValuePair, QueryInfo, RunQuery, RunView, RunViewParams, UserInfo, CompositeKey, IMetadataProvider, IRunViewProvider } from "@memberjunction/core";
 import { MJDataContextEntity, MJDataContextItemEntity, MJDataContextItemEntityType, MJUserViewEntityExtended } from "@memberjunction/core-entities";
-import { MJGlobal, RegisterClass } from "@memberjunction/global";
+import { MJGlobal, RegisterClass, UUIDsEqual } from "@memberjunction/global";
 
 /**
  * Utility class for storing field info from within a DataContextItem object
@@ -274,7 +274,7 @@ export class DataContextItem {
                 break;
             case 'query':
                 this.QueryID = dataContextItem.QueryID; // map the QueryID in our database to the RecordID field in the object model for runtime use
-                const q = provider.Queries.find((q) => q.ID === this.QueryID);
+                const q = provider.Queries.find((q) => UUIDsEqual(q.ID, this.QueryID));
                 this.RecordName = q?.Name;
                 this.SQL = q.SQL;
                 break;
@@ -296,7 +296,7 @@ export class DataContextItem {
                 break;
         }
         if (this.EntityID) {
-            this.Entity = provider.Entities.find((e) => e.ID === this.EntityID);
+            this.Entity = provider.Entities.find((e) => UUIDsEqual(e.ID, this.EntityID));
             this.EntityName = this.Entity.Name;
             this.Fields = DataContext.MapEntityFieldsToDataContextFields(this.Entity);
             if (this.Type === 'full_entity')
@@ -345,7 +345,7 @@ export class DataContextItem {
             const md = new Metadata();
             const rv = new RunView();
             const viewParams: RunViewParams = { IgnoreMaxRows: true }; // ignore max rows for both types
-            const e = md.Entities.find((e) => e.ID === this.EntityID);
+            const e = md.Entities.find((e) => UUIDsEqual(e.ID, this.EntityID));
 
             viewParams.EntityName = e.Name;
             const viewResult = await rv.RunView(viewParams, contextUser);
@@ -375,7 +375,7 @@ export class DataContextItem {
             const md = new Metadata();
             const record = await md.GetEntityObject(this.EntityName, contextUser);
             const pkeyVals: KeyValuePair[] = [];
-            const ei = md.Entities.find((e) => e.ID === this.EntityID);
+            const ei = md.Entities.find((e) => UUIDsEqual(e.ID, this.EntityID));
             const rawVals = this.RecordID.split(',');
             for (let i = 0; i < ei.PrimaryKeys.length; i++) {
                 const pk = ei.PrimaryKeys[i];

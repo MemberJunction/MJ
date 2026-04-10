@@ -8,6 +8,7 @@
  */
 
 import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, UserInfo } from "@memberjunction/core";
+import { UUIDsEqual } from "@memberjunction/global";
 import {
     MJMCPServerEntity,
     MJMCPServerConnectionEntity,
@@ -126,7 +127,7 @@ export class MCPEngine extends BaseEngine<MCPEngine> {
      * @returns The server entity or undefined if not found
      */
     public GetServerById(serverId: string): MJMCPServerEntity | undefined {
-        return this._Servers.find(s => s.ID === serverId);
+        return this._Servers.find(s => UUIDsEqual(s.ID, serverId));
     }
 
     /**
@@ -136,7 +137,7 @@ export class MCPEngine extends BaseEngine<MCPEngine> {
      * @returns The connection entity or undefined if not found
      */
     public GetConnectionById(connectionId: string): MJMCPServerConnectionEntity | undefined {
-        return this._Connections.find(c => c.ID === connectionId);
+        return this._Connections.find(c => UUIDsEqual(c.ID, connectionId));
     }
 
     /**
@@ -146,7 +147,7 @@ export class MCPEngine extends BaseEngine<MCPEngine> {
      * @returns The tool entity or undefined if not found
      */
     public GetToolById(toolId: string): MJMCPServerToolEntity | undefined {
-        return this._Tools.find(t => t.ID === toolId);
+        return this._Tools.find(t => UUIDsEqual(t.ID, toolId));
     }
 
     /**
@@ -156,7 +157,7 @@ export class MCPEngine extends BaseEngine<MCPEngine> {
      * @returns Array of connections for the server
      */
     public GetConnectionsByServer(serverId: string): MJMCPServerConnectionEntity[] {
-        return this._Connections.filter(c => c.MCPServerID === serverId);
+        return this._Connections.filter(c => UUIDsEqual(c.MCPServerID, serverId));
     }
 
     /**
@@ -166,7 +167,7 @@ export class MCPEngine extends BaseEngine<MCPEngine> {
      * @returns Array of tools for the server
      */
     public GetToolsByServer(serverId: string): MJMCPServerToolEntity[] {
-        return this._Tools.filter(t => t.MCPServerID === serverId);
+        return this._Tools.filter(t => UUIDsEqual(t.MCPServerID, serverId));
     }
 
     /**
@@ -203,7 +204,7 @@ export class MCPEngine extends BaseEngine<MCPEngine> {
      * @returns Array of active connections for the server
      */
     public GetActiveConnectionsByServer(serverId: string): MJMCPServerConnectionEntity[] {
-        return this._Connections.filter(c => c.MCPServerID === serverId && c.Status === 'Active');
+        return this._Connections.filter(c => UUIDsEqual(c.MCPServerID, serverId) && c.Status === 'Active');
     }
 
     /**
@@ -213,7 +214,7 @@ export class MCPEngine extends BaseEngine<MCPEngine> {
      * @returns Array of active tools for the server
      */
     public GetActiveToolsByServer(serverId: string): MJMCPServerToolEntity[] {
-        return this._Tools.filter(t => t.MCPServerID === serverId && t.Status === 'Active');
+        return this._Tools.filter(t => UUIDsEqual(t.MCPServerID, serverId) && t.Status === 'Active');
     }
 
     /**

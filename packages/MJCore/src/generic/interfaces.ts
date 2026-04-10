@@ -5,8 +5,9 @@ import { RunViewParams } from "../views/runView";
 import { AuditLogTypeInfo, AuthorizationInfo, RoleInfo, RowLevelSecurityFilterInfo, UserInfo } from "./securityInfo";
 import { TransactionGroupBase } from "./transactionGroup";
 import { RunReportParams } from "./runReport";
-import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo, QueryEntityInfo, QueryParameterInfo } from "./queryInfo";
+import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo, QueryEntityInfo, QueryParameterInfo, QueryDependencyInfo, SQLDialectInfo, QuerySQLInfo } from "./queryInfo";
 import { RunQueryParams } from "./runQuery";
+import { QueryExecutionSpec } from "./queryExecutionSpec";
 import { LibraryInfo } from "./libraryInfo";
 import { CompositeKey } from "./compositeKey";
 import { ExplorerNavigationItem } from "./explorerNavigationItem";
@@ -85,40 +86,84 @@ export type ProviderType = typeof ProviderType[keyof typeof ProviderType];
  */
 export class PotentialDuplicate extends CompositeKey {
     ProbabilityScore: number;
+    /** Full vector metadata snapshot from the vector DB (Name, Description, EntityIcon, etc.) */
+    VectorMetadata?: Record<string, string>;
+}
+
+/**
+ * Configuration options for duplicate detection behavior.
+ * Controls retrieval, scoring, hybrid search, and reranking parameters.
+ */
+export interface DuplicateDetectionOptions {
+    /** ID of an existing Duplicate Run record to continue */
+    DuplicateRunID?: string;
+    /** Number of nearest neighbors to retrieve per record (default: 5) */
+    TopK?: number;
+    /** Enable post-retrieval reranking via BaseReranker (default: false) */
+    ReRankingEnabled?: boolean;
+    /** AI Model ID for the reranker; if omitted, uses default reranker */
+    ReRankingModelID?: string;
+    /** Max candidates to send to reranker per record (default: all retrieved) */
+    ReRankingTopK?: number;
+    /** Fusion method when combining vector + keyword results (default: 'rrf') */
+    FusionMethod?: 'rrf' | 'weighted';
+    /** Weight for keyword search in hybrid mode: 0.0 = pure vector, 1.0 = pure keyword (default: 0.3) */
+    KeywordSearchWeight?: number;
+    /** Enable incremental mode — only check records not in a completed prior run (default: false) */
+    IncrementalOnly?: boolean;
+    /**
+     * Re-vectorize records before detection (default: false).
+     * When false, assumes vectors already exist in the index from a prior sync.
+     * Set to true to force a fresh vectorization pass before running detection.
+     */
+    Revectorize?: boolean;
+    /** Progress callback invoked at natural milestones during detection */
+    OnProgress?: (progress: DuplicateDetectionProgress) => void;
+    /**
+     * Override the entity document's PotentialMatchThreshold for this run.
+     * Value between 0 and 1 (e.g., 0.30 = 30%). If omitted, uses the entity document's value.
+     */
+    PotentialMatchThreshold?: number;
+    /**
+     * Override the entity document's AbsoluteMatchThreshold for this run.
+     * Value between 0 and 1. If omitted, uses the entity document's value.
+     */
+    AbsoluteMatchThreshold?: number;
+}
+
+/**
+ * Progress information emitted during long-running duplicate detection operations.
+ */
+export interface DuplicateDetectionProgress {
+    Phase: 'Vectorizing' | 'Loading' | 'Embedding' | 'Querying' | 'Matching' | 'Merging';
+    TotalRecords: number;
+    ProcessedRecords: number;
+    MatchesFound: number;
+    CurrentRecordID?: string;
+    ElapsedMs: number;
 }
 
 /**
  * Request parameters for finding potential duplicate records.
- * Supports various matching strategies including list-based and document-based comparisons.
- * Can use either a pre-defined list or entity document for duplicate detection.
+ * Supports list-based batch detection and single-record checks.
  */
 export class PotentialDuplicateRequest {
-    /**
-    * The ID of the entity the record belongs to
-    **/
+    /** The ID of the entity the record belongs to */
     EntityID: string;
-    /**
-    * The ID of the List entity to use
-    **/
-    ListID: string;
-    /**
-     * The Primary Key values of each record
-     * we're checking for duplicates
-     */
-    RecordIDs: CompositeKey[]; 
-    /**
-    * The ID of the entity document to use
-    **/
+    /** The ID of the List entity to use for batch detection (optional — if omitted, records are loaded directly from the entity) */
+    ListID?: string;
+    /** The Primary Key values of each record being checked for duplicates */
+    RecordIDs: CompositeKey[];
+    /** The ID of the entity document defining the vectorization template */
     EntityDocumentID?: string;
-    /**
-    * The minimum score in order to consider a record a potential duplicate
-    **/
+    /** Optional saved view ID — run this view to determine which records to check */
+    ViewID?: string;
+    /** Optional SQL filter applied to the entity to determine which records to check */
+    ExtraFilter?: string;
+    /** Minimum score to consider a record a potential duplicate */
     ProbabilityScore?: number;
-
-    /**
-    * Additional options to pass to the provider
-    **/
-    Options?: any;
+    /** Detection options controlling retrieval, scoring, and behavior */
+    Options?: DuplicateDetectionOptions;
 }
 
 /**
@@ -430,6 +475,18 @@ export interface IMetadataProvider {
 
     get Entities(): EntityInfo[]
 
+    /**
+     * O(1) entity lookup by name (case-insensitive, trimmed).
+     * Falls back to linear search if the internal Map hasn't been built yet.
+     */
+    EntityByName(entityName: string): EntityInfo | undefined
+
+    /**
+     * O(1) entity lookup by ID (UUID-normalized).
+     * Falls back to linear search if the internal Map hasn't been built yet.
+     */
+    EntityByID(entityID: string): EntityInfo | undefined
+
     get Applications(): ApplicationInfo[]
 
     get CurrentUser(): UserInfo
@@ -453,6 +510,12 @@ export interface IMetadataProvider {
     get QueryEntities(): QueryEntityInfo[]
 
     get QueryParameters(): QueryParameterInfo[]
+
+    get QueryDependencies(): QueryDependencyInfo[]
+
+    get SQLDialects(): SQLDialectInfo[]
+
+    get QuerySQLs(): QuerySQLInfo[]
 
     get Libraries(): LibraryInfo[]
 
@@ -594,11 +657,16 @@ export interface IMetadataProvider {
     RemoveLocalMetadataFromStorage(): Promise<void>
 
     /**
-     * Always retrieves data from the server - this method does NOT check cache. To use cached local values if available, call GetAndCacheDatasetByName() instead
-     * @param datasetName 
-     * @param itemFilters 
+     * Retrieves a dataset by name. When `forceRefresh` is true, bypasses any in-memory or local cache
+     * and fetches directly from the database. When false (default), server-side providers may serve
+     * from LocalCacheManager if `TrustLocalCacheCompletely` is true.
+     * @param datasetName
+     * @param itemFilters
+     * @param contextUser
+     * @param providerToUse
+     * @param forceRefresh When true, bypasses all caching and fetches fresh data from the database
      */
-    GetDatasetByName(datasetName: string, itemFilters?: DatasetItemFilterType[], contextUser?: UserInfo, providerToUse?: IMetadataProvider): Promise<DatasetResultType>;
+    GetDatasetByName(datasetName: string, itemFilters?: DatasetItemFilterType[], contextUser?: UserInfo, providerToUse?: IMetadataProvider, forceRefresh?: boolean): Promise<DatasetResultType>;
     /**
      * Retrieves the date status information for a dataset and all its items from the server. This method will match the datasetName and itemFilters to the server's dataset and item filters to determine a match
      * @param datasetName 
@@ -742,6 +810,23 @@ export type RunViewResult<T = any> = {
      * Only present if Aggregates were requested.
      */
     AggregateExecutionTime?: number;
+
+    /**
+     * If an `OnDataChanged` callback was provided in {@link RunViewParams}, this function
+     * unregisters that callback. Call this during cleanup (e.g., Angular `ngOnDestroy`,
+     * React effect cleanup) to prevent memory leaks.
+     *
+     * For long-lived callers like engines, this is typically not needed — the callback
+     * persists for the process lifetime.
+     *
+     * @example
+     * ```typescript
+     * const result = await rv.RunView({ EntityName: 'Users', OnDataChanged: (e) => { ... } });
+     * // Later:
+     * result.Unsubscribe?.();
+     * ```
+     */
+    Unsubscribe?: () => void;
 }
 
 /**
@@ -764,6 +849,118 @@ export interface IRunViewProvider {
      * @returns Response containing status and fresh data only for stale caches
      */
     RunViewsWithCacheCheck?<T = unknown>(params: RunViewWithCacheCheckParams[], contextUser?: UserInfo): Promise<RunViewsWithCacheCheckResponse<T>>
+
+    /**
+     * Performs a full-text search across all entities that have FullTextSearchEnabled=true in their metadata.
+     * Uses the database-native full-text search capabilities (SQL Server FREETEXT via CodeGen-generated functions,
+     * PostgreSQL tsvector/GIN indexes, etc.) through the existing RunView + UserSearchString infrastructure.
+     *
+     * @param params Search parameters including the search text and optional entity name filter
+     * @param contextUser Optional user context for permissions and row-level security
+     * @returns Array of search results grouped by entity, with title, snippet, and relevance score
+     *
+     * @see {@link FullTextSearchParams} for parameter details
+     * @see {@link FullTextSearchResult} for result structure
+     * @see /packages/MJCore/docs/FULL_TEXT_SEARCH_GUIDE.md for comprehensive documentation
+     */
+    FullTextSearch(params: FullTextSearchParams, contextUser?: UserInfo): Promise<FullTextSearchResult>
+}
+
+// ============================================================================
+// FULL-TEXT SEARCH TYPES
+// ============================================================================
+
+/**
+ * Parameters for the FullTextSearch method.
+ */
+export type FullTextSearchParams = {
+    /**
+     * The search text to find across entities. This is passed as UserSearchString to RunView,
+     * which routes it through the database-native full-text search infrastructure
+     * (SQL Server FREETEXT functions or PostgreSQL tsvector queries).
+     */
+    SearchText: string;
+
+    /**
+     * Optional list of entity names to restrict the search to. Each entity in this list
+     * MUST have FullTextSearchEnabled=true — entities without FTS enabled will be silently skipped.
+     * If not provided, ALL entities with FullTextSearchEnabled=true are searched.
+     */
+    EntityNames?: string[];
+
+    /**
+     * Maximum number of rows to return per entity. Defaults to 10 if not specified.
+     * Helps control result set size when searching across many entities.
+     */
+    MaxRowsPerEntity?: number;
+}
+
+/**
+ * A single matched record from a full-text search.
+ */
+export type FullTextSearchResultItem = {
+    /**
+     * The name of the entity this result came from (e.g., "MJ: AI Models")
+     */
+    EntityName: string;
+
+    /**
+     * The primary key value of the matched record
+     */
+    RecordID: string;
+
+    /**
+     * The display title for this result, sourced from the entity's best "name" field
+     * (Name, Title, Subject, etc.)
+     */
+    Title: string;
+
+    /**
+     * A text snippet providing context for the match, sourced from the entity's best
+     * "description" field (Description, Summary, Body, etc.). Truncated to ~200 chars.
+     */
+    Snippet: string;
+
+    /**
+     * Relevance score for ranking. Uses rank-based scoring (1/(rank+1)) to be
+     * compatible with Reciprocal Rank Fusion (RRF) when combined with vector search results.
+     */
+    Score: number;
+}
+
+/**
+ * Result of a FullTextSearch operation across multiple entities.
+ */
+export type FullTextSearchResult = {
+    /**
+     * Whether the search completed successfully
+     */
+    Success: boolean;
+
+    /**
+     * Error message if Success is false
+     */
+    ErrorMessage?: string;
+
+    /**
+     * All matched records across all searched entities, ordered by relevance score descending
+     */
+    Results: FullTextSearchResultItem[];
+
+    /**
+     * Total number of results found
+     */
+    TotalCount: number;
+
+    /**
+     * Number of entities that were searched
+     */
+    EntitiesSearched: number;
+
+    /**
+     * Time taken to execute the search in milliseconds
+     */
+    ElapsedMs: number;
 }
 
 // ============================================================================
@@ -901,6 +1098,16 @@ export type RunQueryResult = {
      * Only differs from RowCount when StartRow or MaxRows are used.
      */
     TotalRowCount: number;
+    /**
+     * The page number returned (1-based). Derived from StartRow and MaxRows.
+     * Undefined when paging is not active.
+     */
+    PageNumber?: number;
+    /**
+     * The page size used for this result.
+     * Undefined when paging is not active.
+     */
+    PageSize?: number;
     ExecutionTime: number;
     ErrorMessage: string;
     /**
@@ -1046,6 +1253,16 @@ export interface IRunQueryProvider {
      * @returns Response containing status and fresh data only for stale caches
      */
     RunQueriesWithCacheCheck?<T = unknown>(params: RunQueryWithCacheCheckParams[], contextUser?: UserInfo): Promise<RunQueriesWithCacheCheckResponse<T>>
+
+    /**
+     * Executes a query from a `QueryExecutionSpec` — the lower-layer interface-based entry point.
+     * Runs the full pipeline: composition resolution → Nunjucks template processing → SQL execution.
+     * Used for both saved queries (upper layer maps QueryInfo to spec) and transient test queries.
+     * @param spec - The execution spec describing the query, parameters, and inline dependencies
+     * @param contextUser - Optional user context for permissions (required server-side)
+     * @returns Query results including data rows and execution metadata
+     */
+    ExecuteQueryFromSpec(spec: QueryExecutionSpec, contextUser?: UserInfo): Promise<RunQueryResult>
 }
 
 /**
@@ -1164,6 +1381,9 @@ export class AllMetadata {
     AllQueryPermissions: QueryPermissionInfo[] = [];
     AllQueryEntities: QueryEntityInfo[] = [];
     AllQueryParameters: QueryParameterInfo[] = [];
+    AllQueryDependencies: QueryDependencyInfo[] = [];
+    AllSQLDialects: SQLDialectInfo[] = [];
+    AllQuerySQLs: QuerySQLInfo[] = [];
     AllEntityDocumentTypes: EntityDocumentTypeInfo[] = [];
     AllLibraries: LibraryInfo[] = [];
     AllExplorerNavigationItems: ExplorerNavigationItem[] = [];

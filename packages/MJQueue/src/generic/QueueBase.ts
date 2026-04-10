@@ -1,5 +1,6 @@
 import { UserInfo, BaseEntity } from '@memberjunction/core';
 import { MJQueueEntity, MJQueueTaskEntity } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
 //import { MJQueueTaskEntity, MJQueueEntity } from 'mj_generatedentities';
 
 export class TaskResult {
@@ -163,6 +164,6 @@ export abstract class QueueBase  {
   }
 
   public FindTask(ID: string): TaskBase {
-    return this._queue.find(t => t.ID === ID);
+    return this._queue.find(t => UUIDsEqual(t.ID, ID));
   }
 }

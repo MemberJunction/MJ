@@ -1,9 +1,8 @@
-import { ElementRef, Injectable } from '@angular/core';
-import { LogError, Metadata } from '@memberjunction/core';
+import { Injectable } from '@angular/core';
+import { LogError, Metadata, StartupManager } from '@memberjunction/core';
 import { UserInfoEngine, MJUserNotificationEntity } from '@memberjunction/core-entities';
-import { DisplaySimpleNotificationRequestData, MJEventType, MJGlobal } from '@memberjunction/global';
+import { DisplaySimpleNotificationRequestData, MJEventType, MJGlobal, GetGlobalObjectStore } from '@memberjunction/global';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
-import { NotificationService, NotificationSettings } from "@progress/kendo-angular-notification";
 import { BehaviorSubject, Observable, Subject } from 'rxjs';
 
 /**
@@ -14,7 +13,7 @@ import { BehaviorSubject, Observable, Subject } from 'rxjs';
   providedIn: 'root'
 })
 export class MJNotificationService {
-  private static _instance: MJNotificationService;
+  private static readonly _globalStoreKey = '___SINGLETON__MJNotificationService';
   private static _loaded: boolean = false;
 
   private static isLoading$ = new BehaviorSubject<boolean>(false);
@@ -25,13 +24,20 @@ export class MJNotificationService {
   private static _notifications$ = new BehaviorSubject<MJUserNotificationEntity[]>([]);
   private static _unreadCount$ = new BehaviorSubject<number>(0);
 
-  constructor(private notificationService: NotificationService) {
-    if (MJNotificationService._instance) {
-      // return existing instance which will short circuit the creation of a new instance
-      return MJNotificationService._instance;
+  /**
+   * Optional callback that consuming apps can set to suppress toast notifications
+   * for specific events (e.g., when the user is actively viewing the conversation
+   * that triggered the notification). Return true to suppress the toast.
+   * The notification DB record is still created and the badge count still updates.
+   */
+  public ShouldSuppressToast?: (statusObj: Record<string, unknown>) => boolean;
+
+  constructor() {
+    const g = GetGlobalObjectStore()!;
+    if (g[MJNotificationService._globalStoreKey]) {
+      return g[MJNotificationService._globalStoreKey] as MJNotificationService;
     }
-    // first time this has been called, so return ourselves since we're in the constructor
-    MJNotificationService._instance = this;
+    g[MJNotificationService._globalStoreKey] = this;
 
     MJGlobal.Instance.GetEventListener(true).subscribe( (event) => {
       switch (event.event) {
@@ -47,8 +53,27 @@ export class MJNotificationService {
           }
           break;
         case MJEventType.LoggedIn:
-          if (MJNotificationService._loaded === false) 
-            MJNotificationService.RefreshUserNotifications();
+          if (MJNotificationService._loaded === false) {
+            // Wait for StartupManager to complete before refreshing notifications.
+            // UserInfoEngine (which backs RefreshUserNotifications) is @RegisterForStartup
+            // and its _metadataConfigs are only populated during Config() which runs
+            // as part of StartupManager.Startup(). Calling RefreshItem() before that
+            // completes would silently find no config and return nothing.
+            StartupManager.Instance.Startup().then(() => {
+              MJNotificationService.RefreshUserNotifications();
+            });
+          }
+
+          // Subscribe to UserInfoEngine's DataChange$ so that when CACHE_INVALIDATION
+          // updates the _UserNotifications array, we immediately sync our BehaviorSubjects.
+          // This is the primary mechanism for real-time notification updates — it fires
+          // whenever BaseEngine processes a remote-invalidate event for User Notifications.
+          UserInfoEngine.Instance.DataChange$.subscribe(event => {
+            if (event.config.PropertyName === '_UserNotifications') {
+              MJNotificationService._userNotifications = UserInfoEngine.Instance.UserNotifications;
+              MJNotificationService.UpdateNotificationObservables();
+            }
+          });
 
           // got the login, now subscribe to push status updates here so we can then raise them as events in MJ Global locally
           this.PushStatusUpdates().subscribe( (message: string) => {
@@ -67,17 +92,25 @@ export class MJNotificationService {
               component: this
             })
 
-            if (statusObj.type?.trim().toLowerCase() === 'usernotifications') {
-              if (statusObj.details && statusObj.details.action?.trim().toLowerCase() === 'create') { 
-                // we have changes to user notifications, so refresh them
-                this.CreateSimpleNotification('New Notification Available', "success", 2000)
+            const type = statusObj.type?.trim().toLowerCase();
+            if (type === 'notification' || type === 'usernotifications') {
+              // Server sends type:'notification', legacy used 'usernotifications' — support both
+              const action = statusObj.action?.trim().toLowerCase()
+                          || statusObj.details?.action?.trim().toLowerCase();
+              if (action === 'create') {
+                // Check if the consuming app wants to suppress this toast
+                // (e.g., user is actively viewing the conversation that triggered it)
+                const suppress = this.ShouldSuppressToast?.(statusObj) ?? false;
+                if (!suppress) {
+                  this.CreateSimpleNotification(statusObj.title || 'New Notification Available', "success", 3000);
+                }
+                // Always refresh the notification list (badge count, unread state)
                 MJNotificationService.RefreshUserNotifications();
               }
             }
             else {
               // otherwise just post it as a simple notification, except Skip messages, we will let Skip handle those
-              const type = statusObj.type?.trim().toLowerCase();
-              if (type !== 'askskip' && type !== 'entityobjectstatusmessage' && typeof statusObj.message === 'string') { 
+              if (type !== 'askskip' && type !== 'entityobjectstatusmessage' && typeof statusObj.message === 'string') {
                 this.CreateSimpleNotification(statusObj.message, "success", 2500);
               }
             }
@@ -93,7 +126,7 @@ export class MJNotificationService {
   }
 
   public static get Instance(): MJNotificationService {
-    return MJNotificationService._instance;
+    return GetGlobalObjectStore()![MJNotificationService._globalStoreKey] as MJNotificationService;
   }
  
   private static _userNotifications: MJUserNotificationEntity[] = [];
@@ -171,15 +204,20 @@ export class MJNotificationService {
   }
 
   /**
-   * Refresh the User Notifications from the database. This is called automatically when the service is first loaded after login occurs.
-   * Uses UserInfoEngine for centralized data access with local caching.
+   * Refresh user notifications and re-emit to observables.
+   *
+   * Uses RefreshItem() to guarantee fresh data from the server.  The global
+   * CACHE_INVALIDATION listener keeps the engine cache updated for background
+   * changes, but when this method is called in response to a PushStatusUpdates
+   * message, the cache invalidation event may not have arrived yet (separate
+   * WebSocket message, potential race).  RefreshItem() eliminates that race by
+   * doing a targeted RunView for just notifications.
    */
   public static async RefreshUserNotifications() {
     try {
-      // Use UserInfoEngine for centralized, cached access
       const engine = UserInfoEngine.Instance;
+      await engine.RefreshItem('_UserNotifications');
       MJNotificationService._userNotifications = engine.UserNotifications;
-      // Emit to observables
       MJNotificationService._notifications$.next(engine.UserNotifications);
       MJNotificationService._unreadCount$.next(MJNotificationService.UnreadUserNotificationCount);
       MJNotificationService._loaded = true;
@@ -201,23 +239,105 @@ export class MJNotificationService {
 
   /**
    * Creates a message that is not saved to the User Notifications table, but is displayed to the user.
+   * Uses a lightweight DOM-based toast notification.
    * @param message - text to display
    * @param style - display styling
    * @param hideAfter - option to auto hide after the specified delay in milliseconds
    */
   public CreateSimpleNotification(message: string, style: "none" | "success" | "error" | "warning" | "info" = "success", hideAfter?: number) {
-    const props: NotificationSettings = {
-      content: message,
-      cssClass: "button-notification",
-      animation: { type: "slide", duration: 400 },
-      position: { horizontal: "center", vertical: "top" },
-      type: { style: style, icon: true }
-    }
-    if (hideAfter)
-      props.hideAfter = hideAfter;
-    else
-      props.closable = true;
+    this.showToast(message, style, hideAfter);
+  }
 
-    this.notificationService.show(props);
+  /**
+   * Ensures the toast container element exists in the DOM.
+   */
+  private ensureToastContainer(): HTMLElement {
+    let container = document.getElementById('mj-toast-container');
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'mj-toast-container';
+      container.style.cssText = `
+        position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
+        z-index: 100000; display: flex; flex-direction: column; align-items: center; gap: 8px;
+        pointer-events: none;
+      `;
+      document.body.appendChild(container);
+    }
+    return container;
+  }
+
+  /**
+   * Shows a lightweight toast notification using DOM elements.
+   */
+  private showToast(message: string, style: string, hideAfter?: number): void {
+    const container = this.ensureToastContainer();
+
+    const toast = document.createElement('div');
+    toast.style.cssText = `
+      pointer-events: auto; padding: 12px 20px; border-radius: 6px; font-size: 14px;
+      font-family: inherit; max-width: 500px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      display: flex; align-items: center; gap: 8px; animation: mj-toast-slide-in 0.3s ease-out;
+      color: var(--mj-text-inverse);
+    `;
+
+    const bgColors: Record<string, string> = {
+      success: 'var(--mj-status-success)',
+      error:   'var(--mj-status-error)',
+      warning: 'var(--mj-status-warning)',
+      info:    'var(--mj-status-info)',
+      none:    'var(--mj-text-secondary)'
+    };
+    toast.style.backgroundColor = bgColors[style] || bgColors['none'];
+
+    const iconMap: Record<string, string> = {
+      success: '\u2713',
+      error:   '\u2717',
+      warning: '\u26A0',
+      info:    '\u2139',
+      none:    ''
+    };
+    const icon = iconMap[style] || '';
+
+    const removeToast = () => {
+      toast.style.animation = 'mj-toast-slide-out 0.3s ease-in forwards';
+      toast.addEventListener('animationend', () => toast.remove());
+    };
+
+    toast.innerHTML = `
+      ${icon ? `<span style="font-size:16px;font-weight:bold;">${icon}</span>` : ''}
+      <span style="flex:1;">${this.escapeHtml(message)}</span>
+      ${!hideAfter ? `<button style="background:none;border:none;color:var(--mj-text-inverse);cursor:pointer;font-size:18px;padding:0 0 0 8px;line-height:1;" aria-label="Close">&times;</button>` : ''}
+    `;
+
+    if (!hideAfter) {
+      const closeBtn = toast.querySelector('button');
+      closeBtn?.addEventListener('click', removeToast);
+    }
+
+    container.appendChild(toast);
+
+    // Inject keyframes if not already present
+    if (!document.getElementById('mj-toast-keyframes')) {
+      const styleEl = document.createElement('style');
+      styleEl.id = 'mj-toast-keyframes';
+      styleEl.textContent = `
+        @keyframes mj-toast-slide-in { from { opacity:0; transform:translateY(-20px); } to { opacity:1; transform:translateY(0); } }
+        @keyframes mj-toast-slide-out { from { opacity:1; transform:translateY(0); } to { opacity:0; transform:translateY(-20px); } }
+      `;
+      document.head.appendChild(styleEl);
+    }
+
+    if (hideAfter) {
+      setTimeout(removeToast, hideAfter);
+    }
+  }
+
+  /**
+   * Escapes HTML entities to prevent XSS in toast messages.
+   */
+  private escapeHtml(text: string): string {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
   }
 }

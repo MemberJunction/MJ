@@ -9,10 +9,10 @@
  */
 
 import { LogError, LogStatus, Metadata, UserInfo } from '@memberjunction/core';
-import { MJGlobal } from '@memberjunction/global';
+import { MJGlobal, UUIDsEqual, BaseSingleton } from '@memberjunction/global';
 import { AIEngine, NoteMatchResult } from '@memberjunction/aiengine';
 import { MJAIAgentNoteEntity, MJAIAgentRunStepEntity } from '@memberjunction/core-entities';
-import { BaseReranker, RerankDocument } from '@memberjunction/ai';
+import { BaseReranker, RerankDocument, GetAIAPIKey } from '@memberjunction/ai';
 import { MJAIModelEntityExtended } from '@memberjunction/ai-core-plus';
 import { RerankerConfiguration, parseRerankerConfiguration } from './config.types';
 
@@ -98,24 +98,19 @@ export interface RerankObservabilityOptions {
  * }
  * ```
  */
-export class RerankerService {
-    private static _instance: RerankerService | null = null;
+export class RerankerService extends BaseSingleton<RerankerService> {
     private _rerankerCache: Map<string, BaseReranker> = new Map();
 
     /**
      * Get the singleton instance of RerankerService
      */
     public static get Instance(): RerankerService {
-        if (!RerankerService._instance) {
-            RerankerService._instance = new RerankerService();
-        }
-        return RerankerService._instance;
+        return RerankerService.getInstance<RerankerService>();
     }
 
-    /**
-     * Private constructor to enforce singleton pattern
-     */
-    private constructor() {}
+    public constructor() {
+        super();
+    }
 
     /**
      * Parse RerankerConfiguration JSON from agent settings.
@@ -150,7 +145,7 @@ export class RerankerService {
         }
 
         // Load model from AIEngine
-        const model = AIEngine.Instance.Models.find(m => m.ID === modelID);
+        const model = AIEngine.Instance.Models.find(m => UUIDsEqual(m.ID, modelID));
         if (!model) {
             LogError(`RerankerService: Model not found with ID: ${modelID}`);
             return null;
@@ -228,7 +223,7 @@ export class RerankerService {
     ): Promise<{ driverClass: string | null; apiKey: string | null; apiName: string | null }> {
         // Find the active model vendor relationship
         const modelVendors = AIEngine.Instance.ModelVendors.filter(
-            mv => mv.ModelID === model.ID && mv.Status === 'Active'
+            mv => UUIDsEqual(mv.ModelID, model.ID) && mv.Status === 'Active'
         );
 
         if (modelVendors.length === 0) {
@@ -260,21 +255,13 @@ export class RerankerService {
     }
 
     /**
-     * Get API key for a reranker driver from environment variables.
-     * Uses naming convention: AI_VENDOR_API_KEY__<DRIVERCLASS>
+     * Get API key for a reranker driver using the standard MJ API key utility.
+     * Delegates to GetAIAPIKey which handles case-insensitive env var lookup.
      */
     private getAPIKeyForDriver(driverClass: string): string | null {
         if (!driverClass) return null;
-
-        // Standard MemberJunction API key naming convention
-        const envVar = `AI_VENDOR_API_KEY__${driverClass}`;
-        const apiKey = process.env[envVar];
-
-        if (apiKey && apiKey.trim().length > 0) {
-            return apiKey;
-        }
-
-        return null;
+        const key = GetAIAPIKey(driverClass);
+        return key || null;
     }
 
     /**

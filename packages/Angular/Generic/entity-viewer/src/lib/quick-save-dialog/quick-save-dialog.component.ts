@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, ChangeDetectorRef } from '@angular/core';
 import { MJUserViewEntityExtended } from '@memberjunction/core-entities';
-import { ViewConfigSummary, QuickSaveEvent } from '../types';
+import { ViewConfigSummary, QuickSaveEvent, QuickSaveAdvancedEvent } from '../types';
 
 /**
  * QuickSaveDialogComponent - Focused modal for saving views quickly
@@ -75,9 +75,10 @@ export class QuickSaveDialogComponent implements OnChanges {
   @Output() Close = new EventEmitter<void>();
 
   /**
-   * Emitted when user wants to open the full config panel
+   * Emitted when user wants to open the full config panel.
+   * Carries the partially-filled form data so the config panel can continue the flow.
    */
-  @Output() OpenAdvanced = new EventEmitter<void>();
+  @Output() OpenAdvanced = new EventEmitter<QuickSaveAdvancedEvent>();
 
   // Form state
   public Name: string = '';
@@ -133,9 +134,13 @@ export class QuickSaveDialogComponent implements OnChanges {
   }
 
   /**
-   * Open advanced configuration panel
+   * Open advanced configuration panel, carrying partially-filled form data
    */
   OnOpenAdvanced(): void {
-    this.OpenAdvanced.emit();
+    this.OpenAdvanced.emit({
+      Name: this.Name.trim(),
+      Description: this.Description,
+      IsShared: this.IsShared
+    });
   }
 }

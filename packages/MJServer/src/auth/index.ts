@@ -6,12 +6,9 @@ import { Metadata, RoleInfo, UserInfo } from '@memberjunction/core';
 import { NewUserBase } from './newUsers.js';
 import { MJGlobal } from '@memberjunction/global';
 import { MJUserEntity, MJUserEntityType } from '@memberjunction/core-entities';
-import { AuthProviderFactory } from './AuthProviderFactory.js';
+import { AuthProviderFactory } from '@memberjunction/auth-providers';
 import { initializeAuthProviders } from './initializeProviders.js';
 
-export { TokenExpiredError } from './tokenExpiredError.js';
-export { IAuthProvider } from './IAuthProvider.js';
-export { AuthProviderFactory } from './AuthProviderFactory.js';
 export * from './APIKeyScopeAuth.js';
 
 // This is a hard-coded forever constant due to internal migrations
@@ -47,20 +44,25 @@ const refreshUserCache = async (dataSource?: sql.ConnectionPool) => {
 };
 
 /**
- * Gets validation options for a specific issuer
- * This maintains backward compatibility with the old structure
+ * Gets validation options for a specific issuer.
+ * When multiple providers share the same issuer (e.g. two Auth0 apps on
+ * the same domain with different audiences/client IDs), all unique audiences
+ * are aggregated into an array. jwt.verify() natively accepts string | string[].
  */
-export const getValidationOptions = (issuer: string): { audience: string; jwksUri: string } | undefined => {
-  const factory = AuthProviderFactory.getInstance();
-  const provider = factory.getByIssuer(issuer);
-  
-  if (!provider) {
+export const getValidationOptions = (issuer: string): { audience: string | string[]; jwksUri: string } | undefined => {
+  const factory = AuthProviderFactory.Instance;
+  const providers = factory.getAllByIssuer(issuer);
+
+  if (providers.length === 0) {
     return undefined;
   }
 
+  // Collect unique audiences from all providers matching this issuer
+  const audiences = [...new Set(providers.map(p => p.audience))];
+
   return {
-    audience: provider.audience,
-    jwksUri: provider.jwksUri
+    audience: audiences.length === 1 ? audiences[0] : audiences,
+    jwksUri: providers[0].jwksUri  // Same issuer = same JWKS endpoint
   };
 };
 
@@ -68,7 +70,7 @@ export const getValidationOptions = (issuer: string): { audience: string; jwksUr
  * Backward compatible validationOptions object
  * @deprecated Use getValidationOptions() or AuthProviderRegistry instead
  */
-export const validationOptions: Record<string, { audience: string; jwksUri: string }> = new Proxy({}, {
+export const validationOptions: Record<string, { audience: string | string[]; jwksUri: string }> = new Proxy({}, {
   get: (target, prop: string) => {
     return getValidationOptions(prop);
   },
@@ -76,7 +78,7 @@ export const validationOptions: Record<string, { audience: string; jwksUri: stri
     return getValidationOptions(prop) !== undefined;
   },
   ownKeys: () => {
-    const factory = AuthProviderFactory.getInstance();
+    const factory = AuthProviderFactory.Instance;
     return factory.getAllProviders().map(p => p.issuer);
   }
 });
@@ -107,7 +109,7 @@ export class UserPayload {
  * Gets signing keys for JWT validation
  */
 export const getSigningKeys = (issuer: string) => (header: JwtHeader, cb: SigningKeyCallback) => {
-  const factory = AuthProviderFactory.getInstance();
+  const factory = AuthProviderFactory.Instance;
   
   // Initialize providers if not already done
   if (!factory.hasProviders()) {
@@ -137,7 +139,7 @@ export const extractUserInfoFromPayload = (payload: JwtPayload): {
   fullName?: string;
   preferredUsername?: string;
 } => {
-  const factory = AuthProviderFactory.getInstance();
+  const factory = AuthProviderFactory.Instance;
   const issuer = payload.iss;
   
   if (!issuer) {

@@ -5,7 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { SharedService } from '@memberjunction/ng-shared';
 import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
 import { MJActionFormComponent } from '../../generated/Entities/MJAction/mjaction.form.component';
-import { DialogService } from '@progress/kendo-angular-dialog';
+import { MJDialogService, MJDialogRef } from '@memberjunction/ng-ui-components';
 import { ActionParamDialogComponent, ActionResultCodeDialogComponent } from '@memberjunction/ng-actions';
 
 @RegisterClass(BaseFormComponent, 'MJ: Actions')
@@ -67,7 +67,7 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
     public codeLanguage = 'typescript';
     public showCodeComments = false;
     
-    private dialogService = inject(DialogService);
+    private dialogService = inject(MJDialogService);
     private viewContainerRef = inject(ViewContainerRef);
     private sharedService = inject(SharedService);
 
@@ -194,12 +194,13 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
 
     private async loadCategory() {
         if (!this.record.CategoryID) return;
-        
+
         try {
             const md = new Metadata();
-            this.category = await md.GetEntityObject<MJActionCategoryEntity>('MJ: Action Categories');
-            if (this.category) {
-                await this.category.Load(this.record.CategoryID);
+            const entity = await md.GetEntityObject<MJActionCategoryEntity>('MJ: Action Categories');
+            const loaded = await entity.Load(this.record.CategoryID);
+            if (loaded) {
+                this.category = entity;
             }
         } catch (error) {
             // Error loading category
@@ -375,10 +376,10 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
     // UI Helper Methods
     getStatusColor(): string {
         switch (this.record.Status) {
-            case 'Active': return '#28a745';
-            case 'Pending': return '#ffc107';
-            case 'Disabled': return '#dc3545';
-            default: return '#6c757d';
+            case 'Active': return 'var(--mj-status-success)';
+            case 'Pending': return 'var(--mj-status-warning)';
+            case 'Disabled': return 'var(--mj-status-error)';
+            default: return 'var(--mj-text-muted)';
         }
     }
 
@@ -392,7 +393,7 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
     }
 
     getTypeColor(): string {
-        return this.record.Type === 'Generated' ? '#6f42c1' : '#007bff';
+        return this.record.Type === 'Generated' ? 'var(--mj-brand-primary)' : 'var(--mj-brand-primary)';
     }
 
     getTypeIcon(): string {
@@ -401,10 +402,10 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
 
     getApprovalStatusColor(): string {
         switch (this.record.CodeApprovalStatus) {
-            case 'Approved': return '#28a745';
-            case 'Pending': return '#ffc107';
-            case 'Rejected': return '#dc3545';
-            default: return '#6c757d';
+            case 'Approved': return 'var(--mj-status-success)';
+            case 'Pending': return 'var(--mj-status-warning)';
+            case 'Rejected': return 'var(--mj-status-error)';
+            default: return 'var(--mj-text-muted)';
         }
     }
 
@@ -428,10 +429,10 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
 
     getParamTypeColor(type: string): string {
         switch (type) {
-            case 'Input': return '#007bff';
-            case 'Output': return '#28a745';
-            case 'Both': return '#6f42c1';
-            default: return '#6c757d';
+            case 'Input': return 'var(--mj-brand-primary)';
+            case 'Output': return 'var(--mj-status-success)';
+            case 'Both': return 'var(--mj-brand-primary)';
+            default: return 'var(--mj-text-muted)';
         }
     }
 
@@ -570,9 +571,9 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
 
     getSuccessRateColor(): string {
         const rate = this.executionStats.successRate;
-        if (rate >= 80) return '#28a745'; // green
-        if (rate >= 60) return '#ffc107'; // yellow
-        return '#dc3545'; // red
+        if (rate >= 80) return 'var(--mj-status-success)';
+        if (rate >= 60) return 'var(--mj-status-warning)';
+        return 'var(--mj-status-error)';
     }
 
     // Parameter management methods
@@ -595,26 +596,26 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
             width: 500,
             appendTo: this.viewContainerRef
         });
-        
-        const dialog = dialogRef.content.instance;
-        dialog.param = newParam;
-        dialog.isNew = true;
-        dialog.editMode = true;
-        
-        dialogRef.result.subscribe(result => {
-            if (result && (result as any).save) {
+
+        const dialog = dialogRef.Content!.instance;
+        dialog['param'] = newParam;
+        dialog['isNew'] = true;
+        dialog['editMode'] = true;
+
+        dialogRef.Result.subscribe(result => {
+            if (result && typeof result === 'object' && 'save' in result) {
                 // The dialog has already modified the newParam entity directly
                 // New entities are automatically dirty (IsSaved = false)
-                
+
                 // Add to local array
                 this.actionParams.push(newParam);
-                
+
                 // Add to pending records for saving
                 this.PendingRecords.push({
                     entityObject: newParam,
                     action: 'save'
                 });
-                
+
                 // Update the filtered arrays
                 this.updateParamArrays();
                 this.cdr.detectChanges();
@@ -628,18 +629,18 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
             width: 500,
             appendTo: this.viewContainerRef
         });
-        
-        const dialog = dialogRef.content.instance;
-        dialog.param = param;
-        dialog.isNew = false;
-        dialog.editMode = this.EditMode;
-        
-        dialogRef.result.subscribe(result => {
-            if (result && (result as any).save && this.EditMode) {
+
+        const dialog = dialogRef.Content!.instance;
+        dialog['param'] = param;
+        dialog['isNew'] = false;
+        dialog['editMode'] = this.EditMode;
+
+        dialogRef.Result.subscribe(result => {
+            if (result && typeof result === 'object' && 'save' in result && this.EditMode) {
                 // Param will be dirty from property changes in dialog
                 // Ensure it's in pending records if modified
                 if (param.Dirty) {
-                    const exists = this.PendingRecords.some(pr => 
+                    const exists = this.PendingRecords.some(pr =>
                         pr.entityObject === param && pr.action === 'save'
                     );
                     if (!exists) {
@@ -649,7 +650,7 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
                         });
                     }
                 }
-                
+
                 // Update the local arrays
                 this.updateParamArrays();
                 this.cdr.detectChanges();
@@ -797,23 +798,23 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
             width: 500,
             appendTo: this.viewContainerRef
         });
-        
-        const dialog = dialogRef.content.instance;
-        dialog.resultCode = newResultCode;
-        dialog.isNew = true;
-        dialog.editMode = true;
-        
-        dialogRef.result.subscribe(result => {
-            if (result && (result as any).save) {
+
+        const dialog = dialogRef.Content!.instance;
+        dialog['resultCode'] = newResultCode;
+        dialog['isNew'] = true;
+        dialog['editMode'] = true;
+
+        dialogRef.Result.subscribe(result => {
+            if (result && typeof result === 'object' && 'save' in result) {
                 // Add to local array
                 this.resultCodes.push(newResultCode);
-                
+
                 // Add to pending records for saving
                 this.PendingRecords.push({
                     entityObject: newResultCode,
                     action: 'save'
                 });
-                
+
                 this.cdr.detectChanges();
             }
         });
@@ -825,17 +826,17 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
             width: 500,
             appendTo: this.viewContainerRef
         });
-        
-        const dialog = dialogRef.content.instance;
-        dialog.resultCode = resultCode;
-        dialog.isNew = false;
-        dialog.editMode = this.EditMode;
-        
-        dialogRef.result.subscribe(result => {
-            if (result && (result as any).save && this.EditMode) {
+
+        const dialog = dialogRef.Content!.instance;
+        dialog['resultCode'] = resultCode;
+        dialog['isNew'] = false;
+        dialog['editMode'] = this.EditMode;
+
+        dialogRef.Result.subscribe(result => {
+            if (result && typeof result === 'object' && 'save' in result && this.EditMode) {
                 // Ensure it's in pending records if modified
                 if (resultCode.Dirty) {
-                    const exists = this.PendingRecords.some(pr => 
+                    const exists = this.PendingRecords.some(pr =>
                         pr.entityObject === resultCode && pr.action === 'save'
                     );
                     if (!exists) {
@@ -845,7 +846,7 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
                         });
                     }
                 }
-                
+
                 this.cdr.detectChanges();
             }
         });

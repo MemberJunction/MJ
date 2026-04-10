@@ -13,9 +13,9 @@
 }
 
 .dialog-container {
-    background: white;
-    border-radius: 8px;
-    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+    background: var(--mj-bg-surface);
+    border-radius: var(--mj-radius-md);
+    box-shadow: var(--mj-shadow-lg);
     max-width: 500px;
     width: 100%;
     max-height: 90vh;
@@ -29,8 +29,8 @@
     align-items: center;
     justify-content: space-between;
     padding: 16px 20px;
-    background: #f8f9fa;
-    border-bottom: 1px solid #e9ecef;
+    background: var(--mj-bg-surface-card);
+    border-bottom: 1px solid var(--mj-border-default);
 }
 
 .dialog-title {
@@ -39,11 +39,11 @@
     gap: 10px;
     font-size: 1.1rem;
     font-weight: 600;
-    color: #2c3e50;
+    color: var(--mj-text-primary);
 }
 
 .dialog-title i {
-    color: #6f42c1;
+    color: var(--mj-brand-primary);
 }
 
 .dialog-close-btn {
@@ -51,8 +51,8 @@
     border: none;
     padding: 8px;
     cursor: pointer;
-    color: #6c757d;
-    border-radius: 4px;
+    color: var(--mj-text-muted);
+    border-radius: var(--mj-radius-sm);
     transition: all 0.2s;
     display: flex;
     align-items: center;
@@ -60,8 +60,8 @@
 }
 
 .dialog-close-btn:hover {
-    background: #e9ecef;
-    color: #495057;
+    background: var(--mj-bg-surface-sunken);
+    color: var(--mj-text-secondary);
 }
 
 .dialog-content {
@@ -84,12 +84,12 @@
 
 .form-field label {
     font-weight: 600;
-    color: #495057;
+    color: var(--mj-text-secondary);
     font-size: 0.9em;
 }
 
 .required {
-    color: #dc3545;
+    color: var(--mj-status-error);
     margin-left: 4px;
 }
 
@@ -98,20 +98,21 @@
 .form-textarea {
     width: 100%;
     padding: 10px 12px;
-    border: 1px solid #ced4da;
-    border-radius: 4px;
+    border: 1px solid var(--mj-border-strong);
+    border-radius: var(--mj-radius-sm);
     font-family: inherit;
     font-size: 0.95em;
     transition: border-color 0.2s, box-shadow 0.2s;
-    background: white;
+    background: var(--mj-bg-surface);
+    color: var(--mj-text-primary);
 }
 
 .form-input:focus,
 .form-select:focus,
 .form-textarea:focus {
     outline: none;
-    border-color: #6f42c1;
-    box-shadow: 0 0 0 2px rgba(111, 66, 193, 0.1);
+    border-color: var(--mj-brand-primary);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
 }
 
 .form-textarea {
@@ -121,10 +122,10 @@
 
 .readonly-value {
     padding: 10px 12px;
-    background: #f8f9fa;
-    border: 1px solid #e9ecef;
-    border-radius: 4px;
-    color: #495057;
+    background: var(--mj-bg-surface-card);
+    border: 1px solid var(--mj-border-default);
+    border-radius: var(--mj-radius-sm);
+    color: var(--mj-text-secondary);
 }
 
 .readonly-value.description {
@@ -133,39 +134,39 @@
 }
 
 .readonly-value code {
-    background: #e9ecef;
+    background: var(--mj-bg-surface-sunken);
     padding: 2px 6px;
-    border-radius: 3px;
+    border-radius: var(--mj-radius-sm);
     font-family: 'Courier New', monospace;
-    color: #e83e8c;
+    color: var(--mj-status-error);
 }
 
 .no-value {
-    color: #6c757d;
+    color: var(--mj-text-muted);
     font-style: italic;
 }
 
 .type-badge {
     display: inline-block;
     padding: 4px 12px;
-    border-radius: 12px;
+    border-radius: var(--mj-radius-lg);
     font-weight: 500;
     font-size: 0.85em;
 }
 
 .type-badge.type-input {
-    background: #cfe2ff;
-    color: #084298;
+    background: var(--mj-brand-primary-subtle);
+    color: var(--mj-brand-primary);
 }
 
 .type-badge.type-output {
-    background: #d1e7dd;
-    color: #0f5132;
+    background: var(--mj-status-success-subtle);
+    color: var(--mj-status-success);
 }
 
 .type-badge.type-both {
-    background: #e0cffc;
-    color: #432874;
+    background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+    color: var(--mj-brand-primary);
 }
 
 .form-field-row {
@@ -195,15 +196,15 @@
 .checkbox-custom {
     width: 18px;
     height: 18px;
-    border: 2px solid #ced4da;
-    border-radius: 3px;
+    border: 2px solid var(--mj-border-strong);
+    border-radius: var(--mj-radius-sm);
     position: relative;
     transition: all 0.2s;
 }
 
 .checkbox-input:checked + .checkbox-custom {
-    background: #6f42c1;
-    border-color: #6f42c1;
+    background: var(--mj-brand-primary);
+    border-color: var(--mj-brand-primary);
 }
 
 .checkbox-input:checked + .checkbox-custom::after {
@@ -220,7 +221,7 @@
 
 .checkbox-text {
     font-size: 0.9em;
-    color: #495057;
+    color: var(--mj-text-secondary);
 }
 
 .dialog-footer {
@@ -228,8 +229,8 @@
     justify-content: flex-end;
     gap: 12px;
     padding: 12px 20px;
-    background: #f8f9fa;
-    border-top: 1px solid #e9ecef;
+    background: var(--mj-bg-surface-card);
+    border-top: 1px solid var(--mj-border-default);
 }
 
 /* Button styles */
@@ -239,7 +240,7 @@
     gap: 6px;
     padding: 8px 16px;
     border: 1px solid transparent;
-    border-radius: 4px;
+    border-radius: var(--mj-radius-sm);
     font-size: 0.95em;
     font-weight: 500;
     cursor: pointer;
@@ -248,25 +249,25 @@
 }
 
 .btn-primary {
-    background: #6f42c1;
+    background: var(--mj-brand-primary);
     color: white;
-    border-color: #6f42c1;
+    border-color: var(--mj-brand-primary);
 }
 
 .btn-primary:hover {
-    background: #5a32a3;
-    border-color: #5a32a3;
+    background: var(--mj-brand-primary-hover);
+    border-color: var(--mj-brand-primary-hover);
 }
 
 .btn-outline {
-    background: white;
-    color: #495057;
-    border-color: #ced4da;
+    background: var(--mj-bg-surface);
+    color: var(--mj-text-secondary);
+    border-color: var(--mj-border-strong);
 }
 
 .btn-outline:hover {
-    background: #f8f9fa;
-    border-color: #adb5bd;
+    background: var(--mj-bg-surface-card);
+    border-color: var(--mj-border-strong);
 }
 
 /* Responsive */

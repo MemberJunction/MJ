@@ -2,6 +2,7 @@ import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ViewChild, E
 import { FormControl } from '@angular/forms';
 import { Subject, BehaviorSubject, combineLatest, debounceTime, distinctUntilChanged, takeUntil } from 'rxjs';
 import { RunView } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { MJActionEntity, MJActionCategoryEntity, MJActionParamEntity, MJActionResultCodeEntity } from '@memberjunction/core-entities';
 
 export interface ActionGalleryConfig {
@@ -148,7 +149,7 @@ export class ActionGalleryComponent implements OnInit, OnDestroy {
         const actionsWithDetails = actions.map(action => ({
           ...action,
           expanded: false,
-          selected: this.preSelectedActions.includes(action.ID)
+          selected: this.preSelectedActions.some(id => UUIDsEqual(id, action.ID))
         } as ActionWithDetails));
         
         this.actions$.next(actionsWithDetails);
@@ -280,7 +281,7 @@ export class ActionGalleryComponent implements OnInit, OnDestroy {
   }
   
   private getCategoryName(categoryId: string): string {
-    const category = this.categories$.value.find(c => c.ID === categoryId);
+    const category = this.categories$.value.find(c => UUIDsEqual(c.ID, categoryId));
     return category?.Name || '';
   }
   

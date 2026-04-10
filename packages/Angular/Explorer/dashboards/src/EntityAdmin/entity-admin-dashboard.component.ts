@@ -1,6 +1,6 @@
 import { Component, ViewChild, AfterViewInit, OnDestroy } from '@angular/core';
 import { BaseDashboard } from '@memberjunction/ng-shared';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { EntityInfo, CompositeKey, Metadata } from '@memberjunction/core';
 import { Subject } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
@@ -76,7 +76,7 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
     this.filteredEntities = this.erdComposite?.filteredEntities || [];
 
     if (state.selectedEntityId && this.erdComposite) {
-      this.selectedEntity = this.erdComposite.entities.find(e => e.ID === state.selectedEntityId) || null;
+      this.selectedEntity = this.erdComposite.entities.find(e => UUIDsEqual(e.ID, state.selectedEntityId)) || null;
     } else {
       this.selectedEntity = null;
     }

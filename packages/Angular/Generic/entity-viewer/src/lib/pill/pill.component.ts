@@ -106,28 +106,28 @@ export class PillColorUtil {
     }
 
     .pill-success {
-      background-color: #e8f5e9;
-      color: #2e7d32;
+      background-color: var(--mj-status-success-bg);
+      color: var(--mj-status-success);
     }
 
     .pill-warning {
-      background-color: #fff8e1;
-      color: #f57c00;
+      background-color: var(--mj-status-warning-bg);
+      color: var(--mj-status-warning);
     }
 
     .pill-danger {
-      background-color: #ffebee;
-      color: #c62828;
+      background-color: var(--mj-status-error-bg);
+      color: var(--mj-status-error);
     }
 
     .pill-info {
-      background-color: #e3f2fd;
-      color: #1565c0;
+      background-color: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+      color: var(--mj-brand-primary);
     }
 
     .pill-neutral {
-      background-color: #f5f5f5;
-      color: #616161;
+      background-color: var(--mj-bg-surface-sunken);
+      color: var(--mj-text-secondary);
     }
   `]
 })

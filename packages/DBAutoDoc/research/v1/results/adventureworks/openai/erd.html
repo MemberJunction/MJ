@@ -1,0 +1,1802 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Database ERD - AW_Stripped</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f5f7fa;
+            color: #333;
+            padding: 2rem;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            padding: 2rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        h1 {
+            color: #667eea;
+            margin-bottom: 0.5rem;
+        }
+
+        .metadata {
+            color: #666;
+            font-size: 0.95rem;
+            margin-bottom: 2rem;
+            padding: 1rem;
+            background-color: #f9f9f9;
+            border-radius: 4px;
+        }
+
+        .metadata p {
+            margin: 0.3rem 0;
+        }
+
+        .mermaid {
+            background-color: #f9f9f9;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            padding: 1rem;
+            margin: 2rem 0;
+            overflow: auto;
+        }
+
+        .mermaid svg {
+            max-width: 100%;
+            height: auto;
+        }
+
+        .controls {
+            margin-bottom: 2rem;
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        button {
+            padding: 0.6rem 1.2rem;
+            background-color: #667eea;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.95rem;
+            transition: background-color 0.2s;
+        }
+
+        button:hover {
+            background-color: #764ba2;
+        }
+
+        .download-link {
+            display: inline-block;
+            padding: 0.6rem 1.2rem;
+            background-color: #667eea;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            transition: background-color 0.2s;
+        }
+
+        .download-link:hover {
+            background-color: #764ba2;
+        }
+
+        @media print {
+            body {
+                background: white;
+                padding: 0;
+            }
+
+            .container {
+                box-shadow: none;
+                padding: 0;
+            }
+
+            .controls {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Database Entity Relationship Diagram</h1>
+        <div class="metadata">
+            <p><strong>Database:</strong> AW_Stripped</p>
+            <p><strong>Server:</strong> sql-claude</p>
+            <p><strong>Generated:</strong> 3/22/2026, 1:08:36 PM</p>
+            <p><strong>Tables:</strong> 71 | <strong>Columns:</strong> 486</p>
+        </div>
+
+        <div class="controls">
+            <button onclick="downloadMmd()">Download .mmd File</button>
+            <button onclick="window.print()">Print / Save as PDF</button>
+        </div>
+
+        <div class="mermaid">
+%% Entity Relationship Diagram
+%% Database: AW_Stripped
+%% Server: sql-claude
+%% Generated: 2026-03-22T13:08:36.928Z
+%% Total Schemas: 6
+%% Total Tables: 71
+%% Total Columns: 486
+
+erDiagram
+
+    %% Schema: dbo
+
+    AWBuildVersion {
+        tinyint SystemInformationID "PK,NOT_NULL" %% Unique identifier for the single system information record i
+        nvarchar Database Version "NOT_NULL" %% The installed database build/version string for the Adventur
+        datetime VersionDate "NOT_NULL" %% The date and time associated with the recorded database vers
+        datetime ModifiedDate "NOT_NULL" %% Timestamp indicating when the version record was last update
+    }
+
+    DatabaseLog {
+        int DatabaseLogID "PK,NOT_NULL" %% Primary identifier for each logged database event row.
+        datetime PostTime "NOT_NULL" %% Timestamp when the database event was recorded or occurred.
+        sysname DatabaseUser "NOT_NULL" %% Database principal under which the event was executed or log
+        sysname Event "NOT_NULL" %% Type of database event that was captured, such as table crea
+        sysname Schema %% Schema containing the affected object.
+        sysname Object %% Name of the affected database object.
+        nvarchar TSQL "NOT_NULL" %% Exact T-SQL statement associated with the logged event.
+        xml XmlEvent "NOT_NULL" %% Structured XML representation of the event details.
+    }
+
+    ErrorLog {
+        int ErrorLogID "NOT_NULL" %% Surrogate identifier for each logged error event, likely the
+        datetime ErrorTime "NOT_NULL" %% Date and time when the error was recorded.
+        sysname UserName "NOT_NULL" %% Name of the user or login context associated with the error.
+        int ErrorNumber "NOT_NULL" %% Numeric SQL Server error code or application error code.
+        int ErrorSeverity %% Severity level of the error.
+        int ErrorState %% State code associated with the error number.
+        nvarchar ErrorProcedure %% Stored procedure or routine where the error occurred.
+        int ErrorLine %% Line number within the procedure or batch where the error wa
+        nvarchar ErrorMessage "NOT_NULL" %% Full descriptive text of the error.
+    }
+
+    %% Schema: HumanResources
+
+    Department {
+        smallint DepartmentID "PK,NOT_NULL" %% Unique identifier for each department record; serves as the 
+        Name Name "NOT_NULL" %% The department's human-readable name, such as Engineering, S
+        Name GroupName "NOT_NULL" %% A broader functional grouping for the department, used to ca
+        datetime ModifiedDate "NOT_NULL" %% Timestamp indicating when the department record was last mod
+    }
+
+    Employee {
+        int BusinessEntityID "FK,NOT_NULL" %% The employee's shared business entity identifier and the tab
+        nvarchar NationalIDNumber "NOT_NULL" %% Government-issued or internal national identification number
+        nvarchar LoginID "PK,NOT_NULL" %% Windows/domain login used by the employee to authenticate to
+        hierarchyid OrganizationNode %% Hierarchy path node representing the employee's position in 
+        smallint OrganizationLevel %% Numeric depth of the employee within the organization hierar
+        nvarchar JobTitle "NOT_NULL" %% The employee's current job title or role.
+        date BirthDate "NOT_NULL" %% The employee's date of birth.
+        nchar MaritalStatus "NOT_NULL" %% Marital status code for the employee.
+        nchar Gender "NOT_NULL" %% Gender code for the employee.
+        date HireDate "NOT_NULL" %% The date the employee was hired.
+        Flag SalariedFlag "NOT_NULL" %% Indicates whether the employee is salaried rather than hourl
+        smallint VacationHours "NOT_NULL" %% Current accrued vacation leave balance in hours.
+        smallint SickLeaveHours "NOT_NULL" %% Current accrued sick leave balance in hours.
+        Flag CurrentFlag "NOT_NULL" %% Indicates whether the employee record is currently active/cu
+        uniqueidentifier rowguid "PK,NOT_NULL" %% System-generated unique row identifier used for replication 
+        datetime ModifiedDate "NOT_NULL" %% Timestamp of the last modification to the employee record.
+    }
+
+    EmployeeDepartmentHistory {
+        int BusinessEntityID "FK,NOT_NULL" %% Identifies the employee whose department/shift assignment is
+        smallint DepartmentID "FK,NOT_NULL" %% Identifies the department the employee was assigned to durin
+        tinyint ShiftID "FK,NOT_NULL" %% Identifies the work shift associated with the employee's ass
+        date StartDate "PK,NOT_NULL" %% The date the employee began the department/shift assignment.
+        date EndDate %% The date the employee's assignment ended, if it is no longer
+        datetime ModifiedDate "NOT_NULL" %% Timestamp indicating when the history record was last update
+    }
+
+    EmployeePayHistory {
+        int BusinessEntityID "PK,FK,NOT_NULL" %% Identifies the employee whose pay history record this is.
+        datetime RateChangeDate "PK,NOT_NULL" %% The date and time when this pay rate became effective.
+        money Rate "NOT_NULL" %% The employee's pay rate at the time of the change.
+        tinyint PayFrequency "NOT_NULL" %% Indicates how often the employee is paid.
+        datetime ModifiedDate "NOT_NULL" %% Timestamp of the last modification to the row.
+    }
+
+    JobCandidate {
+        int JobCandidateID "PK,NOT_NULL" %% Surrogate identifier for each job candidate record in HumanR
+        int BusinessEntityID "FK" %% References the underlying person record for the candidate in
+        xml Resume %% XML-formatted resume document containing the candidate's nam
+        datetime ModifiedDate "NOT_NULL" %% Timestamp indicating when the job candidate record was last 
+    }
+
+    Shift {
+        tinyint ShiftID "PK,NOT_NULL" %% Unique identifier for each shift definition.
+        Name Name "NOT_NULL" %% Human-readable shift label such as Day, Evening, or Night.
+        time StartTime "NOT_NULL" %% Clock time when the shift begins.
+        time EndTime "NOT_NULL" %% Clock time when the shift ends.
+        datetime ModifiedDate "NOT_NULL" %% Timestamp indicating when the shift record was last modified
+    }
+
+    %% Schema: Person
+
+    Address {
+        int AddressID "PK,NOT_NULL" %% Surrogate identifier for each address record.
+        nvarchar AddressLine1 "NOT_NULL" %% Primary street address line, such as house number, street na
+        nvarchar AddressLine2 %% Optional secondary address information such as apartment, su
+        nvarchar City "NOT_NULL" %% City, town, or locality component of the address.
+        int StateProvinceID "FK,NOT_NULL" %% Reference to the state, province, or similar administrative 
+        nvarchar PostalCode "NOT_NULL" %% Postal or ZIP code associated with the address.
+        geography SpatialLocation %% Geographic point representation of the address, stored as a 
+        uniqueidentifier rowguid "NOT_NULL" %% Globally unique row identifier used for replication, synchro
+        datetime ModifiedDate "NOT_NULL" %% Timestamp indicating when the address record was last update
+    }
+
+    AddressType {
+        int AddressTypeID "PK,NOT_NULL" %% Surrogate identifier for each address type record; serves as
+        Name Name "NOT_NULL" %% Human-readable label for the address type, such as Billing o
+        uniqueidentifier rowguid "NOT_NULL" %% Globally unique row identifier used for replication and syst
+        datetime ModifiedDate "NOT_NULL" %% Timestamp indicating when the address type record was last u
+    }
+
+    BusinessEntity {
+        int BusinessEntityID "PK,NOT_NULL" %% Surrogate identifier for the business entity record; used as
+        uniqueidentifier rowguid "NOT_NULL" %% Globally unique row identifier used for replication or syste
+        datetime ModifiedDate "NOT_NULL" %% Timestamp indicating when the business entity row was last u
+    }
+
+    BusinessEntityAddress {
+        int BusinessEntityID "FK,NOT_NULL" %% Identifies the business entity associated with the address l
+        int AddressID "FK,NOT_NULL" %% Identifies the address being linked to the business entity.
+        int AddressTypeID "FK,NOT_NULL" %% Indicates the role or usage type of the address for the enti
+        uniqueidentifier rowguid "PK,NOT_NULL" %% Globally unique row identifier used for replication, synchro
+        datetime ModifiedDate "NOT_NULL" %% Timestamp of the last update to the relationship record.
+    }
+
+    BusinessEntityContact {
+        int BusinessEntityID "FK,NOT_NULL" %% Identifies the business entity that the person is associated
+        int PersonID "FK,NOT_NULL" %% Identifies the person involved in the contact relationship; 
+        int ContactTypeID "FK,NOT_NULL" %% Specifies the role or category of the contact relationship, 
+        uniqueidentifier rowguid "PK,NOT_NULL" %% A globally unique row identifier used for replication, synch
+        datetime ModifiedDate "NOT_NULL" %% The timestamp when the contact relationship row was last upd
+    }
+
+    ContactType {
+        int ContactTypeID "PK,NOT_NULL" %% Primary key identifier for each contact type category.
+        Name Name "NOT_NULL" %% Human-readable label for the contact type, such as a job rol
+        datetime ModifiedDate "NOT_NULL" %% Timestamp indicating when the lookup row was last modified o
+    }
+
+    CountryRegion {
+        nvarchar CountryRegionCode "PK,NOT_NULL" %% Two-character country or region code that uniquely identifie
+        Name Name "NOT_NULL" %% The full display name of the country or region.
+        datetime ModifiedDate "NOT_NULL" %% The date the row was last modified or loaded into the databa
+    }
+
+    EmailAddress {
+        int BusinessEntityID "FK,NOT_NULL" %% Identifies the person/business entity that owns this email a
+        int EmailAddressID "PK,NOT_NULL" %% Surrogate primary key for the email address record.
+        nvarchar EmailAddress %% The actual email address string associated with the person/b
+        uniqueidentifier rowguid "NOT_NULL" %% Globally unique row identifier used for replication or synch
+        datetime ModifiedDate "NOT_NULL" %% Timestamp indicating when the email address record was last 
+    }
+
+    Password {
+        int BusinessEntityID "FK,NOT_NULL" %% Identifier of the person whose authentication credentials ar
+        varchar PasswordHash "NOT_NULL" %% Hashed password value used to verify a user's login credenti
+        varchar PasswordSalt "NOT_NULL" %% Random salt used when hashing the password to protect agains
+        uniqueidentifier rowguid "PK,NOT_NULL" %% Globally unique row identifier used for replication, synchro
+        datetime ModifiedDate "NOT_NULL" %% Timestamp indicating when the password record was last updat
+    }
+
+    Person {
+        int BusinessEntityID "FK,NOT_NULL" %% Unique identifier for the person record; serves as the row's
+        nchar PersonType "NOT_NULL" %% Code indicating what kind of person this record represents, 
+        NameStyle NameStyle "NOT_NULL" %% Flag indicating whether the person's name should be displaye
+        nvarchar Title %% Honorific or salutation such as Mr., Ms., Mrs., Sr., or Sra.
+        Name FirstName "NOT_NULL" %% Person's given name.
+        Name MiddleName %% Person's middle name or middle initial, when available.
+        Name LastName "NOT_NULL" %% Person's family name or surname.
+        nvarchar Suffix %% Name suffix such as Jr., Sr., II, III, IV, or PhD.
+        int EmailPromotion "NOT_NULL" %% Preference or status code controlling email marketing promot
+        xml AdditionalContactInfo %% XML payload containing extra contact methods, notes, and con
+        xml Demographics %% XML payload containing survey and demographic attributes for
+        uniqueidentifier rowguid "PK,NOT_NULL" %% Globally unique row identifier used for replication or synch
+        datetime ModifiedDate "NOT_NULL" %% Timestamp of the last update to the person record.
+    }
+
+    PersonPhone {
+        int BusinessEntityID "FK,NOT_NULL" %% Identifies the person/business entity that owns the phone nu
+        Phone PhoneNumber "PK,NOT_NULL" %% The actual phone number stored for the entity.
+        int PhoneNumberTypeID "FK,NOT_NULL" %% Classifies the phone number by type, such as home, work, or 
+        datetime ModifiedDate "NOT_NULL" %% Timestamp indicating when the phone record was last updated.
+    }
+
+    PhoneNumberType {
+        int PhoneNumberTypeID "PK,NOT_NULL" %% Surrogate identifier for each phone number type. It uniquely
+        Name Name "NOT_NULL" %% Human-readable label for the phone type, such as Home, Cell,
+        datetime ModifiedDate "NOT_NULL" %% Timestamp indicating when the lookup row was last modified.
+    }
+
+    StateProvince {
+        int StateProvinceID "PK,NOT_NULL" %% Surrogate primary key for each state/province record.
+        nchar StateProvinceCode "NOT_NULL" %% Short standardized code for the state/province, such as a po
+        nvarchar CountryRegionCode "FK,NOT_NULL" %% Code of the country or region that contains this state/provi
+        Flag IsOnlyStateProvinceFlag "NOT_NULL" %% Indicates whether this record represents the only state/prov
+        Name Name "NOT_NULL" %% Human-readable name of the state, province, department, or e
+        int TerritoryID "FK,NOT_NULL" %% Sales territory assignment for this geographic region.
+        uniqueidentifier rowguid "NOT_NULL" %% Globally unique row identifier used for replication and sync
+        datetime ModifiedDate "NOT_NULL" %% Timestamp indicating when the row was last modified.
+    }
+
+    %% Schema: Production
+
+    BillOfMaterials {
+        int BillOfMaterialsID "PK,NOT_NULL" %% Surrogate primary key for each bill of materials record.
+        int ProductAssemblyID "FK" %% The parent product being assembled.
+        int ComponentID "FK,NOT_NULL" %% The component product required in the assembly.
+        datetime StartDate "NOT_NULL" %% The date this bill of materials relationship becomes effecti
+        datetime EndDate %% The date this bill of materials relationship stops being eff
+        nchar UnitMeasureCode "FK,NOT_NULL" %% The unit of measure used for the component quantity.
+        smallint BOMLevel "NOT_NULL" %% The level of the component within the assembly hierarchy.
+        decimal PerAssemblyQty "NOT_NULL" %% The quantity of the component required per one assembly unit
+        datetime ModifiedDate "NOT_NULL" %% The last date the BOM record was updated.
+    }
+
+    Culture {
+        nchar CultureID "PK,NOT_NULL" %% The culture/language code used as the unique identifier for 
+        Name Name "NOT_NULL" %% The human-readable name of the culture or language.
+        datetime ModifiedDate "NOT_NULL" %% The date the culture record was last modified or seeded into
+    }
+
+    Document {
+        hierarchyid DocumentNode "NOT_NULL"
+        smallint DocumentLevel
+        nvarchar Title "NOT_NULL"
+        int Owner "NOT_NULL"
+        bit FolderFlag "NOT_NULL"
+        nvarchar FileName "NOT_NULL"
+        nvarchar FileExtension "NOT_NULL"
+        nchar Revision "NOT_NULL"
+        int ChangeNumber "NOT_NULL"
+        tinyint Status "NOT_NULL"
+        nvarchar DocumentSummary
+        varbinary Document
+        uniqueidentifier rowguid "NOT_NULL"
+        datetime ModifiedDate "NOT_NULL"
+    }
+
+    Illustration {
+        int IllustrationID "PK,NOT_NULL" %% Unique identifier for each illustration asset in Production.
+        xml Diagram %% XML/XAML representation of the illustration artwork itself, 
+        datetime ModifiedDate "NOT_NULL" %% Timestamp indicating when the illustration record was last u
+    }
+
+    Location {
+        smallint LocationID "PK,NOT_NULL" %% Primary identifier for each production location or work cent
+        Name Name "NOT_NULL" %% Human-readable name of the location, such as a shop area, st
+        smallmoney CostRate "NOT_NULL" %% Standard cost associated with using the location, likely a p
+        decimal Availability "NOT_NULL" %% Available capacity for the location, likely measured in hour
+        datetime ModifiedDate "NOT_NULL" %% Timestamp indicating when the location record was last updat
+    }
+
+    Product {
+        int ProductID "PK,NOT_NULL" %% Surrogate primary key for each product record.
+        Name Name "NOT_NULL" %% Human-readable product name used in catalog, reporting, and 
+        nvarchar ProductNumber "NOT_NULL" %% Business-facing product code or SKU-like identifier.
+        Flag MakeFlag "NOT_NULL" %% Indicates whether the product is manufactured in-house.
+        Flag FinishedGoodsFlag "NOT_NULL" %% Indicates whether the item is a sellable finished good.
+        nvarchar Color %% Optional product color attribute.
+        smallint SafetyStockLevel "NOT_NULL" %% Minimum inventory threshold used to avoid stockouts.
+        smallint ReorderPoint "NOT_NULL" %% Inventory level at which replenishment should be triggered.
+        money StandardCost "NOT_NULL" %% Standard manufacturing or acquisition cost of the product.
+        money ListPrice "NOT_NULL" %% Catalog selling price for the product.
+        nvarchar Size %% Optional size or dimension value for the product.
+        nchar SizeUnitMeasureCode %% Unit of measure for the Size value.
+        nchar WeightUnitMeasureCode %% Unit of measure for the Weight value.
+        decimal Weight %% Optional product weight used for shipping, manufacturing, or
+        int DaysToManufacture "NOT_NULL" %% Estimated number of days required to manufacture the product
+        nchar ProductLine %% High-level product line classification.
+        nchar Class %% Product class or quality tier.
+        nchar Style %% Product style or gender/style classification.
+        int ProductSubcategoryID "FK" %% Foreign key to the product subcategory classification.
+        int ProductModelID "FK" %% Foreign key to the product model definition.
+        datetime SellStartDate "NOT_NULL" %% Date the product became available for sale.
+        datetime SellEndDate %% Date the product stopped being sold, if discontinued.
+        datetime DiscontinuedDate %% Date the product was discontinued.
+        uniqueidentifier rowguid "NOT_NULL" %% Globally unique row identifier used for replication and sync
+        datetime ModifiedDate "NOT_NULL" %% Timestamp of the last update to the product record.
+    }
+
+    ProductCategory {
+        int ProductCategoryID "PK,NOT_NULL" %% Surrogate identifier for each product category; uniquely ide
+        Name Name "NOT_NULL" %% Human-readable category name used to label the top-level pro
+        uniqueidentifier rowguid "NOT_NULL" %% Globally unique row identifier used for replication/integrat
+        datetime ModifiedDate "NOT_NULL" %% Timestamp indicating when the category row was last updated.
+    }
+
+    ProductCostHistory {
+        int ProductID "FK,NOT_NULL" %% Identifies the product whose standard cost is being tracked.
+        datetime StartDate "PK,NOT_NULL" %% The date on which this standard cost version becomes effecti
+        datetime EndDate %% The date on which this standard cost version stops being eff
+        money StandardCost "NOT_NULL" %% The standard manufacturing cost for the product during the e
+        datetime ModifiedDate "NOT_NULL" %% The date the row was last updated in the database.
+    }
+
+    ProductDescription {
+        int ProductDescriptionID "PK,NOT_NULL" %% Surrogate identifier for each product description record.
+        nvarchar Description "NOT_NULL" %% The actual descriptive text for a product, used for marketin
+        uniqueidentifier rowguid "NOT_NULL" %% Globally unique row identifier used for replication or synch
+        datetime ModifiedDate "NOT_NULL" %% Timestamp indicating when the description record was last ch
+    }
+
+    ProductDocument {
+        int ProductID "PK,FK,NOT_NULL" %% Identifies the product associated with a document. This is t
+        hierarchyid DocumentNode "PK,FK,NOT_NULL" %% Identifies the document associated with a product, using the
+        datetime ModifiedDate "NOT_NULL" %% The date and time when the product-document association was 
+    }
+
+    ProductInventory {
+        int ProductID "PK,FK,NOT_NULL" %% Identifies the product whose inventory is being tracked at a
+        smallint LocationID "PK,FK,NOT_NULL" %% Identifies the production or warehouse location where the pr
+        nvarchar Shelf "NOT_NULL" %% Shelf or aisle code indicating the storage shelf position wi
+        tinyint Bin "NOT_NULL" %% Numeric bin or compartment identifier within the shelf/locat
+        smallint Quantity "NOT_NULL" %% The number of units of the product currently on hand at the 
+        uniqueidentifier rowguid "PK,NOT_NULL" %% Globally unique row identifier used for replication or synch
+        datetime ModifiedDate "NOT_NULL" %% Timestamp indicating when the inventory record was last upda
+    }
+
+    ProductListPriceHistory {
+        int ProductID "FK,NOT_NULL" %% Identifies the product whose list price history is being rec
+        datetime StartDate "PK,NOT_NULL" %% The date on which this list price became effective.
+        datetime EndDate %% The date on which this list price stopped being effective, i
+        money ListPrice "NOT_NULL" %% The product's list price during the effective period defined
+        datetime ModifiedDate "NOT_NULL" %% The timestamp when the history row was last updated.
+    }
+
+    ProductModel {
+        int ProductModelID "PK,NOT_NULL" %% Unique identifier for each product model.
+        Name Name "NOT_NULL" %% Human-readable product model name used in the catalog and re
+        xml CatalogDescription %% XML catalog content describing the product model's marketing
+        xml Instructions %% XML manufacturing and assembly instructions for the product 
+        uniqueidentifier rowguid "NOT_NULL" %% Globally unique row identifier used for replication or synch
+        datetime ModifiedDate "NOT_NULL" %% Timestamp indicating when the product model record was last 
+    }
+
+    ProductModelIllustration {
+        int ProductModelID "PK,FK,NOT_NULL" %% Identifies the product model being linked to an illustration
+        int IllustrationID "PK,FK,NOT_NULL" %% Identifies the illustration associated with the product mode
+        datetime ModifiedDate "NOT_NULL" %% Timestamp indicating when the association row was last modif
+    }
+
+    ProductModelProductDescriptionCulture {
+        int ProductModelID "PK,FK,NOT_NULL" %% Identifies the product model that this localized description
+        int ProductDescriptionID "PK,FK,NOT_NULL" %% Identifies the reusable description text linked to the produ
+        nchar CultureID "PK,FK,NOT_NULL" %% Specifies the language/culture for the description text.
+        datetime ModifiedDate "NOT_NULL" %% Audit timestamp indicating when the row was last modified.
+    }
+
+    ProductPhoto {
+        int ProductPhotoID "PK,NOT_NULL"
+        varbinary ThumbNailPhoto
+        nvarchar ThumbnailPhotoFileName
+        varbinary LargePhoto
+        nvarchar LargePhotoFileName
+        datetime ModifiedDate "NOT_NULL"
+    }
+
+    ProductProductPhoto {
+        int ProductID "PK,FK,NOT_NULL" %% Identifies the product being associated with a photo.
+        int ProductPhotoID "PK,FK,NOT_NULL" %% Identifies the photo linked to the product.
+        Flag Primary "NOT_NULL" %% Indicates whether this photo is the primary image for the pr
+        datetime ModifiedDate "NOT_NULL" %% Records when the product-photo association was last modified
+    }
+
+    ProductReview {
+        int ProductReviewID "PK,NOT_NULL" %% Unique identifier for each product review record.
+        int ProductID "FK,NOT_NULL" %% Identifies the product being reviewed.
+        Name ReviewerName "NOT_NULL" %% Name of the person who wrote the review.
+        datetime ReviewDate "NOT_NULL" %% Date and time the review was submitted.
+        nvarchar EmailAddress "NOT_NULL" %% Email contact for the reviewer.
+        int Rating "NOT_NULL" %% Numeric score assigned by the reviewer, likely on a star sca
+        nvarchar Comments %% Free-text review content describing the reviewer's opinion a
+        datetime ModifiedDate "NOT_NULL" %% Timestamp indicating when the review row was last updated.
+    }
+
+    ProductSubcategory {
+        int ProductSubcategoryID "PK,NOT_NULL" %% Primary identifier for each product subcategory.
+        int ProductCategoryID "FK,NOT_NULL" %% Identifies the parent product category that this subcategory
+        Name Name "NOT_NULL" %% Human-readable name of the product subcategory.
+        uniqueidentifier rowguid "NOT_NULL" %% Globally unique row identifier used for replication or syste
+        datetime ModifiedDate "NOT_NULL" %% Timestamp indicating when the subcategory record was last mo
+    }
+
+    ScrapReason {
+        smallint ScrapReasonID "PK,NOT_NULL" %% Primary identifier for each scrap reason code.
+        Name Name "NOT_NULL" %% Human-readable description of the scrap reason.
+        datetime ModifiedDate "NOT_NULL" %% Date the scrap reason record was last modified or seeded int
+    }
+
+    TransactionHistory {
+        int TransactionID "PK,NOT_NULL" %% Unique identifier for each transaction record in the ledger.
+        int ProductID "FK,NOT_NULL" %% Identifies the product affected by the transaction.
+        int ReferenceOrderID "PK,NOT_NULL" %% Identifier of the source document or order that generated th
+        int ReferenceOrderLineID "NOT_NULL" %% Line number or line identifier within the referenced source 
+        datetime TransactionDate "NOT_NULL" %% Date the product transaction occurred.
+        nchar TransactionType "NOT_NULL" %% Code indicating the business process that created the transa
+        int Quantity "NOT_NULL" %% Number of units affected by the transaction.
+        money ActualCost "NOT_NULL" %% Actual cost recorded for the transaction.
+        datetime ModifiedDate "NOT_NULL" %% Timestamp when the transaction row was last updated.
+    }
+
+    TransactionHistoryArchive {
+        int TransactionID "PK,NOT_NULL" %% Unique identifier for each transaction history record.
+        int ProductID "FK,NOT_NULL" %% Identifies the product affected by the transaction.
+        int ReferenceOrderID "FK,NOT_NULL" %% Identifier of the originating order or work order associated
+        int ReferenceOrderLineID "NOT_NULL" %% Line-level reference within the originating order or work or
+        datetime TransactionDate "NOT_NULL" %% Date and time when the transaction occurred.
+        nchar TransactionType "NOT_NULL" %% Code indicating the type of inventory transaction.
+        int Quantity "NOT_NULL" %% Number of units affected by the transaction.
+        money ActualCost "NOT_NULL" %% Actual cost associated with the transaction.
+        datetime ModifiedDate "NOT_NULL" %% Date and time the transaction record was last updated.
+    }
+
+    UnitMeasure {
+        nchar UnitMeasureCode "PK,NOT_NULL" %% Short code that uniquely identifies a unit of measure, such 
+        Name Name "NOT_NULL" %% The descriptive name of the unit of measure, such as Kilogra
+        datetime ModifiedDate "NOT_NULL" %% Timestamp indicating when the unit measure record was last u
+    }
+
+    WorkOrder {
+        int WorkOrderID "PK,NOT_NULL" %% Unique identifier for each work order record.
+        int ProductID "FK,NOT_NULL" %% Identifier of the product being manufactured on this work or
+        int OrderQty "NOT_NULL" %% Planned quantity to produce for the work order.
+        int StockedQty "NOT_NULL" %% Quantity successfully completed and moved into stock.
+        smallint ScrappedQty "NOT_NULL" %% Quantity lost to scrap during the work order.
+        datetime StartDate "NOT_NULL" %% Date the work order began.
+        datetime EndDate %% Date the work order finished or was closed.
+        datetime DueDate "NOT_NULL" %% Target completion date for the work order.
+        smallint ScrapReasonID "FK" %% Optional reason code explaining why units were scrapped.
+        datetime ModifiedDate "NOT_NULL" %% Timestamp of the last update to the work order record.
+    }
+
+    WorkOrderRouting {
+        int WorkOrderID "FK,NOT_NULL" %% Identifies the manufacturing work order this routing step be
+        int ProductID "FK,NOT_NULL" %% Identifies the product being manufactured for this routing s
+        smallint OperationSequence "PK,NOT_NULL" %% The sequence number of the operation within the work order r
+        smallint LocationID "FK,NOT_NULL" %% The production location or work center where the operation i
+        datetime ScheduledStartDate "NOT_NULL" %% The planned date when the routing operation is scheduled to 
+        datetime ScheduledEndDate "NOT_NULL" %% The planned date when the routing operation is scheduled to 
+        datetime ActualStartDate %% The actual date when work on the routing operation began.
+        datetime ActualEndDate %% The actual date when work on the routing operation finished.
+        decimal ActualResourceHrs %% The actual labor or machine hours consumed by the routing op
+        money PlannedCost "NOT_NULL" %% The expected cost for performing the routing operation.
+        money ActualCost %% The realized cost incurred for performing the routing operat
+        datetime ModifiedDate "NOT_NULL" %% The last date and time this routing record was updated.
+    }
+
+    %% Schema: Purchasing
+
+    ProductVendor {
+        int ProductID "PK,FK,NOT_NULL" %% Identifies the product being sourced from a vendor.
+        int BusinessEntityID "PK,FK,NOT_NULL" %% Identifies the vendor supplying the product.
+        int AverageLeadTime "NOT_NULL" %% Typical number of days the vendor needs to deliver the produ
+        money StandardPrice "NOT_NULL" %% Standard negotiated purchase price for the product from this
+        money LastReceiptCost %% Unit cost recorded on the most recent receipt from this vend
+        datetime LastReceiptDate %% Date when the product was last received from the vendor.
+        int MinOrderQty "NOT_NULL" %% Minimum quantity that can be ordered from this vendor for th
+        int MaxOrderQty "NOT_NULL" %% Maximum quantity that can be ordered from this vendor for th
+        int OnOrderQty %% Quantity of the product currently on order from this vendor.
+        nchar UnitMeasureCode "FK,NOT_NULL" %% Unit of measure used when ordering or packaging the product 
+        datetime ModifiedDate "NOT_NULL" %% Timestamp of the last update to this vendor-product purchasi
+    }
+
+    PurchaseOrderDetail {
+        int PurchaseOrderID "PK,NOT_NULL" %% Identifies the purchase order header that this line item bel
+        int PurchaseOrderDetailID "PK,NOT_NULL" %% Unique identifier for each purchase order line item.
+        datetime DueDate "NOT_NULL" %% The expected date by which the ordered product should be rec
+        smallint OrderQty "NOT_NULL" %% The quantity of product ordered on this purchase order line.
+        int ProductID "FK,NOT_NULL" %% The product being purchased on this line item.
+        money UnitPrice "NOT_NULL" %% The agreed purchase price per unit for the product on this l
+        money LineTotal "NOT_NULL" %% The total monetary amount for the line item, typically deriv
+        decimal ReceivedQty "NOT_NULL" %% The quantity actually received from the supplier for this li
+        decimal RejectedQty "NOT_NULL" %% The quantity received but rejected during inspection or qual
+        decimal StockedQty "NOT_NULL" %% The quantity accepted and moved into inventory stock.
+        datetime ModifiedDate "NOT_NULL" %% Timestamp of the last update to the purchase order detail re
+    }
+
+    PurchaseOrderHeader {
+        int PurchaseOrderID "PK,NOT_NULL" %% Unique identifier for each purchase order header record.
+        tinyint RevisionNumber "NOT_NULL" %% Tracks the revision/version of the purchase order document.
+        tinyint Status "NOT_NULL" %% Indicates the current workflow state of the purchase order.
+        int EmployeeID "FK,NOT_NULL" %% References the employee responsible for creating, approving,
+        int VendorID "FK,NOT_NULL" %% References the supplier/vendor from whom the goods or servic
+        int ShipMethodID "FK,NOT_NULL" %% References the shipping method used for the purchase order.
+        datetime OrderDate "NOT_NULL" %% Date the purchase order was placed.
+        datetime ShipDate %% Date the purchase order was shipped or fulfilled.
+        money SubTotal "NOT_NULL" %% Pre-tax, pre-freight monetary total for the purchase order.
+        money TaxAmt "NOT_NULL" %% Tax amount applied to the purchase order.
+        money Freight "NOT_NULL" %% Shipping or freight charge for the purchase order.
+        money TotalDue "NOT_NULL" %% Final amount due for the purchase order, including subtotal,
+        datetime ModifiedDate "NOT_NULL" %% Timestamp of the last update to the purchase order record.
+    }
+
+    ShipMethod {
+        int ShipMethodID "PK,NOT_NULL" %% Primary identifier for each shipping method.
+        Name Name "NOT_NULL" %% The display name or code for the shipping method.
+        money ShipBase "NOT_NULL" %% Base shipping charge applied for this method.
+        money ShipRate "NOT_NULL" %% Additional shipping rate used in cost calculation.
+        uniqueidentifier rowguid "NOT_NULL" %% Globally unique row identifier used for replication or synch
+        datetime ModifiedDate "NOT_NULL" %% Timestamp of the last modification to the shipping method re
+    }
+
+    Vendor {
+        int BusinessEntityID "PK,FK,NOT_NULL" %% Primary identifier for the vendor record; also links the ven
+        AccountNumber AccountNumber "NOT_NULL" %% Vendor account code used internally to identify the supplier
+        Name Name "NOT_NULL" %% The vendor's display name or legal/doing-business-as name.
+        tinyint CreditRating "NOT_NULL" %% Numeric rating used to classify the vendor's creditworthines
+        Flag PreferredVendorStatus "NOT_NULL" %% Indicates whether this supplier is marked as a preferred ven
+        Flag ActiveFlag "NOT_NULL" %% Indicates whether the vendor is currently active and availab
+        nvarchar PurchasingWebServiceURL %% Optional URL for the vendor's purchasing or ordering web ser
+        datetime ModifiedDate "NOT_NULL" %% Timestamp of the last update to the vendor record.
+    }
+
+    %% Schema: Sales
+
+    CountryRegionCurrency {
+        nvarchar CountryRegionCode "PK,FK,NOT_NULL" %% The country or region code for the geographic entity being m
+        nchar CurrencyCode "PK,FK,NOT_NULL" %% The currency code associated with the country or region.
+        datetime ModifiedDate "NOT_NULL" %% The timestamp when the country-region to currency mapping ro
+    }
+
+    CreditCard {
+        int CreditCardID "PK,NOT_NULL" %% Surrogate identifier for each credit card record.
+        nvarchar CardType "NOT_NULL" %% The type or brand/category of the credit card.
+        nvarchar CardNumber "NOT_NULL" %% The stored credit card number or tokenized card identifier.
+        tinyint ExpMonth "NOT_NULL" %% Expiration month of the credit card.
+        smallint ExpYear "NOT_NULL" %% Expiration year of the credit card.
+        datetime ModifiedDate "NOT_NULL" %% Timestamp indicating when the credit card record was last mo
+    }
+
+    Currency {
+        nchar CurrencyCode "PK,NOT_NULL" %% The unique 3-character currency code used to identify each c
+        Name Name "NOT_NULL" %% The display name of the currency, such as 'US Dollar' or 'Po
+        datetime ModifiedDate "NOT_NULL" %% The date the currency reference row was last modified or loa
+    }
+
+    CurrencyRate {
+        int CurrencyRateID "PK,NOT_NULL" %% Surrogate primary key for each currency-rate record.
+        datetime CurrencyRateDate "NOT_NULL" %% The date on which the exchange rate applies or was recorded.
+        nchar FromCurrencyCode "FK,NOT_NULL" %% The source currency for the exchange rate, used as the base 
+        nchar ToCurrencyCode "FK,NOT_NULL" %% The target currency being quoted against the base currency.
+        money AverageRate "NOT_NULL" %% The average exchange rate for the date, likely used for repo
+        money EndOfDayRate "NOT_NULL" %% The exchange rate at the end of the day, likely used for clo
+        datetime ModifiedDate "NOT_NULL" %% Timestamp indicating when the row was last inserted or updat
+    }
+
+    Customer {
+        int CustomerID "PK,NOT_NULL" %% Surrogate primary key for each customer record.
+        int PersonID "FK" %% Optional link to the individual person who is the customer.
+        int StoreID "FK" %% Optional link to the retail store account that is the custom
+        int TerritoryID "FK" %% Sales territory assigned to the customer for regional sales 
+        varchar AccountNumber "NOT_NULL" %% Business account code used to identify the customer in a hum
+        uniqueidentifier rowguid "NOT_NULL" %% Globally unique row identifier used for replication and sync
+        datetime ModifiedDate "NOT_NULL" %% Timestamp indicating when the customer record was last modif
+    }
+
+    PersonCreditCard {
+        int BusinessEntityID "PK,FK,NOT_NULL" %% Identifies the person associated with the credit card.
+        int CreditCardID "PK,FK,NOT_NULL" %% Identifies the credit card linked to the person.
+        datetime ModifiedDate "NOT_NULL" %% Audit timestamp showing when the association row was last up
+    }
+
+    SalesOrderDetail {
+        int SalesOrderID "FK,NOT_NULL" %% Identifies the sales order header that this line item belong
+        int SalesOrderDetailID "PK,NOT_NULL" %% Unique identifier for each sales order line item.
+        nvarchar CarrierTrackingNumber %% Optional shipping carrier tracking number associated with th
+        smallint OrderQty "NOT_NULL" %% Quantity of the product ordered on this line item.
+        int ProductID "FK,NOT_NULL" %% Identifies the product sold on this order line.
+        int SpecialOfferID "FK,NOT_NULL" %% Identifies the special offer or promotion applied to this li
+        money UnitPrice "NOT_NULL" %% Per-unit selling price recorded for the product on this orde
+        money UnitPriceDiscount "NOT_NULL" %% Discount amount or discount rate applied per unit on this li
+        numeric LineTotal "NOT_NULL" %% Extended total for the line item after quantity and discount
+        uniqueidentifier rowguid "NOT_NULL" %% Globally unique row identifier used for replication and sync
+        datetime ModifiedDate "NOT_NULL" %% Timestamp indicating when the row was last modified.
+    }
+
+    SalesOrderHeader {
+        int SalesOrderID "PK,NOT_NULL" %% Unique identifier for each sales order header record.
+        tinyint RevisionNumber "NOT_NULL" %% Revision/version number for the order header, used to track 
+        datetime OrderDate "NOT_NULL" %% Date the sales order was created.
+        datetime DueDate "NOT_NULL" %% Date the order is expected to be fulfilled or paid by.
+        datetime ShipDate %% Date the order was shipped.
+        tinyint Status "NOT_NULL" %% Order status code indicating the current processing state of
+        Flag OnlineOrderFlag "NOT_NULL" %% Indicates whether the order was placed online.
+        nvarchar SalesOrderNumber "NOT_NULL" %% Human-readable business order number for the sales order.
+        OrderNumber PurchaseOrderNumber %% Customer-provided purchase order number associated with the 
+        AccountNumber AccountNumber %% Customer account number used for the order.
+        int CustomerID "FK,NOT_NULL" %% Identifier of the customer who placed the order.
+        int SalesPersonID "FK" %% Identifier of the salesperson responsible for the order, whe
+        int TerritoryID "FK" %% Sales territory associated with the order.
+        int BillToAddressID "FK,NOT_NULL" %% Address used for billing the order.
+        int ShipToAddressID "FK,NOT_NULL" %% Address where the order should be shipped.
+        int ShipMethodID "FK,NOT_NULL" %% Shipping method selected for the order.
+        int CreditCardID "FK" %% Credit card used to pay for the order, if payment was made b
+        varchar CreditCardApprovalCode %% Authorization or approval code returned by the payment proce
+        int CurrencyRateID "FK" %% Exchange-rate record used when the order was placed in a non
+        money SubTotal "NOT_NULL" %% Order subtotal before tax and freight.
+        money TaxAmt "NOT_NULL" %% Tax amount charged on the order.
+        money Freight "NOT_NULL" %% Shipping/freight charge for the order.
+        money TotalDue "NOT_NULL" %% Final amount due for the order, including subtotal, tax, and
+        nvarchar Comment %% Optional free-text comment or note about the order.
+        uniqueidentifier rowguid "NOT_NULL" %% Globally unique row identifier used for replication or synch
+        datetime ModifiedDate "NOT_NULL" %% Timestamp of the last modification to the order header recor
+    }
+
+    SalesOrderHeaderSalesReason {
+        int SalesOrderID "PK,FK,NOT_NULL" %% Identifies the sales order that this reason is associated wi
+        int SalesReasonID "PK,FK,NOT_NULL" %% Identifies the standardized reason for the sales order.
+        datetime ModifiedDate "NOT_NULL" %% Timestamp indicating when the order-reason association row w
+    }
+
+    SalesPerson {
+        int BusinessEntityID "FK,NOT_NULL" %% Identifier for the salesperson record, inherited from the un
+        int TerritoryID "FK" %% Sales territory assigned to the salesperson for regional res
+        money SalesQuota %% Target sales amount assigned to the salesperson for a period
+        money Bonus "NOT_NULL" %% Fixed bonus amount paid to the salesperson.
+        smallmoney CommissionPct "NOT_NULL" %% Commission rate used to calculate variable pay from sales.
+        money SalesYTD "NOT_NULL" %% Year-to-date sales amount attributed to the salesperson.
+        money SalesLastYear "NOT_NULL" %% Sales amount attributed to the salesperson for the previous 
+        uniqueidentifier rowguid "PK,NOT_NULL" %% Globally unique row identifier used for replication and sync
+        datetime ModifiedDate "NOT_NULL" %% Timestamp of the last update to the salesperson record.
+    }
+
+    SalesPersonQuotaHistory {
+        int BusinessEntityID "FK,NOT_NULL" %% Identifies the employee whose sales quota is being recorded.
+        datetime QuotaDate "PK,NOT_NULL" %% The date the quota record applies to, likely the end of a fi
+        money SalesQuota "NOT_NULL" %% The monetary sales target assigned to the employee for the q
+        uniqueidentifier rowguid "PK,NOT_NULL" %% A globally unique row identifier used for replication and ro
+        datetime ModifiedDate "NOT_NULL" %% Timestamp indicating when the quota record was last updated.
+    }
+
+    SalesReason {
+        int SalesReasonID "PK,NOT_NULL" %% Unique identifier for each sales reason.
+        Name Name "NOT_NULL" %% The specific sales reason label shown to users or used in re
+        Name ReasonType "NOT_NULL" %% Broad category grouping for the sales reason, such as Market
+        datetime ModifiedDate "NOT_NULL" %% Timestamp indicating when the sales reason record was last m
+    }
+
+    SalesTaxRate {
+        int SalesTaxRateID "PK,NOT_NULL" %% Surrogate primary key for each sales tax rate record.
+        int StateProvinceID "FK,NOT_NULL" %% References the state or province to which this tax rate appl
+        tinyint TaxType "NOT_NULL" %% Categorizes the kind of tax rate being stored, such as a sta
+        smallmoney TaxRate "NOT_NULL" %% The tax percentage or rate applied for the jurisdiction and 
+        Name Name "NOT_NULL" %% Human-readable label for the tax rate definition.
+        uniqueidentifier rowguid "NOT_NULL" %% Globally unique identifier used for replication and row-leve
+        datetime ModifiedDate "NOT_NULL" %% Timestamp indicating when the tax rate row was last modified
+    }
+
+    SalesTerritory {
+        int TerritoryID "PK,NOT_NULL" %% Unique identifier for each sales territory.
+        Name Name "NOT_NULL" %% Human-readable territory name, such as a region or country-b
+        nvarchar CountryRegionCode "NOT_NULL" %% Two-letter country/region code associated with the territory
+        nvarchar Group "NOT_NULL" %% Higher-level geographic grouping used for reporting and terr
+        money SalesYTD "NOT_NULL" %% Sales generated by the territory year-to-date.
+        money SalesLastYear "NOT_NULL" %% Sales generated by the territory in the previous year.
+        money CostYTD "NOT_NULL" %% Year-to-date cost associated with the territory.
+        money CostLastYear "NOT_NULL" %% Cost associated with the territory in the previous year.
+        uniqueidentifier rowguid "PK,NOT_NULL" %% Globally unique row identifier used for replication or synch
+        datetime ModifiedDate "NOT_NULL" %% Timestamp indicating when the territory row was last modifie
+    }
+
+    SalesTerritoryHistory {
+        int BusinessEntityID "PK,FK,NOT_NULL" %% Identifies the salesperson whose territory assignment is bei
+        int TerritoryID "PK,FK,NOT_NULL" %% Identifies the sales territory assigned to the salesperson.
+        datetime StartDate "NOT_NULL" %% The date the salesperson-territory assignment became effecti
+        datetime EndDate %% The date the salesperson-territory assignment ended, or null
+        uniqueidentifier rowguid "PK,NOT_NULL" %% A globally unique row identifier used for replication, synch
+        datetime ModifiedDate "NOT_NULL" %% The timestamp when the assignment record was last modified.
+    }
+
+    ShoppingCartItem {
+        int ShoppingCartItemID "PK,NOT_NULL" %% Surrogate primary key for each shopping cart line item row.
+        nvarchar ShoppingCartID "NOT_NULL" %% Identifier for the shopping cart that this item belongs to.
+        int Quantity "NOT_NULL" %% Number of units of the product currently in the cart item.
+        int ProductID "FK,NOT_NULL" %% Reference to the product being added to the cart.
+        datetime DateCreated "NOT_NULL" %% Timestamp when the cart item was first created.
+        datetime ModifiedDate "NOT_NULL" %% Timestamp when the cart item was last updated.
+    }
+
+    SpecialOffer {
+        int SpecialOfferID "PK,FK,NOT_NULL" %% Identifier of the special offer applied in this row; also th
+        nvarchar Description "NOT_NULL" %% Human-readable name or label for the special offer, such as 
+        smallmoney DiscountPct "NOT_NULL" %% Discount percentage applied by the offer.
+        nvarchar Type "NOT_NULL" %% Classification of the offer, such as volume discount, season
+        nvarchar Category "NOT_NULL" %% Audience or applicability category for the offer, such as re
+        datetime StartDate "NOT_NULL" %% Date when the offer becomes active.
+        datetime EndDate "NOT_NULL" %% Date when the offer expires or stops being valid.
+        int MinQty "NOT_NULL" %% Minimum quantity required for the offer to apply.
+        int MaxQty %% Maximum quantity allowed for the offer tier, when applicable
+        uniqueidentifier rowguid "NOT_NULL" %% Globally unique row identifier used for replication or synch
+        datetime ModifiedDate "NOT_NULL" %% Timestamp of the last modification to the row.
+    }
+
+    SpecialOfferProduct {
+        int SpecialOfferID "FK,NOT_NULL" %% Identifies the special offer or promotion applied to the pro
+        int ProductID "FK,NOT_NULL" %% Identifies the product participating in the special offer. T
+        uniqueidentifier rowguid "PK,NOT_NULL" %% A globally unique row identifier used by the Adventure Works
+        datetime ModifiedDate "NOT_NULL" %% The date and time the row was last changed.
+    }
+
+    Store {
+        int BusinessEntityID "FK,NOT_NULL" %% Unique identifier for the store's business entity record; th
+        Name Name "NOT_NULL" %% The store's business name as used in sales and customer reco
+        int SalesPersonID "FK" %% Identifier of the salesperson responsible for managing this 
+        xml Demographics %% XML payload containing survey-based store profile attributes
+        uniqueidentifier rowguid "PK,NOT_NULL" %% Globally unique row identifier used for replication and sync
+        datetime ModifiedDate "NOT_NULL" %% Timestamp indicating when the store record was last modified
+    }
+
+
+    %% Relationships
+
+    BusinessEntity ||--o{ Employee : "has"
+    Employee ||--o{ EmployeeDepartmentHistory : "has"
+    Department ||--o{ EmployeeDepartmentHistory : "has"
+    Shift ||--o{ EmployeeDepartmentHistory : "has"
+    Employee ||--o{ EmployeePayHistory : "has"
+    EmployeeDepartmentHistory ||--o{ EmployeePayHistory : "has"
+    Person ||--o{ JobCandidate : "has"
+    StateProvince ||--o{ Address : "has"
+    BusinessEntity ||--o{ BusinessEntityAddress : "has"
+    Address ||--o{ BusinessEntityAddress : "has"
+    AddressType ||--o{ BusinessEntityAddress : "has"
+    BusinessEntity ||--o{ BusinessEntityContact : "has"
+    Person ||--o{ BusinessEntityContact : "has"
+    ContactType ||--o{ BusinessEntityContact : "has"
+    BusinessEntity ||--o{ EmailAddress : "has"
+    Password ||--o{ EmailAddress : "has"
+    Person ||--o{ Password : "has"
+    BusinessEntity ||--o{ Person : "has"
+    BusinessEntity ||--o{ PersonPhone : "has"
+    PhoneNumberType ||--o{ PersonPhone : "has"
+    SalesTerritory ||--o{ StateProvince : "has"
+    SalesTerritoryHistory ||--o{ StateProvince : "has"
+    CountryRegion ||--o{ StateProvince : "has"
+    Product ||--o{ BillOfMaterials : "has"
+    UnitMeasure ||--o{ BillOfMaterials : "has"
+    ProductSubcategory ||--o{ Product : "has"
+    ProductModel ||--o{ Product : "has"
+    Product ||--o{ ProductCostHistory : "has"
+    Product ||--o{ ProductDocument : "has"
+    Document ||--o{ ProductDocument : "has"
+    Product ||--o{ ProductInventory : "has"
+    Location ||--o{ ProductInventory : "has"
+    Product ||--o{ ProductListPriceHistory : "has"
+    ProductModel ||--o{ ProductModelIllustration : "has"
+    Illustration ||--o{ ProductModelIllustration : "has"
+    ProductModel ||--o{ ProductModelProductDescriptionCulture : "has"
+    ProductDescription ||--o{ ProductModelProductDescriptionCulture : "has"
+    Culture ||--o{ ProductModelProductDescriptionCulture : "has"
+    Product ||--o{ ProductProductPhoto : "has"
+    ProductPhoto ||--o{ ProductProductPhoto : "has"
+    Product ||--o{ ProductReview : "has"
+    ProductCategory ||--o{ ProductSubcategory : "has"
+    Product ||--o{ TransactionHistory : "has"
+    Product ||--o{ TransactionHistoryArchive : "has"
+    WorkOrder ||--o{ TransactionHistoryArchive : "has"
+    ScrapReason ||--o{ WorkOrder : "has"
+    Product ||--o{ WorkOrder : "has"
+    WorkOrder ||--o{ WorkOrderRouting : "has"
+    Product ||--o{ WorkOrderRouting : "has"
+    Location ||--o{ WorkOrderRouting : "has"
+    Product ||--o{ ProductVendor : "has"
+    Vendor ||--o{ ProductVendor : "has"
+    UnitMeasure ||--o{ ProductVendor : "has"
+    ProductVendor ||--o{ PurchaseOrderDetail : "has"
+    Employee ||--o{ PurchaseOrderHeader : "has"
+    Vendor ||--o{ PurchaseOrderHeader : "has"
+    ShipMethod ||--o{ PurchaseOrderHeader : "has"
+    BusinessEntity ||--o{ Vendor : "has"
+    CountryRegion ||--o{ CountryRegionCurrency : "has"
+    Currency ||--o{ CountryRegionCurrency : "has"
+    Currency ||--o{ CurrencyRate : "has"
+    SalesTerritory ||--o{ Customer : "has"
+    SalesTerritoryHistory ||--o{ Customer : "has"
+    Person ||--o{ Customer : "has"
+    Store ||--o{ Customer : "has"
+    Person ||--o{ PersonCreditCard : "has"
+    CreditCard ||--o{ PersonCreditCard : "has"
+    ProductCostHistory ||--o{ SalesOrderDetail : "has"
+    ProductListPriceHistory ||--o{ SalesOrderDetail : "has"
+    SpecialOfferProduct ||--o{ SalesOrderDetail : "has"
+    SpecialOffer ||--o{ SalesOrderDetail : "has"
+    Product ||--o{ SalesOrderDetail : "has"
+    SalesOrderHeader ||--o{ SalesOrderDetail : "has"
+    Customer ||--o{ SalesOrderHeader : "has"
+    SalesTerritory ||--o{ SalesOrderHeader : "has"
+    SalesTerritoryHistory ||--o{ SalesOrderHeader : "has"
+    Address ||--o{ SalesOrderHeader : "has"
+    BusinessEntityAddress ||--o{ SalesOrderHeader : "has"
+    CreditCard ||--o{ SalesOrderHeader : "has"
+    PersonCreditCard ||--o{ SalesOrderHeader : "has"
+    SalesPerson ||--o{ SalesOrderHeader : "has"
+    ShipMethod ||--o{ SalesOrderHeader : "has"
+    CurrencyRate ||--o{ SalesOrderHeader : "has"
+    SalesOrderHeader ||--o{ SalesOrderHeaderSalesReason : "has"
+    SalesReason ||--o{ SalesOrderHeaderSalesReason : "has"
+    SalesTerritory ||--o{ SalesPerson : "has"
+    SalesTerritoryHistory ||--o{ SalesPerson : "has"
+    Person ||--o{ SalesPerson : "has"
+    Employee ||--o{ SalesPersonQuotaHistory : "has"
+    StateProvince ||--o{ SalesTaxRate : "has"
+    SalesPerson ||--o{ SalesTerritoryHistory : "has"
+    SalesTerritory ||--o{ SalesTerritoryHistory : "has"
+    Product ||--o{ ShoppingCartItem : "has"
+    SpecialOffer ||--o{ SpecialOffer : "has"
+    SpecialOffer ||--o{ SpecialOfferProduct : "has"
+    Product ||--o{ SpecialOfferProduct : "has"
+    BusinessEntity ||--o{ Store : "has"
+    SalesPerson ||--o{ Store : "has"
+
+    %% Relationship Notation:
+    %% Parent ||--o{ Child : "describes"
+    %% One Parent can have zero or more Children
+        </div>
+    </div>
+
+    <script>
+        mermaid.initialize({ startOnLoad: true, theme: "default", securityLevel: "loose" });
+        mermaid.contentLoaded();
+
+        function downloadMmd() {
+            const content = `%% Entity Relationship Diagram
+%% Database: AW_Stripped
+%% Server: sql-claude
+%% Generated: 2026-03-22T13:08:36.928Z
+%% Total Schemas: 6
+%% Total Tables: 71
+%% Total Columns: 486
+
+erDiagram
+
+    %% Schema: dbo
+
+    AWBuildVersion {
+        tinyint SystemInformationID "PK,NOT_NULL" %% Unique identifier for the single system information record i
+        nvarchar Database Version "NOT_NULL" %% The installed database build/version string for the Adventur
+        datetime VersionDate "NOT_NULL" %% The date and time associated with the recorded database vers
+        datetime ModifiedDate "NOT_NULL" %% Timestamp indicating when the version record was last update
+    }
+
+    DatabaseLog {
+        int DatabaseLogID "PK,NOT_NULL" %% Primary identifier for each logged database event row.
+        datetime PostTime "NOT_NULL" %% Timestamp when the database event was recorded or occurred.
+        sysname DatabaseUser "NOT_NULL" %% Database principal under which the event was executed or log
+        sysname Event "NOT_NULL" %% Type of database event that was captured, such as table crea
+        sysname Schema %% Schema containing the affected object.
+        sysname Object %% Name of the affected database object.
+        nvarchar TSQL "NOT_NULL" %% Exact T-SQL statement associated with the logged event.
+        xml XmlEvent "NOT_NULL" %% Structured XML representation of the event details.
+    }
+
+    ErrorLog {
+        int ErrorLogID "NOT_NULL" %% Surrogate identifier for each logged error event, likely the
+        datetime ErrorTime "NOT_NULL" %% Date and time when the error was recorded.
+        sysname UserName "NOT_NULL" %% Name of the user or login context associated with the error.
+        int ErrorNumber "NOT_NULL" %% Numeric SQL Server error code or application error code.
+        int ErrorSeverity %% Severity level of the error.
+        int ErrorState %% State code associated with the error number.
+        nvarchar ErrorProcedure %% Stored procedure or routine where the error occurred.
+        int ErrorLine %% Line number within the procedure or batch where the error wa
+        nvarchar ErrorMessage "NOT_NULL" %% Full descriptive text of the error.
+    }
+
+    %% Schema: HumanResources
+
+    Department {
+        smallint DepartmentID "PK,NOT_NULL" %% Unique identifier for each department record; serves as the 
+        Name Name "NOT_NULL" %% The department's human-readable name, such as Engineering, S
+        Name GroupName "NOT_NULL" %% A broader functional grouping for the department, used to ca
+        datetime ModifiedDate "NOT_NULL" %% Timestamp indicating when the department record was last mod
+    }
+
+    Employee {
+        int BusinessEntityID "FK,NOT_NULL" %% The employee's shared business entity identifier and the tab
+        nvarchar NationalIDNumber "NOT_NULL" %% Government-issued or internal national identification number
+        nvarchar LoginID "PK,NOT_NULL" %% Windows/domain login used by the employee to authenticate to
+        hierarchyid OrganizationNode %% Hierarchy path node representing the employee's position in 
+        smallint OrganizationLevel %% Numeric depth of the employee within the organization hierar
+        nvarchar JobTitle "NOT_NULL" %% The employee's current job title or role.
+        date BirthDate "NOT_NULL" %% The employee's date of birth.
+        nchar MaritalStatus "NOT_NULL" %% Marital status code for the employee.
+        nchar Gender "NOT_NULL" %% Gender code for the employee.
+        date HireDate "NOT_NULL" %% The date the employee was hired.
+        Flag SalariedFlag "NOT_NULL" %% Indicates whether the employee is salaried rather than hourl
+        smallint VacationHours "NOT_NULL" %% Current accrued vacation leave balance in hours.
+        smallint SickLeaveHours "NOT_NULL" %% Current accrued sick leave balance in hours.
+        Flag CurrentFlag "NOT_NULL" %% Indicates whether the employee record is currently active/cu
+        uniqueidentifier rowguid "PK,NOT_NULL" %% System-generated unique row identifier used for replication 
+        datetime ModifiedDate "NOT_NULL" %% Timestamp of the last modification to the employee record.
+    }
+
+    EmployeeDepartmentHistory {
+        int BusinessEntityID "FK,NOT_NULL" %% Identifies the employee whose department/shift assignment is
+        smallint DepartmentID "FK,NOT_NULL" %% Identifies the department the employee was assigned to durin
+        tinyint ShiftID "FK,NOT_NULL" %% Identifies the work shift associated with the employee's ass
+        date StartDate "PK,NOT_NULL" %% The date the employee began the department/shift assignment.
+        date EndDate %% The date the employee's assignment ended, if it is no longer
+        datetime ModifiedDate "NOT_NULL" %% Timestamp indicating when the history record was last update
+    }
+
+    EmployeePayHistory {
+        int BusinessEntityID "PK,FK,NOT_NULL" %% Identifies the employee whose pay history record this is.
+        datetime RateChangeDate "PK,NOT_NULL" %% The date and time when this pay rate became effective.
+        money Rate "NOT_NULL" %% The employee's pay rate at the time of the change.
+        tinyint PayFrequency "NOT_NULL" %% Indicates how often the employee is paid.
+        datetime ModifiedDate "NOT_NULL" %% Timestamp of the last modification to the row.
+    }
+
+    JobCandidate {
+        int JobCandidateID "PK,NOT_NULL" %% Surrogate identifier for each job candidate record in HumanR
+        int BusinessEntityID "FK" %% References the underlying person record for the candidate in
+        xml Resume %% XML-formatted resume document containing the candidate's nam
+        datetime ModifiedDate "NOT_NULL" %% Timestamp indicating when the job candidate record was last 
+    }
+
+    Shift {
+        tinyint ShiftID "PK,NOT_NULL" %% Unique identifier for each shift definition.
+        Name Name "NOT_NULL" %% Human-readable shift label such as Day, Evening, or Night.
+        time StartTime "NOT_NULL" %% Clock time when the shift begins.
+        time EndTime "NOT_NULL" %% Clock time when the shift ends.
+        datetime ModifiedDate "NOT_NULL" %% Timestamp indicating when the shift record was last modified
+    }
+
+    %% Schema: Person
+
+    Address {
+        int AddressID "PK,NOT_NULL" %% Surrogate identifier for each address record.
+        nvarchar AddressLine1 "NOT_NULL" %% Primary street address line, such as house number, street na
+        nvarchar AddressLine2 %% Optional secondary address information such as apartment, su
+        nvarchar City "NOT_NULL" %% City, town, or locality component of the address.
+        int StateProvinceID "FK,NOT_NULL" %% Reference to the state, province, or similar administrative 
+        nvarchar PostalCode "NOT_NULL" %% Postal or ZIP code associated with the address.
+        geography SpatialLocation %% Geographic point representation of the address, stored as a 
+        uniqueidentifier rowguid "NOT_NULL" %% Globally unique row identifier used for replication, synchro
+        datetime ModifiedDate "NOT_NULL" %% Timestamp indicating when the address record was last update
+    }
+
+    AddressType {
+        int AddressTypeID "PK,NOT_NULL" %% Surrogate identifier for each address type record; serves as
+        Name Name "NOT_NULL" %% Human-readable label for the address type, such as Billing o
+        uniqueidentifier rowguid "NOT_NULL" %% Globally unique row identifier used for replication and syst
+        datetime ModifiedDate "NOT_NULL" %% Timestamp indicating when the address type record was last u
+    }
+
+    BusinessEntity {
+        int BusinessEntityID "PK,NOT_NULL" %% Surrogate identifier for the business entity record; used as
+        uniqueidentifier rowguid "NOT_NULL" %% Globally unique row identifier used for replication or syste
+        datetime ModifiedDate "NOT_NULL" %% Timestamp indicating when the business entity row was last u
+    }
+
+    BusinessEntityAddress {
+        int BusinessEntityID "FK,NOT_NULL" %% Identifies the business entity associated with the address l
+        int AddressID "FK,NOT_NULL" %% Identifies the address being linked to the business entity.
+        int AddressTypeID "FK,NOT_NULL" %% Indicates the role or usage type of the address for the enti
+        uniqueidentifier rowguid "PK,NOT_NULL" %% Globally unique row identifier used for replication, synchro
+        datetime ModifiedDate "NOT_NULL" %% Timestamp of the last update to the relationship record.
+    }
+
+    BusinessEntityContact {
+        int BusinessEntityID "FK,NOT_NULL" %% Identifies the business entity that the person is associated
+        int PersonID "FK,NOT_NULL" %% Identifies the person involved in the contact relationship; 
+        int ContactTypeID "FK,NOT_NULL" %% Specifies the role or category of the contact relationship, 
+        uniqueidentifier rowguid "PK,NOT_NULL" %% A globally unique row identifier used for replication, synch
+        datetime ModifiedDate "NOT_NULL" %% The timestamp when the contact relationship row was last upd
+    }
+
+    ContactType {
+        int ContactTypeID "PK,NOT_NULL" %% Primary key identifier for each contact type category.
+        Name Name "NOT_NULL" %% Human-readable label for the contact type, such as a job rol
+        datetime ModifiedDate "NOT_NULL" %% Timestamp indicating when the lookup row was last modified o
+    }
+
+    CountryRegion {
+        nvarchar CountryRegionCode "PK,NOT_NULL" %% Two-character country or region code that uniquely identifie
+        Name Name "NOT_NULL" %% The full display name of the country or region.
+        datetime ModifiedDate "NOT_NULL" %% The date the row was last modified or loaded into the databa
+    }
+
+    EmailAddress {
+        int BusinessEntityID "FK,NOT_NULL" %% Identifies the person/business entity that owns this email a
+        int EmailAddressID "PK,NOT_NULL" %% Surrogate primary key for the email address record.
+        nvarchar EmailAddress %% The actual email address string associated with the person/b
+        uniqueidentifier rowguid "NOT_NULL" %% Globally unique row identifier used for replication or synch
+        datetime ModifiedDate "NOT_NULL" %% Timestamp indicating when the email address record was last 
+    }
+
+    Password {
+        int BusinessEntityID "FK,NOT_NULL" %% Identifier of the person whose authentication credentials ar
+        varchar PasswordHash "NOT_NULL" %% Hashed password value used to verify a user's login credenti
+        varchar PasswordSalt "NOT_NULL" %% Random salt used when hashing the password to protect agains
+        uniqueidentifier rowguid "PK,NOT_NULL" %% Globally unique row identifier used for replication, synchro
+        datetime ModifiedDate "NOT_NULL" %% Timestamp indicating when the password record was last updat
+    }
+
+    Person {
+        int BusinessEntityID "FK,NOT_NULL" %% Unique identifier for the person record; serves as the row's
+        nchar PersonType "NOT_NULL" %% Code indicating what kind of person this record represents, 
+        NameStyle NameStyle "NOT_NULL" %% Flag indicating whether the person's name should be displaye
+        nvarchar Title %% Honorific or salutation such as Mr., Ms., Mrs., Sr., or Sra.
+        Name FirstName "NOT_NULL" %% Person's given name.
+        Name MiddleName %% Person's middle name or middle initial, when available.
+        Name LastName "NOT_NULL" %% Person's family name or surname.
+        nvarchar Suffix %% Name suffix such as Jr., Sr., II, III, IV, or PhD.
+        int EmailPromotion "NOT_NULL" %% Preference or status code controlling email marketing promot
+        xml AdditionalContactInfo %% XML payload containing extra contact methods, notes, and con
+        xml Demographics %% XML payload containing survey and demographic attributes for
+        uniqueidentifier rowguid "PK,NOT_NULL" %% Globally unique row identifier used for replication or synch
+        datetime ModifiedDate "NOT_NULL" %% Timestamp of the last update to the person record.
+    }
+
+    PersonPhone {
+        int BusinessEntityID "FK,NOT_NULL" %% Identifies the person/business entity that owns the phone nu
+        Phone PhoneNumber "PK,NOT_NULL" %% The actual phone number stored for the entity.
+        int PhoneNumberTypeID "FK,NOT_NULL" %% Classifies the phone number by type, such as home, work, or 
+        datetime ModifiedDate "NOT_NULL" %% Timestamp indicating when the phone record was last updated.
+    }
+
+    PhoneNumberType {
+        int PhoneNumberTypeID "PK,NOT_NULL" %% Surrogate identifier for each phone number type. It uniquely
+        Name Name "NOT_NULL" %% Human-readable label for the phone type, such as Home, Cell,
+        datetime ModifiedDate "NOT_NULL" %% Timestamp indicating when the lookup row was last modified.
+    }
+
+    StateProvince {
+        int StateProvinceID "PK,NOT_NULL" %% Surrogate primary key for each state/province record.
+        nchar StateProvinceCode "NOT_NULL" %% Short standardized code for the state/province, such as a po
+        nvarchar CountryRegionCode "FK,NOT_NULL" %% Code of the country or region that contains this state/provi
+        Flag IsOnlyStateProvinceFlag "NOT_NULL" %% Indicates whether this record represents the only state/prov
+        Name Name "NOT_NULL" %% Human-readable name of the state, province, department, or e
+        int TerritoryID "FK,NOT_NULL" %% Sales territory assignment for this geographic region.
+        uniqueidentifier rowguid "NOT_NULL" %% Globally unique row identifier used for replication and sync
+        datetime ModifiedDate "NOT_NULL" %% Timestamp indicating when the row was last modified.
+    }
+
+    %% Schema: Production
+
+    BillOfMaterials {
+        int BillOfMaterialsID "PK,NOT_NULL" %% Surrogate primary key for each bill of materials record.
+        int ProductAssemblyID "FK" %% The parent product being assembled.
+        int ComponentID "FK,NOT_NULL" %% The component product required in the assembly.
+        datetime StartDate "NOT_NULL" %% The date this bill of materials relationship becomes effecti
+        datetime EndDate %% The date this bill of materials relationship stops being eff
+        nchar UnitMeasureCode "FK,NOT_NULL" %% The unit of measure used for the component quantity.
+        smallint BOMLevel "NOT_NULL" %% The level of the component within the assembly hierarchy.
+        decimal PerAssemblyQty "NOT_NULL" %% The quantity of the component required per one assembly unit
+        datetime ModifiedDate "NOT_NULL" %% The last date the BOM record was updated.
+    }
+
+    Culture {
+        nchar CultureID "PK,NOT_NULL" %% The culture/language code used as the unique identifier for 
+        Name Name "NOT_NULL" %% The human-readable name of the culture or language.
+        datetime ModifiedDate "NOT_NULL" %% The date the culture record was last modified or seeded into
+    }
+
+    Document {
+        hierarchyid DocumentNode "NOT_NULL"
+        smallint DocumentLevel
+        nvarchar Title "NOT_NULL"
+        int Owner "NOT_NULL"
+        bit FolderFlag "NOT_NULL"
+        nvarchar FileName "NOT_NULL"
+        nvarchar FileExtension "NOT_NULL"
+        nchar Revision "NOT_NULL"
+        int ChangeNumber "NOT_NULL"
+        tinyint Status "NOT_NULL"
+        nvarchar DocumentSummary
+        varbinary Document
+        uniqueidentifier rowguid "NOT_NULL"
+        datetime ModifiedDate "NOT_NULL"
+    }
+
+    Illustration {
+        int IllustrationID "PK,NOT_NULL" %% Unique identifier for each illustration asset in Production.
+        xml Diagram %% XML/XAML representation of the illustration artwork itself, 
+        datetime ModifiedDate "NOT_NULL" %% Timestamp indicating when the illustration record was last u
+    }
+
+    Location {
+        smallint LocationID "PK,NOT_NULL" %% Primary identifier for each production location or work cent
+        Name Name "NOT_NULL" %% Human-readable name of the location, such as a shop area, st
+        smallmoney CostRate "NOT_NULL" %% Standard cost associated with using the location, likely a p
+        decimal Availability "NOT_NULL" %% Available capacity for the location, likely measured in hour
+        datetime ModifiedDate "NOT_NULL" %% Timestamp indicating when the location record was last updat
+    }
+
+    Product {
+        int ProductID "PK,NOT_NULL" %% Surrogate primary key for each product record.
+        Name Name "NOT_NULL" %% Human-readable product name used in catalog, reporting, and 
+        nvarchar ProductNumber "NOT_NULL" %% Business-facing product code or SKU-like identifier.
+        Flag MakeFlag "NOT_NULL" %% Indicates whether the product is manufactured in-house.
+        Flag FinishedGoodsFlag "NOT_NULL" %% Indicates whether the item is a sellable finished good.
+        nvarchar Color %% Optional product color attribute.
+        smallint SafetyStockLevel "NOT_NULL" %% Minimum inventory threshold used to avoid stockouts.
+        smallint ReorderPoint "NOT_NULL" %% Inventory level at which replenishment should be triggered.
+        money StandardCost "NOT_NULL" %% Standard manufacturing or acquisition cost of the product.
+        money ListPrice "NOT_NULL" %% Catalog selling price for the product.
+        nvarchar Size %% Optional size or dimension value for the product.
+        nchar SizeUnitMeasureCode %% Unit of measure for the Size value.
+        nchar WeightUnitMeasureCode %% Unit of measure for the Weight value.
+        decimal Weight %% Optional product weight used for shipping, manufacturing, or
+        int DaysToManufacture "NOT_NULL" %% Estimated number of days required to manufacture the product
+        nchar ProductLine %% High-level product line classification.
+        nchar Class %% Product class or quality tier.
+        nchar Style %% Product style or gender/style classification.
+        int ProductSubcategoryID "FK" %% Foreign key to the product subcategory classification.
+        int ProductModelID "FK" %% Foreign key to the product model definition.
+        datetime SellStartDate "NOT_NULL" %% Date the product became available for sale.
+        datetime SellEndDate %% Date the product stopped being sold, if discontinued.
+        datetime DiscontinuedDate %% Date the product was discontinued.
+        uniqueidentifier rowguid "NOT_NULL" %% Globally unique row identifier used for replication and sync
+        datetime ModifiedDate "NOT_NULL" %% Timestamp of the last update to the product record.
+    }
+
+    ProductCategory {
+        int ProductCategoryID "PK,NOT_NULL" %% Surrogate identifier for each product category; uniquely ide
+        Name Name "NOT_NULL" %% Human-readable category name used to label the top-level pro
+        uniqueidentifier rowguid "NOT_NULL" %% Globally unique row identifier used for replication/integrat
+        datetime ModifiedDate "NOT_NULL" %% Timestamp indicating when the category row was last updated.
+    }
+
+    ProductCostHistory {
+        int ProductID "FK,NOT_NULL" %% Identifies the product whose standard cost is being tracked.
+        datetime StartDate "PK,NOT_NULL" %% The date on which this standard cost version becomes effecti
+        datetime EndDate %% The date on which this standard cost version stops being eff
+        money StandardCost "NOT_NULL" %% The standard manufacturing cost for the product during the e
+        datetime ModifiedDate "NOT_NULL" %% The date the row was last updated in the database.
+    }
+
+    ProductDescription {
+        int ProductDescriptionID "PK,NOT_NULL" %% Surrogate identifier for each product description record.
+        nvarchar Description "NOT_NULL" %% The actual descriptive text for a product, used for marketin
+        uniqueidentifier rowguid "NOT_NULL" %% Globally unique row identifier used for replication or synch
+        datetime ModifiedDate "NOT_NULL" %% Timestamp indicating when the description record was last ch
+    }
+
+    ProductDocument {
+        int ProductID "PK,FK,NOT_NULL" %% Identifies the product associated with a document. This is t
+        hierarchyid DocumentNode "PK,FK,NOT_NULL" %% Identifies the document associated with a product, using the
+        datetime ModifiedDate "NOT_NULL" %% The date and time when the product-document association was 
+    }
+
+    ProductInventory {
+        int ProductID "PK,FK,NOT_NULL" %% Identifies the product whose inventory is being tracked at a
+        smallint LocationID "PK,FK,NOT_NULL" %% Identifies the production or warehouse location where the pr
+        nvarchar Shelf "NOT_NULL" %% Shelf or aisle code indicating the storage shelf position wi
+        tinyint Bin "NOT_NULL" %% Numeric bin or compartment identifier within the shelf/locat
+        smallint Quantity "NOT_NULL" %% The number of units of the product currently on hand at the 
+        uniqueidentifier rowguid "PK,NOT_NULL" %% Globally unique row identifier used for replication or synch
+        datetime ModifiedDate "NOT_NULL" %% Timestamp indicating when the inventory record was last upda
+    }
+
+    ProductListPriceHistory {
+        int ProductID "FK,NOT_NULL" %% Identifies the product whose list price history is being rec
+        datetime StartDate "PK,NOT_NULL" %% The date on which this list price became effective.
+        datetime EndDate %% The date on which this list price stopped being effective, i
+        money ListPrice "NOT_NULL" %% The product's list price during the effective period defined
+        datetime ModifiedDate "NOT_NULL" %% The timestamp when the history row was last updated.
+    }
+
+    ProductModel {
+        int ProductModelID "PK,NOT_NULL" %% Unique identifier for each product model.
+        Name Name "NOT_NULL" %% Human-readable product model name used in the catalog and re
+        xml CatalogDescription %% XML catalog content describing the product model's marketing
+        xml Instructions %% XML manufacturing and assembly instructions for the product 
+        uniqueidentifier rowguid "NOT_NULL" %% Globally unique row identifier used for replication or synch
+        datetime ModifiedDate "NOT_NULL" %% Timestamp indicating when the product model record was last 
+    }
+
+    ProductModelIllustration {
+        int ProductModelID "PK,FK,NOT_NULL" %% Identifies the product model being linked to an illustration
+        int IllustrationID "PK,FK,NOT_NULL" %% Identifies the illustration associated with the product mode
+        datetime ModifiedDate "NOT_NULL" %% Timestamp indicating when the association row was last modif
+    }
+
+    ProductModelProductDescriptionCulture {
+        int ProductModelID "PK,FK,NOT_NULL" %% Identifies the product model that this localized description
+        int ProductDescriptionID "PK,FK,NOT_NULL" %% Identifies the reusable description text linked to the produ
+        nchar CultureID "PK,FK,NOT_NULL" %% Specifies the language/culture for the description text.
+        datetime ModifiedDate "NOT_NULL" %% Audit timestamp indicating when the row was last modified.
+    }
+
+    ProductPhoto {
+        int ProductPhotoID "PK,NOT_NULL"
+        varbinary ThumbNailPhoto
+        nvarchar ThumbnailPhotoFileName
+        varbinary LargePhoto
+        nvarchar LargePhotoFileName
+        datetime ModifiedDate "NOT_NULL"
+    }
+
+    ProductProductPhoto {
+        int ProductID "PK,FK,NOT_NULL" %% Identifies the product being associated with a photo.
+        int ProductPhotoID "PK,FK,NOT_NULL" %% Identifies the photo linked to the product.
+        Flag Primary "NOT_NULL" %% Indicates whether this photo is the primary image for the pr
+        datetime ModifiedDate "NOT_NULL" %% Records when the product-photo association was last modified
+    }
+
+    ProductReview {
+        int ProductReviewID "PK,NOT_NULL" %% Unique identifier for each product review record.
+        int ProductID "FK,NOT_NULL" %% Identifies the product being reviewed.
+        Name ReviewerName "NOT_NULL" %% Name of the person who wrote the review.
+        datetime ReviewDate "NOT_NULL" %% Date and time the review was submitted.
+        nvarchar EmailAddress "NOT_NULL" %% Email contact for the reviewer.
+        int Rating "NOT_NULL" %% Numeric score assigned by the reviewer, likely on a star sca
+        nvarchar Comments %% Free-text review content describing the reviewer's opinion a
+        datetime ModifiedDate "NOT_NULL" %% Timestamp indicating when the review row was last updated.
+    }
+
+    ProductSubcategory {
+        int ProductSubcategoryID "PK,NOT_NULL" %% Primary identifier for each product subcategory.
+        int ProductCategoryID "FK,NOT_NULL" %% Identifies the parent product category that this subcategory
+        Name Name "NOT_NULL" %% Human-readable name of the product subcategory.
+        uniqueidentifier rowguid "NOT_NULL" %% Globally unique row identifier used for replication or syste
+        datetime ModifiedDate "NOT_NULL" %% Timestamp indicating when the subcategory record was last mo
+    }
+
+    ScrapReason {
+        smallint ScrapReasonID "PK,NOT_NULL" %% Primary identifier for each scrap reason code.
+        Name Name "NOT_NULL" %% Human-readable description of the scrap reason.
+        datetime ModifiedDate "NOT_NULL" %% Date the scrap reason record was last modified or seeded int
+    }
+
+    TransactionHistory {
+        int TransactionID "PK,NOT_NULL" %% Unique identifier for each transaction record in the ledger.
+        int ProductID "FK,NOT_NULL" %% Identifies the product affected by the transaction.
+        int ReferenceOrderID "PK,NOT_NULL" %% Identifier of the source document or order that generated th
+        int ReferenceOrderLineID "NOT_NULL" %% Line number or line identifier within the referenced source 
+        datetime TransactionDate "NOT_NULL" %% Date the product transaction occurred.
+        nchar TransactionType "NOT_NULL" %% Code indicating the business process that created the transa
+        int Quantity "NOT_NULL" %% Number of units affected by the transaction.
+        money ActualCost "NOT_NULL" %% Actual cost recorded for the transaction.
+        datetime ModifiedDate "NOT_NULL" %% Timestamp when the transaction row was last updated.
+    }
+
+    TransactionHistoryArchive {
+        int TransactionID "PK,NOT_NULL" %% Unique identifier for each transaction history record.
+        int ProductID "FK,NOT_NULL" %% Identifies the product affected by the transaction.
+        int ReferenceOrderID "FK,NOT_NULL" %% Identifier of the originating order or work order associated
+        int ReferenceOrderLineID "NOT_NULL" %% Line-level reference within the originating order or work or
+        datetime TransactionDate "NOT_NULL" %% Date and time when the transaction occurred.
+        nchar TransactionType "NOT_NULL" %% Code indicating the type of inventory transaction.
+        int Quantity "NOT_NULL" %% Number of units affected by the transaction.
+        money ActualCost "NOT_NULL" %% Actual cost associated with the transaction.
+        datetime ModifiedDate "NOT_NULL" %% Date and time the transaction record was last updated.
+    }
+
+    UnitMeasure {
+        nchar UnitMeasureCode "PK,NOT_NULL" %% Short code that uniquely identifies a unit of measure, such 
+        Name Name "NOT_NULL" %% The descriptive name of the unit of measure, such as Kilogra
+        datetime ModifiedDate "NOT_NULL" %% Timestamp indicating when the unit measure record was last u
+    }
+
+    WorkOrder {
+        int WorkOrderID "PK,NOT_NULL" %% Unique identifier for each work order record.
+        int ProductID "FK,NOT_NULL" %% Identifier of the product being manufactured on this work or
+        int OrderQty "NOT_NULL" %% Planned quantity to produce for the work order.
+        int StockedQty "NOT_NULL" %% Quantity successfully completed and moved into stock.
+        smallint ScrappedQty "NOT_NULL" %% Quantity lost to scrap during the work order.
+        datetime StartDate "NOT_NULL" %% Date the work order began.
+        datetime EndDate %% Date the work order finished or was closed.
+        datetime DueDate "NOT_NULL" %% Target completion date for the work order.
+        smallint ScrapReasonID "FK" %% Optional reason code explaining why units were scrapped.
+        datetime ModifiedDate "NOT_NULL" %% Timestamp of the last update to the work order record.
+    }
+
+    WorkOrderRouting {
+        int WorkOrderID "FK,NOT_NULL" %% Identifies the manufacturing work order this routing step be
+        int ProductID "FK,NOT_NULL" %% Identifies the product being manufactured for this routing s
+        smallint OperationSequence "PK,NOT_NULL" %% The sequence number of the operation within the work order r
+        smallint LocationID "FK,NOT_NULL" %% The production location or work center where the operation i
+        datetime ScheduledStartDate "NOT_NULL" %% The planned date when the routing operation is scheduled to 
+        datetime ScheduledEndDate "NOT_NULL" %% The planned date when the routing operation is scheduled to 
+        datetime ActualStartDate %% The actual date when work on the routing operation began.
+        datetime ActualEndDate %% The actual date when work on the routing operation finished.
+        decimal ActualResourceHrs %% The actual labor or machine hours consumed by the routing op
+        money PlannedCost "NOT_NULL" %% The expected cost for performing the routing operation.
+        money ActualCost %% The realized cost incurred for performing the routing operat
+        datetime ModifiedDate "NOT_NULL" %% The last date and time this routing record was updated.
+    }
+
+    %% Schema: Purchasing
+
+    ProductVendor {
+        int ProductID "PK,FK,NOT_NULL" %% Identifies the product being sourced from a vendor.
+        int BusinessEntityID "PK,FK,NOT_NULL" %% Identifies the vendor supplying the product.
+        int AverageLeadTime "NOT_NULL" %% Typical number of days the vendor needs to deliver the produ
+        money StandardPrice "NOT_NULL" %% Standard negotiated purchase price for the product from this
+        money LastReceiptCost %% Unit cost recorded on the most recent receipt from this vend
+        datetime LastReceiptDate %% Date when the product was last received from the vendor.
+        int MinOrderQty "NOT_NULL" %% Minimum quantity that can be ordered from this vendor for th
+        int MaxOrderQty "NOT_NULL" %% Maximum quantity that can be ordered from this vendor for th
+        int OnOrderQty %% Quantity of the product currently on order from this vendor.
+        nchar UnitMeasureCode "FK,NOT_NULL" %% Unit of measure used when ordering or packaging the product 
+        datetime ModifiedDate "NOT_NULL" %% Timestamp of the last update to this vendor-product purchasi
+    }
+
+    PurchaseOrderDetail {
+        int PurchaseOrderID "PK,NOT_NULL" %% Identifies the purchase order header that this line item bel
+        int PurchaseOrderDetailID "PK,NOT_NULL" %% Unique identifier for each purchase order line item.
+        datetime DueDate "NOT_NULL" %% The expected date by which the ordered product should be rec
+        smallint OrderQty "NOT_NULL" %% The quantity of product ordered on this purchase order line.
+        int ProductID "FK,NOT_NULL" %% The product being purchased on this line item.
+        money UnitPrice "NOT_NULL" %% The agreed purchase price per unit for the product on this l
+        money LineTotal "NOT_NULL" %% The total monetary amount for the line item, typically deriv
+        decimal ReceivedQty "NOT_NULL" %% The quantity actually received from the supplier for this li
+        decimal RejectedQty "NOT_NULL" %% The quantity received but rejected during inspection or qual
+        decimal StockedQty "NOT_NULL" %% The quantity accepted and moved into inventory stock.
+        datetime ModifiedDate "NOT_NULL" %% Timestamp of the last update to the purchase order detail re
+    }
+
+    PurchaseOrderHeader {
+        int PurchaseOrderID "PK,NOT_NULL" %% Unique identifier for each purchase order header record.
+        tinyint RevisionNumber "NOT_NULL" %% Tracks the revision/version of the purchase order document.
+        tinyint Status "NOT_NULL" %% Indicates the current workflow state of the purchase order.
+        int EmployeeID "FK,NOT_NULL" %% References the employee responsible for creating, approving,
+        int VendorID "FK,NOT_NULL" %% References the supplier/vendor from whom the goods or servic
+        int ShipMethodID "FK,NOT_NULL" %% References the shipping method used for the purchase order.
+        datetime OrderDate "NOT_NULL" %% Date the purchase order was placed.
+        datetime ShipDate %% Date the purchase order was shipped or fulfilled.
+        money SubTotal "NOT_NULL" %% Pre-tax, pre-freight monetary total for the purchase order.
+        money TaxAmt "NOT_NULL" %% Tax amount applied to the purchase order.
+        money Freight "NOT_NULL" %% Shipping or freight charge for the purchase order.
+        money TotalDue "NOT_NULL" %% Final amount due for the purchase order, including subtotal,
+        datetime ModifiedDate "NOT_NULL" %% Timestamp of the last update to the purchase order record.
+    }
+
+    ShipMethod {
+        int ShipMethodID "PK,NOT_NULL" %% Primary identifier for each shipping method.
+        Name Name "NOT_NULL" %% The display name or code for the shipping method.
+        money ShipBase "NOT_NULL" %% Base shipping charge applied for this method.
+        money ShipRate "NOT_NULL" %% Additional shipping rate used in cost calculation.
+        uniqueidentifier rowguid "NOT_NULL" %% Globally unique row identifier used for replication or synch
+        datetime ModifiedDate "NOT_NULL" %% Timestamp of the last modification to the shipping method re
+    }
+
+    Vendor {
+        int BusinessEntityID "PK,FK,NOT_NULL" %% Primary identifier for the vendor record; also links the ven
+        AccountNumber AccountNumber "NOT_NULL" %% Vendor account code used internally to identify the supplier
+        Name Name "NOT_NULL" %% The vendor's display name or legal/doing-business-as name.
+        tinyint CreditRating "NOT_NULL" %% Numeric rating used to classify the vendor's creditworthines
+        Flag PreferredVendorStatus "NOT_NULL" %% Indicates whether this supplier is marked as a preferred ven
+        Flag ActiveFlag "NOT_NULL" %% Indicates whether the vendor is currently active and availab
+        nvarchar PurchasingWebServiceURL %% Optional URL for the vendor's purchasing or ordering web ser
+        datetime ModifiedDate "NOT_NULL" %% Timestamp of the last update to the vendor record.
+    }
+
+    %% Schema: Sales
+
+    CountryRegionCurrency {
+        nvarchar CountryRegionCode "PK,FK,NOT_NULL" %% The country or region code for the geographic entity being m
+        nchar CurrencyCode "PK,FK,NOT_NULL" %% The currency code associated with the country or region.
+        datetime ModifiedDate "NOT_NULL" %% The timestamp when the country-region to currency mapping ro
+    }
+
+    CreditCard {
+        int CreditCardID "PK,NOT_NULL" %% Surrogate identifier for each credit card record.
+        nvarchar CardType "NOT_NULL" %% The type or brand/category of the credit card.
+        nvarchar CardNumber "NOT_NULL" %% The stored credit card number or tokenized card identifier.
+        tinyint ExpMonth "NOT_NULL" %% Expiration month of the credit card.
+        smallint ExpYear "NOT_NULL" %% Expiration year of the credit card.
+        datetime ModifiedDate "NOT_NULL" %% Timestamp indicating when the credit card record was last mo
+    }
+
+    Currency {
+        nchar CurrencyCode "PK,NOT_NULL" %% The unique 3-character currency code used to identify each c
+        Name Name "NOT_NULL" %% The display name of the currency, such as 'US Dollar' or 'Po
+        datetime ModifiedDate "NOT_NULL" %% The date the currency reference row was last modified or loa
+    }
+
+    CurrencyRate {
+        int CurrencyRateID "PK,NOT_NULL" %% Surrogate primary key for each currency-rate record.
+        datetime CurrencyRateDate "NOT_NULL" %% The date on which the exchange rate applies or was recorded.
+        nchar FromCurrencyCode "FK,NOT_NULL" %% The source currency for the exchange rate, used as the base 
+        nchar ToCurrencyCode "FK,NOT_NULL" %% The target currency being quoted against the base currency.
+        money AverageRate "NOT_NULL" %% The average exchange rate for the date, likely used for repo
+        money EndOfDayRate "NOT_NULL" %% The exchange rate at the end of the day, likely used for clo
+        datetime ModifiedDate "NOT_NULL" %% Timestamp indicating when the row was last inserted or updat
+    }
+
+    Customer {
+        int CustomerID "PK,NOT_NULL" %% Surrogate primary key for each customer record.
+        int PersonID "FK" %% Optional link to the individual person who is the customer.
+        int StoreID "FK" %% Optional link to the retail store account that is the custom
+        int TerritoryID "FK" %% Sales territory assigned to the customer for regional sales 
+        varchar AccountNumber "NOT_NULL" %% Business account code used to identify the customer in a hum
+        uniqueidentifier rowguid "NOT_NULL" %% Globally unique row identifier used for replication and sync
+        datetime ModifiedDate "NOT_NULL" %% Timestamp indicating when the customer record was last modif
+    }
+
+    PersonCreditCard {
+        int BusinessEntityID "PK,FK,NOT_NULL" %% Identifies the person associated with the credit card.
+        int CreditCardID "PK,FK,NOT_NULL" %% Identifies the credit card linked to the person.
+        datetime ModifiedDate "NOT_NULL" %% Audit timestamp showing when the association row was last up
+    }
+
+    SalesOrderDetail {
+        int SalesOrderID "FK,NOT_NULL" %% Identifies the sales order header that this line item belong
+        int SalesOrderDetailID "PK,NOT_NULL" %% Unique identifier for each sales order line item.
+        nvarchar CarrierTrackingNumber %% Optional shipping carrier tracking number associated with th
+        smallint OrderQty "NOT_NULL" %% Quantity of the product ordered on this line item.
+        int ProductID "FK,NOT_NULL" %% Identifies the product sold on this order line.
+        int SpecialOfferID "FK,NOT_NULL" %% Identifies the special offer or promotion applied to this li
+        money UnitPrice "NOT_NULL" %% Per-unit selling price recorded for the product on this orde
+        money UnitPriceDiscount "NOT_NULL" %% Discount amount or discount rate applied per unit on this li
+        numeric LineTotal "NOT_NULL" %% Extended total for the line item after quantity and discount
+        uniqueidentifier rowguid "NOT_NULL" %% Globally unique row identifier used for replication and sync
+        datetime ModifiedDate "NOT_NULL" %% Timestamp indicating when the row was last modified.
+    }
+
+    SalesOrderHeader {
+        int SalesOrderID "PK,NOT_NULL" %% Unique identifier for each sales order header record.
+        tinyint RevisionNumber "NOT_NULL" %% Revision/version number for the order header, used to track 
+        datetime OrderDate "NOT_NULL" %% Date the sales order was created.
+        datetime DueDate "NOT_NULL" %% Date the order is expected to be fulfilled or paid by.
+        datetime ShipDate %% Date the order was shipped.
+        tinyint Status "NOT_NULL" %% Order status code indicating the current processing state of
+        Flag OnlineOrderFlag "NOT_NULL" %% Indicates whether the order was placed online.
+        nvarchar SalesOrderNumber "NOT_NULL" %% Human-readable business order number for the sales order.
+        OrderNumber PurchaseOrderNumber %% Customer-provided purchase order number associated with the 
+        AccountNumber AccountNumber %% Customer account number used for the order.
+        int CustomerID "FK,NOT_NULL" %% Identifier of the customer who placed the order.
+        int SalesPersonID "FK" %% Identifier of the salesperson responsible for the order, whe
+        int TerritoryID "FK" %% Sales territory associated with the order.
+        int BillToAddressID "FK,NOT_NULL" %% Address used for billing the order.
+        int ShipToAddressID "FK,NOT_NULL" %% Address where the order should be shipped.
+        int ShipMethodID "FK,NOT_NULL" %% Shipping method selected for the order.
+        int CreditCardID "FK" %% Credit card used to pay for the order, if payment was made b
+        varchar CreditCardApprovalCode %% Authorization or approval code returned by the payment proce
+        int CurrencyRateID "FK" %% Exchange-rate record used when the order was placed in a non
+        money SubTotal "NOT_NULL" %% Order subtotal before tax and freight.
+        money TaxAmt "NOT_NULL" %% Tax amount charged on the order.
+        money Freight "NOT_NULL" %% Shipping/freight charge for the order.
+        money TotalDue "NOT_NULL" %% Final amount due for the order, including subtotal, tax, and
+        nvarchar Comment %% Optional free-text comment or note about the order.
+        uniqueidentifier rowguid "NOT_NULL" %% Globally unique row identifier used for replication or synch
+        datetime ModifiedDate "NOT_NULL" %% Timestamp of the last modification to the order header recor
+    }
+
+    SalesOrderHeaderSalesReason {
+        int SalesOrderID "PK,FK,NOT_NULL" %% Identifies the sales order that this reason is associated wi
+        int SalesReasonID "PK,FK,NOT_NULL" %% Identifies the standardized reason for the sales order.
+        datetime ModifiedDate "NOT_NULL" %% Timestamp indicating when the order-reason association row w
+    }
+
+    SalesPerson {
+        int BusinessEntityID "FK,NOT_NULL" %% Identifier for the salesperson record, inherited from the un
+        int TerritoryID "FK" %% Sales territory assigned to the salesperson for regional res
+        money SalesQuota %% Target sales amount assigned to the salesperson for a period
+        money Bonus "NOT_NULL" %% Fixed bonus amount paid to the salesperson.
+        smallmoney CommissionPct "NOT_NULL" %% Commission rate used to calculate variable pay from sales.
+        money SalesYTD "NOT_NULL" %% Year-to-date sales amount attributed to the salesperson.
+        money SalesLastYear "NOT_NULL" %% Sales amount attributed to the salesperson for the previous 
+        uniqueidentifier rowguid "PK,NOT_NULL" %% Globally unique row identifier used for replication and sync
+        datetime ModifiedDate "NOT_NULL" %% Timestamp of the last update to the salesperson record.
+    }
+
+    SalesPersonQuotaHistory {
+        int BusinessEntityID "FK,NOT_NULL" %% Identifies the employee whose sales quota is being recorded.
+        datetime QuotaDate "PK,NOT_NULL" %% The date the quota record applies to, likely the end of a fi
+        money SalesQuota "NOT_NULL" %% The monetary sales target assigned to the employee for the q
+        uniqueidentifier rowguid "PK,NOT_NULL" %% A globally unique row identifier used for replication and ro
+        datetime ModifiedDate "NOT_NULL" %% Timestamp indicating when the quota record was last updated.
+    }
+
+    SalesReason {
+        int SalesReasonID "PK,NOT_NULL" %% Unique identifier for each sales reason.
+        Name Name "NOT_NULL" %% The specific sales reason label shown to users or used in re
+        Name ReasonType "NOT_NULL" %% Broad category grouping for the sales reason, such as Market
+        datetime ModifiedDate "NOT_NULL" %% Timestamp indicating when the sales reason record was last m
+    }
+
+    SalesTaxRate {
+        int SalesTaxRateID "PK,NOT_NULL" %% Surrogate primary key for each sales tax rate record.
+        int StateProvinceID "FK,NOT_NULL" %% References the state or province to which this tax rate appl
+        tinyint TaxType "NOT_NULL" %% Categorizes the kind of tax rate being stored, such as a sta
+        smallmoney TaxRate "NOT_NULL" %% The tax percentage or rate applied for the jurisdiction and 
+        Name Name "NOT_NULL" %% Human-readable label for the tax rate definition.
+        uniqueidentifier rowguid "NOT_NULL" %% Globally unique identifier used for replication and row-leve
+        datetime ModifiedDate "NOT_NULL" %% Timestamp indicating when the tax rate row was last modified
+    }
+
+    SalesTerritory {
+        int TerritoryID "PK,NOT_NULL" %% Unique identifier for each sales territory.
+        Name Name "NOT_NULL" %% Human-readable territory name, such as a region or country-b
+        nvarchar CountryRegionCode "NOT_NULL" %% Two-letter country/region code associated with the territory
+        nvarchar Group "NOT_NULL" %% Higher-level geographic grouping used for reporting and terr
+        money SalesYTD "NOT_NULL" %% Sales generated by the territory year-to-date.
+        money SalesLastYear "NOT_NULL" %% Sales generated by the territory in the previous year.
+        money CostYTD "NOT_NULL" %% Year-to-date cost associated with the territory.
+        money CostLastYear "NOT_NULL" %% Cost associated with the territory in the previous year.
+        uniqueidentifier rowguid "PK,NOT_NULL" %% Globally unique row identifier used for replication or synch
+        datetime ModifiedDate "NOT_NULL" %% Timestamp indicating when the territory row was last modifie
+    }
+
+    SalesTerritoryHistory {
+        int BusinessEntityID "PK,FK,NOT_NULL" %% Identifies the salesperson whose territory assignment is bei
+        int TerritoryID "PK,FK,NOT_NULL" %% Identifies the sales territory assigned to the salesperson.
+        datetime StartDate "NOT_NULL" %% The date the salesperson-territory assignment became effecti
+        datetime EndDate %% The date the salesperson-territory assignment ended, or null
+        uniqueidentifier rowguid "PK,NOT_NULL" %% A globally unique row identifier used for replication, synch
+        datetime ModifiedDate "NOT_NULL" %% The timestamp when the assignment record was last modified.
+    }
+
+    ShoppingCartItem {
+        int ShoppingCartItemID "PK,NOT_NULL" %% Surrogate primary key for each shopping cart line item row.
+        nvarchar ShoppingCartID "NOT_NULL" %% Identifier for the shopping cart that this item belongs to.
+        int Quantity "NOT_NULL" %% Number of units of the product currently in the cart item.
+        int ProductID "FK,NOT_NULL" %% Reference to the product being added to the cart.
+        datetime DateCreated "NOT_NULL" %% Timestamp when the cart item was first created.
+        datetime ModifiedDate "NOT_NULL" %% Timestamp when the cart item was last updated.
+    }
+
+    SpecialOffer {
+        int SpecialOfferID "PK,FK,NOT_NULL" %% Identifier of the special offer applied in this row; also th
+        nvarchar Description "NOT_NULL" %% Human-readable name or label for the special offer, such as 
+        smallmoney DiscountPct "NOT_NULL" %% Discount percentage applied by the offer.
+        nvarchar Type "NOT_NULL" %% Classification of the offer, such as volume discount, season
+        nvarchar Category "NOT_NULL" %% Audience or applicability category for the offer, such as re
+        datetime StartDate "NOT_NULL" %% Date when the offer becomes active.
+        datetime EndDate "NOT_NULL" %% Date when the offer expires or stops being valid.
+        int MinQty "NOT_NULL" %% Minimum quantity required for the offer to apply.
+        int MaxQty %% Maximum quantity allowed for the offer tier, when applicable
+        uniqueidentifier rowguid "NOT_NULL" %% Globally unique row identifier used for replication or synch
+        datetime ModifiedDate "NOT_NULL" %% Timestamp of the last modification to the row.
+    }
+
+    SpecialOfferProduct {
+        int SpecialOfferID "FK,NOT_NULL" %% Identifies the special offer or promotion applied to the pro
+        int ProductID "FK,NOT_NULL" %% Identifies the product participating in the special offer. T
+        uniqueidentifier rowguid "PK,NOT_NULL" %% A globally unique row identifier used by the Adventure Works
+        datetime ModifiedDate "NOT_NULL" %% The date and time the row was last changed.
+    }
+
+    Store {
+        int BusinessEntityID "FK,NOT_NULL" %% Unique identifier for the store's business entity record; th
+        Name Name "NOT_NULL" %% The store's business name as used in sales and customer reco
+        int SalesPersonID "FK" %% Identifier of the salesperson responsible for managing this 
+        xml Demographics %% XML payload containing survey-based store profile attributes
+        uniqueidentifier rowguid "PK,NOT_NULL" %% Globally unique row identifier used for replication and sync
+        datetime ModifiedDate "NOT_NULL" %% Timestamp indicating when the store record was last modified
+    }
+
+
+    %% Relationships
+
+    BusinessEntity ||--o{ Employee : "has"
+    Employee ||--o{ EmployeeDepartmentHistory : "has"
+    Department ||--o{ EmployeeDepartmentHistory : "has"
+    Shift ||--o{ EmployeeDepartmentHistory : "has"
+    Employee ||--o{ EmployeePayHistory : "has"
+    EmployeeDepartmentHistory ||--o{ EmployeePayHistory : "has"
+    Person ||--o{ JobCandidate : "has"
+    StateProvince ||--o{ Address : "has"
+    BusinessEntity ||--o{ BusinessEntityAddress : "has"
+    Address ||--o{ BusinessEntityAddress : "has"
+    AddressType ||--o{ BusinessEntityAddress : "has"
+    BusinessEntity ||--o{ BusinessEntityContact : "has"
+    Person ||--o{ BusinessEntityContact : "has"
+    ContactType ||--o{ BusinessEntityContact : "has"
+    BusinessEntity ||--o{ EmailAddress : "has"
+    Password ||--o{ EmailAddress : "has"
+    Person ||--o{ Password : "has"
+    BusinessEntity ||--o{ Person : "has"
+    BusinessEntity ||--o{ PersonPhone : "has"
+    PhoneNumberType ||--o{ PersonPhone : "has"
+    SalesTerritory ||--o{ StateProvince : "has"
+    SalesTerritoryHistory ||--o{ StateProvince : "has"
+    CountryRegion ||--o{ StateProvince : "has"
+    Product ||--o{ BillOfMaterials : "has"
+    UnitMeasure ||--o{ BillOfMaterials : "has"
+    ProductSubcategory ||--o{ Product : "has"
+    ProductModel ||--o{ Product : "has"
+    Product ||--o{ ProductCostHistory : "has"
+    Product ||--o{ ProductDocument : "has"
+    Document ||--o{ ProductDocument : "has"
+    Product ||--o{ ProductInventory : "has"
+    Location ||--o{ ProductInventory : "has"
+    Product ||--o{ ProductListPriceHistory : "has"
+    ProductModel ||--o{ ProductModelIllustration : "has"
+    Illustration ||--o{ ProductModelIllustration : "has"
+    ProductModel ||--o{ ProductModelProductDescriptionCulture : "has"
+    ProductDescription ||--o{ ProductModelProductDescriptionCulture : "has"
+    Culture ||--o{ ProductModelProductDescriptionCulture : "has"
+    Product ||--o{ ProductProductPhoto : "has"
+    ProductPhoto ||--o{ ProductProductPhoto : "has"
+    Product ||--o{ ProductReview : "has"
+    ProductCategory ||--o{ ProductSubcategory : "has"
+    Product ||--o{ TransactionHistory : "has"
+    Product ||--o{ TransactionHistoryArchive : "has"
+    WorkOrder ||--o{ TransactionHistoryArchive : "has"
+    ScrapReason ||--o{ WorkOrder : "has"
+    Product ||--o{ WorkOrder : "has"
+    WorkOrder ||--o{ WorkOrderRouting : "has"
+    Product ||--o{ WorkOrderRouting : "has"
+    Location ||--o{ WorkOrderRouting : "has"
+    Product ||--o{ ProductVendor : "has"
+    Vendor ||--o{ ProductVendor : "has"
+    UnitMeasure ||--o{ ProductVendor : "has"
+    ProductVendor ||--o{ PurchaseOrderDetail : "has"
+    Employee ||--o{ PurchaseOrderHeader : "has"
+    Vendor ||--o{ PurchaseOrderHeader : "has"
+    ShipMethod ||--o{ PurchaseOrderHeader : "has"
+    BusinessEntity ||--o{ Vendor : "has"
+    CountryRegion ||--o{ CountryRegionCurrency : "has"
+    Currency ||--o{ CountryRegionCurrency : "has"
+    Currency ||--o{ CurrencyRate : "has"
+    SalesTerritory ||--o{ Customer : "has"
+    SalesTerritoryHistory ||--o{ Customer : "has"
+    Person ||--o{ Customer : "has"
+    Store ||--o{ Customer : "has"
+    Person ||--o{ PersonCreditCard : "has"
+    CreditCard ||--o{ PersonCreditCard : "has"
+    ProductCostHistory ||--o{ SalesOrderDetail : "has"
+    ProductListPriceHistory ||--o{ SalesOrderDetail : "has"
+    SpecialOfferProduct ||--o{ SalesOrderDetail : "has"
+    SpecialOffer ||--o{ SalesOrderDetail : "has"
+    Product ||--o{ SalesOrderDetail : "has"
+    SalesOrderHeader ||--o{ SalesOrderDetail : "has"
+    Customer ||--o{ SalesOrderHeader : "has"
+    SalesTerritory ||--o{ SalesOrderHeader : "has"
+    SalesTerritoryHistory ||--o{ SalesOrderHeader : "has"
+    Address ||--o{ SalesOrderHeader : "has"
+    BusinessEntityAddress ||--o{ SalesOrderHeader : "has"
+    CreditCard ||--o{ SalesOrderHeader : "has"
+    PersonCreditCard ||--o{ SalesOrderHeader : "has"
+    SalesPerson ||--o{ SalesOrderHeader : "has"
+    ShipMethod ||--o{ SalesOrderHeader : "has"
+    CurrencyRate ||--o{ SalesOrderHeader : "has"
+    SalesOrderHeader ||--o{ SalesOrderHeaderSalesReason : "has"
+    SalesReason ||--o{ SalesOrderHeaderSalesReason : "has"
+    SalesTerritory ||--o{ SalesPerson : "has"
+    SalesTerritoryHistory ||--o{ SalesPerson : "has"
+    Person ||--o{ SalesPerson : "has"
+    Employee ||--o{ SalesPersonQuotaHistory : "has"
+    StateProvince ||--o{ SalesTaxRate : "has"
+    SalesPerson ||--o{ SalesTerritoryHistory : "has"
+    SalesTerritory ||--o{ SalesTerritoryHistory : "has"
+    Product ||--o{ ShoppingCartItem : "has"
+    SpecialOffer ||--o{ SpecialOffer : "has"
+    SpecialOffer ||--o{ SpecialOfferProduct : "has"
+    Product ||--o{ SpecialOfferProduct : "has"
+    BusinessEntity ||--o{ Store : "has"
+    SalesPerson ||--o{ Store : "has"
+
+    %% Relationship Notation:
+    %% Parent ||--o{ Child : "describes"
+    %% One Parent can have zero or more Children`;
+            const element = document.createElement('a');
+            element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(content));
+            element.setAttribute('download', 'AW_Stripped_erd.mmd');
+            element.style.display = 'none';
+            document.body.appendChild(element);
+            element.click();
+            document.body.removeChild(element);
+        }
+    </script>
+</body>
+</html>

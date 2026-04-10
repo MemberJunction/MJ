@@ -19,9 +19,9 @@ export class MJActionCategoryFormComponent extends BaseFormComponent {
             { sectionKey: 'categoryDetails', sectionName: 'Category Details', isExpanded: true },
             { sectionKey: 'hierarchyInformation', sectionName: 'Hierarchy Information', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'actionCategories', sectionName: 'Action Categories', isExpanded: false },
-            { sectionKey: 'actions', sectionName: 'Actions', isExpanded: false },
-            { sectionKey: 'mJMCPServerTools', sectionName: 'MJ: MCP Server Tools', isExpanded: false }
+            { sectionKey: 'mJActionCategories', sectionName: 'Action Categories', isExpanded: false },
+            { sectionKey: 'mJActions', sectionName: 'Actions', isExpanded: false },
+            { sectionKey: 'mJMCPServerTools', sectionName: 'MCP Server Tools', isExpanded: false }
         ]);
     }
 }

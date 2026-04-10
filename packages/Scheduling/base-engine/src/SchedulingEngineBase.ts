@@ -5,6 +5,7 @@
 
 import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, UserInfo } from '@memberjunction/core';
 import { MJScheduledJobEntity, MJScheduledJobTypeEntity, MJScheduledJobRunEntity } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Base engine for scheduling system with metadata caching
@@ -116,14 +117,14 @@ export class SchedulingEngineBase extends BaseEngine<SchedulingEngineBase> {
      * Get all jobs of a specific type
      */
     public GetJobsByType(jobTypeId: string): MJScheduledJobEntity[] {
-        return this._scheduledJobs.filter(j => j.JobTypeID === jobTypeId);
+        return this._scheduledJobs.filter(j => UUIDsEqual(j.JobTypeID, jobTypeId));
     }
 
     /**
      * Get runs for a specific job
      */
     public GetRunsForJob(jobId: string): MJScheduledJobRunEntity[] {
-        return this._scheduledJobRuns.filter(r => r.ScheduledJobID === jobId);
+        return this._scheduledJobRuns.filter(r => UUIDsEqual(r.ScheduledJobID, jobId));
     }
 
     /**

@@ -8,6 +8,7 @@
  */
 
 import { RunView } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { getSystemUser } from '@memberjunction/server';
 import type { APIScopeInfo, ScopeUIConfig } from './types.js';
 
@@ -124,7 +125,7 @@ export function clearScopeCache(): void {
  */
 export async function getScopeByName(name: string): Promise<APIScopeInfo | undefined> {
   const scopes = await loadActiveScopes();
-  return scopes.find((s) => s.Name === name);
+  return scopes.find((s) => s.FullPath === name);
 }
 
 /**
@@ -139,7 +140,7 @@ export async function validateScopes(requestedScopes: string[]): Promise<{
   invalidScopes: string[];
 }> {
   const availableScopes = await loadActiveScopes();
-  const availableScopeNames = new Set(availableScopes.map((s) => s.Name));
+  const availableScopeNames = new Set(availableScopes.map((s) => s.FullPath));
 
   const validScopes: string[] = [];
   const invalidScopes: string[] = [];
@@ -325,6 +326,6 @@ export function getChildScopeFullPaths(parentFullPath: string, scopes: APIScopeI
   if (!parent) return [];
 
   return scopes
-    .filter((s) => s.ParentID === parent.ID)
+    .filter((s) => UUIDsEqual(s.ParentID, parent.ID))
     .map((s) => s.FullPath);
 }

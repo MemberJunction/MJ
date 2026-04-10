@@ -93,23 +93,23 @@
 
     <!-- Record Changes Section -->
     <mj-collapsible-panel
-        SectionKey="recordChanges"
+        SectionKey="mJRecordChanges"
         SectionName="Record Changes"
         Icon="fa fa-history"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('recordChanges')"
+        [BadgeCount]="GetSectionRowCount('mJRecordChanges')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Record Changes','ReplayRunID')"
                 [NewRecordValues]="NewRecordValues('MJ: Record Changes')"
-                [AllowLoad]="IsSectionExpanded('recordChanges')"
+                [AllowLoad]="IsSectionExpanded('mJRecordChanges')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('recordChanges', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJRecordChanges', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

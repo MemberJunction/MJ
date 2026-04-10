@@ -84,23 +84,23 @@
 
     <!-- Template Contents Section -->
     <mj-collapsible-panel
-        SectionKey="templateContents"
+        SectionKey="mJTemplateContents"
         SectionName="Template Contents"
         Icon="fa fa-file-alt"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('templateContents')"
+        [BadgeCount]="GetSectionRowCount('mJTemplateContents')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Template Contents','TypeID')"
                 [NewRecordValues]="NewRecordValues('MJ: Template Contents')"
-                [AllowLoad]="IsSectionExpanded('templateContents')"
+                [AllowLoad]="IsSectionExpanded('mJTemplateContents')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('templateContents', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJTemplateContents', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

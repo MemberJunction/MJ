@@ -7,17 +7,17 @@
     display: block;
     margin-bottom: 8px;
     font-weight: 600;
-    color: #495057;
+    color: var(--mj-text-secondary);
 }
 
 ::ng-deep .k-dialog {
-    border-radius: 8px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+    border-radius: var(--mj-radius-md);
+    box-shadow: var(--mj-shadow-lg);
 }
 
 ::ng-deep .k-dialog-titlebar {
-    background: #f8f9fa;
-    border-bottom: 1px solid #dee2e6;
+    background: var(--mj-bg-surface-card);
+    border-bottom: 1px solid var(--mj-border-strong);
     padding: 16px 20px;
 }
 

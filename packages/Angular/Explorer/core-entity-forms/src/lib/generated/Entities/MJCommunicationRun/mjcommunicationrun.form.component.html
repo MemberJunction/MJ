@@ -127,23 +127,23 @@
 
     <!-- Communication Logs Section -->
     <mj-collapsible-panel
-        SectionKey="communicationLogs"
+        SectionKey="mJCommunicationLogs"
         SectionName="Communication Logs"
         Icon="fa fa-comment"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('communicationLogs')"
+        [BadgeCount]="GetSectionRowCount('mJCommunicationLogs')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Communication Logs','CommunicationRunID')"
                 [NewRecordValues]="NewRecordValues('MJ: Communication Logs')"
-                [AllowLoad]="IsSectionExpanded('communicationLogs')"
+                [AllowLoad]="IsSectionExpanded('mJCommunicationLogs')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('communicationLogs', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJCommunicationLogs', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

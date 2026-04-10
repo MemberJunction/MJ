@@ -1,11 +1,12 @@
-import { Component, Input, OnInit } from '@angular/core';
+import { Component, Input, OnInit, ChangeDetectorRef } from '@angular/core';
 import { Metadata, RunView, UserInfo } from '@memberjunction/core';
-import { MJConversationDetailRatingEntity } from '@memberjunction/core-entities';
-import { RatingJSON } from '../../models/conversation-complete-query.model';
+import { MJConversationDetailRatingEntity, RatingJSON } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Component for displaying and managing multi-user ratings on conversation messages.
  * Shows aggregate ratings and allows users to provide their own rating.
+ * Uses optimistic updates — UI reflects the change immediately while DB saves in background.
  */
 @Component({
   standalone: false,
@@ -23,11 +24,12 @@ import { RatingJSON } from '../../models/conversation-complete-query.model';
               <span class="total-count">({{ totalRatings }} {{ totalRatings === 1 ? 'rating' : 'ratings' }})</span>
             </div>
           }
-        
+
           <div class="user-rating" [class.has-rated]="currentUserRating != null">
             <button
               class="rating-button thumbs-up-btn"
               [class.active]="currentUserRating != null && currentUserRating >= 8"
+              [disabled]="isSaving"
               (click)="RateThumbsUp()"
               title="This was helpful"
               type="button">
@@ -36,6 +38,7 @@ import { RatingJSON } from '../../models/conversation-complete-query.model';
             <button
               class="rating-button thumbs-down-btn"
               [class.active]="currentUserRating != null && currentUserRating <= 3"
+              [disabled]="isSaving"
               (click)="RateThumbsDown()"
               title="This was not helpful"
               type="button">
@@ -57,7 +60,7 @@ import { RatingJSON } from '../../models/conversation-complete-query.model';
             align-items: center;
             gap: 8px;
             font-size: 13px;
-            color: #666;
+            color: var(--mj-text-muted);
         }
 
         .thumbs-up, .thumbs-down {
@@ -70,7 +73,7 @@ import { RatingJSON } from '../../models/conversation-complete-query.model';
 
         .total-count {
             font-size: 12px;
-            color: #999;
+            color: var(--mj-text-disabled);
         }
 
         .user-rating {
@@ -80,8 +83,8 @@ import { RatingJSON } from '../../models/conversation-complete-query.model';
         }
 
         .rating-button {
-            background: white;
-            border: 1px solid #9CA3AF;
+            background: var(--mj-bg-surface);
+            border: 1px solid var(--mj-border-strong);
             border-radius: 6px;
             padding: 6px 10px;
             cursor: pointer;
@@ -91,9 +94,14 @@ import { RatingJSON } from '../../models/conversation-complete-query.model';
             min-width: 36px;
         }
 
-        .rating-button:hover {
+        .rating-button:hover:not(:disabled) {
             opacity: 1;
-            border-color: #6B7280;
+            border-color: var(--mj-text-muted);
+        }
+
+        .rating-button:disabled {
+            cursor: not-allowed;
+            opacity: 0.4;
         }
 
         .rating-button.active {
@@ -101,97 +109,99 @@ import { RatingJSON } from '../../models/conversation-complete-query.model';
         }
 
         .thumbs-up-btn {
-            color: #16A34A;
+            color: var(--mj-status-success);
         }
 
-        .thumbs-up-btn:hover {
-            background: #F0FDF4;
+        .thumbs-up-btn:hover:not(:disabled) {
+            background: color-mix(in srgb, var(--mj-status-success) 8%, var(--mj-bg-surface));
         }
 
         .thumbs-up-btn.active {
-            border-color: #16A34A;
-            background: #DCFCE7;
+            border-color: var(--mj-status-success);
+            background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface));
         }
 
         .thumbs-down-btn {
-            color: #DC2626;
+            color: var(--mj-status-error);
         }
 
-        .thumbs-down-btn:hover {
-            background: #FEF2F2;
+        .thumbs-down-btn:hover:not(:disabled) {
+            background: color-mix(in srgb, var(--mj-status-error) 8%, var(--mj-bg-surface));
         }
 
         .thumbs-down-btn.active {
-            border-color: #DC2626;
-            background: #FEE2E2;
+            border-color: var(--mj-status-error);
+            background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
         }
     `]
 })
 export class ConversationMessageRatingComponent implements OnInit {
     @Input() conversationDetailId!: string;
     @Input() currentUser!: UserInfo;
-    @Input() ratingsData?: RatingJSON[]; // Pre-loaded ratings from parent (RatingsJSON from query)
+    @Input() ratingsData?: RatingJSON[];
 
     thumbsUpCount = 0;
     thumbsDownCount = 0;
     totalRatings = 0;
     currentUserRating: number | null = null;
-    allRatings: RatingJSON[] = [];
+    isSaving = false;
+
+    private allRatings: RatingJSON[] = [];
+    private currentUserRatingId: string | null = null;
 
     private get currentUserId(): string {
         return this.currentUser?.ID || '';
     }
 
+    constructor(private cdr: ChangeDetectorRef) {}
+
     async ngOnInit() {
         if (this.ratingsData) {
-            // Use pre-loaded ratings (no database query needed)
-            this.ProcessRatings(this.ratingsData);
+            this.processRatings(this.ratingsData);
         } else {
-            // Fallback to loading ratings if not provided
-            await this.LoadRatings();
+            await this.loadRatings();
         }
     }
 
-    /**
-     * Process ratings data (from query or API)
-     */
-    private ProcessRatings(ratings: RatingJSON[] | MJConversationDetailRatingEntity[]): void {
+    private processRatings(ratings: RatingJSON[] | MJConversationDetailRatingEntity[]): void {
         this.allRatings = ratings as RatingJSON[];
-        this.thumbsUpCount = ratings.filter(r => r.Rating ? r.Rating >= 8 : false).length;
-        this.thumbsDownCount = ratings.filter(r => r.Rating ? r.Rating <= 3 : false).length;
+        this.thumbsUpCount = ratings.filter(r => r.Rating != null && r.Rating >= 8).length;
+        this.thumbsDownCount = ratings.filter(r => r.Rating != null && r.Rating <= 3).length;
         this.totalRatings = ratings.length;
 
-        const currentUserRating = ratings.find(r => r.UserID === this.currentUserId);
-        this.currentUserRating = currentUserRating?.Rating ?? null;
+        const mine = ratings.find(r => UUIDsEqual(r.UserID, this.currentUserId));
+        this.currentUserRating = mine?.Rating ?? null;
+        this.currentUserRatingId = mine ? (mine as RatingJSON).ID ?? null : null;
     }
 
-    /**
-     * Get tooltip showing who rated this message
-     */
     getRatingsTooltip(): string {
         if (this.allRatings.length === 0) return '';
 
-        const thumbsUpUsers = this.allRatings
-            .filter(r => r.Rating ? r.Rating >= 8 : false)
+        const upUsers = this.allRatings
+            .filter(r => r.Rating != null && r.Rating >= 8)
             .map(r => (r as RatingJSON).UserName || 'Unknown')
             .join(', ');
 
-        const thumbsDownUsers = this.allRatings
-            .filter(r => r.Rating ? r.Rating <= 3 : false)
+        const downUsers = this.allRatings
+            .filter(r => r.Rating != null && r.Rating <= 3)
             .map(r => (r as RatingJSON).UserName || 'Unknown')
             .join(', ');
 
         const parts: string[] = [];
-        if (thumbsUpUsers) parts.push(`👍 ${thumbsUpUsers}`);
-        if (thumbsDownUsers) parts.push(`👎 ${thumbsDownUsers}`);
-
+        if (upUsers) parts.push(`👍 ${upUsers}`);
+        if (downUsers) parts.push(`👎 ${downUsers}`);
         return parts.join('\n');
     }
 
-    /**
-     * Load all ratings for this message (fallback if not pre-loaded)
-     */
-    async LoadRatings(): Promise<void> {
+    async RateThumbsUp(): Promise<void> {
+        await this.saveRating(10);
+    }
+
+    async RateThumbsDown(): Promise<void> {
+        await this.saveRating(1);
+    }
+
+    private async loadRatings(): Promise<void> {
         try {
             const rv = new RunView();
             const result = await rv.RunView<MJConversationDetailRatingEntity>({
@@ -199,74 +209,83 @@ export class ConversationMessageRatingComponent implements OnInit {
                 ExtraFilter: `ConversationDetailID='${this.conversationDetailId}'`,
                 ResultType: 'entity_object'
             });
-
-            if (!result.Success || !result.Results) {
-                return;
+            if (result.Success && result.Results) {
+                this.processRatings(result.Results);
+                this.cdr.detectChanges();
             }
-
-            this.ProcessRatings(result.Results);
-
         } catch (error) {
             console.error('Failed to load ratings:', error);
         }
     }
 
-    /**
-     * Rate message as thumbs up (10/10)
-     */
-    async RateThumbsUp(): Promise<void> {
-        await this.SaveRating(10);
+    private applyOptimisticUpdate(rating: number): void {
+        const wasThumbsUp = this.currentUserRating != null && this.currentUserRating >= 8;
+        const wasThumbsDown = this.currentUserRating != null && this.currentUserRating <= 3;
+
+        // Adjust counts when switching from an existing rating
+        if (wasThumbsUp) this.thumbsUpCount--;
+        if (wasThumbsDown) this.thumbsDownCount--;
+        if (!wasThumbsUp && !wasThumbsDown) this.totalRatings++;
+
+        this.currentUserRating = rating;
+        if (rating >= 8) this.thumbsUpCount++;
+        else this.thumbsDownCount++;
     }
 
-    /**
-     * Rate message as thumbs down (1/10)
-     */
-    async RateThumbsDown(): Promise<void> {
-        await this.SaveRating(1);
-    }
+    private async saveRating(rating: number): Promise<void> {
+        if (this.isSaving) return;
 
-    /**
-     * Save or update user's rating for this message
-     */
-    private async SaveRating(rating: number): Promise<void> {
+        // Ignore if user clicks the same rating they already have
+        if (this.currentUserRating === rating) return;
+
+        // Snapshot for rollback
+        const prevRating = this.currentUserRating;
+        const prevRatingId = this.currentUserRatingId;
+        const prevThumbsUp = this.thumbsUpCount;
+        const prevThumbsDown = this.thumbsDownCount;
+        const prevTotal = this.totalRatings;
+
+        // Optimistic update — UI reflects change instantly
+        this.isSaving = true;
+        this.applyOptimisticUpdate(rating);
+        this.cdr.detectChanges();
+
         try {
-            const md = new Metadata();
-            let ratingEntity: MJConversationDetailRatingEntity;
-
-            // Try to load existing rating
-            const rv = new RunView();
-            const existing = await rv.RunView<MJConversationDetailRatingEntity>({
-                EntityName: 'MJ: Conversation Detail Ratings',
-                ExtraFilter: `ConversationDetailID='${this.conversationDetailId}' AND UserID='${this.currentUserId}'`,
-                MaxRows: 1,
-                ResultType: 'entity_object'
-            });
-
-            if (existing.Success && existing.Results && existing.Results.length > 0) {
-                // Update existing
-                ratingEntity = existing.Results[0];
-
-                // If clicking same rating, remove it (toggle off)
-                if (ratingEntity.Rating === rating) {
-                    await ratingEntity.Delete();
-                    await this.LoadRatings();
-                    return;
-                }
-
-                ratingEntity.Rating = rating;
-            } else {
-                // Create new
-                ratingEntity = await md.GetEntityObject<MJConversationDetailRatingEntity>('MJ: Conversation Detail Ratings');
-                ratingEntity.ConversationDetailID = this.conversationDetailId;
-                ratingEntity.UserID = this.currentUserId;
-                ratingEntity.Rating = rating;
-            }
-
-            await ratingEntity.Save();
-            await this.LoadRatings();
-
+            await this.persistRating(rating, prevRatingId);
         } catch (error) {
+            // Roll back to previous state on failure
             console.error('Failed to save rating:', error);
+            this.currentUserRating = prevRating;
+            this.currentUserRatingId = prevRatingId;
+            this.thumbsUpCount = prevThumbsUp;
+            this.thumbsDownCount = prevThumbsDown;
+            this.totalRatings = prevTotal;
+            this.cdr.detectChanges();
+        } finally {
+            this.isSaving = false;
+            this.cdr.detectChanges();
+        }
+    }
+
+    private async persistRating(rating: number, prevRatingId: string | null): Promise<void> {
+        if (prevRatingId) {
+            // Update existing rating (switch thumbs up ↔ down)
+            const md = new Metadata();
+            const entity = await md.GetEntityObject<MJConversationDetailRatingEntity>('MJ: Conversation Detail Ratings');
+            const loaded = await entity.Load(prevRatingId);
+            if (loaded) {
+                entity.Rating = rating;
+                await entity.Save();
+            }
+        } else {
+            // Create new rating
+            const md = new Metadata();
+            const entity = await md.GetEntityObject<MJConversationDetailRatingEntity>('MJ: Conversation Detail Ratings');
+            entity.ConversationDetailID = this.conversationDetailId;
+            entity.UserID = this.currentUserId;
+            entity.Rating = rating;
+            await entity.Save();
+            this.currentUserRatingId = entity.ID;
         }
     }
 }

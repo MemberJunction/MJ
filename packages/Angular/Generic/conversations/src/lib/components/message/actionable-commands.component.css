@@ -1,15 +1,15 @@
 .actionable-commands {
   margin-top: 16px;
   padding: 12px;
-  background: #f5f8fa;
-  border-left: 3px solid #007bff;
+  background: var(--mj-bg-surface-sunken);
+  border-left: 3px solid var(--mj-brand-primary);
   border-radius: 4px;
 }
 
 .commands-label {
   font-size: 13px;
   font-weight: 600;
-  color: #555;
+  color: var(--mj-text-secondary);
   margin-bottom: 10px;
   text-transform: uppercase;
   letter-spacing: 0.5px;

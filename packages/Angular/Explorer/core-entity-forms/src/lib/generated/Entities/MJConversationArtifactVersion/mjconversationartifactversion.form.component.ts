@@ -19,7 +19,7 @@ export class MJConversationArtifactVersionFormComponent extends BaseFormComponen
             { sectionKey: 'artifactIdentification', sectionName: 'Artifact Identification', isExpanded: true },
             { sectionKey: 'versionContent', sectionName: 'Version Content', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'conversationDetails', sectionName: 'Conversation Details', isExpanded: false }
+            { sectionKey: 'mJConversationDetails', sectionName: 'Conversation Details', isExpanded: false }
         ]);
     }
 }

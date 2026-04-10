@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { UserInfo, RunView, Metadata } from '@memberjunction/core';
 import { MJArtifactPermissionEntity, MJArtifactEntity, MJCollectionArtifactEntity } from '@memberjunction/core-entities';
 import { CollectionPermissionService } from './collection-permission.service';
+import { UUIDsEqual } from '@memberjunction/global';
 
 export interface ArtifactPermission {
     id: string;
@@ -66,7 +67,7 @@ export class ArtifactPermissionService {
     ): Promise<boolean> {
         // 1. Check ownership - owner has all permissions
         const artifact = await this.getArtifact(artifactId, currentUser);
-        if (artifact && artifact.UserID === userId) {
+        if (artifact && UUIDsEqual(artifact.UserID, userId)) {
             return true;
         }
 
@@ -290,7 +291,7 @@ export class ArtifactPermissionService {
      */
     async isOwner(artifactId: string, userId: string, currentUser: UserInfo): Promise<boolean> {
         const artifact = await this.getArtifact(artifactId, currentUser);
-        return artifact ? artifact.UserID === userId : false;
+        return artifact ? UUIDsEqual(artifact.UserID, userId) : false;
     }
 
     /**

@@ -267,6 +267,101 @@ describe('GroqLLM', () => {
         });
     });
 
+    describe('assistantPrefill', () => {
+        const callNonStreaming = async (params: Record<string, unknown>): Promise<unknown> => {
+            return (instance as ReturnType<typeof Object.create>)['nonStreamingChatCompletion'].bind(instance)(params);
+        };
+
+        beforeEach(() => {
+            mockCreate.mockResolvedValue({
+                choices: [{ message: { role: 'assistant', content: 'response text' } }],
+                usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15, queue_time: 0, prompt_time: 0, completion_time: 0 }
+            });
+        });
+
+        it('should append an assistant message with prefill text when assistantPrefill is set', async () => {
+            await callNonStreaming({
+                model: 'llama-3.1-70b',
+                messages: [
+                    { role: ChatMessageRole.system, content: 'You are helpful' },
+                    { role: ChatMessageRole.user, content: 'Hello' }
+                ],
+                assistantPrefill: 'Sure, here is'
+            });
+
+            const sentMessages = mockCreate.mock.calls[0][0].messages;
+            expect(sentMessages).toHaveLength(3);
+            expect(sentMessages[2]).toEqual({ role: 'assistant', content: 'Sure, here is' });
+        });
+
+        it('should NOT append a dummy OK user message when assistantPrefill is set and last message is from user', async () => {
+            await callNonStreaming({
+                model: 'llama-3.1-70b',
+                messages: [
+                    { role: ChatMessageRole.user, content: 'Hello' }
+                ],
+                assistantPrefill: 'Let me help'
+            });
+
+            const sentMessages = mockCreate.mock.calls[0][0].messages;
+            // Should have original user message + assistant prefill, no dummy OK
+            expect(sentMessages).toHaveLength(2);
+            expect(sentMessages[0]).toEqual({ role: 'user', content: 'Hello' });
+            expect(sentMessages[1]).toEqual({ role: 'assistant', content: 'Let me help' });
+        });
+
+        it('should NOT append a dummy OK user message when assistantPrefill is set and last message is from assistant', async () => {
+            await callNonStreaming({
+                model: 'llama-3.1-70b',
+                messages: [
+                    { role: ChatMessageRole.user, content: 'Hello' },
+                    { role: ChatMessageRole.assistant, content: 'Previous reply' }
+                ],
+                assistantPrefill: 'Continuing from'
+            });
+
+            const sentMessages = mockCreate.mock.calls[0][0].messages;
+            // Should have original messages + assistant prefill, no dummy OK
+            expect(sentMessages).toHaveLength(3);
+            expect(sentMessages[0]).toEqual({ role: 'user', content: 'Hello' });
+            expect(sentMessages[1]).toEqual({ role: 'assistant', content: 'Previous reply' });
+            expect(sentMessages[2]).toEqual({ role: 'assistant', content: 'Continuing from' });
+        });
+
+        it('should append dummy OK user message when assistantPrefill is NOT set and last message is not from user', async () => {
+            await callNonStreaming({
+                model: 'llama-3.1-70b',
+                messages: [
+                    { role: ChatMessageRole.user, content: 'Hello' },
+                    { role: ChatMessageRole.assistant, content: 'Hi there' }
+                ]
+            });
+
+            const sentMessages = mockCreate.mock.calls[0][0].messages;
+            // Should have original messages + dummy OK user message
+            expect(sentMessages).toHaveLength(3);
+            expect(sentMessages[0]).toEqual({ role: 'user', content: 'Hello' });
+            expect(sentMessages[1]).toEqual({ role: 'assistant', content: 'Hi there' });
+            expect(sentMessages[2]).toEqual({ role: 'user', content: 'OK' });
+        });
+
+        it('should NOT append dummy OK user message when last message is already from user and no prefill', async () => {
+            await callNonStreaming({
+                model: 'llama-3.1-70b',
+                messages: [
+                    { role: ChatMessageRole.system, content: 'You are helpful' },
+                    { role: ChatMessageRole.user, content: 'Hello' }
+                ]
+            });
+
+            const sentMessages = mockCreate.mock.calls[0][0].messages;
+            // Should have only the original messages, no extras
+            expect(sentMessages).toHaveLength(2);
+            expect(sentMessages[0]).toEqual({ role: 'system', content: 'You are helpful' });
+            expect(sentMessages[1]).toEqual({ role: 'user', content: 'Hello' });
+        });
+    });
+
     describe('convertToGroqMessages', () => {
         const callMethod = (messages: Array<{ role: string; content: unknown }>): unknown[] => {
             return (instance as ReturnType<typeof Object.create>)['convertToGroqMessages'](messages);

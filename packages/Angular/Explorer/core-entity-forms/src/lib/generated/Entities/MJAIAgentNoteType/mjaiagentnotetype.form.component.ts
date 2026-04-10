@@ -19,7 +19,7 @@ export class MJAIAgentNoteTypeFormComponent extends BaseFormComponent {
             { sectionKey: 'identifier', sectionName: 'Identifier', isExpanded: true },
             { sectionKey: 'noteTypeDefinition', sectionName: 'Note Type Definition', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'aIAgentNotes', sectionName: 'AIAgent Notes', isExpanded: false }
+            { sectionKey: 'mJAIAgentNotes', sectionName: 'AIAgent Notes', isExpanded: false }
         ]);
     }
 }

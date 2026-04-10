@@ -1,5 +1,5 @@
 import { BaseEntity, EntitySaveOptions, LogError, Metadata, RunView, IMetadataProvider } from "@memberjunction/core";
-import { RegisterClass, MJGlobal } from "@memberjunction/global";
+import { RegisterClass, MJGlobal, UUIDsEqual } from "@memberjunction/global";
 import { MJAIPromptRunEntityExtended } from "@memberjunction/ai-core-plus";
 import { AIEngineBase, BasePriceUnitType } from "@memberjunction/ai-engine-base";
 
@@ -105,7 +105,7 @@ export class MJAIPromptRunEntityServer extends MJAIPromptRunEntityExtended {
             
             // Get the price unit type to understand the normalization
             const priceUnitType = AIEngineBase.Instance.ModelPriceUnitTypes.find(
-                put => put.ID === activeCost.UnitTypeID
+                put => UUIDsEqual(put.ID, activeCost.UnitTypeID)
             );
             
             if (!priceUnitType) {

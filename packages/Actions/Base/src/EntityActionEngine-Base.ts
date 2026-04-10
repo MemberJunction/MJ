@@ -1,6 +1,7 @@
 import { BaseEngine, BaseEnginePropertyConfig, BaseEntity, IMetadataProvider, UserInfo } from "@memberjunction/core";
+import { UUIDsEqual } from "@memberjunction/global";
 import { MJActionExecutionLogEntity, MJActionResultCodeEntity, MJEntityActionFilterEntity, MJEntityActionInvocationEntity, MJEntityActionInvocationTypeEntity, MJEntityActionParamEntity } from "@memberjunction/core-entities";
-import { ActionParam, RunActionParams } from "./ActionEngine-Base";
+import { ActionParam, AIDirective, RunActionParams } from "./ActionEngine-Base";
 import { MJEntityActionEntityExtended } from "./MJEntityActionEntityExtended";
 
 /**
@@ -71,6 +72,12 @@ export class EntityActionResult {
      * All parameters including inputs and outputs are provided here for convenience
      */
     public Params?: ActionParam[];
+
+    /**
+     * Optional array of structured directives for the AI agent.
+     * Propagated from ActionResult.AIDirectives.
+     */
+    public AIDirectives?: AIDirective[];
  }
 
 /**
@@ -178,7 +185,7 @@ export class EntityActionEngineBase extends BaseEngine<EntityActionEngineBase> {
      * @returns 
      */
     public GetActionsByEntityID(entityID: string): MJEntityActionEntityExtended[] {
-        return this._EntityActions.filter(e => e.EntityID === entityID);
+        return this._EntityActions.filter(e => UUIDsEqual(e.EntityID, entityID));
     }
 
     /**

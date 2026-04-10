@@ -10,11 +10,7 @@ export interface SaveVersionResult {
   selector: 'mj-save-version-dialog',
   template: `
     @if (Visible) {
-      <kendo-dialog
-        [title]="'Save Version'"
-        [width]="420"
-        (close)="OnCancel()">
-
+      <mj-dialog [Visible]="true" Title="Save Version" [Width]="420" (Close)="OnCancel()">
         <div class="dialog-body">
           <div class="version-context">
             @if (CurrentVersion > 0) {
@@ -27,11 +23,10 @@ export interface SaveVersionResult {
           <div class="form-field">
             <label class="field-label" for="versionComment">Comment</label>
             <input
-              kendoTextBox
+              class="mj-input comment-input"
               id="versionComment"
               [(ngModel)]="Comment"
-              placeholder="Describe what changed..."
-              class="comment-input" />
+              placeholder="Describe what changed..." />
           </div>
 
           @if (CurrentVersion > 0) {
@@ -54,15 +49,15 @@ export interface SaveVersionResult {
           }
         </div>
 
-        <kendo-dialog-actions>
-          <button kendoButton [themeColor]="'primary'" (click)="OnSave()">
+        <mj-dialog-actions>
+          <button mjButton variant="primary" (click)="OnSave()">
             <i class="fa-solid fa-save"></i> Save
           </button>
-          <button kendoButton [themeColor]="'base'" (click)="OnCancel()">
+          <button mjButton (click)="OnCancel()">
             Cancel
           </button>
-        </kendo-dialog-actions>
-      </kendo-dialog>
+        </mj-dialog-actions>
+      </mj-dialog>
     }
   `,
   styles: [`
@@ -85,13 +80,13 @@ export interface SaveVersionResult {
       border-radius: 12px;
       font-size: 12px;
       font-weight: 600;
-      background: var(--mat-sys-primary-container, #e0e7ff);
-      color: var(--mat-sys-on-primary-container, #1e1b4b);
+      background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+      color: var(--mj-brand-primary);
     }
 
     .new-badge {
-      background: var(--mat-sys-tertiary-container, #f3e8ff);
-      color: var(--mat-sys-on-tertiary-container, #4a1d96);
+      background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+      color: var(--mj-brand-primary);
     }
 
     .form-field {
@@ -103,7 +98,7 @@ export interface SaveVersionResult {
     .field-label {
       font-size: 13px;
       font-weight: 500;
-      color: var(--mat-sys-on-surface, #1f2937);
+      color: var(--mj-text-primary);
     }
 
     .comment-input {
@@ -121,24 +116,24 @@ export interface SaveVersionResult {
       align-items: flex-start;
       gap: 10px;
       padding: 10px 12px;
-      border: 1px solid var(--mat-sys-outline-variant, #d1d5db);
+      border: 1px solid var(--mj-border-default);
       border-radius: 8px;
       cursor: pointer;
       transition: all 0.15s ease;
     }
 
     .radio-option:hover {
-      background: var(--mat-sys-surface-container, #f3f4f6);
+      background: var(--mj-bg-surface-sunken);
     }
 
     .radio-option.selected {
-      border-color: var(--mat-sys-primary, #6366f1);
-      background: var(--mat-sys-primary-container, #e0e7ff);
+      border-color: var(--mj-brand-primary);
+      background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
     }
 
     .radio-option input[type="radio"] {
       margin-top: 2px;
-      accent-color: var(--mat-sys-primary, #6366f1);
+      accent-color: var(--mj-brand-primary);
     }
 
     .radio-content {
@@ -150,12 +145,12 @@ export interface SaveVersionResult {
     .radio-label {
       font-size: 13px;
       font-weight: 500;
-      color: var(--mat-sys-on-surface, #1f2937);
+      color: var(--mj-text-primary);
     }
 
     .radio-desc {
       font-size: 11px;
-      color: var(--mat-sys-on-surface-variant, #6b7280);
+      color: var(--mj-text-secondary);
     }
   `]
 })

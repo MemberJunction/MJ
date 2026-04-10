@@ -8,9 +8,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Stub all heavy external dependencies
-vi.mock('@memberjunction/global', () => ({
-    RegisterClass: () => () => {},
-}));
+vi.mock('@memberjunction/global', async (importOriginal) => {
+    const actual = await importOriginal();
+    return {
+        ...actual,
+        RegisterClass: () => () => {},
+    };
+});
 
 vi.mock('@memberjunction/templates-base-types', () => ({
     TemplateEngineBase: {
@@ -58,6 +62,9 @@ vi.mock('@memberjunction/core', () => {
 vi.mock('@memberjunction/core-entities', () => {
     const cls = () => class { ID = ''; Name = '' };
     return {
+        ArtifactMetadataEngine: {
+            Instance: { ArtifactTypes: [] },
+        },
         MJAIActionEntity: cls(), MJAIAgentActionEntity: cls(), MJAIAgentNoteEntity: cls(),
         MJAIAgentNoteTypeEntity: cls(), MJAIModelActionEntity: cls(), MJAIPromptModelEntity: cls(),
         MJAIPromptTypeEntity: cls(), MJAIResultCacheEntity: cls(), MJAIVendorTypeDefinitionEntity: cls(),

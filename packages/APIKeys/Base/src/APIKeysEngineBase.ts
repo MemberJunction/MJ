@@ -13,6 +13,7 @@ import {
     MJAPIScopeEntity
 } from "@memberjunction/core-entities";
 import { RegisterForStartup } from "@memberjunction/core";
+import { UUIDsEqual } from "@memberjunction/global";
 
 /**
  * UI configuration for API Scopes.
@@ -250,7 +251,7 @@ export class APIKeysEngineBase extends BaseEngine<APIKeysEngineBase> {
      * @returns Array of application scope entities
      */
     public GetApplicationScopesByApplicationId(applicationId: string): MJAPIApplicationScopeEntity[] {
-        return this._applicationScopes.filter(as => as.ApplicationID === applicationId);
+        return this._applicationScopes.filter(as => UUIDsEqual(as.ApplicationID, applicationId));
     }
 
     /**
@@ -261,7 +262,7 @@ export class APIKeysEngineBase extends BaseEngine<APIKeysEngineBase> {
      */
     public GetApplicationScopeRules(applicationId: string, scopeId: string): MJAPIApplicationScopeEntity[] {
         return this._applicationScopes.filter(
-            as => as.ApplicationID === applicationId && as.ScopeID === scopeId
+            as => UUIDsEqual(as.ApplicationID, applicationId) && UUIDsEqual(as.ScopeID, scopeId)
         );
     }
 
@@ -271,7 +272,7 @@ export class APIKeysEngineBase extends BaseEngine<APIKeysEngineBase> {
      * @returns Array of key application binding entities
      */
     public GetKeyApplicationsByKeyId(apiKeyId: string): MJAPIKeyApplicationEntity[] {
-        return this._keyApplications.filter(ka => ka.APIKeyID === apiKeyId);
+        return this._keyApplications.filter(ka => UUIDsEqual(ka.APIKeyID, apiKeyId));
     }
 
     /**
@@ -280,7 +281,7 @@ export class APIKeysEngineBase extends BaseEngine<APIKeysEngineBase> {
      * @returns Array of key scope entities
      */
     public GetKeyScopesByKeyId(apiKeyId: string): MJAPIKeyScopeEntity[] {
-        return this._keyScopes.filter(ks => ks.APIKeyID === apiKeyId);
+        return this._keyScopes.filter(ks => UUIDsEqual(ks.APIKeyID, apiKeyId));
     }
 
     /**
@@ -291,7 +292,7 @@ export class APIKeysEngineBase extends BaseEngine<APIKeysEngineBase> {
      */
     public GetKeyScopeRules(apiKeyId: string, scopeId: string): MJAPIKeyScopeEntity[] {
         return this._keyScopes.filter(
-            ks => ks.APIKeyID === apiKeyId && ks.ScopeID === scopeId
+            ks => UUIDsEqual(ks.APIKeyID, apiKeyId) && UUIDsEqual(ks.ScopeID, scopeId)
         );
     }
 
@@ -302,7 +303,7 @@ export class APIKeysEngineBase extends BaseEngine<APIKeysEngineBase> {
      * @returns True if the key has application bindings
      */
     public KeyHasApplicationBindings(apiKeyId: string): boolean {
-        return this._keyApplications.some(ka => ka.APIKeyID === apiKeyId);
+        return this._keyApplications.some(ka => UUIDsEqual(ka.APIKeyID, apiKeyId));
     }
 
     /**
@@ -318,7 +319,7 @@ export class APIKeysEngineBase extends BaseEngine<APIKeysEngineBase> {
             return true;
         }
         // Otherwise, check if bound to this specific application
-        return bindings.some(ka => ka.ApplicationID === applicationId);
+        return bindings.some(ka => UUIDsEqual(ka.ApplicationID, applicationId));
     }
 
     // ========================================================================

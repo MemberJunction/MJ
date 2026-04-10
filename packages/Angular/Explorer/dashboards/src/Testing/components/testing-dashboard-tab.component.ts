@@ -14,6 +14,7 @@ import {
 } from '../services/testing-instrumentation.service';
 import { KPICardData } from '../../AI/components/widgets/kpi-card.component';
 import { TestEngineBase } from '@memberjunction/testing-engine-base';
+import { TestingExecutionService, ActiveRun, TestingDialogService } from '@memberjunction/ng-testing';
 
 /** Status type union matching TestRunSummary */
 type TestRunStatus = 'Passed' | 'Failed' | 'Skipped' | 'Error' | 'Running' | 'Timeout';
@@ -74,13 +75,17 @@ interface TestAlert {
           @if (RunningTests.length > 0) {
             <div class="running-tests-list">
               @for (run of RunningTests; track run.id) {
-                <div class="running-test-item">
-                  <div class="running-test-name">{{ run.testName }}</div>
+                <div class="running-test-item" (click)="OnViewRunningTest(run)">
+                  <div class="running-test-info">
+                    <div class="running-test-name">{{ run.testName }}</div>
+                    <div class="running-test-step">{{ GetActiveRunStep(run.testId) }}</div>
+                  </div>
                   <div class="running-test-meta">
                     <span class="running-elapsed">{{ FormatDuration(run.duration) }}</span>
                     <span class="running-progress-bar">
-                      <span class="running-progress-fill"></span>
+                      <span class="running-progress-fill" [style.width.%]="GetActiveRunProgress(run.testId)"></span>
                     </span>
+                    <span class="running-progress-pct">{{ GetActiveRunProgress(run.testId) }}%</span>
                   </div>
                 </div>
               }
@@ -177,7 +182,7 @@ interface TestAlert {
                   </div>
                 } @empty {
                   <div class="empty-state">
-                    <i class="fa-solid fa-check-circle" style="color: #22c55e; margin-right: 6px;"></i>
+                    <i class="fa-solid fa-check-circle" style="color: var(--mj-status-success); margin-right: 6px;"></i>
                     No alerts - all tests healthy
                   </div>
                 }
@@ -197,14 +202,14 @@ interface TestAlert {
       align-items: center;
       height: 100%;
       min-height: 400px;
-      background: #f8f9fa;
+      background: var(--mj-bg-surface-card);
     }
 
     .dashboard-container {
       padding: 24px;
       height: 100%;
       overflow-y: auto;
-      background: #f8f9fa;
+      background: var(--mj-bg-surface-card);
     }
 
     /* ===== Page Header ===== */
@@ -219,17 +224,17 @@ interface TestAlert {
       margin: 0;
       font-size: 22px;
       font-weight: 700;
-      color: #1e293b;
+      color: var(--mj-text-primary);
       display: flex;
       align-items: center;
       gap: 10px;
     }
 
-    .page-title i { color: #6366f1; }
+    .page-title i { color: var(--mj-brand-primary); }
 
     .refresh-btn {
-      background: #6366f1;
-      color: white;
+      background: var(--mj-brand-primary);
+      color: var(--mj-text-inverse);
       border: none;
       padding: 8px 18px;
       border-radius: 8px;
@@ -242,7 +247,7 @@ interface TestAlert {
       transition: background 0.2s ease;
     }
 
-    .refresh-btn:hover:not(:disabled) { background: #4f46e5; }
+    .refresh-btn:hover:not(:disabled) { background: var(--mj-brand-primary-hover); }
     .refresh-btn:disabled { opacity: 0.6; cursor: not-allowed; }
     .refresh-btn i.spinning { animation: spin 1s linear infinite; }
 
@@ -261,9 +266,9 @@ interface TestAlert {
 
     /* ===== Card Base ===== */
     .card {
-      background: white;
+      background: var(--mj-bg-surface);
       border-radius: 12px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      box-shadow: var(--mj-shadow-sm);
       overflow: hidden;
     }
 
@@ -272,26 +277,26 @@ interface TestAlert {
       align-items: center;
       gap: 8px;
       padding: 16px 20px;
-      border-bottom: 1px solid #f1f5f9;
+      border-bottom: 1px solid var(--mj-border-default);
     }
 
     .section-header h3 {
       margin: 0;
       font-size: 14px;
       font-weight: 600;
-      color: #334155;
+      color: var(--mj-text-secondary);
       display: flex;
       align-items: center;
       gap: 8px;
     }
 
-    .section-header h3 i { color: #6366f1; font-size: 13px; }
+    .section-header h3 i { color: var(--mj-brand-primary); font-size: 13px; }
 
     /* ===== Live Activity ===== */
     .live-activity-card {
-      background: white;
+      background: var(--mj-bg-surface);
       border-radius: 12px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      box-shadow: var(--mj-shadow-sm);
       margin-bottom: 24px;
       overflow: hidden;
     }
@@ -299,18 +304,18 @@ interface TestAlert {
     .live-dot {
       width: 10px;
       height: 10px;
-      background: #22c55e;
+      background: var(--mj-status-success);
       border-radius: 50%;
       display: inline-block;
       animation: pulse-dot 1.5s ease-in-out infinite;
     }
 
     @keyframes pulse-dot {
-      0%, 100% { box-shadow: 0 0 0 0 rgba(34,197,94,0.5); }
-      50% { box-shadow: 0 0 0 6px rgba(34,197,94,0); }
+      0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--mj-status-success) 50%, transparent); }
+      50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--mj-status-success) 0%, transparent); }
     }
 
-    .live-idle-icon { color: #9ca3af; font-size: 14px; }
+    .live-idle-icon { color: var(--mj-text-disabled); font-size: 14px; }
 
     .running-tests-list {
       padding: 0 20px 16px;
@@ -324,15 +329,32 @@ interface TestAlert {
       justify-content: space-between;
       align-items: center;
       padding: 10px 14px;
-      background: #f0fdf4;
+      background: color-mix(in srgb, var(--mj-status-success) 10%, var(--mj-bg-surface));
       border-radius: 8px;
-      border: 1px solid #bbf7d0;
+      border: 1px solid color-mix(in srgb, var(--mj-status-success) 25%, var(--mj-bg-surface));
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .running-test-item:hover {
+      background: color-mix(in srgb, var(--mj-status-success) 16%, var(--mj-bg-surface));
+    }
+
+    .running-test-info {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
     }
 
     .running-test-name {
       font-size: 13px;
       font-weight: 500;
-      color: #166534;
+      color: var(--mj-status-success);
+    }
+
+    .running-test-step {
+      font-size: 11px;
+      color: var(--mj-text-muted);
     }
 
     .running-test-meta {
@@ -343,30 +365,32 @@ interface TestAlert {
 
     .running-elapsed {
       font-size: 12px;
-      color: #15803d;
+      color: var(--mj-status-success);
       font-weight: 500;
     }
 
     .running-progress-bar {
-      width: 60px;
+      width: 80px;
       height: 4px;
-      background: #dcfce7;
+      background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface));
       border-radius: 2px;
       overflow: hidden;
     }
 
     .running-progress-fill {
       display: block;
-      width: 100%;
       height: 100%;
-      background: linear-gradient(90deg, #22c55e, #86efac);
-      animation: progress-slide 1.2s ease-in-out infinite;
+      background: var(--mj-status-success);
       border-radius: 2px;
+      transition: width 0.5s ease;
     }
 
-    @keyframes progress-slide {
-      0% { transform: translateX(-100%); }
-      100% { transform: translateX(100%); }
+    .running-progress-pct {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--mj-status-success);
+      min-width: 30px;
+      text-align: right;
     }
 
     /* ===== Lower Grid ===== */
@@ -393,12 +417,12 @@ interface TestAlert {
       justify-content: space-between;
       align-items: center;
       padding: 10px 20px;
-      border-bottom: 1px solid #f8fafc;
+      border-bottom: 1px solid var(--mj-bg-surface-card);
       cursor: pointer;
       transition: background 0.15s ease;
     }
 
-    .run-row:hover { background: #f8fafc; }
+    .run-row:hover { background: var(--mj-bg-surface-card); }
 
     .run-row-left {
       display: flex;
@@ -411,7 +435,7 @@ interface TestAlert {
     .run-row-name {
       font-size: 13px;
       font-weight: 500;
-      color: #1e293b;
+      color: var(--mj-text-primary);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -419,7 +443,7 @@ interface TestAlert {
 
     .run-row-time {
       font-size: 11px;
-      color: #94a3b8;
+      color: var(--mj-text-disabled);
     }
 
     .run-row-right {
@@ -431,7 +455,7 @@ interface TestAlert {
 
     .run-row-duration {
       font-size: 11px;
-      color: #64748b;
+      color: var(--mj-text-muted);
       min-width: 44px;
       text-align: right;
     }
@@ -461,7 +485,7 @@ interface TestAlert {
     .suite-health-name {
       font-size: 13px;
       font-weight: 500;
-      color: #1e293b;
+      color: var(--mj-text-primary);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -469,7 +493,7 @@ interface TestAlert {
 
     .suite-health-count {
       font-size: 11px;
-      color: #94a3b8;
+      color: var(--mj-text-disabled);
     }
 
     .suite-health-bar-wrapper {
@@ -482,7 +506,7 @@ interface TestAlert {
     .suite-health-bar {
       width: 80px;
       height: 6px;
-      background: #f1f5f9;
+      background: var(--mj-bg-surface-sunken);
       border-radius: 3px;
       overflow: hidden;
     }
@@ -511,12 +535,12 @@ interface TestAlert {
       align-items: center;
       gap: 10px;
       padding: 10px 20px;
-      border-bottom: 1px solid #f8fafc;
+      border-bottom: 1px solid var(--mj-bg-surface-card);
       cursor: pointer;
       transition: background 0.15s ease;
     }
 
-    .alert-row:hover { background: #fef2f2; }
+    .alert-row:hover { background: color-mix(in srgb, var(--mj-status-error) 8%, var(--mj-bg-surface)); }
 
     .alert-info {
       display: flex;
@@ -529,7 +553,7 @@ interface TestAlert {
     .alert-name {
       font-size: 13px;
       font-weight: 500;
-      color: #1e293b;
+      color: var(--mj-text-primary);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -537,14 +561,14 @@ interface TestAlert {
 
     .alert-reason {
       font-size: 11px;
-      color: #94a3b8;
+      color: var(--mj-text-disabled);
     }
 
     /* ===== Empty State ===== */
     .empty-state {
       padding: 32px 20px;
       text-align: center;
-      color: #94a3b8;
+      color: var(--mj-text-disabled);
       font-size: 13px;
       display: flex;
       align-items: center;
@@ -579,8 +603,12 @@ export class TestingDashboardTabComponent implements OnInit, OnDestroy {
   SortedSuites: SuiteHierarchyNode[] = [];
   Alerts: TestAlert[] = [];
 
+  private activeRunsMap = new Map<string, ActiveRun>();
+
   constructor(
     private instrumentationService: TestingInstrumentationService,
+    private executionService: TestingExecutionService,
+    private testingDialogService: TestingDialogService,
     private cdr: ChangeDetectorRef
   ) {}
 
@@ -605,6 +633,21 @@ export class TestingDashboardTabComponent implements OnInit, OnDestroy {
 
   OnRefresh(): void {
     this.instrumentationService.refresh();
+  }
+
+  OnViewRunningTest(run: TestRunSummary): void {
+    this.testingDialogService.OpenTestMonitor(run.testId);
+  }
+
+  GetActiveRunProgress(testId: string): number {
+    return this.activeRunsMap.get(testId)?.Progress ?? 0;
+  }
+
+  GetActiveRunStep(testId: string): string {
+    const step = this.activeRunsMap.get(testId)?.CurrentStep ?? '';
+    // Hide raw internal step identifiers (e.g. "driver_log", "loading_test")
+    if (step.includes('_')) return '';
+    return step;
   }
 
   OnOpenRun(run: TestRunSummary): void {
@@ -664,6 +707,19 @@ export class TestingDashboardTabComponent implements OnInit, OnDestroy {
     this.subscribeKpis();
     this.subscribeTestRuns();
     this.subscribeSuites();
+    this.subscribeActiveRuns();
+  }
+
+  private subscribeActiveRuns(): void {
+    this.executionService.ActiveRuns$.pipe(
+      takeUntil(this.destroy$)
+    ).subscribe(runs => {
+      this.activeRunsMap.clear();
+      for (const run of runs) {
+        this.activeRunsMap.set(run.TestId, run);
+      }
+      this.cdr.markForCheck();
+    });
   }
 
   private subscribeLoading(): void {

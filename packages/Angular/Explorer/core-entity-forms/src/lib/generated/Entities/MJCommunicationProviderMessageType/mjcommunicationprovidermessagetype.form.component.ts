@@ -19,7 +19,7 @@ export class MJCommunicationProviderMessageTypeFormComponent extends BaseFormCom
             { sectionKey: 'providerMapping', sectionName: 'Provider Mapping', isExpanded: true },
             { sectionKey: 'messageTypeDefinition', sectionName: 'Message Type Definition', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'communicationLogs', sectionName: 'Communication Logs', isExpanded: false }
+            { sectionKey: 'mJCommunicationLogs', sectionName: 'Communication Logs', isExpanded: false }
         ]);
     }
 }

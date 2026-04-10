@@ -1,0 +1,62 @@
+[
+  {
+    "fields": {
+      "Name": "Cluster Naming",
+      "Description": "Generates short descriptive labels for vector similarity clusters by analyzing sample records from each cluster. Used by the Knowledge Hub clustering dashboard.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/knowledge-hub/cluster-naming.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Lowest",
+      "ParallelizationMode": "None",
+      "MaxRetries": 1,
+      "RetryDelayMS": 500,
+      "RetryStrategy": "Fixed",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.1 Flash-Lite",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 1
+          },
+          "primaryKey": {
+            "ID": "15097289-6A62-499C-96BB-036A8E2599D8"
+          },
+          "sync": {
+            "lastModified": "2026-04-04T01:09:42.780Z",
+            "checksum": "71ee991d8e0ab07b2e4ea296274c871739fbb9068ae94df729251a82c42f9641"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.1 Flash-Lite",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "Priority": 2
+          },
+          "primaryKey": {
+            "ID": "084DF716-BA69-4D4A-8747-1E83FB920C26"
+          },
+          "sync": {
+            "lastModified": "2026-04-04T01:09:42.794Z",
+            "checksum": "095fd3e315f3b21003c644d5708f6734db90f565786423ebadb395b7fa53105f"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "C381DBBC-75E5-4177-ACF4-4F284286C0BA"
+    },
+    "sync": {
+      "lastModified": "2026-04-04T01:09:42.703Z",
+      "checksum": "5b3c79a79a0c23df5e8db10e9cfc24ce4a0b3490cdd157f6b789413e57221e03"
+    }
+  }
+]

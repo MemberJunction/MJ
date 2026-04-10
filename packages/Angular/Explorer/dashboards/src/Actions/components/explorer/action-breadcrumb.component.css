@@ -3,8 +3,8 @@
   align-items: center;
   gap: 4px;
   padding: 8px 20px;
-  background: var(--kendo-color-app-surface);
-  border-bottom: 1px solid var(--kendo-color-border);
+  background: var(--mj-bg-page);
+  border-bottom: 1px solid var(--mj-border-default);
   overflow-x: auto;
   white-space: nowrap;
 }
@@ -18,18 +18,18 @@
   background: transparent;
   border-radius: 4px;
   font-size: 13px;
-  color: var(--kendo-color-primary);
+  color: var(--mj-brand-primary);
   cursor: pointer;
   transition: all 0.15s ease;
   text-decoration: none;
 }
 
 .breadcrumb-item:hover {
-  background: var(--kendo-color-primary-subtle);
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
 }
 
 .breadcrumb-item.current {
-  color: var(--kendo-color-on-app-surface);
+  color: var(--mj-text-primary);
   font-weight: 600;
   cursor: default;
 }
@@ -43,7 +43,7 @@
 }
 
 .breadcrumb-item.current i {
-  color: var(--kendo-color-warning);
+  color: var(--mj-status-warning);
 }
 
 .breadcrumb-text {
@@ -55,7 +55,7 @@
 .breadcrumb-separator {
   display: flex;
   align-items: center;
-  color: var(--kendo-color-subtle);
+  color: var(--mj-text-muted);
 }
 
 .breadcrumb-separator i {

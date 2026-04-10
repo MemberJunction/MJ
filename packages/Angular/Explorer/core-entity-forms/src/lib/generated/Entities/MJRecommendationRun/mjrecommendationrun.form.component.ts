@@ -20,7 +20,7 @@ export class MJRecommendationRunFormComponent extends BaseFormComponent {
             { sectionKey: 'runScheduleStatus', sectionName: 'Run Schedule & Status', isExpanded: true },
             { sectionKey: 'runDescription', sectionName: 'Run Description', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'recommendations', sectionName: 'Recommendations', isExpanded: false }
+            { sectionKey: 'mJRecommendations', sectionName: 'Recommendations', isExpanded: false }
         ]);
     }
 }

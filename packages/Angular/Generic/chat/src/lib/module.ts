@@ -9,9 +9,6 @@ import { MarkdownModule } from '@memberjunction/ng-markdown';
 import { ChatComponent } from './chat/chat.component';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
-import { IndicatorsModule } from '@progress/kendo-angular-indicators';
-import { ButtonsModule } from '@progress/kendo-angular-buttons';
-import { DialogModule } from '@progress/kendo-angular-dialog';
 
 @NgModule({
   declarations: [
@@ -22,9 +19,6 @@ import { DialogModule } from '@progress/kendo-angular-dialog';
     FormsModule,
     ContainerDirectivesModule,
     SharedGenericModule,
-    IndicatorsModule,
-    ButtonsModule,
-    DialogModule,
     MarkdownModule
   ],
   exports: [

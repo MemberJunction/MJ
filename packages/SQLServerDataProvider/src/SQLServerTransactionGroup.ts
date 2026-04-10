@@ -1,7 +1,7 @@
-import { Metadata, TransactionGroupBase, TransactionResult } from "@memberjunction/core";
+import { Metadata, TransactionGroupBase, TransactionResult, LogError } from "@memberjunction/core";
 import sql from 'mssql';
 import { SQLServerDataProvider } from "./SQLServerDataProvider";
-import { LogError, LogStatus } from "@memberjunction/core";
+import { GenericDatabaseProvider } from "@memberjunction/generic-database-provider";
 
 /**
  * SQL Server implementation of the TransactionGroupBase
@@ -50,7 +50,7 @@ export class SQLServerTransactionGroup extends TransactionGroupBase {
                             
                             // Log the SQL statement before execution
                             const description = `${item.OperationType} ${item.ExtraData?.entityName || 'entity'} (Transaction Group)`;
-                            await SQLServerDataProvider.LogSQLStatement(
+                            await GenericDatabaseProvider.LogSQLStatement(
                                 item.Instruction,
                                 item.Vars,
                                 description,
@@ -110,7 +110,7 @@ export class SQLServerTransactionGroup extends TransactionGroupBase {
                                 
                                 // Log the SQL statement before execution
                                 const description = `${item.OperationType} ${item.ExtraData?.entityName || 'entity'} (Transaction Group)`;
-                                await SQLServerDataProvider.LogSQLStatement(
+                                await GenericDatabaseProvider.LogSQLStatement(
                                     modifiedInstruction,
                                     item.Vars,
                                     description,
@@ -128,7 +128,7 @@ export class SQLServerTransactionGroup extends TransactionGroupBase {
                             } else {
                                 // Log the SQL statement before execution
                                 const description = `${item.OperationType} ${item.ExtraData?.entityName || 'entity'} (Transaction Group)`;
-                                await SQLServerDataProvider.LogSQLStatement(
+                                await GenericDatabaseProvider.LogSQLStatement(
                                     item.Instruction,
                                     item.Vars,
                                     description,

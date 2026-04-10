@@ -4,6 +4,7 @@ import { UserInfo, RunView } from '@memberjunction/core';
 import { MJTaskEntity, MJTaskDependencyEntity, MJAIAgentRunEntity } from '@memberjunction/core-entities';
 import { TaskComponent } from '@memberjunction/ng-tasks';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Full-page tasks view with task list and Gantt chart
@@ -63,14 +64,14 @@ import { AIEngineBase } from '@memberjunction/ai-engine-base';
       display: flex;
       flex-direction: column;
       height: 100%;
-      background: #F9FAFB;
+      background: var(--mj-bg-surface-sunken);
     }
 
     .task-detail-view {
       display: flex;
       flex-direction: column;
       height: 100%;
-      background: white;
+      background: var(--mj-bg-surface);
     }
 
     .swoosh-in {
@@ -93,8 +94,8 @@ import { AIEngineBase } from '@memberjunction/ai-engine-base';
       align-items: center;
       gap: 12px;
       padding: 16px 24px;
-      background: white;
-      border-bottom: 1px solid #E5E7EB;
+      background: var(--mj-bg-surface);
+      border-bottom: 1px solid var(--mj-border-default);
     }
 
     .breadcrumb-back {
@@ -103,9 +104,9 @@ import { AIEngineBase } from '@memberjunction/ai-engine-base';
       gap: 8px;
       padding: 8px 12px;
       background: transparent;
-      border: 1px solid #D1D5DB;
+      border: 1px solid var(--mj-border-strong);
       border-radius: 6px;
-      color: #374151;
+      color: var(--mj-text-secondary);
       font-size: 14px;
       font-weight: 500;
       cursor: pointer;
@@ -113,8 +114,8 @@ import { AIEngineBase } from '@memberjunction/ai-engine-base';
     }
 
     .breadcrumb-back:hover {
-      background: #F3F4F6;
-      border-color: #9CA3AF;
+      background: var(--mj-bg-surface-sunken);
+      border-color: var(--mj-text-disabled);
     }
 
     .breadcrumb-back i {
@@ -122,14 +123,14 @@ import { AIEngineBase } from '@memberjunction/ai-engine-base';
     }
 
     .breadcrumb-divider {
-      color: #9CA3AF;
+      color: var(--mj-text-disabled);
       font-size: 14px;
     }
 
     .breadcrumb-current {
       font-size: 14px;
       font-weight: 600;
-      color: #111827;
+      color: var(--mj-text-primary);
     }
   `]
 })
@@ -164,7 +165,7 @@ export class TasksFullViewComponent implements OnInit, OnChanges {
 
     // Auto-drill into task if activeTaskId changes
     if (changes['activeTaskId'] && this.activeTaskId) {
-      const task = this.allTasks.find(t => t.ID === this.activeTaskId);
+      const task = this.allTasks.find(t => UUIDsEqual(t.ID, this.activeTaskId));
       if (task) {
         this.onTaskClick(task);
       }
@@ -267,7 +268,7 @@ export class TasksFullViewComponent implements OnInit, OnChanges {
         const allHierarchy = hierarchyResult.Results || [];
 
         // For list view: Filter out the clicked task itself - only show its children/descendants
-        this.subTasks = allHierarchy.filter(t => t.ID !== task.ID);
+        this.subTasks = allHierarchy.filter(t => !UUIDsEqual(t.ID, task.ID));
 
         // For Gantt view: Include the parent task so hierarchy works correctly
         this.subTasksWithParent = allHierarchy;

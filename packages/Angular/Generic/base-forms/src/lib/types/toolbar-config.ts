@@ -36,6 +36,9 @@ export interface FormToolbarConfig {
   /** Show the Lists button for managing list membership. Default: true */
   ShowListButton: boolean;
 
+  /** Show the Tags button for viewing/managing tags on this record. Default: true */
+  ShowTagsButton: boolean;
+
   /** Show the IS-A entity hierarchy breadcrumb. Default: true */
   ShowEntityHierarchy: boolean;
 
@@ -90,6 +93,7 @@ export const DEFAULT_TOOLBAR_CONFIG: FormToolbarConfig = {
   ShowFavoriteButton: true,
   ShowHistoryButton: true,
   ShowListButton: true,
+  ShowTagsButton: true,
   ShowEntityHierarchy: true,
   ShowSectionControls: true,
   ShowEditBanner: true,
@@ -113,6 +117,7 @@ export const EXPLORER_TOOLBAR_CONFIG: FormToolbarConfig = {
   ShowFavoriteButton: true,
   ShowHistoryButton: true,
   ShowListButton: true,
+  ShowTagsButton: true,
   ShowEntityHierarchy: true,
   ShowSectionControls: true,
   ShowEditBanner: true,

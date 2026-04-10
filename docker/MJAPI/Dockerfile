@@ -8,8 +8,8 @@ WORKDIR /flyway
 
 ENV PATH=/opt/mssql-tools/bin:$PATH
 
-# Install required packages
-RUN apt-get update && apt-get install -y --no-install-recommends curl gnupg tar dialog openssh-server apt-transport-https locales gnupg2
+# Install required packages (build-essential needed for native addons like isolated-vm)
+RUN apt-get update && apt-get install -y --no-install-recommends curl gnupg tar dialog openssh-server apt-transport-https locales gnupg2 build-essential
 
 # Install Node
 RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash -
@@ -43,13 +43,16 @@ WORKDIR /app
 RUN npm install -g pm2
 
 # Copy package.json and package-lock.json from the root directory
-COPY package.json turbo.json ./
+COPY package.json turbo.json tsconfig.server.json ./
 COPY packages/GeneratedActions/package.json ./packages/GeneratedActions/package.json
 COPY packages/GeneratedEntities/package.json ./packages/GeneratedEntities/package.json
 COPY packages/MJAPI/package.json ./packages/MJAPI/package.json
 
 # Install dependencies using npm workspaces
 RUN npm install
+
+# Remove build tools to reduce image size
+RUN apt-get purge -y build-essential && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
 
 # Copy necessary files and directories for the build
 COPY packages/GeneratedActions ./packages/GeneratedActions/

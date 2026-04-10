@@ -16,11 +16,14 @@ export class MJContentItemFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'sourceInformation', sectionName: 'Source Information', isExpanded: true },
-            { sectionKey: 'contentDetails', sectionName: 'Content Details', isExpanded: false },
-            { sectionKey: 'contentItemAttributes', sectionName: 'Content Item Attributes', isExpanded: false },
-            { sectionKey: 'contentItemTags', sectionName: 'Content Item Tags', isExpanded: false }
+            { sectionKey: 'contentDetails', sectionName: 'Content Details', isExpanded: true },
+            { sectionKey: 'aIVectorization', sectionName: 'AI & Vectorization', isExpanded: false },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
+            { sectionKey: 'mJContentItemAttributes', sectionName: 'Content Item Attributes', isExpanded: false },
+            { sectionKey: 'mJContentItemTags', sectionName: 'Content Item Tags', isExpanded: false },
+            { sectionKey: 'mJContentItemDuplicatesContentItemAID', sectionName: 'Content Item Duplicates (Content Item A ID)', isExpanded: false },
+            { sectionKey: 'mJContentItemDuplicatesContentItemBID', sectionName: 'Content Item Duplicates (Content Item B ID)', isExpanded: false }
         ]);
     }
 }

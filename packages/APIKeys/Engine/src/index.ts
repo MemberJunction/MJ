@@ -21,12 +21,16 @@
 // Re-export base engine for convenience
 export { APIKeysEngineBase } from '@memberjunction/api-keys-base';
 
-// Main engine and singleton
+// Main engine, singleton, and generation defaults
 export {
     APIKeyEngine,
     GetAPIKeyEngine,
     ResetAPIKeyEngine,
-    KeyHashValidationResult
+    KeyHashValidationResult,
+    DEFAULT_KEY_PREFIX,
+    DEFAULT_ENTROPY_BYTES,
+    DEFAULT_KEY_ENCODING,
+    DEFAULT_HASH_ALGORITHM
 } from './APIKeyEngine';
 
 // Scope evaluation
@@ -61,5 +65,7 @@ export {
 // Interfaces - Logging and Configuration
 export {
     UsageLogEntry,
-    APIKeyEngineConfig
+    APIKeyEngineConfig,
+    APIKeyGenerationConfig,
+    APIKeyEncoding
 } from './interfaces';

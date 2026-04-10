@@ -1,4 +1,5 @@
 import { CompositeKey, EntityInfo, EntityFieldInfo, EntityRelationshipInfo, Metadata, RunView, UserInfo, LogError, LogStatus } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { DependencyNode, WalkOptions } from './types';
 import { buildCompositeKeyFromRecord, escapeSqlString } from './constants';
 
@@ -403,7 +404,7 @@ export class DependencyGraphWalker {
             // Only walk One-To-Many (parent has many children)
             if (rel.Type.trim() !== 'One To Many') continue;
 
-            const childEntity = md.Entities.find(e => e.ID === rel.RelatedEntityID);
+            const childEntity = md.Entities.find(e => UUIDsEqual(e.ID, rel.RelatedEntityID));
             if (!childEntity) continue;
             if (!childEntity.TrackRecordChanges) continue;
 
@@ -436,9 +437,9 @@ export class DependencyGraphWalker {
         for (const field of entity.Fields) {
             if (!field.RelatedEntityID) continue;
             if (this.isSystemFKField(field.Name)) continue;
-            if (field.RelatedEntityID === entity.ID) continue; // skip self-referencing
+            if (UUIDsEqual(field.RelatedEntityID, entity.ID)) continue; // skip self-referencing
 
-            const targetEntity = md.Entities.find(e => e.ID === field.RelatedEntityID);
+            const targetEntity = md.Entities.find(e => UUIDsEqual(e.ID, field.RelatedEntityID));
             if (!targetEntity) continue;
             if (!targetEntity.TrackRecordChanges) continue;
 

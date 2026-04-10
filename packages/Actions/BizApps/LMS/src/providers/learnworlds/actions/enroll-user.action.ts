@@ -87,8 +87,6 @@ export class EnrollUserAction extends LearnWorldsBaseAction {
       price,
       justification,
       notifyUser,
-      params.StartDate,
-      params.ExpiryDate,
     );
 
     // Create enrollment
@@ -167,7 +165,7 @@ export class EnrollUserAction extends LearnWorldsBaseAction {
   }
 
   /**
-   * Build the endpoint and body based on product type (course vs bundle).
+   * Build the endpoint and body for enrollment (unified endpoint per LW v2 API).
    */
   private buildEnrollmentRequest(
     userId: string,
@@ -176,44 +174,16 @@ export class EnrollUserAction extends LearnWorldsBaseAction {
     price: number,
     justification: string,
     notifyUser: boolean,
-    startDate?: string,
-    expiryDate?: string,
   ): { endpoint: string; enrollmentData: Record<string, unknown> } {
-    if (productType === 'bundle') {
-      // Bundles use the generic enrollments endpoint with product_type
-      return {
-        endpoint: 'enrollments',
-        enrollmentData: {
-          product_id: courseId,
-          product_type: 'bundle',
-          user_id: userId,
-          price: price,
-          justification: justification,
-          notify_user: notifyUser,
-          ...(startDate ? { starts_at: new Date(startDate).toISOString() } : {}),
-          ...(expiryDate ? { expires_at: new Date(expiryDate).toISOString() } : {}),
-        },
-      };
-    }
-
-    // Courses use the per-course enrollment endpoint
-    const enrollmentData: Record<string, unknown> = {
-      user_id: userId,
-      justification: justification,
-      price: price,
-      notify_user: notifyUser,
-    };
-
-    if (startDate) {
-      enrollmentData.starts_at = new Date(startDate).toISOString();
-    }
-    if (expiryDate) {
-      enrollmentData.expires_at = new Date(expiryDate).toISOString();
-    }
-
     return {
-      endpoint: `courses/${courseId}/enrollments`,
-      enrollmentData,
+      endpoint: `users/${userId}/enrollment`,
+      enrollmentData: {
+        productId: courseId,
+        productType,
+        justification,
+        price,
+        send_enrollment_email: notifyUser,
+      },
     };
   }
 

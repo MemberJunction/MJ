@@ -158,6 +158,20 @@ describe('BaseLMSAction', () => {
       const result = action['getCredentialFromEnv']('COMP1', 'MISSING_KEY');
       expect(result).toBeUndefined();
     });
+
+    it('should fallback to lowercase companyId', () => {
+      process.env['BIZAPPS_TESTLMS_abc-123_API_KEY'] = 'lower-key';
+      expect(action['getCredentialFromEnv']('ABC-123', 'API_KEY')).toBe('lower-key');
+      delete process.env['BIZAPPS_TESTLMS_abc-123_API_KEY'];
+    });
+
+    it('should prefer original casing over lowercase fallback', () => {
+      process.env['BIZAPPS_TESTLMS_COMP1_API_KEY'] = 'original';
+      process.env['BIZAPPS_TESTLMS_comp1_API_KEY'] = 'lower';
+      expect(action['getCredentialFromEnv']('COMP1', 'API_KEY')).toBe('original');
+      delete process.env['BIZAPPS_TESTLMS_COMP1_API_KEY'];
+      delete process.env['BIZAPPS_TESTLMS_comp1_API_KEY'];
+    });
   });
 
   describe('getParamValue', () => {
@@ -329,7 +343,7 @@ describe('LearnWorldsBaseAction', () => {
       };
 
       action.SetCompanyContext('comp-123');
-      vi.spyOn(action as never, 'makeLearnWorldsPaginatedRequest').mockResolvedValue([mockUser] as never);
+      vi.spyOn(action as never, 'makeLearnWorldsRequest').mockResolvedValue({ data: [mockUser], meta: { page: 1, totalPages: 1 } } as never);
 
       const mockCtx = { ID: 'ctx-user' } as unknown as (typeof import('@memberjunction/core'))['UserInfo'];
       const result = await action.FindUserByEmail('test@example.com', mockCtx as never);
@@ -341,7 +355,7 @@ describe('LearnWorldsBaseAction', () => {
 
     it('should return null when not found', async () => {
       action.SetCompanyContext('comp-123');
-      vi.spyOn(action as never, 'makeLearnWorldsPaginatedRequest').mockResolvedValue([] as never);
+      vi.spyOn(action as never, 'makeLearnWorldsRequest').mockResolvedValue({ data: [], meta: { page: 1, totalPages: 1 } } as never);
 
       const mockCtx = { ID: 'ctx-user' } as unknown as (typeof import('@memberjunction/core'))['UserInfo'];
       const result = await action.FindUserByEmail('nobody@example.com', mockCtx as never);
@@ -351,7 +365,7 @@ describe('LearnWorldsBaseAction', () => {
 
     it('should re-throw on API error', async () => {
       action.SetCompanyContext('comp-123');
-      vi.spyOn(action as never, 'makeLearnWorldsPaginatedRequest').mockRejectedValue(new Error('API error') as never);
+      vi.spyOn(action as never, 'makeLearnWorldsRequest').mockRejectedValue(new Error('API error') as never);
 
       const mockCtx = { ID: 'ctx-user' } as unknown as (typeof import('@memberjunction/core'))['UserInfo'];
 

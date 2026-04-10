@@ -180,7 +180,7 @@ interface HourlyBucket {
                       <div class="channel-count">{{channel.Count | number}} messages</div>
                     </div>
                     <div class="channel-bar-wrapper">
-                      <div class="channel-bar-fill" [style.width.%]="channel.Percentage" [style.background]="channel.ColorClass === 'email' ? 'var(--mat-sys-primary)' : '#2e7d32'"></div>
+                      <div class="channel-bar-fill" [style.width.%]="channel.Percentage" [style.background]="channel.ColorClass === 'email' ? 'var(--mj-brand-primary)' : 'var(--mj-status-success)'"></div>
                     </div>
                     <span class="channel-pct">{{channel.Percentage}}%</span>
                   </div>
@@ -199,13 +199,10 @@ interface HourlyBucket {
     </div>
     `,
     styles: [`
-    /* ============================================================ */
-    /* MD3 MONITOR RESOURCE                                        */
-    /* ============================================================ */
     .monitor-wrapper {
         height: 100%;
         overflow-y: auto;
-        background: var(--mat-sys-surface-container);
+        background: var(--mj-bg-surface);
     }
     .monitor-container {
         padding: 24px;
@@ -222,9 +219,9 @@ interface HourlyBucket {
         margin-bottom: 24px;
     }
     .kpi-card {
-        background: var(--mat-sys-surface-container-lowest);
-        border: 1px solid var(--mat-sys-outline-variant);
-        border-radius: var(--mat-sys-corner-medium, 12px);
+        background: var(--mj-bg-surface-card);
+        border: 1px solid var(--mj-border-default);
+        border-radius: 12px;
         padding: 20px;
         display: flex;
         align-items: flex-start;
@@ -234,8 +231,8 @@ interface HourlyBucket {
         overflow: hidden;
     }
     .kpi-card:hover {
-        box-shadow: var(--mat-sys-elevation-1);
-        border-color: var(--mat-sys-outline);
+        box-shadow: 0 2px 8px var(--mj-shadow-md);
+        border-color: var(--mj-border-strong);
     }
     .kpi-card::before {
         content: '';
@@ -243,31 +240,43 @@ interface HourlyBucket {
         top: 0; left: 0; right: 0;
         height: 3px;
     }
-    .kpi-card.sent::before { background: var(--mat-sys-primary); }
-    .kpi-card.delivered::before { background: #1b873f; }
-    .kpi-card.pending::before { background: #9a6700; }
-    .kpi-card.failed::before { background: #cf222e; }
+    .kpi-card.sent::before { background: var(--mj-brand-primary); }
+    .kpi-card.delivered::before { background: var(--mj-status-success); }
+    .kpi-card.pending::before { background: var(--mj-status-warning); }
+    .kpi-card.failed::before { background: var(--mj-status-error); }
 
     .kpi-icon {
         width: 44px; height: 44px;
-        border-radius: var(--mat-sys-corner-medium, 12px);
+        border-radius: 12px;
         display: flex; align-items: center; justify-content: center;
         font-size: 16px; flex-shrink: 0;
     }
-    .kpi-card.sent .kpi-icon { background: var(--mat-sys-primary-container); color: var(--mat-sys-primary); }
-    .kpi-card.delivered .kpi-icon { background: #d4f8e0; color: #1b873f; }
-    .kpi-card.pending .kpi-icon { background: #fff0c7; color: #9a6700; }
-    .kpi-card.failed .kpi-icon { background: #ffdce0; color: #cf222e; }
+    .kpi-card.sent .kpi-icon {
+        background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+        color: var(--mj-brand-primary);
+    }
+    .kpi-card.delivered .kpi-icon {
+        background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface));
+        color: var(--mj-status-success);
+    }
+    .kpi-card.pending .kpi-icon {
+        background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface));
+        color: var(--mj-status-warning);
+    }
+    .kpi-card.failed .kpi-icon {
+        background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
+        color: var(--mj-status-error);
+    }
 
     .kpi-body { flex: 1; display: flex; flex-direction: column; gap: 2px; }
     .kpi-label {
         font-size: 11px; font-weight: 600;
         text-transform: uppercase; letter-spacing: 0.5px;
-        color: var(--mat-sys-on-surface-variant);
+        color: var(--mj-text-muted);
     }
     .kpi-value {
         font-size: 28px; font-weight: 800;
-        color: var(--mat-sys-on-surface);
+        color: var(--mj-text-primary);
         letter-spacing: -0.02em; line-height: 1.1;
     }
     .kpi-delta {
@@ -276,18 +285,27 @@ interface HourlyBucket {
         margin-top: 4px; padding: 2px 8px;
         border-radius: 10px; width: fit-content;
     }
-    .kpi-delta.up { background: #d4f8e0; color: #1b873f; }
-    .kpi-delta.down { background: #ffdce0; color: #cf222e; }
-    .kpi-delta.neutral { background: var(--mat-sys-surface-container); color: var(--mat-sys-on-surface-variant); }
+    .kpi-delta.up {
+        background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface));
+        color: var(--mj-status-success);
+    }
+    .kpi-delta.down {
+        background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
+        color: var(--mj-status-error);
+    }
+    .kpi-delta.neutral {
+        background: var(--mj-bg-surface-sunken);
+        color: var(--mj-text-muted);
+    }
 
     .delivery-bar {
         height: 6px; margin-top: 10px;
-        background: var(--mat-sys-surface-container-high);
+        background: var(--mj-bg-surface-sunken);
         border-radius: 3px; overflow: hidden;
     }
     .delivery-fill {
         height: 100%; border-radius: 3px;
-        background: #1b873f; transition: width 0.6s ease;
+        background: var(--mj-status-success); transition: width 0.6s ease;
     }
 
     /* CONTENT GRID */
@@ -299,9 +317,9 @@ interface HourlyBucket {
     }
 
     .card {
-        background: var(--mat-sys-surface-container-lowest);
-        border: 1px solid var(--mat-sys-outline-variant);
-        border-radius: var(--mat-sys-corner-medium, 12px);
+        background: var(--mj-bg-surface-card);
+        border: 1px solid var(--mj-border-default);
+        border-radius: 12px;
         overflow: hidden;
     }
     .card-header {
@@ -309,16 +327,16 @@ interface HourlyBucket {
         justify-content: space-between;
         align-items: center;
         padding: 16px 20px 12px;
-        border-bottom: 1px solid var(--mat-sys-outline-variant);
+        border-bottom: 1px solid var(--mj-border-default);
     }
     .card-header h3 {
         font-size: 13px; font-weight: 700;
-        color: var(--mat-sys-on-surface);
+        color: var(--mj-text-primary);
         display: flex; align-items: center; gap: 8px;
         margin: 0;
     }
     .card-header h3 i {
-        color: var(--mat-sys-on-surface-variant);
+        color: var(--mj-text-muted);
         font-size: 12px;
     }
     .card-body { padding: 16px 20px; }
@@ -334,130 +352,154 @@ interface HourlyBucket {
     .activity-item {
         display: flex; align-items: center; gap: 12px;
         padding: 12px 20px;
-        border-bottom: 1px solid var(--mat-sys-surface-container);
+        border-bottom: 1px solid var(--mj-border-default);
         transition: background 0.15s ease; cursor: pointer;
     }
     .activity-item:last-child { border-bottom: none; }
-    .activity-item:hover { background: var(--mat-sys-surface-container-low); }
+    .activity-item:hover { background: var(--mj-bg-surface-sunken); }
 
     .activity-icon {
         width: 34px; height: 34px;
-        border-radius: var(--mat-sys-corner-small, 8px);
+        border-radius: 8px;
         display: flex; align-items: center; justify-content: center;
         font-size: 12px; flex-shrink: 0;
     }
-    .activity-icon.email { background: var(--mat-sys-primary-container); color: var(--mat-sys-primary); }
-    .activity-icon.sms { background: #e8f5e9; color: #2e7d32; }
-    .activity-icon.error { background: #ffdce0; color: #cf222e; }
+    .activity-icon.email {
+        background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+        color: var(--mj-brand-primary);
+    }
+    .activity-icon.sms {
+        background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface));
+        color: var(--mj-status-success);
+    }
+    .activity-icon.error {
+        background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
+        color: var(--mj-status-error);
+    }
 
     .activity-body { flex: 1; min-width: 0; }
     .activity-title {
         font-size: 12px; font-weight: 600;
-        color: var(--mat-sys-on-surface);
+        color: var(--mj-text-primary);
         white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         display: block;
     }
     .activity-meta {
-        font-size: 11px; color: var(--mat-sys-on-surface-variant); margin-top: 1px;
+        font-size: 11px; color: var(--mj-text-muted); margin-top: 1px;
         display: block;
     }
     .activity-status {
         font-size: 10px; font-weight: 700;
         text-transform: uppercase; letter-spacing: 0.3px;
         padding: 3px 8px;
-        border-radius: var(--mat-sys-corner-extra-small, 4px);
+        border-radius: 4px;
         flex-shrink: 0;
     }
-    .activity-status.complete { background: #d4f8e0; color: #1b873f; }
-    .activity-status.failed { background: #ffdce0; color: #cf222e; }
-    .activity-status.pending { background: #fff0c7; color: #9a6700; }
+    .activity-status.complete {
+        background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface));
+        color: var(--mj-status-success);
+    }
+    .activity-status.failed {
+        background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
+        color: var(--mj-status-error);
+    }
+    .activity-status.pending {
+        background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface));
+        color: var(--mj-status-warning);
+    }
 
     /* PROVIDER HEALTH */
     .provider-health-list { display: flex; flex-direction: column; }
     .provider-row {
         display: flex; align-items: center; gap: 12px;
         padding: 14px 20px;
-        border-bottom: 1px solid var(--mat-sys-surface-container);
+        border-bottom: 1px solid var(--mj-border-default);
         transition: background 0.15s ease;
     }
     .provider-row:last-child { border-bottom: none; }
-    .provider-row:hover { background: var(--mat-sys-surface-container-low); }
+    .provider-row:hover { background: var(--mj-bg-surface-sunken); }
 
     .provider-status-dot {
         width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
-        background: var(--mat-sys-outline);
+        background: var(--mj-border-strong);
     }
-    .provider-status-dot.active { background: #1b873f; }
+    .provider-status-dot.active { background: var(--mj-status-success); }
 
     .provider-logo {
         width: 36px; height: 36px;
-        border-radius: var(--mat-sys-corner-small, 8px);
-        background: var(--mat-sys-surface-container);
+        border-radius: 8px;
+        background: var(--mj-bg-surface-sunken);
         display: flex; align-items: center; justify-content: center;
         font-size: 16px; flex-shrink: 0;
     }
-    .provider-logo.sendgrid { color: #1A82E2; }
-    .provider-logo.twilio { color: #F22F46; }
-    .provider-logo.gmail { color: #EA4335; }
-    .provider-logo.msgraph { color: #0078D4; }
+    .provider-logo.sendgrid { color: var(--mj-brand-primary); }
+    .provider-logo.twilio { color: var(--mj-status-error); }
+    .provider-logo.gmail { color: var(--mj-status-error); }
+    .provider-logo.msgraph { color: var(--mj-brand-primary); }
 
     .provider-info { flex: 1; }
-    .provider-name { font-size: 13px; font-weight: 600; color: var(--mat-sys-on-surface); }
-    .provider-type { font-size: 11px; color: var(--mat-sys-on-surface-variant); }
+    .provider-name { font-size: 13px; font-weight: 600; color: var(--mj-text-primary); }
+    .provider-type { font-size: 11px; color: var(--mj-text-muted); }
 
     .provider-health-bar {
         width: 80px; height: 6px;
-        background: var(--mat-sys-surface-container-high);
+        background: var(--mj-bg-surface-sunken);
         border-radius: 3px; overflow: hidden;
     }
     .provider-health-fill {
         height: 100%; border-radius: 3px;
         transition: width 0.4s ease;
     }
-    .provider-health-fill.excellent { background: #1b873f; }
-    .provider-health-fill.good { background: #66bb6a; }
-    .provider-health-fill.warning { background: #9a6700; }
-    .provider-health-fill.critical { background: #cf222e; }
+    .provider-health-fill.excellent { background: var(--mj-status-success); }
+    .provider-health-fill.good { background: var(--mj-status-success); }
+    .provider-health-fill.warning { background: var(--mj-status-warning); }
+    .provider-health-fill.critical { background: var(--mj-status-error); }
 
     .provider-rate {
         font-size: 12px; font-weight: 700;
         min-width: 44px; text-align: right;
     }
-    .provider-rate.excellent { color: #1b873f; }
-    .provider-rate.good { color: #66bb6a; }
-    .provider-rate.warning { color: #9a6700; }
-    .provider-rate.critical { color: #cf222e; }
+    .provider-rate.excellent { color: var(--mj-status-success); }
+    .provider-rate.good { color: var(--mj-status-success); }
+    .provider-rate.warning { color: var(--mj-status-warning); }
+    .provider-rate.critical { color: var(--mj-status-error); }
 
     /* CHANNEL BREAKDOWN */
     .channel-breakdown { display: flex; flex-direction: column; }
     .channel-row {
         display: flex; align-items: center; gap: 12px;
         padding: 14px 20px;
-        border-bottom: 1px solid var(--mat-sys-surface-container);
+        border-bottom: 1px solid var(--mj-border-default);
     }
     .channel-row:last-child { border-bottom: none; }
     .channel-icon {
         width: 32px; height: 32px;
-        border-radius: var(--mat-sys-corner-small, 8px);
+        border-radius: 8px;
         display: flex; align-items: center; justify-content: center;
         font-size: 13px; flex-shrink: 0;
     }
-    .channel-icon.email { background: var(--mat-sys-primary-container); color: var(--mat-sys-primary); }
-    .channel-icon.sms { background: #e8f5e9; color: #2e7d32; }
+    .channel-icon.email {
+        background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+        color: var(--mj-brand-primary);
+    }
+    .channel-icon.sms {
+        background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface));
+        color: var(--mj-status-success);
+    }
 
     .channel-info { flex: 1; }
-    .channel-name { font-size: 12px; font-weight: 600; color: var(--mat-sys-on-surface); }
-    .channel-count { font-size: 11px; color: var(--mat-sys-on-surface-variant); }
+    .channel-name { font-size: 12px; font-weight: 600; color: var(--mj-text-primary); }
+    .channel-count { font-size: 11px; color: var(--mj-text-muted); }
 
     .channel-bar-wrapper {
         width: 100px; height: 6px;
-        background: var(--mat-sys-surface-container-high);
+        background: var(--mj-bg-surface-sunken);
         border-radius: 3px; overflow: hidden;
     }
     .channel-bar-fill { height: 100%; border-radius: 3px; }
     .channel-pct {
         font-size: 12px; font-weight: 700;
-        color: var(--mat-sys-on-surface);
+        color: var(--mj-text-primary);
         min-width: 36px; text-align: right;
     }
 
@@ -465,7 +507,7 @@ interface HourlyBucket {
     .empty-state {
         display: flex; flex-direction: column;
         align-items: center; justify-content: center;
-        padding: 40px 0; color: var(--mat-sys-on-surface-variant);
+        padding: 40px 0; color: var(--mj-text-muted);
     }
     .empty-state i { font-size: 2rem; margin-bottom: 12px; opacity: 0.5; }
     .empty-state p { margin: 0; font-size: 13px; }

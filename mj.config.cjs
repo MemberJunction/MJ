@@ -39,8 +39,7 @@ module.exports = {
   ],
 
   // Soft PK/FK configuration for tables without database constraints
-  // RELATIVE PATH TO YOUR ADDITIONAL SCHEMA INFO FILE - below is an example to a demo schema
-  // additionalSchemaInfo: './Demos/AdvancedEntities/database-metadata-config.json',
+  additionalSchemaInfo: './metadata/integrations/additionalSchemaInfo.json',
 
   // Output directories specific to monorepo structure
   output: [
@@ -205,6 +204,50 @@ module.exports = {
 
   /**
    * ====================
+   * Server Extensions
+   * ====================
+   */
+  serverExtensions: [
+    {
+      Enabled: true,
+      DriverClass: 'SlackMessagingExtension',
+      RootPath: '/webhook/slack',
+      Settings: {
+        DefaultAgentName: process.env.MJ_BOT_DEFAULT_AGENT_NAME || 'Sage',
+        ContextUserEmail: process.env.MJ_BOT_CONTEXT_USER_EMAIL || 'your-service-account@company.com',
+        BotToken: process.env.SLACK_BOT_TOKEN,
+        SigningSecret: process.env.SLACK_SIGNING_SECRET,
+        ConnectionMode: 'http',
+        MaxThreadMessages: 50,
+        StreamingUpdateIntervalMs: 1500,
+        ExplorerBaseURL: 'http://localhost:4201',
+        SlashCommands: {
+          '/sage': 'Sage',
+          '/skip': 'Skip',
+          '/research': 'Research Agent',
+          '/marketing': 'Marketing Agent',
+          '/codesmith': 'Codesmith Agent',
+          '/query': 'Query Builder',
+        },
+      }
+    },
+    {
+      Enabled: true,
+      DriverClass: 'TeamsMessagingExtension',
+      RootPath: '/webhook/teams',
+      Settings: {
+        DefaultAgentName: process.env.MJ_BOT_DEFAULT_AGENT_NAME || 'Sage',
+        ContextUserEmail: process.env.MJ_BOT_CONTEXT_USER_EMAIL || 'your-service-account@company.com',
+        MicrosoftAppId: process.env.MICROSOFT_APP_ID,
+        MicrosoftAppPassword: process.env.MICROSOFT_APP_PASSWORD,
+        MaxThreadMessages: 50,
+        StreamingUpdateIntervalMs: 2000,
+      }
+    }
+  ],
+
+  /**
+   * ====================
    * QueryGen Overrides
    * ====================
    */
@@ -247,6 +290,37 @@ module.exports = {
    *
    * Supported provider types: 'msal' (Azure AD), 'auth0', 'okta', 'cognito', 'google'
    */
+
+  /**
+   * ====================
+   * API Key Generation
+   * ====================
+   *
+   * Configuration for API key generation parameters.
+   *
+   * WARNING: Changing these values after API keys have been issued will
+   * INVALIDATE all existing keys. Only modify before creating any keys,
+   * or be prepared to rotate all keys.
+   *
+   * All properties are optional and default to:
+   *   prefix: 'mj_sk_'       - Prefix prepended to generated keys
+   *   entropyBytes: 32        - Random bytes of entropy (64 hex chars / 43 base64url chars)
+   *   encoding: 'hex'         - Key body encoding: 'hex' or 'base64url'
+   *   hashAlgorithm: 'sha256' - Hash algorithm for key storage
+   *
+   * Example: base64url encoding with custom prefix for shorter keys:
+   *   apiKeyGeneration: {
+   *     prefix: 'skip-',
+   *     entropyBytes: 50,
+   *     encoding: 'base64url',
+   *   },
+   */
+  // apiKeyGeneration: {
+  //   prefix: 'mj_sk_',
+  //   entropyBytes: 32,
+  //   encoding: 'hex',
+  //   hashAlgorithm: 'sha256',
+  // },
 
   /**
    * ====================

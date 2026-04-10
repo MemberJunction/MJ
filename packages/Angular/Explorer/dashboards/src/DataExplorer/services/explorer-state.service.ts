@@ -3,6 +3,7 @@ import { BehaviorSubject, Observable } from 'rxjs';
 import { Metadata, RunView, CompositeKey, EntityRecordNameInput } from '@memberjunction/core';
 import { MJUserSettingEntity, MJUserFavoriteEntity, MJApplicationEntityEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { DataExplorerState, DEFAULT_EXPLORER_STATE, RecentItem, FavoriteItem, EntityCacheEntry, BreadcrumbItem, DataExplorerFilter, FavoriteEntity, RecentRecordAccess, FavoriteRecord, DataExplorerViewMode } from '../models/explorer-state.interface';
+import { UUIDsEqual } from '@memberjunction/global';
 
 const BASE_SETTING_KEY = 'DataExplorer.State';
 const MAX_RECENT_ITEMS = 20;
@@ -768,12 +769,12 @@ export class ExplorerStateService {
       const engine = UserInfoEngine.Instance;
 
       // Filter to only entity favorites (where EntityID is the Entities entity)
-      const entityFavorites = engine.UserFavorites.filter(f => f.EntityID === entitiesEntity.ID);
+      const entityFavorites = engine.UserFavorites.filter(f => UUIDsEqual(f.EntityID, entitiesEntity.ID));
 
       const favoriteEntities: FavoriteEntity[] = [];
       for (const fav of entityFavorites) {
         // Look up entity name from RecordID (which is the Entity.ID)
-        const entity = this.metadata.Entities.find(e => e.ID === fav.RecordID);
+        const entity = this.metadata.Entities.find(e => UUIDsEqual(e.ID, fav.RecordID));
         if (entity) {
           favoriteEntities.push({
             userFavoriteId: fav.ID,
@@ -808,10 +809,10 @@ export class ExplorerStateService {
 
       for (const log of userRecordLogs) {
         // Look up entity name from EntityID
-        const entity = this.metadata.Entities.find(e => e.ID === log.EntityID);
+        const entity = this.metadata.Entities.find(e => UUIDsEqual(e.ID, log.EntityID));
         if (entity) {
           // Filter by application context if applicable
-          if (this.currentFilter?.applicationId && !this.applicationEntities.some(ae => ae.EntityID === log.EntityID)) {
+          if (this.currentFilter?.applicationId && !this.applicationEntities.some(ae => UUIDsEqual(ae.EntityID, log.EntityID))) {
             continue; // Skip records from entities not in this application
           }
 
@@ -911,7 +912,7 @@ export class ExplorerStateService {
    */
   addLocalRecentRecord(entityName: string, entityId: string, recordId: string, recordName?: string): void {
     // Filter by application context if applicable
-    if (this.currentFilter?.applicationId && !this.applicationEntities.some(ae => ae.EntityID === entityId)) {
+    if (this.currentFilter?.applicationId && !this.applicationEntities.some(ae => UUIDsEqual(ae.EntityID, entityId))) {
       return; // Don't add records from entities not in this application
     }
 
@@ -964,7 +965,7 @@ export class ExplorerStateService {
       const engine = UserInfoEngine.Instance;
 
       // Filter to non-entity favorites (exclude favorites where EntityID is the Entities entity)
-      const nonEntityFavorites = engine.UserFavorites.filter(f => f.EntityID !== entitiesEntityId);
+      const nonEntityFavorites = engine.UserFavorites.filter(f => !UUIDsEqual(f.EntityID, entitiesEntityId));
 
       const favoriteRecords: FavoriteRecord[] = [];
       const recordNameInputs: EntityRecordNameInput[] = [];
@@ -972,10 +973,10 @@ export class ExplorerStateService {
 
       for (const fav of nonEntityFavorites) {
         // Look up entity info from the EntityID
-        const entity = this.metadata.Entities.find(e => e.ID === fav.EntityID);
+        const entity = this.metadata.Entities.find(e => UUIDsEqual(e.ID, fav.EntityID));
         if (entity) {
           // Filter by application context if applicable
-          if (this.currentFilter?.applicationId && !this.applicationEntities.some(ae => ae.EntityID === fav.EntityID)) {
+          if (this.currentFilter?.applicationId && !this.applicationEntities.some(ae => UUIDsEqual(ae.EntityID, fav.EntityID))) {
             continue; // Skip records from entities not in this application
           }
 

@@ -1,0 +1,1151 @@
+import { CompositeKey, IMetadataProvider, Metadata, RunView, type UserInfo } from '@memberjunction/core';
+import { BaseSingleton } from '@memberjunction/global';
+import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
+import type {
+    MJCompanyIntegrationEntity,
+    MJCompanyIntegrationEntityMapEntity,
+    MJCompanyIntegrationFieldMapEntity,
+    MJCompanyIntegrationRunEntity,
+    MJCompanyIntegrationRunDetailEntity,
+    MJCompanyIntegrationRecordMapEntity,
+    MJCompanyIntegrationSyncWatermarkEntity,
+    MJIntegrationEntity,
+    MJIntegrationSourceTypeEntity,
+    MJIntegrationObjectEntity,
+    MJIntegrationObjectFieldEntity,
+} from '@memberjunction/core-entities';
+import type {
+    ICompanyIntegrationEntityMap,
+    ICompanyIntegrationFieldMap,
+} from './entity-types.js';
+import type {
+    SyncResult,
+    MappedRecord,
+    SyncTriggerType,
+    SyncProgress,
+    OnProgressCallback,
+    OnNotificationCallback,
+    SyncNotification,
+    WatermarkType,
+    IntegrationSyncOptions,
+    EntityMapSyncResult,
+    SyncProgressSnapshot,
+} from './types.js';
+import { ClassifyError } from './types.js';
+import { ConnectorFactory } from './ConnectorFactory.js';
+import { FieldMappingEngine } from './FieldMappingEngine.js';
+import { MatchEngine } from './MatchEngine.js';
+import { WatermarkService } from './WatermarkService.js';
+import type { BaseIntegrationConnector, FetchContext } from './BaseIntegrationConnector.js';
+
+/** Default batch size for fetching records from external systems */
+const DEFAULT_BATCH_SIZE = 200;
+
+/**
+ * Server-side Integration Engine.
+ *
+ * Wraps IntegrationEngineBase (cached metadata) via composition and provides
+ * the full sync orchestration pipeline: fetch → map → match → validate → apply.
+ *
+ * Pattern mirrors AIEngine wrapping AIEngineBase.
+ *
+ * Usage:
+ *   await IntegrationEngine.Instance.Config(false, contextUser);
+ *   const result = await IntegrationEngine.Instance.RunSync(companyIntegrationID, contextUser);
+ */
+export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
+    public constructor() {
+        super();
+    }
+    private readonly fieldMappingEngine = new FieldMappingEngine();
+    private readonly matchEngine = new MatchEngine();
+    private readonly watermarkService = new WatermarkService();
+
+    /** In-process lock map to prevent concurrent syncs for the same CompanyIntegration */
+    private static readonly activeSyncs = new Map<string, Promise<SyncResult>>();
+
+    /** Abort controllers for cancelling running syncs */
+    private static readonly _abortControllers = new Map<string, AbortController>();
+
+    /** Live sync progress — updated on every batch for ALL syncs regardless of caller */
+    private static readonly _syncProgress = new Map<string, SyncProgressSnapshot>();
+
+    /** Read current sync progress for a connector. Returns undefined if no sync is running. */
+    public static GetSyncProgress(companyIntegrationID: string): SyncProgressSnapshot | undefined {
+        return IntegrationEngine._syncProgress.get(companyIntegrationID.toLowerCase());
+    }
+
+    /** Cancel a running sync for a connector. Returns true if a sync was found and signalled. */
+    public static CancelSync(companyIntegrationID: string): boolean {
+        const key = companyIntegrationID.toLowerCase();
+        const controller = IntegrationEngine._abortControllers.get(key);
+        if (controller) {
+            console.log(`[IntegrationEngine] Cancelling sync for ${companyIntegrationID}`);
+            controller.abort();
+            return true;
+        }
+        return false;
+    }
+
+    /** Get all active sync progress entries */
+    public static GetAllSyncProgress(): Map<string, SyncProgressSnapshot> {
+        return new Map(IntegrationEngine._syncProgress);
+    }
+
+    /** Configurable maximum batch size. Connector batches exceeding this are truncated. */
+    public MaxBatchSize: number = DEFAULT_BATCH_SIZE;
+
+    /**
+     * Executes a full sync run for a company integration.
+     * If a sync is already running for the same integration, waits for it to finish
+     * and returns the existing result (concurrency lock).
+     *
+     * @param companyIntegrationID - ID of the CompanyIntegration to sync
+     * @param contextUser - User context for all data operations
+     * @param triggerType - What triggered this sync (defaults to 'Manual')
+     * @param onProgress - Optional callback invoked with progress updates during sync
+     * @param onNotification - Optional callback invoked with a notification when the sync completes or fails
+     * @returns Aggregate sync result with record counts and errors
+     */
+    public async RunSync(
+        companyIntegrationID: string,
+        contextUser: UserInfo,
+        triggerType: SyncTriggerType = 'Manual',
+        onProgress?: OnProgressCallback,
+        onNotification?: OnNotificationCallback,
+        options?: IntegrationSyncOptions
+    ): Promise<SyncResult> {
+        const lockKey = companyIntegrationID.toLowerCase();
+        const existing = IntegrationEngine.activeSyncs.get(lockKey);
+        if (existing) {
+            console.warn(`[IntegrationEngine] Sync already running for ${lockKey}, waiting...`);
+            return existing;
+        }
+
+        // Initialize abort controller and progress tracking
+        const abortController = new AbortController();
+        IntegrationEngine._abortControllers.set(lockKey, abortController);
+        IntegrationEngine._syncProgress.set(lockKey, {
+            StartedAt: new Date(),
+            CurrentEntity: '',
+            EntityMapsTotal: 0,
+            EntityMapsCompleted: 0,
+            RecordsProcessed: 0,
+            RecordsCreated: 0,
+            RecordsUpdated: 0,
+            RecordsErrored: 0,
+            TriggerType: triggerType,
+        });
+
+        // Wrap caller's onProgress with internal tracking
+        const wrappedProgress: OnProgressCallback = (progress) => {
+            const entry = IntegrationEngine._syncProgress.get(lockKey);
+            if (entry) {
+                entry.EntityMapsTotal = progress.TotalEntityMaps;
+                entry.EntityMapsCompleted = progress.EntityMapIndex;
+                entry.RecordsProcessed = progress.RecordsProcessedInCurrentMap;
+            }
+            if (onProgress) onProgress(progress);
+        };
+
+        const syncPromise = this.executeSyncInternal(
+            companyIntegrationID, contextUser, triggerType, wrappedProgress, onNotification, options, abortController.signal
+        );
+        IntegrationEngine.activeSyncs.set(lockKey, syncPromise);
+        try {
+            return await syncPromise;
+        } finally {
+            IntegrationEngine.activeSyncs.delete(lockKey);
+            IntegrationEngine._abortControllers.delete(lockKey);
+            IntegrationEngine._syncProgress.delete(lockKey);
+        }
+    }
+
+    /**
+     * Internal sync execution method. Contains the full orchestration logic.
+     */
+    private async executeSyncInternal(
+        companyIntegrationID: string,
+        contextUser: UserInfo,
+        triggerType: SyncTriggerType,
+        onProgress?: OnProgressCallback,
+        onNotification?: OnNotificationCallback,
+        options?: IntegrationSyncOptions,
+        abortSignal?: AbortSignal
+    ): Promise<SyncResult> {
+        const startTime = Date.now();
+        const config = await this.LoadRunConfiguration(companyIntegrationID, contextUser, options);
+        const run = await this.CreateRunRecord(config.companyIntegration, triggerType, contextUser, options?.ScheduledJobRunID);
+
+        try {
+            const result = await this.ExecuteEntityMaps(config, run, contextUser, onProgress, abortSignal);
+            result.RunID = run.Get('ID') as string;
+            result.Duration = Date.now() - startTime;
+            if (result.RecordsErrored > 0) {
+                result.ErrorMessage = `Sync completed with ${result.RecordsErrored} error(s)`;
+            }
+            await this.FinalizeRun(run, result, contextUser, onNotification);
+            return result;
+        } catch (err) {
+            await this.FailRun(run, err, contextUser, onNotification);
+            throw err;
+        }
+    }
+
+    /**
+     * Loads all configuration needed for a sync run.
+     */
+    private async LoadRunConfiguration(
+        companyIntegrationID: string,
+        contextUser: UserInfo,
+        options?: IntegrationSyncOptions
+    ): Promise<RunConfiguration> {
+        const rv = new RunView();
+
+        const [ciResult, entityMapsResult, integrationsResult] = await rv.RunViews([
+            {
+                EntityName: 'MJ: Company Integrations',
+                ExtraFilter: `ID='${companyIntegrationID}'`,
+                MaxRows: 1,
+                ResultType: 'entity_object',
+            },
+            {
+                EntityName: 'MJ: Company Integration Entity Maps',
+                ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}' AND SyncEnabled=1 AND Status='Active'`,
+                OrderBy: 'Priority ASC',
+                ResultType: 'entity_object',
+            },
+            {
+                EntityName: 'MJ: Integrations',
+                ExtraFilter: '',
+                ResultType: 'entity_object',
+            },
+        ], contextUser);
+
+        const companyIntegration = (ciResult.Results as MJCompanyIntegrationEntity[])[0];
+        if (!companyIntegration) {
+            throw new Error(`CompanyIntegration not found: ${companyIntegrationID}`);
+        }
+
+        const integration = (integrationsResult.Results as MJIntegrationEntity[])
+            .find(i => i.Get('ID') === companyIntegration.IntegrationID);
+        if (!integration) {
+            throw new Error(`Integration not found for CompanyIntegration: ${companyIntegrationID}`);
+        }
+
+        const connector = ConnectorFactory.Resolve(integration);
+
+        let entityMaps = entityMapsResult.Results as ICompanyIntegrationEntityMap[];
+
+        // Filter to specific entity maps if requested
+        if (options?.EntityMapIDs && options.EntityMapIDs.length > 0) {
+            const requestedIDs = new Set(options.EntityMapIDs.map(id => id.toLowerCase()));
+            entityMaps = entityMaps.filter(m => requestedIDs.has((m.Get('ID') as string).toLowerCase()));
+        }
+
+        return {
+            companyIntegration,
+            entityMaps,
+            integration,
+            connector,
+            fullSync: options?.FullSync ?? false,
+        };
+    }
+
+    /**
+     * Creates a new CompanyIntegrationRun record to track this sync.
+     */
+    private async CreateRunRecord(
+        companyIntegration: MJCompanyIntegrationEntity,
+        triggerType: SyncTriggerType,
+        contextUser: UserInfo,
+        scheduledJobRunID?: string
+    ): Promise<MJCompanyIntegrationRunEntity> {
+        const md = new Metadata();
+        const run = await md.GetEntityObject<MJCompanyIntegrationRunEntity>(
+            'MJ: Company Integration Runs',
+            contextUser
+        );
+        run.NewRecord();
+        run.CompanyIntegrationID = companyIntegration.Get('ID');
+        run.RunByUserID = contextUser.ID;
+        run.StartedAt = new Date();
+        run.Status = 'In Progress';
+        run.TotalRecords = 0;
+        run.ConfigData = JSON.stringify({ triggerType });
+
+        // Link to scheduled job run if triggered by the scheduler.
+        // Use Set() because the ScheduledJobRunID column won't exist on the
+        // generated entity type until CodeGen runs after the migration.
+        if (scheduledJobRunID) {
+            run.Set('ScheduledJobRunID', scheduledJobRunID);
+        }
+
+        const saved = await run.Save();
+        if (!saved) {
+            throw new Error('Failed to create CompanyIntegrationRun record');
+        }
+        return run;
+    }
+
+    /**
+     * Processes all entity maps, aggregating results with progress tracking.
+     */
+    private async ExecuteEntityMaps(
+        config: RunConfiguration,
+        run: MJCompanyIntegrationRunEntity,
+        contextUser: UserInfo,
+        onProgress?: OnProgressCallback,
+        abortSignal?: AbortSignal
+    ): Promise<SyncResult> {
+        const aggregate: SyncResult = {
+            Success: true,
+            RecordsProcessed: 0,
+            RecordsCreated: 0,
+            RecordsUpdated: 0,
+            RecordsDeleted: 0,
+            RecordsErrored: 0,
+            RecordsSkipped: 0,
+            Errors: [],
+            EntityMapResults: [],
+        };
+
+        const totalMaps = config.entityMaps.length;
+
+        for (let i = 0; i < totalMaps; i++) {
+            if (abortSignal?.aborted) {
+                console.log(`[IntegrationEngine] Sync cancelled before entity map ${i + 1}/${totalMaps}`);
+                aggregate.Success = false;
+                aggregate.ErrorMessage = 'Sync cancelled by user';
+                break;
+            }
+            const entityMap = config.entityMaps[i];
+            const mapStartTime = Date.now();
+            try {
+                const mapResult = await this.ProcessSingleEntityMap(
+                    config, entityMap, run, contextUser, i, totalMaps, onProgress, abortSignal
+                );
+                this.MergeResult(aggregate, mapResult);
+                aggregate.EntityMapResults!.push(this.buildEntityMapResult(entityMap, mapResult, Date.now() - mapStartTime));
+            } catch (err) {
+                const objName = entityMap.ExternalObjectName ?? String(entityMap.Get('ID'));
+                const errMsg = err instanceof Error ? err.message : String(err);
+                console.error(`[IntegrationEngine] Entity map '${objName}' failed: ${errMsg}`);
+                aggregate.RecordsErrored++;
+                aggregate.Errors.push({
+                    ExternalID: objName,
+                    ChangeType: 'Skip',
+                    ErrorMessage: errMsg,
+                    ErrorCode: 'CONNECTOR_ERROR',
+                    Severity: 'Critical',
+                    ExternalRecord: { ExternalID: objName, ObjectType: objName, Fields: {} },
+                });
+                aggregate.EntityMapResults!.push({
+                    EntityMapID: entityMap.Get('ID') as string,
+                    ExternalObjectName: objName,
+                    EntityName: entityMap.Entity ?? '',
+                    Success: false,
+                    RecordsProcessed: 0,
+                    RecordsCreated: 0,
+                    RecordsUpdated: 0,
+                    RecordsDeleted: 0,
+                    RecordsErrored: 1,
+                    RecordsSkipped: 0,
+                    Duration: Date.now() - mapStartTime,
+                });
+            }
+        }
+
+        return aggregate;
+    }
+
+    /**
+     * Processes a single entity map: fetch → map → match → validate → apply.
+     */
+    private async ProcessSingleEntityMap(
+        config: RunConfiguration,
+        entityMap: ICompanyIntegrationEntityMap,
+        run: MJCompanyIntegrationRunEntity,
+        contextUser: UserInfo,
+        entityMapIndex: number,
+        totalEntityMaps: number,
+        onProgress?: OnProgressCallback,
+        abortSignal?: AbortSignal
+    ): Promise<SyncResult> {
+        const entityMapID = entityMap.Get('ID') as string;
+        const fieldMaps = await this.LoadFieldMaps(entityMapID, contextUser);
+        const watermark = await this.watermarkService.Load(entityMapID, contextUser);
+
+        // A6: Validate watermark before using it — skip entirely when FullSync requested
+        let initialWatermark = config.fullSync ? null : (watermark?.WatermarkValue ?? null);
+        if (initialWatermark && watermark) {
+            const watermarkType = (watermark.WatermarkType ?? 'Timestamp') as WatermarkType;
+            if (!this.watermarkService.ValidateWatermark(initialWatermark, watermarkType)) {
+                console.warn(
+                    `[IntegrationEngine] Invalid watermark '${initialWatermark}' for EntityMap ${entityMap.Get('ID')}, resetting to full fetch`
+                );
+                initialWatermark = null;
+            }
+        }
+
+        const result: SyncResult = {
+            Success: true,
+            RecordsProcessed: 0,
+            RecordsCreated: 0,
+            RecordsUpdated: 0,
+            RecordsDeleted: 0,
+            RecordsErrored: 0,
+            RecordsSkipped: 0,
+            Errors: [],
+        };
+
+        let hasMore = true;
+        let currentWatermark = initialWatermark;
+        let recordsInMap = 0;
+        let currentPage: number | undefined;
+        let currentOffset: number | undefined;
+        let currentCursor: string | undefined;
+        let batchCount = 0;
+        let previousBatchFingerprint: string | undefined;
+        const MAX_BATCHES_PER_MAP = 5000;
+
+        while (hasMore) {
+            if (abortSignal?.aborted) {
+                console.log(`[IntegrationEngine] Sync cancelled for ${entityMap.ExternalObjectName} after ${recordsInMap} records — saving watermark`);
+                break;
+            }
+            batchCount++;
+            if (batchCount > MAX_BATCHES_PER_MAP) {
+                console.error(
+                    `[IntegrationEngine] Safety limit reached: ${MAX_BATCHES_PER_MAP} batches for ` +
+                    `${entityMap.ExternalObjectName}. Stopping to prevent infinite loop.`
+                );
+                break;
+            }
+            const ctx: FetchContext = {
+                CompanyIntegration: config.companyIntegration,
+                ObjectName: entityMap.ExternalObjectName,
+                WatermarkValue: currentWatermark,
+                BatchSize: this.MaxBatchSize,
+                ContextUser: contextUser,
+                CurrentPage: currentPage,
+                CurrentOffset: currentOffset,
+                CurrentCursor: currentCursor,
+            };
+
+            const batch = await config.connector.FetchChanges(ctx);
+
+            // Enforce MaxBatchSize — connectors are asked to respect it but may overshoot
+            if (batch.Records.length > this.MaxBatchSize) {
+                console.warn(
+                    `[IntegrationEngine] ${entityMap.ExternalObjectName}: connector returned ` +
+                    `${batch.Records.length} records, exceeding MaxBatchSize of ${this.MaxBatchSize}. ` +
+                    `Truncating to ${this.MaxBatchSize}.`
+                );
+                batch.Records = batch.Records.slice(0, this.MaxBatchSize);
+            }
+
+            if (batch.Records.length > 0) {
+                const fingerprint = batch.Records.map(r => r.ExternalID).join(',');
+                if (fingerprint === previousBatchFingerprint) {
+                    console.warn(
+                        `[IntegrationEngine] Duplicate batch detected for ${entityMap.ExternalObjectName} — ` +
+                        `connector returned same records twice. Stopping to prevent infinite loop.`
+                    );
+                    break;
+                }
+                previousBatchFingerprint = fingerprint;
+            }
+
+            const mapped = this.fieldMappingEngine.Apply(
+                batch.Records, fieldMaps, entityMap.Entity
+            );
+            const resolved = await this.matchEngine.Resolve(
+                mapped, entityMap, fieldMaps, contextUser
+            );
+
+            const beforeApply = result.RecordsCreated + result.RecordsUpdated + result.RecordsSkipped + result.RecordsErrored;
+            await this.ApplyRecords(resolved, config.companyIntegration, entityMap, result, contextUser);
+            const afterApply = result.RecordsCreated + result.RecordsUpdated + result.RecordsSkipped + result.RecordsErrored;
+
+            if (batch.Records.length > 0) {
+                const written = afterApply - beforeApply;
+                const offsetInfo = currentOffset != null ? ` (offset ${currentOffset})` : '';
+                console.log(
+                    `[IntegrationEngine] ${entityMap.ExternalObjectName}: wrote ${written} records to DB` +
+                    `${offsetInfo} — running totals: ${result.RecordsCreated} created, ${result.RecordsUpdated} updated, ` +
+                    `${result.RecordsSkipped} skipped, ${result.RecordsErrored} errored` +
+                    (batch.HasMore ? ` | more batches pending` : ` | batch complete`)
+                );
+
+                // Update progress on the watermark record so the DB reflects live sync state
+                if (batch.HasMore) {
+                    await this.watermarkService.UpdateProgress(entityMapID, afterApply, contextUser);
+                }
+            }
+
+            recordsInMap += batch.Records.length;
+
+            // A8: Progress tracking
+            if (onProgress) {
+                this.emitProgress(onProgress, entityMapIndex, totalEntityMaps, recordsInMap, recordsInMap);
+            }
+
+            if (batch.NewWatermarkValue) {
+                currentWatermark = batch.NewWatermarkValue;
+            }
+            currentPage = batch.NextPage;
+            currentOffset = batch.NextOffset;
+            currentCursor = batch.NextCursor;
+            hasMore = batch.HasMore === true; // Explicit boolean check — prevents truthy undefined from looping
+        }
+
+        if (currentWatermark) {
+            await this.watermarkService.Update(entityMapID, currentWatermark, contextUser);
+            result.WatermarkAfter = currentWatermark;
+        }
+
+        await this.CreateRunDetail(run, entityMap, result, contextUser);
+        return result;
+    }
+
+    /**
+     * Emits a progress update via the callback.
+     */
+    private emitProgress(
+        onProgress: OnProgressCallback,
+        entityMapIndex: number,
+        totalEntityMaps: number,
+        processedInMap: number,
+        totalInMap: number
+    ): void {
+        const mapProgress = totalEntityMaps > 0 ? entityMapIndex / totalEntityMaps : 0;
+        const inMapProgress = totalInMap > 0 ? processedInMap / totalInMap : 0;
+        const overallPercent = Math.round((mapProgress + inMapProgress / totalEntityMaps) * 100);
+
+        const progress: SyncProgress = {
+            EntityMapIndex: entityMapIndex,
+            TotalEntityMaps: totalEntityMaps,
+            RecordsProcessedInCurrentMap: processedInMap,
+            TotalRecordsInCurrentMap: totalInMap,
+            PercentComplete: Math.min(overallPercent, 100),
+        };
+        onProgress(progress);
+    }
+
+    /**
+     * Loads active field maps for a given entity map.
+     */
+    private async LoadFieldMaps(
+        entityMapID: string,
+        contextUser: UserInfo
+    ): Promise<ICompanyIntegrationFieldMap[]> {
+        const rv = new RunView();
+        const result = await rv.RunView<ICompanyIntegrationFieldMap>({
+            EntityName: 'MJ: Company Integration Field Maps',
+            ExtraFilter: `EntityMapID='${entityMapID}' AND Status='Active'`,
+            OrderBy: 'Priority ASC',
+            ResultType: 'entity_object',
+        }, contextUser);
+
+        return result.Success ? result.Results : [];
+    }
+
+    /**
+     * Applies resolved records to MJ, handling each individually for error isolation.
+     */
+    private async ApplyRecords(
+        records: MappedRecord[],
+        companyIntegration: MJCompanyIntegrationEntity,
+        entityMap: ICompanyIntegrationEntityMap,
+        result: SyncResult,
+        contextUser: UserInfo
+    ): Promise<void> {
+        for (const record of records) {
+            result.RecordsProcessed++;
+            try {
+                await this.ApplySingleRecord(record, companyIntegration, entityMap, result, contextUser);
+            } catch (err) {
+                const classified = ClassifyError(err);
+                result.RecordsErrored++;
+                result.Errors.push({
+                    ExternalID: record.ExternalRecord.ExternalID,
+                    ChangeType: record.ChangeType,
+                    ErrorMessage: err instanceof Error ? err.message : String(err),
+                    ErrorCode: classified.Code,
+                    Severity: classified.Severity,
+                    ExternalRecord: record.ExternalRecord,
+                });
+            }
+        }
+    }
+
+    /**
+     * Applies a single record change (Create, Update, Delete, or Skip).
+     */
+    private async ApplySingleRecord(
+        record: MappedRecord,
+        companyIntegration: MJCompanyIntegrationEntity,
+        entityMap: ICompanyIntegrationEntityMap,
+        result: SyncResult,
+        contextUser: UserInfo
+    ): Promise<void> {
+        switch (record.ChangeType) {
+            case 'Create':
+                await this.CreateRecord(record, companyIntegration, entityMap, contextUser);
+                result.RecordsCreated++;
+                break;
+            case 'Update':
+                await this.UpdateRecord(record, contextUser);
+                result.RecordsUpdated++;
+                break;
+            case 'Delete':
+                await this.DeleteRecord(record, entityMap, contextUser);
+                result.RecordsDeleted++;
+                break;
+            case 'Skip':
+                result.RecordsSkipped++;
+                break;
+        }
+    }
+
+    /**
+     * Creates a new MJ record with pre-write validation and saves a record map entry.
+     */
+    private async CreateRecord(
+        record: MappedRecord,
+        companyIntegration: MJCompanyIntegrationEntity,
+        entityMap: ICompanyIntegrationEntityMap,
+        contextUser: UserInfo
+    ): Promise<void> {
+        const md = new Metadata();
+        const entity = await md.GetEntityObject(record.MJEntityName, contextUser);
+        entity.NewRecord();
+        this.SetEntityFields(entity, record.MappedFields);
+        this.SetStandardIntegrationFields(entity, record);
+
+        // A5: Pre-write validation
+        this.validateEntity(entity, record.MJEntityName);
+
+        const saved = await entity.Save();
+        if (!saved) {
+            throw new Error(`Failed to create ${record.MJEntityName} record`);
+        }
+
+        // Use the external ID as the entity record identifier in the record map
+        await this.SaveRecordMap(
+            companyIntegration.Get('ID'),
+            record.ExternalRecord.ExternalID,
+            entityMap.EntityID,
+            record.ExternalRecord.ExternalID,
+            contextUser
+        );
+    }
+
+    /**
+     * Updates an existing MJ record with pre-write validation.
+     */
+    private async UpdateRecord(
+        record: MappedRecord,
+        contextUser: UserInfo
+    ): Promise<void> {
+        if (!record.MatchedMJRecordID) {
+            throw new Error('Cannot update record without MatchedMJRecordID');
+        }
+
+        const md = new Metadata();
+        const entity = await md.GetEntityObject(record.MJEntityName, contextUser);
+        const entityInfo = md.Entities.find(e => e.Name === record.MJEntityName);
+        const pkFields = entityInfo?.PrimaryKeys ?? (entityInfo?.FirstPrimaryKey ? [entityInfo.FirstPrimaryKey] : []);
+        const loaded = await entity.InnerLoad(this.BuildEntityPrimaryKey(record.MatchedMJRecordID, pkFields));
+        if (!loaded) {
+            throw new Error(`Failed to load ${record.MJEntityName} record ${record.MatchedMJRecordID}`);
+        }
+
+        this.SetEntityFields(entity, record.MappedFields);
+        this.SetStandardIntegrationFields(entity, record);
+
+        // A5: Pre-write validation
+        this.validateEntity(entity, record.MJEntityName);
+
+        const saved = await entity.Save();
+        if (!saved) {
+            throw new Error(`Failed to update ${record.MJEntityName} record ${record.MatchedMJRecordID}`);
+        }
+    }
+
+    /**
+     * Runs Validate() on an entity if the method exists.
+     * Throws a validation error with details if validation fails.
+     */
+    private validateEntity(
+        entity: { Validate?: () => ValidationResult | null },
+        entityName: string
+    ): void {
+        if (typeof entity.Validate !== 'function') return;
+
+        const validationResult = entity.Validate();
+        if (validationResult && !validationResult.Success) {
+            const messages = validationResult.Errors?.map(e => e.Message).join('; ') ?? 'Validation failed';
+            throw new Error(`Validation failed for ${entityName}: ${messages}`);
+        }
+    }
+
+    /**
+     * Deletes (or soft-deletes) an MJ record based on the entity map's DeleteBehavior.
+     */
+    private async DeleteRecord(
+        record: MappedRecord,
+        entityMap: ICompanyIntegrationEntityMap,
+        contextUser: UserInfo
+    ): Promise<void> {
+        if (!record.MatchedMJRecordID) {
+            throw new Error('Cannot delete record without MatchedMJRecordID');
+        }
+
+        if (entityMap.DeleteBehavior === 'DoNothing') return;
+
+        const md = new Metadata();
+        const entity = await md.GetEntityObject(record.MJEntityName, contextUser);
+        const entityInfo = md.Entities.find(e => e.Name === record.MJEntityName);
+        const pkFields = entityInfo?.PrimaryKeys ?? (entityInfo?.FirstPrimaryKey ? [entityInfo.FirstPrimaryKey] : []);
+        const loaded = await entity.InnerLoad(this.BuildEntityPrimaryKey(record.MatchedMJRecordID, pkFields));
+        if (!loaded) {
+            throw new Error(`Failed to load ${record.MJEntityName} for deletion: ${record.MatchedMJRecordID}`);
+        }
+
+        const deleted = await entity.Delete();
+        if (!deleted) {
+            throw new Error(`Failed to delete ${record.MJEntityName} record ${record.MatchedMJRecordID}`);
+        }
+    }
+
+    /**
+     * Builds a CompositeKey for a record lookup using the entity's PK field definitions.
+     * Supports both single-PK and composite-PK entities. For composite PKs the recordID
+     * is expected to be a '|'-delimited string of values in PK-field sequence order —
+     * the same format written by BaseRESTIntegrationConnector.ToExternalRecord.
+     */
+    private BuildEntityPrimaryKey(
+        recordID: string,
+        pkFields: Array<{ Name: string }>
+    ): CompositeKey {
+        const key = new CompositeKey();
+        if (pkFields.length <= 1) {
+            key.KeyValuePairs.push({ FieldName: pkFields[0]?.Name ?? 'ID', Value: recordID });
+        } else {
+            const parts = recordID.split('|');
+            for (let i = 0; i < pkFields.length; i++) {
+                key.KeyValuePairs.push({ FieldName: pkFields[i].Name, Value: parts[i] ?? '' });
+            }
+        }
+        return key;
+    }
+
+    /**
+     * Sets fields on a BaseEntity instance from a field value map.
+     */
+    private SetEntityFields(
+        entity: { Set(fieldName: string, value: unknown): void },
+        fields: Record<string, unknown>
+    ): void {
+        for (const [fieldName, value] of Object.entries(fields)) {
+            entity.Set(fieldName, value);
+        }
+    }
+
+    /**
+     * Sets standard integration columns (__mj_integration_*) on target entities.
+     * Silently skips if the entity doesn't have these columns (e.g., __mj targets).
+     */
+    private SetStandardIntegrationFields(
+        entity: { Set(fieldName: string, value: unknown): void; Fields?: Array<{ Name: string }> },
+        _record: MappedRecord
+    ): void {
+        const fieldNames = entity.Fields?.map(f => f.Name) ?? [];
+        const hasField = (name: string) => fieldNames.includes(name);
+
+        if (hasField('__mj_integration_LastSyncedAt')) {
+            entity.Set('__mj_integration_LastSyncedAt', new Date().toISOString());
+        }
+        if (hasField('__mj_integration_SyncStatus')) {
+            entity.Set('__mj_integration_SyncStatus', 'Active');
+        }
+    }
+
+    /**
+     * Creates or updates a CompanyIntegrationRecordMap entry to track the external↔MJ mapping.
+     */
+    private async SaveRecordMap(
+        companyIntegrationID: string,
+        externalID: string,
+        entityID: string,
+        entityRecordID: string,
+        contextUser: UserInfo
+    ): Promise<void> {
+        const md = new Metadata();
+        const recordMap = await md.GetEntityObject<MJCompanyIntegrationRecordMapEntity>(
+            'MJ: Company Integration Record Maps',
+            contextUser
+        );
+        recordMap.NewRecord();
+        recordMap.CompanyIntegrationID = companyIntegrationID;
+        recordMap.ExternalSystemRecordID = externalID;
+        recordMap.EntityID = entityID;
+        recordMap.EntityRecordID = entityRecordID;
+
+        const saved = await recordMap.Save();
+        if (!saved) {
+            throw new Error(`Failed to save record map for external ID: ${externalID}`);
+        }
+    }
+
+    /**
+     * Creates a CompanyIntegrationRunDetail record for audit/reporting.
+     */
+    private async CreateRunDetail(
+        run: MJCompanyIntegrationRunEntity,
+        entityMap: ICompanyIntegrationEntityMap,
+        result: SyncResult,
+        contextUser: UserInfo
+    ): Promise<void> {
+        const md = new Metadata();
+        const detail = await md.GetEntityObject<MJCompanyIntegrationRunDetailEntity>(
+            'MJ: Company Integration Run Details',
+            contextUser
+        );
+        detail.NewRecord();
+        detail.CompanyIntegrationRunID = run.Get('ID');
+        detail.EntityID = entityMap.EntityID;
+        detail.RecordID = `Processed:${result.RecordsProcessed}`;
+        detail.Action = result.RecordsCreated > 0 ? 'INSERT' : 'UPDATE';
+        detail.IsSuccess = result.RecordsErrored === 0;
+
+        await detail.Save();
+    }
+
+    /**
+     * Merges an entity-map-level result into the aggregate result.
+     */
+    private MergeResult(aggregate: SyncResult, mapResult: SyncResult): void {
+        aggregate.RecordsProcessed += mapResult.RecordsProcessed;
+        aggregate.RecordsCreated += mapResult.RecordsCreated;
+        aggregate.RecordsUpdated += mapResult.RecordsUpdated;
+        aggregate.RecordsDeleted += mapResult.RecordsDeleted;
+        aggregate.RecordsErrored += mapResult.RecordsErrored;
+        aggregate.RecordsSkipped += mapResult.RecordsSkipped;
+        aggregate.Errors.push(...mapResult.Errors);
+
+        if (mapResult.RecordsErrored > 0) {
+            aggregate.Success = false;
+        }
+    }
+
+    /**
+     * Builds a per-entity-map result summary from the entity map and its sync result.
+     */
+    private buildEntityMapResult(
+        entityMap: ICompanyIntegrationEntityMap,
+        mapResult: SyncResult,
+        duration?: number
+    ): EntityMapSyncResult {
+        return {
+            EntityMapID: entityMap.Get('ID') as string,
+            ExternalObjectName: entityMap.ExternalObjectName ?? '',
+            EntityName: entityMap.Entity ?? '',
+            Success: mapResult.RecordsErrored === 0,
+            RecordsProcessed: mapResult.RecordsProcessed,
+            RecordsCreated: mapResult.RecordsCreated,
+            RecordsUpdated: mapResult.RecordsUpdated,
+            RecordsDeleted: mapResult.RecordsDeleted,
+            RecordsErrored: mapResult.RecordsErrored,
+            RecordsSkipped: mapResult.RecordsSkipped,
+            Duration: duration,
+        };
+    }
+
+    /**
+     * Finalizes a successful run with aggregate totals and emits a completion notification.
+     */
+    private async FinalizeRun(
+        run: MJCompanyIntegrationRunEntity,
+        result: SyncResult,
+        _contextUser: UserInfo,
+        onNotification?: OnNotificationCallback
+    ): Promise<void> {
+        run.EndedAt = new Date();
+        run.TotalRecords = result.RecordsProcessed;
+        run.Status = result.RecordsErrored > 0 ? 'Failed' : 'Success';
+        if (result.Errors.length > 0) {
+            run.ErrorLog = JSON.stringify(result.Errors.slice(0, 100));
+        }
+        await run.Save();
+
+        if (onNotification) {
+            const notification = this.buildCompletionNotification(run, result);
+            this.safeNotify(onNotification, notification);
+        }
+    }
+
+    /**
+     * Marks a run as failed after an unrecoverable error and emits a failure notification.
+     */
+    private async FailRun(
+        run: MJCompanyIntegrationRunEntity,
+        err: unknown,
+        _contextUser: UserInfo,
+        onNotification?: OnNotificationCallback
+    ): Promise<void> {
+        run.EndedAt = new Date();
+        run.Status = 'Failed';
+        run.ErrorLog = err instanceof Error ? err.message : String(err);
+        await run.Save();
+
+        if (onNotification) {
+            const failResult: SyncResult = {
+                Success: false,
+                RecordsProcessed: 0,
+                RecordsCreated: 0,
+                RecordsUpdated: 0,
+                RecordsDeleted: 0,
+                RecordsErrored: 0,
+                RecordsSkipped: 0,
+                Errors: [],
+            };
+            const notification = this.buildFailureNotification(run, err, failResult);
+            this.safeNotify(onNotification, notification);
+        }
+    }
+
+    /**
+     * Builds a SyncNotification for a completed run (success or completed-with-errors).
+     */
+    private buildCompletionNotification(
+        run: MJCompanyIntegrationRunEntity,
+        result: SyncResult
+    ): SyncNotification {
+        const hasErrors = result.RecordsErrored > 0;
+        const event = hasErrors ? 'SyncCompletedWithErrors' : 'SyncCompleted';
+        const severity = hasErrors ? 'Warning' : 'Info';
+        const integrationName = run.Get('Integration') ?? 'Unknown Integration';
+        const subject = hasErrors
+            ? `Integration Sync Completed with Errors: ${integrationName}`
+            : `Integration Sync Completed: ${integrationName}`;
+
+        const body = this.buildSyncResultBody(integrationName, result);
+
+        return {
+            Event: event,
+            Severity: severity,
+            CompanyIntegrationID: run.CompanyIntegrationID,
+            RunID: run.Get('ID') as string,
+            Subject: subject,
+            Body: body,
+            Result: result,
+            OccurredAt: new Date(),
+        };
+    }
+
+    /**
+     * Builds a SyncNotification for a catastrophically failed run.
+     */
+    private buildFailureNotification(
+        run: MJCompanyIntegrationRunEntity,
+        err: unknown,
+        result: SyncResult
+    ): SyncNotification {
+        const integrationName = run.Get('Integration') ?? 'Unknown Integration';
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        const subject = `Integration Sync Failed: ${integrationName}`;
+        const body = [
+            `Integration: ${integrationName}`,
+            `Status: Failed`,
+            `Error: ${errorMessage}`,
+            `Time: ${new Date().toISOString()}`,
+        ].join('\n');
+
+        return {
+            Event: 'SyncFailed',
+            Severity: 'Error',
+            CompanyIntegrationID: run.CompanyIntegrationID,
+            RunID: run.Get('ID') as string,
+            Subject: subject,
+            Body: body,
+            Result: result,
+            OccurredAt: new Date(),
+        };
+    }
+
+    /**
+     * Formats a human-readable sync result body for notification messages.
+     */
+    private buildSyncResultBody(integrationName: string, result: SyncResult): string {
+        const lines = [
+            `Integration: ${integrationName}`,
+            `Status: ${result.RecordsErrored > 0 ? 'Completed with errors' : 'Success'}`,
+            '',
+            'Record Counts:',
+            `  Processed:  ${result.RecordsProcessed}`,
+            `  Created:    ${result.RecordsCreated}`,
+            `  Updated:    ${result.RecordsUpdated}`,
+            `  Deleted:    ${result.RecordsDeleted}`,
+            `  Skipped:    ${result.RecordsSkipped}`,
+        ];
+        if (result.RecordsErrored > 0) {
+            lines.push(`  Errors:     ${result.RecordsErrored}`);
+            if (result.Errors.length > 0) {
+                lines.push('', 'Error Summary (first 5):');
+                for (const e of result.Errors.slice(0, 5)) {
+                    lines.push(`  [${e.ErrorCode}] ${e.ExternalID}: ${e.ErrorMessage}`);
+                }
+            }
+        }
+        lines.push('', `Completed at: ${new Date().toISOString()}`);
+        return lines.join('\n');
+    }
+
+    /**
+     * Invokes the notification callback without propagating exceptions.
+     */
+    private safeNotify(callback: OnNotificationCallback, notification: SyncNotification): void {
+        try {
+            callback(notification);
+        } catch (notifyErr) {
+            console.warn('[IntegrationEngine] Notification callback threw:', notifyErr);
+        }
+    }
+
+    // ── Composition: delegate metadata to IntegrationEngineBase ───────
+
+    protected get Base(): IntegrationEngineBase {
+        return IntegrationEngineBase.Instance;
+    }
+
+    /**
+     * Configures the engine by loading all integration metadata.
+     * Delegates to IntegrationEngineBase.Config().
+     */
+    public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
+        await IntegrationEngineBase.Instance.Config(forceRefresh ?? false, contextUser, provider);
+    }
+
+    // ── Metadata Accessors (delegated to Base) ────────────────────────
+
+    public get Integrations(): MJIntegrationEntity[] {
+        return this.Base.Integrations;
+    }
+
+    public get SourceTypes(): MJIntegrationSourceTypeEntity[] {
+        return this.Base.SourceTypes;
+    }
+
+    public get CompanyIntegrations(): MJCompanyIntegrationEntity[] {
+        return this.Base.CompanyIntegrations;
+    }
+
+    public get EntityMaps(): MJCompanyIntegrationEntityMapEntity[] {
+        return this.Base.EntityMaps;
+    }
+
+    public get FieldMaps(): MJCompanyIntegrationFieldMapEntity[] {
+        return this.Base.FieldMaps;
+    }
+
+    public get Watermarks(): MJCompanyIntegrationSyncWatermarkEntity[] {
+        return this.Base.Watermarks;
+    }
+
+    // ── Convenience Lookups (delegated to Base) ───────────────────────
+
+    public GetIntegrationByID(id: string): MJIntegrationEntity | undefined {
+        return this.Base.GetIntegrationByID(id);
+    }
+
+    public GetIntegrationByName(name: string): MJIntegrationEntity | undefined {
+        return this.Base.GetIntegrationByName(name);
+    }
+
+    public GetCompanyIntegrationByID(id: string): MJCompanyIntegrationEntity | undefined {
+        return this.Base.GetCompanyIntegrationByID(id);
+    }
+
+    public GetCompanyIntegrationsByIntegrationID(integrationID: string): MJCompanyIntegrationEntity[] {
+        return this.Base.GetCompanyIntegrationsByIntegrationID(integrationID);
+    }
+
+    public GetEntityMapsForCompanyIntegration(companyIntegrationID: string): MJCompanyIntegrationEntityMapEntity[] {
+        return this.Base.GetEntityMapsForCompanyIntegration(companyIntegrationID);
+    }
+
+    public GetFieldMapsForEntityMap(entityMapID: string): MJCompanyIntegrationFieldMapEntity[] {
+        return this.Base.GetFieldMapsForEntityMap(entityMapID);
+    }
+
+    public GetEnabledEntityMaps(companyIntegrationID: string): MJCompanyIntegrationEntityMapEntity[] {
+        return this.Base.GetEnabledEntityMaps(companyIntegrationID);
+    }
+
+    public GetIntegrationForCompanyIntegration(companyIntegrationID: string): MJIntegrationEntity | undefined {
+        return this.Base.GetIntegrationForCompanyIntegration(companyIntegrationID);
+    }
+
+    // ── Integration Object Metadata (delegated to Base) ──────────────
+
+    public get IntegrationObjects(): MJIntegrationObjectEntity[] {
+        return this.Base.IntegrationObjects;
+    }
+
+    public get IntegrationObjectFields(): MJIntegrationObjectFieldEntity[] {
+        return this.Base.IntegrationObjectFields;
+    }
+
+    public GetIntegrationObjectsByIntegrationID(integrationID: string): MJIntegrationObjectEntity[] {
+        return this.Base.GetIntegrationObjectsByIntegrationID(integrationID);
+    }
+
+    public GetIntegrationObject(integrationID: string, objectName: string): MJIntegrationObjectEntity | undefined {
+        return this.Base.GetIntegrationObject(integrationID, objectName);
+    }
+
+    public GetIntegrationObjectByID(objectID: string): MJIntegrationObjectEntity | undefined {
+        return this.Base.GetIntegrationObjectByID(objectID);
+    }
+
+    public GetIntegrationObjectFields(objectID: string): MJIntegrationObjectFieldEntity[] {
+        return this.Base.GetIntegrationObjectFields(objectID);
+    }
+
+    public GetActiveIntegrationObjects(integrationID: string): MJIntegrationObjectEntity[] {
+        return this.Base.GetActiveIntegrationObjects(integrationID);
+    }
+
+    public GetObjectsInDependencyOrder(integrationID: string): MJIntegrationObjectEntity[] {
+        return this.Base.GetObjectsInDependencyOrder(integrationID);
+    }
+
+    // ── Singleton ─────────────────────────────────────────────────────
+
+    public static get Instance(): IntegrationEngine {
+        return IntegrationEngine.getInstance<IntegrationEngine>();
+    }
+}
+
+/** Internal configuration bundle for a sync run */
+interface RunConfiguration {
+    companyIntegration: MJCompanyIntegrationEntity;
+    entityMaps: ICompanyIntegrationEntityMap[];
+    integration: MJIntegrationEntity;
+    connector: BaseIntegrationConnector;
+    fullSync: boolean;
+}
+
+/** Shape of a validation result from BaseEntity.Validate() */
+interface ValidationResult {
+    Success: boolean;
+    Errors?: ValidationError[];
+}
+
+/** Shape of a single validation error */
+interface ValidationError {
+    Message: string;
+}

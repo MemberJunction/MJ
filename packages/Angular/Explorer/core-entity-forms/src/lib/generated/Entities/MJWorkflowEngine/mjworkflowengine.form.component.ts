@@ -18,7 +18,7 @@ export class MJWorkflowEngineFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'engineSpecification', sectionName: 'Engine Specification', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'workflows', sectionName: 'Workflows', isExpanded: false }
+            { sectionKey: 'mJWorkflows', sectionName: 'Workflows', isExpanded: false }
         ]);
     }
 }

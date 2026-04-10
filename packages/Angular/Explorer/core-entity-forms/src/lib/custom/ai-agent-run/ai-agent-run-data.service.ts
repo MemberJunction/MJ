@@ -19,7 +19,7 @@ export class AIAgentRunDataHelper {
   private subRunsSubject$ = new BehaviorSubject<MJAIAgentRunEntity[]>([]);
   private actionLogsSubject$ = new BehaviorSubject<MJActionExecutionLogEntity[]>([]);
   private promptRunsSubject$ = new BehaviorSubject<MJAIPromptRunEntity[]>([]);
-  private loadingSubject$ = new BehaviorSubject<boolean>(false);
+  private loadingSubject$ = new BehaviorSubject<boolean>(true);
   private errorSubject$ = new BehaviorSubject<string | null>(null);
   
   // Public observables

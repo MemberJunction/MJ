@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { MJConversationEntity, MJConversationDetailEntity } from '@memberjunction/core-entities';
 import { Metadata, UserInfo, BaseEntity } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Global singleton cache for conversation-related entities.
@@ -34,7 +35,7 @@ export class DataCacheService {
    */
   async getConversation(id: string, currentUser: UserInfo): Promise<MJConversationEntity | null> {
     // Check cache first
-    const cached = this.conversations.find(c => c.ID === id);
+    const cached = this.conversations.find(c => UUIDsEqual(c.ID, id));
     if (cached) {
       return cached;
     }
@@ -76,7 +77,7 @@ export class DataCacheService {
    * @param id The conversation ID to remove
    */
   removeConversation(id: string): void {
-    this.conversations = this.conversations.filter(c => c.ID !== id);
+    this.conversations = this.conversations.filter(c => !UUIDsEqual(c.ID, id));
   }
 
   /**
@@ -99,7 +100,7 @@ export class DataCacheService {
    */
   async getConversationDetail(id: string, currentUser: UserInfo): Promise<MJConversationDetailEntity | null> {
     // Check cache first
-    const cached = this.conversationDetails.find(d => d.ID === id);
+    const cached = this.conversationDetails.find(d => UUIDsEqual(d.ID, id));
     if (cached) {
       return cached;
     }
@@ -170,7 +171,7 @@ export class DataCacheService {
 
       // Add all to cache (avoid duplicates by checking ID)
       for (const detail of details) {
-        const existingIndex = this.conversationDetails.findIndex(d => d.ID === detail.ID);
+        const existingIndex = this.conversationDetails.findIndex(d => UUIDsEqual(d.ID, detail.ID));
         if (existingIndex >= 0) {
           // Replace existing (ensures we keep the same object reference)
           this.conversationDetails[existingIndex] = detail;
@@ -193,7 +194,7 @@ export class DataCacheService {
    * @returns Array of cached conversation details
    */
   getCachedConversationDetails(conversationId: string): MJConversationDetailEntity[] {
-    return this.conversationDetails.filter(d => d.ConversationID === conversationId);
+    return this.conversationDetails.filter(d => UUIDsEqual(d.ConversationID, conversationId));
   }
 
   /**
@@ -201,7 +202,7 @@ export class DataCacheService {
    * @param id The conversation detail ID to remove
    */
   removeConversationDetail(id: string): void {
-    this.conversationDetails = this.conversationDetails.filter(d => d.ID !== id);
+    this.conversationDetails = this.conversationDetails.filter(d => !UUIDsEqual(d.ID, id));
   }
 
   // =============================================================================
@@ -265,8 +266,8 @@ export class DataCacheService {
    * @param conversationId The conversation ID
    */
   clearConversation(conversationId: string): void {
-    this.conversations = this.conversations.filter(c => c.ID !== conversationId);
-    this.conversationDetails = this.conversationDetails.filter(d => d.ConversationID !== conversationId);
+    this.conversations = this.conversations.filter(c => !UUIDsEqual(c.ID, conversationId));
+    this.conversationDetails = this.conversationDetails.filter(d => !UUIDsEqual(d.ConversationID, conversationId));
   }
 
   /**

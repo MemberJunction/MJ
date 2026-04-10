@@ -34,12 +34,12 @@ import { SharedService } from '@memberjunction/ng-shared';
       align-items: center;
       gap: 6px;
       padding: 4px 10px;
-      background: linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(99, 102, 241, 0.08));
-      border: 1px solid rgba(59, 130, 246, 0.2);
+      background: color-mix(in srgb, var(--mj-brand-primary) 8%, transparent);
+      border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 20%, transparent);
       border-radius: 16px;
       font-size: 12px;
       font-weight: 500;
-      color: #3b82f6;
+      color: var(--mj-brand-primary);
       cursor: pointer;
       transition: all 0.2s ease;
       white-space: nowrap;
@@ -47,10 +47,10 @@ import { SharedService } from '@memberjunction/ng-shared';
     }
 
     .entity-link-pill:hover {
-      background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(99, 102, 241, 0.15));
-      border-color: rgba(59, 130, 246, 0.4);
+      background: color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
+      border-color: color-mix(in srgb, var(--mj-brand-primary) 40%, transparent);
       transform: translateY(-1px);
-      box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15);
+      box-shadow: var(--mj-shadow-sm);
     }
 
     .entity-icon {

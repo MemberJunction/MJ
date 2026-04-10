@@ -3,6 +3,7 @@ import { UserInfo, Metadata, RunView } from '@memberjunction/core';
 import { MJArtifactEntity, MJArtifactTypeEntity, MJArtifactVersionEntity, MJCollectionEntity } from '@memberjunction/core-entities';
 import { ToastService } from '../../services/toast.service';
 import { CollectionPermissionService } from '../../services/collection-permission.service';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Modal for creating new artifacts and adding them to collections
@@ -12,11 +13,12 @@ import { CollectionPermissionService } from '../../services/collection-permissio
   selector: 'mj-artifact-create-modal',
   template: `
     @if (isOpen) {
-      <kendo-dialog
-        title="Create Artifact"
-        (close)="onCancel()"
-        [width]="600"
-        [minWidth]="400">
+      <mj-dialog
+        Title="Create Artifact"
+        (Close)="onCancel()"
+        [Width]="600"
+        [MinWidth]="400"
+        [Visible]="true">
         <div class="artifact-form">
           <div class="form-group">
             <label class="form-label">
@@ -33,15 +35,16 @@ import { CollectionPermissionService } from '../../services/collection-permissio
             <label class="form-label">
               Type <span class="required">*</span>
             </label>
-            <kendo-dropdownlist
-              [data]="artifactTypes"
-              [(ngModel)]="formData.selectedType"
-              textField="Name"
-              valueField="ID"
-              [valuePrimitive]="false"
-              class="form-control"
-              [loading]="isLoadingTypes">
-            </kendo-dropdownlist>
+            <select
+              [ngModel]="formData.selectedType?.ID || ''"
+              (ngModelChange)="onTypeSelected($event)"
+              class="form-control mj-select"
+              [disabled]="isLoadingTypes">
+              <option value="" disabled>Select a type...</option>
+              @for (type of artifactTypes; track type.ID) {
+                <option [value]="type.ID">{{ type.Name }}</option>
+              }
+            </select>
           </div>
           <div class="form-group">
             <label class="form-label">Description</label>
@@ -74,18 +77,18 @@ import { CollectionPermissionService } from '../../services/collection-permissio
             </div>
           }
         </div>
-        <kendo-dialog-actions>
-          <button kendoButton (click)="onCancel()" [disabled]="isSaving">
+        <mj-dialog-actions>
+          <button mjButton (click)="onCancel()" [disabled]="isSaving">
             Cancel
           </button>
-          <button kendoButton
-            [primary]="true"
+          <button mjButton
+            variant="primary"
             (click)="onSave()"
             [disabled]="!canSave || isSaving">
             {{ isSaving ? 'Creating...' : 'Create Artifact' }}
           </button>
-        </kendo-dialog-actions>
-      </kendo-dialog>
+        </mj-dialog-actions>
+      </mj-dialog>
     }
     `,
   styles: [`
@@ -101,11 +104,11 @@ import { CollectionPermissionService } from '../../services/collection-permissio
       display: block;
       margin-bottom: 8px;
       font-weight: 500;
-      color: #333;
+      color: var(--mj-text-primary);
     }
 
     .required {
-      color: #DC2626;
+      color: var(--mj-status-error);
     }
 
     .form-control {
@@ -124,11 +127,11 @@ import { CollectionPermissionService } from '../../services/collection-permissio
       gap: 8px;
       margin-top: 8px;
       padding: 8px 12px;
-      background: #EFF6FF;
-      border: 1px solid #BFDBFE;
+      background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+      border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 30%, var(--mj-bg-surface));
       border-radius: 6px;
       font-size: 13px;
-      color: #1e40af;
+      color: var(--mj-brand-primary);
     }
 
     .content-hint i {
@@ -141,10 +144,10 @@ import { CollectionPermissionService } from '../../services/collection-permissio
       align-items: center;
       gap: 8px;
       padding: 12px;
-      background: #FEE2E2;
-      border: 1px solid #FCA5A5;
+      background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
+      border: 1px solid color-mix(in srgb, var(--mj-status-error) 30%, var(--mj-bg-surface));
       border-radius: 6px;
-      color: #DC2626;
+      color: var(--mj-status-error);
       font-size: 14px;
     }
 
@@ -227,6 +230,10 @@ export class ArtifactCreateModalComponent implements OnChanges {
     }
   }
 
+  onTypeSelected(typeId: string): void {
+    this.formData.selectedType = this.artifactTypes.find(t => UUIDsEqual(t.ID, typeId)) || null;
+  }
+
   async onSave(): Promise<void> {
     if (!this.canSave) return;
 
@@ -240,7 +247,7 @@ export class ArtifactCreateModalComponent implements OnChanges {
       await collection.Load(this.collectionId);
 
       // Check if user has Edit permission on collection
-      if (collection.OwnerID && collection.OwnerID !== this.currentUser.ID) {
+      if (collection.OwnerID && !UUIDsEqual(collection.OwnerID, this.currentUser.ID)) {
         const permission = await this.permissionService.checkPermission(
           this.collectionId,
           this.currentUser.ID,

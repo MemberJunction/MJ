@@ -14,8 +14,8 @@ import {
   NavItem
 } from '@memberjunction/ng-base-application';
 import { Metadata, EntityInfo, LogStatus, StartupManager, CompositeKey } from '@memberjunction/core';
-import { MJEventType, MJGlobal, uuidv4 } from '@memberjunction/global';
-import { EventCodes, NavigationService, SYSTEM_APP_ID, TitleService, DeveloperModeService, ThemeService } from '@memberjunction/ng-shared';
+import { MJEventType, MJGlobal, uuidv4 , UUIDsEqual } from '@memberjunction/global';
+import { EventCodes, NavigationService, SYSTEM_APP_ID, TitleService, DeveloperModeService, ThemeService, HomeAppPinService } from '@memberjunction/ng-shared';
 import { LogoGradient } from '@memberjunction/ng-shared-generic';
 import { NavItemClickEvent } from './components/header/app-nav.component';
 import { MJAuthBase } from '@memberjunction/ng-auth-services';
@@ -24,10 +24,11 @@ import { UserAvatarService } from '@memberjunction/ng-user-avatar';
 import { SettingsDialogService } from './services/settings-dialog.service';
 import { LoadingTheme, LoadingAnimationType, AnimationStep, getActiveTheme } from './loading-themes';
 import { AppAccessDialogComponent, AppAccessDialogConfig, AppAccessDialogResult } from './components/dialogs/app-access-dialog.component';
+import { TabContainerComponent } from './components/tabs/tab-container.component';
 import { BaseUserMenu, UserMenuElement, UserMenuItem, UserMenuContext, isUserMenuDivider, ApplicationInfoRef } from '../user-menu';
-import { MJUserEntity } from '@memberjunction/core-entities';
+import { MJUserEntity, InstanceConfigEngine } from '@memberjunction/core-entities';
 import { CommandPaletteService } from '../command-palette/command-palette.service';
-import { FeedbackDialogService } from '@memberjunction/ng-feedback';
+import { FileOpenService } from '@memberjunction/ng-file-storage';
 
 /**
  * Main shell component for the new Explorer UX.
@@ -75,6 +76,10 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   private animationSequence: AnimationStep[] = [];
   private currentAnimationIndex = 0;
   private animationSequenceTimeout: ReturnType<typeof setTimeout> | null = null;
+  // Loading recovery reset
+  ShowResetOption = false;
+  private loadingResetTimeout: ReturnType<typeof setTimeout> | null = null;
+  private readonly loadingResetDelayMs = 20_000; // 20 seconds before showing reset option
   currentLoadingText: string;
   currentLoadingColor: string;
   currentLoadingTextColor: string;
@@ -93,11 +98,29 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   public userMenuElements: UserMenuElement[] = [];
   private destroy$ = new Subject<void>();
 
+  // Pin progress overlay
+  public PinProgressVisible = false;
+  public PinProgressText = '';
+
   // Search state
   isSearchOpen = false;
   searchableEntities: EntityInfo[] = [];
   selectedEntity: EntityInfo | null = null;
   @ViewChild('searchInput') searchInput!: ElementRef<HTMLInputElement>;
+
+  // Universal search bar
+  @ViewChild('shellSearchComposite') shellSearchComposite: { Focus?(): void; MinRelevancePercent?: number } | undefined;
+
+  // Instance configuration feature flags
+  get ShowSearchBar(): boolean {
+      return InstanceConfigEngine.Instance.GetBoolean('Shell.SearchBar.Enabled', true);
+  }
+  get ShowSearchPreview(): boolean {
+      return InstanceConfigEngine.Instance.GetBoolean('Shell.SearchBar.EnablePreview', true);
+  }
+
+  // Tab container reference for thumbnail capture
+  @ViewChild(TabContainerComponent) tabContainerRef!: TabContainerComponent;
 
   // App access dialog
   @ViewChild('appAccessDialog') appAccessDialog!: AppAccessDialogComponent;
@@ -109,7 +132,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
    */
   get leftOfSwitcherApps(): BaseApplication[] {
     return this.appManager.GetNavBarApps('Left of App Switcher')
-      .filter(app => !(app.HideNavBarIconWhenActive && app.ID === this.activeApp?.ID));
+      .filter(app => !(app.HideNavBarIconWhenActive && UUIDsEqual(app.ID, this.activeApp?.ID)));
   }
 
   /**
@@ -118,7 +141,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
    */
   get leftOfUserMenuApps(): BaseApplication[] {
     return this.appManager.GetNavBarApps('Left of User Menu')
-      .filter(app => !(app.HideNavBarIconWhenActive && app.ID === this.activeApp?.ID));
+      .filter(app => !(app.HideNavBarIconWhenActive && UUIDsEqual(app.ID, this.activeApp?.ID)));
   }
 
   constructor(
@@ -138,7 +161,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     public developerModeService: DeveloperModeService,
     private commandPaletteService: CommandPaletteService,
     private themeService: ThemeService,
-    private feedbackDialogService: FeedbackDialogService
+    private homePinService: HomeAppPinService,
+    private fileOpenService: FileOpenService
   ) {
     // Initialize theme immediately so loading UI shows correct colors from the start
     this.activeTheme = getActiveTheme();
@@ -188,9 +212,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           }
         }
       });
-      
+
     } catch (error) {
-      console.error('Failed to initialize shell:', error);
       this.loading = false;
     }
   }
@@ -202,7 +225,12 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     // Initialize application manager (subscribes to LoggedIn event)
     this.appManager.Initialize();
 
-    await StartupManager.Instance.Startup();          
+    await StartupManager.Instance.Startup();
+
+    // Initialize instance configuration for feature flags
+    await InstanceConfigEngine.Instance.Config(false).catch(() => {
+        LogStatus('InstanceConfigEngine initialization skipped (not critical)');
+    });
 
     // Get current user
     const md = new Metadata();
@@ -395,6 +423,16 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     this.initialized = true;
     this.waitingForFirstResource = true;
 
+    // Trigger initial URL sync: the Configuration BehaviorSubject already emitted
+    // its value when the shell subscribed (line above), but this.initialized was false
+    // at that point so syncUrlWithWorkspace() was skipped. Now that we're initialized,
+    // manually trigger the first URL sync to set the browser URL from workspace state.
+    const initConfig = this.workspaceManager.GetConfiguration();
+    if (initConfig && initConfig.activeTabId) {
+      await this.syncActiveAppWithTab(initConfig);
+      this.syncUrlWithWorkspace(initConfig);
+    }
+
     // Force change detection to sync Angular's expected values after all async
     // state changes (apps loaded, searchableEntities populated, etc.) to prevent
     // NG0100 ExpressionChangedAfterItHasBeenCheckedError in dev mode
@@ -444,7 +482,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     // 3. Either NOT in URL-based navigation mode, OR this IS a URL-based tab
     const shouldSetActiveApp = this.initialized &&
                               app &&
-                              currentActiveApp?.ID !== request.ApplicationId &&
+                              !UUIDsEqual(currentActiveApp?.ID, request.ApplicationId) &&
                               (!this.urlBasedNavigation || isUrlBasedTab);
 
     if (shouldSetActiveApp) {
@@ -495,15 +533,17 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
 
     // Check if active app needs to be updated
     const currentActiveApp = this.appManager.GetActiveApp();
-    if (currentActiveApp?.ID !== tabAppId) {
+    if (!UUIDsEqual(currentActiveApp?.ID, tabAppId)) {
       // Update the active app to match the tab's application
       await this.appManager.SetActiveApp(tabAppId);
     }
 
-    // Update browser title with app and tab context
+    // Update browser title with app and tab context.
+    // Prefer navItemName from configuration (always correct) over activeTab.title
+    // (which can be stale when switching between apps in single-resource mode).
     const app = this.appManager.GetAppById(tabAppId);
     const appName = app?.Name || null;
-    const tabTitle = activeTab.title || null;
+    const tabTitle = (activeTab.configuration?.['navItemName'] as string) || activeTab.title || null;
     this.titleService.setContext(appName, tabTitle);
   }
 
@@ -642,6 +682,14 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         return;
       }
 
+      // Check for app-scoped search URL: /app/:appName/search/:searchInput
+      const appSearchMatch = urlPath.match(/^\/app\/([^\/]+)\/search\/(.+)$/);
+      if (appSearchMatch) {
+        const searchInput = decodeURIComponent(appSearchMatch[2]);
+        this.navigationService.OpenSearch(searchInput);
+        return;
+      }
+
       // Check for app-only URL: /app/:appName
       const appOnlyMatch = urlPath.match(/^\/app\/([^\/]+)$/);
       if (appOnlyMatch) {
@@ -721,7 +769,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         if (!app) return false;
 
         const appMatches = tabAppName.toLowerCase() === app.Name.toLowerCase() ||
-                          tab.applicationId === app.ID;
+                          UUIDsEqual(tab.applicationId, app.ID);
         const navMatches = tabNavItemName.toLowerCase() === navItemName.toLowerCase();
 
         return appMatches && navMatches;
@@ -738,7 +786,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         // First, try to find a tab with isAppDefault for this app
         const defaultTab = tabs.find(tab => {
           const tabConfig = tab.configuration || {};
-          return tab.applicationId === app.ID && tabConfig['isAppDefault'] === true;
+          return UUIDsEqual(tab.applicationId, app.ID) && tabConfig['isAppDefault'] === true;
         });
         if (defaultTab) {
           return defaultTab;
@@ -748,7 +796,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         // This handles the case where the default tab was replaced when navigating away
         const navItems = await app.GetNavItems();
         if (navItems.length === 0) {
-          return tabs.find(tab => tab.applicationId === app.ID) || null;
+          return tabs.find(tab => UUIDsEqual(tab.applicationId, app.ID)) || null;
         }
 
         return null;
@@ -1028,7 +1076,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
             }
             // For non-Custom resources, match by ResourceType + RecordID
             if (item.ResourceType && item.RecordID) {
-              return item.ResourceType.toLowerCase() === resourceType && item.RecordID === recordId;
+              return item.ResourceType.toLowerCase() === resourceType && UUIDsEqual(item.RecordID, recordId);
             }
             return false;
           });
@@ -1134,17 +1182,27 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           }
           break;
 
-        case 'search results':
-          // /app/:appName/search/:searchInput?Entity=...
+        case 'search results': {
+          // /app/:appName/search/:searchInput?minRelevance=...&Entity=...
           const searchInput = config['SearchInput'] as string | undefined;
           if (searchInput) {
             let url = `/app/${encodeURIComponent(appPath)}/search/${encodeURIComponent(searchInput)}`;
+            const searchParams = new URLSearchParams();
             if (entityName) {
-              url += `?Entity=${encodeURIComponent(entityName)}`;
+              searchParams.set('Entity', entityName);
+            }
+            if (queryParams) {
+              for (const [key, value] of Object.entries(queryParams)) {
+                if (value != null) searchParams.set(key, value);
+              }
+            }
+            if (searchParams.toString()) {
+              url += `?${searchParams.toString()}`;
             }
             return url;
           }
           break;
+        }
       }
     }
 
@@ -1243,6 +1301,10 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       this.cycleToNextMessage();
       this.cdr.detectChanges();
     }, this.messageIntervalMs);
+
+    // Start the recovery reset timer - if loading hasn't completed after
+    // the delay, offer the user an option to clear cached data and reload
+    this.startLoadingResetTimer();
   }
 
   /**
@@ -1258,6 +1320,69 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       clearTimeout(this.animationSequenceTimeout);
       this.animationSequenceTimeout = null;
     }
+    // Cancel the recovery reset timer since loading completed successfully
+    this.cancelLoadingResetTimer();
+  }
+
+  /**
+   * Start a timer that shows a recovery reset option if loading takes too long.
+   * This helps users recover from stuck loading states caused by upgrades,
+   * corrupted cache, or bad stored state.
+   */
+  private startLoadingResetTimer(): void {
+    this.cancelLoadingResetTimer();
+    this.loadingResetTimeout = setTimeout(() => {
+      if (this.loading) {
+        this.ShowResetOption = true;
+        this.cdr.detectChanges();
+      }
+    }, this.loadingResetDelayMs);
+  }
+
+  /**
+   * Cancel the recovery reset timer.
+   */
+  private cancelLoadingResetTimer(): void {
+    if (this.loadingResetTimeout) {
+      clearTimeout(this.loadingResetTimeout);
+      this.loadingResetTimeout = null;
+    }
+    this.ShowResetOption = false;
+  }
+
+  /**
+   * Nuclear recovery: clear all browser-side cached data and reload the page.
+   * This clears localStorage, sessionStorage, and IndexedDB to recover
+   * from stuck loading states caused by corrupted or stale cached data.
+   */
+  ResetApplication(): void {
+    try {
+      // 1. Clear localStorage
+      localStorage.clear();
+
+      // 2. Clear sessionStorage
+      sessionStorage.clear();
+
+      // 3. Delete all IndexedDB databases
+      if (window.indexedDB?.databases) {
+        window.indexedDB.databases().then(databases => {
+          for (const db of databases) {
+            if (db.name) {
+              window.indexedDB.deleteDatabase(db.name);
+            }
+          }
+        }).catch(() => {
+          // databases() not supported in all browsers - proceed with reload
+        });
+      }
+    } catch (e) {
+      console.warn('Error during cache reset:', e);
+    }
+
+    // Give IndexedDB deletions a moment to initiate, then hard reload
+    setTimeout(() => {
+      location.reload();
+    }, 100);
   }
 
   /**
@@ -1474,7 +1599,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       const app = this.appManager.GetAppById(appId);
       if (!app) {
         // Get app info from all system apps to show the name
-        const systemApp = this.appManager.GetAllSystemApps().find(a => a.ID === appId);
+        const systemApp = this.appManager.GetAllSystemApps().find(a => UUIDsEqual(a.ID, appId));
         const appName = systemApp?.Name || 'this application';
 
         // Clear loading indicator before showing dialog
@@ -1599,7 +1724,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     const tabRequest = await app.CreateDefaultTab();
     if (tabRequest) {
       // Set the app as active first if it isn't already
-      if (this.activeApp?.ID !== app.ID) {
+      if (!UUIDsEqual(this.activeApp?.ID, app.ID)) {
         await this.appManager.SetActiveApp(app.ID);
       }
 
@@ -1685,7 +1810,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
    */
   private async initializeUserMenu(): Promise<void> {
     // Get the highest priority user menu implementation via ClassFactory
-    this.userMenu = MJGlobal.Instance.ClassFactory.CreateInstance<BaseUserMenu>(BaseUserMenu);
+    this.userMenu = await MJGlobal.Instance.ClassFactory.CreateInstanceAsync<BaseUserMenu>(BaseUserMenu);
 
     if (!this.userMenu) {
       console.error('No user menu implementation found');
@@ -1708,6 +1833,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       currentApplication: this.activeApp as unknown as ApplicationInfoRef | null,
       workspaceManager: this.workspaceManager,
       authService: this.authBase,
+      pinService: this.homePinService,
       openSettings: () => this.openSettingsDialog(),
       themePreference: this.themeService.Preference,
       availableThemes: this.themeService.AvailableThemes,
@@ -1795,6 +1921,18 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       return;
     }
 
+    if (result.message === 'pin-to-home') {
+      // Close menu and show overlay immediately before any async work
+      this.userMenuVisible = false;
+      this.refreshMenuElements();
+      this.showPinProgress('Pinning...');
+      // Let the UI render the overlay before starting the work
+      await new Promise<void>(resolve => setTimeout(resolve, 0));
+      await this.handlePinToHome();
+      this.hidePinProgress();
+      return;
+    }
+
     if (result.closeMenu) {
       this.userMenuVisible = false;
     }
@@ -1854,6 +1992,141 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   onSettings(): void {
     this.userMenuVisible = false;
     this.openSettingsDialog();
+  }
+
+  /**
+   * Pin the currently active resource to the Home dashboard
+   */
+  private async handlePinToHome(): Promise<void> {
+    const activeTabId = this.workspaceManager.GetActiveTabId();
+    if (!activeTabId) {
+      console.warn('Pin to Home: No active tab found');
+      return;
+    }
+
+    const activeTab = this.workspaceManager.GetTab(activeTabId);
+    if (!activeTab) {
+      console.warn('Pin to Home: Active tab not found');
+      return;
+    }
+
+    // Ensure pins are loaded before adding
+    await this.homePinService.LoadPins();
+
+    const resourceType = this.resolveTabResourceType(activeTab);
+
+    // Resolve a better display name for record pins
+    let displayName = activeTab.title;
+    if (resourceType === 'Records') {
+      const resolved = await this.resolveRecordDisplayName(activeTab);
+      if (resolved) displayName = resolved;
+    }
+
+    // Resolve nav item icon for Custom pins
+    let pinIcon: string | undefined;
+    if (resourceType === 'Custom' && this.activeApp) {
+      const navItemName = activeTab.configuration?.['navItemName'] as string;
+      if (navItemName) {
+        const navItems = await this.activeApp.GetNavItems();
+        const navItem = navItems.find(ni => ni.Label === navItemName);
+        pinIcon = navItem?.Icon || undefined;
+      }
+    }
+
+    const added = this.homePinService.AddPin({
+      DisplayName: displayName,
+      ResourceType: resourceType,
+      ApplicationID: activeTab.applicationId,
+      ApplicationName: this.activeApp?.Name,
+      Icon: pinIcon,
+      Color: this.activeApp?.GetColor() || undefined,
+      Configuration: activeTab.configuration as Record<string, unknown>
+    });
+
+    if (added) {
+      this.showPinProgress(`Capturing preview for "${displayName}"...`);
+      await this.captureAndAttachThumbnail(activeTab, resourceType);
+    } else {
+      MJNotificationService.Instance.CreateSimpleNotification(
+        `"${activeTab.title}" is already pinned to Home`, 'info', 3000
+      );
+    }
+  }
+
+  /**
+   * Capture a thumbnail of the currently visible content and attach it to the pin.
+   */
+  private async captureAndAttachThumbnail(tab: WorkspaceTab, resourceType: string): Promise<void> {
+    try {
+      if (!this.tabContainerRef) return;
+      const thumbnail = await this.tabContainerRef.CaptureActiveThumbnail();
+      if (thumbnail) {
+        const pin = this.homePinService.FindPin(resourceType, tab.configuration as Record<string, unknown>);
+        if (pin) {
+          this.homePinService.UpdatePin(pin.Id, { Thumbnail: thumbnail });
+        }
+      }
+    } catch {
+      // Thumbnail capture is best-effort
+    }
+  }
+
+  /**
+   * Resolve a friendly display name for a record tab using GetEntityRecordNames.
+   */
+  private async resolveRecordDisplayName(tab: WorkspaceTab): Promise<string | null> {
+    try {
+      const config = tab.configuration;
+      const entityName = (config['Entity'] || config['entity']) as string;
+      const recordId = config['recordId'] as string;
+      if (!entityName || !recordId) return null;
+
+      const md = new Metadata();
+      const entityInfo = md.Entities.find(e => e.Name === entityName);
+      if (!entityInfo) return null;
+
+      const pkField = entityInfo.FirstPrimaryKey;
+      if (!pkField) return null;
+
+      const compositeKey = new CompositeKey();
+      compositeKey.KeyValuePairs = [{ FieldName: pkField.Name, Value: recordId }];
+
+      const results = await md.GetEntityRecordNames([{ EntityName: entityName, CompositeKey: compositeKey }]);
+      if (results.length > 0 && results[0].Success && results[0].RecordName) {
+        return results[0].RecordName;
+      }
+    } catch {
+      // Fall through to null
+    }
+    return null;
+  }
+
+  private showPinProgress(text: string): void {
+    this.PinProgressText = text;
+    this.PinProgressVisible = true;
+    this.cdr.detectChanges();
+  }
+
+  private hidePinProgress(): void {
+    this.PinProgressVisible = false;
+    this.PinProgressText = '';
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Resolve a WorkspaceTab's resource type to a human-readable string
+   * used by the pin service for matching and by the Home dashboard for navigation.
+   */
+  private resolveTabResourceType(tab: WorkspaceTab): string {
+    const config = tab.configuration;
+    const rt = (config.resourceType as string) || '';
+    if (rt === 'Dashboards' || config['dashboardId']) return 'Dashboards';
+    if (rt === 'User Views' || rt === 'MJ: User Views' || config['viewId']) return 'User Views';
+    if (rt === 'Queries' || config['queryId']) return 'Queries';
+    if (rt === 'Reports' || config['reportId']) return 'Reports';
+    if (rt === 'Records' || (config['Entity'] && config['recordId'])) return 'Records';
+    if (rt === 'Custom' || config['navItemName']) return 'Custom';
+    return rt || 'Custom';
   }
 
   /**
@@ -2122,6 +2395,51 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   // ========================================
+  // UNIVERSAL SEARCH EVENT HANDLERS
+  // ========================================
+
+  @HostListener('document:keydown', ['$event'])
+  OnGlobalKeydown(event: KeyboardEvent): void {
+      const target = event.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return;
+      const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+      const isCtrlOrCmd = isMac ? event.metaKey : event.ctrlKey;
+      if (isCtrlOrCmd && event.key === 'k') {
+          event.preventDefault();
+          event.stopPropagation();
+          if (this.shellSearchComposite?.Focus) {
+              this.shellSearchComposite.Focus();
+          }
+      }
+  }
+
+  OnSearchResultSelected(result: { EntityName: string; RecordID: string; ResultType?: string; RawMetadata?: string }): void {
+      if (result.ResultType === 'storage-file') {
+          if (!this.fileOpenService.OpenPreviewFromSearchResult(result.RawMetadata)) {
+              this.fileOpenService.OpenFileFromSearchResult(result.RawMetadata);
+          }
+          return;
+      }
+
+      if (!result.EntityName || !result.RecordID) return;
+
+      // Entity records — open via NavigationService
+      const pkey = new CompositeKey([{ FieldName: 'ID', Value: result.RecordID }]);
+      this.navigationService.OpenEntityRecord(result.EntityName, pkey);
+  }
+
+  OnSearchSubmitted(query: string): void {
+      if (query && query.trim().length >= 2) {
+          const minRelevance = this.shellSearchComposite?.MinRelevancePercent;
+          this.navigationService.OpenSearch(query, minRelevance ? { minRelevance } : undefined);
+      }
+  }
+
+  OnSeeAllSearch(query: string): void {
+      this.OnSearchSubmitted(query);
+  }
+
+  // ========================================
   // NOTIFICATION FUNCTIONALITY
   // ========================================
 
@@ -2382,7 +2700,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     }
 
     // Timeout - try to get from system apps as fallback
-    const systemApp = this.appManager.GetAllSystemApps().find(a => a.ID === appId);
+    const systemApp = this.appManager.GetAllSystemApps().find(a => UUIDsEqual(a.ID, appId));
     if (systemApp) {
       await this.navigateToApp(systemApp);
       this.appAccessDialog?.completeProcessing();
@@ -2415,6 +2733,11 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   /**
    * Redirect to the first available app (fallback)
    */
+  /** Case-insensitive UUID check whether an app is the currently active app. */
+  public IsActiveApp(app: BaseApplication): boolean {
+    return UUIDsEqual(app.ID, this.activeApp?.ID);
+  }
+
   private async redirectToFirstApp(apps: BaseApplication[]): Promise<void> {
     if (apps.length > 0) {
       const firstApp = apps[0];

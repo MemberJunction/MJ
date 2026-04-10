@@ -25,14 +25,21 @@ export const LIGHT_COMMANDS: ReadonlySet<string> = new Set([
   'clean',
   'migrate',
 
-  // Install wizard - uses zod, recast, fs-extra only
+  // Install wizard - uses @memberjunction/installer engine (lightweight, no bootstrap)
   'install',
+
+  // Doctor - uses @memberjunction/installer engine (lightweight, no bootstrap)
+  'doctor',
 
   // Topic index commands (just display help text, no heavy imports)
   'ai',
   'ai audit',
   'test',
   'dbdoc',
+
+  // SQL conversion commands - use @memberjunction/sql-converter + sqlglot-ts only
+  'sql-convert',
+  'sql-audit',
 
   // DBDoc commands - already use dynamic imports internally
   'dbdoc init',

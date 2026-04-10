@@ -20,8 +20,8 @@ export class MJUserNotificationTypeFormComponent extends BaseFormComponent {
             { sectionKey: 'deliveryDefaults', sectionName: 'Delivery Defaults', isExpanded: true },
             { sectionKey: 'templateSettings', sectionName: 'Template Settings', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'userNotifications', sectionName: 'User Notifications', isExpanded: false },
-            { sectionKey: 'mJUserNotificationPreferences', sectionName: 'MJ: User Notification Preferences', isExpanded: false }
+            { sectionKey: 'mJUserNotifications', sectionName: 'User Notifications', isExpanded: false },
+            { sectionKey: 'mJUserNotificationPreferences', sectionName: 'User Notification Preferences', isExpanded: false }
         ]);
     }
 }

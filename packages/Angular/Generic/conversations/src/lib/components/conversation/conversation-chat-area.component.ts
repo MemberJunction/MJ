@@ -1,9 +1,8 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, ViewChildren, QueryList, ElementRef, AfterViewChecked } from '@angular/core';
-import { UserInfo, RunView, RunQuery, Metadata, CompositeKey, LogStatusEx } from '@memberjunction/core';
-import { MJConversationEntity, MJConversationDetailEntity, MJAIAgentRunEntity, MJArtifactEntity, MJTaskEntity, ArtifactMetadataEngine } from '@memberjunction/core-entities';
+import { UserInfo, Metadata, CompositeKey, LogStatusEx } from '@memberjunction/core';
+import { MJConversationEntity, MJConversationDetailEntity, MJAIAgentRunEntity, MJArtifactEntity, MJTaskEntity, ConversationEngine, ConversationDetailComplete, RatingJSON } from '@memberjunction/core-entities';
 import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended } from "@memberjunction/ai-core-plus";
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { ConversationDataService } from '../../services/conversation-data.service';
 import { AgentStateService } from '../../services/agent-state.service';
 import { ConversationAgentService } from '../../services/conversation-agent.service';
 import { ActiveTasksService } from '../../services/active-tasks.service';
@@ -12,15 +11,20 @@ import { ArtifactPermissionService } from '../../services/artifact-permission.se
 import { ConversationAttachmentService } from '../../services/conversation-attachment.service';
 import { MessageAttachment } from '../message/message-item.component';
 import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
-import { ConversationDetailComplete, parseConversationDetailComplete, AgentRunJSON, RatingJSON } from '../../models/conversation-complete-query.model';
 import { MessageInputComponent } from '../message/message-input.component';
 import { PendingAttachment } from '../mention/mention-editor.component';
 import { ArtifactViewerPanelComponent, NavigationRequest } from '@memberjunction/ng-artifacts';
-import { TestFeedbackDialogComponent, TestFeedbackDialogData } from '@memberjunction/ng-testing';
-import { DialogService } from '@progress/kendo-angular-dialog';
+import { ConversationEmptyStateComponent } from './conversation-empty-state.component';
+import { TestFeedbackDialogData, TestFeedbackDialogResult } from '@memberjunction/ng-testing';
+import { DialogService as ConversationsDialogService } from '../../services/dialog.service';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { ConversationStreamingService } from '../../services/conversation-streaming.service';
+import { ConversationBridgeService } from '../../services/conversation-bridge.service';
+import { UUIDsEqual } from '@memberjunction/global';
+
+/** Default width (percentage) for the artifact viewer pane */
+const DEFAULT_ARTIFACT_PANE_WIDTH = 40;
 
 @Component({
   standalone: false,
@@ -51,7 +55,18 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
   @Input() conversation: MJConversationEntity | null = null;
   @Input() threadId: string | null = null;
-  @Input() isNewConversation: boolean = false;
+
+  private _isNewConversation: boolean = false;
+  @Input()
+  set isNewConversation(value: boolean) {
+    this._isNewConversation = value;
+    if (value) {
+      this.focusEmptyStateInput();
+    }
+  }
+  get isNewConversation(): boolean {
+    return this._isNewConversation;
+  }
 
   // Using getter/setter to ensure correct type handling
   private _pendingMessage: string | null = null;
@@ -81,6 +96,24 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   @Input() pendingArtifactId: string | null = null;
   @Input() pendingArtifactVersionNumber: number | null = null;
 
+  /** When true, the component is rendered inside the floating overlay (hides suggested topics, etc.) */
+  @Input() overlayMode: boolean = false;
+
+  /** Show the Export button in the conversation header. Default true. */
+  @Input() showExportButton: boolean = true;
+
+  /** Show the Share button in the conversation header. Default true. */
+  @Input() showShareButton: boolean = true;
+
+  /** Show the artifact count indicator in the conversation header. Default true. */
+  @Input() showArtifactIndicator: boolean = true;
+
+  /** Application context snapshot for AI agent awareness. Included in agent execution data. */
+  @Input() appContext: Record<string, unknown> | null = null;
+
+  /** Greeting message shown in the empty state when no conversation is active */
+  @Input() emptyStateGreeting: string = 'How can I help you?';
+
   // Sidebar toggle - when true, shows toggle button in header to expand sidebar
   @Input() showSidebarToggle: boolean = false;
 
@@ -108,6 +141,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   @ViewChild('scrollContainer') private scrollContainer!: ElementRef;
   @ViewChildren('messageInput') private messageInputComponents!: QueryList<MessageInputComponent>;
   @ViewChild(ArtifactViewerPanelComponent) private artifactViewerComponent?: ArtifactViewerPanelComponent;
+  @ViewChild(ConversationEmptyStateComponent) private emptyStateComponent?: ConversationEmptyStateComponent;
 
   public messages: MJConversationDetailEntity[] = [];
   public showScrollToBottomIcon = false;
@@ -116,10 +150,9 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   private currentlyLoadingConversationId: string | null = null; // Track which conversation is currently being loaded
   public isProcessing: boolean = false;
   private intentCheckMessage: MJConversationDetailEntity | null = null; // Temporary message shown during intent checking
-  public isLoadingConversation: boolean = true; // True while loading initial conversation messages
+  public isLoadingConversation: boolean = false; // Set to true only when actively loading conversation data
 
-  // Store raw query results and derived data
-  private rawConversationData: ConversationDetailComplete[] = [];
+  // User avatar map derived from engine cache
   public userAvatarMap: Map<string, {imageUrl: string | null; iconClass: string | null}> = new Map();
   public memberCount: number = 1;
   public artifactCount: number = 0;
@@ -134,9 +167,9 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   public showSystemArtifacts: boolean = false; // Toggle for showing system-only artifacts
   public selectedArtifactId: string | null = null;
   public selectedVersionNumber: number | undefined = undefined; // Version to show in artifact viewer
-  public artifactPaneWidth: number = 40; // Default 40% width
+  public artifactPaneWidth: number = DEFAULT_ARTIFACT_PANE_WIDTH;
   public isArtifactPaneMaximized: boolean = false; // Track maximize state
-  private artifactPaneWidthBeforeMaximize: number = 40; // Store width before maximizing
+  private artifactPaneWidthBeforeMaximize: number = DEFAULT_ARTIFACT_PANE_WIDTH;
   public expandedArtifactId: string | null = null; // Track which artifact card is expanded in modal
   public showCollectionPicker: boolean = false;
   public collectionPickerArtifactId: string | null = null;
@@ -150,9 +183,6 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   public isArtifactShareModalOpen: boolean = false;
   public artifactToShare: MJArtifactEntity | null = null;
 
-  // Conversation data cache: ConversationID -> Array of ConversationDetailComplete
-  // Stores raw query results so we don't need to re-query when switching conversations
-  private conversationDataCache = new Map<string, ConversationDetailComplete[]>();
 
   // Artifact mapping: ConversationDetailID -> Array of LazyArtifactInfo
   // Uses lazy-loading pattern: display data loaded immediately, full entities on-demand
@@ -220,6 +250,18 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   // LocalStorage key
   private readonly ARTIFACT_PANE_WIDTH_KEY = 'mj-conversations-artifact-pane-width';
 
+  // Pinned messages panel state
+  public showPinsPanel: boolean = false;
+
+  /** All currently pinned messages in the active conversation, newest pin first */
+  get pinnedMessages(): MJConversationDetailEntity[] {
+    return this.messages.filter(m => m.IsPinned).reverse();
+  }
+
+  // Test feedback dialog state
+  public showTestFeedbackDialog: boolean = false;
+  public testFeedbackDialogData: TestFeedbackDialogData | null = null;
+
   // Image viewer state
   public showImageViewer: boolean = false;
   public selectedImageUrl: string = '';
@@ -238,17 +280,20 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   public acceptedFileTypes: string = 'image/*';
   private conversationManagerAgent: MJAIAgentEntityExtended | null = null;
 
+  private engine = ConversationEngine.Instance;
+
+
   constructor(
-    public conversationData: ConversationDataService,
     private agentStateService: AgentStateService,
     private conversationAgentService: ConversationAgentService,
     private activeTasks: ActiveTasksService,
     private cdr: ChangeDetectorRef,
     private mentionAutocompleteService: MentionAutocompleteService,
     private artifactPermissionService: ArtifactPermissionService,
-    private dialogService: DialogService,
     private attachmentService: ConversationAttachmentService,
-    private streamingService: ConversationStreamingService
+    private streamingService: ConversationStreamingService,
+    private confirmDialog: ConversationsDialogService,
+    private bridge: ConversationBridgeService
   ) {}
 
   async ngOnInit() {
@@ -262,10 +307,10 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
       await this.mentionAutocompleteService.initialize(this.currentUser);
     }
 
-    // Ensure ArtifactMetadataEngine is loaded so LazyArtifactInfo can
-    // resolve versions from its always-fresh in-memory cache.
+    // Ensure ConversationEngine and ArtifactMetadataEngine are loaded.
     // Config(false) is a no-op if already loaded by another component.
-    await ArtifactMetadataEngine.Instance.Config(false, this.currentUser);
+    // ConversationEngine.Config() also initializes ArtifactMetadataEngine internally.
+    await ConversationEngine.Instance.Config(false, this.currentUser);
 
     // Initialize attachment support based on agent modalities
     await this.initializeAttachmentSupport();
@@ -287,12 +332,28 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     window.addEventListener('touchmove', this.onResizeTouchMove.bind(this));
     window.addEventListener('touchend', this.onResizeTouchEnd.bind(this));
 
+    // Handle overlay→workspace handoffs: if the handed-off conversation is already
+    // loaded, force a reload from the engine (which has the latest data).
+    this.bridge.SwitchEvent$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(event => {
+        if (event.Target === 'workspace' && event.ConversationID) {
+          if (UUIDsEqual(event.ConversationID, this._conversationId)) {
+            // Same conversation already displayed — reload from engine
+            this.lastLoadedConversationId = null; // Reset so peripheral data reprocesses
+            void this.onConversationChanged(event.ConversationID);
+          }
+          // Different conversation — engine cache is already warm, onConversationChanged
+          // will read from it when the parent sets the conversationId input.
+        }
+      });
+
     // Subscribe to completion events from PubSub
     this.streamingService.completionEvents$
       .pipe(takeUntil(this.destroy$))
       .subscribe(async (event) => {
         // Find the message in our current conversation
-        const message = this.messages.find(m => m.ID === event.conversationDetailId);
+        const message = this.messages.find(m => UUIDsEqual(m.ID, event.conversationDetailId));
         if (message) {
           await this.handleMessageCompletion(message, event.agentRunId);
         }
@@ -302,18 +363,38 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     // The sessionId is persisted in localStorage and reused on refresh, so WebSocket events
     // normally arrive correctly. However, there's a brief timing gap between page load and
     // WebSocket reconnection where events can be lost. The catch-up check in
-    // detectAndReconnectToInProgressRuns() is the primary fallback; polling is the last resort.
+    // detectAndReconcileAgentRuns() is the primary fallback; polling is the last resort.
     this.agentStateService.activeAgents$
       .pipe(takeUntil(this.destroy$))
       .subscribe(async (agents) => {
         if (!this.conversationId) return;
-        const conversationAgents = agents.filter(a => a.run.ConversationID === this.conversationId);
+        const conversationAgents = agents.filter(a => UUIDsEqual(a.run.ConversationID, this.conversationId));
         const hasActiveAgents = conversationAgents.length > 0;
         if (this.hadActiveAgents && !hasActiveAgents) {
-          // Agents just completed — reload messages to pick up final response and any
-          // delegated-agent messages that were created during the run.
-          this.invalidateConversationCache(this.conversationId);
-          await this.reloadMessagesForActiveConversation();
+          // Agents just completed — surgical refresh picks up new messages,
+          // updated agent runs, and new artifacts in one query with minimal UI repaint
+          await this.engine.RefreshConversationDetails(this.conversationId, this.currentUser);
+
+          // Re-read messages from the surgically updated engine cache
+          const freshDetails = this.engine.GetCachedDetails(this.conversationId);
+          if (freshDetails) {
+            this.messages = freshDetails;
+          }
+
+          // Reprocess peripheral data (artifacts, ratings) from updated cache
+          this.lastLoadedConversationId = null;
+          await this.loadPeripheralData(this.conversationId);
+
+          // Clear active tasks for messages that are no longer in-progress
+          for (const message of this.messages) {
+            if (message.Status !== 'In-Progress') {
+              const task = this.activeTasks.getByConversationDetailId(message.ID);
+              if (task) {
+                this.activeTasks.remove(task.id);
+              }
+            }
+          }
+
           this.cdr.detectChanges();
         }
         this.hadActiveAgents = hasActiveAgents;
@@ -367,7 +448,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
         .find(msg =>
           msg.Role === 'AI' &&
           msg.AgentID &&
-          msg.AgentID !== this.conversationManagerAgent?.ID
+          !UUIDsEqual(msg.AgentID, this.conversationManagerAgent?.ID)
         );
 
       if (lastNonSageAgent?.AgentID) {
@@ -435,6 +516,9 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
     this.showArtifactPanel = false;
     this.selectedArtifactId = null;
+    // Reset maximize state so it doesn't carry over to the next conversation
+    this.isArtifactPaneMaximized = false;
+    this.artifactPaneWidth = DEFAULT_ARTIFACT_PANE_WIDTH; // restore default width
 
     // Reset poll-based completion tracking whenever we switch conversations,
     // so the first empty poll on the new conversation doesn't trigger a spurious reload.
@@ -450,11 +534,10 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
         });
       }
 
-      // Only show loading spinner if we don't have cached data for this conversation.
-      // When switching between previously visited conversations, the cache provides
-      // instant display without the loading flash.
-      const hasCachedData = this.conversationDataCache.has(conversationId);
-      if (!hasCachedData) {
+      // Only show loading spinner if the engine doesn't have cached data for this conversation.
+      // This prevents the "no messages" flash when switching between conversations.
+      const hasCachedMessages = this.engine.HasCachedDetails(conversationId);
+      if (!hasCachedMessages) {
         this.isLoadingConversation = true;
         this.messages = [];
         this.cdr.detectChanges();
@@ -503,6 +586,18 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   }
 
   /**
+   * Focus the message input inside the empty state component.
+   * Uses a delay to allow Angular to render the empty state if it's being created.
+   */
+  private focusEmptyStateInput(): void {
+    setTimeout(() => {
+      if (this.emptyStateComponent) {
+        this.emptyStateComponent.FocusInput();
+      }
+    }, 150);
+  }
+
+  /**
    * Get the message input component for the current conversation.
    * Since we cache multiple message-input instances (one per visited conversation),
    * we need to find the one that matches the current conversationId.
@@ -518,37 +613,54 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
   private async loadMessages(conversationId: string): Promise<void> {
     try {
-      const cachedData = this.conversationDataCache.get(conversationId);
+      // Single source of truth: ConversationEngine handles caching and DB queries.
+      // Cache hit = instant (no DB). Cache miss = one GetConversationComplete query.
+      // If peripheral data (artifacts/ratings) changed externally, force refresh to pick up joined fields.
+      const existingEntry = this.engine.GetCachedDetailEntry(conversationId);
+      const forceRefresh = existingEntry?.PeripheralDataStale === true;
+      const cacheEntry = await this.engine.LoadConversationDetails(conversationId, this.currentUser, forceRefresh);
 
-      if (cachedData) {
-        await this.buildMessagesFromCache(cachedData);
-        await this.loadPeripheralData(conversationId);
-      } else {
-        const rq = new RunQuery();
-        const result = await rq.RunQuery({
-          QueryName: 'GetConversationComplete',
-          CategoryPath: 'MJ/Conversations',
-          Parameters: { ConversationID: conversationId }
-        }, this.currentUser);
+      // Set messages from engine cache
+      this.messages = cacheEntry.Details;
 
-        if (!result.Success || !result.Results) {
-          console.error('Failed to load conversation data:', result.ErrorMessage);
-          this.messages = [];
-          return;
-        }
-
-        const conversationData = result.Results as ConversationDetailComplete[];
-        this.conversationDataCache.set(conversationId, conversationData);
-
-        await this.buildMessagesFromCache(conversationData);
-
-        this.isLoadingPeripheralData = true;
-        await this.loadPeripheralData(conversationId);
-        this.isLoadingPeripheralData = false;
-        this.cdr.detectChanges();
+      // Copy user avatars from engine cache
+      this.userAvatarMap.clear();
+      for (const [userId, avatar] of cacheEntry.UserAvatars) {
+        this.userAvatarMap.set(userId, {
+          imageUrl: avatar.ImageURL,
+          iconClass: avatar.IconClass
+        });
       }
 
-      await this.detectAndReconnectToInProgressRuns(conversationId);
+      this.updateAttachmentSupport();
+
+      // Detect in-progress messages for streaming reconnection
+      this.inProgressMessageIds = [...this.messages
+        .filter(m => m.Status === 'In-Progress')
+        .map(m => m.ID)];
+
+      if (this.inProgressMessageIds.length > 0) {
+        LogStatusEx({message: `🔌 Detected ${this.inProgressMessageIds.length} in-progress messages for reconnection`, verboseOnly: true});
+      }
+
+      // Check for missed completions (user navigated away, agent completed, user returned)
+      for (const message of this.messages) {
+        if (message.Status === 'In-Progress' && message.ID) {
+          const recentCompletion = this.streamingService.getRecentCompletion(message.ID);
+          if (recentCompletion) {
+            LogStatusEx({message: `📥 Found missed completion for message ${message.ID}, handling...`, verboseOnly: true});
+            this.handleMessageCompletion(message, recentCompletion.agentRunId);
+            this.streamingService.clearRecentCompletion(message.ID);
+          }
+        }
+      }
+
+      this.scrollToBottom = true;
+
+      // Process peripheral data (agent runs, artifacts, ratings, attachments) from engine cache
+      await this.loadPeripheralData(conversationId);
+
+      await this.detectAndReconcileAgentRuns(conversationId);
       await this.handlePendingArtifactNavigation();
 
     } catch (error) {
@@ -557,84 +669,6 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     }
   }
 
-  /**
-   * Build message entities from cached conversation data
-   * Creates MJConversationDetailEntity objects from the raw query results
-   */
-  private async buildMessagesFromCache(conversationData: ConversationDetailComplete[]): Promise<void> {
-    const md = new Metadata();
-    const messages: MJConversationDetailEntity[] = [];
-
-    this.rawConversationData = conversationData;
-    this.buildUserAvatarMap(conversationData);
-
-    for (const row of conversationData) {
-      if (!row.ID) continue;
-
-      const message = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', this.currentUser);
-      message.LoadFromData(row);
-      messages.push(message);
-    }
-
-    this.messages = messages;
-
-    // Update attachment support based on agents in this conversation
-    this.updateAttachmentSupport();
-
-    // Detect in-progress messages for streaming reconnection
-    // Always create NEW array reference to trigger Input setter in message-input component
-    this.inProgressMessageIds = [...messages
-      .filter(m => m.Status === 'In-Progress')
-      .map(m => m.ID)];
-
-    if (this.inProgressMessageIds.length > 0) {
-      LogStatusEx({message: `🔌 Detected ${this.inProgressMessageIds.length} in-progress messages for reconnection`, verboseOnly: true});
-    }
-
-    // Check for missed completions (user navigated away, agent completed, user returned)
-    // The streaming service stores recent completions so we can handle them
-    for (const message of messages) {
-      if (message.Status === 'In-Progress' && message.ID) {
-        const recentCompletion = this.streamingService.getRecentCompletion(message.ID);
-        if (recentCompletion) {
-          // This message completed while we were away - handle it
-          LogStatusEx({message: `📥 Found missed completion for message ${message.ID}, handling...`, verboseOnly: true});
-          this.handleMessageCompletion(message, recentCompletion.agentRunId);
-          this.streamingService.clearRecentCompletion(message.ID);
-        }
-      }
-    }
-
-    this.scrollToBottom = true;
-    LogStatusEx({message: `✅ Built ${messages.length} messages from cache`, verboseOnly: true});
-  }
-
-  /**
-   * Builds a map of UserID -> Avatar data for fast lookups
-   * Extracts unique users from conversation data and their avatar settings
-   */
-  private buildUserAvatarMap(conversationData: ConversationDetailComplete[]): void {
-    this.userAvatarMap.clear();
-
-    // Get unique users and their avatar data
-    const userMap = new Map<string, {imageUrl: string | null; iconClass: string | null}>();
-
-    for (const row of conversationData) {
-      // Only process user messages that have a UserID
-      if (row.Role?.toLowerCase() === 'user' && row.UserID) {
-        // Only add if we haven't seen this user yet
-        if (!userMap.has(row.UserID)) {
-          userMap.set(row.UserID, {
-            imageUrl: row.UserImageURL || null,
-            iconClass: row.UserImageIconClass || null
-          });
-        }
-      }
-    }
-
-    this.userAvatarMap = userMap;
-    LogStatusEx({message: `👤 Built user avatar map with ${this.userAvatarMap.size} unique users`, verboseOnly: true});
-  }
 
   /**
    * Process peripheral data (agent runs and artifacts) from cached conversation data
@@ -646,101 +680,62 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
    * - Instant when switching between conversations
    */
   private async loadPeripheralData(conversationId: string): Promise<void> {
-    const timestamp = new Date().toISOString();
-
     // Skip if we've already processed peripheral data for this conversation
     if (this.lastLoadedConversationId === conversationId) {
-      LogStatusEx({message: `[${timestamp}] ⏭️ Skipping peripheral data processing - already processed for conversation ${conversationId}`, verboseOnly: true});
       return;
     }
 
-    // Mark this conversation as processed to prevent duplicate processing
     this.lastLoadedConversationId = conversationId;
-    LogStatusEx({message: `[${timestamp}] 📊 Processing peripheral data for conversation ${conversationId} from cache`, verboseOnly: true});
 
     try {
-      // Get cached data - should always be present by the time we get here
-      const conversationData = this.conversationDataCache.get(conversationId);
-      if (!conversationData) {
-        console.warn(`No cached data found for conversation ${conversationId}`);
+      // Read from engine cache — always present after loadMessages() calls LoadConversationDetails()
+      const cacheEntry = this.engine.GetCachedDetailEntry(conversationId);
+      if (!cacheEntry) {
+        console.warn(`No engine cache found for conversation ${conversationId}`);
         return;
       }
 
-      const md = new Metadata();
-
-      // Clear and rebuild maps from cached data
+      // Clear and rebuild component maps from engine cache
       this.agentRunsByDetailId.clear();
       this.artifactsByDetailId.clear();
+      this.systemArtifactsByDetailId.clear();
+      this.ratingsByDetailId.clear();
 
-      for (const row of conversationData) {
-        // Skip rows without ID (should never happen, but type safety check)
-        if (!row.ID) {
-          console.warn('Skipping conversation detail row without ID');
-          continue;
-        }
+      // Copy agent runs from engine (cast to extended type for UI compatibility)
+      for (const [detailId, agentRun] of cacheEntry.AgentRunsByDetailId) {
+        this.agentRunsByDetailId.set(detailId, agentRun as MJAIAgentRunEntityExtended);
+      }
 
-        const parsed = parseConversationDetailComplete(row);
+      // Convert ArtifactJSON[] from engine cache into LazyArtifactInfo[] for UI
+      for (const [detailId, artifacts] of cacheEntry.ArtifactsByDetailId) {
+        const artifactList: LazyArtifactInfo[] = [];
+        const systemArtifactList: LazyArtifactInfo[] = [];
 
-        // Build agent runs map
-        if (parsed.agentRuns.length > 0) {
-          // Convert AgentRunJSON to MJAIAgentRunEntityExtended
-          const agentRunData = parsed.agentRuns[0]; // Should only be one per detail
-          const agentRun = await md.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', this.currentUser);
-
-          // Convert ISO date strings to Date objects
-          agentRun.LoadFromData({
-            ID: agentRunData.ID,
-            AgentID: agentRunData.AgentID,
-            Agent: agentRunData.Agent,
-            Status: agentRunData.Status,
-            __mj_CreatedAt: agentRunData.__mj_CreatedAt,
-            __mj_UpdatedAt: agentRunData.__mj_UpdatedAt,
-            TotalPromptTokensUsed: agentRunData.TotalPromptTokensUsed,
-            TotalCompletionTokensUsed: agentRunData.TotalCompletionTokensUsed,
-            TotalCost: agentRunData.TotalCost,
-            ConversationDetailID: agentRunData.ConversationDetailID
-          });
-
-          this.agentRunsByDetailId.set(row.ID, agentRun);
-        }
-
-        // Build artifacts map - no need to load full entities, just create LazyArtifactInfo
-        if (parsed.artifacts.length > 0) {
-          const artifactList: LazyArtifactInfo[] = [];
-          const systemArtifactList: LazyArtifactInfo[] = [];
-
-          for (const artifactData of parsed.artifacts) {
-            // Create LazyArtifactInfo with display data from query
-            // Full entities will be loaded on-demand when artifact is clicked
-            const lazyInfo = new LazyArtifactInfo(artifactData, this.currentUser);
-
-            // Separate system-only artifacts from user-visible artifacts
-            if (artifactData.Visibility === 'System Only') {
-              systemArtifactList.push(lazyInfo);
-            } else {
-              artifactList.push(lazyInfo);
-            }
-          }
-
-          // Add to appropriate maps
-          if (artifactList.length > 0) {
-            this.artifactsByDetailId.set(row.ID, artifactList);
-          }
-          if (systemArtifactList.length > 0) {
-            this.systemArtifactsByDetailId.set(row.ID, systemArtifactList);
+        for (const artifactData of artifacts) {
+          const lazyInfo = new LazyArtifactInfo(artifactData, this.currentUser);
+          if (artifactData.Visibility === 'System Only') {
+            systemArtifactList.push(lazyInfo);
+          } else {
+            artifactList.push(lazyInfo);
           }
         }
 
-        // Build ratings map
-        if (parsed.ratings.length > 0) {
-          this.ratingsByDetailId.set(row.ID, parsed.ratings);
+        if (artifactList.length > 0) {
+          this.artifactsByDetailId.set(detailId, artifactList);
+        }
+        if (systemArtifactList.length > 0) {
+          this.systemArtifactsByDetailId.set(detailId, systemArtifactList);
         }
       }
 
-      // Load attachments for all messages in this conversation
-      // Uses the ConversationAttachmentService to batch-load all attachments
+      // Copy ratings from engine cache
+      for (const [detailId, ratings] of cacheEntry.RatingsByDetailId) {
+        this.ratingsByDetailId.set(detailId, ratings);
+      }
+
+      // Load attachments (still separate — not part of GetConversationComplete query)
       this.attachmentsByDetailId.clear();
-      const messageIds = conversationData.map(row => row.ID).filter((id): id is string => !!id);
+      const messageIds = cacheEntry.Details.map(d => d.ID).filter((id): id is string => !!id);
       if (messageIds.length > 0) {
         const attachmentsMap = await this.attachmentService.loadAttachmentsForMessages(messageIds, this.currentUser);
         for (const [detailId, attachments] of attachmentsMap) {
@@ -758,24 +753,15 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
       // Clear combined cache since we loaded new artifacts
       this._combinedArtifactsMap = null;
 
-      // Update artifact count for header display (unique artifacts, not versions)
+      // Update artifact count for header display
       this.artifactCount = this.calculateUniqueArtifactCount();
       this.updateArtifactCountDisplay();
 
-      // Debug: Log summary
-      const systemArtifactCount = this.systemArtifactsByDetailId.size;
-      const attachmentCount = this.attachmentsByDetailId.size;
-      LogStatusEx({message: `📊 Processed ${this.agentRunsByDetailId.size} agent runs, ${this.artifactsByDetailId.size} user artifact mappings, ${systemArtifactCount} system artifact mappings (${this.artifactCount} unique user artifacts), ${attachmentCount} messages with attachments`, verboseOnly: true});
-
-      // CRITICAL: Trigger message re-render now that agent runs and artifacts are loaded
-      // This updates all message components with the newly loaded agent run data
-      this.messages = [...this.messages]; // Create new array reference to trigger change detection
+      // Trigger message re-render now that peripheral data is loaded
+      this.messages = [...this.messages];
       this.cdr.detectChanges();
-
-      LogStatusEx({message: `✅ Peripheral data processed successfully for conversation ${conversationId} from cache`, verboseOnly: true});
     } catch (error) {
       console.error('Failed to process peripheral data:', error);
-      // Don't set lastLoadedConversationId on error so we can retry
       this.lastLoadedConversationId = null;
     }
   }
@@ -791,6 +777,18 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   }
 
   async onMessageSent(message: MJConversationDetailEntity): Promise<void> {
+    // Guard: ignore events from hidden message-input instances belonging to other conversations.
+    // Multiple inputs are kept alive in the DOM cache (one per visited conversation) and all
+    // emit events to this single parent. Without this check, a background agent's response
+    // for conversation A would pollute conversation B's message list.
+    if (!UUIDsEqual(message.ConversationID, this.conversationId)) {
+      // Invalidate that conversation's cache so fresh data loads when the user switches back
+      if (message.ConversationID) {
+        this.resetComponentState(message.ConversationID);
+      }
+      return;
+    }
+
     // Clear pending message if it was sent - notify parent via output
     if (this.pendingMessage) {
       this.pendingMessageConsumed.emit();
@@ -798,7 +796,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
     // Check if message already exists in the array (by ID) to prevent duplicates
     // Messages can be emitted multiple times as they're updated (e.g., status changes)
-    const existingIndex = this.messages.findIndex(m => m.ID === message.ID);
+    const existingIndex = this.messages.findIndex(m => UUIDsEqual(m.ID, message.ID));
 
     if (existingIndex >= 0) {
       // Update existing message in place (replace with updated version)
@@ -818,12 +816,21 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
       // Without this, navigating away and back would load stale cached data
       // that doesn't include this new message.
       if (this.conversationId) {
-        this.invalidateConversationCache(this.conversationId);
+        this.resetComponentState(this.conversationId);
       }
 
       // Load attachments for the new message (if any were saved with it)
       // This ensures attachments are displayed immediately after sending
       await this.loadAttachmentsForMessage(message.ID);
+
+      // CRITICAL: If this is a new In-Progress AI message, add it to inProgressMessageIds
+      // immediately so message-input registers a PubSub streaming callback for it.
+      // buildMessagesFromCache handles the nav-away/nav-back reconnection case;
+      // this handles the active-session case where the agent just started.
+      // Without this, inProgressMessageIds stays [] and the completion event is never received.
+      if (message.Status === 'In-Progress' && message.ID && !this.inProgressMessageIds.includes(message.ID)) {
+        this.inProgressMessageIds = [...this.inProgressMessageIds, message.ID];
+      }
     }
 
     // Scroll to bottom when new message is sent
@@ -897,7 +904,23 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
     if (existingAgentRun?.ID) {
       // Refresh the SAME object by calling Load() - preserves all references
-      await existingAgentRun.Load(existingAgentRun.ID);
+      // duck type check to see if we have a BaseEntity or not
+      if (!!existingAgentRun.Load) {
+        await existingAgentRun.Load(existingAgentRun.ID);        
+      }
+      else {
+        // we do NOT have an existingAgentRun base entity, but rather a simple JSON object so we need to create an object here
+        const md = new Metadata();
+        const newEntity = await md.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs');
+        newEntity.LoadFromData(existingAgentRun);
+        // swap the map entry to have this object now
+        this.agentRunsByDetailId.set(event.conversationDetailId, newEntity);
+
+        // Also update ConversationEngine's cache
+        if (this.conversationId) {
+          ConversationEngine.Instance.SetAgentRunForDetail(this.conversationId, event.conversationDetailId, newEntity);
+        }
+      }
 
       // Trigger re-render to show updated status
       this.messages = [...this.messages];
@@ -924,6 +947,11 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
       // Directly update map with fresh data from progress (no database query needed)
       // Don't create new Map - message-list component needs to keep the same reference
       this.agentRunsByDetailId.set(event.conversationDetailId, event.agentRun);
+
+      // Also update ConversationEngine's cache for other consumers
+      if (this.conversationId) {
+        ConversationEngine.Instance.SetAgentRunForDetail(this.conversationId, event.conversationDetailId, event.agentRun);
+      }
     }
     else {
       // no agent run, should have agentRunId
@@ -946,8 +974,9 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   }
 
   /**
-   * Reload messages for the active conversation from the database
-   * Called when completion is detected to discover newly delegated agent messages
+   * Reload messages from the ConversationEngine cache (no DB round-trip).
+   * The engine cache is kept warm by entity event handlers that auto-sync on save/delete.
+   * Called when agent completion is detected to discover newly delegated agent messages.
    */
   private async reloadMessagesForActiveConversation(): Promise<void> {
     const conversationId = this.conversationId;
@@ -956,65 +985,49 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     }
 
     try {
-      LogStatusEx({message: `🔄 Reloading messages for conversation ${conversationId} to discover delegated agents`, verboseOnly: true});
-
-      const md = new Metadata();
-      const rv = new RunView();
+      // Read from engine cache — already warm from entity event handler auto-sync
+      const engineDetails = this.engine.GetCachedDetails(conversationId);
+      if (!engineDetails || engineDetails.length === 0) {
+        return;
+      }
 
       // Track existing message IDs before reload to identify new messages
       const existingMessageIds = new Set(this.messages.map(m => m.ID));
 
-      const result = await rv.RunView<MJConversationDetailEntity>({
-        EntityName: 'MJ: Conversation Details',
-        ExtraFilter: `ConversationID='${conversationId}'`,
-        OrderBy: '__mj_CreatedAt ASC',
-        ResultType: 'entity_object'
-      }, this.currentUser);
+      // Merge engine cache with existing client-side messages.
+      // Preserves messages added client-side (e.g., by handleSubAgentInvocation)
+      // that haven't been picked up by entity events yet due to timing.
+      const merged = new Map<string, MJConversationDetailEntity>();
 
-      if (result.Success && result.Results && result.Results.length > 0) {
-        // Merge DB results with existing client-side messages rather than replacing entirely.
-        // This prevents dropping messages added client-side (e.g., by handleSubAgentInvocation)
-        // that haven't appeared in the DB query results yet due to timing.
-        const merged = new Map<string, MJConversationDetailEntity>();
+      for (const msg of engineDetails) {
+        merged.set(msg.ID, msg);
+      }
 
-        // Add all DB messages (fresh data)
-        for (const msg of result.Results) {
+      // Preserve client-side messages not yet in engine cache
+      for (const msg of this.messages) {
+        if (!merged.has(msg.ID)) {
           merged.set(msg.ID, msg);
         }
-
-        // Preserve client-side messages not yet in DB
-        for (const msg of this.messages) {
-          if (!merged.has(msg.ID)) {
-            merged.set(msg.ID, msg);
-          }
-        }
-
-        this.messages = Array.from(merged.values())
-          .sort((a, b) => (a.__mj_CreatedAt?.getTime() || 0) - (b.__mj_CreatedAt?.getTime() || 0));
-
-        // Find newly discovered messages (delegated agents)
-        const newMessages = result.Results.filter(m => !existingMessageIds.has(m.ID));
-
-        // Load agent runs for new messages so completion detector can reload artifacts
-        for (const message of newMessages) {
-          if (message.AgentID && message.ID) {
-            // Query to find agent run for this conversation detail
-            const agentRunResult = await rv.RunView<MJAIAgentRunEntityExtended>({
-              EntityName: 'MJ: AI Agent Runs',
-              ExtraFilter: `ConversationDetailID='${message.ID}'`,
-              ResultType: 'entity_object'
-            }, this.currentUser);
-
-            if (agentRunResult.Success && agentRunResult.Results && agentRunResult.Results.length > 0) {
-              const agentRun = agentRunResult.Results[0];
-              this.agentRunsByDetailId.set(message.ID, agentRun);
-              LogStatusEx({message: `✅ Loaded agent run for new delegated message ${message.ID} (Agent: ${agentRun.Agent})`, verboseOnly: true});
-            }
-          }
-        }
-
-        LogStatusEx({message: `✅ Reloaded ${result.Results.length} messages (${newMessages.length} new, ${result.Results.filter(m => m.Status === 'In-Progress').length} in-progress)`, verboseOnly: true});
       }
+
+      this.messages = Array.from(merged.values())
+        .sort((a, b) => (a.__mj_CreatedAt?.getTime() || 0) - (b.__mj_CreatedAt?.getTime() || 0));
+
+      // Find newly discovered messages (delegated agents)
+      const newMessages = engineDetails.filter(m => !existingMessageIds.has(m.ID));
+
+      // Check engine cache for agent runs on new messages
+      for (const message of newMessages) {
+        if (message.AgentID && message.ID) {
+          const agentRun = this.engine.GetAgentRunForDetail(conversationId, message.ID);
+          if (agentRun) {
+            this.agentRunsByDetailId.set(message.ID, agentRun as MJAIAgentRunEntityExtended);
+            LogStatusEx({message: `✅ Found cached agent run for new delegated message ${message.ID}`, verboseOnly: true});
+          }
+        }
+      }
+
+      LogStatusEx({message: `✅ Refreshed ${engineDetails.length} messages from engine cache (${newMessages.length} new)`, verboseOnly: true});
     } catch (error) {
       console.error('Failed to reload messages for active conversation:', error);
     }
@@ -1053,7 +1066,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
       // that are not in the cache set by reloadArtifactsForMessage().
       // Without this, navigating away and back would show stale data.
       if (message.ConversationID) {
-        this.invalidateConversationCache(message.ConversationID);
+        this.resetComponentState(message.ConversationID);
       }
 
       // Update inProgressMessageIds to include new delegated agents
@@ -1087,12 +1100,21 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   }
 
   async onAgentResponse(event: {message: MJConversationDetailEntity, agentResult: any}): Promise<void> {
+    // Guard: ignore agent responses from background inputs for other conversations.
+    // See onMessageSent() for the full explanation.
+    if (!UUIDsEqual(event.message.ConversationID, this.conversationId)) {
+      if (event.message.ConversationID) {
+        this.resetComponentState(event.message.ConversationID);
+      }
+      return;
+    }
+
     // Add the agent's response message to the conversation
     this.messages = [...this.messages, event.message];
 
     // Invalidate cache for this conversation since we have new messages
     if (this.conversationId) {
-      this.invalidateConversationCache(this.conversationId);
+      this.resetComponentState(this.conversationId);
     }
 
     // Scroll to bottom when agent responds
@@ -1121,12 +1143,15 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   }
 
   /**
-   * Invalidate cached conversation data
-   * Called when new messages are added or conversation data changes
+   * Reset component-level UI state so peripheral data reprocesses on next load.
+   * Does NOT invalidate ConversationEngine cache — the engine is the single source of truth
+   * and is kept warm via AddDetailToCache/UpdateDetailInCache.
    */
-  private invalidateConversationCache(conversationId: string): void {
-    this.conversationDataCache.delete(conversationId);
-    LogStatusEx({message: `🗑️ Invalidated cache for conversation ${conversationId}`, verboseOnly: true});
+  private resetComponentState(conversationId: string): void {
+    // Reset so loadPeripheralData re-runs on next conversation load
+    if (this.lastLoadedConversationId === conversationId) {
+      this.lastLoadedConversationId = null;
+    }
   }
 
   /**
@@ -1142,6 +1167,11 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
         const agentRun = await md.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', this.currentUser);
         if (await agentRun.Load(agentRunId)) {
           this.agentRunsByDetailId.set(conversationDetailId, agentRun);
+
+          // Also update ConversationEngine's cache for other consumers
+          if (this.conversationId) {
+            ConversationEngine.Instance.SetAgentRunForDetail(this.conversationId, conversationDetailId, agentRun);
+          }
 
           // Force message list to re-render with updated agent run
           // Keep same Map reference so message-list component can access updates
@@ -1170,7 +1200,6 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   private async reloadArtifactsForMessage(conversationDetailId: string): Promise<void> {
     LogStatusEx({message: `🔄 Reloading artifacts for message ${conversationDetailId}`, verboseOnly: true});
     try {
-      const rq = new RunQuery();
       const md = new Metadata();
 
       // Get the ConversationID for this detail
@@ -1180,88 +1209,14 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
         return;
       }
 
-      // Invalidate cache since artifacts changed
-      this.invalidateConversationCache(detail.ConversationID);
+      // Surgical refresh — merges new artifacts into existing cache without replacing objects
+      await this.engine.RefreshConversationDetails(detail.ConversationID, this.currentUser);
 
-      // Use optimized single query to reload all conversation data
-      const result = await rq.RunQuery({
-        QueryName: 'GetConversationComplete',
-        CategoryPath: 'MJ/Conversations',
-        Parameters: { ConversationID: detail.ConversationID }
-      }, this.currentUser);
-
-      if (!result.Success || !result.Results) {
-        console.error('Failed to reload artifacts:', result.ErrorMessage);
-        return;
-      }
-
-      LogStatusEx({message: `📊 Query result: ${result.Results.length} conversation details loaded`, verboseOnly: true});
-
-      // Update cache with fresh data
-      const conversationData = result.Results as ConversationDetailComplete[];
-      this.conversationDataCache.set(detail.ConversationID, conversationData);
-
-      // Process ALL messages in the conversation to pick up artifacts from
-      // delegated sub-agent messages (e.g., when Sage delegates to Skip,
-      // the artifact is on Skip's message, not Sage's)
-      for (const row of conversationData) {
-        this.updateArtifactsForRow(row);
-      }
-
-      // Create new Map reference to trigger Angular change detection
-      this.artifactsByDetailId = new Map(this.artifactsByDetailId);
-      this._combinedArtifactsMap = null; // Clear cache so effectiveArtifactsMap rebuilds
-
-      // Update artifact count
-      this.artifactCount = this.calculateUniqueArtifactCount();
-      this.updateArtifactCountDisplay();
+      // Reprocess peripheral data from the updated engine cache
+      this.lastLoadedConversationId = null;
+      await this.loadPeripheralData(detail.ConversationID);
     } catch (error) {
       console.error('Failed to reload artifacts for message:', error);
-    }
-  }
-
-  /**
-   * Update artifact maps for a single conversation detail row.
-   * Clears existing entries for the row and rebuilds from parsed data.
-   */
-  private updateArtifactsForRow(row: ConversationDetailComplete): void {
-    const rowId = row.ID;
-    if (!rowId) {
-      return;
-    }
-
-    const parsed = parseConversationDetailComplete(row);
-
-    // Clear existing artifacts for this detail and rebuild
-    this.artifactsByDetailId.delete(rowId);
-    this.systemArtifactsByDetailId.delete(rowId);
-
-    if (parsed.artifacts.length === 0) {
-      return;
-    }
-
-    const artifactList: LazyArtifactInfo[] = [];
-    const systemArtifactList: LazyArtifactInfo[] = [];
-
-    for (const artifactData of parsed.artifacts) {
-      const lazyInfo = new LazyArtifactInfo(artifactData, this.currentUser);
-
-      // Separate system-only artifacts from user-visible artifacts
-      if (artifactData.Visibility === 'System Only') {
-        systemArtifactList.push(lazyInfo);
-      } else {
-        artifactList.push(lazyInfo);
-      }
-
-      LogStatusEx({message: `✅ Loaded artifact ${artifactData.ArtifactID} v${artifactData.VersionNumber} for message ${rowId}`, verboseOnly: true});
-    }
-
-    // Add to appropriate maps
-    if (artifactList.length > 0) {
-      this.artifactsByDetailId.set(rowId, artifactList);
-    }
-    if (systemArtifactList.length > 0) {
-      this.systemArtifactsByDetailId.set(rowId, systemArtifactList);
     }
   }
 
@@ -1495,7 +1450,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   async onProjectSelected(project: any): Promise<void> {
     if (this.conversation && project) {
       try {
-        await this.conversationData.saveConversation(
+        await this.engine.SaveConversation(
           this.conversation.ID,
           { ProjectID: project.ID },
           this.currentUser
@@ -1507,7 +1462,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     } else if (this.conversation && !project) {
       // Remove project assignment
       try {
-        await this.conversationData.saveConversation(
+        await this.engine.SaveConversation(
           this.conversation.ID,
           { ProjectID: null },
           this.currentUser
@@ -1569,6 +1524,60 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     // Just ensure the UI reflects the changes
   }
 
+  onMessagePinToggled(message: MJConversationDetailEntity): void {
+    // The entity object is already mutated by .Save() and the engine cache holds the same
+    // object reference, so no explicit cache update is needed here.
+    // Update engine's raw data cache to stay in sync
+    if (this.conversationId) {
+      const cacheEntry = this.engine.GetCachedDetailEntry(this.conversationId);
+      if (cacheEntry) {
+        const row = cacheEntry.RawData.find((r: ConversationDetailComplete) => UUIDsEqual(r.ID, message.ID));
+        if (row) {
+          row.IsPinned = message.IsPinned;
+        }
+      }
+    }
+    // Auto-close the panel when the last pin is removed
+    if (this.showPinsPanel && this.pinnedMessages.length === 0) {
+      setTimeout(() => { this.showPinsPanel = false; this.cdr.detectChanges(); }, 600);
+    }
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Scrolls the message list to the target message and plays the beacon animation.
+   * Called when the user clicks "Jump to message" in the pins panel.
+   */
+  onJumpToMessage(messageId: string): void {
+    const el = this.scrollContainer?.nativeElement?.querySelector(`[data-message-id="${messageId}"]`);
+    if (!el) return;
+
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+    // Add beacon animation after scroll settles
+    setTimeout(() => {
+      el.classList.add('pin-beacon');
+      setTimeout(() => el.classList.remove('pin-beacon'), 1500);
+    }, 350);
+  }
+
+  /**
+   * Unpins a message from the pins panel — saves to DB and patches the cache.
+   */
+  async onUnpinFromPanel(message: MJConversationDetailEntity): Promise<void> {
+    const previous = message.IsPinned;
+    message.IsPinned = false;
+    this.cdr.detectChanges();
+    try {
+      await message.Save();
+      this.onMessagePinToggled(message);
+    } catch (err) {
+      console.error('Failed to unpin message from panel:', err);
+      message.IsPinned = previous;
+      this.cdr.detectChanges();
+    }
+  }
+
   /**
    * Handle suggested response selection from user
    * Sends the selected response as a new user message WITHOUT modifying the visible input
@@ -1590,6 +1599,59 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     } else {
       console.error('MessageInputComponent not available and not in a valid state to create conversation');
     }
+  }
+
+  async onDeleteMessage(message: MJConversationDetailEntity): Promise<void> {
+    if (!UUIDsEqual(this.conversation?.UserID, this.currentUser?.ID)) return;
+
+    // Find this message and all messages after it sorted by creation time
+    const sortedMessages = [...this.messages].sort((a, b) =>
+      new Date(a.__mj_CreatedAt!).getTime() - new Date(b.__mj_CreatedAt!).getTime()
+    );
+    const targetIndex = sortedMessages.findIndex(m => UUIDsEqual(m.ID, message.ID));
+    if (targetIndex === -1) return;
+
+    const toHide = sortedMessages.slice(targetIndex);
+    const count = toHide.length;
+
+    const confirmed = await this.confirmDialog.confirm({
+      title: 'Delete Messages',
+      message: count === 1
+        ? 'Delete this message? This cannot be undone.'
+        : `Delete this message and the ${count - 1} message${count - 1 === 1 ? '' : 's'} after it? This cannot be undone.`,
+      okText: 'Delete',
+      cancelText: 'Cancel'
+    });
+    if (!confirmed) return;
+
+    // Load all entities in parallel, then delete in parallel.
+    // entity.Delete() calls spDeleteConversationDetail which handles all FK children:
+    // hard-deletes junction tables (Artifact/Attachment/Rating), nullifies FKs on AI* records.
+    const md = new Metadata();
+    const loadResults = await Promise.all(
+      toHide.map(async msg => {
+        const entity = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', this.currentUser);
+        const loaded = await entity.Load(msg.ID);
+        return loaded ? entity : null;
+      })
+    );
+    const entities = loadResults.filter((e): e is MJConversationDetailEntity => e !== null);
+    if (entities.length === 0) return;
+
+    // Sequential deletes — parallel fires concurrent server-side transactions which race on
+    // SQLServerDataProvider's singleton _transactionDepth counter and fail with SAVE TRANSACTION errors.
+    for (const e of entities) {
+      const ok = await e.Delete();
+      if (!ok) {
+        const last = e.ResultHistory[e.ResultHistory.length - 1];
+        console.error(`Failed to delete ConversationDetail ${e.ID}: ${last?.Message ?? 'unknown error'}`, last?.Error ?? '');
+      }
+    }
+
+    const hideIds = new Set(toHide.map(m => m.ID));
+    this.messages = this.messages.filter(m => !hideIds.has(m.ID));
+    this.resetComponentState(this.conversationId!);
+    this.cdr.detectChanges();
   }
 
   onRetryMessage(message: MJConversationDetailEntity): void {
@@ -1701,8 +1763,10 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     // Clear permissions
     this.canShareSelectedArtifact = false;
     this.canEditSelectedArtifact = false;
-    // Reset maximize state when closing
+    // Reset maximize state and width when closing so the next artifact opens at default size
     this.isArtifactPaneMaximized = false;
+    this.artifactPaneWidth = DEFAULT_ARTIFACT_PANE_WIDTH;
+    this.cdr.detectChanges();
   }
 
   toggleMaximizeArtifactPane(): void {
@@ -1887,8 +1951,8 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     try {
       this.isProcessing = true;
 
-      // Create a new conversation using the data service
-      const newConversation = await this.conversationData.createConversation(
+      // Create a new conversation using the engine
+      const newConversation = await this.engine.CreateConversation(
         'New Conversation', // Temporary name - will be auto-named after first message
         this.environmentId,
         this.currentUser
@@ -1940,37 +2004,56 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     });
   }
 
+  /**
+   * Handles Shift+Click on an AI message bubble.
+   * Dumps a live snapshot of in-memory streaming and agent-run state to the browser
+   * console so engineers can debug stuck/forever-spinning conversations without
+   * needing to add any temporary code.
+   *
+   * Usage: Hold Shift and click any AI message bubble. Open DevTools Console to see the dump.
+   */
+  onDiagnosticRequested(messageId: string): void {
+    const streaming = this.streamingService.getDiagnosticSnapshot(messageId);
+    const agentRun = this.agentRunsByDetailId.get(messageId);
+    const isInProgress = this.inProgressMessageIds.includes(messageId);
+
+    console.group(`%c[MJ Diagnostic Dump] Message ${messageId}`, 'color: #0076b6; font-weight: bold');
+    console.log('Timestamp:', new Date().toISOString());
+    console.log('ConversationID:', this.conversationId);
+    console.log('isInProgress (UI):', isInProgress);
+    console.log('All inProgressMessageIds:', [...this.inProgressMessageIds]);
+    console.log('Streaming connection:', streaming.connectionStatus);
+    console.log('Streaming callbacks registered:', streaming.callbackCount);
+    if (streaming.recentCompletion) {
+      console.log('Recent completion (not yet processed):', streaming.recentCompletion);
+    }
+    if (agentRun) {
+      console.log('Agent run:', { id: agentRun.ID, status: agentRun.Status, name: agentRun.Agent });
+    } else {
+      console.log('Agent run: none loaded for this message');
+    }
+    console.groupEnd();
+  }
+
   onTestFeedbackMessage(message: MJConversationDetailEntity): void {
     if (!message.TestRunID) {
       console.error('Cannot provide test feedback: message has no TestRunID');
       return;
     }
 
-    const dialogData: TestFeedbackDialogData = {
+    this.testFeedbackDialogData = {
       testRunId: message.TestRunID,
       conversationDetailId: message.ID,
       currentUser: this.currentUser
     };
+    this.showTestFeedbackDialog = true;
+  }
 
-    const dialogRef = this.dialogService.open({
-      content: TestFeedbackDialogComponent,
-      title: 'Provide Test Feedback',
-      width: 600,
-      minHeight: 500
-    });
-
-    const dialogInstance = dialogRef.content.instance as TestFeedbackDialogComponent;
-    dialogInstance.data = dialogData;
-
-    dialogRef.result.subscribe((result) => {
-      if (result && typeof result === 'object' && 'success' in result) {
-        const feedbackResult = result as {success: boolean; feedbackId?: string};
-        if (feedbackResult.success) {
-          console.log('Test feedback saved successfully:', feedbackResult.feedbackId);
-          // TODO: Optionally show success notification
-        }
-      }
-    });
+  onTestFeedbackDialogClosed(result: TestFeedbackDialogResult): void {
+    this.showTestFeedbackDialog = false;
+    if (result.success) {
+      console.log('Test feedback saved successfully:', result.feedbackId);
+    }
   }
 
   onTaskClicked(task: MJTaskEntity): void {
@@ -2102,15 +2185,27 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   }
 
   /**
-   * Detect in-progress agent runs/tasks and reconnect to their streaming updates.
-   * Called after loading a conversation to resume progress tracking.
+   * Detect and reconcile agent run states against conversation detail statuses.
+   * Called after loading a conversation to handle two scenarios:
    *
-   * Also handles the "timing gap" scenario: if an agent completed between the page
-   * refresh and the WebSocket reconnection, the completion PubSub event is lost.
-   * We catch this by comparing message status against the agent run status from
-   * the database — if the run is already complete, we handle the completion immediately.
+   * 1. **In-progress catch-up**: If an agent completed between page refresh and
+   *    WebSocket reconnection, the completion PubSub event is lost. We catch this
+   *    by comparing message status against the agent run status from the database.
+   *
+   * 2. **Stale error correction**: If the client previously marked a conversation
+   *    detail as 'Error' (e.g., due to WebSocket timeout) but the server actually
+   *    completed successfully, we detect the mismatch and correct it. This prevents
+   *    the race condition where the client overwrites a server-completed record.
    */
-  private async detectAndReconnectToInProgressRuns(conversationId: string): Promise<void> {
+  private async detectAndReconcileAgentRuns(conversationId: string): Promise<void> {
+    await this.reconnectInProgressRuns();
+    await this.correctStaleErrorMessages();
+  }
+
+  /**
+   * Reconnect to in-progress agent runs whose completion events were missed.
+   */
+  private async reconnectInProgressRuns(): Promise<void> {
     const inProgressMessages = this.messages.filter(
       m => m.Status === 'In-Progress' && m.Role === 'AI'
     );
@@ -2139,6 +2234,29 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
         await this.handleMessageCompletion(message, agentRun.ID);
       } else {
         LogStatusEx({message: `🔌 Agent run ${agentRun.ID} still ${agentRun.Status} for message ${message.ID}, WebSocket will receive updates`, verboseOnly: true});
+      }
+    }
+  }
+
+  /**
+   * Detect conversation details marked as 'Error' by the client whose corresponding
+   * agent run actually completed successfully on the server. This corrects the race
+   * condition where the client overwrote a server-completed record with an error status.
+   */
+  private async correctStaleErrorMessages(): Promise<void> {
+    const errorMessages = this.messages.filter(
+      m => m.Status === 'Error' && m.Role === 'AI'
+    );
+
+    if (errorMessages.length === 0) {
+      return;
+    }
+
+    for (const message of errorMessages) {
+      const agentRun = this.agentRunsByDetailId.get(message.ID);
+      if (agentRun && agentRun.Status === 'Completed') {
+        LogStatusEx({message: `🔧 Correcting stale error: message ${message.ID} shows Error but agent run ${agentRun.ID} completed successfully`, verboseOnly: true});
+        await this.handleMessageCompletion(message, agentRun.ID);
       }
     }
   }

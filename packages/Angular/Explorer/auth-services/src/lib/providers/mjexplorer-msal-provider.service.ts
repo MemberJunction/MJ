@@ -4,7 +4,7 @@ import { MJAuthBase } from '../mjexplorer-auth-base.service';
 import { BehaviorSubject, Observable, Subject, catchError, filter, from, map, of, throwError, takeUntil, take } from 'rxjs';
 import { MsalBroadcastService, MsalService, MSAL_INSTANCE, MSAL_GUARD_CONFIG, MSAL_INTERCEPTOR_CONFIG, MsalGuard } from '@azure/msal-angular';
 import { AccountInfo, AuthenticationResult } from '@azure/msal-common';
-import { CacheLookupPolicy, InteractionRequiredAuthError, InteractionStatus, PublicClientApplication, InteractionType, BrowserAuthError } from '@azure/msal-browser';
+import { CacheLookupPolicy, ClientAuthError, InteractionRequiredAuthError, InteractionStatus, PublicClientApplication, InteractionType, BrowserAuthError } from '@azure/msal-browser';
 import { LogError } from '@memberjunction/core';
 import { AngularAuthProviderConfig } from '../IAuthProvider';
 import {
@@ -94,17 +94,17 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
   }
 
   private async _performInitialization(): Promise<void> {
-    console.log('[MSAL] Starting initialization...');
+    console.debug('[MSAL] Starting initialization...');
     await this.auth.instance.initialize();
-    console.log('[MSAL] MSAL instance initialized');
+    console.debug('[MSAL] MSAL instance initialized');
 
     // Handle redirect immediately after initialization
     const redirectResponse = await this.auth.instance.handleRedirectPromise();
-    console.log('[MSAL] Redirect response:', redirectResponse ? 'Found' : 'None');
+    console.debug('[MSAL] Redirect response:', redirectResponse ? 'Found' : 'None');
 
     if (redirectResponse && redirectResponse.account) {
       // User just logged in via redirect
-      console.log('[MSAL] Processing redirect login');
+      console.debug('[MSAL] Processing redirect login');
       this.auth.instance.setActiveAccount(redirectResponse.account);
       this.updateAuthState(true);
 
@@ -113,14 +113,14 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
       this.updateUserInfo(userInfo);
 
       this._initializationCompleted$.next(true);
-      console.log('[MSAL] Initialization completed (redirect login)');
+      console.debug('[MSAL] Initialization completed (redirect login)');
     } else {
       // Set active account if we have one from cache
       const accounts = this.auth.instance.getAllAccounts();
-      console.log('[MSAL] Cached accounts found:', accounts.length);
+      console.debug('[MSAL] Cached accounts found:', accounts.length);
 
       if (accounts.length > 0) {
-        console.log('[MSAL] Restoring session from cached account:', accounts[0].username);
+        console.debug('[MSAL] Restoring session from cached account:', accounts[0].username);
         this.auth.instance.setActiveAccount(accounts[0]);
         this.updateAuthState(true);
 
@@ -128,18 +128,10 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
         const userInfo = this.mapMSALAccountToStandard(accounts[0]);
         this.updateUserInfo(userInfo);
 
-        // Proactively refresh tokens to extend the interaction-free period
-        // This uses refreshTokenExpirationOffsetSeconds to ensure tokens remain valid
-        // for at least 2 hours without requiring user interaction
-        this.performProactiveRefresh(accounts[0]).catch((err: unknown) => {
-          // Log but don't fail initialization - cached tokens may still be valid
-          console.warn('[MSAL] Proactive token refresh failed during init:', err);
-        });
-
         this._initializationCompleted$.next(true);
-        console.log('[MSAL] Initialization completed (cached session restored)');
+        console.debug('[MSAL] Initialization completed (cached session restored)');
       } else {
-        console.log('[MSAL] No cached accounts, user needs to log in');
+        console.debug('[MSAL] No cached accounts, user needs to log in');
       }
     }
 
@@ -188,7 +180,7 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
     });
   }
 
-  async logout(): Promise<void> {
+  protected async logoutInternal(): Promise<void> {
     await this.ensureInitialized();
     this.auth.logoutRedirect().subscribe(() => {
       // Logout will trigger a redirect
@@ -223,7 +215,26 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
       // First try to get cached token from account
       // This avoids unnecessary iframe calls that can timeout
       if (account.idToken) {
-        return account.idToken;
+        // Check if token is expired or about to expire (within 5-minute buffer)
+        // This prevents the race condition where proactive refresh hasn't completed
+        // but the cached token is already expired
+        if (this.isTokenValid(account.idToken, 300)) {
+          return account.idToken;
+        }
+
+        // Token expired or near-expiry — force a silent refresh
+        console.debug('[MSAL] Cached token expired or near-expiry, forcing silent refresh');
+        try {
+          const response = await this.auth.instance.acquireTokenSilent({
+            scopes: ['User.Read', 'email', 'profile'],
+            account: account,
+            forceRefresh: true
+          });
+          return response.idToken || null;
+        } catch (refreshError) {
+          console.warn('[MSAL] Silent refresh failed, returning expired cached token:', refreshError);
+          // Fall through to existing cache-only acquisition below
+        }
       }
 
       // If not in account, try silent token acquisition from cache only
@@ -317,8 +328,14 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
    *
    * MSAL 5.x Best Practices:
    * - Pass account parameter for reliable silent acquisition
-   * - Use CacheLookupPolicy.Default for efficient cache → refresh token → iframe chain
+   * - Use forceRefresh: true to bypass cache and get fresh tokens from Azure AD
    * - Handle MSAL 5.x specific error codes (timed_out, no_tokens_found, etc.)
+   *
+   * IMPORTANT: This method is called when the server has already rejected the current
+   * token as expired (JWT_EXPIRED). Using CacheLookupPolicy.Default here can return a
+   * cached ID token that is still expired (e.g. when the access token has a longer
+   * lifetime than the ID token). forceRefresh: true ensures a network round-trip to
+   * Azure AD so both the access token and ID token are genuinely refreshed.
    */
   protected async refreshTokenInternal(): Promise<TokenRefreshResult> {
     try {
@@ -337,11 +354,14 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
       }
 
       // MSAL 5.x: Pass account for reliable silent acquisition
-      // Use Default policy for efficient cache → refresh token → iframe chain
+      // Use forceRefresh to bypass cache and ensure a network round-trip.
+      // This is critical because this method is called after the server rejected
+      // the current token — returning a cached (potentially stale) ID token would
+      // cause the retry to fail with the same JWT_EXPIRED error.
       const response = await this.auth.instance.acquireTokenSilent({
         scopes: ['User.Read', 'email', 'profile'],
         account: account,
-        cacheLookupPolicy: CacheLookupPolicy.Default
+        forceRefresh: true
       });
 
       if (!response.idToken) {
@@ -351,6 +371,21 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
             type: AuthErrorType.NO_ACTIVE_SESSION,
             message: 'Token refresh succeeded but no ID token returned',
             userMessage: 'Session refresh failed. Please log in again.'
+          }
+        };
+      }
+
+      // Safety net: verify the refreshed token is actually valid.
+      // This should always pass after a forced refresh, but guards against
+      // edge cases like severe clock skew between client and Azure AD.
+      if (!this.isTokenValid(response.idToken)) {
+        console.warn('[MSAL] Forced refresh returned an expired ID token — requesting interaction');
+        return {
+          success: false,
+          error: {
+            type: AuthErrorType.INTERACTION_REQUIRED,
+            message: 'Token refresh returned an expired ID token',
+            userMessage: 'Your session has expired. Redirecting to login...'
           }
         };
       }
@@ -382,7 +417,8 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
         'no_tokens_found',
         'no_account_error',
         'login_required',
-        'consent_required'
+        'consent_required',
+        'token_refresh_required'  // ClientAuthError when cached token needs refresh
       ];
 
       if (interactionRequiredCodes.includes(errorCode || '') || error instanceof InteractionRequiredAuthError) {
@@ -423,6 +459,26 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
         message,
         originalError: error,
         userMessage: 'Additional authentication is required. Please log in again.'
+      };
+    }
+
+    // ClientAuthError — covers codes like token_refresh_required that are not
+    // surfaced through BrowserAuthError or InteractionRequiredAuthError.
+    if (error instanceof ClientAuthError) {
+      if (errorCode === 'token_refresh_required') {
+        return {
+          type: AuthErrorType.INTERACTION_REQUIRED,
+          message,
+          originalError: error,
+          userMessage: 'Your session has expired. Please log in again.'
+        };
+      }
+
+      return {
+        type: AuthErrorType.TOKEN_EXPIRED,
+        message,
+        originalError: error,
+        userMessage: 'Your session has expired. Please log in again.'
       };
     }
 
@@ -513,35 +569,26 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
   }
 
   /**
-   * Proactively refresh tokens to extend the interaction-free period
+   * Check if a JWT token is still valid with an optional buffer period.
+   * Decodes the payload to read the `exp` claim without cryptographic verification
+   * (expiry is a timing check, not an authenticity check).
    *
-   * MSAL 5.x Best Practice: Use refreshTokenExpirationOffsetSeconds to get tokens
-   * that will remain valid for a specified duration. This is called:
-   * - On initialization (to ensure fresh tokens at app startup)
-   * - Can be called manually before important operations
-   *
-   * @param account - The account to refresh tokens for
-   * @param offsetSeconds - How long tokens should remain valid (default: 2 hours)
+   * @param token - The JWT string to check
+   * @param bufferSeconds - Number of seconds before actual expiry to consider the token invalid (default: 0)
+   * @returns true if the token's exp claim is beyond (now + buffer), false otherwise
    */
-  private async performProactiveRefresh(account: AccountInfo, offsetSeconds: number = 7200): Promise<void> {
+  private isTokenValid(token: string, bufferSeconds: number = 0): boolean {
     try {
-      console.log(`[MSAL] Performing proactive token refresh (offset: ${offsetSeconds}s)...`);
-
-      // Use forceRefresh with refreshTokenExpirationOffsetSeconds to get fresh tokens
-      // that will be valid for at least the specified offset period
-      await this.auth.instance.acquireTokenSilent({
-        scopes: ['User.Read', 'email', 'profile'],
-        account: account,
-        forceRefresh: true,
-        refreshTokenExpirationOffsetSeconds: offsetSeconds
-      });
-
-      console.log('[MSAL] Proactive token refresh successful');
-    } catch (error) {
-      // Don't treat proactive refresh failures as critical - the app can still
-      // function with existing cached tokens until they expire
-      console.warn('[MSAL] Proactive token refresh failed (will use cached tokens):', error);
-      throw error; // Re-throw so caller can decide how to handle
+      const parts = token.split('.');
+      if (parts.length !== 3) {
+        return false;
+      }
+      const payload = JSON.parse(atob(parts[1])) as { exp?: number };
+      const expiresAtMs = (payload.exp ?? 0) * 1000;
+      return expiresAtMs > Date.now() + (bufferSeconds * 1000);
+    } catch {
+      // If we can't decode the token, treat it as invalid
+      return false;
     }
   }
 
@@ -612,7 +659,7 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
    * After authentication, the app will reload and re-initialize with a fresh token.
    */
   protected async handleSessionExpiryInternal(): Promise<void> {
-    console.log('[MSAL] Redirecting to Microsoft login for re-authentication...');
+    console.debug('[MSAL] Redirecting to Microsoft login for re-authentication...');
 
     // Initiate redirect authentication - page will navigate away
     this.auth.loginRedirect({

@@ -2,6 +2,7 @@ import { LogError } from "@memberjunction/core";
 import { GraphQLDataProvider } from "./graphQLDataProvider";
 import { gql } from "graphql-request";
 import { SafeJSONParse } from "@memberjunction/global";
+import { FireAndForgetHelper } from "./fireAndForgetHelper";
 
 /**
  * Parameters for running a test
@@ -26,7 +27,7 @@ export interface RunTestResult {
     success: boolean;
     errorMessage?: string;
     executionTimeMs?: number;
-    result: any; // Parsed TestRunResult from engine
+    result: Record<string, unknown> | null;
 }
 
 /**
@@ -68,7 +69,7 @@ export interface RunTestSuiteResult {
     success: boolean;
     errorMessage?: string;
     executionTimeMs?: number;
-    result: any; // Parsed TestSuiteRunResult from engine
+    result: Record<string, unknown> | null;
 }
 
 /**
@@ -85,21 +86,20 @@ export interface TestExecutionProgress {
 
 /**
  * Client for executing tests through GraphQL.
- * This class provides an easy way to run tests and test suites from a client application.
+ * Uses the fire-and-forget pattern to avoid Azure proxy timeouts (~230s)
+ * on long-running test executions. Results are delivered via WebSocket PubSub.
  *
  * @example
  * ```typescript
- * // Create the client
  * const testingClient = new GraphQLTestingClient(graphQLProvider);
  *
- * // Run a test
  * const result = await testingClient.RunTest({
  *   testId: "test-uuid",
  *   verbose: true,
- *   environment: "dev"
+ *   environment: "dev",
+ *   onProgress: (progress) => console.log(progress.message)
  * });
  *
- * // Run a test suite
  * const suiteResult = await testingClient.RunTestSuite({
  *   suiteId: "suite-uuid",
  *   parallel: true
@@ -109,237 +109,76 @@ export interface TestExecutionProgress {
 export class GraphQLTestingClient {
     private _dataProvider: GraphQLDataProvider;
 
-    /**
-     * Creates a new GraphQLTestingClient instance.
-     * @param dataProvider The GraphQL data provider to use for queries
-     */
     constructor(dataProvider: GraphQLDataProvider) {
         this._dataProvider = dataProvider;
     }
 
     /**
-     * Run a single test with the specified parameters.
-     *
-     * This method invokes a test on the server through GraphQL and returns the result.
-     * If a progress callback is provided in params.onProgress, this method will subscribe
-     * to real-time progress updates from the GraphQL server and forward them to the callback.
-     *
-     * @param params The parameters for running the test
-     * @returns A Promise that resolves to a RunTestResult object
-     *
-     * @example
-     * ```typescript
-     * const result = await testingClient.RunTest({
-     *   testId: "test-uuid",
-     *   verbose: true,
-     *   environment: "staging",
-     *   onProgress: (progress) => {
-     *     console.log(`${progress.currentStep}: ${progress.message} (${progress.percentage}%)`);
-     *   }
-     * });
-     *
-     * if (result.success) {
-     *   console.log('Test passed!', result.result);
-     * } else {
-     *   console.error('Test failed:', result.errorMessage);
-     * }
-     * ```
+     * Run a single test using fire-and-forget to avoid Azure proxy timeouts.
+     * The mutation returns immediately, and the result is delivered via WebSocket.
      */
     public async RunTest(params: RunTestParams): Promise<RunTestResult> {
-        let subscription: any;
-
         try {
-            // Subscribe to progress updates if callback provided
-            if (params.onProgress) {
-                subscription = this._dataProvider.PushStatusUpdates(this._dataProvider.sessionId)
-                    .subscribe((message: string) => {
-                        try {
-                            const parsed = JSON.parse(message);
+            const mutation = this.buildRunTestMutation();
+            const variables = this.buildRunTestVariables(params);
 
-                            // Filter for TestExecutionProgress messages from RunTestResolver
-                            if (parsed.resolver === 'RunTestResolver' &&
-                                parsed.type === 'TestExecutionProgress' &&
-                                parsed.status === 'ok' &&
-                                parsed.data?.progress) {
-
-                                // Forward progress to callback
-                                params.onProgress!(parsed.data.progress);
-                            }
-                        } catch (e) {
-                            console.error('[GraphQLTestingClient] Failed to parse progress message:', e);
-                        }
-                    });
-            }
-
-            const mutation = gql`
-                mutation RunTest(
-                    $testId: String!,
-                    $verbose: Boolean,
-                    $environment: String,
-                    $tags: String,
-                    $variables: String
-                ) {
-                    RunTest(
-                        testId: $testId,
-                        verbose: $verbose,
-                        environment: $environment,
-                        tags: $tags,
-                        variables: $variables
-                    ) {
-                        success
-                        errorMessage
-                        executionTimeMs
-                        result
-                    }
-                }
-            `;
-
-            // Serialize tags array to JSON string for GraphQL
-            const tagsJson = params.tags && params.tags.length > 0 ? JSON.stringify(params.tags) : undefined;
-            // Serialize variables object to JSON string for GraphQL
-            const variablesJson = params.variables ? JSON.stringify(params.variables) : undefined;
-
-            const variables = {
-                testId: params.testId,
-                verbose: params.verbose,
-                environment: params.environment,
-                tags: tagsJson,
-                variables: variablesJson
-            };
-
-            const result = await this._dataProvider.ExecuteGQL(mutation, variables);
-            return this.processTestResult(result.RunTest);
-
+            return await FireAndForgetHelper.Execute<RunTestResult>({
+                dataProvider: this._dataProvider,
+                mutation,
+                variables,
+                mutationFieldName: 'RunTest',
+                operationLabel: 'RunTest',
+                validateAck: (ack) => ack?.success === true,
+                isCompletionEvent: (parsed) => this.isTestCompletionEvent(parsed, params.testId),
+                extractResult: (parsed) => this.extractTestResult(parsed),
+                onMessage: params.onProgress
+                    ? (parsed) => this.forwardTestProgress(parsed, params.onProgress!)
+                    : undefined,
+                createErrorResult: (msg) => ({
+                    success: false,
+                    errorMessage: msg,
+                    result: null
+                }),
+            });
         } catch (e) {
             return this.handleError(e, 'RunTest');
-        } finally {
-            // Always clean up subscription
-            if (subscription) {
-                subscription.unsubscribe();
-            }
         }
     }
 
     /**
-     * Run a test suite with the specified parameters.
-     *
-     * If a progress callback is provided in params.onProgress, this method will subscribe
-     * to real-time progress updates from the GraphQL server and forward them to the callback.
-     *
-     * @param params The parameters for running the test suite
-     * @returns A Promise that resolves to a RunTestSuiteResult object
-     *
-     * @example
-     * ```typescript
-     * const result = await testingClient.RunTestSuite({
-     *   suiteId: "suite-uuid",
-     *   parallel: true,
-     *   verbose: false,
-     *   onProgress: (progress) => {
-     *     console.log(`Progress: ${progress.message} (${progress.percentage}%)`);
-     *   }
-     * });
-     *
-     * console.log(`Suite: ${result.result.totalTests} tests run`);
-     * console.log(`Passed: ${result.result.passedTests}`);
-     * ```
+     * Run a test suite using fire-and-forget to avoid Azure proxy timeouts.
+     * The mutation returns immediately, and the result is delivered via WebSocket.
      */
     public async RunTestSuite(params: RunTestSuiteParams): Promise<RunTestSuiteResult> {
-        let subscription: any;
-
         try {
-            // Subscribe to progress updates if callback provided
-            if (params.onProgress) {
-                subscription = this._dataProvider.PushStatusUpdates(this._dataProvider.sessionId)
-                    .subscribe((message: string) => {
-                        try {
-                            const parsed = JSON.parse(message);
+            const mutation = this.buildRunTestSuiteMutation();
+            const variables = this.buildRunTestSuiteVariables(params);
 
-                            // Filter for TestExecutionProgress messages from RunTestResolver
-                            if (parsed.resolver === 'RunTestResolver' &&
-                                parsed.type === 'TestExecutionProgress' &&
-                                parsed.status === 'ok' &&
-                                parsed.data?.progress) {
-
-                                // Forward progress to callback
-                                params.onProgress!(parsed.data.progress);
-                            }
-                        } catch (e) {
-                            console.error('[GraphQLTestingClient] Failed to parse progress message:', e);
-                        }
-                    });
-            }
-
-            const mutation = gql`
-                mutation RunTestSuite(
-                    $suiteId: String!,
-                    $verbose: Boolean,
-                    $environment: String,
-                    $parallel: Boolean,
-                    $tags: String,
-                    $variables: String,
-                    $selectedTestIds: String,
-                    $sequenceStart: Int,
-                    $sequenceEnd: Int
-                ) {
-                    RunTestSuite(
-                        suiteId: $suiteId,
-                        verbose: $verbose,
-                        environment: $environment,
-                        parallel: $parallel,
-                        tags: $tags,
-                        variables: $variables,
-                        selectedTestIds: $selectedTestIds,
-                        sequenceStart: $sequenceStart,
-                        sequenceEnd: $sequenceEnd
-                    ) {
-                        success
-                        errorMessage
-                        executionTimeMs
-                        result
-                    }
-                }
-            `;
-
-            // Serialize tags array to JSON string for GraphQL
-            const tagsJson = params.tags && params.tags.length > 0 ? JSON.stringify(params.tags) : undefined;
-            // Serialize variables object to JSON string for GraphQL
-            const variablesJson = params.variables ? JSON.stringify(params.variables) : undefined;
-            // Serialize selectedTestIds array to JSON string for GraphQL
-            const selectedTestIdsJson = params.selectedTestIds && params.selectedTestIds.length > 0
-                ? JSON.stringify(params.selectedTestIds)
-                : undefined;
-
-            const variables = {
-                suiteId: params.suiteId,
-                verbose: params.verbose,
-                environment: params.environment,
-                parallel: params.parallel,
-                tags: tagsJson,
-                variables: variablesJson,
-                selectedTestIds: selectedTestIdsJson,
-                sequenceStart: params.sequenceStart,
-                sequenceEnd: params.sequenceEnd
-            };
-
-            const result = await this._dataProvider.ExecuteGQL(mutation, variables);
-            return this.processSuiteResult(result.RunTestSuite);
-
+            return await FireAndForgetHelper.Execute<RunTestSuiteResult>({
+                dataProvider: this._dataProvider,
+                mutation,
+                variables,
+                mutationFieldName: 'RunTestSuite',
+                operationLabel: 'RunTestSuite',
+                validateAck: (ack) => ack?.success === true,
+                isCompletionEvent: (parsed) => this.isSuiteCompletionEvent(parsed, params.suiteId),
+                extractResult: (parsed) => this.extractSuiteResult(parsed),
+                onMessage: params.onProgress
+                    ? (parsed) => this.forwardTestProgress(parsed, params.onProgress!)
+                    : undefined,
+                createErrorResult: (msg) => ({
+                    success: false,
+                    errorMessage: msg,
+                    result: null
+                }),
+            });
         } catch (e) {
             return this.handleError(e, 'RunTestSuite');
-        } finally {
-            // Always clean up subscription
-            if (subscription) {
-                subscription.unsubscribe();
-            }
         }
     }
 
     /**
      * Check if a test is currently running
-     *
-     * @param testId The test ID to check
-     * @returns True if the test is running, false otherwise
      */
     public async IsTestRunning(testId: string): Promise<boolean> {
         try {
@@ -358,55 +197,188 @@ export class GraphQLTestingClient {
         }
     }
 
-    // ===== Helper Methods =====
+    // ===== Mutation Builders =====
 
-    private processTestResult(result: any): RunTestResult {
-        if (!result) {
-            throw new Error("Invalid response from server");
-        }
+    private buildRunTestMutation(): string {
+        return gql`
+            mutation RunTest(
+                $testId: String!,
+                $verbose: Boolean,
+                $environment: String,
+                $tags: String,
+                $variables: String,
+                $fireAndForget: Boolean
+            ) {
+                RunTest(
+                    testId: $testId,
+                    verbose: $verbose,
+                    environment: $environment,
+                    tags: $tags,
+                    variables: $variables,
+                    fireAndForget: $fireAndForget
+                ) {
+                    success
+                    errorMessage
+                    executionTimeMs
+                    result
+                }
+            }
+        `;
+    }
 
-        let parsedResult: any;
-        try {
-            parsedResult = SafeJSONParse(result.result);
-        } catch (e) {
-            parsedResult = result.result;
-        }
+    private buildRunTestSuiteMutation(): string {
+        return gql`
+            mutation RunTestSuite(
+                $suiteId: String!,
+                $verbose: Boolean,
+                $environment: String,
+                $parallel: Boolean,
+                $tags: String,
+                $variables: String,
+                $selectedTestIds: String,
+                $sequenceStart: Int,
+                $sequenceEnd: Int,
+                $fireAndForget: Boolean
+            ) {
+                RunTestSuite(
+                    suiteId: $suiteId,
+                    verbose: $verbose,
+                    environment: $environment,
+                    parallel: $parallel,
+                    tags: $tags,
+                    variables: $variables,
+                    selectedTestIds: $selectedTestIds,
+                    sequenceStart: $sequenceStart,
+                    sequenceEnd: $sequenceEnd,
+                    fireAndForget: $fireAndForget
+                ) {
+                    success
+                    errorMessage
+                    executionTimeMs
+                    result
+                }
+            }
+        `;
+    }
+
+    // ===== Variable Builders =====
+
+    private buildRunTestVariables(params: RunTestParams): Record<string, unknown> {
+        const tagsJson = params.tags && params.tags.length > 0 ? JSON.stringify(params.tags) : undefined;
+        const variablesJson = params.variables ? JSON.stringify(params.variables) : undefined;
 
         return {
-            success: result.success,
-            errorMessage: result.errorMessage,
-            executionTimeMs: result.executionTimeMs,
-            result: parsedResult
+            testId: params.testId,
+            verbose: params.verbose,
+            environment: params.environment,
+            tags: tagsJson,
+            variables: variablesJson,
+            fireAndForget: true
         };
     }
 
-    private processSuiteResult(result: any): RunTestSuiteResult {
-        if (!result) {
-            throw new Error("Invalid response from server");
-        }
-
-        let parsedResult: any;
-        try {
-            parsedResult = SafeJSONParse(result.result);
-        } catch (e) {
-            parsedResult = result.result;
-        }
+    private buildRunTestSuiteVariables(params: RunTestSuiteParams): Record<string, unknown> {
+        const tagsJson = params.tags && params.tags.length > 0 ? JSON.stringify(params.tags) : undefined;
+        const variablesJson = params.variables ? JSON.stringify(params.variables) : undefined;
+        const selectedTestIdsJson = params.selectedTestIds && params.selectedTestIds.length > 0
+            ? JSON.stringify(params.selectedTestIds)
+            : undefined;
 
         return {
-            success: result.success,
-            errorMessage: result.errorMessage,
-            executionTimeMs: result.executionTimeMs,
-            result: parsedResult
+            suiteId: params.suiteId,
+            verbose: params.verbose,
+            environment: params.environment,
+            parallel: params.parallel,
+            tags: tagsJson,
+            variables: variablesJson,
+            selectedTestIds: selectedTestIdsJson,
+            sequenceStart: params.sequenceStart,
+            sequenceEnd: params.sequenceEnd,
+            fireAndForget: true
         };
     }
 
-    private handleError(error: any, operation: string): any {
+    // ===== Event Matching =====
+
+    /**
+     * Check if a PubSub message is the fire-and-forget completion event for this test.
+     */
+    private isTestCompletionEvent(parsed: Record<string, unknown>, testId: string): boolean {
+        const data = parsed.data as Record<string, unknown> | undefined;
+        return parsed.resolver === 'RunTestResolver' &&
+            parsed.type === 'FireAndForgetComplete' &&
+            data?.type === 'complete' &&
+            data?.testId === testId;
+    }
+
+    /**
+     * Check if a PubSub message is the fire-and-forget completion event for this suite.
+     */
+    private isSuiteCompletionEvent(parsed: Record<string, unknown>, suiteId: string): boolean {
+        const data = parsed.data as Record<string, unknown> | undefined;
+        return parsed.resolver === 'RunTestResolver' &&
+            parsed.type === 'FireAndForgetSuiteComplete' &&
+            data?.type === 'complete' &&
+            data?.suiteId === suiteId;
+    }
+
+    // ===== Result Extraction =====
+
+    private extractTestResult(parsed: Record<string, unknown>): RunTestResult {
+        const data = parsed.data as Record<string, unknown>;
+        return {
+            success: data.success as boolean,
+            errorMessage: data.errorMessage as string | undefined,
+            executionTimeMs: data.executionTimeMs as number | undefined,
+            result: data.result ? SafeJSONParse(data.result as string) : null
+        };
+    }
+
+    private extractSuiteResult(parsed: Record<string, unknown>): RunTestSuiteResult {
+        const data = parsed.data as Record<string, unknown>;
+        return {
+            success: data.success as boolean,
+            errorMessage: data.errorMessage as string | undefined,
+            executionTimeMs: data.executionTimeMs as number | undefined,
+            result: data.result ? SafeJSONParse(data.result as string) : null
+        };
+    }
+
+    // ===== Progress Forwarding =====
+
+    /**
+     * Forward test execution progress from PubSub messages to the onProgress callback.
+     */
+    private forwardTestProgress(
+        parsed: Record<string, unknown>,
+        onProgress: (progress: TestExecutionProgress) => void
+    ): void {
+        if (parsed.resolver === 'RunTestResolver' &&
+            parsed.type === 'TestExecutionProgress' &&
+            parsed.status === 'ok') {
+            const data = parsed.data as Record<string, unknown> | undefined;
+            const progress = data?.progress as TestExecutionProgress | undefined;
+            if (progress) {
+                onProgress(progress);
+            }
+        }
+    }
+
+    // ===== Error Handling =====
+
+    private handleError(error: unknown, operation: string): RunTestResult | RunTestSuiteResult {
         const errorMsg = (error as Error).message;
         LogError(`${operation} failed: ${errorMsg}`);
 
+        // Provide helpful messages for common timeout/network errors
+        const isFetchError = errorMsg.includes('Failed to fetch') || errorMsg.includes('NetworkError');
+        const userMessage = isFetchError
+            ? 'Lost connection to the server. The test may still be running. Please refresh to check the latest status.'
+            : errorMsg;
+
         return {
             success: false,
-            errorMessage: errorMsg,
+            errorMessage: userMessage,
             result: null
         };
     }

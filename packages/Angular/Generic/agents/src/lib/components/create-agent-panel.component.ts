@@ -7,6 +7,7 @@ import { Metadata, RunView } from '@memberjunction/core';
 import { MJAIAgentTypeEntity, MJAIAgentPromptEntity, MJAIAgentActionEntity, MJActionEntity } from '@memberjunction/core-entities';
 import { MJAIAgentEntityExtended, MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Configuration for the CreateAgentPanel component.
@@ -393,12 +394,12 @@ export class CreateAgentPanelComponent implements OnInit, OnDestroy {
     }
 
     public RemovePrompt(prompt: MJAIPromptEntityExtended): void {
-        const index = this.LinkedPrompts.findIndex(p => p.ID === prompt.ID);
+        const index = this.LinkedPrompts.findIndex(p => UUIDsEqual(p.ID, prompt.ID));
         if (index >= 0) {
             this.LinkedPrompts.splice(index, 1);
         }
 
-        const linkIndex = this.agentPromptLinks.findIndex(ap => ap.PromptID === prompt.ID);
+        const linkIndex = this.agentPromptLinks.findIndex(ap => UUIDsEqual(ap.PromptID, prompt.ID));
         if (linkIndex >= 0) {
             this.agentPromptLinks.splice(linkIndex, 1);
         }
@@ -470,12 +471,12 @@ export class CreateAgentPanelComponent implements OnInit, OnDestroy {
     }
 
     public RemoveAction(action: MJActionEntity): void {
-        const index = this.LinkedActions.findIndex(a => a.ID === action.ID);
+        const index = this.LinkedActions.findIndex(a => UUIDsEqual(a.ID, action.ID));
         if (index >= 0) {
             this.LinkedActions.splice(index, 1);
         }
 
-        const linkIndex = this.agentActionLinks.findIndex(aa => aa.ActionID === action.ID);
+        const linkIndex = this.agentActionLinks.findIndex(aa => UUIDsEqual(aa.ActionID, action.ID));
         if (linkIndex >= 0) {
             this.agentActionLinks.splice(linkIndex, 1);
         }

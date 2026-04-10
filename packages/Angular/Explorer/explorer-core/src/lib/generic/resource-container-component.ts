@@ -31,7 +31,7 @@ export class ResourceContainerComponent implements OnChanges, OnDestroy {
   @ViewChild(Container, { static: true }) resourceContainer!: Container;
 
   private _loaded: boolean = false;
-  private _componentRef: ComponentRef<any> | null = null; 
+  private _componentRef: ComponentRef<any> | null = null;
 
   constructor(public sharedService: SharedService) { }
 
@@ -50,10 +50,11 @@ export class ResourceContainerComponent implements OnChanges, OnDestroy {
     }
   }
 
-  loadComponent() {
+  async loadComponent() {
     try {
       this._loaded = true;
-      const resourceReg = MJGlobal.Instance.ClassFactory.GetRegistration(BaseResourceComponent, this.Data.ResourceType); 
+      const resourceReg = await MJGlobal.Instance.ClassFactory.GetRegistrationAsync(BaseResourceComponent, this.Data.ResourceType);
+
       if (!resourceReg) {
         throw new Error(`Unable to find resource registration for ${this.Data.ResourceType}`);
       }
@@ -65,7 +66,7 @@ export class ResourceContainerComponent implements OnChanges, OnDestroy {
 
       viewContainerRef.clear();
       const componentRef = viewContainerRef.createComponent<typeof resourceReg.SubClass>(resourceReg.SubClass);
-      
+
       // Track the component reference for cleanup
       this._componentRef = componentRef;
 

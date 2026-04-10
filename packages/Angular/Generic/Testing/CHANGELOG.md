@@ -1,5 +1,408 @@
 # @memberjunction/ng-testing
 
+## 5.24.0
+
+### Patch Changes
+
+- Updated dependencies [c318a0c]
+- Updated dependencies [1912726]
+  - @memberjunction/graphql-dataprovider@5.24.0
+  - @memberjunction/core@5.24.0
+  - @memberjunction/core-entities@5.24.0
+  - @memberjunction/ng-shared@5.24.0
+  - @memberjunction/ng-notifications@5.24.0
+  - @memberjunction/ng-base-types@5.24.0
+  - @memberjunction/ng-code-editor@5.24.0
+  - @memberjunction/ng-container-directives@5.24.0
+  - @memberjunction/testing-engine-base@5.24.0
+  - @memberjunction/ng-ui-components@5.24.0
+  - @memberjunction/global@5.24.0
+
+## 5.23.0
+
+### Patch Changes
+
+- Updated dependencies [247df16]
+- Updated dependencies [9250070]
+- Updated dependencies [513b20c]
+- Updated dependencies [44bc22b]
+- Updated dependencies [58af481]
+- Updated dependencies [fb0c69f]
+- Updated dependencies [1d1e02e]
+  - @memberjunction/core@5.23.0
+  - @memberjunction/global@5.23.0
+  - @memberjunction/graphql-dataprovider@5.23.0
+  - @memberjunction/core-entities@5.23.0
+  - @memberjunction/ng-ui-components@5.23.0
+  - @memberjunction/ng-shared@5.23.0
+  - @memberjunction/ng-base-types@5.23.0
+  - @memberjunction/ng-code-editor@5.23.0
+  - @memberjunction/ng-container-directives@5.23.0
+  - @memberjunction/ng-notifications@5.23.0
+  - @memberjunction/testing-engine-base@5.23.0
+
+## 5.22.0
+
+### Patch Changes
+
+- Updated dependencies [6a5093b]
+- Updated dependencies [e123e4b]
+- Updated dependencies [f2a6bec]
+  - @memberjunction/core@5.22.0
+  - @memberjunction/global@5.22.0
+  - @memberjunction/graphql-dataprovider@5.22.0
+  - @memberjunction/ng-shared@5.22.0
+  - @memberjunction/ng-base-types@5.22.0
+  - @memberjunction/ng-code-editor@5.22.0
+  - @memberjunction/ng-container-directives@5.22.0
+  - @memberjunction/ng-notifications@5.22.0
+  - @memberjunction/core-entities@5.22.0
+  - @memberjunction/testing-engine-base@5.22.0
+
+## 5.21.0
+
+### Patch Changes
+
+- Updated dependencies [c7dfb20]
+  - @memberjunction/core@5.21.0
+  - @memberjunction/ng-shared@5.21.0
+  - @memberjunction/ng-base-types@5.21.0
+  - @memberjunction/ng-code-editor@5.21.0
+  - @memberjunction/ng-container-directives@5.21.0
+  - @memberjunction/ng-notifications@5.21.0
+  - @memberjunction/graphql-dataprovider@5.21.0
+  - @memberjunction/core-entities@5.21.0
+  - @memberjunction/testing-engine-base@5.21.0
+  - @memberjunction/global@5.21.0
+
+## 5.20.0
+
+### Patch Changes
+
+- Updated dependencies [2298f8a]
+  - @memberjunction/core@5.20.0
+  - @memberjunction/ng-shared@5.20.0
+  - @memberjunction/ng-base-types@5.20.0
+  - @memberjunction/ng-code-editor@5.20.0
+  - @memberjunction/ng-container-directives@5.20.0
+  - @memberjunction/ng-notifications@5.20.0
+  - @memberjunction/graphql-dataprovider@5.20.0
+  - @memberjunction/core-entities@5.20.0
+  - @memberjunction/testing-engine-base@5.20.0
+  - @memberjunction/global@5.20.0
+
+## 5.19.0
+
+### Patch Changes
+
+- @memberjunction/ng-shared@5.19.0
+- @memberjunction/ng-base-types@5.19.0
+- @memberjunction/ng-code-editor@5.19.0
+- @memberjunction/ng-container-directives@5.19.0
+- @memberjunction/ng-notifications@5.19.0
+- @memberjunction/graphql-dataprovider@5.19.0
+- @memberjunction/core@5.19.0
+- @memberjunction/core-entities@5.19.0
+- @memberjunction/global@5.19.0
+- @memberjunction/testing-engine-base@5.19.0
+
+## 5.18.0
+
+### Patch Changes
+
+- @memberjunction/graphql-dataprovider@5.18.0
+- @memberjunction/ng-shared@5.18.0
+- @memberjunction/ng-notifications@5.18.0
+- @memberjunction/ng-base-types@5.18.0
+- @memberjunction/ng-code-editor@5.18.0
+- @memberjunction/ng-container-directives@5.18.0
+- @memberjunction/core@5.18.0
+- @memberjunction/core-entities@5.18.0
+- @memberjunction/global@5.18.0
+- @memberjunction/testing-engine-base@5.18.0
+
+## 5.17.0
+
+### Patch Changes
+
+- Updated dependencies [bbfbf5e]
+- Updated dependencies [9881045]
+  - @memberjunction/graphql-dataprovider@5.17.0
+  - @memberjunction/core@5.17.0
+  - @memberjunction/ng-shared@5.17.0
+  - @memberjunction/ng-notifications@5.17.0
+  - @memberjunction/ng-base-types@5.17.0
+  - @memberjunction/ng-code-editor@5.17.0
+  - @memberjunction/ng-container-directives@5.17.0
+  - @memberjunction/core-entities@5.17.0
+  - @memberjunction/testing-engine-base@5.17.0
+  - @memberjunction/global@5.17.0
+
+## 5.16.0
+
+### Patch Changes
+
+- Updated dependencies [2387400]
+- Updated dependencies [179a4ce]
+- Updated dependencies [11dba07]
+  - @memberjunction/core@5.16.0
+  - @memberjunction/graphql-dataprovider@5.16.0
+  - @memberjunction/ng-shared@5.16.0
+  - @memberjunction/ng-base-types@5.16.0
+  - @memberjunction/ng-code-editor@5.16.0
+  - @memberjunction/ng-container-directives@5.16.0
+  - @memberjunction/ng-notifications@5.16.0
+  - @memberjunction/core-entities@5.16.0
+  - @memberjunction/testing-engine-base@5.16.0
+  - @memberjunction/global@5.16.0
+
+## 5.15.0
+
+### Patch Changes
+
+- Updated dependencies [662d56b]
+- Updated dependencies [d01f697]
+  - @memberjunction/core@5.15.0
+  - @memberjunction/ng-shared@5.15.0
+  - @memberjunction/ng-base-types@5.15.0
+  - @memberjunction/ng-code-editor@5.15.0
+  - @memberjunction/ng-container-directives@5.15.0
+  - @memberjunction/ng-notifications@5.15.0
+  - @memberjunction/graphql-dataprovider@5.15.0
+  - @memberjunction/core-entities@5.15.0
+  - @memberjunction/testing-engine-base@5.15.0
+  - @memberjunction/global@5.15.0
+
+## 5.14.0
+
+### Patch Changes
+
+- Updated dependencies [69b5af4]
+- Updated dependencies [140fc6d]
+  - @memberjunction/core@5.14.0
+  - @memberjunction/graphql-dataprovider@5.14.0
+  - @memberjunction/ng-shared@5.14.0
+  - @memberjunction/ng-base-types@5.14.0
+  - @memberjunction/ng-code-editor@5.14.0
+  - @memberjunction/ng-container-directives@5.14.0
+  - @memberjunction/ng-notifications@5.14.0
+  - @memberjunction/core-entities@5.14.0
+  - @memberjunction/testing-engine-base@5.14.0
+  - @memberjunction/global@5.14.0
+
+## 5.13.0
+
+### Patch Changes
+
+- Updated dependencies [f72b538]
+- Updated dependencies [d0d9eba]
+  - @memberjunction/core@5.13.0
+  - @memberjunction/global@5.13.0
+  - @memberjunction/ng-shared@5.13.0
+  - @memberjunction/ng-base-types@5.13.0
+  - @memberjunction/ng-code-editor@5.13.0
+  - @memberjunction/ng-container-directives@5.13.0
+  - @memberjunction/ng-notifications@5.13.0
+  - @memberjunction/graphql-dataprovider@5.13.0
+  - @memberjunction/core-entities@5.13.0
+  - @memberjunction/testing-engine-base@5.13.0
+
+## 5.12.0
+
+### Patch Changes
+
+- a57b8d5: Migrate all hardcoded CSS colors to design tokens for dark mode and white-label support. Introduces `--mj-*` semantic CSS custom properties in `_tokens.scss` with full `[data-theme="dark"]` overrides. Migrates 1,544 of 1,659 hardcoded hex values (93%) across 72+ CSS files to semantic tokens. Adds logo token system (`--mj-logo-mark`, `--mj-logo-color`) for themeable branding. Fixes dark mode theming for CodeMirror, AG Grid v35, and Kendo popups. No API or behavioral changes — CSS only.
+- e87d153: design tokens phase 1
+- Updated dependencies [05f19ff]
+- Updated dependencies [a57b8d5]
+- Updated dependencies [e87d153]
+- Updated dependencies [7def002]
+- Updated dependencies [d92502e]
+- Updated dependencies [1567293]
+- Updated dependencies [1e5d181]
+  - @memberjunction/core@5.12.0
+  - @memberjunction/ng-code-editor@5.12.0
+  - @memberjunction/graphql-dataprovider@5.12.0
+  - @memberjunction/core-entities@5.12.0
+  - @memberjunction/ng-shared@5.12.0
+  - @memberjunction/ng-base-types@5.12.0
+  - @memberjunction/ng-container-directives@5.12.0
+  - @memberjunction/ng-notifications@5.12.0
+  - @memberjunction/testing-engine-base@5.12.0
+  - @memberjunction/global@5.12.0
+
+## 5.11.0
+
+### Patch Changes
+
+- Updated dependencies [a4c3c81]
+  - @memberjunction/graphql-dataprovider@5.11.0
+  - @memberjunction/core@5.11.0
+  - @memberjunction/ng-shared@5.11.0
+  - @memberjunction/ng-notifications@5.11.0
+  - @memberjunction/ng-base-types@5.11.0
+  - @memberjunction/ng-code-editor@5.11.0
+  - @memberjunction/ng-container-directives@5.11.0
+  - @memberjunction/core-entities@5.11.0
+  - @memberjunction/testing-engine-base@5.11.0
+  - @memberjunction/global@5.11.0
+
+## 5.10.1
+
+### Patch Changes
+
+- @memberjunction/ng-shared@5.10.1
+- @memberjunction/ng-base-types@5.10.1
+- @memberjunction/ng-code-editor@5.10.1
+- @memberjunction/ng-container-directives@5.10.1
+- @memberjunction/ng-notifications@5.10.1
+- @memberjunction/graphql-dataprovider@5.10.1
+- @memberjunction/core@5.10.1
+- @memberjunction/core-entities@5.10.1
+- @memberjunction/global@5.10.1
+- @memberjunction/testing-engine-base@5.10.1
+
+## 5.10.0
+
+### Patch Changes
+
+- Updated dependencies [f2df653]
+- Updated dependencies [4e298b7]
+- Updated dependencies [98e9f15]
+- Updated dependencies [5ce18ff]
+- Updated dependencies [75dd36b]
+  - @memberjunction/core@5.10.0
+  - @memberjunction/core-entities@5.10.0
+  - @memberjunction/graphql-dataprovider@5.10.0
+  - @memberjunction/ng-shared@5.10.0
+  - @memberjunction/ng-base-types@5.10.0
+  - @memberjunction/ng-code-editor@5.10.0
+  - @memberjunction/ng-container-directives@5.10.0
+  - @memberjunction/ng-notifications@5.10.0
+  - @memberjunction/testing-engine-base@5.10.0
+  - @memberjunction/global@5.10.0
+
+## 5.9.0
+
+### Patch Changes
+
+- Updated dependencies [c6a0df2]
+- Updated dependencies [194ddf2]
+  - @memberjunction/core-entities@5.9.0
+  - @memberjunction/global@5.9.0
+  - @memberjunction/core@5.9.0
+  - @memberjunction/ng-shared@5.9.0
+  - @memberjunction/ng-base-types@5.9.0
+  - @memberjunction/ng-code-editor@5.9.0
+  - @memberjunction/ng-notifications@5.9.0
+  - @memberjunction/graphql-dataprovider@5.9.0
+  - @memberjunction/testing-engine-base@5.9.0
+  - @memberjunction/ng-container-directives@5.9.0
+
+## 5.8.0
+
+### Patch Changes
+
+- Updated dependencies [de9f2c0]
+- Updated dependencies [0753249]
+  - @memberjunction/graphql-dataprovider@5.8.0
+  - @memberjunction/core@5.8.0
+  - @memberjunction/ng-shared@5.8.0
+  - @memberjunction/ng-notifications@5.8.0
+  - @memberjunction/ng-base-types@5.8.0
+  - @memberjunction/ng-code-editor@5.8.0
+  - @memberjunction/ng-container-directives@5.8.0
+  - @memberjunction/core-entities@5.8.0
+  - @memberjunction/testing-engine-base@5.8.0
+  - @memberjunction/global@5.8.0
+
+## 5.7.0
+
+### Patch Changes
+
+- Updated dependencies [642c4df]
+  - @memberjunction/core@5.7.0
+  - @memberjunction/core-entities@5.7.0
+  - @memberjunction/ng-shared@5.7.0
+  - @memberjunction/ng-base-types@5.7.0
+  - @memberjunction/ng-code-editor@5.7.0
+  - @memberjunction/ng-container-directives@5.7.0
+  - @memberjunction/ng-notifications@5.7.0
+  - @memberjunction/graphql-dataprovider@5.7.0
+  - @memberjunction/testing-engine-base@5.7.0
+  - @memberjunction/global@5.7.0
+
+## 5.6.0
+
+### Patch Changes
+
+- Updated dependencies [4547d05]
+- Updated dependencies [76eaabc]
+  - @memberjunction/core@5.6.0
+  - @memberjunction/graphql-dataprovider@5.6.0
+  - @memberjunction/ng-shared@5.6.0
+  - @memberjunction/ng-base-types@5.6.0
+  - @memberjunction/ng-code-editor@5.6.0
+  - @memberjunction/ng-container-directives@5.6.0
+  - @memberjunction/ng-notifications@5.6.0
+  - @memberjunction/core-entities@5.6.0
+  - @memberjunction/testing-engine-base@5.6.0
+  - @memberjunction/global@5.6.0
+
+## 5.5.0
+
+### Patch Changes
+
+- df2457c: no migration, just small code changes
+- Updated dependencies [2b1d842]
+- Updated dependencies [a1648c5]
+- Updated dependencies [ee9f788]
+- Updated dependencies [df2457c]
+  - @memberjunction/core@5.5.0
+  - @memberjunction/graphql-dataprovider@5.5.0
+  - @memberjunction/core-entities@5.5.0
+  - @memberjunction/global@5.5.0
+  - @memberjunction/ng-shared@5.5.0
+  - @memberjunction/ng-base-types@5.5.0
+  - @memberjunction/ng-code-editor@5.5.0
+  - @memberjunction/ng-container-directives@5.5.0
+  - @memberjunction/ng-notifications@5.5.0
+  - @memberjunction/testing-engine-base@5.5.0
+
+## 5.4.1
+
+### Patch Changes
+
+- Updated dependencies [8789e86]
+  - @memberjunction/ng-shared@5.4.1
+  - @memberjunction/ng-base-types@5.4.1
+  - @memberjunction/ng-code-editor@5.4.1
+  - @memberjunction/ng-container-directives@5.4.1
+  - @memberjunction/ng-notifications@5.4.1
+  - @memberjunction/graphql-dataprovider@5.4.1
+  - @memberjunction/core@5.4.1
+  - @memberjunction/core-entities@5.4.1
+  - @memberjunction/global@5.4.1
+  - @memberjunction/testing-engine-base@5.4.1
+
+## 5.4.0
+
+### Patch Changes
+
+- Updated dependencies [8a11457]
+- Updated dependencies [c9a760c]
+- Updated dependencies [6bcfa1c]
+  - @memberjunction/graphql-dataprovider@5.4.0
+  - @memberjunction/core-entities@5.4.0
+  - @memberjunction/ng-shared@5.4.0
+  - @memberjunction/ng-notifications@5.4.0
+  - @memberjunction/ng-base-types@5.4.0
+  - @memberjunction/ng-code-editor@5.4.0
+  - @memberjunction/testing-engine-base@5.4.0
+  - @memberjunction/ng-container-directives@5.4.0
+  - @memberjunction/core@5.4.0
+  - @memberjunction/global@5.4.0
+
 ## 5.3.1
 
 ### Patch Changes

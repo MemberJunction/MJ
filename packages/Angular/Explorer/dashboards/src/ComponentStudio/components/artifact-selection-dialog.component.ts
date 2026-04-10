@@ -1,7 +1,7 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
-import { DialogRef } from '@progress/kendo-angular-dialog';
+import { Component, OnInit, OnDestroy, Input, Output, EventEmitter, inject } from '@angular/core';
 import { RunView, Metadata, UserInfo } from '@memberjunction/core';
 import { MJArtifactEntity, MJArtifactVersionEntity } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
 import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -19,6 +19,9 @@ export interface ArtifactSelectionResult {
   styleUrl: './artifact-selection-dialog.component.css'
 })
 export class ArtifactSelectionDialogComponent implements OnInit, OnDestroy {
+  @Input() Visible = false;
+  @Output() Close = new EventEmitter<ArtifactSelectionResult | undefined>();
+
   // Data
   artifacts: MJArtifactEntity[] = [];
   artifactVersions: MJArtifactVersionEntity[] = [];
@@ -52,10 +55,7 @@ export class ArtifactSelectionDialogComponent implements OnInit, OnDestroy {
   private destroy$ = new Subject<void>();
   private searchSubject = new Subject<string>();
 
-  constructor(
-    public dialog: DialogRef,
-    private notificationService: MJNotificationService
-  ) {}
+  private notificationService = inject(MJNotificationService);
 
   async ngOnInit() {
     // Setup search debouncing
@@ -258,7 +258,7 @@ export class ArtifactSelectionDialogComponent implements OnInit, OnDestroy {
   }
 
   cancel() {
-    this.dialog.close(undefined);
+    this.Close.emit(undefined);
   }
 
   async save() {
@@ -272,7 +272,7 @@ export class ArtifactSelectionDialogComponent implements OnInit, OnDestroy {
           artifact: newArtifact,
           action: 'new-version'
         };
-        this.dialog.close(result);
+        this.Close.emit(result);
       }
       return;
     }
@@ -294,7 +294,7 @@ export class ArtifactSelectionDialogComponent implements OnInit, OnDestroy {
         if (!confirm) return;
       }
 
-      this.dialog.close(result);
+      this.Close.emit(result);
     }
   }
 
@@ -349,5 +349,15 @@ export class ArtifactSelectionDialogComponent implements OnInit, OnDestroy {
       );
       return null;
     }
+  }
+
+  /** Case-insensitive UUID check whether an artifact is the currently selected artifact. */
+  IsArtifactSelected(artifact: MJArtifactEntity): boolean {
+    return UUIDsEqual(this.selectedArtifact?.ID, artifact.ID);
+  }
+
+  /** Case-insensitive UUID check whether a version is the currently selected version. */
+  IsVersionSelected(version: MJArtifactVersionEntity): boolean {
+    return UUIDsEqual(this.selectedVersion?.ID, version.ID);
   }
 }

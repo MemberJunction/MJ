@@ -14,8 +14,20 @@ import { trigger, transition, style, animate } from '@angular/animations';
 import { Subject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
 import { RunView, RunViewParams, Metadata, EntityInfo, EntityFieldInfo, AggregateResult, AggregateValue, AggregateExpression } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
+import { PageChangeEvent } from '@memberjunction/ng-pagination';
 import { buildPkString, computeFieldsList } from '../utils/record.util';
-import { MJUserViewEntityExtended, ViewInfo, ViewGridState, UserViewEngine, UserInfoEngine, ColumnFormat, ColumnTextStyle, ViewGridAggregatesConfig, ViewGridAggregate } from '@memberjunction/core-entities';
+import {
+  MJUserViewEntityExtended,
+  ViewInfo,
+  ViewGridState,
+  UserViewEngine,
+  UserInfoEngine,
+  MJUserViewEntity_IColumnFormat as ColumnFormat,
+  MJUserViewEntity_IColumnTextStyle as ColumnTextStyle,
+  MJUserViewEntity_IGridAggregatesConfig as ViewGridAggregatesConfig,
+  MJUserViewEntity_IGridAggregate as ViewGridAggregate
+} from '@memberjunction/core-entities';
 import {
   ColDef,
   GridReadyEvent,
@@ -28,6 +40,7 @@ import {
   GetRowIdParams,
   themeAlpine,
   SortChangedEvent as AgSortChangedEvent,
+  type Theme,
   ColumnResizedEvent,
   ColumnMovedEvent,
   SelectionChangedEvent,
@@ -266,6 +279,35 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
     return this._maxBlocksInCache;
   }
 
+  /**
+   * Whether to show the shared PaginationComponent below the grid.
+   * When true, displays page-based navigation (first/prev/next/last) using the
+   * TotalRowCount from server responses. The pager auto-hides when there's only one page.
+   */
+  @Input() ShowPager: boolean = false;
+
+  /**
+   * Current page number for the shared pager (1-based).
+   * Set by parent when using external data with server-side paging.
+   */
+  @Input() PagerPageNumber: number = 1;
+
+  /**
+   * Total row count from server for the shared pager.
+   * When using external data ([Data] input), the parent must set this
+   * so the pager knows the total number of rows across all pages.
+   */
+  @Input()
+  set TotalRowCount(value: number) {
+    this.totalRowCount = value;
+  }
+
+  /**
+   * Emits when the user navigates to a different page via the shared PaginationComponent.
+   * Parent components should handle this by re-fetching data with updated StartRow/MaxRows.
+   */
+  @Output() PageChange = new EventEmitter<PageChangeEvent>();
+
   // ========================================
   // External Data Input
   // ========================================
@@ -335,11 +377,15 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
    */
   @Input()
   set GridState(value: ViewGridState | null) {
-    if (!!value) {
-      const previousValue = this._gridState;
-      this._gridState = value;
-      if (value !== previousValue) {
+    const previousValue = this._gridState;
+    this._gridState = value;
+    if (value !== previousValue) {
+      if (value) {
         this.onGridStateChanged();
+      } else if (previousValue) {
+        // Grid state was cleared (e.g. switching to entity with no saved view) -
+        // rebuild columns from entity metadata instead of retaining stale columns
+        this.buildAgColumnDefs();
       }
     }
   }
@@ -1210,9 +1256,23 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
   private gridApi: GridApi | null = null;
 
   /** AG Grid theme (v34+) with custom selection colors */
-  public agGridTheme = themeAlpine.withParams({
-    selectedRowBackgroundColor: '#fff3cd',  // More visible mellow yellow selection
-    rowHoverColor: '#f5f5f5'
+  public agGridTheme: Theme = themeAlpine.withParams({
+    backgroundColor: 'var(--mj-bg-surface)',
+    foregroundColor: 'var(--mj-text-primary)',
+    textColor: 'var(--mj-text-primary)',
+    borderColor: 'var(--mj-border-default)',
+    chromeBackgroundColor: 'var(--mj-bg-surface-card)',
+    headerBackgroundColor: 'var(--mj-bg-surface-card)',
+    headerTextColor: 'var(--mj-text-secondary)',
+    cellTextColor: 'var(--mj-text-primary)',
+    subtleTextColor: 'var(--mj-text-muted)',
+    dataBackgroundColor: 'var(--mj-bg-surface)',
+    oddRowBackgroundColor: 'var(--mj-bg-surface-card)',
+    rowHoverColor: 'var(--mj-bg-surface-hover, color-mix(in srgb, var(--mj-brand-primary) 5%, var(--mj-bg-surface)))',
+    selectedRowBackgroundColor: 'color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface))',
+    accentColor: 'var(--mj-brand-primary)',
+    borderRadius: 'var(--mj-radius-sm)',
+    browserColorScheme: 'inherit',
   });
 
   /** AG Grid row selection configuration */
@@ -1485,9 +1545,10 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
     this._aggregateResults = [];
     this._aggregateValues.clear();
 
-    // Reset allowLoad to true when params change - this ensures the new view gets to load
-    // (The parent may have set allowLoad=false for the previous view, which shouldn't prevent loading the new view)
-    this._allowLoad = true;
+    // NOTE: Do NOT reset _allowLoad here. When a parent (e.g., entity-viewer) explicitly
+    // sets [AllowLoad]="false" to manage data loading itself, resetting it to true here
+    // causes a duplicate RunView because the Params setter fires before the AllowLoad
+    // binding in Angular's template binding order.
 
     try {
       // If using a stored view, load the view entity first
@@ -1542,8 +1603,8 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       // Rebuild AG Grid column definitions to reflect the new view's settings
       this.buildAgColumnDefs();
 
-      // Load data if auto-refresh is enabled
-      if (this._autoRefreshOnParamsChange) {
+      // Load data if auto-refresh is enabled and parent hasn't disabled loading
+      if (this._autoRefreshOnParamsChange && this._allowLoad) {
         await this.loadData(false);
       }
     } catch (error) {
@@ -1608,7 +1669,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
 
     // Third try: Look up by EntityID
     if (viewEntity.EntityID) {
-      const entityById = md.Entities.find(e => e.ID === viewEntity.EntityID);
+      const entityById = md.Entities.find(e => UUIDsEqual(e.ID, viewEntity.EntityID));
       if (entityById) {
         return entityById;
       }
@@ -1632,16 +1693,33 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
 
         // Only apply if not already set via props (props take precedence)
         if (!this._gridState && gridState.columnSettings?.length) {
-          this._gridState = {
-            columnSettings: gridState.columnSettings,
-            sortSettings: gridState.sortSettings || [],
-            aggregates: gridState.aggregates
-          };
+          // Validate column settings against the current entity's fields to prevent
+          // stale columns from a previously viewed entity leaking into the query.
+          // This can happen when user defaults were saved for a different view of
+          // the same entity with different columns, or when settings are mismatched.
+          const validColumns = this._entityInfo
+            ? gridState.columnSettings.filter(col =>
+                this._entityInfo!.Fields.some(f => f.Name === col.Name)
+              )
+            : gridState.columnSettings;
+
+          if (validColumns.length > 0) {
+            this._gridState = {
+              columnSettings: validColumns,
+              sortSettings: gridState.sortSettings || [],
+              aggregates: gridState.aggregates
+            };
+          }
         }
 
-        // Apply sort state if not already set
+        // Apply sort state if not already set — validate sort fields exist on current entity
         if (this._sortState.length === 0 && gridState.sortSettings?.length) {
-          this._sortState = gridState.sortSettings.map((s, index) => ({
+          const validSorts = this._entityInfo
+            ? gridState.sortSettings.filter(s =>
+                this._entityInfo!.Fields.some(f => f.Name === s.field)
+              )
+            : gridState.sortSettings;
+          this._sortState = validSorts.map((s, index) => ({
             field: s.field,
             direction: s.dir,
             index
@@ -1700,8 +1778,8 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
     // Only apply grid state from view entity if not already set via props
     // (gridState input takes precedence)
     if (!this._gridState && this._viewEntity.GridState) {
-      try {
-        const gridState = JSON.parse(this._viewEntity.GridState) as ViewGridState;
+      const gridState = this._viewEntity.GridStateObject;
+      if (gridState) {
         if (gridState.columnSettings?.length) {
           this._gridState = {
             columnSettings: gridState.columnSettings,
@@ -1713,23 +1791,27 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
         if (gridState.aggregates && !this._aggregatesConfig) {
           this._aggregatesConfig = gridState.aggregates;
         }
-      } catch (e) {
-        console.warn('Failed to parse view GridState:', e);
       }
     }
 
     // Only apply sort state if:
     // 1. No explicit OrderBy in Params
     // 2. No sort already set via gridState (either prop or from view)
-    const hasExplicitOrderBy = this._params?.OrderBy && this._params.OrderBy.trim().length > 0;
+    const orderByValue = this._params?.OrderBy;
+    const hasExplicitOrderBy = orderByValue != null && (typeof orderByValue === 'string' ? orderByValue.trim().length > 0 : !!orderByValue.default);
     const hasSortFromGridState = this._gridState?.sortSettings && this._gridState.sortSettings.length > 0;
 
     if (!hasExplicitOrderBy && !hasSortFromGridState && this._sortState.length === 0) {
       const sortInfo = this._viewEntity.ViewSortInfo;
       if (sortInfo?.length) {
-        this._sortState = sortInfo.map((s, index) => ({
+        // Validate sort fields exist on the current entity to prevent stale
+        // sort fields from a previously viewed entity leaking into ORDER BY
+        const validSorts = this._entityInfo
+          ? sortInfo.filter(s => this._entityInfo!.Fields.some(f => f.Name === s.field))
+          : sortInfo;
+        this._sortState = validSorts.map((s, index) => ({
           field: s.field,
-          direction: s.direction?.toLowerCase() === 'desc' ? 'desc' : 'asc',
+          direction: (typeof s.direction === 'string' ? s.direction.toLowerCase() : s.direction === 2 ? 'desc' : 'asc') === 'desc' ? 'desc' : 'asc',
           index
         }));
       }
@@ -1738,7 +1820,11 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       // includes the correct ORDER BY clause. Without this, _sortState remains
       // empty and buildOrderByClause() returns '' — causing the SQL to omit
       // ORDER BY on the first page load.
-      this._sortState = this._gridState!.sortSettings!.map((sortSetting, index) => ({
+      // Validate sort fields exist on the current entity
+      const validSorts = this._entityInfo
+        ? this._gridState!.sortSettings!.filter(s => this._entityInfo!.Fields.some(f => f.Name === s.field))
+        : this._gridState!.sortSettings!;
+      this._sortState = validSorts.map((sortSetting, index) => ({
         field: sortSetting.field,
         direction: sortSetting.dir,
         index: index
@@ -1748,23 +1834,48 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
 
   private onGridStateChanged(): void {
     if (this._gridState && this._entityInfo) {
+      // Suppress sort events for the entire operation. AG Grid fires sortChanged
+      // asynchronously when columnDefs are rebuilt (clears sort model) and when
+      // applyColumnState re-applies sort. Without this, those async events leak
+      // through to the parent (entity-viewer) and trigger redundant unsorted reloads.
+      // setTimeout clears the flag after AG Grid's async events have been processed.
+      this.suppressSortEvents = true;
+
       this.buildAgColumnDefs();
 
       // Update AG Grid with new column definitions to apply header styles
-      if (this.gridApi) {
+      if (this.gridApi && !this.gridApi.isDestroyed()) {
         this.gridApi.setGridOption('columnDefs', this.agColumnDefs);
         // Refresh header to apply new header styles
         this.gridApi.refreshHeader();
       }
 
       // Apply sort if present - support multi-column sort
-      if (this._gridState.sortSettings?.length && this.gridApi) {
-        this._sortState = this._gridState.sortSettings.map((sortSetting, index) => ({
+      // Validate sort fields against current entity to prevent stale sort from a previous entity
+      if (this._gridState.sortSettings?.length && this.gridApi && !this.gridApi.isDestroyed()) {
+        const validSorts = this._entityInfo
+          ? this._gridState.sortSettings.filter(s => this._entityInfo!.Fields.some(f => f.Name === s.field))
+          : this._gridState.sortSettings;
+        this._sortState = validSorts.map((sortSetting, index) => ({
           field: sortSetting.field,
           direction: sortSetting.dir,
           index: index
         }));
-        this.applySortStateToGrid();
+        // Apply directly — suppressSortEvents is already true for the whole operation
+        if (this.gridApi && !this.gridApi.isDestroyed()) {
+          const currentColumnState = this.gridApi.getColumnState();
+          if (currentColumnState) {
+            const columnState = currentColumnState.map(col => {
+              const sort = this._sortState.find(s => s.field === col.colId);
+              return {
+                ...col,
+                sort: sort ? sort.direction : null,
+                sortIndex: sort ? sort.index : null
+              };
+            });
+            this.gridApi.applyColumnState({ state: columnState });
+          }
+        }
       }
 
       // Apply aggregates from GridState if present and fetch their values
@@ -1773,6 +1884,10 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
         // Fetch aggregate values when gridState aggregates change
         this.refreshAggregates();
       }
+
+      // Clear suppression after AG Grid's async events have been processed.
+      // setTimeout(0) fires after microtasks and rAF, catching all async sort events.
+      setTimeout(() => { this.suppressSortEvents = false; }, 0);
     }
   }
 
@@ -1821,7 +1936,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       // Build the ExtraFilter from params or view entity
       let extraFilter: string | undefined;
       if (this._params?.ExtraFilter) {
-        extraFilter = this._params.ExtraFilter;
+        extraFilter = typeof this._params.ExtraFilter === 'string' ? this._params.ExtraFilter : this._params.ExtraFilter.default;
       } else if (this._viewEntity?.WhereClause) {
         extraFilter = this._viewEntity.WhereClause;
       }
@@ -2674,6 +2789,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
 
   async loadData(isAutoRefresh: boolean = false): Promise<void> {
     if (this._useExternalData) {
+      console.debug(`[entity-data-grid] loadData() skipped: using external data`);
       this.processData();
       return;
     }
@@ -2687,13 +2803,17 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
     );
 
     if (!hasDataSource) {
+      console.debug(`[entity-data-grid] loadData() skipped: no data source in params`);
       return;
     }
 
     // Check AllowLoad for deferred loading
     if (!this._allowLoad) {
+      console.debug(`[entity-data-grid] loadData() skipped: allowLoad=false`);
       return;
     }
+
+    console.debug(`[entity-data-grid] loadData() proceeding: entity=${this._entityInfo?.Name}, isAutoRefresh=${isAutoRefresh}, allowLoad=${this._allowLoad}`);
 
     // For infinite scroll mode, setup or refresh the datasource
     if (this._paginationMode === 'infinite') {
@@ -2742,8 +2862,8 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
     // Create GridRunViewParams for events (backward compatibility)
     const gridParams: GridRunViewParams = {
       entityName: runViewParams.EntityName || this._entityInfo?.Name || '',
-      extraFilter: runViewParams.ExtraFilter || '',
-      orderBy: runViewParams.OrderBy || '',
+      extraFilter: (typeof runViewParams.ExtraFilter === 'string' ? runViewParams.ExtraFilter : runViewParams.ExtraFilter?.default) || '',
+      orderBy: (typeof runViewParams.OrderBy === 'string' ? runViewParams.OrderBy : runViewParams.OrderBy?.default) || '',
       maxRows: runViewParams.MaxRows || 0,
       fields: runViewParams.Fields,
       searchString: runViewParams.UserSearchString || ''
@@ -2903,7 +3023,9 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
         .join(', ');
     }
     // Fall back to OrderBy from Params if set
-    return this._params?.OrderBy || '';
+    const orderByParam = this._params?.OrderBy;
+    if (!orderByParam) return '';
+    return typeof orderByParam === 'string' ? orderByParam : orderByParam.default;
   }
 
   // ========================================
@@ -3530,24 +3652,19 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       this.isSavingState = true;
       this.pendingStateToSave = state;
 
-      // Build the grid state JSON matching ViewGridState format
-      const gridStateJson: ViewGridState = {
-        columnSettings: state.columnSettings,
-        sortSettings: state.sortSettings,
-        aggregates: state.aggregates
-      };
-
-      // Update the view entity's GridState
-      this._viewEntity.GridState = JSON.stringify(gridStateJson);
+      // Mutate the existing GridState object and write back via typed setter
+      const gridState = this._viewEntity.GridStateObject ?? {};
+      gridState.columnSettings = state.columnSettings;
+      gridState.sortSettings = state.sortSettings;
+      gridState.aggregates = state.aggregates;
+      this._viewEntity.GridStateObject = gridState;
 
       // Update SortState separately if changed
       if (state.sortSettings?.length) {
-        this._viewEntity.SortState = JSON.stringify(
-          state.sortSettings.map(s => ({
+        this._viewEntity.SortStateObject = state.sortSettings.map(s => ({
             field: s.field,
-            dir: s.dir
-          }))
-        );
+            direction: s.dir
+          }));
       }
 
       // Save the view entity
@@ -3655,7 +3772,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
   }
 
   private applySortStateToGrid(): void {
-    if (!this.gridApi || this._sortState.length === 0) {
+    if (!this.gridApi || this.gridApi.isDestroyed() || this._sortState.length === 0) {
       return;
     }
 
@@ -3664,20 +3781,21 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       return;
     }
 
+    // Suppress sort events while we programmatically apply sort state.
+    // AG Grid fires sortChanged ASYNCHRONOUSLY (via setTimeout) after applyColumnState,
+    // so we must keep the flag true across the async boundary and clear it with setTimeout(0).
     this.suppressSortEvents = true;
-    try {
-      const columnState = currentColumnState.map(col => {
-        const sort = this._sortState.find(s => s.field === col.colId);
-        return {
-          ...col,
-          sort: sort ? sort.direction : null,
-          sortIndex: sort ? sort.index : null
-        };
-      });
-      this.gridApi.applyColumnState({ state: columnState });
-    } finally {
-      this.suppressSortEvents = false;
-    }
+    const columnState = currentColumnState.map(col => {
+      const sort = this._sortState.find(s => s.field === col.colId);
+      return {
+        ...col,
+        sort: sort ? sort.direction : null,
+        sortIndex: sort ? sort.index : null
+      };
+    });
+    this.gridApi.applyColumnState({ state: columnState });
+    // Clear after AG Grid's async event queue drains
+    setTimeout(() => { this.suppressSortEvents = false; }, 0);
   }
 
   private updateSelection(): void {

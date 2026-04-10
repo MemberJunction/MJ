@@ -3,6 +3,7 @@ import { Subject, interval, Subscription } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { ExecutionNodeComponent } from './agent-execution-node.component';
 import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended } from '@memberjunction/ai-core-plus';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Progress message with display mode
@@ -446,7 +447,7 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
             
             // Only clear if it's actually a different execution (different ID)
             const isDifferentExecution = (!oldRun && newRun) || 
-                                       (oldRun && newRun && oldRun.ID !== newRun.ID) ||
+                                       (oldRun && newRun && !UUIDsEqual(oldRun.ID, newRun.ID)) ||
                                        (oldRun && !newRun);
             
             if (isDifferentExecution) {

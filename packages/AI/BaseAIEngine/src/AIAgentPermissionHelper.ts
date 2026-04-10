@@ -1,4 +1,5 @@
 import { LogError, UserInfo } from "@memberjunction/core";
+import { UUIDsEqual } from "@memberjunction/global";
 import { MJAIAgentEntity } from "@memberjunction/core-entities";
 import { AIEngineBase } from "./BaseAIEngine";
 
@@ -71,13 +72,13 @@ export class AIAgentPermissionHelper {
             await AIEngineBase.Instance.Config(false, user);
 
             // Find agent from cached metadata
-            const agent = AIEngineBase.Instance.Agents.find(a => a.ID === agentId);
+            const agent = AIEngineBase.Instance.Agents.find(a => UUIDsEqual(a.ID, agentId));
             if (!agent) {
                 throw new Error(`Agent ${agentId} not found in cached metadata`);
             }
 
             // Check if user is owner - owners have all permissions
-            const isOwner = agent.OwnerUserID === user.ID;
+            const isOwner = UUIDsEqual(agent.OwnerUserID, user.ID);
             if (isOwner) {
                 return {
                     canView: true,
@@ -90,7 +91,7 @@ export class AIAgentPermissionHelper {
 
             // Get permissions from cached metadata
             const agentPermissions = AIEngineBase.Instance.AgentPermissions.filter(
-                p => p.AgentID === agentId
+                p => UUIDsEqual(p.AgentID, agentId)
             );
 
             // DEFAULT BEHAVIOR: If no permission records exist, grant View and Run to everyone
@@ -110,7 +111,7 @@ export class AIAgentPermissionHelper {
 
             // Find all matching permissions (direct user permissions or role permissions)
             const matchingPermissions = agentPermissions.filter(p =>
-                p.UserID === user.ID || (p.RoleID && userRoleIds.includes(p.RoleID))
+                UUIDsEqual(p.UserID, user.ID) || (p.RoleID && userRoleIds.some(rid => UUIDsEqual(rid, p.RoleID)))
             );
 
             // Aggregate base permissions - any matching permission grants access (OR logic)

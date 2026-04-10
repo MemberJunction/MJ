@@ -655,6 +655,9 @@ Parameterized queries use Nunjucks templates with built-in SQL injection protect
 | `sqlBoolean` | Converts to SQL bit | `{{ flag \| sqlBoolean }}` produces `1` |
 | `sqlIdentifier` | Brackets identifiers | `{{ table \| sqlIdentifier }}` produces `[UserAccounts]` |
 | `sqlIn` | Formats arrays for IN clauses | `{{ list \| sqlIn }}` produces `('A', 'B', 'C')` |
+| `sqlLikeContains` | Wraps value with `%` for LIKE contains | `{{ term \| sqlLikeContains }}` produces `'%Conference%'` |
+| `sqlLikeBegins` | Appends `%` for LIKE begins-with | `{{ term \| sqlLikeBegins }}` produces `'Conference%'` |
+| `sqlLikeEnds` | Prepends `%` for LIKE ends-with | `{{ term \| sqlLikeEnds }}` produces `'%Conference'` |
 | `sqlNoKeywordsExpression` | Blocks dangerous SQL keywords | Allows `Revenue DESC`, blocks `DROP TABLE` |
 
 ---
@@ -830,6 +833,64 @@ const result = await rv.RunView({
     CacheLocalTTL: 300000  // 5 minutes
 });
 ```
+#### Cross-Server Cache Invalidation
+
+When multiple MJAPI server instances share a Redis-backed `ILocalStorageProvider`, cache invalidation propagates automatically across all instances. The system uses two complementary mechanisms:
+
+**1. BaseEngine path (engine-managed data):**
+When `BaseEntity.Save()` fires, `BaseEngine` catches the MJGlobal event, updates its in-memory arrays, and calls `syncLocalCacheForConfig()` → `LocalCacheManager.UpsertSingleEntity()` → Redis `SetItem()` → pub/sub notification. Other servers receive the notification via `OnExternalCacheChange()` and refresh their engine data.
+
+**2. LocalCacheManager path (all cached data):**
+`LocalCacheManager` independently subscribes to MJGlobal `BaseEntityEvent` events. When any entity is saved or deleted, it finds all cached RunView fingerprints for that entity via a reverse index and either updates them in-place (unfiltered queries) or invalidates them (filtered queries). This ensures that **all** cached data — not just engine-managed data — stays consistent across servers.
+
+```
+MJAPI-A: BaseEntity.Save()
+  → MJGlobal event
+  → LocalCacheManager.HandleBaseEntityEvent()
+  → Find all cached fingerprints for this entity
+  → UpsertSingleEntity() or InvalidateRunViewResult()
+  → Redis SetItem() → PUBLISH on mj:__pubsub__
+  → MJAPI-B receives → DispatchCacheChange()
+  → BaseEngine.OnExternalCacheChange() refreshes arrays
+```
+
+**Registering for change notifications:**
+
+```typescript
+// Engines and components can register callbacks for specific cache fingerprints
+const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params);
+const unsubscribe = LocalCacheManager.Instance.RegisterChangeCallback(
+    fingerprint,
+    (event: CacheChangedEvent) => {
+        console.log(`Cache updated by server ${event.SourceServerId}`);
+        // Refresh local data...
+    }
+);
+
+// Cleanup when no longer needed
+unsubscribe();
+```
+
+**Requirements for cross-server invalidation:**
+- Redis-backed `ILocalStorageProvider` (`@memberjunction/redis-provider`)
+- `enablePubSub: true` in Redis provider config
+- `StartListening()` called after provider creation
+- `OnCacheChanged` wired to `LocalCacheManager.DispatchCacheChange()`
+
+#### Storage Provider Implementations
+
+`LocalCacheManager` and `ProviderBase` delegate persistence to an `ILocalStorageProvider`. MemberJunction ships with several implementations:
+
+| Provider | Package | Environment | Persistence |
+|----------|---------|-------------|-------------|
+| `InMemoryLocalStorageProvider` | `@memberjunction/core` | Server (Node.js) | None — data lost on restart |
+| `BrowserLocalStorageProvider` | `@memberjunction/graphql-dataprovider` | Browser | `localStorage` |
+| `BrowserIndexedDBStorageProvider` | `@memberjunction/graphql-dataprovider` | Browser | IndexedDB |
+| `RedisLocalStorageProvider` | [`@memberjunction/redis-provider`](../RedisProvider/) | Server (Node.js) | Redis — shared across instances, survives restarts |
+
+For production server deployments, the Redis provider is recommended. See the [`@memberjunction/redis-provider` README](../RedisProvider/) for setup instructions.
+
+> **Comprehensive Guide**: For a deep dive into the full caching architecture — LocalCacheManager internals, differential updates, eviction policies, BaseEngine integration, Redis cross-server sync, GraphQL cache invalidation subscriptions, and deployment topologies — see the [**Caching & Pub/Sub Guide**](/guides/CACHING_AND_PUBSUB_GUIDE.md).
 
 ---
 
@@ -1341,13 +1402,42 @@ When saving through one branch of an overlapping hierarchy, Record Change entrie
 
 > **Full Guide**: See [IS-A Relationships Guide](./docs/isa-relationships.md) for the complete data model, runtime object model, save/delete orchestration sequences, overlapping subtypes, Record Change propagation, provider implementations, CodeGen integration, and troubleshooting.
 
+## Organic Keys (Cross-System Matching)
+
+MemberJunction supports **Organic Keys** for establishing relationships between entities based on shared business data (email addresses, phone numbers, domains, etc.) rather than foreign key constraints. This is essential for cross-system integrations where external platforms (Mailchimp, QuickBooks, HubSpot, etc.) share data values but not primary keys.
+
+Key capabilities:
+- **Direct matching**: Field-to-field comparison with configurable normalization (LowerCaseTrim, Trim, ExactMatch, Custom)
+- **Compound keys**: Match on multiple fields simultaneously (FirstName + LastName + DOB)
+- **Transitive matching**: Bridge through intermediate tables via SQL views for multi-hop relationships
+- **Bidirectional**: Configure on both sides for complete cross-system navigation
+- **CodeGen integration**: Declare organic keys in `additionalSchemaInfo.json` — CodeGen creates bridge views, inserts metadata, and generates form panels automatically
+
+```typescript
+// Access organic keys at runtime
+const organicKeys = entity.OrganicKeys; // EntityOrganicKeyInfo[]
+
+// Build query params for matching
+const params = EntityInfo.BuildOrganicKeyViewParams(record, relatedEntity, organicKey);
+// params.ExtraFilter = "LOWER(LTRIM(RTRIM([EmailAddress]))) = LOWER(LTRIM(RTRIM('john@acme.com')))"
+```
+
+> **Full Guide**: See [Organic Keys Guide](./docs/organic-keys.md) for the complete schema, all 4 query patterns, normalization strategies, CodeGen configuration, Angular UI integration, and an end-to-end setup walkthrough.
+
 ## Documentation
 
 For detailed guides on specific topics, see the [docs/](./docs/) folder:
 
 - [Virtual Entities](./docs/virtual-entities.md) — Config-driven creation, LLM decoration, read-only enforcement
 - [IS-A Relationships](./docs/isa-relationships.md) — Type inheritance, save/delete orchestration, provider integration
+- [Organic Keys](./docs/organic-keys.md) — Cross-system matching by shared business data (email, phone, domain), CodeGen integration, transitive views
 - [RunQuery Pagination](./docs/runquery-pagination.md) — Parameterized queries with pagination support
+- [Full-Text Search](./docs/FULL_TEXT_SEARCH_GUIDE.md) — Database-native FTS via `Metadata.FullTextSearch()`, SQL Server FREETEXT / PostgreSQL tsvector, provider architecture, Knowledge Hub integration
+
+### Scoring Utilities
+
+- **`ComputeRRF(rankedLists, k?)`** — Reciprocal Rank Fusion for combining ranked result lists from different retrieval methods. Score-scale independent — works on ordinal position, making it ideal for fusing vector similarity results with full-text search results. Located in `@memberjunction/core` (exported from `src/generic/scoring/ReciprocalRankFusion.ts`).
+- **`ScoredCandidate`** — Interface for RRF input/output: `{ ID: string, Score: number, Metadata?: Record<string, unknown> }`
 
 ## Support
 

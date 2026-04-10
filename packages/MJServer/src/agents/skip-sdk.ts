@@ -16,6 +16,7 @@ import {
     SkipResponsePhase,
     SkipAPIRequestAPIKey,
     SkipQueryInfo,
+    SkipQueryCatalogEntry,
     SkipEntityInfo,
     SkipEntityFieldInfo,
     SkipEntityFieldValueInfo,
@@ -32,9 +33,10 @@ import { request as httpRequest } from 'http';
 import { request as httpsRequest } from 'https';
 import { gzip as gzipCompress, createGunzip } from 'zlib';
 import { configInfo, baseUrl, publicUrl, graphqlPort, graphqlRootPath, apiKey as callbackAPIKey } from '../config.js';
+import { getDbType } from '../index.js';
 import { GetAIAPIKey } from '@memberjunction/ai';
 import { AIEngine } from '@memberjunction/aiengine';
-import { CopyScalarsAndArrays } from '@memberjunction/global';
+import { CopyScalarsAndArrays, UUIDsEqual } from '@memberjunction/global';
 import mssql from 'mssql';
 import { registerAccessToken, GetDataAccessToken } from '../resolvers/GetDataResolver.js';
 import { BehaviorSubject } from 'rxjs';
@@ -141,6 +143,13 @@ export interface SkipCallOptions {
      * the client should pass that payload back in the next request.
      */
     payload?: Record<string, any>;
+
+    /**
+     * Optional reference ID from the calling system. When the MJ API proxies a request
+     * to Skip via SkipProxyAgent, this contains the MJ-side Agent Run ID for cross-system
+     * correlation and debugging.
+     */
+    externalReferenceID?: string;
 }
 
 /**
@@ -255,6 +264,19 @@ export class SkipSDK {
             if (responses && responses.length > 0) {
                 const finalResponse = responses[responses.length - 1].value as SkipAPIResponse;
 
+                // Check if Skip itself reported an error (success: false in the response body)
+                if (finalResponse.success === false) {
+                    const skipError = finalResponse.error || 'Skip API returned an error response';
+                    LogError(`[SkipSDK] Skip API error: ${skipError}`);
+                    return {
+                        success: false,
+                        response: finalResponse,
+                        responsePhase: finalResponse.responsePhase,
+                        error: skipError,
+                        allResponses: responses
+                    };
+                }
+
                 return {
                     success: true,
                     response: finalResponse,
@@ -272,8 +294,9 @@ export class SkipSDK {
             LogError(`[SkipSDK] Error calling Skip API: ${error}`);
 
             // Provide user-friendly error messages for common failures
-            let userFriendlyError = String(error);
-            const errorStr = String(error).toLowerCase();
+            const rawError = error instanceof Error ? error.message : String(error);
+            let userFriendlyError = rawError;
+            const errorStr = rawError.toLowerCase();
 
             if (errorStr.includes('stream error') || errorStr.includes('aborted') || errorStr.includes('econnreset')) {
                 userFriendlyError = 'The Skip analysis service became unavailable during processing. Please try again.';
@@ -307,7 +330,8 @@ export class SkipSDK {
             includeRequests = false,
             forceEntityRefresh = false,
             includeCallbackAuth = true,
-            payload
+            payload,
+            externalReferenceID
         } = options;
 
         // Build base request with metadata
@@ -339,6 +363,7 @@ export class SkipSDK {
             payload, // Pass through payload for incremental artifact building (e.g., PRD in progress)
             entities: baseRequest.entities || [],
             queries: baseRequest.queries || [],
+            queryCatalog: baseRequest.queryCatalog,
             notes: baseRequest.notes,
             noteTypes: baseRequest.noteTypes,
             userEmail: baseRequest.userEmail,
@@ -347,7 +372,9 @@ export class SkipSDK {
             apiKeys: baseRequest.apiKeys,
             callingServerURL: baseRequest.callingServerURL,
             callingServerAPIKey: baseRequest.callingServerAPIKey,
-            callingServerAccessToken: baseRequest.callingServerAccessToken
+            callingServerAccessToken: baseRequest.callingServerAccessToken,
+            externalReferenceID,
+            databasePlatform: getDbType()
         };
 
         return request;
@@ -369,6 +396,9 @@ export class SkipSDK {
     ): Promise<Partial<SkipAPIRequest>> {
         const entities = includeEntities ? await this.buildEntities(dataSource, forceEntityRefresh) : [];
         const queries = includeQueries ? this.buildQueries() : [];
+        // Always build the lightweight query catalog for collision detection,
+        // regardless of whether full queries are included
+        const queryCatalog = this.buildQueryCatalog();
         const { notes, noteTypes } = includeNotes ? await this.buildAgentNotes(contextUser) : { notes: [], noteTypes: [] };
         // Note: requests would be built here if includeRequests is true
 
@@ -393,6 +423,7 @@ export class SkipSDK {
         return {
             entities,
             queries,
+            queryCatalog,
             notes,
             noteTypes,
             userEmail: contextUser.Email,
@@ -446,9 +477,11 @@ export class SkipSDK {
             SQL: q.SQL,
             Status: q.Status,
             QualityRank: q.QualityRank,
+            Reusable: q.Reusable,
             EmbeddingVector: q.EmbeddingVector,
             EmbeddingModelID: q.EmbeddingModelID,
             EmbeddingModelName: q.EmbeddingModel,
+            TechnicalDescription: q.TechnicalDescription,
             Fields: q.Fields.map((f) => ({
                 ID: f.ID,
                 QueryID: f.QueryID,
@@ -484,7 +517,7 @@ export class SkipSDK {
             })),
             CacheEnabled: q.CacheEnabled,
             CacheMaxSize: q.CacheMaxSize,
-            CacheTTLMinutes: q.CacheMaxSize,
+            CacheTTLMinutes: q.CacheTTLMinutes,
             CacheValidationSQL: q.CacheValidationSQL
         }));
     }
@@ -493,11 +526,27 @@ export class SkipSDK {
      * Recursively build category path for a query
      */
     private buildQueryCategoryPath(md: Metadata, categoryID: string): string {
-        const cat = md.QueryCategories.find((c) => c.ID === categoryID);
+        const cat = md.QueryCategories.find((c) => UUIDsEqual(c.ID, categoryID));
         if (!cat) return '';
         if (!cat.ParentID) return cat.Name;
         const parentPath = this.buildQueryCategoryPath(md, cat.ParentID);
         return parentPath ? `${parentPath}/${cat.Name}` : cat.Name;
+    }
+
+    /**
+     * Build a lightweight catalog of ALL query names and category paths (regardless of status).
+     * Always called regardless of includeQueries, so collision detection
+     * has accurate data even when full query metadata is not transmitted.
+     * Includes all statuses because the database enforces name+category uniqueness
+     * across all queries, not just approved ones.
+     */
+    private buildQueryCatalog(): SkipQueryCatalogEntry[] {
+        const md = new Metadata();
+
+        return md.Queries.map((q) => ({
+            Name: q.Name,
+            CategoryPath: this.buildQueryCategoryPath(md, q.CategoryID)
+        }));
     }
 
     /**
@@ -730,6 +779,34 @@ export class SkipSDK {
                 };
 
                 const req = requestFn(options, (res) => {
+                    // Check for non-2xx HTTP status codes before attempting SSE parsing.
+                    // The Skip API returns JSON error bodies for auth/validation failures (401, 403, etc.)
+                    // which won't contain SSE `data:` lines, resulting in an empty events array
+                    // and the misleading "No response received from Skip API" error.
+                    if (res.statusCode && (res.statusCode < 200 || res.statusCode >= 300)) {
+                        let errorBody = '';
+                        res.on('data', (chunk: Buffer) => { errorBody += chunk.toString(); });
+                        res.on('end', () => {
+                            let errorMessage = `Skip API returned HTTP ${res.statusCode}`;
+                            try {
+                                const parsed = JSON.parse(errorBody);
+                                if (parsed.message) {
+                                    errorMessage = parsed.message;
+                                } else if (parsed.error) {
+                                    errorMessage = parsed.error;
+                                }
+                            } catch {
+                                // Non-JSON body — use raw text if available
+                                if (errorBody.trim()) {
+                                    errorMessage += `: ${errorBody.trim().substring(0, 200)}`;
+                                }
+                            }
+                            LogError(`[SkipSDK] HTTP ${res.statusCode} from ${url}: ${errorMessage}`);
+                            reject(new Error(errorMessage));
+                        });
+                        return;
+                    }
+
                     const gunzip = createGunzip();
                     const stream = res.headers['content-encoding'] === 'gzip' ? res.pipe(gunzip) : res;
 

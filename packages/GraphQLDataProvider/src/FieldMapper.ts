@@ -6,27 +6,30 @@ import { RegisterClass } from '@memberjunction/global';
  * to another. Uses an internal field mapping but may be overridden or extended as needed.
  */
 export class FieldMapper {
-  private _fieldMap: Record<string, string> = {
-    __mj_CreatedAt: '_mj__CreatedAt',
-    __mj_UpdatedAt: '_mj__UpdatedAt',
-    __mj_DeletedAt: '_mj__DeletedAt',
-  };
+  /**
+   * Prefix used in database column names that must be transformed for GraphQL transport.
+   * GraphQL reserves `__` as a prefix for introspection fields, so any column starting
+   * with `__mj_` is mapped to `_mj__` for transport and mapped back on the client side.
+   */
+  private static readonly DB_PREFIX = '__mj_';
+  private static readonly GQL_PREFIX = '_mj__';
 
   /**
    * Creates a new FieldMapper instance.
-   * @param fieldMap An optional field map to use for mapping fields. If not provided, the default field map will be used.
    */
   constructor() {}
 
   /**
    * Maps fields from one name to another mutating the object in place.
+   * Any field starting with `__mj_` is renamed to `_mj__` for GraphQL transport.
    * @param obj The object to mutate
    */
   public MapFields(obj?: Record<string, unknown>) {
     if (obj) {
       for (const k in obj) {
-        if (k in this._fieldMap) {
-          obj[this._fieldMap[k]] = obj[k];
+        const mapped = this.MapFieldName(k);
+        if (mapped !== k) {
+          obj[mapped] = obj[k];
           delete obj[k];
         }
       }
@@ -35,32 +38,41 @@ export class FieldMapper {
   }
 
   /**
-   * Maps a field name from one name to another.
+   * Maps a field name for GraphQL transport. Fields starting with `__mj_` are
+   * transformed to `_mj__` because GraphQL reserves the `__` prefix.
    * @param fieldName The field name to map.
-   * @returns The mapped field name, or the original field name if no mapping is found.
+   * @returns The mapped field name, or the original field name if no mapping is needed.
    */
   public MapFieldName(fieldName: string): string {
-    return this._fieldMap[fieldName] ?? fieldName;
+    if (fieldName.startsWith(FieldMapper.DB_PREFIX)) {
+      return FieldMapper.GQL_PREFIX + fieldName.substring(FieldMapper.DB_PREFIX.length);
+    }
+    return fieldName;
   }
 
   /**
-   * Maps a field name from one name to another using the reverse mapping.
-   * @param fieldName The field name to map.
-   * @returns The mapped field name, or the original field name if no mapping is found.
+   * Reverse-maps a GraphQL field name back to the database column name.
+   * Fields starting with `_mj__` are transformed back to `__mj_`.
+   * @param fieldName The field name to reverse-map.
+   * @returns The original database field name.
    */
   public ReverseMapFieldName(fieldName: string): string {
-    return Object.entries(this._fieldMap).find(([k, v]) => v === fieldName)?.[0] ?? fieldName;
+    if (fieldName.startsWith(FieldMapper.GQL_PREFIX)) {
+      return FieldMapper.DB_PREFIX + fieldName.substring(FieldMapper.GQL_PREFIX.length);
+    }
+    return fieldName;
   }
 
   /**
    * Maps fields from one name to another mutating the object in place using the reverse mapping.
+   * Any field starting with `_mj__` is renamed back to `__mj_`.
    * @param obj The object to mutate
    */
   public ReverseMapFields(obj: Record<string, unknown>) {
-    const reversed = Object.fromEntries(Object.entries(this._fieldMap).map(([k, v]) => [v, k]));
     for (const k in obj) {
-      if (k in reversed) {
-        obj[reversed[k]] = obj[k];
+      const reversed = this.ReverseMapFieldName(k);
+      if (reversed !== k) {
+        obj[reversed] = obj[k];
         delete obj[k];
       }
     }

@@ -86,23 +86,23 @@
 
     <!-- Details Section -->
     <mj-collapsible-panel
-        SectionKey="details"
+        SectionKey="mJUserViewRunDetails"
         SectionName="Details"
         Icon="fa fa-eye"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('details')"
+        [BadgeCount]="GetSectionRowCount('mJUserViewRunDetails')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: User View Run Details','UserViewRunID')"
                 [NewRecordValues]="NewRecordValues('MJ: User View Run Details')"
-                [AllowLoad]="IsSectionExpanded('details')"
+                [AllowLoad]="IsSectionExpanded('mJUserViewRunDetails')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('details', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJUserViewRunDetails', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

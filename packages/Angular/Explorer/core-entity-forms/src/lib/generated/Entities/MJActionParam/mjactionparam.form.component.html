@@ -133,23 +133,23 @@
 
     <!-- Entity Action Params Section -->
     <mj-collapsible-panel
-        SectionKey="entityActionParams"
+        SectionKey="mJEntityActionParams"
         SectionName="Entity Action Params"
         Icon="fa fa-sliders-h"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('entityActionParams')"
+        [BadgeCount]="GetSectionRowCount('mJEntityActionParams')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Entity Action Params','ActionParamID')"
                 [NewRecordValues]="NewRecordValues('MJ: Entity Action Params')"
-                [AllowLoad]="IsSectionExpanded('entityActionParams')"
+                [AllowLoad]="IsSectionExpanded('mJEntityActionParams')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('entityActionParams', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJEntityActionParams', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -158,23 +158,23 @@
 
     <!-- Scheduled Action Params Section -->
     <mj-collapsible-panel
-        SectionKey="scheduledActionParams"
+        SectionKey="mJScheduledActionParams"
         SectionName="Scheduled Action Params"
         Icon="fa fa-calendar-alt"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('scheduledActionParams')"
+        [BadgeCount]="GetSectionRowCount('mJScheduledActionParams')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Scheduled Action Params','ActionParamID')"
                 [NewRecordValues]="NewRecordValues('MJ: Scheduled Action Params')"
-                [AllowLoad]="IsSectionExpanded('scheduledActionParams')"
+                [AllowLoad]="IsSectionExpanded('mJScheduledActionParams')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('scheduledActionParams', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJScheduledActionParams', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

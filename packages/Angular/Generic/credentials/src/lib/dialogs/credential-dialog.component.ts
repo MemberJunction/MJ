@@ -140,11 +140,13 @@ export class CredentialDialogComponent implements OnInit, OnChanges {
         }
 
         this.Visible = true;
-        this.cdr.markForCheck();
 
         await this.loadCredentialTypes();
 
-        // Initialize the edit panel after types are loaded
+        // Force synchronous render so @if (Visible) creates the editPanel ViewChild
+        this.cdr.detectChanges();
+
+        // Initialize the edit panel after types are loaded and template is rendered
         if (this.editPanel) {
             await this.editPanel.open(this.Credential, this.PreselectedTypeId, this.PreselectedCategoryId);
         }

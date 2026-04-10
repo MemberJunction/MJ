@@ -168,33 +168,33 @@
 
     <!-- User Notifications Section -->
     <mj-collapsible-panel
-        SectionKey="userNotifications"
+        SectionKey="mJUserNotifications"
         SectionName="User Notifications"
         Icon="fa fa-bell"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('userNotifications')"
+        [BadgeCount]="GetSectionRowCount('mJUserNotifications')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: User Notifications','NotificationTypeID')"
                 [NewRecordValues]="NewRecordValues('MJ: User Notifications')"
-                [AllowLoad]="IsSectionExpanded('userNotifications')"
+                [AllowLoad]="IsSectionExpanded('mJUserNotifications')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('userNotifications', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJUserNotifications', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
         }
     </mj-collapsible-panel>
 
-    <!-- MJ: User Notification Preferences Section -->
+    <!-- User Notification Preferences Section -->
     <mj-collapsible-panel
         SectionKey="mJUserNotificationPreferences"
-        SectionName="MJ: User Notification Preferences"
+        SectionName="User Notification Preferences"
         Icon="fa fa-bell"
         Variant="related-entity"
         [Form]="this"

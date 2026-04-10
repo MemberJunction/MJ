@@ -7,7 +7,8 @@ import {
 import { Subject, Subscription, debounceTime } from 'rxjs';
 import {
   EntityInfo, ValidationResult, BaseEntity, EntityPermissionType,
-  EntityRelationshipInfo, Metadata, RunViewParams, LogError,
+  EntityRelationshipInfo, EntityOrganicKeyInfo, EntityOrganicKeyRelatedEntityInfo,
+  Metadata, RunViewParams, LogError,
   RecordDependency, BaseEntityEvent, CompositeKey, RunView, RunViewResult
 } from '@memberjunction/core';
 import { MJEventType, MJGlobal, ValidationErrorInfo } from '@memberjunction/global';
@@ -50,6 +51,8 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   public EditMode: boolean = false;
   public FavoriteInitDone: boolean = false;
   public isHistoryDialogOpen: boolean = false;
+  public IsTagsPanelOpen: boolean = false;
+  public TagCount: number = 0;
   public showDeleteDialog: boolean = false;
   public showCreateDialog: boolean = false;
 
@@ -58,6 +61,18 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
    * Referenced by CodeGen-generated templates for entities with "top area" sections.
    */
   public TopAreaHeight: string = '300px';
+
+  /**
+   * Size of the top area as a percentage (0-100) for angular-split.
+   * Used by CodeGen-generated templates with as-split.
+   */
+  public TopAreaSize: number = 40;
+
+  /**
+   * Size of the bottom area as a percentage (0-100) for angular-split.
+   * Used by CodeGen-generated templates with as-split.
+   */
+  public BottomAreaSize: number = 60;
 
   /**
    * Called when the splitter layout changes (for entities with "top area" sections).
@@ -100,6 +115,13 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   /** Emitted when validation fails before save */
   @Output() ValidationFailed = new EventEmitter<ValidationFailedEvent>();
 
+  /**
+   * Emitted once after ngOnInit completes and the record is fully initialized
+   * (favorites loaded, form state initialized). This is the safe point for
+   * the container to start loading badge counts and other record-dependent data.
+   */
+  @Output() RecordReady = new EventEmitter<BaseEntity>();
+
   // #endregion
 
   /** Subscription to form state changes */
@@ -125,6 +147,11 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
           this.cdr.markForCheck();
         });
       }
+    }
+
+    // Signal that the record is fully initialized and ready for dependent operations
+    if (this.record) {
+      this.RecordReady.emit(this.record);
     }
 
     // Set up debounced filter subscription
@@ -198,15 +225,27 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
 
   public StartEditMode(): void {
     this.EditMode = true;
+    const entityName = this.getEntityName();
+    if (entityName) {
+      this.formStateService.setEditMode(entityName, true);
+    }
   }
 
   public EndEditMode(): void {
     this.EditMode = false;
     this.clearValidationState();
+    const entityName = this.getEntityName();
+    if (entityName) {
+      this.formStateService.setEditMode(entityName, false);
+    }
   }
 
   public handleHistoryDialog(): void {
     this.isHistoryDialogOpen = !this.isHistoryDialogOpen;
+  }
+
+  public HandleTagsPanel(): void {
+    this.IsTagsPanelOpen = !this.IsTagsPanelOpen;
   }
 
   // #endregion
@@ -485,6 +524,67 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
       return relatedEntities && relatedEntities.length > 0;
     }
     return false;
+  }
+
+  // #endregion
+
+  // #region Organic Key Helpers
+
+  /**
+   * Returns all active organic keys for the current entity, or an empty array if none.
+   */
+  public get OrganicKeys(): EntityOrganicKeyInfo[] {
+    if (this.record) {
+      return (<BaseEntity>this.record).EntityInfo.OrganicKeys || [];
+    }
+    return [];
+  }
+
+  /**
+   * Whether the current entity has any active organic keys with related entities configured.
+   */
+  public get HasOrganicKeys(): boolean {
+    return this.OrganicKeys.some(ok => ok.RelatedEntities.length > 0);
+  }
+
+  /**
+   * Returns all organic key related entities across all organic keys, flattened and sorted.
+   */
+  public get AllOrganicKeyRelatedEntities(): { OrganicKey: EntityOrganicKeyInfo; RelatedEntity: EntityOrganicKeyRelatedEntityInfo }[] {
+    const result: { OrganicKey: EntityOrganicKeyInfo; RelatedEntity: EntityOrganicKeyRelatedEntityInfo }[] = [];
+    for (const ok of this.OrganicKeys) {
+      for (const re of ok.RelatedEntities) {
+        result.push({ OrganicKey: ok, RelatedEntity: re });
+      }
+    }
+    return result;
+  }
+
+  /**
+   * Builds RunViewParams for a specific organic key related entity.
+   */
+  public BuildOrganicKeyViewParams(
+    organicKeyRelatedEntity: EntityOrganicKeyRelatedEntityInfo,
+    organicKey: EntityOrganicKeyInfo
+  ): RunViewParams {
+    if (this.record) {
+      return EntityInfo.BuildOrganicKeyViewParams(this.record, organicKeyRelatedEntity, organicKey);
+    }
+    return {};
+  }
+
+  /**
+   * Convenience method to build organic key view params by organic key name and related entity name.
+   */
+  public BuildOrganicKeyViewParamsByNames(organicKeyName: string, relatedEntityName: string): RunViewParams {
+    const ok = this.OrganicKeys.find(k => k.Name.trim().toLowerCase() === organicKeyName.trim().toLowerCase());
+    if (ok) {
+      const re = ok.RelatedEntities.find(r => r.RelatedEntity.trim().toLowerCase() === relatedEntityName.trim().toLowerCase());
+      if (re) {
+        return this.BuildOrganicKeyViewParams(re, ok);
+      }
+    }
+    return {};
   }
 
   // #endregion

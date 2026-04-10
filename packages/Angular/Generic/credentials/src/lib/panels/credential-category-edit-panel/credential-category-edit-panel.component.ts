@@ -1,6 +1,7 @@
 import { Component, Input, Output, EventEmitter, ChangeDetectorRef, ChangeDetectionStrategy, OnInit } from '@angular/core';
 import { MJCredentialCategoryEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 @Component({
@@ -80,7 +81,7 @@ export class CredentialCategoryEditPanelComponent implements OnInit {
         const descendants = new Set<string>();
         const findChildren = (parentId: string): void => {
             for (const cat of this.allCategories) {
-                if (cat.ParentID === parentId) {
+                if (UUIDsEqual(cat.ParentID, parentId)) {
                     descendants.add(cat.ID);
                     findChildren(cat.ID);
                 }
@@ -259,11 +260,11 @@ export class CredentialCategoryEditPanelComponent implements OnInit {
 
     public getParentPath(categoryId: string): string {
         const parts: string[] = [];
-        let current = this.allCategories.find(c => c.ID === categoryId);
+        let current = this.allCategories.find(c => UUIDsEqual(c.ID, categoryId));
 
         while (current) {
             parts.unshift(current.Name);
-            current = current.ParentID ? this.allCategories.find(c => c.ID === current!.ParentID) : undefined;
+            current = current.ParentID ? this.allCategories.find(c => UUIDsEqual(c.ID, current!.ParentID)) : undefined;
         }
 
         return parts.join(' / ');

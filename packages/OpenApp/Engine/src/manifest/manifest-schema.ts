@@ -15,7 +15,7 @@ const semverRegex = /^\d+\.\d+\.\d+(-[a-zA-Z0-9]+(\.[a-zA-Z0-9]+)*)?(\+[a-zA-Z0-
 const appNameRegex = /^[a-z][a-z0-9-]{1,62}[a-z0-9]$/;
 
 /** SQL schema name: lowercase alphanumeric + underscores, 3-128 chars */
-const schemaNameRegex = /^[a-z][a-z0-9_]{1,126}[a-z0-9]$/;
+const schemaNameRegex = /^_{0,2}[a-z][a-z0-9_]{1,126}[a-z0-9]$/;
 
 /** Hex color: #RRGGBB */
 const hexColorRegex = /^#[0-9a-fA-F]{6}$/;
@@ -60,8 +60,13 @@ const packagesSchema = z.object({
 // ── Database Schema ───────────────────────────────────────
 
 const dbSchemaSchema = z.object({
-    name: z.string().regex(schemaNameRegex, 'Schema name must be lowercase alphanumeric + underscores, 3-128 chars'),
+    name: z.string().regex(schemaNameRegex, 'Schema name must be lowercase alphanumeric + underscores, 3-128 chars. May start with up to two underscores.'),
     createIfNotExists: z.boolean().optional().default(true),
+    /** npm package that exports the generated entity subclasses for this schema.
+     *  Used by CodeGen to resolve per-schema imports. If omitted, the install
+     *  engine auto-detects it from packages.shared (first library-role package
+     *  whose name contains "entities"). */
+    entityPackage: z.string().min(1).optional(),
 });
 
 // ── Migrations ────────────────────────────────────────────

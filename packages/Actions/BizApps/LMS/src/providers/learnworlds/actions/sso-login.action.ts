@@ -28,7 +28,7 @@ export class SSOLoginAction extends LearnWorldsBaseAction {
     this.validateSSOParams(params);
 
     const body = this.buildSSORequestBody(params);
-    const response = await this.makeLearnWorldsRequest<LWApiSSOResponse>('sso', 'POST', body, contextUser);
+    const response = await this.makeLearnWorldsNonVersionedRequest<LWApiSSOResponse>('sso', 'POST', body, contextUser);
 
     return {
       LoginURL: response.url,

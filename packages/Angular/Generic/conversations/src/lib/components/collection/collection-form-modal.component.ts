@@ -4,6 +4,7 @@ import { MJCollectionEntity } from '@memberjunction/core-entities';
 import { DialogService } from '../../services/dialog.service';
 import { ToastService } from '../../services/toast.service';
 import { CollectionPermissionService } from '../../services/collection-permission.service';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Modal for creating and editing collections
@@ -13,11 +14,12 @@ import { CollectionPermissionService } from '../../services/collection-permissio
   selector: 'mj-collection-form-modal',
   template: `
     @if (isOpen) {
-      <kendo-dialog
-        [title]="collection?.ID ? 'Edit Collection' : 'New Collection'"
-        (close)="onCancel()"
-        [width]="500"
-        [minWidth]="300">
+      <mj-dialog
+        [Title]="collection?.ID ? 'Edit Collection' : 'New Collection'"
+        (Close)="onCancel()"
+        [Width]="500"
+        [MinWidth]="300"
+        [Visible]="true">
         <div class="collection-form">
           <div class="form-group">
             <label class="form-label">
@@ -56,18 +58,18 @@ import { CollectionPermissionService } from '../../services/collection-permissio
             </div>
           }
         </div>
-        <kendo-dialog-actions>
-          <button kendoButton (click)="onCancel()" [disabled]="isSaving">
+        <mj-dialog-actions>
+          <button mjButton (click)="onCancel()" [disabled]="isSaving">
             Cancel
           </button>
-          <button kendoButton
-            [primary]="true"
+          <button mjButton
+            variant="primary"
             (click)="onSave()"
             [disabled]="!canSave || isSaving">
             {{ isSaving ? 'Saving...' : 'Save' }}
           </button>
-        </kendo-dialog-actions>
-      </kendo-dialog>
+        </mj-dialog-actions>
+      </mj-dialog>
     }
     `,
   styles: [`
@@ -83,11 +85,11 @@ import { CollectionPermissionService } from '../../services/collection-permissio
       display: block;
       margin-bottom: 8px;
       font-weight: 500;
-      color: #333;
+      color: var(--mj-text-primary);
     }
 
     .required {
-      color: #DC2626;
+      color: var(--mj-status-error);
     }
 
     .form-control {
@@ -99,14 +101,14 @@ import { CollectionPermissionService } from '../../services/collection-permissio
       align-items: center;
       gap: 8px;
       padding: 8px 12px;
-      background: #F9FAFB;
-      border: 1px solid #E5E7EB;
+      background: var(--mj-bg-surface-sunken);
+      border: 1px solid var(--mj-border-default);
       border-radius: 6px;
-      color: #6B7280;
+      color: var(--mj-text-muted);
     }
 
     .parent-info i {
-      color: #1e40af;
+      color: var(--mj-brand-primary);
     }
 
     .form-error {
@@ -114,10 +116,10 @@ import { CollectionPermissionService } from '../../services/collection-permissio
       align-items: center;
       gap: 8px;
       padding: 12px;
-      background: #FEE2E2;
-      border: 1px solid #FCA5A5;
+      background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
+      border: 1px solid color-mix(in srgb, var(--mj-status-error) 30%, var(--mj-bg-surface));
       border-radius: 6px;
-      color: #DC2626;
+      color: var(--mj-status-error);
       font-size: 14px;
     }
 
@@ -174,7 +176,7 @@ export class CollectionFormModalComponent implements OnChanges {
       // Validate permissions before saving
       if (this.collection) {
         // Editing existing collection - need Edit permission
-        if (this.collection.OwnerID && this.collection.OwnerID !== this.currentUser.ID) {
+        if (this.collection.OwnerID && !UUIDsEqual(this.collection.OwnerID, this.currentUser.ID)) {
           const permission = await this.permissionService.checkPermission(
             this.collection.ID,
             this.currentUser.ID,
@@ -189,7 +191,7 @@ export class CollectionFormModalComponent implements OnChanges {
         }
       } else if (this.parentCollection) {
         // Creating child collection - need Edit permission on parent
-        if (this.parentCollection.OwnerID && this.parentCollection.OwnerID !== this.currentUser.ID) {
+        if (this.parentCollection.OwnerID && !UUIDsEqual(this.parentCollection.OwnerID, this.currentUser.ID)) {
           const permission = await this.permissionService.checkPermission(
             this.parentCollection.ID,
             this.currentUser.ID,

@@ -163,12 +163,12 @@ import { CommonModule } from '@angular/common';
       border: none;
       cursor: pointer;
       font-size: 16px;
-      color: #666;
+      color: var(--mj-text-secondary);
       padding: 4px;
     }
 
     .dismiss-button:hover {
-      color: #333;
+      color: var(--mj-text-primary);
     }
 
     @keyframes slide-down {

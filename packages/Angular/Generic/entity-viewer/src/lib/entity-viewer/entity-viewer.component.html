@@ -58,6 +58,15 @@
               <i class="fa-solid fa-timeline"></i>
             </button>
           }
+          <button
+            class="toggle-btn"
+            [class.active]="effectiveViewMode === 'map'"
+            [class.geo-hidden]="!HasGeoCoding"
+            (click)="setViewMode('map')"
+            title="Map View">
+            <i class="fa-solid fa-map-location-dot"></i>
+          </button>
+          <span class="geo-debug-marker" style="color:red;font-size:10px;">GEO</span>
         </div>
       }
 
@@ -140,6 +149,10 @@
       [SelectionMode]="gridSelectionMode"
       [ShowAddToListButton]="showAddToListButton"
       [AllowLoad]="false"
+      [ShowPager]="effectiveConfig.showPagination"
+      [PageSize]="effectiveConfig.pageSize"
+      [TotalRowCount]="pagination.totalRecords"
+      [PagerPageNumber]="pagination.currentPage + 1"
       (AfterRowClick)="onDataGridRowClick($event)"
       (AfterRowDoubleClick)="onDataGridRowDoubleClick($event)"
       (AfterSort)="onDataGridSortChanged($event)"
@@ -150,7 +163,8 @@
       (DeleteButtonClick)="onGridDeleteRequested($event)"
       (ExportButtonClick)="onGridExportRequested()"
       (AddToListRequested)="onGridAddToListRequested($event)"
-      (ForeignKeyClick)="onForeignKeyClick($event)">
+      (ForeignKeyClick)="onForeignKeyClick($event)"
+      (PageChange)="onGridPageChange($event)">
     </mj-entity-data-grid>
 
     <!-- Cards View - always rendered, visibility controlled by hidden -->
@@ -179,14 +193,18 @@
       [selectedEventId]="timelineSelectedEventId"
       (afterEventClick)="onTimelineEventClick($event)">
     </mj-timeline>
+
+    <!-- Map View - rendered when geocoding supported, visibility controlled by hidden -->
+    @if (HasGeoCoding) {
+      <mj-map-view
+        [hidden]="effectiveViewMode !== 'map'"
+        [Entity]="effectiveEntity!"
+        [Records]="filteredRecords"
+        [DisplayState]="mapDisplayState"
+        (MarkerClick)="onMapMarkerClick($event)"
+        (DisplayStateChange)="onMapDisplayStateChange($event)">
+      </mj-map-view>
+    }
   </div>
 
-  <!-- Pagination - only show when there's more data to load OR we've loaded more than one page -->
-  @if (effectiveConfig.showPagination && effectiveEntity && (pagination.hasMore || pagination.totalRecords > effectiveConfig.pageSize)) {
-    <mj-pagination
-      [pagination]="pagination"
-      [loadedRecordCount]="filteredRecords.length"
-      (loadMore)="onLoadMore()">
-    </mj-pagination>
-  }
 </div>

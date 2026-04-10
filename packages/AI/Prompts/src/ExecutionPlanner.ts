@@ -1,4 +1,5 @@
 import { LogError, LogStatus, UserInfo } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { MJAIPromptModelEntity } from '@memberjunction/core-entities';
 import { ExecutionTask, ParallelizationStrategy } from './ParallelExecution';
 import { ChatMessage } from '@memberjunction/ai';
@@ -139,7 +140,7 @@ export class ExecutionPlanner {
       return [];
     }
 
-    const promptModel = promptModels.find((pm) => pm.ModelID === selectedModel.ID);
+    const promptModel = promptModels.find((pm) => UUIDsEqual(pm.ModelID, selectedModel.ID));
     const vendorInfo = this.selectVendorForModel(selectedModel);
 
     const task: ExecutionTask = {
@@ -206,7 +207,7 @@ export class ExecutionPlanner {
     for (let i = 0; i < parallelCount; i++) {
       const modelIndex = i % availableModels.length;
       const selectedModel = availableModels[modelIndex];
-      const promptModel = promptModels.find((pm) => pm.ModelID === selectedModel.ID);
+      const promptModel = promptModels.find((pm) => UUIDsEqual(pm.ModelID, selectedModel.ID));
 
       const vendorInfo = this.selectVendorForModel(selectedModel);
 
@@ -287,7 +288,7 @@ export class ExecutionPlanner {
     for (let i = 0; i < parallelCount; i++) {
       const modelIndex = i % availableModels.length;
       const selectedModel = availableModels[modelIndex];
-      const promptModel = promptModels.find((pm) => pm.ModelID === selectedModel.ID);
+      const promptModel = promptModels.find((pm) => UUIDsEqual(pm.ModelID, selectedModel.ID));
 
       const vendorInfo = this.selectVendorForModel(selectedModel);
 
@@ -349,7 +350,7 @@ export class ExecutionPlanner {
 
     // Create tasks based on each prompt model's configuration
     for (const promptModel of activePromptModels) {
-      const model = allModels.find((m) => m.ID === promptModel.ModelID && m.IsActive);
+      const model = allModels.find((m) => UUIDsEqual(m.ID, promptModel.ModelID) && m.IsActive);
 
       if (!model) {
         LogError(`Model ${promptModel.ModelID} not found or inactive for prompt "${prompt.Name}"`);
@@ -405,7 +406,7 @@ export class ExecutionPlanner {
   ): MJAIModelEntityExtended | null {
     // First try to use prompt-specific models
     const availablePromptModels = promptModels.filter(
-      (pm) => (pm.Status === 'Active' || pm.Status === 'Preview') && (!configurationId || !pm.ConfigurationID || pm.ConfigurationID === configurationId),
+      (pm) => (pm.Status === 'Active' || pm.Status === 'Preview') && (!configurationId || !pm.ConfigurationID || UUIDsEqual(pm.ConfigurationID, configurationId)),
     );
 
     if (availablePromptModels.length > 0) {
@@ -413,7 +414,7 @@ export class ExecutionPlanner {
       availablePromptModels.sort((a, b) => b.Priority - a.Priority);
       const selectedPromptModel = availablePromptModels[0];
 
-      const model = allModels.find((m) => m.ID === selectedPromptModel.ModelID && m.IsActive);
+      const model = allModels.find((m) => UUIDsEqual(m.ID, selectedPromptModel.ModelID) && m.IsActive);
       if (model) {
         return model;
       }
@@ -421,7 +422,7 @@ export class ExecutionPlanner {
 
     // Fall back to automatic model selection
     const candidateModels = allModels.filter(
-      (m) => m.IsActive && m.PowerRank >= (prompt.MinPowerRank || 0) && (!prompt.AIModelTypeID || m.AIModelTypeID === prompt.AIModelTypeID),
+      (m) => m.IsActive && m.PowerRank >= (prompt.MinPowerRank || 0) && (!prompt.AIModelTypeID || UUIDsEqual(m.AIModelTypeID, prompt.AIModelTypeID)),
     );
 
     if (candidateModels.length === 0) {
@@ -461,19 +462,19 @@ export class ExecutionPlanner {
     configurationId?: string,
   ): MJAIModelEntityExtended[] {
     const availablePromptModels = promptModels.filter(
-      (pm) => (pm.Status === 'Active' || pm.Status === 'Preview') && (!configurationId || !pm.ConfigurationID || pm.ConfigurationID === configurationId),
+      (pm) => (pm.Status === 'Active' || pm.Status === 'Preview') && (!configurationId || !pm.ConfigurationID || UUIDsEqual(pm.ConfigurationID, configurationId)),
     );
 
     if (availablePromptModels.length > 0) {
       // Use prompt-specific models
       const models = availablePromptModels
-        .map((pm) => allModels.find((m) => m.ID === pm.ModelID && m.IsActive))
+        .map((pm) => allModels.find((m) => UUIDsEqual(m.ID, pm.ModelID) && m.IsActive))
         .filter((m) => m !== undefined) as MJAIModelEntityExtended[];
 
       // Sort by priority from prompt models
       models.sort((a, b) => {
-        const aPriority = availablePromptModels.find((pm) => pm.ModelID === a.ID)?.Priority || 0;
-        const bPriority = availablePromptModels.find((pm) => pm.ModelID === b.ID)?.Priority || 0;
+        const aPriority = availablePromptModels.find((pm) => UUIDsEqual(pm.ModelID, a.ID))?.Priority || 0;
+        const bPriority = availablePromptModels.find((pm) => UUIDsEqual(pm.ModelID, b.ID))?.Priority || 0;
         return bPriority - aPriority;
       });
 
@@ -482,7 +483,7 @@ export class ExecutionPlanner {
 
     // Fall back to all suitable models
     return allModels.filter(
-      (m) => m.IsActive && m.PowerRank >= (prompt.MinPowerRank || 0) && (!prompt.AIModelTypeID || m.AIModelTypeID === prompt.AIModelTypeID),
+      (m) => m.IsActive && m.PowerRank >= (prompt.MinPowerRank || 0) && (!prompt.AIModelTypeID || UUIDsEqual(m.AIModelTypeID, prompt.AIModelTypeID)),
     );
   }
 
@@ -607,10 +608,10 @@ export class ExecutionPlanner {
 
     // Get active model vendors for this model that are inference providers
     const modelVendors = AIEngine.Instance.ModelVendors
-      .filter(mv => 
-        mv.ModelID === model.ID && 
-        mv.Status === 'Active' && 
-        mv.TypeID === inferenceProviderType.ID
+      .filter(mv =>
+        UUIDsEqual(mv.ModelID, model.ID) &&
+        mv.Status === 'Active' &&
+        UUIDsEqual(mv.TypeID, inferenceProviderType.ID)
       )
       .sort((a, b) => b.Priority - a.Priority);
 

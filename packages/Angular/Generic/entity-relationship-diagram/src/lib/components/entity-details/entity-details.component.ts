@@ -1,5 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, ViewChild, ElementRef } from '@angular/core';
 import { EntityInfo, EntityFieldInfo, EntityFieldValueInfo, Metadata } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Event emitted when requesting to open an entity record.
@@ -116,7 +117,7 @@ export class EntityDetailsComponent implements OnChanges {
   public getEntityFields(entityId: string): EntityFieldInfo[] {
     if (!entityId) return [];
 
-    let fields = this.allEntityFields.filter(f => f.EntityID === entityId);
+    let fields = this.allEntityFields.filter(f => UUIDsEqual(f.EntityID, entityId));
 
     switch (this.fieldFilter) {
       case 'keys':
@@ -137,12 +138,12 @@ export class EntityDetailsComponent implements OnChanges {
 
     // Get entities that this entity references (foreign keys)
     this.allEntityFields
-      .filter(f => f.EntityID === entityId && f.RelatedEntityID)
+      .filter(f => UUIDsEqual(f.EntityID, entityId) && f.RelatedEntityID)
       .forEach(f => relatedEntityIds.add(f.RelatedEntityID!));
 
     // Get entities that reference this entity
     this.allEntityFields
-      .filter(f => f.RelatedEntityID === entityId)
+      .filter(f => UUIDsEqual(f.RelatedEntityID, entityId))
       .forEach(f => relatedEntityIds.add(f.EntityID));
 
     // Remove the current entity from the set (don't return self-references)
@@ -153,7 +154,7 @@ export class EntityDetailsComponent implements OnChanges {
     const allEntities = md.Entities;
     const retVals: EntityInfo[] = [];
     relatedEntityIds.forEach(id => {
-      const entity = allEntities.find(e => e.ID === id);
+      const entity = allEntities.find(e => UUIDsEqual(e.ID, id));
       if (entity) {
         retVals.push(entity);
       }
@@ -225,7 +226,7 @@ export class EntityDetailsComponent implements OnChanges {
     if (field.RelatedEntityID) {
       // Find the related entity and select it in the ERD
       const md = new Metadata();
-      const relatedEntity = md.Entities.find(e => e.ID === field.RelatedEntityID);
+      const relatedEntity = md.Entities.find(e => UUIDsEqual(e.ID, field.RelatedEntityID));
       if (relatedEntity) {
         this.entitySelected.emit(relatedEntity);
       }

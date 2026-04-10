@@ -19,8 +19,8 @@ export class MJCredentialCategoryFormComponent extends BaseFormComponent {
             { sectionKey: 'categoryDetails', sectionName: 'Category Details', isExpanded: true },
             { sectionKey: 'hierarchy', sectionName: 'Hierarchy', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJCredentialCategories', sectionName: 'MJ: Credential Categories', isExpanded: false },
-            { sectionKey: 'mJCredentials', sectionName: 'MJ: Credentials', isExpanded: false }
+            { sectionKey: 'mJCredentialCategories', sectionName: 'Credential Categories', isExpanded: false },
+            { sectionKey: 'mJCredentials', sectionName: 'Credentials', isExpanded: false }
         ]);
     }
 }

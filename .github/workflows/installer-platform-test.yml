@@ -1,0 +1,48 @@
+name: MJInstaller Cross-Platform Tests
+
+on:
+  push:
+    branches: [feature/mj-install-v2]
+    paths:
+      - 'packages/MJInstaller/**'
+      - '.github/workflows/installer-platform-test.yml'
+  pull_request:
+    branches: [next]
+    paths:
+      - 'packages/MJInstaller/**'
+      - '.github/workflows/installer-platform-test.yml'
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: MJInstaller (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-14, windows-latest]
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: 'npm'
+          cache-dependency-path: 'package-lock.json'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build MJInstaller
+        run: npm run build -w packages/MJInstaller
+
+      - name: Run unit tests
+        run: npm run test -w packages/MJInstaller
+
+      - name: Run cross-platform integration smoke
+        run: npx tsx packages/MJInstaller/src/__tests__/integration/cross-platform-smoke.ts

@@ -83,10 +83,14 @@
       <mj-query-data-grid
         [QueryInfo]="QueryInfo"
         [Data]="QueryData"
+        [TotalRowCount]="QueryTotalRowCount"
+        [PageNumber]="CurrentPageNumber"
+        [PageSize]="PageSize"
         [SelectionMode]="SelectionMode"
         [ShowToolbar]="ShowToolbar"
         [VisualConfig]="VisualConfig"
         [IsLoading]="IsLoading"
+        (PageChange)="OnPageChange($event)"
         (EntityLinkClick)="OnEntityLinkClick($event)"
         (RowDoubleClick)="OnRowDoubleClick($event)"
         (SelectionChange)="OnSelectionChange($event)"
@@ -110,6 +114,7 @@
     [QueryInfo]="QueryInfo"
     [Visible]="ShowInfoPanel"
     (Close)="CloseInfoPanel()"
-    (OpenRecord)="OnOpenQueryRecord($event)">
+    (OpenRecord)="OnOpenQueryRecord($event)"
+    (CompositionTokenClick)="OnCompositionTokenClick($event)">
   </mj-query-info-panel>
 </div>

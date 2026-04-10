@@ -169,4 +169,78 @@ describe('ErrorAnalyzer', () => {
             expect(info.providerErrorCode).toBe('invalid_model');
         });
     });
+
+    describe('NoCredentials error type', () => {
+        it('should detect "No suitable model found" as NoCredentials', () => {
+            const error = { message: 'No suitable model found for prompt System Prompt' };
+            const info = ErrorAnalyzer.analyzeError(error, 'AIPromptRunner');
+
+            expect(info.errorType).toBe('NoCredentials');
+            expect(info.severity).toBe('Fatal');
+            expect(info.canFailover).toBe(false);
+        });
+
+        it('should detect "No credentials found" as NoCredentials', () => {
+            const error = { message: 'No credentials found for any model-vendor combination' };
+            const info = ErrorAnalyzer.analyzeError(error);
+
+            expect(info.errorType).toBe('NoCredentials');
+            expect(info.severity).toBe('Fatal');
+            expect(info.canFailover).toBe(false);
+        });
+
+        it('should detect "No API keys found" as NoCredentials', () => {
+            const error = { message: 'No API keys found for any model-vendor combination' };
+            const info = ErrorAnalyzer.analyzeError(error);
+
+            expect(info.errorType).toBe('NoCredentials');
+            expect(info.severity).toBe('Fatal');
+            expect(info.canFailover).toBe(false);
+        });
+
+        it('should detect NoCredentials with mixed-case message', () => {
+            const error = { message: 'NO SUITABLE MODEL FOUND for prompt My Prompt' };
+            const info = ErrorAnalyzer.analyzeError(error);
+
+            expect(info.errorType).toBe('NoCredentials');
+        });
+
+        it('should detect NoCredentials with detailed credential message', () => {
+            const error = {
+                message: 'No suitable model found for prompt Sage - System Prompt. ' +
+                    'No valid API credentials/keys are configured for any of the candidate ' +
+                    'model-vendor combinations. Tried: GPT-4/OpenAI, Claude/Anthropic.'
+            };
+            const info = ErrorAnalyzer.analyzeError(error);
+
+            expect(info.errorType).toBe('NoCredentials');
+            expect(info.severity).toBe('Fatal');
+            expect(info.canFailover).toBe(false);
+        });
+
+        it('should distinguish NoCredentials from Authentication errors', () => {
+            // "No suitable model found" = NoCredentials (no keys configured at all)
+            const noCredsError = { message: 'No suitable model found for prompt X' };
+            const noCredsInfo = ErrorAnalyzer.analyzeError(noCredsError);
+            expect(noCredsInfo.errorType).toBe('NoCredentials');
+
+            // "Invalid API key" = Authentication (key exists but is wrong)
+            const authError = { message: 'Invalid API key provided' };
+            const authInfo = ErrorAnalyzer.analyzeError(authError);
+            expect(authInfo.errorType).toBe('Authentication');
+        });
+
+        it('should not allow failover for NoCredentials (no provider has keys)', () => {
+            const error = { message: 'No suitable model found for prompt Test' };
+            const info = ErrorAnalyzer.analyzeError(error);
+
+            // NoCredentials means NO provider has credentials, so failover is pointless
+            expect(info.canFailover).toBe(false);
+
+            // Contrast with Authentication where a different provider may have valid keys
+            const authError = { message: 'Invalid API key' };
+            const authInfo = ErrorAnalyzer.analyzeError(authError);
+            expect(authInfo.canFailover).toBe(true);
+        });
+    });
 });

@@ -72,7 +72,7 @@ describe('SSOLoginAction', () => {
   describe('GenerateSSOUrl() typed method', () => {
     it('should generate SSO URL with email', async () => {
       const requestSpy = vi
-        .spyOn(action as unknown as { makeLearnWorldsRequest: (...args: unknown[]) => Promise<unknown> }, 'makeLearnWorldsRequest')
+        .spyOn(action as unknown as { makeLearnWorldsNonVersionedRequest: (...args: unknown[]) => Promise<unknown> }, 'makeLearnWorldsNonVersionedRequest')
         .mockResolvedValue({
           url: 'https://school.learnworlds.com/sso?token=abc123',
           user_id: 'lw-user-42',
@@ -99,7 +99,7 @@ describe('SSOLoginAction', () => {
 
     it('should generate SSO URL with userId', async () => {
       const requestSpy = vi
-        .spyOn(action as unknown as { makeLearnWorldsRequest: (...args: unknown[]) => Promise<unknown> }, 'makeLearnWorldsRequest')
+        .spyOn(action as unknown as { makeLearnWorldsNonVersionedRequest: (...args: unknown[]) => Promise<unknown> }, 'makeLearnWorldsNonVersionedRequest')
         .mockResolvedValue({
           url: 'https://school.learnworlds.com/sso?token=def456',
           user_id: 'lw-user-99',
@@ -130,7 +130,7 @@ describe('SSOLoginAction', () => {
 
     it('should include RedirectTo in the request body when provided', async () => {
       const requestSpy = vi
-        .spyOn(action as unknown as { makeLearnWorldsRequest: (...args: unknown[]) => Promise<unknown> }, 'makeLearnWorldsRequest')
+        .spyOn(action as unknown as { makeLearnWorldsNonVersionedRequest: (...args: unknown[]) => Promise<unknown> }, 'makeLearnWorldsNonVersionedRequest')
         .mockResolvedValue({
           url: 'https://school.learnworlds.com/sso?token=xyz',
         });
@@ -149,7 +149,7 @@ describe('SSOLoginAction', () => {
 
     it('should prefer email over userId when both are provided', async () => {
       const requestSpy = vi
-        .spyOn(action as unknown as { makeLearnWorldsRequest: (...args: unknown[]) => Promise<unknown> }, 'makeLearnWorldsRequest')
+        .spyOn(action as unknown as { makeLearnWorldsNonVersionedRequest: (...args: unknown[]) => Promise<unknown> }, 'makeLearnWorldsNonVersionedRequest')
         .mockResolvedValue({
           url: 'https://school.learnworlds.com/sso?token=both',
         });
@@ -170,7 +170,7 @@ describe('SSOLoginAction', () => {
     });
 
     it('should propagate API errors', async () => {
-      vi.spyOn(action as unknown as { makeLearnWorldsRequest: (...args: unknown[]) => Promise<unknown> }, 'makeLearnWorldsRequest').mockRejectedValue(
+      vi.spyOn(action as unknown as { makeLearnWorldsNonVersionedRequest: (...args: unknown[]) => Promise<unknown> }, 'makeLearnWorldsNonVersionedRequest').mockRejectedValue(
         new Error('LearnWorlds API error: 401 Unauthorized'),
       );
 
@@ -185,7 +185,7 @@ describe('SSOLoginAction', () => {
 
   describe('InternalRunAction()', () => {
     it('should work via framework path', async () => {
-      vi.spyOn(action as unknown as { makeLearnWorldsRequest: (...args: unknown[]) => Promise<unknown> }, 'makeLearnWorldsRequest').mockResolvedValue({
+      vi.spyOn(action as unknown as { makeLearnWorldsNonVersionedRequest: (...args: unknown[]) => Promise<unknown> }, 'makeLearnWorldsNonVersionedRequest').mockResolvedValue({
         url: 'https://school.learnworlds.com/sso?token=framework',
         user_id: 'lw-user-fw',
       });
@@ -208,7 +208,7 @@ describe('SSOLoginAction', () => {
     });
 
     it('should set output params on success', async () => {
-      vi.spyOn(action as unknown as { makeLearnWorldsRequest: (...args: unknown[]) => Promise<unknown> }, 'makeLearnWorldsRequest').mockResolvedValue({
+      vi.spyOn(action as unknown as { makeLearnWorldsNonVersionedRequest: (...args: unknown[]) => Promise<unknown> }, 'makeLearnWorldsNonVersionedRequest').mockResolvedValue({
         url: 'https://school.learnworlds.com/sso?token=output',
         user_id: 'lw-user-out',
       });

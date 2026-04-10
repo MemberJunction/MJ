@@ -250,6 +250,53 @@ export interface UsageLogEntry {
 // =========================================================================
 
 /**
+ * Supported encoding formats for the random portion of API keys.
+ * - `hex`: lowercase hexadecimal (e.g., `a1b2c3...`) — 2 chars per byte
+ * - `base64url`: URL-safe Base64 without padding (e.g., `QEi8czPK...`) — ~1.33 chars per byte
+ */
+export type APIKeyEncoding = 'hex' | 'base64url';
+
+/**
+ * Configuration for API key generation parameters.
+ *
+ * **WARNING**: Changing these values after API keys have been created will invalidate
+ * all existing keys. They will fail format validation and/or hash comparison.
+ * Only change these before issuing any keys, or be prepared to rotate all keys.
+ *
+ * All properties are optional — omitted values use the defaults shown below.
+ */
+export interface APIKeyGenerationConfig {
+    /**
+     * Prefix prepended to generated API keys (e.g., `'mj_sk_'`, `'skip-'`).
+     * Used for key format detection and identification.
+     * @default 'mj_sk_'
+     */
+    prefix?: string;
+    /**
+     * Number of cryptographically secure random bytes used for key entropy.
+     * The resulting encoded string length depends on the encoding:
+     * - hex: entropyBytes * 2 characters
+     * - base64url: Math.ceil(entropyBytes * 4/3) characters
+     * @default 32
+     */
+    entropyBytes?: number;
+    /**
+     * Encoding format for the random portion of the key body.
+     * Does NOT affect the hash stored in the database (always hex).
+     * @default 'hex'
+     */
+    encoding?: APIKeyEncoding;
+    /**
+     * Hash algorithm used for key storage and comparison.
+     * Must be a valid Node.js `crypto.createHash()` algorithm name
+     * (e.g., `'sha256'`, `'sha512'`, `'sha384'`).
+     * The hash is always output as a hex string regardless of the key encoding.
+     * @default 'sha256'
+     */
+    hashAlgorithm?: string;
+}
+
+/**
  * Configuration for the API Key Engine
  */
 export interface APIKeyEngineConfig {
@@ -261,4 +308,9 @@ export interface APIKeyEngineConfig {
     defaultBehaviorNoScopes?: 'allow' | 'deny';
     /** Cache TTL in milliseconds for scope rules (default: 60000) */
     scopeCacheTTLMs?: number;
+    /**
+     * API key generation parameters (prefix, entropy, encoding, hash algorithm).
+     * WARNING: Changing these after keys exist will invalidate all existing keys.
+     */
+    keyGeneration?: APIKeyGenerationConfig;
 }

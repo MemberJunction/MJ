@@ -1,0 +1,294 @@
+<!--
+  Option B: Wizard Flow
+  Design Philosophy: Guided, step-by-step process that reduces cognitive load by
+  breaking duplicate detection into four discrete phases: Configure, Detect, Review,
+  and Approve. Each step has a clear purpose and completion criteria, making the
+  process approachable for non-technical users while still exposing advanced options.
+  The wizard pattern ensures nothing is missed and provides a clear sense of progress.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Duplicate Detection - Wizard Flow</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  :root {
+    --mj-brand-primary: #264FAF;
+    --mj-bg-page: #f8f9fa;
+    --mj-bg-surface: #ffffff;
+    --mj-text-primary: #334155;
+    --mj-text-secondary: #475569;
+    --mj-border-default: #e2e8f0;
+    --mj-status-success: #22c55e;
+    --mj-status-warning: #f59e0b;
+    --mj-status-error: #ef4444;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--mj-bg-page); color: var(--mj-text-primary); }
+
+  /* Header */
+  .header { background: var(--mj-bg-surface); border-bottom: 1px solid var(--mj-border-default); padding: 16px 32px; }
+  .header h1 { font-size: 18px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .header h1 i { color: var(--mj-brand-primary); }
+
+  /* Step Indicator */
+  .steps { display: flex; align-items: center; justify-content: center; padding: 32px 32px 0; gap: 0; }
+  .step { display: flex; align-items: center; gap: 10px; position: relative; }
+  .step-circle { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; border: 2px solid var(--mj-border-default); color: var(--mj-text-secondary); background: var(--mj-bg-surface); transition: all 0.3s; }
+  .step.active .step-circle { background: var(--mj-brand-primary); color: white; border-color: var(--mj-brand-primary); }
+  .step.done .step-circle { background: var(--mj-status-success); color: white; border-color: var(--mj-status-success); }
+  .step-label { font-size: 13px; font-weight: 600; color: var(--mj-text-secondary); }
+  .step.active .step-label { color: var(--mj-brand-primary); }
+  .step.done .step-label { color: var(--mj-status-success); }
+  .step-line { width: 80px; height: 2px; background: var(--mj-border-default); margin: 0 12px; }
+  .step-line.done { background: var(--mj-status-success); }
+
+  /* Content Area */
+  .content { max-width: 900px; margin: 32px auto; padding: 0 32px; }
+  .card { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 12px; padding: 32px; }
+  .card h2 { font-size: 20px; margin-bottom: 8px; }
+  .card .subtitle { font-size: 14px; color: var(--mj-text-secondary); margin-bottom: 24px; }
+
+  /* Form Elements */
+  .form-group { margin-bottom: 20px; }
+  .form-group label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: var(--mj-text-secondary); }
+  .form-group select, .form-group input[type=number] { width: 100%; padding: 10px 14px; border: 1px solid var(--mj-border-default); border-radius: 8px; font-size: 14px; color: var(--mj-text-primary); }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+  .toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--mj-border-default); }
+  .toggle-row:last-child { border-bottom: none; }
+  .toggle-label { font-size: 14px; }
+  .toggle-desc { font-size: 12px; color: var(--mj-text-secondary); }
+  .toggle { width: 44px; height: 24px; border-radius: 12px; background: var(--mj-border-default); position: relative; cursor: pointer; }
+  .toggle.on { background: var(--mj-brand-primary); }
+  .toggle::after { content: ''; position: absolute; width: 20px; height: 20px; border-radius: 50%; background: white; top: 2px; left: 2px; transition: left 0.2s; }
+  .toggle.on::after { left: 22px; }
+
+  /* Progress Step */
+  .progress-container { text-align: center; padding: 40px 0; }
+  .progress-ring { width: 120px; height: 120px; margin: 0 auto 24px; position: relative; }
+  .progress-ring svg { transform: rotate(-90deg); }
+  .progress-ring circle { fill: none; stroke-width: 8; }
+  .progress-ring .bg { stroke: var(--mj-border-default); }
+  .progress-ring .fg { stroke: var(--mj-brand-primary); stroke-dasharray: 339.3; stroke-dashoffset: 74.6; stroke-linecap: round; transition: stroke-dashoffset 0.5s; }
+  .progress-pct { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 28px; font-weight: 700; color: var(--mj-brand-primary); }
+  .progress-stats { display: flex; justify-content: center; gap: 40px; margin-top: 24px; }
+  .stat { text-align: center; }
+  .stat-value { font-size: 24px; font-weight: 700; }
+  .stat-label { font-size: 12px; color: var(--mj-text-secondary); }
+  .log-line { font-size: 13px; color: var(--mj-text-secondary); margin-top: 4px; }
+  .log-line i { margin-right: 6px; }
+
+  /* Results Table */
+  .results-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .results-table th { text-align: left; padding: 10px 12px; border-bottom: 2px solid var(--mj-border-default); color: var(--mj-text-secondary); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .results-table td { padding: 12px; border-bottom: 1px solid var(--mj-border-default); }
+  .results-table tr:hover { background: var(--mj-bg-page); }
+  .score-bar-wrap { width: 100px; height: 8px; background: var(--mj-border-default); border-radius: 4px; overflow: hidden; display: inline-block; vertical-align: middle; margin-right: 8px; }
+  .score-bar { height: 100%; border-radius: 4px; }
+  .expand-btn { background: none; border: none; cursor: pointer; color: var(--mj-brand-primary); font-size: 14px; }
+  .match-detail { background: var(--mj-bg-page); padding: 16px; border-radius: 8px; margin-top: 8px; }
+  .match-detail-grid { display: grid; grid-template-columns: 100px 1fr 1fr; gap: 6px; font-size: 12px; }
+  .match-detail-grid .label { color: var(--mj-text-secondary); font-weight: 500; }
+
+  /* Summary Step */
+  .summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+  .summary-card { background: var(--mj-bg-page); border-radius: 10px; padding: 20px; text-align: center; }
+  .summary-card .num { font-size: 32px; font-weight: 700; }
+  .summary-card .label { font-size: 12px; color: var(--mj-text-secondary); margin-top: 4px; }
+  .summary-card.success .num { color: var(--mj-status-success); }
+  .summary-card.warning .num { color: var(--mj-status-warning); }
+  .summary-card.error .num { color: var(--mj-status-error); }
+  .summary-card.info .num { color: var(--mj-brand-primary); }
+
+  /* Buttons */
+  .btn { padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 600; border: none; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; transition: all 0.15s; }
+  .btn-primary { background: var(--mj-brand-primary); color: white; }
+  .btn-primary:hover { opacity: 0.9; }
+  .btn-outline { background: transparent; border: 1px solid var(--mj-border-default); color: var(--mj-text-primary); }
+  .btn-success { background: var(--mj-status-success); color: white; }
+  .footer { display: flex; justify-content: space-between; margin-top: 24px; }
+
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1><i class="fa-solid fa-clone"></i> Duplicate Detection Wizard</h1>
+</div>
+
+<!-- Step Indicator -->
+<div class="steps">
+  <div class="step done">
+    <div class="step-circle"><i class="fa-solid fa-check"></i></div>
+    <span class="step-label">Configure</span>
+  </div>
+  <div class="step-line done"></div>
+  <div class="step done">
+    <div class="step-circle"><i class="fa-solid fa-check"></i></div>
+    <span class="step-label">Detect</span>
+  </div>
+  <div class="step-line done"></div>
+  <div class="step active">
+    <div class="step-circle">3</div>
+    <span class="step-label">Review</span>
+  </div>
+  <div class="step-line"></div>
+  <div class="step">
+    <div class="step-circle">4</div>
+    <span class="step-label">Approve</span>
+  </div>
+</div>
+
+<div class="content">
+  <!-- Step 1: Configure (shown for reference, currently hidden) -->
+  <div class="card hidden" id="step1">
+    <h2>Configure Detection</h2>
+    <p class="subtitle">Select the entity and tune detection parameters.</p>
+    <div class="form-group">
+      <label>Entity</label>
+      <select><option>Contacts (1,247 records)</option><option>Companies (583 records)</option></select>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Top K Matches</label><input type="number" value="5"></div>
+      <div class="form-group"><label>Min Score Threshold</label><input type="number" value="60" min="0" max="100"></div>
+      <div class="form-group"><label>Batch Size</label><input type="number" value="100"></div>
+    </div>
+    <h3 style="margin:16px 0 8px; font-size:15px;">Advanced Options</h3>
+    <div class="toggle-row">
+      <div><div class="toggle-label">Hybrid Search</div><div class="toggle-desc">Combine vector similarity with keyword matching</div></div>
+      <div class="toggle on"></div>
+    </div>
+    <div class="toggle-row">
+      <div><div class="toggle-label">Reranking</div><div class="toggle-desc">Use cross-encoder to refine initial results</div></div>
+      <div class="toggle on"></div>
+    </div>
+    <div class="toggle-row">
+      <div><div class="toggle-label">Cross-Entity Matching</div><div class="toggle-desc">Check for duplicates across related entities</div></div>
+      <div class="toggle"></div>
+    </div>
+    <div class="footer">
+      <span></span>
+      <button class="btn btn-primary"><i class="fa-solid fa-arrow-right"></i> Start Detection</button>
+    </div>
+  </div>
+
+  <!-- Step 2: Detect (shown for reference, currently hidden) -->
+  <div class="card hidden" id="step2">
+    <h2>Running Detection</h2>
+    <p class="subtitle">Analyzing Contacts for potential duplicates...</p>
+    <div class="progress-container">
+      <div class="progress-ring">
+        <svg width="120" height="120"><circle class="bg" cx="60" cy="60" r="54"/><circle class="fg" cx="60" cy="60" r="54"/></svg>
+        <div class="progress-pct">78%</div>
+      </div>
+      <div class="progress-stats">
+        <div class="stat"><div class="stat-value">782</div><div class="stat-label">Records Processed</div></div>
+        <div class="stat"><div class="stat-value">156</div><div class="stat-label">Duplicates Found</div></div>
+        <div class="stat"><div class="stat-value">2m 34s</div><div class="stat-label">Time Elapsed</div></div>
+      </div>
+      <div style="margin-top:24px;">
+        <div class="log-line"><i class="fa-solid fa-circle-check" style="color:var(--mj-status-success);"></i> Batch 1-100: 23 duplicates found</div>
+        <div class="log-line"><i class="fa-solid fa-circle-check" style="color:var(--mj-status-success);"></i> Batch 101-200: 18 duplicates found</div>
+        <div class="log-line"><i class="fa-solid fa-spinner fa-spin" style="color:var(--mj-status-warning);"></i> Batch 701-800: Processing...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 3: Review Results (ACTIVE) -->
+  <div class="card" id="step3">
+    <h2>Review Results</h2>
+    <p class="subtitle">156 potential duplicate groups found across 1,247 contacts. Click a row to expand match details.</p>
+
+    <div style="display:flex; gap:12px; margin-bottom:16px;">
+      <select style="padding:8px 12px; border:1px solid var(--mj-border-default); border-radius:8px; font-size:13px;">
+        <option>All Scores</option><option>High (>90%)</option><option>Medium (70-90%)</option><option>Low (<70%)</option>
+      </select>
+      <select style="padding:8px 12px; border:1px solid var(--mj-border-default); border-radius:8px; font-size:13px;">
+        <option>Sort: Score (High to Low)</option><option>Sort: Score (Low to High)</option><option>Sort: Name A-Z</option>
+      </select>
+    </div>
+
+    <table class="results-table">
+      <thead>
+        <tr><th></th><th>Source Record</th><th>Best Match</th><th>Score</th><th># Matches</th><th>Status</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><button class="expand-btn"><i class="fa-solid fa-chevron-down"></i></button></td>
+          <td><strong>John Davidson</strong><br><span style="color:var(--mj-text-secondary); font-size:12px;">john.d@acmecorp.com</span></td>
+          <td>Jon Davidson<br><span style="color:var(--mj-text-secondary); font-size:12px;">jon.davidson@acmecorp.com</span></td>
+          <td><div class="score-bar-wrap"><div class="score-bar" style="width:96%; background:var(--mj-status-success);"></div></div>96%</td>
+          <td>4</td>
+          <td><span style="color:var(--mj-status-warning);"><i class="fa-solid fa-clock"></i> Pending</span></td>
+        </tr>
+        <tr><td colspan="6" style="padding:0;">
+          <div class="match-detail">
+            <div class="match-detail-grid">
+              <span class="label">Field</span><span class="label">Source</span><span class="label">Match (96%)</span>
+              <span>Name</span><span>John Davidson</span><span>Jon Davidson</span>
+              <span>Email</span><span>john.d@acmecorp.com</span><span>jon.davidson@acmecorp.com</span>
+              <span>Phone</span><span>(555) 123-4567</span><span>(555) 123-4567</span>
+              <span>Company</span><span>Acme Corp</span><span>Acme Corporation</span>
+            </div>
+            <div style="margin-top:12px; display:flex; gap:8px;">
+              <button class="btn btn-success" style="padding:6px 14px; font-size:12px;"><i class="fa-solid fa-check"></i> Approve Merge</button>
+              <button class="btn btn-outline" style="padding:6px 14px; font-size:12px;"><i class="fa-solid fa-xmark"></i> Reject</button>
+            </div>
+          </div>
+        </td></tr>
+
+        <tr>
+          <td><button class="expand-btn"><i class="fa-solid fa-chevron-right"></i></button></td>
+          <td><strong>Sarah Mitchell</strong><br><span style="color:var(--mj-text-secondary); font-size:12px;">s.mitchell@globex.io</span></td>
+          <td>Sara Mitchell<br><span style="color:var(--mj-text-secondary); font-size:12px;">sara.m@globex.io</span></td>
+          <td><div class="score-bar-wrap"><div class="score-bar" style="width:93%; background:var(--mj-status-success);"></div></div>93%</td>
+          <td>3</td>
+          <td><span style="color:var(--mj-status-warning);"><i class="fa-solid fa-clock"></i> Pending</span></td>
+        </tr>
+        <tr>
+          <td><button class="expand-btn"><i class="fa-solid fa-chevron-right"></i></button></td>
+          <td><strong>Robert Johnson</strong><br><span style="color:var(--mj-text-secondary); font-size:12px;">rjohnson@initech.com</span></td>
+          <td>Bob Johnson<br><span style="color:var(--mj-text-secondary); font-size:12px;">bob.j@initech.com</span></td>
+          <td><div class="score-bar-wrap"><div class="score-bar" style="width:88%; background:var(--mj-status-warning);"></div></div>88%</td>
+          <td>2</td>
+          <td><span style="color:var(--mj-status-success);"><i class="fa-solid fa-check"></i> Approved</span></td>
+        </tr>
+        <tr>
+          <td><button class="expand-btn"><i class="fa-solid fa-chevron-right"></i></button></td>
+          <td><strong>Emily Watson</strong><br><span style="color:var(--mj-text-secondary); font-size:12px;">ewatson@umbrella.co</span></td>
+          <td>E. Watson<br><span style="color:var(--mj-text-secondary); font-size:12px;">emily.watson@umbrellacorp.com</span></td>
+          <td><div class="score-bar-wrap"><div class="score-bar" style="width:79%; background:var(--mj-status-warning);"></div></div>79%</td>
+          <td>5</td>
+          <td><span style="color:var(--mj-text-secondary);"><i class="fa-solid fa-minus"></i> Skipped</span></td>
+        </tr>
+        <tr>
+          <td><button class="expand-btn"><i class="fa-solid fa-chevron-right"></i></button></td>
+          <td><strong>Michael Chen</strong><br><span style="color:var(--mj-text-secondary); font-size:12px;">m.chen@soylent.org</span></td>
+          <td>Mike Chen<br><span style="color:var(--mj-text-secondary); font-size:12px;">mikechen@soylent.org</span></td>
+          <td><div class="score-bar-wrap"><div class="score-bar" style="width:91%; background:var(--mj-status-success);"></div></div>91%</td>
+          <td>2</td>
+          <td><span style="color:var(--mj-status-warning);"><i class="fa-solid fa-clock"></i> Pending</span></td>
+        </tr>
+        <tr>
+          <td><button class="expand-btn"><i class="fa-solid fa-chevron-right"></i></button></td>
+          <td><strong>Laura Perez</strong><br><span style="color:var(--mj-text-secondary); font-size:12px;">laura.p@hooli.com</span></td>
+          <td>L. Perez-Garcia<br><span style="color:var(--mj-text-secondary); font-size:12px;">lperez@hooli.com</span></td>
+          <td><div class="score-bar-wrap"><div class="score-bar" style="width:67%; background:var(--mj-status-error);"></div></div>67%</td>
+          <td>1</td>
+          <td><span style="color:var(--mj-status-warning);"><i class="fa-solid fa-clock"></i> Pending</span></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="footer">
+      <button class="btn btn-outline"><i class="fa-solid fa-arrow-left"></i> Back</button>
+      <button class="btn btn-primary">Continue to Approve <i class="fa-solid fa-arrow-right"></i></button>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

@@ -91,7 +91,7 @@ describe('CreateUserAction', () => {
   describe('CreateUser() typed method', () => {
     it('should create user successfully', async () => {
       const apiResponse = mockLWCreateUserResponse();
-      vi.spyOn(action as unknown as { makeLearnWorldsRequest: (...args: unknown[]) => Promise<unknown> }, 'makeLearnWorldsRequest').mockResolvedValue(
+      const requestSpy = vi.spyOn(action as unknown as { makeLearnWorldsRequest: (...args: unknown[]) => Promise<unknown> }, 'makeLearnWorldsRequest').mockResolvedValue(
         apiResponse,
       );
 
@@ -113,6 +113,10 @@ describe('CreateUserAction', () => {
       expect(result.Summary.email).toBe('newuser@example.com');
       expect(result.Summary.welcomeEmailSent).toBe(true);
       expect(result.EnrollmentResults).toEqual([]);
+
+      // username should always be present (defaults to email)
+      const body = requestSpy.mock.calls[0][2] as Record<string, unknown>;
+      expect(body.username).toBe('newuser@example.com');
     });
 
     it('should throw when email is missing', async () => {
@@ -146,6 +150,13 @@ describe('CreateUserAction', () => {
       expect(result.EnrollmentResults[0].enrollmentId).toBe('enrollment-1');
       expect(result.Summary.coursesEnrolled).toBe(1);
       expect(result.Summary.totalCoursesRequested).toBe(1);
+
+      // Verify enrollment used the unified endpoint and new body format
+      expect(requestSpy.mock.calls[1][0]).toBe('users/lw-user-123/enrollment');
+      const enrollBody = requestSpy.mock.calls[1][2] as Record<string, unknown>;
+      expect(enrollBody.productId).toBe('course-abc');
+      expect(enrollBody.productType).toBe('course');
+      expect(enrollBody.send_enrollment_email).toBe(false);
     });
 
     it('should handle enrollment failure gracefully', async () => {

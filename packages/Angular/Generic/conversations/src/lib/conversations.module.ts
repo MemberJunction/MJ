@@ -3,16 +3,8 @@ import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
 
-// Kendo UI modules
-import { DialogModule, WindowModule } from '@progress/kendo-angular-dialog';
-import { ButtonsModule } from '@progress/kendo-angular-buttons';
-import { InputsModule } from '@progress/kendo-angular-inputs';
-import { LayoutModule } from '@progress/kendo-angular-layout';
-import { IndicatorsModule } from '@progress/kendo-angular-indicators';
-import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
-import { NotificationModule } from '@progress/kendo-angular-notification';
-import { UploadsModule } from '@progress/kendo-angular-upload';
-import { DateInputsModule } from '@progress/kendo-angular-dateinputs';
+// MJ UI Components
+import { MJButtonDirective, MJDatepickerComponent, MJDialogComponent, MJDialogActionsComponent } from '@memberjunction/ng-ui-components';
 
 // MemberJunction modules
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
@@ -30,8 +22,7 @@ import { MessageListComponent } from './components/message/message-list.componen
 import { MessageInputComponent } from './components/message/message-input.component';
 import { MessageInputBoxComponent } from './components/message/message-input-box.component';
 import { SuggestedResponsesComponent } from './components/message/suggested-responses.component';
-import { FormQuestionComponent } from './components/message/form-question.component';
-import { AgentResponseFormComponent } from './components/message/agent-response-form.component';
+import { DynamicFormsModule } from '@memberjunction/ng-forms';
 import { ActionableCommandsComponent } from './components/message/actionable-commands.component';
 import { MentionDropdownComponent } from './components/mention/mention-dropdown.component';
 import { MentionEditorComponent } from './components/mention/mention-editor.component';
@@ -72,6 +63,8 @@ import { ArtifactCollectionPickerModalComponent } from './components/collection/
 import { ArtifactShareModalComponent } from './components/artifact/artifact-share-modal.component';
 import { GlobalTasksPanelComponent } from './components/global-tasks/global-tasks-panel.component';
 import { ImageViewerComponent } from './components/attachment/image-viewer.component';
+import { PinnedMessagesPanelComponent } from './components/conversation/pinned-messages-panel.component';
+import { ChatAgentsOverlayComponent } from './components/overlay/chat-overlay.component';
 
 // Directives
 import { SearchShortcutDirective } from './directives/search-shortcut.directive';
@@ -83,8 +76,6 @@ const COMPONENTS = [
   MessageInputComponent,
   MessageInputBoxComponent,
   SuggestedResponsesComponent,
-  FormQuestionComponent,
-  AgentResponseFormComponent,
   ActionableCommandsComponent,
   MentionDropdownComponent,
   MentionEditorComponent,
@@ -120,7 +111,9 @@ const COMPONENTS = [
   ToastComponent,
   InputDialogComponent,
   GlobalTasksPanelComponent,
-  ImageViewerComponent
+  ImageViewerComponent,
+  PinnedMessagesPanelComponent,
+  ChatAgentsOverlayComponent
 ];
 
 @NgModule({
@@ -133,22 +126,17 @@ const COMPONENTS = [
     FormsModule,
     ReactiveFormsModule,
     RouterModule,
-    DialogModule,
-    WindowModule,
-    ButtonsModule,
-    InputsModule,
-    LayoutModule,
-    IndicatorsModule,
-    DropDownsModule,
-    NotificationModule,
-    UploadsModule,
-    DateInputsModule,
+    MJButtonDirective,
+    MJDatepickerComponent,
+    MJDialogComponent,
+    MJDialogActionsComponent,
     ContainerDirectivesModule,
     CodeEditorModule,
     ArtifactsModule,
     TestingModule,
     SharedGenericModule,
     MarkdownModule,
+    DynamicFormsModule,
     // Standalone components
     TasksFullViewComponent,
     CollectionShareModalComponent,

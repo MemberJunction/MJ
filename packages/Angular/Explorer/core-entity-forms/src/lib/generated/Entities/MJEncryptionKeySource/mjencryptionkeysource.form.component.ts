@@ -17,7 +17,7 @@ export class MJEncryptionKeySourceFormComponent extends BaseFormComponent {
         await super.ngOnInit();
         this.initSections([
             { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
-            { sectionKey: 'mJEncryptionKeys', sectionName: 'MJ: Encryption Keys', isExpanded: false }
+            { sectionKey: 'mJEncryptionKeys', sectionName: 'Encryption Keys', isExpanded: false }
         ]);
     }
 }

@@ -1,4 +1,4 @@
-<div class="shell-container" [class.hidden]="loading" [class.tabs-visible]="tabBarVisible" kendoDialogContainer>
+<div class="shell-container" [class.hidden]="loading" [class.tabs-visible]="tabBarVisible">
   <!-- Header -->
   <header class="shell-header">
     <!-- MJ Logo -->
@@ -15,7 +15,7 @@
         @for (app of leftOfSwitcherApps; track app) {
           <button
             class="nav-bar-app-btn"
-            [class.active]="app.ID === activeApp?.ID"
+            [class.active]="IsActiveApp(app)"
             [title]="app.Name"
             [style.--app-color]="app.GetColor()"
             (click)="onNavBarAppClick(app, $event)"
@@ -44,14 +44,26 @@
       </mj-app-nav>
     }
 
+    <!-- Universal Search Bar -->
+    @if (ShowSearchBar) {
+      <div class="shell-search-bar desktop-only">
+        <mj-search-composite
+          #shellSearchComposite
+          Placeholder="Search everything..."
+          [ShowShortcutHint]="true"
+          [EnablePreview]="ShowSearchPreview"
+          [EnableRecent]="true"
+          [MaxPreviewResults]="8"
+          (ResultSelected)="OnSearchResultSelected($event)"
+          (SearchSubmitted)="OnSearchSubmitted($event)"
+          (SeeAllRequested)="OnSeeAllSearch($event)">
+        </mj-search-composite>
+      </div>
+    }
     <!-- Spacer -->
     <div class="spacer"></div>
-
-    <!-- Actions (search, notifications, user menu) -->
+    <!-- Actions (notifications, user menu) -->
     <div class="header-actions">
-      <button class="icon-btn desktop-only search-toggle-btn" title="Search" (click)="toggleSearch()">
-        <i class="fa-solid fa-search"></i>
-      </button>
       <button class="icon-btn desktop-only notification-btn" title="Notifications" (click)="showNotifications()">
         <i class="fa-solid fa-bell"></i>
         @if (unreadNotificationCount > 0) {
@@ -70,7 +82,7 @@
           @for (app of leftOfUserMenuApps; track app) {
             <button
               class="nav-bar-app-btn"
-              [class.active]="app.ID === activeApp?.ID"
+              [class.active]="IsActiveApp(app)"
               [title]="app.Name"
               [style.--app-color]="app.GetColor()"
               (click)="onNavBarAppClick(app, $event)"
@@ -105,6 +117,9 @@
                     <span class="user-email">
                       {{ getUserDisplayInfo()?.email }}
                     </span>
+                  }
+                  @if (getUserDisplayInfo()?.subtitle) {
+                    <span class="user-subtitle">{{ getUserDisplayInfo()?.subtitle }}</span>
                   }
                 </div>
               </div>
@@ -160,19 +175,18 @@
   }
   <div class="search-popup" [class.open]="isSearchOpen">
     <div class="search-popup-content" (click)="$event.stopPropagation()">
-      <kendo-dropdownlist
-        [data]="searchableEntities"
-        textField="Name"
-        valueField="ID"
+      <mj-dropdown
+        [Data]="searchableEntities"
+        TextField="Name"
+        ValueField="ID"
         class="search-entity-dropdown"
         [(ngModel)]="selectedEntity">
-      </kendo-dropdownlist>
+      </mj-dropdown>
       <input
         type="text"
         #searchInput
         placeholder="Search..."
-        kendoTextBox
-        class="search-input"
+        class="mj-input search-input"
         (keydown.enter)="onSearch($event)"
         />
       <button class="search-submit-btn" (click)="onSearch($event)" title="Search">
@@ -238,6 +252,21 @@
       [animation]="currentLoadingAnimation"
       size="large">
     </mj-loading>
+    @if (ShowResetOption) {
+      <div class="loading-reset-panel">
+        <p class="loading-reset-message">
+          <i class="fa-regular fa-clock"></i>
+          Taking longer than expected
+        </p>
+        <p class="loading-reset-hint">
+          This can happen after updates or due to cached data issues.
+        </p>
+        <button class="loading-reset-btn" (click)="ResetApplication()">
+          <i class="fa-solid fa-arrows-rotate"></i>
+          Reset
+        </button>
+      </div>
+    }
   </div>
 }
 
@@ -249,3 +278,13 @@
 
 <!-- Command Palette -->
 <mj-command-palette (AppSelected)="onAppSwitch($event)"></mj-command-palette>
+
+<!-- Pin Progress Overlay -->
+@if (PinProgressVisible) {
+  <div class="pin-progress-backdrop">
+    <div class="pin-progress-modal">
+      <mj-loading [showText]="false" size="small"></mj-loading>
+      <span class="pin-progress-text">{{ PinProgressText }}</span>
+    </div>
+  </div>
+}

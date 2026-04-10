@@ -4,7 +4,7 @@ import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { RunView, Metadata } from '@memberjunction/core';
 import { MJUserEntity, MJRoleEntity, MJUserRoleEntity, ResourceData } from '@memberjunction/core-entities';
 import { BaseDashboard } from '@memberjunction/ng-shared';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { UserDialogData, UserDialogResult } from './user-dialog/user-dialog.component';
 
 interface UserStats {
@@ -675,6 +675,6 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
   // Get roles for a specific user
   public getUserRoles(userId: string): MJRoleEntity[] {
     const roleIds = this.userRoleMap.get(userId) || [];
-    return this.roles.filter(role => roleIds.includes(role.ID));
+    return this.roles.filter(role => roleIds.some(id => UUIDsEqual(id, role.ID)));
   }
 }

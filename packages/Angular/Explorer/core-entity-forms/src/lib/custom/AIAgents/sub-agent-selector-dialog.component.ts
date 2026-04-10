@@ -1,10 +1,10 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, Output, EventEmitter } from '@angular/core';
 import { FormControl } from '@angular/forms';
-import { WindowRef } from '@progress/kendo-angular-dialog';
 import { Subject, BehaviorSubject, combineLatest, debounceTime, distinctUntilChanged, takeUntil, startWith } from 'rxjs';
 import { RunView } from '@memberjunction/core';
 import { MJAIAgentTypeEntity } from '@memberjunction/core-entities';
 import { MJAIAgentEntityExtended } from "@memberjunction/ai-core-plus";
+import { UUIDsEqual } from '@memberjunction/global';
 
 export interface SubAgentSelectorResult {
   selectedAgents: MJAIAgentEntityExtended[];
@@ -67,8 +67,9 @@ export class SubAgentSelectorDialogComponent implements OnInit, OnDestroy {
     return this.filteredAgents$.value.length;
   }
 
+  @Output() DialogClose = new EventEmitter<void>();
+
   constructor(
-    private dialogRef: WindowRef,
     private cdr: ChangeDetectorRef
   ) {}
 
@@ -156,7 +157,7 @@ export class SubAgentSelectorDialogComponent implements OnInit, OnDestroy {
 
     // Type filter
     if (typeId !== 'all') {
-      filtered = filtered.filter(agent => agent.TypeID === typeId);
+      filtered = filtered.filter(agent => UUIDsEqual(agent.TypeID, typeId));
     }
 
     // Search filter
@@ -197,7 +198,7 @@ export class SubAgentSelectorDialogComponent implements OnInit, OnDestroy {
     const agents = this.allAgents$.value;
     
     // Find the agent and toggle its selection
-    const agentToUpdate = agents.find(a => a.ID === agent.ID);
+    const agentToUpdate = agents.find(a => UUIDsEqual(a.ID, agent.ID));
     if (agentToUpdate) {
       agentToUpdate.selected = !agentToUpdate.selected;
       
@@ -206,7 +207,7 @@ export class SubAgentSelectorDialogComponent implements OnInit, OnDestroy {
           // Single select mode - clear other selections
           selected.clear();
           agents.forEach(a => {
-            if (a.ID !== agent.ID) {
+            if (!UUIDsEqual(a.ID, agent.ID)) {
               a.selected = false;
             }
           });
@@ -221,7 +222,7 @@ export class SubAgentSelectorDialogComponent implements OnInit, OnDestroy {
       
       // Update filtered agents to reflect selection state
       const filtered = this.filteredAgents$.value;
-      const filteredAgent = filtered.find(a => a.ID === agent.ID);
+      const filteredAgent = filtered.find(a => UUIDsEqual(a.ID, agent.ID));
       if (filteredAgent) {
         filteredAgent.selected = agentToUpdate.selected;
         this.filteredAgents$.next(filtered);
@@ -242,10 +243,10 @@ export class SubAgentSelectorDialogComponent implements OnInit, OnDestroy {
 
   getAgentStatusColor(agent: AgentDisplayItem): string {
     switch (agent.Status) {
-      case 'Active': return '#28a745';
-      case 'Disabled': return '#6c757d';
-      case 'Pending': return '#ffc107';
-      default: return '#6c757d';
+      case 'Active': return 'var(--mj-status-success)';
+      case 'Disabled': return 'var(--mj-text-muted)';
+      case 'Pending': return 'var(--mj-status-warning)';
+      default: return 'var(--mj-text-muted)';
     }
   }
 
@@ -253,7 +254,7 @@ export class SubAgentSelectorDialogComponent implements OnInit, OnDestroy {
 
   cancel() {
     this.result.next(null);
-    this.dialogRef.close();
+    this.DialogClose.emit();
   }
 
   createNew() {
@@ -261,7 +262,7 @@ export class SubAgentSelectorDialogComponent implements OnInit, OnDestroy {
       selectedAgents: [],
       createNew: true
     });
-    this.dialogRef.close();
+    this.DialogClose.emit();
   }
 
   async addSelectedAgents() {
@@ -279,6 +280,6 @@ export class SubAgentSelectorDialogComponent implements OnInit, OnDestroy {
       selectedAgents,
       createNew: false
     });
-    this.dialogRef.close();
+    this.DialogClose.emit();
   }
 }

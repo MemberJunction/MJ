@@ -1,6 +1,7 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges, ChangeDetectorRef, inject } from '@angular/core';
 import { GraphQLDataProvider, GraphQLFileStorageClient } from '@memberjunction/graphql-dataprovider';
 import { FileStorageEngine, StorageAccountWithProvider } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Represents a file or folder item in the grid
@@ -96,6 +97,8 @@ export class FileGridComponent implements OnInit, OnChanges {
    * Currently selected item keys in the grid (Kendo stores keys, not full objects)
    */
   public selectedItems: string[] = [];
+
+  private cdr = inject(ChangeDetectorRef);
 
   /**
    * Loading state indicator
@@ -237,6 +240,7 @@ export class FileGridComponent implements OnInit, OnChanges {
     const previousItemNames = this.items.map(i => i.name);
 
     this.isLoading = true;
+    this.cdr.detectChanges();
     this.errorMessage = null;
 
     try {
@@ -300,6 +304,7 @@ export class FileGridComponent implements OnInit, OnChanges {
       console.error('[FileGrid] Error loading files:', error);
     } finally {
       this.isLoading = false;
+      this.cdr.detectChanges();
     }
 
     // Apply filters after loading
@@ -1390,7 +1395,7 @@ export class FileGridComponent implements OnInit, OnChanges {
 
       // Build available accounts (excluding current account)
       this.availableAccounts = engine.AccountsWithProviders
-        .filter(a => a.account.ID !== this.account?.account.ID);
+        .filter(a => !UUIDsEqual(a.account.ID, this.account?.account.ID));
 
       if (this.availableAccounts.length === 0) {
         this.errorMessage = 'No other storage accounts available';

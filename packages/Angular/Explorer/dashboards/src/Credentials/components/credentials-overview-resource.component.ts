@@ -1,7 +1,7 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy } from '@angular/core';
 import { Subject } from 'rxjs';
 import { ResourceData, MJCredentialEntity, MJCredentialTypeEntity, MJCredentialCategoryEntity, MJAuditLogEntity } from '@memberjunction/core-entities';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { RunView, Metadata, CompositeKey } from '@memberjunction/core';
 interface CategoryStat {
@@ -74,14 +74,15 @@ export class CredentialsOverviewResourceComponent extends BaseResourceComponent 
     private _metadata = new Metadata();
     private _permissionCache = new Map<string, boolean>();
 
-    // Category colors for charts
+    // Category colors for charts - using CSS custom properties via getComputedStyle at runtime
+    // These are semantic fallback values; the actual tokens are resolved from the theme
     private categoryColors: Record<string, string> = {
-        'AI': '#8b5cf6',
-        'Communication': '#3b82f6',
-        'Storage': '#10b981',
-        'Database': '#f59e0b',
-        'Authentication': '#ef4444',
-        'Integration': '#6366f1'
+        'AI': 'var(--mj-brand-primary)',
+        'Communication': 'var(--mj-brand-primary)',
+        'Storage': 'var(--mj-status-success)',
+        'Database': 'var(--mj-status-warning)',
+        'Authentication': 'var(--mj-status-error)',
+        'Integration': 'var(--mj-brand-primary)'
     };
 
     private destroy$ = new Subject<void>();
@@ -248,7 +249,7 @@ export class CredentialsOverviewResourceComponent extends BaseResourceComponent 
         thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
 
         this.typeStats = this.types.map(type => {
-            const typeCredentials = this.credentials.filter(c => c.CredentialTypeID === type.ID);
+            const typeCredentials = this.credentials.filter(c => UUIDsEqual(c.CredentialTypeID, type.ID));
 
             return {
                 typeId: type.ID,
@@ -272,7 +273,7 @@ export class CredentialsOverviewResourceComponent extends BaseResourceComponent 
         for (const type of this.types) {
             const category = type.Category;
             const existing = categoryMap.get(category);
-            const categoryCredentials = this.credentials.filter(c => c.CredentialTypeID === type.ID);
+            const categoryCredentials = this.credentials.filter(c => UUIDsEqual(c.CredentialTypeID, type.ID));
 
             if (existing) {
                 existing.count += categoryCredentials.length;
@@ -282,7 +283,7 @@ export class CredentialsOverviewResourceComponent extends BaseResourceComponent 
                     categoryId: category, // Use category name as ID for filtering
                     count: categoryCredentials.length,
                     iconClass: this.getCategoryIcon(category),
-                    color: this.categoryColors[category] || '#64748b',
+                    color: this.categoryColors[category] || 'var(--mj-text-muted)',
                     percentage: 0
                 });
             }

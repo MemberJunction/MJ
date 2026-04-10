@@ -10,11 +10,12 @@ import { ToastService } from '../../services/toast.service';
   selector: 'mj-export-modal',
   template: `
     @if (isVisible) {
-      <kendo-dialog
-        [title]="exportTitle"
-        [width]="600"
-        [height]="600"
-        (close)="onCancel()">
+      <mj-dialog
+        [Title]="exportTitle"
+        [Width]="600"
+        [Height]="600"
+        [Visible]="true"
+        (Close)="onCancel()">
         <div class="export-modal-content">
           <section class="format-section">
             <h3 class="section-title">
@@ -104,17 +105,17 @@ import { ToastService } from '../../services/toast.service';
             </div>
           }
         </div>
-        <kendo-dialog-actions>
-          <button kendoButton [disabled]="isExporting" (click)="onCancel()">
+        <mj-dialog-actions>
+          <button mjButton [disabled]="isExporting" (click)="onCancel()">
             <i class="fa-solid fa-times"></i>
             Cancel
           </button>
-          <button kendoButton [primary]="true" [disabled]="!canExport" (click)="onExport()">
+          <button mjButton variant="primary" [disabled]="!canExport" (click)="onExport()">
             <i class="fa-solid fa-download"></i>
             Export
           </button>
-        </kendo-dialog-actions>
-      </kendo-dialog>
+        </mj-dialog-actions>
+      </mj-dialog>
     }
     `,
   styles: [`
@@ -135,16 +136,16 @@ import { ToastService } from '../../services/toast.service';
       margin: 0 0 8px 0;
       font-size: 16px;
       font-weight: 600;
-      color: #333;
+      color: var(--mj-text-primary);
     }
 
     .section-title i {
-      color: #007bff;
+      color: var(--mj-brand-primary);
     }
 
     .section-description {
       margin: 0 0 16px 0;
-      color: #666;
+      color: var(--mj-text-muted);
       font-size: 14px;
     }
 
@@ -159,33 +160,34 @@ import { ToastService } from '../../services/toast.service';
       align-items: center;
       gap: 12px;
       padding: 12px;
-      border: 2px solid #e0e0e0;
+      border: 2px solid var(--mj-border-strong);
       border-radius: 6px;
       cursor: pointer;
       transition: all 0.2s;
+      background: var(--mj-bg-surface-card);
     }
 
     .format-option:hover {
-      border-color: #007bff;
-      background: #f8f9fa;
+      border-color: var(--mj-brand-primary);
+      background: var(--mj-bg-surface-sunken);
     }
 
     .format-option.selected {
-      border-color: #007bff;
-      background: #e3f2fd;
+      border-color: var(--mj-brand-primary);
+      background: color-mix(in srgb, var(--mj-brand-primary) 20%, var(--mj-bg-surface-card));
     }
 
     .format-option > i.fa-solid,
     .format-option > i.fas {
       font-size: 24px;
-      color: #666;
+      color: var(--mj-text-muted);
       width: 32px;
       text-align: center;
     }
 
     .format-option.selected > i.fa-solid,
     .format-option.selected > i.fas {
-      color: #007bff;
+      color: var(--mj-brand-primary);
     }
 
     .format-details {
@@ -200,12 +202,12 @@ import { ToastService } from '../../services/toast.service';
 
     .format-description {
       font-size: 12px;
-      color: #666;
+      color: var(--mj-text-muted);
     }
 
     .check-icon {
       font-size: 20px;
-      color: #28a745;
+      color: var(--mj-status-success);
     }
 
     .option-checkboxes {
@@ -225,7 +227,7 @@ import { ToastService } from '../../services/toast.service';
     }
 
     .checkbox-label:hover {
-      background: #f8f9fa;
+      background: var(--mj-bg-surface-sunken);
     }
 
     .checkbox-label input[type="checkbox"] {
@@ -247,32 +249,32 @@ import { ToastService } from '../../services/toast.service';
     .checkbox-label small {
       margin-left: 28px;
       font-size: 12px;
-      color: #666;
+      color: var(--mj-text-muted);
     }
 
     .format-specific-options {
       margin-top: 16px;
       padding-top: 16px;
-      border-top: 1px solid #e0e0e0;
+      border-top: 1px solid var(--mj-border-default);
     }
 
     .subsection-title {
       margin: 0 0 12px 0;
       font-size: 14px;
       font-weight: 600;
-      color: #555;
+      color: var(--mj-text-secondary);
     }
 
     .error-message {
       display: flex;
       align-items: center;
       gap: 8px;
-      color: #d32f2f;
+      color: var(--mj-status-error);
       font-size: 13px;
       margin-top: 15px;
       padding: 10px 12px;
-      background: #ffebee;
-      border-left: 3px solid #d32f2f;
+      background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
+      border-left: 3px solid var(--mj-status-error);
       border-radius: 4px;
     }
 
@@ -282,20 +284,20 @@ import { ToastService } from '../../services/toast.service';
       gap: 10px;
       margin-top: 15px;
       padding: 12px;
-      background: #f8f9fa;
+      background: var(--mj-bg-surface-sunken);
       border-radius: 4px;
-      color: #666;
+      color: var(--mj-text-muted);
     }
 
-    kendo-dialog-actions {
+    mj-dialog-actions {
       display: flex;
       justify-content: flex-end;
       gap: 10px;
       padding: 15px 20px;
-      border-top: 1px solid #e0e0e0;
+      border-top: 1px solid var(--mj-border-default);
     }
 
-    kendo-dialog-actions button i {
+    mj-dialog-actions button i {
       margin-right: 6px;
     }
   `]

@@ -29,6 +29,18 @@ describe('FieldMapper', () => {
       expect(mapper.MapFieldName('__mj_DeletedAt')).toBe('_mj__DeletedAt');
     });
 
+    it('should map __mj_integration_SyncStatus to _mj__integration_SyncStatus', () => {
+      expect(mapper.MapFieldName('__mj_integration_SyncStatus')).toBe('_mj__integration_SyncStatus');
+    });
+
+    it('should map __mj_integration_LastSyncedAt to _mj__integration_LastSyncedAt', () => {
+      expect(mapper.MapFieldName('__mj_integration_LastSyncedAt')).toBe('_mj__integration_LastSyncedAt');
+    });
+
+    it('should map any __mj_ prefixed field generically', () => {
+      expect(mapper.MapFieldName('__mj_SomeNewField')).toBe('_mj__SomeNewField');
+    });
+
     it('should return original name for unmapped fields', () => {
       expect(mapper.MapFieldName('ID')).toBe('ID');
       expect(mapper.MapFieldName('Name')).toBe('Name');
@@ -51,6 +63,14 @@ describe('FieldMapper', () => {
 
     it('should reverse map _mj__DeletedAt to __mj_DeletedAt', () => {
       expect(mapper.ReverseMapFieldName('_mj__DeletedAt')).toBe('__mj_DeletedAt');
+    });
+
+    it('should reverse map _mj__integration_SyncStatus to __mj_integration_SyncStatus', () => {
+      expect(mapper.ReverseMapFieldName('_mj__integration_SyncStatus')).toBe('__mj_integration_SyncStatus');
+    });
+
+    it('should reverse map _mj__integration_LastSyncedAt to __mj_integration_LastSyncedAt', () => {
+      expect(mapper.ReverseMapFieldName('_mj__integration_LastSyncedAt')).toBe('__mj_integration_LastSyncedAt');
     });
 
     it('should return original name for unmapped fields', () => {
@@ -108,11 +128,13 @@ describe('FieldMapper', () => {
       expect(result).toBeUndefined();
     });
 
-    it('should handle all three __mj_ fields', () => {
+    it('should handle all __mj_ fields including integration fields', () => {
       const obj: Record<string, unknown> = {
         __mj_CreatedAt: 'date1',
         __mj_UpdatedAt: 'date2',
         __mj_DeletedAt: 'date3',
+        __mj_integration_SyncStatus: 'Active',
+        __mj_integration_LastSyncedAt: 'date4',
       };
 
       mapper.MapFields(obj);
@@ -120,9 +142,13 @@ describe('FieldMapper', () => {
       expect(obj._mj__CreatedAt).toBe('date1');
       expect(obj._mj__UpdatedAt).toBe('date2');
       expect(obj._mj__DeletedAt).toBe('date3');
+      expect(obj._mj__integration_SyncStatus).toBe('Active');
+      expect(obj._mj__integration_LastSyncedAt).toBe('date4');
       expect(obj.__mj_CreatedAt).toBeUndefined();
       expect(obj.__mj_UpdatedAt).toBeUndefined();
       expect(obj.__mj_DeletedAt).toBeUndefined();
+      expect(obj.__mj_integration_SyncStatus).toBeUndefined();
+      expect(obj.__mj_integration_LastSyncedAt).toBeUndefined();
     });
   });
 

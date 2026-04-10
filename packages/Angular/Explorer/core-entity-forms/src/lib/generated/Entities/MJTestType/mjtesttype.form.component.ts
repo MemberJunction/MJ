@@ -18,8 +18,8 @@ export class MJTestTypeFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'testTypeDefinition', sectionName: 'Test Type Definition', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJTestRubrics', sectionName: 'MJ: Test Rubrics', isExpanded: false },
-            { sectionKey: 'mJTests', sectionName: 'MJ: Tests', isExpanded: false }
+            { sectionKey: 'mJTestRubrics', sectionName: 'Test Rubrics', isExpanded: false },
+            { sectionKey: 'mJTests', sectionName: 'Tests', isExpanded: false }
         ]);
     }
 }

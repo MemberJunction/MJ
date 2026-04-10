@@ -2408,6 +2408,7 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
                     'Engine': { events: 0, avgMs: 0 },
                     'AI': { events: 0, avgMs: 0 },
                     'Cache': { events: 0, avgMs: 0 },
+                    'Coalesce': { events: 0, avgMs: 0 },
                     'Network': { events: 0, avgMs: 0 },
                     'Custom': { events: 0, avgMs: 0 }
                 };
@@ -2626,7 +2627,7 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         const events = this.telemetryEvents.filter(e => e.elapsedMs !== undefined);
 
         if (events.length === 0) {
-            container.innerHTML = '<div style="color: #666; text-align: center; padding: 100px 20px;">No telemetry events with timing data yet.<br>Navigate around the app to generate performance data.</div>';
+            container.innerHTML = '<div style="color: var(--mj-text-secondary); text-align: center; padding: 100px 20px;">No telemetry events with timing data yet.<br>Navigate around the app to generate performance data.</div>';
             return;
         }
 
@@ -2673,7 +2674,7 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
 
         // If no data in viewport, show a message
         if (chartData.length === 0) {
-            container.innerHTML = '<div style="color: #666; text-align: center; padding: 100px 20px;">No events in the current view.<br>Try zooming out or panning to see events.</div>';
+            container.innerHTML = '<div style="color: var(--mj-text-secondary); text-align: center; padding: 100px 20px;">No events in the current view.<br>Try zooming out or panning to see events.</div>';
             return;
         }
 

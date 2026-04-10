@@ -1,11 +1,10 @@
 import { Component, Input, Output, EventEmitter, ViewChild, OnInit, OnDestroy, OnChanges, SimpleChanges, AfterViewInit } from '@angular/core';
 import { UserInfo, Metadata } from '@memberjunction/core';
-import { MJConversationDetailEntity, MJEnvironmentEntityExtended } from '@memberjunction/core-entities';
+import { MJConversationDetailEntity, MJEnvironmentEntityExtended, ConversationEngine } from '@memberjunction/core-entities';
 import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended } from "@memberjunction/ai-core-plus";
 import { DialogService } from '../../services/dialog.service';
 import { ToastService } from '../../services/toast.service';
 import { ConversationAgentService } from '../../services/conversation-agent.service';
-import { ConversationDataService } from '../../services/conversation-data.service';
 import { DataCacheService } from '../../services/data-cache.service';
 import { ActiveTasksService } from '../../services/active-tasks.service';
 import { ConversationStreamingService, MessageProgressUpdate, MessageProgressMetadata } from '../../services/conversation-streaming.service';
@@ -19,8 +18,10 @@ import { Mention, MentionParseResult } from '../../models/conversation-state.mod
 import { PendingAttachment } from '../mention/mention-editor.component';
 import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { ConversationBridgeService } from '../../services/conversation-bridge.service';
 import { Subscription } from 'rxjs';
 import { MessageInputBoxComponent } from './message-input-box.component';
+import { UUIDsEqual, CleanAndParseJSON } from '@memberjunction/global';
 
 @Component({
   standalone: false,
@@ -46,6 +47,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
   @Input() systemArtifactsByDetailId?: Map<string, LazyArtifactInfo[]>; // Pre-loaded system artifact data (Visibility='System Only')
   @Input() agentRunsByDetailId?: Map<string, MJAIAgentRunEntityExtended>; // Pre-loaded agent run data for performance
   @Input() emptyStateMode: boolean = false; // When true, emits emptyStateSubmit instead of creating messages directly
+  @Input() appContext: Record<string, unknown> | null = null; // Application context for AI agent awareness
 
   // Initial message to send automatically - using getter/setter for precise control
   private _initialMessage: string | null = null;
@@ -136,17 +138,19 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
   // Track pending attachments from the input box
   private pendingAttachments: PendingAttachment[] = [];
 
+  private engine = ConversationEngine.Instance;
+
   constructor(
     private dialogService: DialogService,
     private toastService: ToastService,
     private agentService: ConversationAgentService,
-    private conversationData: ConversationDataService,
     private dataCache: DataCacheService,
     private activeTasks: ActiveTasksService,
     private streamingService: ConversationStreamingService,
     private mentionParser: MentionParserService,
     private mentionAutocomplete: MentionAutocompleteService,
-    private attachmentService: ConversationAttachmentService
+    private attachmentService: ConversationAttachmentService,
+    private bridge: ConversationBridgeService
   ) {}
 
   async ngOnInit() {
@@ -647,7 +651,23 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
   }
 
   /**
-   * Handles routing when there's a previous agent - checks intent first
+   * Handles routing when there's a previous non-Sage agent in the conversation.
+   *
+   * LATENCY OPTIMIZATION (PR #2309 / plans/agent-latency-optimization.md — Opt #1):
+   * Previously, this method made a separate LLM call via checkContinuityIntent() to decide
+   * whether the user's new message was still directed at the previous agent or should be
+   * routed to Sage. That call added ~300ms of latency on every message in a conversation
+   * with an active agent — the single largest source of non-inference overhead on the client.
+   *
+   * The heuristic replacement is simple: if a previous non-Sage agent exists, always continue
+   * with it. The user can @mention a different agent (or Sage) to explicitly switch. This is
+   * more predictable and eliminates a common source of confusion where the intent check
+   * incorrectly rerouted messages away from the active agent.
+   *
+   * The checkContinuityIntent() method and the underlying checkAgentContinuityIntent() service
+   * method are preserved (not deleted) so we can reintroduce intent checking in the future
+   * when browser-local inference is fast enough (~20-50ms) to do this without blocking the
+   * user. See PR #2309 for the full discussion.
    */
   private async handleAgentContinuity(
     messageDetail: MJConversationDetailEntity,
@@ -655,26 +675,39 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     mentionResult: MentionParseResult,
     isFirstMessage: boolean
   ): Promise<void> {
-    const intentResult = await this.checkContinuityIntent(lastAgentId, messageDetail.Message);
+    // COMMENTED OUT — LLM intent check removed for latency optimization (see JSDoc above).
+    // const intentResult = await this.checkContinuityIntent(lastAgentId, messageDetail.Message);
+    //
+    // if (intentResult.decision === 'YES') {
+    //   await this.executeRouteWithNaming(
+    //     () => this.continueWithAgent(
+    //       messageDetail,
+    //       lastAgentId,
+    //       this.conversationId,
+    //       intentResult.targetArtifactVersionId
+    //     ),
+    //     messageDetail.Message,
+    //     isFirstMessage
+    //   );
+    // } else {
+    //   await this.executeRouteWithNaming(
+    //     () => this.processMessageThroughAgent(messageDetail, mentionResult),
+    //     messageDetail.Message,
+    //     isFirstMessage
+    //   );
+    // }
 
-    if (intentResult.decision === 'YES') {
-      await this.executeRouteWithNaming(
-        () => this.continueWithAgent(
-          messageDetail,
-          lastAgentId,
-          this.conversationId,
-          intentResult.targetArtifactVersionId
-        ),
-        messageDetail.Message,
-        isFirstMessage
-      );
-    } else {
-      await this.executeRouteWithNaming(
-        () => this.processMessageThroughAgent(messageDetail, mentionResult),
-        messageDetail.Message,
-        isFirstMessage
-      );
-    }
+    // Always continue with the previous agent — user can @mention another agent to switch.
+    await this.executeRouteWithNaming(
+      () => this.continueWithAgent(
+        messageDetail,
+        lastAgentId,
+        this.conversationId,
+        undefined // artifact version targeting unavailable without intent check
+      ),
+      messageDetail.Message,
+      isFirstMessage
+    );
   }
 
   /**
@@ -702,7 +735,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
       .find(msg =>
         msg.Role === 'AI' &&
         msg.AgentID &&
-        msg.AgentID !== this.converationManagerAgent?.ID
+        !UUIDsEqual(msg.AgentID, this.converationManagerAgent?.ID)
       );
 
     return lastAIMessage?.AgentID || null;
@@ -932,7 +965,8 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
         userMessage,
         this.conversationHistory,
         conversationManagerMessage.ID,
-        this.createProgressCallback(conversationManagerMessage, 'Sage')
+        this.createProgressCallback(conversationManagerMessage, 'Sage'),
+        this.appContext
       );
 
       // Task will be removed automatically in markMessageComplete()
@@ -1249,6 +1283,20 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
       this.markMessageComplete(convoDetail);
     }
 
+    // Race condition guard: Before writing Error, reload from DB to check if the server
+    // already completed this record. The server and client write to the same conversation
+    // detail record — if the server completed successfully but a client-side timeout or
+    // WebSocket disconnect triggered this error path, we must not overwrite the server's
+    // successful completion with an error status.
+    if (status === 'Error' && convoDetail.ID) {
+      await convoDetail.Load(convoDetail.ID);
+      if (convoDetail.Status === 'Complete') {
+        // Server already completed — emit updated message, don't overwrite with error
+        this.messageSent.emit(convoDetail);
+        return;
+      }
+    }
+
     // Guard clause: Don't re-save if already complete/errored (prevents duplicate saves)
     // Task has already been removed by markMessageComplete() above
     if (convoDetail.Status === 'Complete' || convoDetail.Status === 'Error') {
@@ -1304,7 +1352,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     const agentMessages = this.conversationHistory
       .slice()
       .reverse()
-      .filter(msg => msg.Role === 'AI' && msg.AgentID === agentId);
+      .filter(msg => msg.Role === 'AI' && UUIDsEqual(msg.AgentID, agentId));
 
     if (agentMessages.length === 0) {
       return { payload: null, artifactInfo: null };
@@ -1620,7 +1668,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
       .find(msg =>
         msg.Role === 'AI' &&
         msg.AgentID &&
-        msg.AgentID !== this.converationManagerAgent?.ID
+        !UUIDsEqual(msg.AgentID, this.converationManagerAgent?.ID)
       );
 
     if (!lastAIMessage || !lastAIMessage.AgentID) {
@@ -1631,7 +1679,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     }
 
     // Load the agent entity to get its name
-    const previousAgent = AIEngineBase.Instance.Agents.find(a => a.ID === lastAIMessage.AgentID);
+    const previousAgent = AIEngineBase.Instance.Agents.find(a => UUIDsEqual(a.ID, lastAIMessage.AgentID));
     if (!previousAgent) {
       console.warn('⚠️ Could not load previous agent - marking complete');
       await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
@@ -1906,7 +1954,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     targetArtifactVersionId?: string
   ): Promise<void> {
     // Load the agent entity to get its name
-    const agent = AIEngineBase.Instance.Agents.find(a => a.ID === agentId);
+    const agent = AIEngineBase.Instance.Agents.find(a => UUIDsEqual(a.ID, agentId));
     if (!agent) {
       console.warn('⚠️ Could not load agent for continuation - falling back to Sage');
       await this.processMessageThroughAgent(userMessage, { mentions: [], agentMention: null, userMentions: [] });
@@ -1973,7 +2021,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     const agentMessages = this.conversationHistory
       .slice()
       .reverse()
-      .filter(msg => msg.Role === 'AI' && msg.AgentID === agentId);
+      .filter(msg => msg.Role === 'AI' && UUIDsEqual(msg.AgentID, agentId));
 
     // Extract configuration preset from the User message that @mentioned this agent
     // Uses the shared helper method in the agent service
@@ -2193,16 +2241,17 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
       ]);
 
       if (result && result.success && (result.parsedResult || result.output)) {
-        // Use parsedResult if available, otherwise parse output
+        // Use parsedResult if available, otherwise clean and parse output
+        // (CleanAndParseJSON handles markdown code blocks like ```json ... ```)
         const parsed = result.parsedResult ||
-          (result.output ? JSON.parse(result.output) : null);
+          (result.output ? CleanAndParseJSON(result.output) : null);
 
         if (parsed) {
           const { name, description } = parsed;
 
           if (name) {
             // Update the conversation name and description in database AND state immediately
-            await this.conversationData.saveConversation(
+            await this.engine.SaveConversation(
               this.conversationId,
               { Name: name, Description: description || '' },
               this.currentUser
@@ -2260,12 +2309,17 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
 
       this.activeTasks.remove(task.id);
 
-      // Show completion notification
-      MJNotificationService.Instance?.CreateSimpleNotification(
-        `${task.agentName} completed in ${task.conversationName || 'conversation'}`,
-        'success',
-        3000
-      );
+      // Show toast only if the user isn't currently viewing this conversation.
+      // If they're watching, the inline completion is sufficient.
+      const isConvoVisible = UUIDsEqual(this.bridge.ActiveConversationID$.value, task.conversationId)
+        && (this.bridge.OverlayActive$.value || this.bridge.WorkspaceActive$.value);
+      if (!isConvoVisible) {
+        MJNotificationService.Instance?.CreateSimpleNotification(
+          `${task.agentName} completed in ${task.conversationName || 'conversation'}`,
+          'success',
+          3000
+        );
+      }
     } else {
       console.warn(`⚠️ No task found for completed message ${conversationDetail.ID} - task may have been removed prematurely or not added`);
     }

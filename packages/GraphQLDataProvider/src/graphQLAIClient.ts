@@ -2,7 +2,8 @@ import { LogError, LogStatusEx } from "@memberjunction/core";
 import { GraphQLDataProvider } from "./graphQLDataProvider";
 import { gql } from "graphql-request";
 import { ExecuteAgentParams, ExecuteAgentResult } from "@memberjunction/ai-core-plus";
-import { SafeJSONParse } from "@memberjunction/global";
+import { SafeJSONParse, CleanAndParseJSON } from "@memberjunction/global";
+import { FireAndForgetHelper } from "./fireAndForgetHelper";
 
 /**
  * Client for executing AI operations through GraphQL.
@@ -32,14 +33,6 @@ import { SafeJSONParse } from "@memberjunction/global";
  * ```
  */
 export class GraphQLAIClient {
-    /**
-     * Timeout for fire-and-forget agent execution completion wait (15 minutes).
-     * Agent execution can take a long time, especially for complex Skip operations.
-     * This is a safety net — if no completion event arrives within this window,
-     * the client stops waiting and advises the user to refresh.
-     */
-    private static readonly FIRE_AND_FORGET_TIMEOUT_MS = 15 * 60 * 1000;
-
     /**
      * The GraphQLDataProvider instance used to execute GraphQL requests
      * @private
@@ -221,7 +214,7 @@ export class GraphQLAIClient {
 
         try {
             if (promptResult.parsedResult) {
-                parsedResult = JSON.parse(promptResult.parsedResult);
+                parsedResult = CleanAndParseJSON(promptResult.parsedResult);
             }
         } catch (e) {
             // Keep as string if parsing fails
@@ -312,107 +305,77 @@ export class GraphQLAIClient {
         sourceArtifactId?: string,
         sourceArtifactVersionId?: string
     ): Promise<ExecuteAgentResult> {
-        let subscription: any;
-
         try {
-            // Subscribe to progress updates if callback provided
-            if (params.onProgress) {
-                subscription = this._dataProvider.PushStatusUpdates(this._dataProvider.sessionId)
-                    .subscribe((message: string) => {
-                        try {
-                            LogStatusEx({message: '[GraphQLAIClient] Received statusUpdate message', verboseOnly: true, additionalArgs: [message]});
-                            const parsed = JSON.parse(message);
-                            LogStatusEx({message: '[GraphQLAIClient] Parsed message', verboseOnly: true, additionalArgs: [parsed]});
-
-                            // Filter for ExecutionProgress messages from RunAIAgentResolver
-                            if (parsed.resolver === 'RunAIAgentResolver' &&
-                                parsed.type === 'ExecutionProgress' &&
-                                parsed.status === 'ok' &&
-                                parsed.data?.progress) {
-
-                                LogStatusEx({message: '[GraphQLAIClient] Forwarding progress to callback', verboseOnly: true, additionalArgs: [parsed.data.progress]});
-                                // Forward progress to callback with agentRunId in metadata
-                                const progressWithRunId = {
-                                    ...parsed.data.progress,
-                                    metadata: {
-                                        ...(parsed.data.progress.metadata || {}),
-                                        agentRunId: parsed.data.agentRunId
-                                    }
-                                };
-                                params.onProgress!(progressWithRunId);
-                            } else {
-                                LogStatusEx({message: '[GraphQLAIClient] Message does not match filter criteria', verboseOnly: true, additionalArgs: [{
-                                    resolver: parsed.resolver,
-                                    type: parsed.type,
-                                    status: parsed.status,
-                                    hasProgress: !!parsed.data?.progress
-                                }]});
-                            }
-                        } catch (e) {
-                            // Log parsing errors for debugging
-                            console.error('[GraphQLAIClient] Failed to parse progress message:', e, 'Raw message:', message);
-                        }
-                    });
-            }
-
-            // Build the mutation
-            const mutation = gql`
-                mutation RunAIAgent(
-                    $agentId: String!,
-                    $messages: String!,
-                    $sessionId: String!,
-                    $data: String,
-                    $payload: String,
-                    $templateData: String,
-                    $lastRunId: String,
-                    $autoPopulateLastRunPayload: Boolean,
-                    $configurationId: String,
-                    $conversationDetailId: String,
-                    $createArtifacts: Boolean,
-                    $createNotification: Boolean,
-                    $sourceArtifactId: String,
-                    $sourceArtifactVersionId: String
-                ) {
-                    RunAIAgent(
-                        agentId: $agentId,
-                        messages: $messages,
-                        sessionId: $sessionId,
-                        data: $data,
-                        payload: $payload,
-                        templateData: $templateData,
-                        lastRunId: $lastRunId,
-                        autoPopulateLastRunPayload: $autoPopulateLastRunPayload,
-                        configurationId: $configurationId,
-                        conversationDetailId: $conversationDetailId,
-                        createArtifacts: $createArtifacts,
-                        createNotification: $createNotification,
-                        sourceArtifactId: $sourceArtifactId,
-                        sourceArtifactVersionId: $sourceArtifactVersionId
-                    ) {
-                        success
-                        errorMessage
-                        executionTimeMs
-                        result
-                    }
-                }
-            `;
-
-            // Prepare variables
+            const mutation = this.buildRunAIAgentMutation();
             const variables = this.prepareAgentVariables(params, sourceArtifactId, sourceArtifactVersionId);
+            // Enable fire-and-forget to avoid Azure proxy timeouts
+            variables.fireAndForget = true;
 
-            // Execute the mutation
-            const result = await this._dataProvider.ExecuteGQL(mutation, variables);
-
-            // Process and return the result
-            return this.processAgentResult(result.RunAIAgent?.result);
+            return await FireAndForgetHelper.Execute<ExecuteAgentResult>({
+                dataProvider: this._dataProvider,
+                mutation,
+                variables,
+                mutationFieldName: 'RunAIAgent',
+                operationLabel: 'RunAIAgent',
+                validateAck: (ack) => ack?.success === true,
+                isCompletionEvent: (parsed) => this.isAgentCompletionEvent(parsed),
+                extractResult: (parsed) => this.extractAgentResult(parsed),
+                onMessage: params.onProgress
+                    ? (parsed) => this.forwardAgentProgress(parsed, params.onProgress!)
+                    : undefined,
+                createErrorResult: (msg) => this.createAgentErrorResult(msg),
+            });
         } catch (e) {
             return this.handleAgentError(e);
-        } finally {
-            // Always clean up subscription
-            if (subscription) {
-                subscription.unsubscribe();
-            }
         }
+    }
+
+    /**
+     * Build the RunAIAgent mutation document including fireAndForget parameter.
+     */
+    private buildRunAIAgentMutation(): string {
+        return gql`
+            mutation RunAIAgent(
+                $agentId: String!,
+                $messages: String!,
+                $sessionId: String!,
+                $data: String,
+                $payload: String,
+                $templateData: String,
+                $lastRunId: String,
+                $autoPopulateLastRunPayload: Boolean,
+                $configurationId: String,
+                $conversationDetailId: String,
+                $createArtifacts: Boolean,
+                $createNotification: Boolean,
+                $sourceArtifactId: String,
+                $sourceArtifactVersionId: String,
+                $fireAndForget: Boolean
+            ) {
+                RunAIAgent(
+                    agentId: $agentId,
+                    messages: $messages,
+                    sessionId: $sessionId,
+                    data: $data,
+                    payload: $payload,
+                    templateData: $templateData,
+                    lastRunId: $lastRunId,
+                    autoPopulateLastRunPayload: $autoPopulateLastRunPayload,
+                    configurationId: $configurationId,
+                    conversationDetailId: $conversationDetailId,
+                    createArtifacts: $createArtifacts,
+                    createNotification: $createNotification,
+                    sourceArtifactId: $sourceArtifactId,
+                    sourceArtifactVersionId: $sourceArtifactVersionId,
+                    fireAndForget: $fireAndForget
+                ) {
+                    success
+                    errorMessage
+                    executionTimeMs
+                    result
+                }
+            }
+        `;
     }
 
     /**
@@ -531,171 +494,223 @@ export class GraphQLAIClient {
     public async RunAIAgentFromConversationDetail(
         params: RunAIAgentFromConversationDetailParams
     ): Promise<ExecuteAgentResult> {
-        let subscription: ReturnType<typeof this._dataProvider.PushStatusUpdates.prototype.subscribe> | undefined;
-        let completionTimeoutId: ReturnType<typeof setTimeout> | undefined;
-
         try {
-            // Set up a promise that resolves when we receive the completion event via WebSocket.
-            // This allows us to use fire-and-forget mode where the HTTP mutation returns immediately,
-            // avoiding Azure Web App proxy timeouts (~230s) on long-running agent executions.
-            let resolveCompletion!: (value: ExecuteAgentResult) => void;
-            let rejectCompletion!: (reason: Error) => void;
-            const completionPromise = new Promise<ExecuteAgentResult>((resolve, reject) => {
-                resolveCompletion = resolve;
-                rejectCompletion = reject;
+            const mutation = this.buildConversationDetailMutation();
+            const variables = this.prepareConversationDetailVariables(params);
+
+            return await FireAndForgetHelper.Execute<ExecuteAgentResult>({
+                dataProvider: this._dataProvider,
+                mutation,
+                variables,
+                mutationFieldName: 'RunAIAgentFromConversationDetail',
+                operationLabel: 'RunAIAgentFromConversationDetail',
+                validateAck: (ack) => ack?.success === true,
+                isCompletionEvent: (parsed) =>
+                    this.isConversationDetailCompletionEvent(parsed, params.conversationDetailId),
+                extractResult: (parsed) => this.extractAgentResult(parsed),
+                onMessage: params.onProgress
+                    ? (parsed) => this.forwardConversationDetailProgress(parsed, params.onProgress!)
+                    : undefined,
+                createErrorResult: (msg) => this.createAgentErrorResult(msg),
             });
-
-            // Set up timeout for the completion wait
-            completionTimeoutId = setTimeout(() => {
-                rejectCompletion(new Error(
-                    'The agent may still be running on the server but the connection timed out after 15 minutes. ' +
-                    'Please refresh the page to check the latest status.'
-                ));
-            }, GraphQLAIClient.FIRE_AND_FORGET_TIMEOUT_MS);
-
-            // Always subscribe to PubSub updates (for both progress forwarding and completion detection)
-            subscription = this._dataProvider.PushStatusUpdates(this._dataProvider.sessionId)
-                .subscribe((message: string) => {
-                    try {
-                        const parsed = JSON.parse(message);
-
-                        // Forward progress updates to callback if provided
-                        if (params.onProgress &&
-                            parsed.resolver === 'RunAIAgentResolver' &&
-                            parsed.type === 'ExecutionProgress' &&
-                            parsed.status === 'ok' &&
-                            parsed.data?.progress) {
-
-                            // Forward progress to callback with agentRunId in metadata
-                            const progressWithRunId = {
-                                ...parsed.data.progress,
-                                metadata: {
-                                    ...(parsed.data.progress.metadata || {}),
-                                    agentRunId: parsed.data.agentRunId
-                                }
-                            };
-                            params.onProgress!(progressWithRunId);
-                        }
-
-                        // Listen for completion event matching our conversationDetailId.
-                        // The server publishes this via PublishStreamingUpdate with type='StreamingContent'
-                        // and the inner data has type='complete'.
-                        if (parsed.resolver === 'RunAIAgentResolver' &&
-                            parsed.type === 'StreamingContent' &&
-                            parsed.status === 'ok' &&
-                            parsed.data?.type === 'complete' &&
-                            parsed.data?.conversationDetailId === params.conversationDetailId) {
-
-                            if (completionTimeoutId) clearTimeout(completionTimeoutId);
-
-                            // Parse the enriched result data included in the completion event
-                            if (parsed.data.result) {
-                                resolveCompletion(SafeJSONParse(parsed.data.result) as ExecuteAgentResult);
-                            } else {
-                                // Completion event without result data (backward compatibility)
-                                resolveCompletion({
-                                    success: parsed.data.success !== false,
-                                    agentRun: undefined
-                                });
-                            }
-                        }
-                    } catch (e) {
-                        console.error('[GraphQLAIClient] Failed to parse progress message:', e);
-                    }
-                });
-
-            // Build the fire-and-forget mutation
-            const mutation = gql`
-                mutation RunAIAgentFromConversationDetail(
-                    $conversationDetailId: String!,
-                    $agentId: String!,
-                    $sessionId: String!,
-                    $maxHistoryMessages: Int,
-                    $data: String,
-                    $payload: String,
-                    $lastRunId: String,
-                    $autoPopulateLastRunPayload: Boolean,
-                    $configurationId: String,
-                    $createArtifacts: Boolean,
-                    $createNotification: Boolean,
-                    $sourceArtifactId: String,
-                    $sourceArtifactVersionId: String,
-                    $fireAndForget: Boolean
-                ) {
-                    RunAIAgentFromConversationDetail(
-                        conversationDetailId: $conversationDetailId,
-                        agentId: $agentId,
-                        sessionId: $sessionId,
-                        maxHistoryMessages: $maxHistoryMessages,
-                        data: $data,
-                        payload: $payload,
-                        lastRunId: $lastRunId,
-                        autoPopulateLastRunPayload: $autoPopulateLastRunPayload,
-                        configurationId: $configurationId,
-                        createArtifacts: $createArtifacts,
-                        createNotification: $createNotification,
-                        sourceArtifactId: $sourceArtifactId,
-                        sourceArtifactVersionId: $sourceArtifactVersionId,
-                        fireAndForget: $fireAndForget
-                    ) {
-                        success
-                        errorMessage
-                        executionTimeMs
-                        result
-                    }
-                }
-            `;
-
-            // Prepare variables with fireAndForget enabled
-            const variables: Record<string, unknown> = {
-                conversationDetailId: params.conversationDetailId,
-                agentId: params.agentId,
-                sessionId: this._dataProvider.sessionId,
-                fireAndForget: true
-            };
-
-            // Add optional parameters
-            if (params.maxHistoryMessages !== undefined) variables.maxHistoryMessages = params.maxHistoryMessages;
-            if (params.data !== undefined) {
-                variables.data = typeof params.data === 'object' ? JSON.stringify(params.data) : params.data;
-            }
-            if (params.payload !== undefined) {
-                variables.payload = typeof params.payload === 'object' ? JSON.stringify(params.payload) : params.payload;
-            }
-            if (params.lastRunId !== undefined) variables.lastRunId = params.lastRunId;
-            if (params.autoPopulateLastRunPayload !== undefined) variables.autoPopulateLastRunPayload = params.autoPopulateLastRunPayload;
-            if (params.configurationId !== undefined) variables.configurationId = params.configurationId;
-            if (params.createArtifacts !== undefined) variables.createArtifacts = params.createArtifacts;
-            if (params.createNotification !== undefined) variables.createNotification = params.createNotification;
-            if (params.sourceArtifactId !== undefined) variables.sourceArtifactId = params.sourceArtifactId;
-            if (params.sourceArtifactVersionId !== undefined) variables.sourceArtifactVersionId = params.sourceArtifactVersionId;
-
-            // Execute the fire-and-forget mutation (returns immediately after server validates input)
-            const mutationResult = await this._dataProvider.ExecuteGQL(mutation, variables);
-            const ack = mutationResult.RunAIAgentFromConversationDetail;
-
-            // Check if the server accepted the request
-            if (!ack?.success) {
-                if (completionTimeoutId) clearTimeout(completionTimeoutId);
-                return {
-                    success: false,
-                    agentRun: undefined,
-                    errorMessage: ack?.errorMessage || 'Server rejected the agent execution request'
-                } as ExecuteAgentResult;
-            }
-
-            // Server accepted - wait for completion via WebSocket
-            return await completionPromise;
         } catch (e) {
-            if (completionTimeoutId) clearTimeout(completionTimeoutId);
             return this.handleAgentError(e);
-        } finally {
-            // Always clean up subscription and timeout
-            if (completionTimeoutId) clearTimeout(completionTimeoutId);
-            if (subscription) {
-                subscription.unsubscribe();
-            }
         }
+    }
+
+    /**
+     * Build the RunAIAgentFromConversationDetail mutation document.
+     */
+    private buildConversationDetailMutation(): string {
+        return gql`
+            mutation RunAIAgentFromConversationDetail(
+                $conversationDetailId: String!,
+                $agentId: String!,
+                $sessionId: String!,
+                $maxHistoryMessages: Int,
+                $data: String,
+                $payload: String,
+                $lastRunId: String,
+                $autoPopulateLastRunPayload: Boolean,
+                $configurationId: String,
+                $createArtifacts: Boolean,
+                $createNotification: Boolean,
+                $sourceArtifactId: String,
+                $sourceArtifactVersionId: String,
+                $fireAndForget: Boolean
+            ) {
+                RunAIAgentFromConversationDetail(
+                    conversationDetailId: $conversationDetailId,
+                    agentId: $agentId,
+                    sessionId: $sessionId,
+                    maxHistoryMessages: $maxHistoryMessages,
+                    data: $data,
+                    payload: $payload,
+                    lastRunId: $lastRunId,
+                    autoPopulateLastRunPayload: $autoPopulateLastRunPayload,
+                    configurationId: $configurationId,
+                    createArtifacts: $createArtifacts,
+                    createNotification: $createNotification,
+                    sourceArtifactId: $sourceArtifactId,
+                    sourceArtifactVersionId: $sourceArtifactVersionId,
+                    fireAndForget: $fireAndForget
+                ) {
+                    success
+                    errorMessage
+                    executionTimeMs
+                    result
+                }
+            }
+        `;
+    }
+
+    /**
+     * Prepare variables for RunAIAgentFromConversationDetail mutation.
+     */
+    private prepareConversationDetailVariables(
+        params: RunAIAgentFromConversationDetailParams
+    ): Record<string, unknown> {
+        const variables: Record<string, unknown> = {
+            conversationDetailId: params.conversationDetailId,
+            agentId: params.agentId,
+            sessionId: this._dataProvider.sessionId,
+            fireAndForget: true
+        };
+
+        if (params.maxHistoryMessages !== undefined) variables.maxHistoryMessages = params.maxHistoryMessages;
+        if (params.data !== undefined) {
+            variables.data = typeof params.data === 'object' ? JSON.stringify(params.data) : params.data;
+        }
+        if (params.payload !== undefined) {
+            variables.payload = typeof params.payload === 'object' ? JSON.stringify(params.payload) : params.payload;
+        }
+        if (params.lastRunId !== undefined) variables.lastRunId = params.lastRunId;
+        if (params.autoPopulateLastRunPayload !== undefined) variables.autoPopulateLastRunPayload = params.autoPopulateLastRunPayload;
+        if (params.configurationId !== undefined) variables.configurationId = params.configurationId;
+        if (params.createArtifacts !== undefined) variables.createArtifacts = params.createArtifacts;
+        if (params.createNotification !== undefined) variables.createNotification = params.createNotification;
+        if (params.sourceArtifactId !== undefined) variables.sourceArtifactId = params.sourceArtifactId;
+        if (params.sourceArtifactVersionId !== undefined) variables.sourceArtifactVersionId = params.sourceArtifactVersionId;
+
+        return variables;
+    }
+
+    // ===== Agent Event Matching =====
+
+    /**
+     * Check if a PubSub message is the completion event for an agent execution.
+     * Used by RunAIAgent which doesn't have a conversationDetailId to correlate on.
+     */
+    private isAgentCompletionEvent(parsed: Record<string, unknown>): boolean {
+        const data = parsed.data as Record<string, unknown> | undefined;
+        return parsed.resolver === 'RunAIAgentResolver' &&
+            parsed.type === 'StreamingContent' &&
+            data?.type === 'complete';
+    }
+
+    /**
+     * Check if a PubSub message is the completion event for a specific conversation detail.
+     * Used by RunAIAgentFromConversationDetail which correlates by conversationDetailId.
+     */
+    private isConversationDetailCompletionEvent(
+        parsed: Record<string, unknown>,
+        conversationDetailId: string
+    ): boolean {
+        const data = parsed.data as Record<string, unknown> | undefined;
+        return parsed.resolver === 'RunAIAgentResolver' &&
+            parsed.type === 'StreamingContent' &&
+            data?.type === 'complete' &&
+            data?.conversationDetailId === conversationDetailId;
+    }
+
+    // ===== Agent Result Extraction =====
+
+    /**
+     * Extract an ExecuteAgentResult from a completion PubSub message.
+     * The server publishes the full result JSON in the completion event data.
+     */
+    private extractAgentResult(parsed: Record<string, unknown>): ExecuteAgentResult {
+        const data = parsed.data as Record<string, unknown>;
+        const resultJson = data.result as string | undefined;
+        if (resultJson) {
+            return SafeJSONParse(resultJson) as ExecuteAgentResult;
+        }
+        // Fallback: construct a minimal result from the event data
+        return {
+            success: data.success as boolean,
+            agentRun: undefined,
+        } as ExecuteAgentResult;
+    }
+
+    // ===== Agent Progress Forwarding =====
+
+    /**
+     * Forward agent execution progress from PubSub to the AgentExecutionProgressCallback.
+     * Maps server-side `currentStep` to the callback's expected `step` field.
+     */
+    private forwardAgentProgress(
+        parsed: Record<string, unknown>,
+        onProgress: NonNullable<ExecuteAgentParams['onProgress']>
+    ): void {
+        if (parsed.resolver !== 'RunAIAgentResolver' ||
+            parsed.type !== 'ExecutionProgress' ||
+            parsed.status !== 'ok') {
+            return;
+        }
+
+        const data = parsed.data as Record<string, unknown> | undefined;
+        const progress = data?.progress as Record<string, unknown> | undefined;
+        if (!progress) return;
+
+        onProgress({
+            step: (progress.currentStep as string) as 'initialization',
+            percentage: progress.percentage as number | undefined,
+            message: progress.message as string,
+            metadata: progress as Record<string, unknown>,
+        });
+    }
+
+    /**
+     * Forward agent execution progress from PubSub to the conversation detail progress callback.
+     * Passes `currentStep` directly since the callback interface already uses that field name.
+     */
+    private forwardConversationDetailProgress(
+        parsed: Record<string, unknown>,
+        onProgress: NonNullable<RunAIAgentFromConversationDetailParams['onProgress']>
+    ): void {
+        if (parsed.resolver !== 'RunAIAgentResolver' ||
+            parsed.type !== 'ExecutionProgress' ||
+            parsed.status !== 'ok') {
+            return;
+        }
+
+        const data = parsed.data as Record<string, unknown> | undefined;
+        const progress = data?.progress as Record<string, unknown> | undefined;
+        if (!progress) return;
+
+        onProgress({
+            currentStep: progress.currentStep as string,
+            percentage: progress.percentage as number | undefined,
+            message: progress.message as string,
+            metadata: {
+                ...progress,
+                agentRun: data?.agentRun,
+                agentRunId: data?.agentRunId,
+            } as Record<string, unknown>,
+        });
+    }
+
+    // ===== Agent Error Result =====
+
+    /**
+     * Create an error ExecuteAgentResult for fire-and-forget failures.
+     */
+    private createAgentErrorResult(errorMessage: string): ExecuteAgentResult {
+        return {
+            success: false,
+            agentRun: undefined,
+            errorMessage,
+        } as ExecuteAgentResult;
     }
 
     /**
@@ -891,6 +906,276 @@ export class GraphQLAIClient {
             };
         }
     }
+
+    /**
+     * Trigger the autotagging pipeline (fire-and-forget).
+     * Returns a PipelineRunID that can be used to subscribe to PipelineProgress.
+     */
+    public async RunAutotagPipeline(options?: {
+        contentSourceIDs?: string[];
+        forceReprocess?: boolean;
+    }): Promise<AutotagPipelineResult> {
+        try {
+            const mutation = gql`
+                mutation RunAutotagPipeline($contentSourceIDs: [String!], $forceReprocess: Boolean) {
+                    RunAutotagPipeline(contentSourceIDs: $contentSourceIDs, forceReprocess: $forceReprocess) {
+                        Success
+                        Status
+                        ErrorMessage
+                        PipelineRunID
+                    }
+                }
+            `;
+
+            const variables: Record<string, unknown> = {};
+            if (options?.contentSourceIDs?.length) {
+                variables['contentSourceIDs'] = options.contentSourceIDs;
+            }
+            if (options?.forceReprocess) {
+                variables['forceReprocess'] = true;
+            }
+
+            const result = await this._dataProvider.ExecuteGQL(mutation, variables);
+
+            if (!result?.RunAutotagPipeline) {
+                throw new Error('Invalid response from server');
+            }
+
+            return result.RunAutotagPipeline as AutotagPipelineResult;
+        } catch (error: unknown) {
+            const e = error as Error;
+            LogError('GraphQLAIClient.RunAutotagPipeline failed', undefined, e);
+            return {
+                Success: false,
+                Status: 'Error',
+                ErrorMessage: e.message || 'Unknown error'
+            };
+        }
+    }
+
+    /**
+     * Pause a running classification pipeline.
+     * Sets CancellationRequested on the process run so the engine pauses after the current batch.
+     */
+    public async PauseClassificationPipeline(processRunID: string): Promise<AutotagPipelineResult> {
+        try {
+            const mutation = gql`
+                mutation PauseClassificationPipeline($processRunID: String!) {
+                    PauseClassificationPipeline(processRunID: $processRunID) {
+                        Success
+                        Status
+                        ErrorMessage
+                        PipelineRunID
+                    }
+                }
+            `;
+
+            const result = await this._dataProvider.ExecuteGQL(mutation, { processRunID });
+            if (!result?.PauseClassificationPipeline) {
+                throw new Error('Invalid response from server');
+            }
+            return result.PauseClassificationPipeline as AutotagPipelineResult;
+        } catch (error: unknown) {
+            const e = error as Error;
+            LogError('GraphQLAIClient.PauseClassificationPipeline failed', undefined, e);
+            return { Success: false, Status: 'Error', ErrorMessage: e.message || 'Unknown error' };
+        }
+    }
+
+    /**
+     * Resume a paused classification pipeline from its last completed offset.
+     */
+    public async ResumeClassificationPipeline(processRunID: string): Promise<AutotagPipelineResult> {
+        try {
+            const mutation = gql`
+                mutation ResumeClassificationPipeline($processRunID: String!) {
+                    ResumeClassificationPipeline(processRunID: $processRunID) {
+                        Success
+                        Status
+                        ErrorMessage
+                        PipelineRunID
+                    }
+                }
+            `;
+
+            const result = await this._dataProvider.ExecuteGQL(mutation, { processRunID });
+            if (!result?.ResumeClassificationPipeline) {
+                throw new Error('Invalid response from server');
+            }
+            return result.ResumeClassificationPipeline as AutotagPipelineResult;
+        } catch (error: unknown) {
+            const e = error as Error;
+            LogError('GraphQLAIClient.ResumeClassificationPipeline failed', undefined, e);
+            return { Success: false, Status: 'Error', ErrorMessage: e.message || 'Unknown error' };
+        }
+    }
+
+    /**
+     * Trigger vectorization for an entity document.
+     * Calls the server-side EntityVectorSyncer to embed and upsert entity records.
+     */
+    public async VectorizeEntity(params: VectorizeEntityParams): Promise<VectorizeEntityResult> {
+        try {
+            const mutation = gql`
+                mutation VectorizeEntity(
+                    $entityDocumentID: String!,
+                    $entityID: String!,
+                    $batchSize: Float
+                ) {
+                    VectorizeEntity(
+                        entityDocumentID: $entityDocumentID,
+                        entityID: $entityID,
+                        batchSize: $batchSize
+                    ) {
+                        Success
+                        Status
+                        ErrorMessage
+                        PipelineRunID
+                    }
+                }
+            `;
+
+            const variables: Record<string, unknown> = {
+                entityDocumentID: params.entityDocumentID,
+                entityID: params.entityID
+            };
+            if (params.batchSize !== undefined) {
+                variables['batchSize'] = params.batchSize;
+            }
+
+            const result = await this._dataProvider.ExecuteGQL(mutation, variables);
+
+            if (!result?.VectorizeEntity) {
+                throw new Error('Invalid response from server');
+            }
+
+            return result.VectorizeEntity as VectorizeEntityResult;
+        } catch (error: unknown) {
+            const e = error as Error;
+            LogError('GraphQLAIClient.VectorizeEntity failed', undefined, e);
+            return {
+                Success: false,
+                Status: 'Error',
+                ErrorMessage: e.message || 'Unknown error'
+            };
+        }
+    }
+
+    /**
+     * Fetch vectors with metadata from Pinecone for a given entity document.
+     * Returns the vector IDs, embedding values, and metadata stored in the vector index.
+     *
+     * @param params The parameters for fetching entity vectors
+     * @returns A Promise that resolves to a FetchEntityVectorsResult
+     */
+    public async FetchEntityVectors(params: FetchEntityVectorsParams): Promise<FetchEntityVectorsResult> {
+        try {
+            const query = gql`
+                query FetchEntityVectors(
+                    $entityDocumentID: String!,
+                    $maxRecords: Int,
+                    $filter: String
+                ) {
+                    FetchEntityVectors(
+                        entityDocumentID: $entityDocumentID,
+                        maxRecords: $maxRecords,
+                        filter: $filter
+                    ) {
+                        Success
+                        TotalCount
+                        ElapsedMs
+                        ErrorMessage
+                        Results {
+                            ID
+                            Values
+                            Metadata
+                        }
+                    }
+                }
+            `;
+
+            const variables: Record<string, unknown> = {
+                entityDocumentID: params.entityDocumentID,
+            };
+            if (params.maxRecords !== undefined) {
+                variables['maxRecords'] = params.maxRecords;
+            }
+            if (params.filter !== undefined) {
+                variables['filter'] = params.filter;
+            }
+
+            const result = await this._dataProvider.ExecuteGQL(query, variables);
+
+            if (!result?.FetchEntityVectors) {
+                throw new Error('Invalid response from server');
+            }
+
+            return result.FetchEntityVectors as FetchEntityVectorsResult;
+        } catch (error: unknown) {
+            const e = error as Error;
+            LogError('GraphQLAIClient.FetchEntityVectors failed', undefined, e);
+            return {
+                Success: false,
+                Results: [],
+                TotalCount: 0,
+                ElapsedMs: 0,
+                ErrorMessage: e.message || 'Unknown error',
+            };
+        }
+    }
+}
+
+/** Result from RunAutotagPipeline */
+export interface AutotagPipelineResult {
+    Success: boolean;
+    Status?: string;
+    ErrorMessage?: string;
+    PipelineRunID?: string;
+}
+
+/** Parameters for VectorizeEntity */
+export interface VectorizeEntityParams {
+    entityDocumentID: string;
+    entityID: string;
+    batchSize?: number;
+}
+
+/** Result from VectorizeEntity */
+export interface VectorizeEntityResult {
+    Success: boolean;
+    Status?: string;
+    ErrorMessage?: string;
+    PipelineRunID?: string;
+    RecordsProcessed?: number;
+}
+
+/** Parameters for FetchEntityVectors */
+export interface FetchEntityVectorsParams {
+    /** The ID of the EntityDocument whose vectors to fetch */
+    entityDocumentID: string;
+    /** Maximum number of vectors to return (default 1000) */
+    maxRecords?: number;
+    /** Optional additional filter string */
+    filter?: string;
+}
+
+/** A single vector record with its embedding and metadata */
+export interface EntityVectorItemResult {
+    /** The vector ID in the index */
+    ID: string;
+    /** The embedding vector values */
+    Values: number[];
+    /** JSON-serialized metadata stored with the vector */
+    Metadata: string;
+}
+
+/** Result from FetchEntityVectors */
+export interface FetchEntityVectorsResult {
+    Success: boolean;
+    Results: EntityVectorItemResult[];
+    TotalCount: number;
+    ElapsedMs: number;
+    ErrorMessage?: string;
 }
 
 /**

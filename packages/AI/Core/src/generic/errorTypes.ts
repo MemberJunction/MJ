@@ -8,6 +8,7 @@
  * - `RateLimit`: Rate limit exceeded - typically HTTP 429. Suggests switching to another provider or waiting
  * - `NoCredit`: Insufficient credits or quota for billing - typically HTTP 402/403. Account has no credits/balance or quota exhausted. Suggests switching to another provider
  * - `Authentication`: Authentication or authorization failure - typically HTTP 401/403. Usually indicates invalid API key or permissions issue
+ * - `NoCredentials`: No valid API credentials/keys configured for any model-vendor combination. This is a configuration error that cannot be resolved by retrying — the user must configure credentials
  * - `ServiceUnavailable`: Service temporarily unavailable - typically HTTP 503. Suggests the service is down or overloaded
  * - `InternalServerError`: Internal server error - typically HTTP 500. Indicates a problem on the provider's side
  * - `NetworkError`: Network connectivity issues. Connection timeouts, DNS failures, etc.
@@ -23,6 +24,7 @@ export type AIErrorType =
     | 'RateLimit'
     | 'NoCredit'
     | 'Authentication'
+    | 'NoCredentials'
     | 'ServiceUnavailable'
     | 'InternalServerError'
     | 'NetworkError'

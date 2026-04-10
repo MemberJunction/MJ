@@ -1,13 +1,14 @@
 import { Component, ViewContainerRef, ViewChild, AfterViewInit, OnDestroy, inject } from '@angular/core';
 import { MJActionEntity, MJAIAgentActionEntity, MJAIAgentLearningCycleEntity, MJAIAgentNoteEntity, MJAIAgentPromptEntity, MJAIAgentTypeEntity, MJAIAgentRelationshipEntity } from '@memberjunction/core-entities';
 import { MJAIAgentRunEntityExtended, MJAIPromptEntityExtended, MJAIAgentEntityExtended, } from "@memberjunction/ai-core-plus";
-import { RegisterClass, MJGlobal } from '@memberjunction/global';
+import { RegisterClass, MJGlobal , UUIDsEqual } from '@memberjunction/global';
 import { BaseFormComponent, BaseFormSectionComponent } from '@memberjunction/ng-base-forms';
-import { CompositeKey, Metadata, RunView } from '@memberjunction/core';
+import { CompositeKey, KeyValuePair, Metadata, RunView } from '@memberjunction/core';
+import { TreeBranchConfig } from '@memberjunction/ng-trees';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { MJAIAgentFormComponent } from '../../generated/Entities/MJAIAgent/mjaiagent.form.component';
-import { DialogService } from '@progress/kendo-angular-dialog';
+import { MJDialogService } from '@memberjunction/ng-ui-components';
 import { SharedService } from '@memberjunction/ng-shared';
 import { AIAgentManagementService } from './ai-agent-management.service';
 import { AITestHarnessDialogService } from '@memberjunction/ng-ai-test-harness';
@@ -276,6 +277,30 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
     /** Agent types loaded from the database */
     public agentTypes: any[] = [];
 
+    /** TreeDropdown configuration for the agent category field */
+    public CategoryBranchConfig: TreeBranchConfig = {
+        EntityName: 'MJ: AI Agent Categories',
+        DisplayField: 'Name',
+        ParentIDField: 'ParentID',
+        DefaultIcon: 'fa-solid fa-folder',
+        OrderBy: 'Name ASC',
+        DescriptionField: 'Description'
+    };
+
+    /** Current category selection for the TreeDropdown */
+    public SelectedCategoryKey: CompositeKey | null = null;
+
+    /** Handle category selection change from the TreeDropdown */
+    public OnCategoryChange(value: CompositeKey | CompositeKey[] | null): void {
+        if (value && !Array.isArray(value)) {
+            const idValue = value.KeyValuePairs?.find((kv: KeyValuePair) => kv.FieldName === 'ID')?.Value;
+            this.record.CategoryID = idValue ?? null;
+        } else {
+            this.record.CategoryID = null;
+        }
+        this.SelectedCategoryKey = Array.isArray(value) ? null : value;
+    }
+
     /** Currently selected context compression prompt */
     public selectedContextCompressionPrompt: any = null;
 
@@ -297,7 +322,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
             return;
         }
 
-        this.selectedContextCompressionPrompt = AIEngineBase.Instance.Prompts.find(p => p.ID === this.record.ContextCompressionPromptID);
+        this.selectedContextCompressionPrompt = AIEngineBase.Instance.Prompts.find(p => UUIDsEqual(p.ID, this.record.ContextCompressionPromptID));
         if (!this.selectedContextCompressionPrompt) {
             console.warn('Context compression prompt not found:', this.record.ContextCompressionPromptID);
         }
@@ -315,8 +340,8 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                 height: 600
             });
 
-            const promptSelector = dialogRef.content.instance;
-            
+            const promptSelector = dialogRef.Content!.instance as unknown as PromptSelectorDialogComponent;
+
             // Configure the prompt selector for single selection
             promptSelector.config = {
                 title: 'Select Context Compression Prompt',
@@ -531,7 +556,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
 
     // Dependency injection using inject() function
     private sharedService = inject(SharedService);
-    private dialogService = inject(DialogService);
+    private dialogService = inject(MJDialogService);
     private viewContainerRef = inject(ViewContainerRef);
     private agentManagementService = inject(AIAgentManagementService);
     private testHarnessService = inject(AITestHarnessDialogService);
@@ -551,7 +576,13 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         await ActionEngineBase.Instance.Config(false);
 
         await this.loadAgentTypes();
-        
+
+        // Initialize category selection from the record's CategoryID
+        const categoryId = this.record?.CategoryID;
+        if (categoryId) {
+            this.SelectedCategoryKey = new CompositeKey([{ FieldName: 'ID', Value: categoryId }]);
+        }
+
         // Load context compression prompt if one is set
         if (this.record?.ContextCompressionPromptID) {
             await this.loadContextCompressionPrompt();
@@ -613,7 +644,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
             this.allSubAgents = [];
 
             // Load child sub-agents (ParentID-based)
-            const childAgents = AIEngineBase.Instance.Agents.filter(a => a.ParentID === this.record.ID);
+            const childAgents = AIEngineBase.Instance.Agents.filter(a => UUIDsEqual(a.ParentID, this.record.ID));
             for (const agent of childAgents) {
                 this.allSubAgents.push({
                     agent,
@@ -635,7 +666,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
             if (relationshipsResult.Success && relationshipsResult.Results) {
                 for (const relationship of relationshipsResult.Results) {
                     const agent = AIEngineBase.Instance.Agents.find(
-                        a => a.ID === relationship.SubAgentID
+                        a => UUIDsEqual(a.ID, relationship.SubAgentID)
                     );
 
                     if (agent) {
@@ -657,13 +688,13 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
             });
 
             this.agentPrompts = AIEngineBase.Instance.Prompts.filter(p => {
-                const filteredAgentPrompts = AIEngineBase.Instance.AgentPrompts.filter(ap => ap.AgentID === this.record.ID);
-                return filteredAgentPrompts.some(ap => ap.PromptID === p.ID);
+                const filteredAgentPrompts = AIEngineBase.Instance.AgentPrompts.filter(ap => UUIDsEqual(ap.AgentID, this.record.ID));
+                return filteredAgentPrompts.some(ap => UUIDsEqual(ap.PromptID, p.ID));
             });
 
             this.agentActions = ActionEngineBase.Instance.Actions.filter(a => {
-                const filteredAgentActions = AIEngineBase.Instance.AgentActions.filter(aa => aa.AgentID === this.record.ID);
-                return filteredAgentActions.some(aa => aa.ActionID === a.ID);
+                const filteredAgentActions = AIEngineBase.Instance.AgentActions.filter(aa => UUIDsEqual(aa.AgentID, this.record.ID));
+                return filteredAgentActions.some(aa => UUIDsEqual(aa.ActionID, a.ID));
             });
 
             // Execute all queries in a single batch for better performance
@@ -1135,10 +1166,10 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
      */
     public getStatusBadgeColor(): string {
         switch (this.record?.Status) {
-            case 'Active': return '#28a745';
-            case 'Pending': return '#ffc107';
-            case 'Disabled': return '#6c757d';
-            default: return '#6c757d';
+            case 'Active': return 'var(--mj-status-success)';
+            case 'Pending': return 'var(--mj-status-warning)';
+            case 'Disabled': return 'var(--mj-text-muted)';
+            default: return 'var(--mj-text-muted)';
         }
     }
 
@@ -1348,8 +1379,8 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                 next: async (result) => {
                     if (result && result.selectedPrompts.length > 0) {
                         // Filter out already linked or pending prompts
-                        const newPrompts = result.selectedPrompts.filter(prompt => 
-                            !allLinkedIds.includes(prompt.ID)
+                        const newPrompts = result.selectedPrompts.filter(prompt =>
+                            !allLinkedIds.some(id => UUIDsEqual(id, prompt.ID))
                         );
                         
                         if (newPrompts.length === 0) {
@@ -1451,8 +1482,8 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
             next: async (selectedActions) => {
                 if (selectedActions && selectedActions.length > 0) {
                     // Filter out already linked or pending actions
-                    const newActions = selectedActions.filter(action => 
-                        !allLinkedIds.includes(action.ID)
+                    const newActions = selectedActions.filter(action =>
+                        !allLinkedIds.some(id => UUIDsEqual(id, action.ID))
                     );
                     
                     if (newActions.length === 0) {
@@ -1534,17 +1565,17 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         switch (status?.toLowerCase()) {
             case 'completed':
             case 'success':
-                return '#28a745';
+                return 'var(--mj-status-success)';
             case 'failed':
             case 'error':
-                return '#dc3545';
+                return 'var(--mj-status-error)';
             case 'running':
             case 'in_progress':
-                return '#17a2b8';
+                return 'var(--mj-status-info)';
             case 'pending':
-                return '#ffc107';
+                return 'var(--mj-status-warning)';
             default:
-                return '#6c757d';
+                return 'var(--mj-text-muted)';
         }
     }
 
@@ -1680,9 +1711,9 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
      * Gets the priority badge color
      */
     public getPriorityBadgeColor(priority: number): string {
-        if (priority <= 1) return '#dc3545'; // High priority - red
-        if (priority <= 5) return '#ffc107'; // Medium priority - yellow
-        return '#28a745'; // Low priority - green
+        if (priority <= 1) return 'var(--mj-status-error)'; // High priority - red
+        if (priority <= 5) return 'var(--mj-status-warning)'; // Medium priority - yellow
+        return 'var(--mj-status-success)'; // Low priority - green
     }
 
     /**
@@ -2017,14 +2048,14 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         });
 
         try {
-            const result = await firstValueFrom(confirmDialog.result);
-            if (result && (result as any).text === 'Remove') {
+            const result = await firstValueFrom(confirmDialog.Result);
+            if (result && typeof result === 'object' && 'text' in result && (result as Record<string, unknown>)['text'] === 'Remove') {
                 try {
                     // Check if this is a pending add (not yet in database)
                     const pendingAddIndex = this.PendingRecords.findIndex(
                         p => p.entityObject.EntityInfo.Name === 'MJ: AI Agent Prompts' && 
                              p.action === 'save' && 
-                             p.entityObject.Get('PromptID') === prompt.ID
+                             UUIDsEqual(p.entityObject.Get('PromptID'), prompt.ID)
                     );
 
                     if (pendingAddIndex >= 0) {
@@ -2053,7 +2084,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                     }
 
                     // Remove from UI immediately
-                    const promptIndex = this.agentPrompts.findIndex(p => p.ID === prompt.ID);
+                    const promptIndex = this.agentPrompts.findIndex(p => UUIDsEqual(p.ID, prompt.ID));
                     if (promptIndex >= 0) {
                         this.agentPrompts.splice(promptIndex, 1);
                     }
@@ -2117,8 +2148,8 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                 next: async (result) => {
                     if (result && result.selectedAgents && result.selectedAgents.length > 0) {
                         // Filter out already linked or pending agents
-                        const newAgents = result.selectedAgents.filter(agent => 
-                            !allLinkedIds.includes(agent.ID)
+                        const newAgents = result.selectedAgents.filter(agent =>
+                            !allLinkedIds.some(id => UUIDsEqual(id, agent.ID))
                         );
                         
                         if (newAgents.length === 0) {
@@ -2201,14 +2232,14 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         });
 
         try {
-            const result = await firstValueFrom(confirmDialog.result);
-            if (result && (result as any).text === 'Remove') {
+            const result = await firstValueFrom(confirmDialog.Result);
+            if (result && typeof result === 'object' && 'text' in result && (result as Record<string, unknown>)['text'] === 'Remove') {
                 try {
                     // Check if this is a pending add (not yet in database)
                     const pendingAddIndex = this.PendingRecords.findIndex(
                         p => p.entityObject.EntityInfo.Name === 'MJ: AI Agents' && 
                              p.action === 'save' && 
-                             p.entityObject.Get('ID') === subAgent.ID &&
+                             UUIDsEqual(p.entityObject.Get('ID'), subAgent.ID) &&
                              p.entityObject.Get('ParentID') === this.record.ID
                     );
 
@@ -2229,7 +2260,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                     }
 
                     // Remove from UI immediately
-                    const subAgentIndex = this.subAgents.findIndex(sa => sa.ID === subAgent.ID);
+                    const subAgentIndex = this.subAgents.findIndex(sa => UUIDsEqual(sa.ID, subAgent.ID));
                     if (subAgentIndex >= 0) {
                         this.subAgents.splice(subAgentIndex, 1);
                     }
@@ -2269,7 +2300,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
      * Gets the badge color for a sub-agent based on its type
      */
     public getSubAgentBadgeColor(item: UnifiedSubAgent): string {
-        return item.type === 'child' ? '#2196F3' : '#9C27B0';
+        return item.type === 'child' ? 'var(--mj-status-info)' : 'var(--mj-brand-primary)';
     }
 
     /**
@@ -2341,14 +2372,14 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         });
 
         try {
-            const result = await firstValueFrom(confirmDialog.result);
-            if (result && (result as any).text === 'Unlink') {
+            const result = await firstValueFrom(confirmDialog.Result);
+            if (result && typeof result === 'object' && 'text' in result && (result as Record<string, unknown>)['text'] === 'Unlink') {
                 try {
                     const success = await item.relationship.Delete();
                     if (success) {
                         // Remove from unified list
                         const index = this.allSubAgents.findIndex(s =>
-                            s.type === 'related' && s.relationship?.ID === item.relationship!.ID
+                            s.type === 'related' && UUIDsEqual(s.relationship?.ID, item.relationship!.ID)
                         );
                         if (index >= 0) {
                             this.allSubAgents.splice(index, 1);
@@ -2423,14 +2454,14 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         });
 
         try {
-            const result = await firstValueFrom(confirmDialog.result);
-            if (result && (result as any).text === 'Remove') {
+            const result = await firstValueFrom(confirmDialog.Result);
+            if (result && typeof result === 'object' && 'text' in result && (result as Record<string, unknown>)['text'] === 'Remove') {
                 try {
                 // Check if this is a pending add (not yet in database)
                 const pendingAddIndex = this.PendingRecords.findIndex(
                     p => p.entityObject.EntityInfo.Name === 'MJ: AI Agent Actions' && 
                          p.action === 'save' && 
-                         p.entityObject.Get('ActionID') === action.ID
+                         UUIDsEqual(p.entityObject.Get('ActionID'), action.ID)
                 );
 
                 if (pendingAddIndex >= 0) {
@@ -2459,7 +2490,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                 }
 
                 // Remove from UI immediately
-                const actionIndex = this.agentActions.findIndex(a => a.ID === action.ID);
+                const actionIndex = this.agentActions.findIndex(a => UUIDsEqual(a.ID, action.ID));
                 if (actionIndex >= 0) {
                     this.agentActions.splice(actionIndex, 1);
                 }
@@ -2498,8 +2529,8 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
             // Find the corresponding MJAIAgentPromptEntity for this prompt
             // Get all agent prompts for validation
 
-            const allAgentPrompts = AIEngineBase.Instance.AgentPrompts.filter(ap => ap.AgentID === this.record.ID);
-            const agentPrompt = allAgentPrompts.find(ap => ap.PromptID === prompt.ID);
+            const allAgentPrompts = AIEngineBase.Instance.AgentPrompts.filter(ap => UUIDsEqual(ap.AgentID, this.record.ID));
+            const agentPrompt = allAgentPrompts.find(ap => UUIDsEqual(ap.PromptID, prompt.ID));
             if (!agentPrompt) {
                 MJNotificationService.Instance.CreateSimpleNotification(
                     'Unable to find prompt configuration for advanced settings',
@@ -2581,7 +2612,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         
         try {
             // Get all sub-agents under the same parent for validation
-            const allSubAgents = AIEngineBase.Instance.Agents.filter(sa => sa.ParentID === subAgentEntity.ParentID);
+            const allSubAgents = AIEngineBase.Instance.Agents.filter(sa => UUIDsEqual(sa.ParentID, subAgentEntity.ParentID));
 
             this.agentManagementService.openSubAgentAdvancedSettingsDialog({
                 subAgent: subAgentEntity,
@@ -2608,7 +2639,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                                 );
 
                                 // Update the local sub-agent data to reflect changes
-                                const localSubAgent = this.subAgents.find(sa => sa.ID === subAgentEntity.ID);
+                                const localSubAgent = this.subAgents.find(sa => UUIDsEqual(sa.ID, subAgentEntity.ID));
                                 if (localSubAgent) {
                                     localSubAgent.ExecutionOrder = formData.executionOrder;
                                     localSubAgent.ExecutionMode = formData.executionMode;

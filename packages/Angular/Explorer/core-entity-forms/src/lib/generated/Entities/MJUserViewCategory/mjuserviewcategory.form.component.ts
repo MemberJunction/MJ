@@ -20,8 +20,8 @@ export class MJUserViewCategoryFormComponent extends BaseFormComponent {
             { sectionKey: 'organizationalHierarchy', sectionName: 'Organizational Hierarchy', isExpanded: true },
             { sectionKey: 'linkedEntities', sectionName: 'Linked Entities', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'userViewCategories', sectionName: 'User View Categories', isExpanded: false },
-            { sectionKey: 'userViews', sectionName: 'User Views', isExpanded: false }
+            { sectionKey: 'mJUserViewCategories', sectionName: 'User View Categories', isExpanded: false },
+            { sectionKey: 'mJUserViews', sectionName: 'User Views', isExpanded: false }
         ]);
     }
 }

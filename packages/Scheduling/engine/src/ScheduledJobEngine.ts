@@ -7,12 +7,13 @@ import os from 'os';
 import {
     UserInfo,
     Metadata,
+    IMetadataProvider,
     LogError,
     LogStatusEx,
     IsVerboseLoggingEnabled
 } from '@memberjunction/core';
-import { MJScheduledJobEntity, MJScheduledJobRunEntity } from '@memberjunction/core-entities';
-import { MJGlobal } from '@memberjunction/global';
+import { MJScheduledJobEntity, MJScheduledJobRunEntity, MJScheduledJobTypeEntity } from '@memberjunction/core-entities';
+import { BaseSingleton, MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { ScheduledJobResult, NotificationChannel } from '@memberjunction/scheduling-base-types';
 import { SchedulingEngineBase } from '@memberjunction/scheduling-engine-base';
 import { BaseScheduledJob, ScheduledJobExecutionContext } from './BaseScheduledJob';
@@ -22,7 +23,8 @@ import { NotificationManager } from './NotificationManager';
 /**
  * Engine for managing scheduled job execution
  *
- * This engine extends SchedulingEngineBase with execution capabilities:
+ * This engine uses composition to delegate metadata operations to SchedulingEngineBase
+ * while adding execution capabilities:
  * - Evaluates cron expressions to determine which jobs are due
  * - Instantiates the appropriate plugin for each job type
  * - Executes jobs and tracks results in ScheduledJobRun
@@ -40,7 +42,7 @@ import { NotificationManager } from './NotificationManager';
  * console.log(`Executed ${runs.length} scheduled jobs`);
  * ```
  */
-export class SchedulingEngine extends SchedulingEngineBase {
+export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
     /**
      * Get singleton instance
      */
@@ -48,9 +50,87 @@ export class SchedulingEngine extends SchedulingEngineBase {
         return super.getInstance<SchedulingEngine>();
     }
 
+    /**
+     * Access the contained SchedulingEngineBase instance for metadata operations.
+     */
+    protected get Base(): SchedulingEngineBase {
+        return SchedulingEngineBase.Instance;
+    }
+
     private pollingTimer?: NodeJS.Timeout;
     private isPolling: boolean = false;
     private hasInitialized: boolean = false;
+
+    // ========================================================================
+    // DELEGATED METADATA PROPERTIES AND METHODS
+    // ========================================================================
+
+    /** Gets all scheduled job types. */
+    public get ScheduledJobTypes(): MJScheduledJobTypeEntity[] {
+        return this.Base.ScheduledJobTypes;
+    }
+
+    /** Gets scheduled jobs (active only by default). */
+    public get ScheduledJobs(): MJScheduledJobEntity[] {
+        return this.Base.ScheduledJobs;
+    }
+
+    /** Gets recent scheduled job runs. */
+    public get ScheduledJobRuns(): MJScheduledJobRunEntity[] {
+        return this.Base.ScheduledJobRuns;
+    }
+
+    /** Gets the current active polling interval in milliseconds. */
+    public get ActivePollingInterval(): number | null {
+        return this.Base.ActivePollingInterval;
+    }
+
+    /** Find a job type by name. */
+    public GetJobTypeByName(name: string): MJScheduledJobTypeEntity | undefined {
+        return this.Base.GetJobTypeByName(name);
+    }
+
+    /** Find a job type by driver class. */
+    public GetJobTypeByDriverClass(driverClass: string): MJScheduledJobTypeEntity | undefined {
+        return this.Base.GetJobTypeByDriverClass(driverClass);
+    }
+
+    /** Get all jobs of a specific type. */
+    public GetJobsByType(jobTypeId: string): MJScheduledJobEntity[] {
+        return this.Base.GetJobsByType(jobTypeId);
+    }
+
+    /** Get runs for a specific job. */
+    public GetRunsForJob(jobId: string): MJScheduledJobRunEntity[] {
+        return this.Base.GetRunsForJob(jobId);
+    }
+
+    /** Calculate and update the active polling interval. */
+    public UpdatePollingInterval(): void {
+        this.Base.UpdatePollingInterval();
+    }
+
+    // ========================================================================
+    // CONFIG
+    // ========================================================================
+
+    /**
+     * Configures the engine by loading scheduling metadata from the database.
+     * Delegates to SchedulingEngineBase.
+     */
+    public async Config(
+        forceRefresh?: boolean,
+        contextUser?: UserInfo,
+        provider?: IMetadataProvider,
+        includeRuns: boolean = false,
+        includeAllJobs: boolean = false
+    ): Promise<boolean> {
+        return this.Base.Config(forceRefresh, contextUser, provider, includeRuns, includeAllJobs);
+    }
+
+    // ========================================================================
+    // EXECUTION METHODS
+    // ========================================================================
 
     /**
      * Start continuous polling for scheduled jobs
@@ -71,8 +151,9 @@ export class SchedulingEngine extends SchedulingEngineBase {
             if (!this.hasInitialized) {
                 await this.initializeNextRunTimes(contextUser);
                 await this.cleanupStaleLocks(contextUser);
-                // Force reload after cleaning locks to ensure we have fresh data
-                await this.Config(true, contextUser);
+                // No need to force-reload: initializeNextRunTimes and cleanupStaleLocks
+                // modify and save the in-memory entity objects directly, so the cache
+                // already reflects the current DB state.
                 this.hasInitialized = true;
 
                 // Check if there are no jobs after initialization
@@ -221,7 +302,7 @@ export class SchedulingEngine extends SchedulingEngineBase {
     ): Promise<MJScheduledJobRunEntity> {
         await this.Config(false, contextUser);
 
-        const job = this.ScheduledJobs.find(j => j.ID === jobId);
+        const job = this.ScheduledJobs.find(j => UUIDsEqual(j.ID, jobId));
         if (!job) {
             throw new Error(`Scheduled job ${jobId} not found or not active`);
         }
@@ -288,7 +369,7 @@ export class SchedulingEngine extends SchedulingEngineBase {
 
         try {
             // Get job type
-            const jobType = this.ScheduledJobTypes.find(t => t.ID === job.JobTypeID);
+            const jobType = this.ScheduledJobTypes.find(t => UUIDsEqual(t.ID, job.JobTypeID));
             if (!jobType) {
                 throw new Error(`Job type ${job.JobTypeID} not found`);
             }
@@ -361,10 +442,6 @@ export class SchedulingEngine extends SchedulingEngineBase {
 
     /**
      * Create a new ScheduledJobRun record
-     *
-     * @param job - The scheduled job
-     * @param contextUser - User context
-     * @returns The created run entity
      * @private
      */
     private async createJobRun(
@@ -388,10 +465,6 @@ export class SchedulingEngine extends SchedulingEngineBase {
 
     /**
      * Update job statistics after execution
-     *
-     * @param job - The scheduled job
-     * @param success - Whether the run succeeded
-     * @param runId - The run ID
      * @private
      */
     private async updateJobStatistics(
@@ -416,11 +489,6 @@ export class SchedulingEngine extends SchedulingEngineBase {
 
     /**
      * Send notifications if configured
-     *
-     * @param job - The scheduled job
-     * @param context - Execution context
-     * @param result - Execution result
-     * @param plugin - The job plugin
      * @private
      */
     private async sendNotificationsIfNeeded(
@@ -460,14 +528,9 @@ export class SchedulingEngine extends SchedulingEngineBase {
 
     /**
      * Try to acquire a lock for job execution
-     * Uses atomic database update to prevent race conditions
-     *
-     * @param job - The job to lock
-     * @returns True if lock acquired, false if already locked
      * @private
      */
     private async tryAcquireLock(job: MJScheduledJobEntity): Promise<boolean> {
-        // Check if already locked and not stale
         console.log(`    🔒 tryAcquireLock: job.LockToken=${job.LockToken?.substring(0, 8) || 'NULL'}, ExpectedCompletionAt=${job.ExpectedCompletionAt?.toISOString() || 'NULL'}`);
 
         if (job.LockToken != null) {
@@ -479,7 +542,6 @@ export class SchedulingEngine extends SchedulingEngineBase {
                 this.log(`Detected stale lock on job ${job.Name}, cleaning up`);
                 await this.cleanupStaleLock(job);
             } else {
-                // Lock is active and not stale
                 console.log(`      → Lock is ACTIVE (not stale), returning false`);
                 return false;
             }
@@ -487,22 +549,18 @@ export class SchedulingEngine extends SchedulingEngineBase {
             console.log(`      → No lock exists, will try to acquire`);
         }
 
-        // Try to acquire lock using BaseEntity Save for proper change tracking
         const lockToken = this.generateGuid();
         const instanceId = this.getInstanceIdentifier();
-        const expectedCompletion = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes default
+        const expectedCompletion = new Date(Date.now() + 10 * 60 * 1000);
 
         try {
-            // Reload job from database to ensure we have latest state and enable dirty checking
             await job.Load(job.ID);
 
-            // Verify lock is still null after reload (race condition check)
             if (job.LockToken != null) {
                 console.log(`      ❌ Lock was acquired by another process during reload`);
                 return false;
             }
 
-            // Set lock fields
             job.LockToken = lockToken;
             job.LockedAt = new Date();
             job.LockedByInstance = instanceId;
@@ -510,7 +568,6 @@ export class SchedulingEngine extends SchedulingEngineBase {
 
             console.log(`      → Attempting to save with lock: ${lockToken.substring(0, 8)}...`);
 
-            // Save will use optimistic concurrency - fails if another process updated the record
             const saveResult = await job.Save();
 
             if (saveResult) {
@@ -518,7 +575,6 @@ export class SchedulingEngine extends SchedulingEngineBase {
                 return true;
             } else {
                 console.log(`      ❌ Save failed - likely race condition with another server`);
-                // Clear lock state on failure
                 job.LockToken = null;
                 job.LockedAt = null;
                 job.LockedByInstance = null;
@@ -527,7 +583,6 @@ export class SchedulingEngine extends SchedulingEngineBase {
             }
         } catch (error) {
             this.logError(`Failed to acquire lock for job ${job.Name}`, error);
-            // Clear any partial lock state
             job.LockToken = null;
             job.LockedAt = null;
             job.LockedByInstance = null;
@@ -538,8 +593,6 @@ export class SchedulingEngine extends SchedulingEngineBase {
 
     /**
      * Release a lock after job execution
-     *
-     * @param job - The job to unlock
      * @private
      */
     private async releaseLock(job: MJScheduledJobEntity): Promise<void> {
@@ -555,9 +608,7 @@ export class SchedulingEngine extends SchedulingEngineBase {
     }
 
     /**
-     * Clean up a stale lock (when ExpectedCompletionAt has passed)
-     *
-     * @param job - The job with stale lock
+     * Clean up a stale lock
      * @private
      */
     private async cleanupStaleLock(job: MJScheduledJobEntity): Promise<void> {
@@ -567,10 +618,6 @@ export class SchedulingEngine extends SchedulingEngineBase {
 
     /**
      * Create a queued job run for later execution
-     *
-     * @param job - The job to queue
-     * @param contextUser - User context
-     * @returns The queued run entity
      * @private
      */
     private async createQueuedJobRun(
@@ -585,7 +632,7 @@ export class SchedulingEngine extends SchedulingEngineBase {
 
         run.ScheduledJobID = job.ID;
         run.ExecutedByUserID = contextUser.ID;
-        run.Status = 'Running'; // Will be picked up by queue processor
+        run.Status = 'Running';
         run.QueuedAt = new Date();
         run.StartedAt = new Date();
 
@@ -596,19 +643,14 @@ export class SchedulingEngine extends SchedulingEngineBase {
 
     /**
      * Get unique identifier for this server instance
-     *
-     * @returns Server instance identifier
      * @private
      */
     private getInstanceIdentifier(): string {
-        // Use hostname + process ID for unique instance identification
         return `${os.hostname()}-${process.pid}`;
     }
 
     /**
      * Generate a GUID for lock tokens
-     *
-     * @returns Generated GUID
      * @private
      */
     private generateGuid(): string {
@@ -621,7 +663,6 @@ export class SchedulingEngine extends SchedulingEngineBase {
 
     /**
      * Initialize NextRunAt for jobs that don't have it set
-     * @param contextUser - User context
      * @private
      */
     private async initializeNextRunTimes(contextUser: UserInfo): Promise<void> {
@@ -640,8 +681,6 @@ export class SchedulingEngine extends SchedulingEngineBase {
 
     /**
      * Clean up stale locks on startup
-     * Releases any locks that have expired (ExpectedCompletionAt in the past)
-     * @param contextUser - User context
      * @private
      */
     private async cleanupStaleLocks(contextUser: UserInfo): Promise<void> {
@@ -702,7 +741,7 @@ export class SchedulingEngine extends SchedulingEngineBase {
         });
     }
 
-    private logError(message: string, error?: any): void {
+    private logError(message: string, error?: unknown): void {
         LogError(`[ScheduledJobEngine] ${message}`, undefined, error);
     }
 }

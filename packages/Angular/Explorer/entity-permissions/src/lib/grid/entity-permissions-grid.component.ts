@@ -2,6 +2,7 @@ import { Component, Output, EventEmitter, OnInit, Input, SimpleChanges, OnChange
 
 import { Metadata, RunView } from '@memberjunction/core';
 import { MJEntityPermissionEntity } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
 
 
 export type EntityPermissionChangedEvent = {
@@ -81,7 +82,7 @@ export class EntityPermissionsGridComponent implements OnInit, OnChanges {
       const roles = md.Roles;
 
       if (this.Mode === 'Entity') {
-        const rolesWithNoPermissions = roles.filter(r => !existingPermissions.some(p => p.RoleID === r.ID));
+        const rolesWithNoPermissions = roles.filter(r => !existingPermissions.some(p => UUIDsEqual(p.RoleID, r.ID)));
         for (const r of rolesWithNoPermissions) {
           const p = await md.GetEntityObject<MJEntityPermissionEntity>('MJ: Entity Permissions')
            
@@ -101,7 +102,7 @@ export class EntityPermissionsGridComponent implements OnInit, OnChanges {
       }
       else if (this.Mode === 'Role') {
         // for the mode of Role, that means we want to show all entities and their permissions for the given role
-        const entitiesWithNoPermissions = md.Entities.filter(e => !existingPermissions.some(p => p.EntityID === e.ID));
+        const entitiesWithNoPermissions = md.Entities.filter(e => !existingPermissions.some(p => UUIDsEqual(p.EntityID, e.ID)));
         for (const e of entitiesWithNoPermissions) {
           const p = await md.GetEntityObject<MJEntityPermissionEntity>('MJ: Entity Permissions')
           
@@ -129,7 +130,7 @@ export class EntityPermissionsGridComponent implements OnInit, OnChanges {
 
   public getRoleName(roleID: string): string {
     const md = new Metadata();
-    const r = md.Roles.find(r => r.ID === roleID);
+    const r = md.Roles.find(r => UUIDsEqual(r.ID, roleID));
     return r ? r.Name : '';
   }
   

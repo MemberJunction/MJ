@@ -1,6 +1,6 @@
 import { LogError, Metadata } from "@memberjunction/core";
 import { MJActionExecutionLogEntity, MJActionFilterEntity, MJActionParamEntity, MJActionResultCodeEntity } from "@memberjunction/core-entities";
-import { MJGlobal, SafeJSONParse } from "@memberjunction/global";
+import { MJGlobal, SafeJSONParse, UUIDsEqual } from "@memberjunction/global";
 import { BaseAction } from "./BaseAction";
 import { ActionEngineBase, MJActionEntityExtended, ActionParam, ActionResult, ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 
@@ -142,12 +142,13 @@ export class ActionEngineServer extends ActionEngineBase {
          // we now have the action class for this particular action, so run it
          const simpleResult: ActionResultSimple = await action.Run(params);
 
-         const resultCodeEntity: MJActionResultCodeEntity | undefined = this.ActionResultCodes.find(r => r.ActionID === params.Action.ID && 
+         const resultCodeEntity: MJActionResultCodeEntity | undefined = this.ActionResultCodes.find(r => UUIDsEqual(r.ActionID, params.Action.ID) &&
                                                                r.ResultCode.trim().toLowerCase() === simpleResult.ResultCode.trim().toLowerCase());
          const result: ActionResult = {
             RunParams: params,
             Success: simpleResult.Success,
             Message: simpleResult.Message,
+            AIDirectives: simpleResult.AIDirectives,
             LogEntry: logEntry,
             Params: simpleResult.Params || params.Params, // use the params from the simple result if provided, otherwise use the original params
             Result: resultCodeEntity

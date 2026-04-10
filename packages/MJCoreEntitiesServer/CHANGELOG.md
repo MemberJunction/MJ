@@ -1,5 +1,583 @@
 # @memberjunction/core-entities-server
 
+## 5.24.0
+
+### Minor Changes
+
+- c318a0c: metadata + migrations in this PR == minor
+
+### Patch Changes
+
+- Updated dependencies [c318a0c]
+- Updated dependencies [1912726]
+  - @memberjunction/ai-core-plus@5.24.0
+  - @memberjunction/tag-engine@5.24.0
+  - @memberjunction/ai-prompts@5.24.0
+  - @memberjunction/ai-vectordb@5.24.0
+  - @memberjunction/ai-vector-dupe@5.24.0
+  - @memberjunction/ai-vectors-memory@5.24.0
+  - @memberjunction/core@5.24.0
+  - @memberjunction/core-entities@5.24.0
+  - @memberjunction/ai-engine-base@5.24.0
+  - @memberjunction/aiengine@5.24.0
+  - @memberjunction/skip-types@5.24.0
+  - @memberjunction/sqlserver-dataprovider@5.24.0
+  - @memberjunction/ai-provider-bundle@5.24.0
+  - @memberjunction/actions-base@5.24.0
+  - @memberjunction/doc-utils@5.24.0
+  - @memberjunction/generic-database-provider@5.24.0
+  - @memberjunction/ai@5.24.0
+  - @memberjunction/global@5.24.0
+  - @memberjunction/sql-converter@5.24.0
+  - @memberjunction/sql-parser@5.24.0
+
+## 5.23.0
+
+### Patch Changes
+
+- 247df16: Fix server-side RunView cache write asymmetry that caused repeated DB queries during metadata sync, add deterministic Nunjucks template parameter extraction via AST, support comma-delimited multi-value fields in validation, and redesign QueryPagingEngine to append paging directly instead of wrapping in CTEs (fixing ORDER BY on non-projected columns and apostrophe-in-comments bugs).
+- 1d1e02e: Knowledge Hub Phase 2: autotagging pipeline, duplicate detection dashboards, and client tool invocation system.
+
+  Autotagging: Run Pipeline button with real-time progress, direct vectorization of content items (bypasses entity documents), pipeline stage visualization, Gemini 3 Flash tagging.
+
+  Duplicate Detection: Run Detection button with entity document picker, progress via PubSub, Kanban approve/reject with persistence.
+
+  Client Tools: New 'ClientTools' step type in BaseAgent enabling browser-side tool invocation (navigation, UI display, tab switching) during agent execution. Includes ClientToolRequestManager server singleton, GraphQL subscription transport, runtime tool decoration, three-level timeout, loop agent integration, and 646-line documentation guide.
+
+- Updated dependencies [247df16]
+- Updated dependencies [9250070]
+- Updated dependencies [513b20c]
+- Updated dependencies [44bc22b]
+- Updated dependencies [1d1e02e]
+  - @memberjunction/core@5.23.0
+  - @memberjunction/global@5.23.0
+  - @memberjunction/generic-database-provider@5.23.0
+  - @memberjunction/ai-prompts@5.23.0
+  - @memberjunction/sqlserver-dataprovider@5.23.0
+  - @memberjunction/ai-vectordb@5.23.0
+  - @memberjunction/ai-vector-dupe@5.23.0
+  - @memberjunction/ai-vectors-memory@5.23.0
+  - @memberjunction/core-entities@5.23.0
+  - @memberjunction/ai-core-plus@5.23.0
+  - @memberjunction/ai-engine-base@5.23.0
+  - @memberjunction/aiengine@5.23.0
+  - @memberjunction/actions-base@5.23.0
+  - @memberjunction/doc-utils@5.23.0
+  - @memberjunction/skip-types@5.23.0
+  - @memberjunction/ai@5.23.0
+  - @memberjunction/ai-provider-bundle@5.23.0
+  - @memberjunction/sql-converter@5.23.0
+  - @memberjunction/sql-parser@5.23.0
+
+## 5.22.0
+
+### Patch Changes
+
+- Updated dependencies [0b23772]
+- Updated dependencies [cf91278]
+- Updated dependencies [6a5093b]
+- Updated dependencies [e123e4b]
+- Updated dependencies [a42aba6]
+- Updated dependencies [f2a6bec]
+  - @memberjunction/ai-core-plus@5.22.0
+  - @memberjunction/ai-prompts@5.22.0
+  - @memberjunction/sql-parser@5.22.0
+  - @memberjunction/core@5.22.0
+  - @memberjunction/ai-vectordb@5.22.0
+  - @memberjunction/ai-vector-dupe@5.22.0
+  - @memberjunction/ai-vectors-memory@5.22.0
+  - @memberjunction/global@5.22.0
+  - @memberjunction/ai-engine-base@5.22.0
+  - @memberjunction/aiengine@5.22.0
+  - @memberjunction/skip-types@5.22.0
+  - @memberjunction/generic-database-provider@5.22.0
+  - @memberjunction/actions-base@5.22.0
+  - @memberjunction/doc-utils@5.22.0
+  - @memberjunction/core-entities@5.22.0
+  - @memberjunction/sqlserver-dataprovider@5.22.0
+  - @memberjunction/ai-provider-bundle@5.22.0
+  - @memberjunction/ai@5.22.0
+  - @memberjunction/sql-converter@5.22.0
+
+## 5.21.0
+
+### Patch Changes
+
+- c7dfb20: no migration/metadata changes (yet)
+- Updated dependencies [c7dfb20]
+- Updated dependencies [76cd2bc]
+- Updated dependencies [845c980]
+  - @memberjunction/ai-vector-dupe@5.21.0
+  - @memberjunction/ai-vectors-memory@5.21.0
+  - @memberjunction/core@5.21.0
+  - @memberjunction/ai-core-plus@5.21.0
+  - @memberjunction/ai-prompts@5.21.0
+  - @memberjunction/ai-provider-bundle@5.21.0
+  - @memberjunction/sqlserver-dataprovider@5.21.0
+  - @memberjunction/aiengine@5.21.0
+  - @memberjunction/ai-engine-base@5.21.0
+  - @memberjunction/actions-base@5.21.0
+  - @memberjunction/doc-utils@5.21.0
+  - @memberjunction/generic-database-provider@5.21.0
+  - @memberjunction/core-entities@5.21.0
+  - @memberjunction/skip-types@5.21.0
+  - @memberjunction/ai@5.21.0
+  - @memberjunction/global@5.21.0
+  - @memberjunction/sql-converter@5.21.0
+  - @memberjunction/sql-parser@5.21.0
+
+## 5.20.0
+
+### Patch Changes
+
+- Updated dependencies [cc954e1]
+- Updated dependencies [2298f8a]
+  - @memberjunction/generic-database-provider@5.20.0
+  - @memberjunction/core@5.20.0
+  - @memberjunction/sqlserver-dataprovider@5.20.0
+  - @memberjunction/ai-engine-base@5.20.0
+  - @memberjunction/ai-core-plus@5.20.0
+  - @memberjunction/aiengine@5.20.0
+  - @memberjunction/ai-prompts@5.20.0
+  - @memberjunction/ai-vector-dupe@5.20.0
+  - @memberjunction/ai-vectors-memory@5.20.0
+  - @memberjunction/actions-base@5.20.0
+  - @memberjunction/doc-utils@5.20.0
+  - @memberjunction/core-entities@5.20.0
+  - @memberjunction/skip-types@5.20.0
+  - @memberjunction/ai-provider-bundle@5.20.0
+  - @memberjunction/ai@5.20.0
+  - @memberjunction/global@5.20.0
+  - @memberjunction/sql-converter@5.20.0
+  - @memberjunction/sql-parser@5.20.0
+
+## 5.19.0
+
+### Patch Changes
+
+- @memberjunction/ai-engine-base@5.19.0
+- @memberjunction/ai@5.19.0
+- @memberjunction/ai-core-plus@5.19.0
+- @memberjunction/aiengine@5.19.0
+- @memberjunction/ai-prompts@5.19.0
+- @memberjunction/ai-provider-bundle@5.19.0
+- @memberjunction/ai-vector-dupe@5.19.0
+- @memberjunction/ai-vectors-memory@5.19.0
+- @memberjunction/actions-base@5.19.0
+- @memberjunction/doc-utils@5.19.0
+- @memberjunction/generic-database-provider@5.19.0
+- @memberjunction/core@5.19.0
+- @memberjunction/core-entities@5.19.0
+- @memberjunction/global@5.19.0
+- @memberjunction/sql-converter@5.19.0
+- @memberjunction/sql-parser@5.19.0
+- @memberjunction/sqlserver-dataprovider@5.19.0
+- @memberjunction/skip-types@5.19.0
+
+## 5.18.0
+
+### Patch Changes
+
+- 931740a: Fix SQLParser to extract parameters from Jinja2 control flow conditions ({% if %}/{% elif %}) and remove hardcoded golden-queries reusability check from QueryEntityServer.
+- Updated dependencies [322dac6]
+- Updated dependencies [931740a]
+- Updated dependencies [48f7296]
+  - @memberjunction/ai-core-plus@5.18.0
+  - @memberjunction/sql-parser@5.18.0
+  - @memberjunction/ai-prompts@5.18.0
+  - @memberjunction/ai-engine-base@5.18.0
+  - @memberjunction/aiengine@5.18.0
+  - @memberjunction/skip-types@5.18.0
+  - @memberjunction/generic-database-provider@5.18.0
+  - @memberjunction/ai-vector-dupe@5.18.0
+  - @memberjunction/sqlserver-dataprovider@5.18.0
+  - @memberjunction/ai-provider-bundle@5.18.0
+  - @memberjunction/ai@5.18.0
+  - @memberjunction/ai-vectors-memory@5.18.0
+  - @memberjunction/actions-base@5.18.0
+  - @memberjunction/doc-utils@5.18.0
+  - @memberjunction/core@5.18.0
+  - @memberjunction/core-entities@5.18.0
+  - @memberjunction/global@5.18.0
+  - @memberjunction/sql-converter@5.18.0
+
+## 5.17.0
+
+### Patch Changes
+
+- 4b6fd2a: Add composable query passthrough parameter bubbling, deterministic field type resolution from dependency queries and entity metadata, MJLexer-based template variable manipulation, and refactor MJQueryEntityServer into a 5-stage extraction pipeline
+- Updated dependencies [4b6fd2a]
+- Updated dependencies [9881045]
+  - @memberjunction/sql-parser@5.17.0
+  - @memberjunction/generic-database-provider@5.17.0
+  - @memberjunction/core@5.17.0
+  - @memberjunction/sqlserver-dataprovider@5.17.0
+  - @memberjunction/ai-engine-base@5.17.0
+  - @memberjunction/ai-core-plus@5.17.0
+  - @memberjunction/aiengine@5.17.0
+  - @memberjunction/ai-prompts@5.17.0
+  - @memberjunction/ai-vector-dupe@5.17.0
+  - @memberjunction/ai-vectors-memory@5.17.0
+  - @memberjunction/actions-base@5.17.0
+  - @memberjunction/doc-utils@5.17.0
+  - @memberjunction/core-entities@5.17.0
+  - @memberjunction/skip-types@5.17.0
+  - @memberjunction/ai-provider-bundle@5.17.0
+  - @memberjunction/ai@5.17.0
+  - @memberjunction/global@5.17.0
+  - @memberjunction/sql-converter@5.17.0
+
+## 5.16.0
+
+### Patch Changes
+
+- Updated dependencies [2387400]
+- Updated dependencies [11dba07]
+  - @memberjunction/core@5.16.0
+  - @memberjunction/ai-engine-base@5.16.0
+  - @memberjunction/ai-core-plus@5.16.0
+  - @memberjunction/aiengine@5.16.0
+  - @memberjunction/ai-prompts@5.16.0
+  - @memberjunction/ai-vector-dupe@5.16.0
+  - @memberjunction/ai-vectors-memory@5.16.0
+  - @memberjunction/actions-base@5.16.0
+  - @memberjunction/doc-utils@5.16.0
+  - @memberjunction/generic-database-provider@5.16.0
+  - @memberjunction/core-entities@5.16.0
+  - @memberjunction/sqlserver-dataprovider@5.16.0
+  - @memberjunction/skip-types@5.16.0
+  - @memberjunction/ai-provider-bundle@5.16.0
+  - @memberjunction/ai@5.16.0
+  - @memberjunction/global@5.16.0
+  - @memberjunction/sql-converter@5.16.0
+  - @memberjunction/sql-parser@5.16.0
+
+## 5.15.0
+
+### Patch Changes
+
+- d01f697: MJ SQL Parser: unified parser for SQL + Nunjucks templates + composition tokens. Replaces fragmented regex-based SQL parsing across 6 packages with a single MJSQLParser class providing AST-based tokenization, placeholder substitution, CTE extraction, ORDER BY remapping, and deterministic parameter/field extraction. Moves QueryPagingEngine from MJCore to GenericDatabaseProvider with AST-based paging. Fixes backtick quoting, table-qualified ORDER BY remapping, trailing semicolon, and FOR XML parsing bugs.
+- Updated dependencies [662d56b]
+- Updated dependencies [5e85b29]
+- Updated dependencies [d01f697]
+- Updated dependencies [c3e8b94]
+  - @memberjunction/core@5.15.0
+  - @memberjunction/generic-database-provider@5.15.0
+  - @memberjunction/sql-parser@5.15.0
+  - @memberjunction/ai@5.15.0
+  - @memberjunction/ai-core-plus@5.15.0
+  - @memberjunction/ai-prompts@5.15.0
+  - @memberjunction/ai-provider-bundle@5.15.0
+  - @memberjunction/ai-engine-base@5.15.0
+  - @memberjunction/aiengine@5.15.0
+  - @memberjunction/ai-vector-dupe@5.15.0
+  - @memberjunction/ai-vectors-memory@5.15.0
+  - @memberjunction/actions-base@5.15.0
+  - @memberjunction/doc-utils@5.15.0
+  - @memberjunction/core-entities@5.15.0
+  - @memberjunction/sqlserver-dataprovider@5.15.0
+  - @memberjunction/skip-types@5.15.0
+  - @memberjunction/global@5.15.0
+  - @memberjunction/sql-converter@5.15.0
+
+## 5.14.0
+
+### Patch Changes
+
+- Updated dependencies [69b5af4]
+- Updated dependencies [140fc6d]
+- Updated dependencies [6489cd8]
+  - @memberjunction/core@5.14.0
+  - @memberjunction/generic-database-provider@5.14.0
+  - @memberjunction/skip-types@5.14.0
+  - @memberjunction/actions-base@5.14.0
+  - @memberjunction/ai-engine-base@5.14.0
+  - @memberjunction/ai-core-plus@5.14.0
+  - @memberjunction/aiengine@5.14.0
+  - @memberjunction/ai-prompts@5.14.0
+  - @memberjunction/ai-vector-dupe@5.14.0
+  - @memberjunction/ai-vectors-memory@5.14.0
+  - @memberjunction/doc-utils@5.14.0
+  - @memberjunction/core-entities@5.14.0
+  - @memberjunction/sqlserver-dataprovider@5.14.0
+  - @memberjunction/ai-provider-bundle@5.14.0
+  - @memberjunction/ai@5.14.0
+  - @memberjunction/global@5.14.0
+  - @memberjunction/sql-converter@5.14.0
+  - @memberjunction/sql-parser@5.14.0
+
+## 5.13.0
+
+### Patch Changes
+
+- Updated dependencies [f72b538]
+- Updated dependencies [d0d9eba]
+  - @memberjunction/core@5.13.0
+  - @memberjunction/global@5.13.0
+  - @memberjunction/ai-engine-base@5.13.0
+  - @memberjunction/ai-core-plus@5.13.0
+  - @memberjunction/aiengine@5.13.0
+  - @memberjunction/ai-prompts@5.13.0
+  - @memberjunction/ai-vector-dupe@5.13.0
+  - @memberjunction/actions-base@5.13.0
+  - @memberjunction/doc-utils@5.13.0
+  - @memberjunction/core-entities@5.13.0
+  - @memberjunction/sqlserver-dataprovider@5.13.0
+  - @memberjunction/skip-types@5.13.0
+  - @memberjunction/ai@5.13.0
+  - @memberjunction/ai-provider-bundle@5.13.0
+  - @memberjunction/sql-converter@5.13.0
+
+## 5.12.0
+
+### Minor Changes
+
+- 05f19ff: Add composable query system with semantic catalog search, CTE composition engine, server-side paging, query caching with TTL/dependency invalidation, and agent directive surfacing. Includes QueryCacheManager wrapper over LocalCacheManager, QueryPagingEngine for SQL-level OFFSET/FETCH paging, QueryCompositionEngine for platform-aware CTE generation, and SearchQueryCatalog action for vector-based query discovery. Renames PaginationComponent to DataPagerComponent and extracts into shared module.
+- 1567293: migration
+
+### Patch Changes
+
+- Updated dependencies [05f19ff]
+- Updated dependencies [d92502e]
+- Updated dependencies [1567293]
+- Updated dependencies [1e5d181]
+  - @memberjunction/core@5.12.0
+  - @memberjunction/aiengine@5.12.0
+  - @memberjunction/skip-types@5.12.0
+  - @memberjunction/core-entities@5.12.0
+  - @memberjunction/ai-engine-base@5.12.0
+  - @memberjunction/ai-core-plus@5.12.0
+  - @memberjunction/ai-prompts@5.12.0
+  - @memberjunction/ai-vector-dupe@5.12.0
+  - @memberjunction/actions-base@5.12.0
+  - @memberjunction/doc-utils@5.12.0
+  - @memberjunction/sqlserver-dataprovider@5.12.0
+  - @memberjunction/ai-provider-bundle@5.12.0
+  - @memberjunction/ai@5.12.0
+  - @memberjunction/global@5.12.0
+  - @memberjunction/sql-converter@5.12.0
+
+## 5.11.0
+
+### Patch Changes
+
+- Updated dependencies [a4c3c81]
+  - @memberjunction/core@5.11.0
+  - @memberjunction/sql-converter@5.11.0
+  - @memberjunction/sqlserver-dataprovider@5.11.0
+  - @memberjunction/ai-engine-base@5.11.0
+  - @memberjunction/ai-core-plus@5.11.0
+  - @memberjunction/aiengine@5.11.0
+  - @memberjunction/ai-prompts@5.11.0
+  - @memberjunction/ai-vector-dupe@5.11.0
+  - @memberjunction/actions-base@5.11.0
+  - @memberjunction/doc-utils@5.11.0
+  - @memberjunction/core-entities@5.11.0
+  - @memberjunction/skip-types@5.11.0
+  - @memberjunction/ai-provider-bundle@5.11.0
+  - @memberjunction/ai@5.11.0
+  - @memberjunction/global@5.11.0
+
+## 5.10.1
+
+### Patch Changes
+
+- @memberjunction/ai-engine-base@5.10.1
+- @memberjunction/ai@5.10.1
+- @memberjunction/ai-core-plus@5.10.1
+- @memberjunction/aiengine@5.10.1
+- @memberjunction/ai-prompts@5.10.1
+- @memberjunction/ai-provider-bundle@5.10.1
+- @memberjunction/ai-vector-dupe@5.10.1
+- @memberjunction/actions-base@5.10.1
+- @memberjunction/doc-utils@5.10.1
+- @memberjunction/core@5.10.1
+- @memberjunction/core-entities@5.10.1
+- @memberjunction/global@5.10.1
+- @memberjunction/sql-converter@5.10.1
+- @memberjunction/sqlserver-dataprovider@5.10.1
+- @memberjunction/skip-types@5.10.1
+
+## 5.10.0
+
+### Patch Changes
+
+- Updated dependencies [f2df653]
+- Updated dependencies [98e9f15]
+- Updated dependencies [5ce18ff]
+- Updated dependencies [75dd36b]
+  - @memberjunction/core@5.10.0
+  - @memberjunction/core-entities@5.10.0
+  - @memberjunction/skip-types@5.10.0
+  - @memberjunction/ai-engine-base@5.10.0
+  - @memberjunction/ai-core-plus@5.10.0
+  - @memberjunction/aiengine@5.10.0
+  - @memberjunction/ai-prompts@5.10.0
+  - @memberjunction/ai-vector-dupe@5.10.0
+  - @memberjunction/actions-base@5.10.0
+  - @memberjunction/doc-utils@5.10.0
+  - @memberjunction/sqlserver-dataprovider@5.10.0
+  - @memberjunction/ai-provider-bundle@5.10.0
+  - @memberjunction/ai@5.10.0
+  - @memberjunction/global@5.10.0
+  - @memberjunction/sql-converter@5.10.0
+
+## 5.9.0
+
+### Patch Changes
+
+- Updated dependencies [c6a0df2]
+- Updated dependencies [194ddf2]
+  - @memberjunction/core-entities@5.9.0
+  - @memberjunction/global@5.9.0
+  - @memberjunction/core@5.9.0
+  - @memberjunction/sqlserver-dataprovider@5.9.0
+  - @memberjunction/ai-engine-base@5.9.0
+  - @memberjunction/ai-core-plus@5.9.0
+  - @memberjunction/aiengine@5.9.0
+  - @memberjunction/ai-prompts@5.9.0
+  - @memberjunction/ai-vector-dupe@5.9.0
+  - @memberjunction/actions-base@5.9.0
+  - @memberjunction/doc-utils@5.9.0
+  - @memberjunction/ai@5.9.0
+  - @memberjunction/skip-types@5.9.0
+  - @memberjunction/ai-provider-bundle@5.9.0
+  - @memberjunction/sql-converter@5.9.0
+
+## 5.8.0
+
+### Patch Changes
+
+- Updated dependencies [0753249]
+  - @memberjunction/core@5.8.0
+  - @memberjunction/sqlserver-dataprovider@5.8.0
+  - @memberjunction/ai-engine-base@5.8.0
+  - @memberjunction/ai-core-plus@5.8.0
+  - @memberjunction/aiengine@5.8.0
+  - @memberjunction/ai-prompts@5.8.0
+  - @memberjunction/ai-vector-dupe@5.8.0
+  - @memberjunction/actions-base@5.8.0
+  - @memberjunction/doc-utils@5.8.0
+  - @memberjunction/core-entities@5.8.0
+  - @memberjunction/skip-types@5.8.0
+  - @memberjunction/ai-provider-bundle@5.8.0
+  - @memberjunction/ai@5.8.0
+  - @memberjunction/global@5.8.0
+  - @memberjunction/sql-converter@5.8.0
+
+## 5.7.0
+
+### Patch Changes
+
+- Updated dependencies [f52e156]
+- Updated dependencies [642c4df]
+  - @memberjunction/ai@5.7.0
+  - @memberjunction/ai-prompts@5.7.0
+  - @memberjunction/core@5.7.0
+  - @memberjunction/ai-engine-base@5.7.0
+  - @memberjunction/ai-core-plus@5.7.0
+  - @memberjunction/aiengine@5.7.0
+  - @memberjunction/ai-vector-dupe@5.7.0
+  - @memberjunction/core-entities@5.7.0
+  - @memberjunction/sqlserver-dataprovider@5.7.0
+  - @memberjunction/actions-base@5.7.0
+  - @memberjunction/doc-utils@5.7.0
+  - @memberjunction/skip-types@5.7.0
+  - @memberjunction/ai-provider-bundle@5.7.0
+  - @memberjunction/global@5.7.0
+  - @memberjunction/sql-converter@5.7.0
+
+## 5.6.0
+
+### Patch Changes
+
+- Updated dependencies [4547d05]
+- Updated dependencies [76eaabc]
+  - @memberjunction/core@5.6.0
+  - @memberjunction/ai-engine-base@5.6.0
+  - @memberjunction/ai-core-plus@5.6.0
+  - @memberjunction/aiengine@5.6.0
+  - @memberjunction/ai-prompts@5.6.0
+  - @memberjunction/ai-vector-dupe@5.6.0
+  - @memberjunction/actions-base@5.6.0
+  - @memberjunction/doc-utils@5.6.0
+  - @memberjunction/core-entities@5.6.0
+  - @memberjunction/sqlserver-dataprovider@5.6.0
+  - @memberjunction/skip-types@5.6.0
+  - @memberjunction/ai-provider-bundle@5.6.0
+  - @memberjunction/ai@5.6.0
+  - @memberjunction/global@5.6.0
+  - @memberjunction/sql-converter@5.6.0
+
+## 5.5.0
+
+### Minor Changes
+
+- ee9f788: migrations - postgres sql support!
+
+### Patch Changes
+
+- df2457c: no migration, just small code changes
+- Updated dependencies [2b1d842]
+- Updated dependencies [a1648c5]
+- Updated dependencies [7ca2459]
+- Updated dependencies [ee9f788]
+- Updated dependencies [df2457c]
+  - @memberjunction/core@5.5.0
+  - @memberjunction/ai-provider-bundle@5.5.0
+  - @memberjunction/sqlserver-dataprovider@5.5.0
+  - @memberjunction/core-entities@5.5.0
+  - @memberjunction/global@5.5.0
+  - @memberjunction/sql-converter@5.5.0
+  - @memberjunction/ai-engine-base@5.5.0
+  - @memberjunction/ai@5.5.0
+  - @memberjunction/ai-core-plus@5.5.0
+  - @memberjunction/aiengine@5.5.0
+  - @memberjunction/ai-prompts@5.5.0
+  - @memberjunction/ai-vector-dupe@5.5.0
+  - @memberjunction/actions-base@5.5.0
+  - @memberjunction/doc-utils@5.5.0
+  - @memberjunction/skip-types@5.5.0
+
+## 5.4.1
+
+### Patch Changes
+
+- @memberjunction/ai-engine-base@5.4.1
+- @memberjunction/ai@5.4.1
+- @memberjunction/ai-core-plus@5.4.1
+- @memberjunction/aiengine@5.4.1
+- @memberjunction/ai-prompts@5.4.1
+- @memberjunction/ai-provider-bundle@5.4.1
+- @memberjunction/ai-vector-dupe@5.4.1
+- @memberjunction/actions-base@5.4.1
+- @memberjunction/doc-utils@5.4.1
+- @memberjunction/core@5.4.1
+- @memberjunction/core-entities@5.4.1
+- @memberjunction/global@5.4.1
+- @memberjunction/sqlserver-dataprovider@5.4.1
+- @memberjunction/skip-types@5.4.1
+
+## 5.4.0
+
+### Patch Changes
+
+- Updated dependencies [c9a760c]
+  - @memberjunction/core-entities@5.4.0
+  - @memberjunction/ai-engine-base@5.4.0
+  - @memberjunction/ai-core-plus@5.4.0
+  - @memberjunction/aiengine@5.4.0
+  - @memberjunction/ai-prompts@5.4.0
+  - @memberjunction/ai-vector-dupe@5.4.0
+  - @memberjunction/actions-base@5.4.0
+  - @memberjunction/doc-utils@5.4.0
+  - @memberjunction/sqlserver-dataprovider@5.4.0
+  - @memberjunction/skip-types@5.4.0
+  - @memberjunction/ai-provider-bundle@5.4.0
+  - @memberjunction/ai@5.4.0
+  - @memberjunction/core@5.4.0
+  - @memberjunction/global@5.4.0
+
 ## 5.3.1
 
 ### Patch Changes

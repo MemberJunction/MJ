@@ -1,0 +1,286 @@
+[
+  {
+    "fields": {
+      "Name": "Run Integration Sync",
+      "Description": "Triggers a data sync for a Company Integration. Pulls or pushes records according to entity maps, field maps, and watermarks configured for the integration.",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Data&Parent=System",
+      "DriverClass": "Run Integration Sync",
+      "Type": "Custom",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-arrows-rotate"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the Company Integration to sync",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "C123CEB2-E36F-4EF6-96E4-346D66E51D60"
+          },
+          "sync": {
+            "lastModified": "2026-03-12T21:57:26.565Z",
+            "checksum": "e7ebc76bba0e198dbe6afd83d1ce1b73587269f06dee1462ce5da39abc3015a9"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TriggerType",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "How the sync was triggered: Manual, Scheduled, or Webhook (defaults to Manual)",
+            "IsRequired": false,
+            "DefaultValue": "Manual"
+          },
+          "primaryKey": {
+            "ID": "1F25EC7E-00B9-4A07-B6E9-987F2674193B"
+          },
+          "sync": {
+            "lastModified": "2026-03-12T21:57:26.581Z",
+            "checksum": "089195c3f3ccbc9b71ee7dfad5626d0eed4f1caffc7a8738c4584c8e8e581bb2"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FullSync",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Set to 'true' to force a full sync ignoring watermarks",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "384575CE-AD82-4081-988C-44D0A26EC062"
+          },
+          "sync": {
+            "lastModified": "2026-03-12T21:57:26.595Z",
+            "checksum": "1eee8fc1758d185d13018ab2400c9b7975ffb7268a434163a7ec662581c10c40"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EntityMapIDs",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Comma-separated list of EntityMapIDs to restrict the sync to specific entity maps",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B2FAB3B8-EBE4-482E-B293-6C98200BECF1"
+          },
+          "sync": {
+            "lastModified": "2026-03-12T21:57:26.608Z",
+            "checksum": "46219526340f53dfe5fe9153ff37921924aa5a839927f7d2a32c159f2c798c0d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RecordsProcessed",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Total number of records processed during sync",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "0D2F0BDA-CFD1-4DDA-9DA4-14D948B8D808"
+          },
+          "sync": {
+            "lastModified": "2026-03-12T21:57:26.621Z",
+            "checksum": "a31fb4b80628c9c9ecc6f4e20848b5b695372dd2c304ad8c4e94f36db847244f"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RecordsCreated",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of new records created",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "4E363E15-7BF3-4F18-9C9E-797E6204D627"
+          },
+          "sync": {
+            "lastModified": "2026-03-12T21:57:26.633Z",
+            "checksum": "4362a85e2ddcbfad10acaf4954b00704d1642db6970b91fd837b7275420a34fa"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RecordsUpdated",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of existing records updated",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "8F8F9020-384F-4856-8A85-DE47EEF47CD2"
+          },
+          "sync": {
+            "lastModified": "2026-03-12T21:57:26.648Z",
+            "checksum": "e87da702ad6572e552b21e92bc74a2d735d9b7e037482b5c3ef6e58ef42b1f55"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RecordsDeleted",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of records deleted",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "454534E8-314A-4FBB-AD80-B9E2F5C9E94A"
+          },
+          "sync": {
+            "lastModified": "2026-03-12T21:57:26.661Z",
+            "checksum": "80e6e6888889357815b1b36a09186d6f0bb5ba879a87e379227108dc922b2040"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RecordsErrored",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of records that encountered errors",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "825616F8-6A17-4279-A2BE-5C1B48D50A48"
+          },
+          "sync": {
+            "lastModified": "2026-03-12T21:57:26.673Z",
+            "checksum": "346f00b35eb5da5952fb00459d730102325659f854b0ab86e3988eb51dba4ae3"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RecordsSkipped",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of records that were skipped",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "2E9E1C3B-7093-406A-AEE0-4CC1BBB77DA7"
+          },
+          "sync": {
+            "lastModified": "2026-03-12T21:57:26.683Z",
+            "checksum": "4e17d27336f7cf70ea57731029a61cd6753bf0e90bcebdfdf4b61a54ed2c8275"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ErrorSummary",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "JSON string containing details of the first 10 errors encountered",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "0432F739-6A72-4E76-9744-4A7B21EE9280"
+          },
+          "sync": {
+            "lastModified": "2026-03-12T21:57:26.707Z",
+            "checksum": "c630fbaf6307d9d71a742c6c16c18177ce8b69a26781b1daeec26e96aa333961"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Sync completed successfully with no errors"
+          },
+          "primaryKey": {
+            "ID": "B98007F6-5E4D-4440-9688-A75950384DF9"
+          },
+          "sync": {
+            "lastModified": "2026-03-12T21:57:26.726Z",
+            "checksum": "252e771117aef7e3bef9d1c618b6a94263819abefa66d5e0f9901c3a174f5eef"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SYNC_COMPLETED_WITH_ERRORS",
+            "IsSuccess": false,
+            "Description": "Sync completed but some records encountered errors"
+          },
+          "primaryKey": {
+            "ID": "201C2536-9A0B-4F40-8BB1-FB386F2F7875"
+          },
+          "sync": {
+            "lastModified": "2026-03-12T21:57:26.737Z",
+            "checksum": "3c32790ac7193e6ac722ce201a57415bf680f598cd33529938e2e508be459cdf"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PARAMETER",
+            "IsSuccess": false,
+            "Description": "Required parameter CompanyIntegrationID was not provided"
+          },
+          "primaryKey": {
+            "ID": "0B463575-5F04-4865-8707-8912978F18EF"
+          },
+          "sync": {
+            "lastModified": "2026-03-12T21:57:26.749Z",
+            "checksum": "3bc0be042ac140854c8eeadd533f79d7f0b9a036825a3c532bc432dcfd090abe"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "UNEXPECTED_ERROR",
+            "IsSuccess": false,
+            "Description": "An unexpected error occurred during sync execution"
+          },
+          "primaryKey": {
+            "ID": "70E9122E-4921-4E84-B7F1-4C3174C993D6"
+          },
+          "sync": {
+            "lastModified": "2026-03-12T21:57:26.759Z",
+            "checksum": "69e88de983fc065e12eb1870dac0a59c36cfa9096462502ba6a12e69b8f91267"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "D5F8549D-54A9-4A6E-9D84-AAF2988F8DA0"
+    },
+    "sync": {
+      "lastModified": "2026-03-12T21:57:26.514Z",
+      "checksum": "96d41c1e1fce0261688e351922186e9408afe8988d26224ab811a5ca2ca4ce6a"
+    }
+  }
+]

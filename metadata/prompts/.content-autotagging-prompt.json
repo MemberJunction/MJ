@@ -1,0 +1,62 @@
+[
+  {
+    "fields": {
+      "Name": "Content Autotagging",
+      "Description": "Extracts titles, descriptions, and topical keywords from content items. Used by the Content Autotagging engine to analyze and tag ingested content.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/knowledge-hub/content-autotagging.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Lowest",
+      "ParallelizationMode": "None",
+      "MaxRetries": 5,
+      "RetryDelayMS": 5000,
+      "RetryStrategy": "Exponential",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.1 Flash-Lite",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 1
+          },
+          "primaryKey": {
+            "ID": "B8AF58CA-88C6-4117-A358-1CC9ECB5BA01"
+          },
+          "sync": {
+            "lastModified": "2026-04-04T01:09:46.975Z",
+            "checksum": "71ee991d8e0ab07b2e4ea296274c871739fbb9068ae94df729251a82c42f9641"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.1 Flash-Lite",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "Priority": 2
+          },
+          "primaryKey": {
+            "ID": "FC7EDB2A-9E3C-41BF-A138-8BB4EFCF729D"
+          },
+          "sync": {
+            "lastModified": "2026-04-04T01:09:46.987Z",
+            "checksum": "095fd3e315f3b21003c644d5708f6734db90f565786423ebadb395b7fa53105f"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "91C4178C-355C-49EA-9565-AEE8B7C630B2"
+    },
+    "sync": {
+      "lastModified": "2026-04-06T23:23:00.860Z",
+      "checksum": "8229a18dfd96c158122e73cb33088b517cedbb9b035214af2fa8612f839ab9a5"
+    }
+  }
+]

@@ -19,8 +19,11 @@ import { AuthServicesModule, RedirectComponent, MJAuthBase } from '@memberjuncti
 import { MJExplorerAppModule } from '@memberjunction/ng-explorer-app';
 import { FeedbackModule } from '@memberjunction/ng-feedback';
 
-// Import pre-built MJ class registrations manifest (covers all @memberjunction/* packages)
-import {CLASS_REGISTRATIONS} from '@memberjunction/ng-bootstrap';
+// Lazy loading infrastructure
+import { LazyModuleRegistry, LAZY_FEATURE_CONFIG } from '@memberjunction/ng-explorer-core';
+
+// Import lite class registrations manifest (excludes lazy-loaded dashboard and settings packages)
+import {CLASS_REGISTRATIONS} from '@memberjunction/ng-bootstrap-lite';
 
 // Import supplemental manifest for user-defined classes (generated at prestart with --exclude-packages @memberjunction)
 import {CLASS_REGISTRATIONS as LOCAL_CLASSES} from './generated/class-registrations-manifest';
@@ -113,6 +116,15 @@ export function initializeAuth(authService: MJAuthBase): () => Promise<void> {
       provide: APP_INITIALIZER,
       useFactory: initializeAuth,
       deps: [MJAuthBase],
+      multi: true
+    },
+    {
+      provide: APP_INITIALIZER,
+      useFactory: (lazyRegistry: LazyModuleRegistry) => () => {
+        lazyRegistry.RegisterBulk(LAZY_FEATURE_CONFIG);
+        lazyRegistry.WireToClassFactory();
+      },
+      deps: [LazyModuleRegistry],
       multi: true
     }
   ],

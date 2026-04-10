@@ -2,55 +2,62 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { BaseAction } from "@memberjunction/actions";
 
 import { EntityInfo, Metadata } from "@memberjunction/core";
-import { ChangeDetectionResult, ExternalChangeDetectorEngine } from "@memberjunction/external-change-detection";
+import { ExternalChangeDetectorEngine } from "@memberjunction/external-change-detection";
 import { RegisterClass } from "@memberjunction/global";
 
 /**
- * This class provides a simple wrapper to execute the External Change Detection process.
- * Possible params:
- *  EntityList - a comma separated list of entity names to detect changes for. If not provided, all eligible entities will be processed.
+ * Thin action wrapper for External Change Detection. Delegates to
+ * ExternalChangeDetectorEngine.DetectAndReplayChanges() which interleaves
+ * detection and replay per entity to keep memory bounded.
+ *
+ * Params:
+ *  EntityList - Comma-separated entity names. If omitted, all eligible entities are processed.
+ *  ReplayBatchSize - Concurrent record replays per entity. Default 20.
+ *  DetectionBatchSize - Max parallel entity detection. Default 5.
+ *  StaleTimeoutHours - Hours before a stuck run is considered stale. Default 24.
  */
 @RegisterClass(BaseAction, "__RunExternalChangeDetection")
 export class ExternalChangeDetectionAction extends BaseAction {
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
-        const entityListParam = params.Params.find(p => p.Name.trim().toLowerCase() === 'entitylist');
+        const replayBatchSize = this.getIntParam(params, 'replaybatchsize', 20);
+        const detectionBatchSize = this.getIntParam(params, 'detectionbatchsize', 5);
+        const staleTimeoutHours = this.getIntParam(params, 'staletimeouthours', 24);
 
         await ExternalChangeDetectorEngine.Instance.Config(false, params.ContextUser);
 
-        let changes: ChangeDetectionResult;
-        if (entityListParam && entityListParam.Value && entityListParam.Value.length > 0) {
-            const md = new Metadata();
-            const entityNames = entityListParam.Value.split(',');
-            const entities: EntityInfo[] = entityNames.map(entityName => md.EntityByName(entityName));
-            changes = await ExternalChangeDetectorEngine.Instance.DetectChangesForEntities(entities);
-        } 
-        else {
-            changes = await ExternalChangeDetectorEngine.Instance.DetectChangesForAllEligibleEntities();
-        }
+        const entities = this.resolveEntityList(params);
+        const result = await ExternalChangeDetectorEngine.Instance.DetectAndReplayChanges(
+            entities,
+            replayBatchSize,
+            detectionBatchSize,
+            staleTimeoutHours
+        );
 
-        if (changes && changes.Success) {
-            // attempt to replay the changes
-            if (await ExternalChangeDetectorEngine.Instance.ReplayChanges(changes.Changes)) {
-                return {
-                    Success: true,
-                    Message: "Changes detected and replayed successfully.",
-                    ResultCode: "SUCCESS"
-                }
-            }
-            else {
-                return {
-                    Success: false,
-                    Message: "Failed to replay changes.",
-                    ResultCode: "FAILED"
-                }
-            }
+        const summary = `${result.EntitiesProcessed} entities processed, ${result.EntitiesFailed} failed, ` +
+            `${result.TotalDetected} changes detected, ${result.TotalReplayed} replayed`;
+
+        return {
+            Success: result.Success,
+            Message: result.Success ? `${summary}.` : `${summary}. ${result.ErrorMessage || ''}`,
+            ResultCode: result.Success ? "SUCCESS" : "FAILED"
+        };
+    }
+
+    private resolveEntityList(params: RunActionParams): EntityInfo[] {
+        const entityListParam = params.Params.find(p => p.Name.trim().toLowerCase() === 'entitylist');
+        if (entityListParam?.Value && entityListParam.Value.length > 0) {
+            const md = new Metadata();
+            return entityListParam.Value.split(',')
+                .map((name: string) => md.EntityByName(name.trim()))
+                .filter((e: EntityInfo | undefined): e is EntityInfo => !!e);
         }
-        else {
-            return {
-                Success: false,
-                Message: changes.ErrorMessage,
-                ResultCode: "FAILED"
-            }
-        }
+        return ExternalChangeDetectorEngine.Instance.EligibleEntities;
+    }
+
+    private getIntParam(params: RunActionParams, name: string, defaultValue: number): number {
+        const param = params.Params.find(p => p.Name.trim().toLowerCase() === name.toLowerCase());
+        if (!param?.Value) return defaultValue;
+        const parsed = parseInt(param.Value, 10);
+        return isNaN(parsed) ? defaultValue : parsed;
     }
 }

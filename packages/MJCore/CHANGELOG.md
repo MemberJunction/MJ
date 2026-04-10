@@ -1,5 +1,224 @@
 # Change Log - @memberjunction/core
 
+## 5.24.0
+
+### Minor Changes
+
+- c318a0c: metadata + migrations in this PR == minor
+
+### Patch Changes
+
+- 1912726: Add sqlLikeContains, sqlLikeBegins, and sqlLikeEnds template filters for platform-aware LIKE pattern matching
+  - @memberjunction/global@5.24.0
+
+## 5.23.0
+
+### Minor Changes
+
+- 513b20c: migration/metadata
+- 44bc22b: JSONType strong typing system: adds JSONType, JSONTypeIsArray, and JSONTypeDefinition metadata.
+
+### Patch Changes
+
+- 247df16: Fix server-side RunView cache write asymmetry that caused repeated DB queries during metadata sync, add deterministic Nunjucks template parameter extraction via AST, support comma-delimited multi-value fields in validation, and redesign QueryPagingEngine to append paging directly instead of wrapping in CTEs (fixing ORDER BY on non-projected columns and apostrophe-in-comments bugs).
+- 9250070: Update default configs for local cache manager.
+- Updated dependencies [247df16]
+  - @memberjunction/global@5.23.0
+
+## 5.22.0
+
+### Patch Changes
+
+- 6a5093b: no migration
+- e123e4b: bug fixes for RunView cache, Data Explorer, and MCP OAuth scopes
+- Updated dependencies [f2a6bec]
+  - @memberjunction/global@5.22.0
+
+## 5.21.0
+
+### Patch Changes
+
+- c7dfb20: no migration/metadata changes (yet)
+  - @memberjunction/global@5.21.0
+
+## 5.20.0
+
+### Minor Changes
+
+- 2298f8a: Metadata Migration for v5.20.0
+
+### Patch Changes
+
+- @memberjunction/global@5.20.0
+
+## 5.19.0
+
+### Patch Changes
+
+- @memberjunction/global@5.19.0
+
+## 5.18.0
+
+### Patch Changes
+
+- @memberjunction/global@5.18.0
+
+## 5.17.0
+
+### Patch Changes
+
+- 9881045: no metadata or migration files, patch release
+  - @memberjunction/global@5.17.0
+
+## 5.16.0
+
+### Patch Changes
+
+- 2387400: Migrated singleton classes to BaseSingleton pattern and extracted auth providers into standalone package
+- 11dba07: no migration
+  - @memberjunction/global@5.16.0
+
+## 5.15.0
+
+### Minor Changes
+
+- 662d56b: migration + metadata
+
+### Patch Changes
+
+- d01f697: MJ SQL Parser: unified parser for SQL + Nunjucks templates + composition tokens. Replaces fragmented regex-based SQL parsing across 6 packages with a single MJSQLParser class providing AST-based tokenization, placeholder substitution, CTE extraction, ORDER BY remapping, and deterministic parameter/field extraction. Moves QueryPagingEngine from MJCore to GenericDatabaseProvider with AST-based paging. Fixes backtick quoting, table-qualified ORDER BY remapping, trailing semicolon, and FOR XML parsing bugs.
+  - @memberjunction/global@5.15.0
+
+## 5.14.0
+
+### Minor Changes
+
+- 140fc6d: Add HubSpot v4 association fetch, fix empty-string-to-null coercion for HubSpot datetime fields, widen GetCachedObject/GetCachedFields visibility to protected, and fix OpenAI streaming max_completion_tokens parameter
+
+### Patch Changes
+
+- 69b5af4: Add TestQuerySQL resolver and client method for query execution testing, refactor CreateQueryResolver into QuerySystemUserResolver composing CodeGen-generated MJQuery\_ types, add lightweight query catalog for collision detection, unit tests for transitive template composition and ORDER BY stripping, and updated class registration manifests
+  - @memberjunction/global@5.14.0
+
+## 5.13.0
+
+### Minor Changes
+
+- d0d9eba: Add metadata migration script for v5.13.0
+
+### Patch Changes
+
+- f72b538: Replace HookRegistry and DynamicPackageLoader with @RegisterClass + ClassFactory middleware pattern, and add GetResolverPaths() to BaseServerMiddleware for auto-discovery of middleware-contributed GraphQL resolvers
+- Updated dependencies [f72b538]
+  - @memberjunction/global@5.13.0
+
+## 5.12.0
+
+### Minor Changes
+
+- 05f19ff: Add composable query system with semantic catalog search, CTE composition engine, server-side paging, query caching with TTL/dependency invalidation, and agent directive surfacing. Includes QueryCacheManager wrapper over LocalCacheManager, QueryPagingEngine for SQL-level OFFSET/FETCH paging, QueryCompositionEngine for platform-aware CTE generation, and SearchQueryCatalog action for vector-based query discovery. Renames PaginationComponent to DataPagerComponent and extracts into shared module.
+- d92502e: migration/metadata
+
+### Patch Changes
+
+- @memberjunction/global@5.12.0
+
+## 5.11.0
+
+### Minor Changes
+
+- a4c3c81: migration/metadata
+
+### Patch Changes
+
+- @memberjunction/global@5.11.0
+
+## 5.10.1
+
+### Patch Changes
+
+- @memberjunction/global@5.10.1
+
+## 5.10.0
+
+### Minor Changes
+
+- f2df653: Add ExternalReferenceID column to AIAgentRun for cross-system run correlation and wire it through Skip proxy. Fix CodeGen validator duplicate generation and cleanup existing duplicates.
+
+### Patch Changes
+
+- 75dd36b: no migration
+  - @memberjunction/global@5.10.0
+
+## 5.9.0
+
+### Minor Changes
+
+- 194ddf2: Add Redis-backed ILocalStorageProvider with cross-server cache invalidation via pub/sub
+
+### Patch Changes
+
+- Updated dependencies [194ddf2]
+  - @memberjunction/global@5.9.0
+
+## 5.8.0
+
+### Minor Changes
+
+- 0753249: Add metadata migration script for v5.8.0
+
+### Patch Changes
+
+- @memberjunction/global@5.8.0
+
+## 5.7.0
+
+### Minor Changes
+
+- 642c4df: Remove migration script V202603021400**v5.6.x**Optimize_RecordChange_Detection_Index because it would significantly increase database size and cause migration timeouts for AIDP upgrades (it adds an index on RecordChange that included FullRecordJSON).
+
+### Patch Changes
+
+- @memberjunction/global@5.7.0
+
+## 5.6.0
+
+### Minor Changes
+
+- 4547d05: Grant UI role Create/Update permissions on 9 agent and conversation entities so end users can use agents like Sage
+
+### Patch Changes
+
+- 76eaabc: Fix SQL validation regex to allow legitimate string values containing SQL keywords, add PlatformSQL support to GraphQLSystemUserClient input types, and mark 25 deprecated AI model-vendor inference pairs as Inactive
+  - @memberjunction/global@5.6.0
+
+## 5.5.0
+
+### Minor Changes
+
+- a1648c5: Add MiniMax AI provider package, add MiniMax and Gemini 3.1 Pro models to AI model catalog, fix ng-conversations to prevent client from overwriting server-completed conversation details, and align metadata files with SQL logger output to prevent phantom mj-sync updates
+- ee9f788: migrations - postgres sql support!
+
+### Patch Changes
+
+- 2b1d842: Add Qwen 3.5 Plus AI model metadata and revert diagnostic logging for component registry loading
+- df2457c: no migration, just small code changes
+- Updated dependencies [ee9f788]
+- Updated dependencies [df2457c]
+  - @memberjunction/global@5.5.0
+
+## 5.4.1
+
+### Patch Changes
+
+- @memberjunction/global@5.4.1
+
+## 5.4.0
+
+### Patch Changes
+
+- @memberjunction/global@5.4.0
+
 ## 5.3.1
 
 ### Patch Changes

@@ -7,7 +7,9 @@
  * @module @memberjunction/core/runQuerySQLFilterImplementations
  */
 
+import { BaseSingleton } from '@memberjunction/global';
 import { RUN_QUERY_SQL_FILTERS, RunQuerySQLFilter } from './querySQLFilters';
+import { DatabasePlatform } from './platformSQL';
 
 /**
  * Dangerous SQL keywords that should be blocked in expressions
@@ -111,17 +113,19 @@ const FILTER_IMPLEMENTATIONS: Record<string, (value: any) => any> = {
         return `'${date.toISOString()}'`;
     },
     
-    sqlBoolean: (value: any) => {
+    sqlBoolean: (value: unknown) => {
+        // Default SQL Server behavior; overridden by platform-aware version in RunQuerySQLFilterManager
         return value ? '1' : '0';
     },
-    
-    sqlIdentifier: (value: any) => {
+
+    sqlIdentifier: (value: unknown) => {
         if (!value) throw new Error('Identifier cannot be empty');
         const identifier = String(value);
         // Basic SQL injection prevention for identifiers
         if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(identifier)) {
             throw new Error(`Invalid SQL identifier: ${identifier}`);
         }
+        // Default SQL Server behavior; overridden by platform-aware version in RunQuerySQLFilterManager
         return `[${identifier}]`;
     },
     
@@ -142,6 +146,24 @@ const FILTER_IMPLEMENTATIONS: Record<string, (value: any) => any> = {
         return `(${escaped.join(', ')})`;
     },
     
+    sqlLikeContains: (value: any) => {
+        if (value === null || value === undefined) return 'NULL';
+        const escaped = String(value).replace(/'/g, "''").replace(/%/g, '[%]').replace(/_/g, '[_]');
+        return `'%${escaped}%'`;
+    },
+
+    sqlLikeBegins: (value: any) => {
+        if (value === null || value === undefined) return 'NULL';
+        const escaped = String(value).replace(/'/g, "''").replace(/%/g, '[%]').replace(/_/g, '[_]');
+        return `'${escaped}%'`;
+    },
+
+    sqlLikeEnds: (value: any) => {
+        if (value === null || value === undefined) return 'NULL';
+        const escaped = String(value).replace(/'/g, "''").replace(/%/g, '[%]').replace(/_/g, '[_]');
+        return `'%${escaped}'`;
+    },
+
     sqlNoKeywordsExpression: (value: any) => {
         if (!value) {
             throw new Error('SQL expression cannot be empty');
@@ -210,30 +232,155 @@ export const RUN_QUERY_SQL_FILTERS_WITH_IMPLEMENTATIONS: RunQuerySQLFilter[] =
     }));
 
 /**
- * Singleton class for managing RunQuery SQL filters with implementations
+ * Creates a platform-aware sqlBoolean filter implementation.
+ * SQL Server uses 1/0, PostgreSQL uses true/false.
  */
-export class RunQuerySQLFilterManager {
-    private static _instance: RunQuerySQLFilterManager;
-    private _filters: Map<string, RunQuerySQLFilter>;
+function createPlatformSqlBoolean(platform: DatabasePlatform): (value: unknown) => string {
+    return (value: unknown) => {
+        if (platform === 'postgresql') {
+            return value ? 'true' : 'false';
+        }
+        return value ? '1' : '0';
+    };
+}
 
-    private constructor() {
-        this._filters = new Map();
-        // Initialize with all filters that have implementations
+/**
+ * Creates a platform-aware sqlIdentifier filter implementation.
+ * SQL Server uses [brackets], PostgreSQL uses "double quotes".
+ */
+function createPlatformSqlIdentifier(platform: DatabasePlatform): (value: unknown) => string {
+    return (value: unknown) => {
+        if (!value) throw new Error('Identifier cannot be empty');
+        const identifier = String(value);
+        if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(identifier)) {
+            throw new Error(`Invalid SQL identifier: ${identifier}`);
+        }
+        if (platform === 'postgresql') {
+            return `"${identifier}"`;
+        }
+        return `[${identifier}]`;
+    };
+}
+
+/**
+ * Escapes literal % and _ characters inside a LIKE value in a platform-aware way.
+ * SQL Server uses bracket escaping [%] [_]; PostgreSQL uses backslash escaping \% \_.
+ */
+function escapeLikeValue(value: string, platform: DatabasePlatform): string {
+    const escaped = value.replace(/'/g, "''");
+    if (platform === 'postgresql') {
+        return escaped.replace(/%/g, '\\%').replace(/_/g, '\\_');
+    }
+    return escaped.replace(/%/g, '[%]').replace(/_/g, '[_]');
+}
+
+/**
+ * Creates platform-aware sqlLike filter implementations.
+ * SQL Server escapes with [%]/[_], PostgreSQL escapes with \%/\_.
+ */
+function createPlatformSqlLikeContains(platform: DatabasePlatform): (value: any) => string {
+    return (value: any) => {
+        if (value === null || value === undefined) return 'NULL';
+        return `'%${escapeLikeValue(String(value), platform)}%'`;
+    };
+}
+
+function createPlatformSqlLikeBegins(platform: DatabasePlatform): (value: any) => string {
+    return (value: any) => {
+        if (value === null || value === undefined) return 'NULL';
+        return `'${escapeLikeValue(String(value), platform)}%'`;
+    };
+}
+
+function createPlatformSqlLikeEnds(platform: DatabasePlatform): (value: any) => string {
+    return (value: any) => {
+        if (value === null || value === undefined) return 'NULL';
+        return `'%${escapeLikeValue(String(value), platform)}'`;
+    };
+}
+
+/**
+ * Singleton class for managing RunQuery SQL filters with implementations.
+ * Supports platform-specific filter behavior via SetPlatform().
+ *
+ * Uses BaseSingleton to guarantee a single instance across the entire process,
+ * even if bundlers duplicate this module across multiple execution paths.
+ */
+export class RunQuerySQLFilterManager extends BaseSingleton<RunQuerySQLFilterManager> {
+    private _filters: Map<string, RunQuerySQLFilter> = new Map();
+    private _platform: DatabasePlatform = 'sqlserver';
+
+    /**
+     * Use RunQuerySQLFilterManager.Instance to get the singleton instance.
+     */
+    public constructor() {
+        super();
+        this.initializeFilters();
+    }
+
+    /**
+     * Initializes or reinitializes all filters with the current platform setting.
+     */
+    private initializeFilters(): void {
+        this._filters.clear();
         RUN_QUERY_SQL_FILTERS_WITH_IMPLEMENTATIONS.forEach(filter => {
             if (filter.implementation) {
-                this._filters.set(filter.name, filter);
+                this._filters.set(filter.name, { ...filter });
             }
         });
+        // Override platform-sensitive filters with platform-aware versions
+        this.applyPlatformOverrides();
+    }
+
+    /**
+     * Applies platform-specific overrides for sqlBoolean and sqlIdentifier filters.
+     */
+    private applyPlatformOverrides(): void {
+        const boolFilter = this._filters.get('sqlBoolean');
+        if (boolFilter) {
+            boolFilter.implementation = createPlatformSqlBoolean(this._platform);
+        }
+        const idFilter = this._filters.get('sqlIdentifier');
+        if (idFilter) {
+            idFilter.implementation = createPlatformSqlIdentifier(this._platform);
+        }
+        const likeContainsFilter = this._filters.get('sqlLikeContains');
+        if (likeContainsFilter) {
+            likeContainsFilter.implementation = createPlatformSqlLikeContains(this._platform);
+        }
+        const likeBeginsFilter = this._filters.get('sqlLikeBegins');
+        if (likeBeginsFilter) {
+            likeBeginsFilter.implementation = createPlatformSqlLikeBegins(this._platform);
+        }
+        const likeEndsFilter = this._filters.get('sqlLikeEnds');
+        if (likeEndsFilter) {
+            likeEndsFilter.implementation = createPlatformSqlLikeEnds(this._platform);
+        }
     }
 
     /**
      * Gets the singleton instance
      */
     public static get Instance(): RunQuerySQLFilterManager {
-        if (!this._instance) {
-            this._instance = new RunQuerySQLFilterManager();
+        return RunQuerySQLFilterManager.getInstance<RunQuerySQLFilterManager>();
+    }
+
+    /**
+     * Gets the current database platform for this filter manager.
+     */
+    public get Platform(): DatabasePlatform {
+        return this._platform;
+    }
+
+    /**
+     * Sets the database platform, updating platform-sensitive filters accordingly.
+     * Call this during provider initialization to match the active database platform.
+     */
+    public SetPlatform(platform: DatabasePlatform): void {
+        if (this._platform !== platform) {
+            this._platform = platform;
+            this.applyPlatformOverrides();
         }
-        return this._instance;
     }
 
     /**
@@ -268,7 +415,7 @@ export class RunQuerySQLFilterManager {
      * @returns The filtered result
      * @throws Error if filter is not found or execution fails
      */
-    public executeFilter(filterName: string, value: any): any {
+    public executeFilter(filterName: string, value: unknown): unknown {
         const filter = this._filters.get(filterName);
         if (!filter || !filter.implementation) {
             throw new Error(`Filter '${filterName}' not found or has no implementation`);

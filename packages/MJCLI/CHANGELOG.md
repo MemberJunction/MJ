@@ -1,5 +1,460 @@
 # Change Log - @memberjunction/cli
 
+## 5.24.0
+
+### Patch Changes
+
+- Updated dependencies [c318a0c]
+- Updated dependencies [1912726]
+  - @memberjunction/codegen-lib@5.24.0
+  - @memberjunction/core@5.24.0
+  - @memberjunction/server-bootstrap-lite@5.24.0
+  - @memberjunction/ai-cli@5.24.0
+  - @memberjunction/query-gen@5.24.0
+  - @memberjunction/sqlserver-dataprovider@5.24.0
+  - @memberjunction/metadata-sync@5.24.0
+  - @memberjunction/db-auto-doc@5.24.0
+  - @memberjunction/testing-cli@5.24.0
+  - @memberjunction/config@5.24.0
+  - @memberjunction/installer@5.24.0
+  - @memberjunction/sql-converter@5.24.0
+
+## 5.23.0
+
+### Patch Changes
+
+- 247df16: Fix server-side RunView cache write asymmetry that caused repeated DB queries during metadata sync, add deterministic Nunjucks template parameter extraction via AST, support comma-delimited multi-value fields in validation, and redesign QueryPagingEngine to append paging directly instead of wrapping in CTEs (fixing ORDER BY on non-projected columns and apostrophe-in-comments bugs).
+- b589bef: Switch installer from distribution bootstrap ZIP to full monorepo source download. The installer now downloads the complete MemberJunction repository via GitHub's codeload CDN (not rate-limited) instead of the smaller bootstrap distribution ZIP.
+- Updated dependencies [247df16]
+- Updated dependencies [37dc301]
+- Updated dependencies [9250070]
+- Updated dependencies [513b20c]
+- Updated dependencies [44bc22b]
+- Updated dependencies [b589bef]
+  - @memberjunction/core@5.23.0
+  - @memberjunction/metadata-sync@5.23.0
+  - @memberjunction/codegen-lib@5.23.0
+  - @memberjunction/sqlserver-dataprovider@5.23.0
+  - @memberjunction/installer@5.23.0
+  - @memberjunction/ai-cli@5.23.0
+  - @memberjunction/db-auto-doc@5.23.0
+  - @memberjunction/query-gen@5.23.0
+  - @memberjunction/server-bootstrap-lite@5.23.0
+  - @memberjunction/testing-cli@5.23.0
+  - @memberjunction/config@5.23.0
+  - @memberjunction/sql-converter@5.23.0
+
+## 5.22.0
+
+### Patch Changes
+
+- f2a6bec: Universal lazy loading via ClassFactory async API. Fixes HomeApplication being tree-shaken by moving lazy loading from consumer-specific retry patterns into ClassFactory itself with RegisterLazyLoader, CreateInstanceAsync, and GetRegistrationAsync. Lazy config now uses compound keys (BaseClassName::Key) to support any base class. Adds coverage audit to codegen to detect gaps.
+- Updated dependencies [6a5093b]
+- Updated dependencies [e123e4b]
+- Updated dependencies [a42aba6]
+- Updated dependencies [f2a6bec]
+  - @memberjunction/core@5.22.0
+  - @memberjunction/server-bootstrap-lite@5.22.0
+  - @memberjunction/codegen-lib@5.22.0
+  - @memberjunction/ai-cli@5.22.0
+  - @memberjunction/query-gen@5.22.0
+  - @memberjunction/db-auto-doc@5.22.0
+  - @memberjunction/metadata-sync@5.22.0
+  - @memberjunction/sqlserver-dataprovider@5.22.0
+  - @memberjunction/testing-cli@5.22.0
+  - @memberjunction/config@5.22.0
+  - @memberjunction/installer@5.22.0
+  - @memberjunction/sql-converter@5.22.0
+
+## 5.21.0
+
+### Patch Changes
+
+- Updated dependencies [c7dfb20]
+  - @memberjunction/core@5.21.0
+  - @memberjunction/server-bootstrap-lite@5.21.0
+  - @memberjunction/sqlserver-dataprovider@5.21.0
+  - @memberjunction/query-gen@5.21.0
+  - @memberjunction/ai-cli@5.21.0
+  - @memberjunction/codegen-lib@5.21.0
+  - @memberjunction/db-auto-doc@5.21.0
+  - @memberjunction/metadata-sync@5.21.0
+  - @memberjunction/testing-cli@5.21.0
+  - @memberjunction/config@5.21.0
+  - @memberjunction/installer@5.21.0
+  - @memberjunction/sql-converter@5.21.0
+
+## 5.20.0
+
+### Patch Changes
+
+- Updated dependencies [2298f8a]
+  - @memberjunction/core@5.20.0
+  - @memberjunction/metadata-sync@5.20.0
+  - @memberjunction/sqlserver-dataprovider@5.20.0
+  - @memberjunction/ai-cli@5.20.0
+  - @memberjunction/server-bootstrap-lite@5.20.0
+  - @memberjunction/codegen-lib@5.20.0
+  - @memberjunction/db-auto-doc@5.20.0
+  - @memberjunction/query-gen@5.20.0
+  - @memberjunction/testing-cli@5.20.0
+  - @memberjunction/config@5.20.0
+  - @memberjunction/installer@5.20.0
+  - @memberjunction/sql-converter@5.20.0
+
+## 5.19.0
+
+### Patch Changes
+
+- @memberjunction/ai-cli@5.19.0
+- @memberjunction/server-bootstrap-lite@5.19.0
+- @memberjunction/db-auto-doc@5.19.0
+- @memberjunction/codegen-lib@5.19.0
+- @memberjunction/metadata-sync@5.19.0
+- @memberjunction/testing-cli@5.19.0
+- @memberjunction/config@5.19.0
+- @memberjunction/core@5.19.0
+- @memberjunction/installer@5.19.0
+- @memberjunction/query-gen@5.19.0
+- @memberjunction/sql-converter@5.19.0
+- @memberjunction/sqlserver-dataprovider@5.19.0
+
+## 5.18.0
+
+### Patch Changes
+
+- @memberjunction/ai-cli@5.18.0
+- @memberjunction/server-bootstrap-lite@5.18.0
+- @memberjunction/codegen-lib@5.18.0
+- @memberjunction/query-gen@5.18.0
+- @memberjunction/metadata-sync@5.18.0
+- @memberjunction/db-auto-doc@5.18.0
+- @memberjunction/testing-cli@5.18.0
+- @memberjunction/sqlserver-dataprovider@5.18.0
+- @memberjunction/config@5.18.0
+- @memberjunction/core@5.18.0
+- @memberjunction/installer@5.18.0
+- @memberjunction/sql-converter@5.18.0
+
+## 5.17.0
+
+### Patch Changes
+
+- 5ff5f32: use createRequire for ESM-compatible require in getMJVersion
+- Updated dependencies [001fd3e]
+- Updated dependencies [9881045]
+  - @memberjunction/codegen-lib@5.17.0
+  - @memberjunction/core@5.17.0
+  - @memberjunction/metadata-sync@5.17.0
+  - @memberjunction/sqlserver-dataprovider@5.17.0
+  - @memberjunction/ai-cli@5.17.0
+  - @memberjunction/server-bootstrap-lite@5.17.0
+  - @memberjunction/db-auto-doc@5.17.0
+  - @memberjunction/query-gen@5.17.0
+  - @memberjunction/testing-cli@5.17.0
+  - @memberjunction/config@5.17.0
+  - @memberjunction/installer@5.17.0
+  - @memberjunction/sql-converter@5.17.0
+
+## 5.16.0
+
+### Patch Changes
+
+- Updated dependencies [2387400]
+- Updated dependencies [11dba07]
+  - @memberjunction/core@5.16.0
+  - @memberjunction/ai-cli@5.16.0
+  - @memberjunction/codegen-lib@5.16.0
+  - @memberjunction/db-auto-doc@5.16.0
+  - @memberjunction/metadata-sync@5.16.0
+  - @memberjunction/query-gen@5.16.0
+  - @memberjunction/sqlserver-dataprovider@5.16.0
+  - @memberjunction/server-bootstrap-lite@5.16.0
+  - @memberjunction/testing-cli@5.16.0
+  - @memberjunction/config@5.16.0
+  - @memberjunction/installer@5.16.0
+  - @memberjunction/sql-converter@5.16.0
+
+## 5.15.0
+
+### Patch Changes
+
+- Updated dependencies [662d56b]
+- Updated dependencies [d01f697]
+  - @memberjunction/core@5.15.0
+  - @memberjunction/codegen-lib@5.15.0
+  - @memberjunction/ai-cli@5.15.0
+  - @memberjunction/db-auto-doc@5.15.0
+  - @memberjunction/metadata-sync@5.15.0
+  - @memberjunction/query-gen@5.15.0
+  - @memberjunction/sqlserver-dataprovider@5.15.0
+  - @memberjunction/server-bootstrap-lite@5.15.0
+  - @memberjunction/testing-cli@5.15.0
+  - @memberjunction/config@5.15.0
+  - @memberjunction/installer@5.15.0
+  - @memberjunction/sql-converter@5.15.0
+
+## 5.14.0
+
+### Patch Changes
+
+- Updated dependencies [69b5af4]
+- Updated dependencies [140fc6d]
+  - @memberjunction/core@5.14.0
+  - @memberjunction/server-bootstrap-lite@5.14.0
+  - @memberjunction/ai-cli@5.14.0
+  - @memberjunction/codegen-lib@5.14.0
+  - @memberjunction/db-auto-doc@5.14.0
+  - @memberjunction/metadata-sync@5.14.0
+  - @memberjunction/query-gen@5.14.0
+  - @memberjunction/sqlserver-dataprovider@5.14.0
+  - @memberjunction/testing-cli@5.14.0
+  - @memberjunction/config@5.14.0
+  - @memberjunction/installer@5.14.0
+  - @memberjunction/sql-converter@5.14.0
+
+## 5.13.0
+
+### Patch Changes
+
+- Updated dependencies [f72b538]
+- Updated dependencies [d0d9eba]
+  - @memberjunction/core@5.13.0
+  - @memberjunction/db-auto-doc@5.13.0
+  - @memberjunction/ai-cli@5.13.0
+  - @memberjunction/codegen-lib@5.13.0
+  - @memberjunction/metadata-sync@5.13.0
+  - @memberjunction/query-gen@5.13.0
+  - @memberjunction/sqlserver-dataprovider@5.13.0
+  - @memberjunction/server-bootstrap-lite@5.13.0
+  - @memberjunction/testing-cli@5.13.0
+  - @memberjunction/config@5.13.0
+  - @memberjunction/installer@5.13.0
+  - @memberjunction/sql-converter@5.13.0
+
+## 5.12.0
+
+### Patch Changes
+
+- 714e42d: Add diagnostic report generation to `mj doctor` command. `--report` generates a basic diagnostic report (`mj-diagnostic-report.md`) with environment info, install state, and check results. `--report_extended` adds sanitized configuration file snapshots and service startup log capture (`mj-diagnostic-report-extended.md`). Passwords and secrets are automatically redacted. Also fixes process cleanup after service log capture and corrects key file detection for distribution installs.
+- 7def002: Fix ExternalChangeDetection unquoted string IDs and log spam, add /healthcheck endpoint before auth middleware, return TechnicalDescription in CreateQuery/UpdateQuery mutations, and improve MJCLI config validation errors with env var hints
+- Updated dependencies [217bca4]
+- Updated dependencies [21a04c1]
+- Updated dependencies [05f19ff]
+- Updated dependencies [714e42d]
+- Updated dependencies [257512b]
+- Updated dependencies [7def002]
+- Updated dependencies [d92502e]
+- Updated dependencies [1e5d181]
+  - @memberjunction/codegen-lib@5.12.0
+  - @memberjunction/core@5.12.0
+  - @memberjunction/installer@5.12.0
+  - @memberjunction/server-bootstrap-lite@5.12.0
+  - @memberjunction/ai-cli@5.12.0
+  - @memberjunction/db-auto-doc@5.12.0
+  - @memberjunction/metadata-sync@5.12.0
+  - @memberjunction/query-gen@5.12.0
+  - @memberjunction/sqlserver-dataprovider@5.12.0
+  - @memberjunction/testing-cli@5.12.0
+  - @memberjunction/config@5.12.0
+  - @memberjunction/sql-converter@5.12.0
+
+## 5.11.0
+
+### Patch Changes
+
+- Updated dependencies [a4c3c81]
+  - @memberjunction/core@5.11.0
+  - @memberjunction/sql-converter@5.11.0
+  - @memberjunction/sqlserver-dataprovider@5.11.0
+  - @memberjunction/metadata-sync@5.11.0
+  - @memberjunction/ai-cli@5.11.0
+  - @memberjunction/codegen-lib@5.11.0
+  - @memberjunction/db-auto-doc@5.11.0
+  - @memberjunction/query-gen@5.11.0
+  - @memberjunction/server-bootstrap-lite@5.11.0
+  - @memberjunction/testing-cli@5.11.0
+  - @memberjunction/config@5.11.0
+  - @memberjunction/installer@5.11.0
+
+## 5.10.1
+
+### Patch Changes
+
+- Updated dependencies [a4ac83d]
+  - @memberjunction/codegen-lib@5.10.1
+  - @memberjunction/ai-cli@5.10.1
+  - @memberjunction/config@5.10.1
+  - @memberjunction/db-auto-doc@5.10.1
+  - @memberjunction/core@5.10.1
+  - @memberjunction/installer@5.10.1
+  - @memberjunction/metadata-sync@5.10.1
+  - @memberjunction/query-gen@5.10.1
+  - @memberjunction/sql-converter@5.10.1
+  - @memberjunction/sqlserver-dataprovider@5.10.1
+  - @memberjunction/server-bootstrap-lite@5.10.1
+  - @memberjunction/testing-cli@5.10.1
+
+## 5.10.0
+
+### Patch Changes
+
+- f2df653: Add ExternalReferenceID column to AIAgentRun for cross-system run correlation and wire it through Skip proxy. Fix CodeGen validator duplicate generation and cleanup existing duplicates.
+- Updated dependencies [f2df653]
+- Updated dependencies [75dd36b]
+  - @memberjunction/core@5.10.0
+  - @memberjunction/codegen-lib@5.10.0
+  - @memberjunction/ai-cli@5.10.0
+  - @memberjunction/db-auto-doc@5.10.0
+  - @memberjunction/metadata-sync@5.10.0
+  - @memberjunction/query-gen@5.10.0
+  - @memberjunction/sqlserver-dataprovider@5.10.0
+  - @memberjunction/server-bootstrap-lite@5.10.0
+  - @memberjunction/testing-cli@5.10.0
+  - @memberjunction/config@5.10.0
+  - @memberjunction/installer@5.10.0
+  - @memberjunction/sql-converter@5.10.0
+
+## 5.9.0
+
+### Minor Changes
+
+- 6214edf: feat: Provider-agnostic OpenApp Engine with configurable project layouts, package manager auto-detection, Azure SQL support, and MJ version fallback detection
+
+### Patch Changes
+
+- Updated dependencies [f991f6d]
+- Updated dependencies [194ddf2]
+  - @memberjunction/codegen-lib@5.9.0
+  - @memberjunction/core@5.9.0
+  - @memberjunction/sqlserver-dataprovider@5.9.0
+  - @memberjunction/ai-cli@5.9.0
+  - @memberjunction/server-bootstrap-lite@5.9.0
+  - @memberjunction/metadata-sync@5.9.0
+  - @memberjunction/query-gen@5.9.0
+  - @memberjunction/testing-cli@5.9.0
+  - @memberjunction/db-auto-doc@5.9.0
+  - @memberjunction/config@5.9.0
+  - @memberjunction/installer@5.9.0
+  - @memberjunction/sql-converter@5.9.0
+
+## 5.8.0
+
+### Patch Changes
+
+- 064cf3a: Make API key generation configurable via mj.config.cjs, fix codegen TVF sync and EntityRelationship deduplication, fix SQL logger post-processing, preserve version range prefixes in CLI bump command, and fix SkipProxyAgent crash on error responses
+- Updated dependencies [064cf3a]
+- Updated dependencies [0753249]
+  - @memberjunction/codegen-lib@5.8.0
+  - @memberjunction/core@5.8.0
+  - @memberjunction/metadata-sync@5.8.0
+  - @memberjunction/sqlserver-dataprovider@5.8.0
+  - @memberjunction/server-bootstrap-lite@5.8.0
+  - @memberjunction/ai-cli@5.8.0
+  - @memberjunction/db-auto-doc@5.8.0
+  - @memberjunction/query-gen@5.8.0
+  - @memberjunction/testing-cli@5.8.0
+  - @memberjunction/config@5.8.0
+  - @memberjunction/installer@5.8.0
+  - @memberjunction/sql-converter@5.8.0
+
+## 5.7.0
+
+### Patch Changes
+
+- 178e891: Add configurable migration request timeout via `dbRequestTimeout` in mj.config.cjs and `MJ_MIGRATION_REQUEST_TIMEOUT` environment variable. Passes `RequestTimeout` through to Skyway-Core's database connection options, allowing long-running migrations (e.g., large index builds) to complete without hitting the default 5-minute timeout.
+- Updated dependencies [642c4df]
+  - @memberjunction/core@5.7.0
+  - @memberjunction/ai-cli@5.7.0
+  - @memberjunction/codegen-lib@5.7.0
+  - @memberjunction/db-auto-doc@5.7.0
+  - @memberjunction/query-gen@5.7.0
+  - @memberjunction/sqlserver-dataprovider@5.7.0
+  - @memberjunction/server-bootstrap-lite@5.7.0
+  - @memberjunction/metadata-sync@5.7.0
+  - @memberjunction/testing-cli@5.7.0
+  - @memberjunction/config@5.7.0
+  - @memberjunction/installer@5.7.0
+  - @memberjunction/sql-converter@5.7.0
+
+## 5.6.0
+
+### Patch Changes
+
+- Updated dependencies [4547d05]
+- Updated dependencies [76eaabc]
+  - @memberjunction/core@5.6.0
+  - @memberjunction/ai-cli@5.6.0
+  - @memberjunction/codegen-lib@5.6.0
+  - @memberjunction/db-auto-doc@5.6.0
+  - @memberjunction/metadata-sync@5.6.0
+  - @memberjunction/query-gen@5.6.0
+  - @memberjunction/sqlserver-dataprovider@5.6.0
+  - @memberjunction/server-bootstrap-lite@5.6.0
+  - @memberjunction/testing-cli@5.6.0
+  - @memberjunction/config@5.6.0
+  - @memberjunction/installer@5.6.0
+  - @memberjunction/sql-converter@5.6.0
+
+## 5.5.0
+
+### Patch Changes
+
+- 7ca2459: Viewing System fixes, CodeGen cleanup, startup performance
+- 1d3dec4: Add new headless, event-driven installer engine for MemberJunction. Features 9-phase install pipeline (preflight, scaffold, configure, database, platform compat, dependencies, migrate, codegen, smoke test), checkpoint/resume via state file, non-interactive CI/Docker mode (`--yes` + `--config`), `mj doctor` diagnostics, `--fast` optimistic mode, known-issue patching system, stdout-based service readiness detection, cross-platform Windows compatibility fixes, and 425 unit tests across 20 Vitest test files.
+- df2457c: no migration, just small code changes
+- Updated dependencies [2b1d842]
+- Updated dependencies [a1648c5]
+- Updated dependencies [7ca2459]
+- Updated dependencies [bf2c142]
+- Updated dependencies [ee9f788]
+- Updated dependencies [1d3dec4]
+- Updated dependencies [df2457c]
+- Updated dependencies [6421543]
+  - @memberjunction/core@5.5.0
+  - @memberjunction/server-bootstrap-lite@5.5.0
+  - @memberjunction/sqlserver-dataprovider@5.5.0
+  - @memberjunction/codegen-lib@5.5.0
+  - @memberjunction/sql-converter@5.5.0
+  - @memberjunction/installer@5.5.0
+  - @memberjunction/ai-cli@5.5.0
+  - @memberjunction/config@5.5.0
+  - @memberjunction/db-auto-doc@5.5.0
+  - @memberjunction/metadata-sync@5.5.0
+  - @memberjunction/query-gen@5.5.0
+  - @memberjunction/testing-cli@5.5.0
+
+## 5.4.1
+
+### Patch Changes
+
+- @memberjunction/ai-cli@5.4.1
+- @memberjunction/codegen-lib@5.4.1
+- @memberjunction/config@5.4.1
+- @memberjunction/db-auto-doc@5.4.1
+- @memberjunction/core@5.4.1
+- @memberjunction/metadata-sync@5.4.1
+- @memberjunction/query-gen@5.4.1
+- @memberjunction/sqlserver-dataprovider@5.4.1
+- @memberjunction/server-bootstrap-lite@5.4.1
+- @memberjunction/testing-cli@5.4.1
+
+## 5.4.0
+
+### Patch Changes
+
+- Updated dependencies [c9a760c]
+  - @memberjunction/codegen-lib@5.4.0
+  - @memberjunction/server-bootstrap-lite@5.4.0
+  - @memberjunction/metadata-sync@5.4.0
+  - @memberjunction/ai-cli@5.4.0
+  - @memberjunction/query-gen@5.4.0
+  - @memberjunction/sqlserver-dataprovider@5.4.0
+  - @memberjunction/testing-cli@5.4.0
+  - @memberjunction/db-auto-doc@5.4.0
+  - @memberjunction/config@5.4.0
+  - @memberjunction/core@5.4.0
+
 ## 5.3.1
 
 ### Patch Changes

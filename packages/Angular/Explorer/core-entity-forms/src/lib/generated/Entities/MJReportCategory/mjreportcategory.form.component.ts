@@ -19,8 +19,8 @@ export class MJReportCategoryFormComponent extends BaseFormComponent {
             { sectionKey: 'categoryDetails', sectionName: 'Category Details', isExpanded: true },
             { sectionKey: 'hierarchy', sectionName: 'Hierarchy', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'reportCategories', sectionName: 'Report Categories', isExpanded: false },
-            { sectionKey: 'reports', sectionName: 'Reports', isExpanded: false }
+            { sectionKey: 'mJReportCategories', sectionName: 'Report Categories', isExpanded: false },
+            { sectionKey: 'mJReports', sectionName: 'Reports', isExpanded: false }
         ]);
     }
 }

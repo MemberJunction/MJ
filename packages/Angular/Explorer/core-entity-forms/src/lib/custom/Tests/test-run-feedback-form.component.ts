@@ -15,7 +15,7 @@ import { MJTestRunFeedbackFormComponent } from '../../generated/Entities/MJTestR
       <div class="feedback-header">
         <h2><i class="fas fa-comment-dots"></i> Test Run Feedback</h2>
         @if (record.TestRunID) {
-          <button kendoButton (click)="openTestRun()">
+          <button mjButton (click)="openTestRun()">
             <i class="fas fa-external-link"></i> View Test Run
           </button>
         }
@@ -48,10 +48,10 @@ import { MJTestRunFeedbackFormComponent } from '../../generated/Entities/MJTestR
     .feedback-form { padding: 20px; }
     .feedback-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
     .feedback-header h2 { margin: 0; font-size: 20px; display: flex; align-items: center; gap: 12px; }
-    .feedback-content { background: white; padding: 24px; border-radius: 8px; }
+    .feedback-content { background: var(--mj-bg-surface); padding: 24px; border-radius: 8px; }
     .field-group { margin-bottom: 20px; }
-    .field-group label { display: block; margin-bottom: 8px; font-weight: 600; color: #333; }
-    .field-group input[type="number"], .field-group textarea { width: 100%; padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px; }
+    .field-group label { display: block; margin-bottom: 8px; font-weight: 600; color: var(--mj-text-primary); }
+    .field-group input[type="number"], .field-group textarea { width: 100%; padding: 8px 12px; border: 1px solid var(--mj-border-default); border-radius: 4px; }
     .field-group input[type="checkbox"] { width: auto; }
   `],
   changeDetection: ChangeDetectionStrategy.OnPush

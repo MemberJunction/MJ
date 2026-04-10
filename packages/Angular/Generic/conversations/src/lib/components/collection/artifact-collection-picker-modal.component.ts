@@ -3,12 +3,11 @@ import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChange
 import { FormsModule } from '@angular/forms';
 import { UserInfo, RunView, Metadata } from '@memberjunction/core';
 import { MJCollectionEntity } from '@memberjunction/core-entities';
-import { DialogModule } from '@progress/kendo-angular-dialog';
-import { ButtonsModule } from '@progress/kendo-angular-buttons';
-import { InputsModule } from '@progress/kendo-angular-inputs';
+import { MJDialogComponent, MJDialogActionsComponent, MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { ToastService } from '../../services/toast.service';
 import { CollectionPermissionService, CollectionPermission } from '../../services/collection-permission.service';
+import { UUIDsEqual } from '@memberjunction/global';
 
 interface CollectionNode {
   collection: MJCollectionEntity;
@@ -31,18 +30,19 @@ interface CollectionNode {
   standalone: true,
   imports: [
     FormsModule,
-    DialogModule,
-    ButtonsModule,
-    InputsModule,
+    MJDialogComponent,
+    MJDialogActionsComponent,
+    MJButtonDirective,
     SharedGenericModule
 ],
   template: `
     @if (isOpen) {
-      <kendo-dialog
-        title="Save to Collection"
-        (close)="onCancel()"
-        [width]="700"
-        [minWidth]="500">
+      <mj-dialog
+        Title="Save to Collection"
+        (Close)="onCancel()"
+        [Visible]="true"
+        [Width]="700"
+        [MinWidth]="500">
         <div class="picker-modal">
           <!-- Breadcrumb Navigation -->
           @if (navigationPath.length > 0) {
@@ -98,7 +98,7 @@ interface CollectionNode {
                         [disabled]="node.alreadyContainsArtifact"
                         (click)="$event.stopPropagation(); toggleSelection(node)">
                     </div>
-                    <i class="fas fa-folder collection-icon" [style.color]="node.collection.Color || '#0076B6'"></i>
+                    <i class="fas fa-folder collection-icon" [style.color]="node.collection.Color || 'var(--mj-brand-primary)'"></i>
                     <span class="collection-name">{{ node.collection.Name }}</span>
                     @if (node.alreadyContainsArtifact) {
                       <span class="already-added-badge">
@@ -158,14 +158,14 @@ interface CollectionNode {
                   (keydown.enter)="createCollection()"
                   #newCollectionInput>
                 <div class="create-actions">
-                  <button class="btn-create" kendoButton (click)="createCollection()" [disabled]="isCreatingCollection || !newCollectionName.trim()">
+                  <button mjButton variant="primary" size="sm" (click)="createCollection()" [disabled]="isCreatingCollection || !newCollectionName.trim()">
                     @if (isCreatingCollection) {
                       <i class="fas fa-spinner fa-spin"></i>
                     } @else {
                       Create
                     }
                   </button>
-                  <button class="btn-cancel" kendoButton (click)="showCreateForm = false; newCollectionName = ''">
+                  <button mjButton size="sm" (click)="showCreateForm = false; newCollectionName = ''">
                     Cancel
                   </button>
                 </div>
@@ -173,12 +173,12 @@ interface CollectionNode {
             }
           </div>
         </div>
-        <kendo-dialog-actions>
-          <button kendoButton (click)="onCancel()">
+        <mj-dialog-actions>
+          <button mjButton (click)="onCancel()">
             Cancel
           </button>
-          <button kendoButton
-            [primary]="true"
+          <button mjButton
+            variant="primary"
             (click)="onSave()"
             [disabled]="selectedCollections.length === 0 || isSaving">
             @if (isSaving) {
@@ -187,8 +187,8 @@ interface CollectionNode {
               <i class="fas fa-save"></i> Save to {{ selectedCollections.length }} Collection(s)
             }
           </button>
-        </kendo-dialog-actions>
-      </kendo-dialog>
+        </mj-dialog-actions>
+      </mj-dialog>
     }
     `,
   styles: [`
@@ -206,8 +206,8 @@ interface CollectionNode {
       align-items: center;
       gap: 8px;
       padding: 12px 16px;
-      background: #F9FAFB;
-      border: 1px solid #E5E7EB;
+      background: var(--mj-bg-surface-sunken);
+      border: 1px solid var(--mj-border-default);
       border-radius: 6px;
       overflow-x: auto;
     }
@@ -220,18 +220,18 @@ interface CollectionNode {
       background: transparent;
       border: none;
       border-radius: 4px;
-      color: #0076B6;
+      color: var(--mj-brand-primary);
       cursor: pointer;
       white-space: nowrap;
       font-size: 14px;
     }
 
     .breadcrumb-btn:hover {
-      background: #E5E7EB;
+      background: var(--mj-border-default);
     }
 
     .breadcrumb-separator {
-      color: #9CA3AF;
+      color: var(--mj-text-disabled);
       font-size: 12px;
     }
 
@@ -244,7 +244,7 @@ interface CollectionNode {
     .search-icon {
       position: absolute;
       left: 12px;
-      color: #9CA3AF;
+      color: var(--mj-text-disabled);
       pointer-events: none;
     }
 
@@ -256,7 +256,7 @@ interface CollectionNode {
     .collections-list {
       flex: 1;
       overflow-y: auto;
-      border: 1px solid #E5E7EB;
+      border: 1px solid var(--mj-border-default);
       border-radius: 6px;
       min-height: 250px;
       max-height: 350px;
@@ -267,13 +267,13 @@ interface CollectionNode {
       align-items: center;
       gap: 12px;
       padding: 12px 16px;
-      border-bottom: 1px solid #F3F4F6;
+      border-bottom: 1px solid var(--mj-border-default);
       cursor: pointer;
       transition: background 0.2s;
     }
 
     .collection-item:hover {
-      background: #F9FAFB;
+      background: var(--mj-bg-surface-sunken);
     }
 
     .collection-item:last-child {
@@ -281,13 +281,13 @@ interface CollectionNode {
     }
 
     .collection-item.already-added {
-      background: #F9FAFB;
+      background: var(--mj-bg-surface-sunken);
       opacity: 0.7;
       cursor: not-allowed;
     }
 
     .collection-item.already-added:hover {
-      background: #F9FAFB;
+      background: var(--mj-bg-surface-sunken);
     }
 
     .collection-checkbox {
@@ -309,7 +309,7 @@ interface CollectionNode {
     .collection-name {
       flex: 1;
       font-size: 14px;
-      color: #1F2937;
+      color: var(--mj-text-primary);
     }
 
     .already-added-badge {
@@ -317,10 +317,10 @@ interface CollectionNode {
       align-items: center;
       gap: 4px;
       padding: 4px 8px;
-      background: #DBEAFE;
-      border: 1px solid #93C5FD;
+      background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+      border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 30%, var(--mj-bg-surface));
       border-radius: 12px;
-      color: #1E40AF;
+      color: var(--mj-brand-primary);
       font-size: 12px;
       font-weight: 500;
       white-space: nowrap;
@@ -328,23 +328,23 @@ interface CollectionNode {
 
     .already-added-badge i {
       font-size: 12px;
-      color: #2563EB;
+      color: var(--mj-brand-primary);
     }
 
     .drill-down-btn {
       padding: 6px 10px;
       background: transparent;
-      border: 1px solid #D1D5DB;
+      border: 1px solid var(--mj-border-strong);
       border-radius: 4px;
-      color: #6B7280;
+      color: var(--mj-text-muted);
       cursor: pointer;
       transition: all 0.2s;
     }
 
     .drill-down-btn:hover {
-      background: #F3F4F6;
-      border-color: #9CA3AF;
-      color: #374151;
+      background: var(--mj-bg-surface-sunken);
+      border-color: var(--mj-text-disabled);
+      color: var(--mj-text-secondary);
     }
 
     .empty-state {
@@ -353,7 +353,7 @@ interface CollectionNode {
       align-items: center;
       justify-content: center;
       padding: 48px 24px;
-      color: #6B7280;
+      color: var(--mj-text-muted);
       text-align: center;
     }
 
@@ -370,7 +370,7 @@ interface CollectionNode {
 
     .empty-state .hint {
       font-size: 13px;
-      color: #9CA3AF;
+      color: var(--mj-text-disabled);
     }
 
     .loading-state, .error-state {
@@ -380,7 +380,7 @@ interface CollectionNode {
       justify-content: center;
       padding: 48px 24px;
       gap: 12px;
-      color: #6B7280;
+      color: var(--mj-text-muted);
     }
 
     .error-state i {
@@ -388,7 +388,7 @@ interface CollectionNode {
     }
 
     .error-state {
-      color: #DC2626;
+      color: var(--mj-status-error);
     }
 
     .selected-summary {
@@ -396,16 +396,16 @@ interface CollectionNode {
       align-items: center;
       gap: 8px;
       padding: 12px 16px;
-      background: #DBEAFE;
-      border: 1px solid #93C5FD;
+      background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+      border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 30%, var(--mj-bg-surface));
       border-radius: 6px;
-      color: #1E40AF;
+      color: var(--mj-brand-primary);
       font-size: 14px;
       font-weight: 500;
     }
 
     .selected-summary i {
-      color: #2563EB;
+      color: var(--mj-brand-primary);
     }
 
     .create-section {
@@ -418,7 +418,7 @@ interface CollectionNode {
       display: flex;
       align-items: center;
       text-align: center;
-      color: #9CA3AF;
+      color: var(--mj-text-disabled);
       font-size: 12px;
       font-weight: 500;
     }
@@ -427,7 +427,7 @@ interface CollectionNode {
     .divider::after {
       content: '';
       flex: 1;
-      border-bottom: 1px solid #E5E7EB;
+      border-bottom: 1px solid var(--mj-border-default);
     }
 
     .divider span {
@@ -440,10 +440,10 @@ interface CollectionNode {
       justify-content: center;
       gap: 8px;
       padding: 10px 16px;
-      background: #F9FAFB;
-      border: 2px dashed #D1D5DB;
+      background: var(--mj-bg-surface-sunken);
+      border: 2px dashed var(--mj-border-strong);
       border-radius: 6px;
-      color: #0076B6;
+      color: var(--mj-brand-primary);
       font-size: 14px;
       font-weight: 500;
       cursor: pointer;
@@ -451,8 +451,8 @@ interface CollectionNode {
     }
 
     .btn-create-collection:hover {
-      background: #F3F4F6;
-      border-color: #0076B6;
+      background: var(--mj-bg-surface-sunken);
+      border-color: var(--mj-brand-primary);
     }
 
     .btn-create-collection i {
@@ -464,8 +464,8 @@ interface CollectionNode {
       flex-direction: column;
       gap: 12px;
       padding: 16px;
-      background: #F9FAFB;
-      border: 1px solid #E5E7EB;
+      background: var(--mj-bg-surface-sunken);
+      border: 1px solid var(--mj-border-default);
       border-radius: 6px;
     }
 
@@ -589,7 +589,7 @@ export class ArtifactCollectionPickerModalComponent implements OnInit, OnChanges
   private async loadUserPermissions(): Promise<void> {
     // Load permissions for collections not owned by current user
     const nonOwnedCollections = this.allCollections.filter(
-      c => c.OwnerID && c.OwnerID !== this.currentUser.ID
+      c => c.OwnerID && !UUIDsEqual(c.OwnerID, this.currentUser.ID)
     );
 
     if (nonOwnedCollections.length === 0) {
@@ -614,16 +614,16 @@ export class ArtifactCollectionPickerModalComponent implements OnInit, OnChanges
   }
 
   private displayChildCollections(parentId: string, editableCollections: MJCollectionEntity[]): void {
-    const childCollections = editableCollections.filter(c => c.ParentID === parentId);
+    const childCollections = editableCollections.filter(c => UUIDsEqual(c.ParentID, parentId));
     this.displayedCollections = childCollections.map(c => this.createNode(c, editableCollections));
   }
 
   private createNode(collection: MJCollectionEntity, allEditableCollections: MJCollectionEntity[]): CollectionNode {
-    const hasChildren = allEditableCollections.some(c => c.ParentID === collection.ID);
-    const alreadyContainsArtifact = this.excludeCollectionIds.includes(collection.ID);
+    const hasChildren = allEditableCollections.some(c => UUIDsEqual(c.ParentID, collection.ID));
+    const alreadyContainsArtifact = this.excludeCollectionIds.some(id => UUIDsEqual(id, collection.ID));
     return {
       collection,
-      selected: this.selectedCollections.some(sc => sc.ID === collection.ID),
+      selected: this.selectedCollections.some(sc => UUIDsEqual(sc.ID, collection.ID)),
       hasChildren,
       alreadyContainsArtifact
     };
@@ -631,7 +631,7 @@ export class ArtifactCollectionPickerModalComponent implements OnInit, OnChanges
 
   canEdit(collection: MJCollectionEntity): boolean {
     // Backwards compatibility: treat null OwnerID as owned by current user
-    if (!collection.OwnerID || collection.OwnerID === this.currentUser.ID) {
+    if (!collection.OwnerID || UUIDsEqual(collection.OwnerID, this.currentUser.ID)) {
       return true;
     }
 
@@ -646,7 +646,7 @@ export class ArtifactCollectionPickerModalComponent implements OnInit, OnChanges
       return;
     }
 
-    const index = this.selectedCollections.findIndex(c => c.ID === node.collection.ID);
+    const index = this.selectedCollections.findIndex(c => UUIDsEqual(c.ID, node.collection.ID));
     if (index >= 0) {
       this.selectedCollections.splice(index, 1);
       node.selected = false;
@@ -690,7 +690,7 @@ export class ArtifactCollectionPickerModalComponent implements OnInit, OnChanges
 
   navigateToCollection(collection: MJCollectionEntity): void {
     // Find the index of this collection in the navigation path
-    const index = this.navigationPath.findIndex(n => n.collection.ID === collection.ID);
+    const index = this.navigationPath.findIndex(n => UUIDsEqual(n.collection.ID, collection.ID));
 
     if (index >= 0) {
       // Trim navigation path to this level

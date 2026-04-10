@@ -22,6 +22,7 @@ const DEFAULT_CLI_CONFIG = {
   dbTrustServerCertificate: parseBooleanEnv(process.env.DB_TRUST_SERVER_CERTIFICATE),
   codeGenLogin: process.env.CODEGEN_DB_USERNAME ?? '',
   codeGenPassword: process.env.CODEGEN_DB_PASSWORD ?? '',
+  dbRequestTimeout: process.env.MJ_MIGRATION_REQUEST_TIMEOUT ? parseInt(process.env.MJ_MIGRATION_REQUEST_TIMEOUT) : undefined,
   coreSchema: '__mj',
   cleanDisabled: true,
   baselineOnMigrate: true,
@@ -73,6 +74,21 @@ const openAppsConfigSchema = z.object({
     overrideApps: z.array(z.string()).default([]),
   }).optional(),
   config: z.record(z.string(), z.unknown()).optional(),
+  /** Path to server workspace relative to repo root (default: 'packages/MJAPI') */
+  serverPackagePath: z.string().optional(),
+  /** Path to client workspace relative to repo root (default: 'packages/MJExplorer') */
+  clientPackagePath: z.string().optional(),
+  /** Package manager to use: 'npm' | 'pnpm' | 'yarn' (default: auto-detected from lockfile) */
+  packageManager: z.enum(['npm', 'pnpm', 'yarn']).optional(),
+  /** Version strategy for deps: 'semver' | 'catalog' | 'workspace' | 'auto' (default: 'auto') */
+  versionStrategy: z.enum(['semver', 'catalog', 'workspace', 'auto']).optional(),
+  /** Additional workspace targets beyond the primary server/client pair */
+  additionalTargets: z.array(z.object({
+    Path: z.string(),
+    Role: z.enum(['server', 'client']),
+  })).optional(),
+  /** File subpath within client workspace for bootstrap file */
+  clientBootstrapSubpath: z.string().optional(),
 }).optional();
 
 // Schema for dynamic packages section
@@ -83,13 +99,14 @@ const dynamicPackagesSchema = z.object({
 // Schema for database-dependent config (required fields)
 const mjConfigSchema = z.object({
   dbHost: z.string().default('localhost'),
-  dbDatabase: z.string(),
+  dbDatabase: z.string().min(1),
   dbPort: z.number({ coerce: true }).default(1433),
-  codeGenLogin: z.string(),
-  codeGenPassword: z.string(),
+  codeGenLogin: z.string().min(1),
+  codeGenPassword: z.string().min(1),
   migrationsLocation: z.string().optional().default('filesystem:./migrations'),
   dbEncrypt: z.coerce.boolean().default(true),
   dbTrustServerCertificate: z.coerce.boolean().default(false),
+  dbRequestTimeout: z.number({ coerce: true }).optional(),
   coreSchema: z.string().optional().default('__mj'),
   cleanDisabled: z.boolean().optional().default(true),
   mjRepoUrl: z.string().url().catch(MJ_REPO_URL),
@@ -113,6 +130,7 @@ const mjConfigSchemaOptional = z.object({
   migrationsLocation: z.string().optional().default('filesystem:./migrations'),
   dbEncrypt: z.coerce.boolean().default(true),
   dbTrustServerCertificate: z.coerce.boolean().default(false),
+  dbRequestTimeout: z.number({ coerce: true }).optional(),
   coreSchema: z.string().optional().default('__mj'),
   cleanDisabled: z.boolean().optional().default(true),
   mjRepoUrl: z.string().url().catch(MJ_REPO_URL),
@@ -136,9 +154,25 @@ export const config = result?.config as MJConfig | undefined;
 export const getValidatedConfig = (): MJConfig => {
   const parsedConfig = mjConfigSchema.safeParse(result?.config);
   if (!parsedConfig.success) {
+    const fieldEnvMap: Record<string, string> = {
+      dbHost: 'DB_HOST',
+      dbPort: 'DB_PORT',
+      dbDatabase: 'DB_DATABASE',
+      codeGenLogin: 'CODEGEN_DB_USERNAME',
+      codeGenPassword: 'CODEGEN_DB_PASSWORD',
+    };
+
+    const issues = parsedConfig.error.issues.map(i => {
+      const field = i.path.join('.');
+      const envVar = fieldEnvMap[field];
+      return envVar ? `  - ${field} (env: ${envVar})` : `  - ${field}`;
+    });
+
     throw new Error(
-      `Invalid or missing mj.config.cjs file. Database commands require valid configuration.\n` +
-      `Missing fields: ${parsedConfig.error.issues.map(i => i.path.join('.')).join(', ')}`
+      `Database credentials are missing or empty. The following fields are required:\n` +
+      `${issues.join('\n')}\n\n` +
+      `Set these in your .env file or mj.config.cjs. ` +
+      `If using mj.config.cjs, ensure the field names match exactly (e.g. codeGenLogin, not dbUsername).`
     );
   }
   return parsedConfig.data;
@@ -243,6 +277,7 @@ export const getSkywayConfig = async (
       Options: {
         Encrypt: mjConfig.dbEncrypt,
         TrustServerCertificate: mjConfig.dbTrustServerCertificate,
+        ...(mjConfig.dbRequestTimeout ? { RequestTimeout: mjConfig.dbRequestTimeout } : {}),
       },
     },
     Migrations: {

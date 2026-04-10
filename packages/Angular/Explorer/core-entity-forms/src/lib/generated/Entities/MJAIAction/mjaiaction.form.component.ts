@@ -19,8 +19,8 @@ export class MJAIActionFormComponent extends BaseFormComponent {
             { sectionKey: 'actionDefinition', sectionName: 'Action Definition', isExpanded: true },
             { sectionKey: 'executionSettings', sectionName: 'Execution Settings', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'aIModelActions', sectionName: 'AI Model Actions', isExpanded: false },
-            { sectionKey: 'entityAIActions', sectionName: 'Entity AI Actions', isExpanded: false }
+            { sectionKey: 'mJAIModelActions', sectionName: 'AI Model Actions', isExpanded: false },
+            { sectionKey: 'mJEntityAIActions', sectionName: 'Entity AI Actions', isExpanded: false }
         ]);
     }
 }

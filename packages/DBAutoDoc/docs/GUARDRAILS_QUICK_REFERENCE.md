@@ -221,7 +221,7 @@ Safety limit: 50,000 tokens/iteration (10x average)
 ### Cost Calculation
 
 ```
-Model: gpt-4-turbo
+Model: gemini-3-flash-preview
 Input: $0.01 per 1K tokens
 Output: $0.03 per 1K tokens
 
