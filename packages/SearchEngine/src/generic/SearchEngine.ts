@@ -1,9 +1,12 @@
 /**
  * @fileoverview SearchEngine singleton - the main entry point for multi-source search.
  *
- * Orchestrates vector, full-text, and entity search providers in parallel,
+ * Orchestrates search providers discovered from the SearchProvider metadata entity,
  * fuses results with Reciprocal Rank Fusion (RRF), applies enrichment
  * (entity icons, record names, tags), and filters by minimum score.
+ *
+ * Providers are loaded via @RegisterClass(BaseSearchProvider, DriverClass) and
+ * instantiated using the MJ ClassFactory based on active SearchProvider records.
  *
  * Uses BaseSingleton from @memberjunction/global for a truly global instance.
  *
@@ -11,20 +14,19 @@
  */
 
 import { EntityInfo, EntityPermissionType, LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
-import { BaseSingleton, NormalizeUUID } from '@memberjunction/global';
+import { SearchEngineBase, MJSearchProviderEntity } from '@memberjunction/core-entities';
+import { BaseSingleton, MJGlobal, NormalizeUUID } from '@memberjunction/global';
 import {
     SearchParams,
     SearchResult,
     SearchResultItem,
     SearchFilters,
+    SearchProviderInfo,
 } from './search.types';
-import { ISearchProvider } from './ISearchProvider';
+import { BaseSearchProvider, SearchProviderConfig } from './ISearchProvider';
 import { SearchFusion, LabeledResultList } from './SearchFusion';
 import { SearchEnricher } from './SearchEnricher';
-import { VectorSearchProvider } from './VectorSearchProvider';
 import { FullTextSearchProvider } from './FullTextSearchProvider';
-import { EntitySearchProvider } from './EntitySearchProvider';
-import { StorageSearchProvider } from './StorageSearchProvider';
 
 /**
  * Configuration options for the SearchEngine.
@@ -32,18 +34,30 @@ import { StorageSearchProvider } from './StorageSearchProvider';
 export interface SearchEngineConfig {
     /** Default maximum results if not specified in SearchParams (default: 20) */
     DefaultMaxResults?: number;
-    /** Whether to include entity LIKE-based search (default: true) */
-    EnableEntitySearch?: boolean;
-    /** Whether to include full-text search (default: true) */
-    EnableFullTextSearch?: boolean;
-    /** Whether to include vector search (default: true, but gracefully skipped if unavailable) */
-    EnableVectorSearch?: boolean;
-    /** Whether to include file storage search (default: true, but gracefully skipped if unavailable) */
-    EnableStorageSearch?: boolean;
+}
+
+/**
+ * Internal wrapper that pairs a provider instance with its metadata record.
+ */
+interface ProviderEntry {
+    Provider: BaseSearchProvider;
+    /** SearchProvider record ID from the database */
+    ID: string;
+    /** Display label for the UI */
+    DisplayName: string;
+    /** Font Awesome icon class */
+    Icon: string;
+    Priority: number;
+    SupportsPreview: boolean;
+    MaxResultsOverride: number | null;
 }
 
 /**
  * Singleton search engine that orchestrates multi-source search with RRF fusion.
+ *
+ * Providers are discovered from the MJ: Search Providers entity. Each active
+ * provider's DriverClass is resolved via ClassFactory to create an instance,
+ * which is then initialized with the provider's config from the DB.
  *
  * Usage:
  * ```typescript
@@ -70,17 +84,25 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
     }
 
     private _configured = false;
-    private _providers: ISearchProvider[] = [];
+    private _providerEntries: ProviderEntry[] = [];
     private _fusion = new SearchFusion();
     private _enricher = new SearchEnricher();
     private _defaultMaxResults = 20;
 
+    /** Access the cached provider metadata from SearchEngineBase */
+    protected get Base(): SearchEngineBase {
+        return SearchEngineBase.Instance;
+    }
+
     /**
-     * Initialize the search engine with configuration and check provider availability.
+     * Initialize the search engine by reading active SearchProvider records
+     * from SearchEngineBase (which caches them via BaseEngine) and
+     * instantiating each via ClassFactory.
+     *
      * Safe to call multiple times (no-ops if already configured unless forceRefresh=true).
      *
      * @param config - Engine configuration options
-     * @param contextUser - The user context for checking provider availability
+     * @param contextUser - The user context for initialization
      * @param forceRefresh - If true, re-initializes even if already configured
      */
     public async Config(
@@ -91,50 +113,30 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         if (this._configured && !forceRefresh) return;
 
         this._defaultMaxResults = config.DefaultMaxResults ?? 20;
-        this._providers = [];
+        this._providerEntries = [];
 
-        // Build provider list based on config
-        const enableVector = config.EnableVectorSearch !== false;
-        const enableFullText = config.EnableFullTextSearch !== false;
-        const enableEntity = config.EnableEntitySearch !== false;
+        // Ensure SearchEngineBase has loaded provider metadata
+        await this.Base.Config(forceRefresh, contextUser);
 
-        if (enableVector) {
-            const vectorProvider = new VectorSearchProvider();
-            await vectorProvider.CheckAvailability(contextUser);
-            if (vectorProvider.IsAvailable()) {
-                this._providers.push(vectorProvider);
-                LogStatus('SearchEngine: Vector search provider enabled');
-            } else {
-                LogStatus('SearchEngine: Vector search provider not available (no indexes configured)');
-            }
+        const providerRecords = this.Base.ActiveProviders;
+
+        if (providerRecords.length === 0) {
+            LogStatus('SearchEngine: No active search providers found in database');
+            this._configured = true;
+            return;
         }
 
-        if (enableFullText) {
-            const ftsProvider = new FullTextSearchProvider(this._enricher);
-            this._providers.push(ftsProvider);
-            LogStatus('SearchEngine: Full-text search provider enabled');
+        // Instantiate and initialize each provider via ClassFactory
+        for (const record of providerRecords) {
+            await this.initializeProvider(record, contextUser);
         }
 
-        if (enableEntity) {
-            const entityProvider = new EntitySearchProvider();
-            this._providers.push(entityProvider);
-            LogStatus('SearchEngine: Entity search provider enabled');
-        }
-
-        const enableStorage = config.EnableStorageSearch !== false;
-        if (enableStorage) {
-            const storageProvider = new StorageSearchProvider();
-            await storageProvider.CheckAvailability(contextUser);
-            if (storageProvider.IsAvailable()) {
-                this._providers.push(storageProvider);
-                LogStatus('SearchEngine: Storage search provider enabled');
-            } else {
-                LogStatus('SearchEngine: Storage search provider not available (no searchable accounts configured)');
-            }
-        }
+        // Sort by priority (lower = higher priority)
+        this._providerEntries.sort((a, b) => a.Priority - b.Priority);
 
         this._configured = true;
-        LogStatus(`SearchEngine: Configured with ${this._providers.length} provider(s)`);
+        const names = this._providerEntries.map(e => e.Provider.SourceType);
+        LogStatus(`SearchEngine: Configured with ${this._providerEntries.length} provider(s): ${names.join(', ')}`);
     }
 
     /**
@@ -167,9 +169,10 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
 
             const topK = params.MaxResults ?? this._defaultMaxResults;
             const mode = params.Mode ?? 'full';
+            const isPreview = mode === 'preview';
 
-            // Step 1: Run all providers in parallel
-            const labeledLists = await this.executeProviders(params.Query, topK, params.Filters, contextUser);
+            // Step 1: Run all providers in parallel (respecting preview flag)
+            const labeledLists = await this.executeProviders(params.Query, topK, params.Filters, contextUser, isPreview);
             const sourceCounts = this.countSources(labeledLists);
 
             // Step 2: Fuse with RRF
@@ -191,7 +194,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             }
 
             // Step 6: Enrich (skip in preview mode)
-            if (mode === 'full') {
+            if (!isPreview) {
                 await this._enricher.Enrich(results, contextUser);
             }
 
@@ -203,6 +206,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
                 TotalCount: results.length,
                 ElapsedMs: Date.now() - startTime,
                 SourceCounts: sourceCounts,
+                Providers: this.buildProviderInfoList(),
             };
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
@@ -214,6 +218,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
     /**
      * Quick preview search optimized for autocomplete / typeahead.
      * Uses preview mode (no enrichment), limited to 8 results by default.
+     * Only runs providers that have SupportsPreview=true.
      *
      * @param query - The search query text
      * @param maxResults - Maximum number of preview results (default: 8)
@@ -233,35 +238,125 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
     }
 
     // ────────────────────────────────────────────────────────────────
-    // Private helpers
+    // Provider loading and initialization
+    // ────────────────────────────────────────────────────────────────
+
+    /**
+     * Instantiate a single provider from its SearchProvider metadata record,
+     * initialize it, check availability, and add to the active list if available.
+     */
+    private async initializeProvider(
+        record: MJSearchProviderEntity,
+        contextUser: UserInfo
+    ): Promise<void> {
+        const driverClass = record.DriverClass;
+
+        try {
+            // Use ClassFactory to create an instance from the DriverClass key
+            const provider = MJGlobal.Instance.ClassFactory.CreateInstance<BaseSearchProvider>(
+                BaseSearchProvider,
+                driverClass
+            );
+
+            if (!provider) {
+                LogError(`SearchEngine: No registered class found for DriverClass "${driverClass}" (provider: ${record.Name})`);
+                return;
+            }
+
+            // Parse ProviderConfig JSON if present
+            let providerConfig: Record<string, unknown> | null = null;
+            if (record.ProviderConfig) {
+                try {
+                    providerConfig = JSON.parse(record.ProviderConfig) as Record<string, unknown>;
+                } catch {
+                    LogError(`SearchEngine: Invalid JSON in ProviderConfig for "${record.Name}"`);
+                }
+            }
+
+            // Build the config object from the metadata record
+            const config: SearchProviderConfig = {
+                Name: record.Name,
+                ProviderConfig: providerConfig,
+                CredentialID: record.CredentialID ?? null,
+                MaxResultsOverride: record.MaxResultsOverride ?? null,
+                SupportsPreview: record.SupportsPreview,
+                Priority: record.Priority,
+            };
+
+            // Initialize the provider
+            await provider.Initialize(config, contextUser);
+
+            // Special handling: FullTextSearchProvider needs the shared enricher
+            if (provider instanceof FullTextSearchProvider) {
+                provider.SetEnricher(this._enricher);
+            }
+
+            // Check availability
+            await provider.CheckAvailability(contextUser);
+
+            if (provider.IsAvailable()) {
+                this._providerEntries.push({
+                    Provider: provider,
+                    ID: record.ID,
+                    DisplayName: record.DisplayName ?? record.Name,
+                    Icon: record.Icon ?? 'fa-solid fa-circle',
+                    Priority: record.Priority,
+                    SupportsPreview: record.SupportsPreview,
+                    MaxResultsOverride: record.MaxResultsOverride ?? null,
+                });
+                LogStatus(`SearchEngine: Provider "${record.Name}" (${driverClass}) enabled`);
+            } else {
+                LogStatus(`SearchEngine: Provider "${record.Name}" (${driverClass}) not available`);
+            }
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            LogError(`SearchEngine: Failed to initialize provider "${record.Name}" (${driverClass}): ${msg}`);
+        }
+    }
+
+    // ────────────────────────────────────────────────────────────────
+    // Search execution helpers
     // ────────────────────────────────────────────────────────────────
 
     /**
      * Run all available providers in parallel and return labeled result lists.
+     * When isPreview is true, only providers with SupportsPreview=true are included.
      */
     private async executeProviders(
         query: string,
         topK: number,
         filters: SearchFilters | undefined,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        isPreview: boolean
     ): Promise<LabeledResultList[]> {
-        if (this._providers.length === 0) {
+        const entries = this._providerEntries.filter(e => {
+            if (!e.Provider.IsAvailable()) return false;
+            if (isPreview && !e.SupportsPreview) return false;
+            return true;
+        });
+
+        if (entries.length === 0) {
             LogStatus('SearchEngine: No providers available');
             return [];
         }
 
-        const promises = this._providers
-            .filter(p => p.IsAvailable())
-            .map(async (provider): Promise<LabeledResultList> => {
-                try {
-                    const results = await provider.Search(query, topK, filters, contextUser);
-                    return { Source: provider.SourceType, Results: results };
-                } catch (error) {
-                    const msg = error instanceof Error ? error.message : String(error);
-                    LogError(`SearchEngine: Provider "${provider.SourceType}" failed: ${msg}`);
-                    return { Source: provider.SourceType, Results: [] };
+        const promises = entries.map(async (entry): Promise<LabeledResultList> => {
+            try {
+                const providerTopK = entry.MaxResultsOverride ?? topK;
+                const results = await entry.Provider.Search(query, providerTopK, filters, contextUser);
+                // Stamp provider metadata onto each result
+                for (const r of results) {
+                    r.ProviderId = entry.ID;
+                    r.ProviderLabel = entry.DisplayName;
+                    r.ProviderIcon = entry.Icon;
                 }
-            });
+                return { Source: entry.Provider.SourceType, Results: results };
+            } catch (error) {
+                const msg = error instanceof Error ? error.message : String(error);
+                LogError(`SearchEngine: Provider "${entry.Provider.SourceType}" failed: ${msg}`);
+                return { Source: entry.Provider.SourceType, Results: [] };
+            }
+        });
 
         return Promise.all(promises);
     }
@@ -289,6 +384,10 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         }
         return counts;
     }
+
+    // ────────────────────────────────────────────────────────────────
+    // Permission filtering
+    // ────────────────────────────────────────────────────────────────
 
     /**
      * Filter search results by entity-level and row-level security permissions.
@@ -449,7 +548,20 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             TotalCount: 0,
             ElapsedMs: Date.now() - startTime,
             SourceCounts: { Vector: 0, FullText: 0, Entity: 0, Storage: 0 },
+            Providers: [],
             ErrorMessage: message,
         };
+    }
+
+    /** Build the list of active provider metadata for the response */
+    private buildProviderInfoList(): SearchProviderInfo[] {
+        return this._providerEntries.map(e => ({
+            ID: e.ID,
+            Name: e.DisplayName,
+            DisplayName: e.DisplayName,
+            Icon: e.Icon,
+            SourceType: e.Provider.SourceType,
+            Priority: e.Priority,
+        }));
     }
 }
