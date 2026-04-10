@@ -1,6 +1,40 @@
-import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, UserInfo } from "@memberjunction/core";
+import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, UserInfo, LogStatus } from "@memberjunction/core";
 import { RegisterForStartup } from "@memberjunction/core";
 import { MJCountryEntity, MJStateProvinceEntity } from "../generated/entity_subclasses";
+
+/**
+ * Pre-parsed polygon geometry with bounding box for fast point-in-polygon testing.
+ * Each entry represents one ring (outer boundary or hole) of a GeoJSON polygon.
+ */
+interface ParsedPolygon {
+    /** Coordinate rings: each ring is an array of [lng, lat] pairs */
+    rings: number[][][];
+    /** Bounding box for fast rejection: [minLng, minLat, maxLng, maxLat] */
+    bbox: [number, number, number, number];
+}
+
+/**
+ * Cached geometry for a state/province or country, parsed once from BoundaryGeoJSON.
+ * A single boundary can have multiple polygons (MultiPolygon — islands, exclaves, etc.).
+ */
+interface CachedGeometry {
+    /** The entity ID this geometry belongs to */
+    entityId: string;
+    /** All polygons in this boundary (supports Polygon and MultiPolygon) */
+    polygons: ParsedPolygon[];
+    /** Overall bounding box across all polygons: [minLng, minLat, maxLng, maxLat] */
+    bbox: [number, number, number, number];
+}
+
+/**
+ * Result of a point-in-polygon resolution.
+ */
+export interface GeoPointResolution {
+    /** The matched country, if any */
+    Country: MJCountryEntity | undefined;
+    /** The matched state/province, if any */
+    State: MJStateProvinceEntity | undefined;
+}
 
 /**
  * GeoDataEngine provides cached, in-memory access to Country and StateProvince
@@ -32,6 +66,12 @@ export class GeoDataEngine extends BaseEngine<GeoDataEngine> {
     private _statesByCountryAndName = new Map<string, MJStateProvinceEntity>();
     private _statesById = new Map<string, MJStateProvinceEntity>();
 
+    // Pre-parsed geometry caches for point-in-polygon testing
+    private _countryGeometries: CachedGeometry[] = [];
+    private _stateGeometries: CachedGeometry[] = [];
+    /** Maps countryId → array of state geometries for that country */
+    private _stateGeometriesByCountry = new Map<string, CachedGeometry[]>();
+
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
         const configs: Partial<BaseEnginePropertyConfig>[] = [
             {
@@ -52,6 +92,7 @@ export class GeoDataEngine extends BaseEngine<GeoDataEngine> {
 
     protected override async AdditionalLoading(_contextUser?: UserInfo): Promise<void> {
         this.buildLookupMaps();
+        this.buildGeometryCaches();
     }
 
     // ================================================================
@@ -151,6 +192,250 @@ export class GeoDataEngine extends BaseEngine<GeoDataEngine> {
         const byCode = this.GetStateByCode(countryId, value);
         if (byCode) return byCode;
         return this.GetStateByName(countryId, value);
+    }
+
+    // ================================================================
+    // Point-in-polygon resolution — coordinate-based lookups
+    // ================================================================
+
+    /**
+     * Resolve a lat/lng coordinate to its containing country and state/province
+     * using point-in-polygon testing against cached BoundaryGeoJSON data.
+     * No text matching — purely geometric.
+     *
+     * @param lat - Latitude (-90 to 90)
+     * @param lng - Longitude (-180 to 180)
+     * @returns The matched country and state/province, or undefined for each if no match
+     */
+    public ResolvePointToLocation(lat: number, lng: number): GeoPointResolution {
+        const country = this.ResolvePointToCountry(lat, lng);
+        const state = country ? this.ResolvePointToState(lat, lng, country.ID) : undefined;
+        return { Country: country, State: state };
+    }
+
+    /**
+     * Resolve a lat/lng coordinate to its containing country.
+     * Uses bounding-box pre-filtering then ray-casting point-in-polygon.
+     */
+    public ResolvePointToCountry(lat: number, lng: number): MJCountryEntity | undefined {
+        for (const geom of this._countryGeometries) {
+            if (this.pointInCachedGeometry(lat, lng, geom)) {
+                return this._countriesById.get(geom.entityId);
+            }
+        }
+        return undefined;
+    }
+
+    /**
+     * Resolve a lat/lng coordinate to its containing state/province within a known country.
+     * If countryId is not provided, resolves the country first.
+     */
+    public ResolvePointToState(lat: number, lng: number, countryId?: string): MJStateProvinceEntity | undefined {
+        let resolvedCountryId = countryId?.toLowerCase();
+        if (!resolvedCountryId) {
+            const country = this.ResolvePointToCountry(lat, lng);
+            if (!country) return undefined;
+            resolvedCountryId = country.ID.toLowerCase();
+        }
+
+        const stateGeoms = this._stateGeometriesByCountry.get(resolvedCountryId);
+        if (!stateGeoms) return undefined;
+
+        for (const geom of stateGeoms) {
+            if (this.pointInCachedGeometry(lat, lng, geom)) {
+                return this._statesById.get(geom.entityId);
+            }
+        }
+        return undefined;
+    }
+
+    /**
+     * Batch-resolve multiple lat/lng points in parallel.
+     * Each point is resolved independently — ideal for choropleth grouping.
+     *
+     * @param points - Array of {lat, lng} coordinates
+     * @returns Array of GeoPointResolution in the same order as input
+     */
+    public ResolvePoints(points: { lat: number; lng: number }[]): GeoPointResolution[] {
+        return points.map(p => this.ResolvePointToLocation(p.lat, p.lng));
+    }
+
+    // ================================================================
+    // Private — point-in-polygon geometry
+    // ================================================================
+
+    /**
+     * Test if a point falls inside a CachedGeometry (bbox pre-filter + ray-casting).
+     */
+    private pointInCachedGeometry(lat: number, lng: number, geom: CachedGeometry): boolean {
+        // Fast rejection via overall bounding box
+        if (!this.pointInBBox(lat, lng, geom.bbox)) return false;
+
+        // Test each polygon (MultiPolygon support)
+        for (const poly of geom.polygons) {
+            if (!this.pointInBBox(lat, lng, poly.bbox)) continue;
+            if (this.pointInPolygonRings(lat, lng, poly.rings)) return true;
+        }
+        return false;
+    }
+
+    /**
+     * Check if a point is inside a bounding box.
+     * BBox format: [minLng, minLat, maxLng, maxLat]
+     */
+    private pointInBBox(lat: number, lng: number, bbox: [number, number, number, number]): boolean {
+        return lng >= bbox[0] && lat >= bbox[1] && lng <= bbox[2] && lat <= bbox[3];
+    }
+
+    /**
+     * Ray-casting point-in-polygon for a polygon with rings.
+     * First ring is the outer boundary (must be inside).
+     * Subsequent rings are holes (must NOT be inside).
+     */
+    private pointInPolygonRings(lat: number, lng: number, rings: number[][][]): boolean {
+        if (rings.length === 0) return false;
+
+        // Must be inside the outer ring
+        if (!this.rayCast(lat, lng, rings[0])) return false;
+
+        // Must NOT be inside any hole
+        for (let i = 1; i < rings.length; i++) {
+            if (this.rayCast(lat, lng, rings[i])) return false;
+        }
+        return true;
+    }
+
+    /**
+     * Ray-casting algorithm: cast a horizontal ray from the point eastward,
+     * count how many polygon edges it crosses. Odd = inside.
+     * Coordinates are [lng, lat] pairs (GeoJSON convention).
+     */
+    private rayCast(lat: number, lng: number, ring: number[][]): boolean {
+        let inside = false;
+        const n = ring.length;
+
+        for (let i = 0, j = n - 1; i < n; j = i++) {
+            const xi = ring[i][0], yi = ring[i][1]; // lng, lat of vertex i
+            const xj = ring[j][0], yj = ring[j][1]; // lng, lat of vertex j
+
+            // Check if the ray crosses this edge
+            if ((yi > lat) !== (yj > lat) &&
+                lng < (xj - xi) * (lat - yi) / (yj - yi) + xi) {
+                inside = !inside;
+            }
+        }
+        return inside;
+    }
+
+    // ================================================================
+    // Private — geometry cache building
+    // ================================================================
+
+    /**
+     * Parse all BoundaryGeoJSON data and build indexed geometry caches.
+     * Called once during AdditionalLoading after entities are loaded.
+     */
+    private buildGeometryCaches(): void {
+        this._countryGeometries = [];
+        this._stateGeometries = [];
+        this._stateGeometriesByCountry.clear();
+
+        let countryParsed = 0;
+        let stateParsed = 0;
+
+        // Parse country boundaries
+        for (const country of this._countries) {
+            const geom = this.parseEntityBoundary(country.ID, country.BoundaryGeoJSON);
+            if (geom) {
+                this._countryGeometries.push(geom);
+                countryParsed++;
+            }
+        }
+
+        // Parse state/province boundaries, indexed by country
+        for (const state of this._stateProvinces) {
+            const geom = this.parseEntityBoundary(state.ID, state.BoundaryGeoJSON);
+            if (geom) {
+                this._stateGeometries.push(geom);
+                stateParsed++;
+
+                const countryKey = state.CountryID.toLowerCase();
+                let arr = this._stateGeometriesByCountry.get(countryKey);
+                if (!arr) {
+                    arr = [];
+                    this._stateGeometriesByCountry.set(countryKey, arr);
+                }
+                arr.push(geom);
+            }
+        }
+
+        LogStatus(`GeoDataEngine: parsed ${countryParsed} country and ${stateParsed} state/province boundaries for point-in-polygon`);
+    }
+
+    /**
+     * Parse a BoundaryGeoJSON value into a CachedGeometry.
+     * Supports GeoJSON Feature, Polygon, and MultiPolygon types.
+     * Returns null if the boundary is missing or unparseable.
+     */
+    private parseEntityBoundary(entityId: string, boundaryGeoJSON: string | null): CachedGeometry | null {
+        if (!boundaryGeoJSON) return null;
+
+        try {
+            const raw = typeof boundaryGeoJSON === 'string' ? JSON.parse(boundaryGeoJSON) : boundaryGeoJSON;
+            const geometry = raw.type === 'Feature' ? raw.geometry : raw;
+
+            if (!geometry || !geometry.coordinates) return null;
+
+            const polygons: ParsedPolygon[] = [];
+
+            if (geometry.type === 'Polygon') {
+                const parsed = this.parsePolygonCoordinates(geometry.coordinates);
+                if (parsed) polygons.push(parsed);
+            } else if (geometry.type === 'MultiPolygon') {
+                for (const polyCoords of geometry.coordinates) {
+                    const parsed = this.parsePolygonCoordinates(polyCoords);
+                    if (parsed) polygons.push(parsed);
+                }
+            }
+
+            if (polygons.length === 0) return null;
+
+            // Compute overall bounding box across all polygons
+            const overallBbox: [number, number, number, number] = [
+                Math.min(...polygons.map(p => p.bbox[0])),
+                Math.min(...polygons.map(p => p.bbox[1])),
+                Math.max(...polygons.map(p => p.bbox[2])),
+                Math.max(...polygons.map(p => p.bbox[3]))
+            ];
+
+            return { entityId: entityId.toLowerCase(), polygons, bbox: overallBbox };
+        } catch {
+            return null;
+        }
+    }
+
+    /**
+     * Parse a single Polygon's coordinate rings and compute its bounding box.
+     * GeoJSON Polygon coordinates: [ outerRing, ...holeRings ]
+     * Each ring is an array of [lng, lat] pairs.
+     */
+    private parsePolygonCoordinates(coordinates: number[][][]): ParsedPolygon | null {
+        if (!coordinates || coordinates.length === 0) return null;
+
+        let minLng = Infinity, minLat = Infinity, maxLng = -Infinity, maxLat = -Infinity;
+
+        // Compute bbox from the outer ring (first ring)
+        for (const point of coordinates[0]) {
+            if (point[0] < minLng) minLng = point[0];
+            if (point[1] < minLat) minLat = point[1];
+            if (point[0] > maxLng) maxLng = point[0];
+            if (point[1] > maxLat) maxLat = point[1];
+        }
+
+        return {
+            rings: coordinates,
+            bbox: [minLng, minLat, maxLng, maxLat]
+        };
     }
 
     // ================================================================
