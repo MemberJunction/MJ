@@ -1,6 +1,6 @@
 import { BaseSingleton } from '@memberjunction/global';
-import { BaseEntity, EntityFieldInfo, EntityInfo, Metadata, RunView, LogError, LogStatus } from '@memberjunction/core';
-import { MJRecordGeoCodeEntity, MJCountryEntity, MJStateProvinceEntity } from '@memberjunction/core-entities';
+import { BaseEntity, EntityFieldInfo, EntityInfo, Metadata, RunView, UserInfo, LogError, LogStatus } from '@memberjunction/core';
+import { MJRecordGeoCodeEntity, GeoDataEngine } from '@memberjunction/core-entities';
 import { GeoFieldMapping, GeocodeResult, GeocodeStatus, GeocodePrecision } from './types';
 import { ComputeGeoSourceHash } from './hash';
 
@@ -55,11 +55,11 @@ export class GeoCodeSyncService extends BaseSingleton<GeoCodeSyncService> {
      * @param entity - The entity instance that was just saved
      * @param mappings - Field-to-location mappings (if not provided, derived from EntityField.ExtendedType metadata)
      */
-    public async SyncIfChanged(entity: BaseEntity, mappings?: GeoFieldMapping[]): Promise<void> {
+    public async SyncIfChanged(entity: BaseEntity, contextUser: UserInfo, mappings?: GeoFieldMapping[]): Promise<void> {
         const resolvedMappings = mappings ?? GeoCodeSyncService.BuildMappingsFromMetadata(entity.EntityInfo);
         for (const mapping of resolvedMappings) {
             try {
-                await this.ProcessMapping(entity, mapping);
+                await this.ProcessMapping(entity, mapping, contextUser);
             } catch (e: unknown) {
                 const message = e instanceof Error ? e.message : String(e);
                 LogError(`GeoCodeSyncService: Error processing ${mapping.LocationType} for ${entity.EntityInfo.Name} ${entity.PrimaryKey.ToString()}: ${message}`);
@@ -103,7 +103,7 @@ export class GeoCodeSyncService extends BaseSingleton<GeoCodeSyncService> {
     /**
      * Process a single field mapping for a single entity record.
      */
-    protected async ProcessMapping(entity: BaseEntity, mapping: GeoFieldMapping): Promise<void> {
+    protected async ProcessMapping(entity: BaseEntity, mapping: GeoFieldMapping, contextUser: UserInfo): Promise<void> {
         const hash = ComputeGeoSourceHash(entity, mapping.Fields);
 
         // Build RecordID matching the format used in the view's LEFT JOIN to vwRecordGeoCodes:
@@ -118,7 +118,8 @@ export class GeoCodeSyncService extends BaseSingleton<GeoCodeSyncService> {
         const existing = await this.FindExistingGeoCode(
             entity.EntityInfo.ID,
             recordId,
-            mapping.LocationType
+            mapping.LocationType,
+            contextUser
         );
 
         if (existing && existing.SourceFieldHash === hash && existing.Status === 'success') {
@@ -129,7 +130,8 @@ export class GeoCodeSyncService extends BaseSingleton<GeoCodeSyncService> {
         const row = existing ?? await this.CreateGeoCodeRow(
             entity.EntityInfo.ID,
             recordId,
-            mapping.LocationType
+            mapping.LocationType,
+            contextUser
         );
 
         if (!row) {
@@ -139,8 +141,13 @@ export class GeoCodeSyncService extends BaseSingleton<GeoCodeSyncService> {
 
         row.SourceFieldHash = hash;
         row.Status = 'pending' as GeocodeStatus;
+        row.RetryCount = 0; // Reset retries — fresh attempt for new/changed address
         row.GeocodedAt = new Date();
-        await row.Save();
+        const pendingSaved = await row.Save();
+        if (!pendingSaved) {
+            LogError(`GeoCodeSyncService: Failed to save pending RecordGeoCode: ${row.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            return;
+        }
 
         // Attempt geocoding
         try {
@@ -148,9 +155,13 @@ export class GeoCodeSyncService extends BaseSingleton<GeoCodeSyncService> {
             if (result) {
                 await this.UpdateSuccess(row, result, hash);
             } else {
-                await this.UpdateFailure(row, 'Geocoding returned no result');
+                // No result means the address can't be geocoded (e.g., "Conference Room B").
+                // Mark as not_geocodable so the retry job skips it. If the user later edits
+                // the address, the hash will change and SyncIfChanged will re-attempt.
+                await this.UpdateNotGeocodable(row, 'Geocoding returned no result — address may not be a valid location');
             }
         } catch (e: unknown) {
+            // Exception = transient API error — mark as failed for retry
             const message = e instanceof Error ? e.message : String(e);
             await this.UpdateFailure(row, message);
         }
@@ -162,7 +173,8 @@ export class GeoCodeSyncService extends BaseSingleton<GeoCodeSyncService> {
     protected async FindExistingGeoCode(
         entityID: string,
         recordID: string,
-        locationType: string
+        locationType: string,
+        contextUser: UserInfo
     ): Promise<MJRecordGeoCodeEntity | null> {
         const rv = new RunView();
         const result = await rv.RunView<MJRecordGeoCodeEntity>({
@@ -170,7 +182,7 @@ export class GeoCodeSyncService extends BaseSingleton<GeoCodeSyncService> {
             ExtraFilter: `EntityID='${entityID}' AND RecordID='${recordID}' AND LocationType='${locationType}'`,
             ResultType: 'entity_object',
             MaxRows: 1
-        });
+        }, contextUser);
         if (result.Success && result.Results.length > 0) {
             return result.Results[0];
         }
@@ -183,10 +195,11 @@ export class GeoCodeSyncService extends BaseSingleton<GeoCodeSyncService> {
     protected async CreateGeoCodeRow(
         entityID: string,
         recordID: string,
-        locationType: string
+        locationType: string,
+        contextUser: UserInfo
     ): Promise<MJRecordGeoCodeEntity | null> {
         const md = new Metadata();
-        const row = await md.GetEntityObject<MJRecordGeoCodeEntity>('MJ: Record Geo Codes');
+        const row = await md.GetEntityObject<MJRecordGeoCodeEntity>('MJ: Record Geo Codes', contextUser);
         row.NewRecord();
         row.EntityID = entityID;
         row.RecordID = recordID;
@@ -194,7 +207,11 @@ export class GeoCodeSyncService extends BaseSingleton<GeoCodeSyncService> {
         row.Status = 'pending';
         row.RetryCount = 0;
         const saved = await row.Save();
-        return saved ? row : null;
+        if (!saved) {
+            LogError(`GeoCodeSyncService: Failed to create RecordGeoCode row: ${row.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            return null;
+        }
+        return row;
     }
 
     /**
@@ -208,25 +225,48 @@ export class GeoCodeSyncService extends BaseSingleton<GeoCodeSyncService> {
         row.Latitude = result.Latitude;
         row.Longitude = result.Longitude;
         row.Precision = result.Precision;
-        row.CountryID = result.CountryID ?? '';
-        row.StateProvinceID = result.StateProvinceID ?? '';
+        row.CountryID = result.CountryID ?? null;
+        row.StateProvinceID = result.StateProvinceID ?? null;
         row.Status = 'success';
         row.GeocodingSource = result.Source;
         row.SourceFieldHash = hash;
         row.GeocodedAt = new Date();
         row.ErrorMessage = '';
-        await row.Save();
+        const saved = await row.Save();
+        if (!saved) {
+            LogError(`GeoCodeSyncService: Failed to save successful geocode: ${row.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        }
     }
 
     /**
-     * Update a RecordGeoCode row with failure information.
+     * Mark a RecordGeoCode row as not geocodable — the address can't be resolved
+     * to coordinates (e.g., "Conference Room B", "TBD"). Won't be retried by the
+     * bulk job. If the source record's address fields change, the hash mismatch
+     * in SyncIfChanged will trigger a fresh attempt.
+     */
+    protected async UpdateNotGeocodable(row: MJRecordGeoCodeEntity, reason: string): Promise<void> {
+        row.Status = 'failed';
+        row.ErrorMessage = reason;
+        row.RetryCount = 9999; // Permanently skip retries — hash change will reset this
+        row.GeocodedAt = new Date();
+        const saved = await row.Save();
+        if (!saved) {
+            LogError(`GeoCodeSyncService: Failed to save not_geocodable status: ${row.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        }
+    }
+
+    /**
+     * Update a RecordGeoCode row with failure information (transient error, eligible for retry).
      */
     protected async UpdateFailure(row: MJRecordGeoCodeEntity, errorMessage: string): Promise<void> {
         row.Status = 'failed';
         row.ErrorMessage = errorMessage;
         row.RetryCount = (row.RetryCount ?? 0) + 1;
         row.GeocodedAt = new Date();
-        await row.Save();
+        const saved = await row.Save();
+        if (!saved) {
+            LogError(`GeoCodeSyncService: Failed to save failure status: ${row.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        }
     }
 
     /**
@@ -238,10 +278,8 @@ export class GeoCodeSyncService extends BaseSingleton<GeoCodeSyncService> {
      */
     protected async Geocode(
         entity: BaseEntity,
-        mapping: GeoFieldMapping
+        _mapping: GeoFieldMapping,
     ): Promise<GeocodeResult | null> {
-        const fields = mapping.Fields;
-
         // Strategy 1: Check for native lat/lng fields (ExtendedType = GeoLatitude/GeoLongitude)
         const latField = entity.EntityInfo.Fields.find(f => f.ExtendedType === 'GeoLatitude');
         const lngField = entity.EntityInfo.Fields.find(f => f.ExtendedType === 'GeoLongitude');
@@ -273,7 +311,7 @@ export class GeoCodeSyncService extends BaseSingleton<GeoCodeSyncService> {
                 const googleResult = await this.geocodeViaGoogle(addressString, apiKey);
                 if (googleResult) {
                     // Resolve country/state IDs from Google's response
-                    await this.resolveReferenceIDs(googleResult, entity);
+                    this.resolveReferenceIDs(googleResult, entity);
                     return googleResult;
                 }
             }
@@ -361,35 +399,25 @@ export class GeoCodeSyncService extends BaseSingleton<GeoCodeSyncService> {
      * Resolve CountryID and StateProvinceID from entity geo field values
      * against the reference Country/StateProvince tables.
      */
-    private async resolveReferenceIDs(result: GeocodeResult, entity: BaseEntity): Promise<void> {
+    /**
+     * Resolve CountryID and StateProvinceID from entity geo field values
+     * using the in-memory GeoDataEngine (O(1) lookups, no DB queries).
+     */
+    private resolveReferenceIDs(result: GeocodeResult, entity: BaseEntity): void {
         const geoValues = this.extractGeoFieldValues(entity);
-        const rv = new RunView();
+        const geo = GeoDataEngine.Instance;
 
-        // Resolve country
         const countryVal = geoValues['GeoCountry'];
         if (countryVal) {
-            const countryResult = await rv.RunView<{ ID: string }>({
-                EntityName: 'MJ: Countries',
-                ExtraFilter: `Name = '${countryVal.replace(/'/g, "''")}' OR ISO2 = '${countryVal.replace(/'/g, "''")}' OR ISO3 = '${countryVal.replace(/'/g, "''")}'`,
-                Fields: ['ID'],
-                ResultType: 'simple',
-                MaxRows: 1
-            });
-            if (countryResult.Success && countryResult.Results.length > 0) {
-                result.CountryID = countryResult.Results[0].ID;
+            const country = geo.ResolveCountry(countryVal);
+            if (country) {
+                result.CountryID = country.ID;
 
-                // Resolve state within this country
                 const stateVal = geoValues['GeoStateProvince'];
                 if (stateVal) {
-                    const stateResult = await rv.RunView<{ ID: string }>({
-                        EntityName: 'MJ: State Provinces',
-                        ExtraFilter: `CountryID = '${result.CountryID}' AND (Name = '${stateVal.replace(/'/g, "''")}' OR Code = '${stateVal.replace(/'/g, "''")}')`,
-                        Fields: ['ID'],
-                        ResultType: 'simple',
-                        MaxRows: 1
-                    });
-                    if (stateResult.Success && stateResult.Results.length > 0) {
-                        result.StateProvinceID = stateResult.Results[0].ID;
+                    const state = geo.ResolveState(country.ID, stateVal);
+                    if (state) {
+                        result.StateProvinceID = state.ID;
                     }
                 }
             }
@@ -397,11 +425,11 @@ export class GeoCodeSyncService extends BaseSingleton<GeoCodeSyncService> {
     }
 
     /**
-     * Fallback geocoding using reference table centroids.
-     * Looks up Country/StateProvince by name and returns their centroid coordinates.
+     * Fallback geocoding using reference table centroids from GeoDataEngine.
+     * All lookups are O(1) in-memory — no DB queries.
      */
-    private async geocodeViaReferenceData(geoValues: Record<string, string>): Promise<GeocodeResult | null> {
-        const rv = new RunView();
+    private geocodeViaReferenceData(geoValues: Record<string, string>): GeocodeResult | null {
+        const geo = GeoDataEngine.Instance;
         const countryVal = geoValues['GeoCountry'];
         const stateVal = geoValues['GeoStateProvince'];
 
@@ -411,59 +439,34 @@ export class GeoCodeSyncService extends BaseSingleton<GeoCodeSyncService> {
 
         // Try state-level first (more precise)
         if (countryVal && stateVal) {
-            const countryResult = await rv.RunView<{ ID: string }>({
-                EntityName: 'MJ: Countries',
-                ExtraFilter: `Name = '${countryVal.replace(/'/g, "''")}' OR ISO2 = '${countryVal.replace(/'/g, "''")}' OR ISO3 = '${countryVal.replace(/'/g, "''")}'`,
-                Fields: ['ID'],
-                ResultType: 'simple',
-                MaxRows: 1
-            });
-            if (countryResult.Success && countryResult.Results.length > 0) {
-                const countryID = countryResult.Results[0].ID;
-                const stateResult = await rv.RunView<{ ID: string; Latitude: number; Longitude: number }>({
-                    EntityName: 'MJ: State Provinces',
-                    ExtraFilter: `CountryID = '${countryID}' AND (Name = '${stateVal.replace(/'/g, "''")}' OR Code = '${stateVal.replace(/'/g, "''")}')`,
-                    Fields: ['ID', 'Latitude', 'Longitude'],
-                    ResultType: 'simple',
-                    MaxRows: 1
-                });
-                if (stateResult.Success && stateResult.Results.length > 0) {
-                    const state = stateResult.Results[0];
-                    if (state.Latitude != null && state.Longitude != null) {
-                        return {
-                            Latitude: state.Latitude,
-                            Longitude: state.Longitude,
-                            Precision: 'state_province',
-                            CountryID: countryID,
-                            StateProvinceID: state.ID,
-                            Source: 'reference_data'
-                        };
-                    }
+            const country = geo.ResolveCountry(countryVal);
+            if (country) {
+                const state = geo.ResolveState(country.ID, stateVal);
+                if (state && state.Latitude != null && state.Longitude != null) {
+                    return {
+                        Latitude: state.Latitude,
+                        Longitude: state.Longitude,
+                        Precision: 'state_province',
+                        CountryID: country.ID,
+                        StateProvinceID: state.ID,
+                        Source: 'reference_data'
+                    };
                 }
             }
         }
 
         // Fall back to country-level centroid
         if (countryVal) {
-            const countryResult = await rv.RunView<{ ID: string; Latitude: number; Longitude: number }>({
-                EntityName: 'MJ: Countries',
-                ExtraFilter: `Name = '${countryVal.replace(/'/g, "''")}' OR ISO2 = '${countryVal.replace(/'/g, "''")}' OR ISO3 = '${countryVal.replace(/'/g, "''")}'`,
-                Fields: ['ID', 'Latitude', 'Longitude'],
-                ResultType: 'simple',
-                MaxRows: 1
-            });
-            if (countryResult.Success && countryResult.Results.length > 0) {
-                const country = countryResult.Results[0];
-                if (country.Latitude != null && country.Longitude != null) {
-                    return {
-                        Latitude: country.Latitude,
-                        Longitude: country.Longitude,
-                        Precision: 'country',
-                        CountryID: country.ID,
-                        StateProvinceID: null,
-                        Source: 'reference_data'
-                    };
-                }
+            const country = geo.ResolveCountry(countryVal);
+            if (country && country.Latitude != null && country.Longitude != null) {
+                return {
+                    Latitude: country.Latitude,
+                    Longitude: country.Longitude,
+                    Precision: 'country',
+                    CountryID: country.ID,
+                    StateProvinceID: null,
+                    Source: 'reference_data'
+                };
             }
         }
 

@@ -570,7 +570,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         // Fire-and-forget geocoding if geo fields were dirty before save
         if (context.State['geoSyncNeeded']) {
             // No await — geocoding runs async, errors are captured in RecordGeoCode
-            GeoCodeSyncService.Instance.SyncIfChanged(entity).catch(e => {
+            GeoCodeSyncService.Instance.SyncIfChanged(entity, user).catch(e => {
                 const msg = e instanceof Error ? e.message : String(e);
                 LogError(`GenericDatabaseProvider: Geo sync failed for ${entity.EntityInfo.Name}: ${msg}`);
             });
@@ -592,7 +592,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
         // Fire-and-forget: clean up RecordGeoCode rows for the deleted record
         if (entity.EntityInfo.SupportsGeoCoding) {
-            this.cleanupGeoCodesForDeletedRecord(entity).catch(e => {
+            this.cleanupGeoCodesForDeletedRecord(entity, user).catch(e => {
                 const msg = e instanceof Error ? e.message : String(e);
                 LogError(`GenericDatabaseProvider: Geo cleanup failed for deleted ${entity.EntityInfo.Name}: ${msg}`);
             });
@@ -602,24 +602,26 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     /**
      * Delete RecordGeoCode rows associated with a deleted entity record.
      */
-    private async cleanupGeoCodesForDeletedRecord(entity: BaseEntity): Promise<void> {
+    private async cleanupGeoCodesForDeletedRecord(entity: BaseEntity, contextUser: UserInfo): Promise<void> {
         const pkPairs = entity.PrimaryKey.KeyValuePairs;
         const recordId = pkPairs.length === 1
             ? String(pkPairs[0].Value)
             : pkPairs.map(pk => String(pk.Value)).join('||');
 
         const rv = new RunView();
-        const result = await rv.RunView<{ ID: string }>({
+        const result = await rv.RunView({
             EntityName: 'MJ: Record Geo Codes',
             ExtraFilter: `EntityID='${entity.EntityInfo.ID}' AND RecordID='${recordId}'`,
-            Fields: ['ID'],
             ResultType: 'entity_object'
-        });
+        }, contextUser);
 
         if (result.Success && result.Results.length > 0) {
             for (const row of result.Results) {
                 const geoRecord = row as unknown as BaseEntity;
-                await geoRecord.Delete();
+                const deleted = await geoRecord.Delete();
+                if (!deleted) {
+                    LogError(`GenericDatabaseProvider: Failed to delete orphaned RecordGeoCode: ${geoRecord.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+                }
             }
         }
     }

@@ -861,7 +861,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
 
     /**
      * Validates a user-provided SQL clause (WHERE, ORDER BY, etc.) to prevent SQL injection.
-     * Checks for forbidden keywords (INSERT, UPDATE, DELETE, EXEC, DROP, UNION, CAST, etc.)
+     * Checks for forbidden keywords (INSERT, UPDATE, DELETE, EXEC, DROP, UNION, etc.)
      * and dangerous patterns (comments, semicolons, xp_ prefix).
      * String literals are stripped before validation to avoid false positives.
      *
@@ -877,7 +877,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         const forbiddenPatterns: RegExp[] = [
             /\binsert\b/, /\bupdate\b/, /\bdelete\b/,
             /\bexec\b/, /\bexecute\b/, /\bdrop\b/,
-            /--/, /\/\*/, /\*\//, /\bunion\b/, /\bcast\b/, /\bxp_/, /;/,
+            /--/, /\/\*/, /\*\//, /\bunion\b/, /\bxp_/, /;/,
         ];
 
         for (const pattern of forbiddenPatterns) {

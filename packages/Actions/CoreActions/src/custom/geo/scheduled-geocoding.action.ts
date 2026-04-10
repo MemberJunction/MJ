@@ -96,9 +96,6 @@ export class ScheduledGeocodingAction extends BaseAction {
         maxRows: number
     ): Promise<{ Processed: number; Success: number }> {
         const rv = new RunView();
-
-        // Find records that have no RecordGeoCode row
-        // We load entity records as entity_object so GeoCodeSyncService can read field values
         const pkField = entityInfo.FirstPrimaryKey;
         if (!pkField) return { Processed: 0, Success: 0 };
 
@@ -109,19 +106,25 @@ export class ScheduledGeocodingAction extends BaseAction {
         );
         if (geoFields.length === 0) return { Processed: 0, Success: 0 };
 
-        // At least one address-type geo field must be non-null
-        const nonNullConditions = geoFields.map(f => `${f.Name} IS NOT NULL`).join(' OR ');
-
-        // Subquery to exclude records that already have a RecordGeoCode row
-        // Use a LEFT JOIN approach via ExtraFilter with NOT EXISTS
-        const entityIdStr = entityInfo.ID.replace(/'/g, "''");
-        const filter = `(${nonNullConditions}) AND NOT EXISTS (SELECT 1 FROM __mj.RecordGeoCode rgc WHERE rgc.EntityID = '${entityIdStr}' AND rgc.RecordID = CAST(${pkField.Name} AS NVARCHAR(450)))`;
-
         try {
+            // Step 1: Get all record IDs that already have a RecordGeoCode row
+            const existingResult = await rv.RunView<{ RecordID: string }>({
+                EntityName: 'MJ: Record Geo Codes',
+                ExtraFilter: `EntityID = '${entityInfo.ID}'`,
+                Fields: ['RecordID'],
+                ResultType: 'simple'
+            }, contextUser);
+
+            const existingRecordIds = new Set<string>(
+                existingResult.Success ? existingResult.Results.map(r => r.RecordID) : []
+            );
+
+            // Step 2: Load entity records with non-null geo fields
+            const nonNullConditions = geoFields.map(f => `${f.Name} IS NOT NULL`).join(' OR ');
             const result = await rv.RunView({
                 EntityName: entityInfo.Name,
-                ExtraFilter: filter,
-                MaxRows: maxRows,
+                ExtraFilter: `(${nonNullConditions})`,
+                MaxRows: maxRows * 2, // over-fetch to account for filtering
                 ResultType: 'entity_object'
             }, contextUser);
 
@@ -129,11 +132,21 @@ export class ScheduledGeocodingAction extends BaseAction {
                 return { Processed: 0, Success: 0 };
             }
 
+            // Step 3: Filter out records that already have geocodes
+            const missingRecords = (result.Results as unknown as import('@memberjunction/core').BaseEntity[])
+                .filter(entity => {
+                    const pkPairs = entity.PrimaryKey.KeyValuePairs;
+                    const recordId = pkPairs.length === 1
+                        ? String(pkPairs[0].Value)
+                        : pkPairs.map(pk => String(pk.Value)).join('||');
+                    return !existingRecordIds.has(recordId);
+                })
+                .slice(0, maxRows);
+
             let successCount = 0;
-            for (const record of result.Results) {
+            for (const entity of missingRecords) {
                 try {
-                    const entity = record as unknown as import('@memberjunction/core').BaseEntity;
-                    await GeoCodeSyncService.Instance.SyncIfChanged(entity);
+                    await GeoCodeSyncService.Instance.SyncIfChanged(entity, contextUser);
                     successCount++;
                 } catch (e: unknown) {
                     const msg = e instanceof Error ? e.message : String(e);
@@ -141,7 +154,7 @@ export class ScheduledGeocodingAction extends BaseAction {
                 }
             }
 
-            return { Processed: result.Results.length, Success: successCount };
+            return { Processed: missingRecords.length, Success: successCount };
         } catch (e: unknown) {
             const msg = e instanceof Error ? e.message : String(e);
             LogError(`ScheduledGeocodingAction: Error querying missing records for ${entityInfo.Name}: ${msg}`);
@@ -191,7 +204,7 @@ export class ScheduledGeocodingAction extends BaseAction {
                     continue;
                 }
 
-                await GeoCodeSyncService.Instance.SyncIfChanged(entity);
+                await GeoCodeSyncService.Instance.SyncIfChanged(entity, contextUser);
                 successCount++;
             } catch (e: unknown) {
                 const msg = e instanceof Error ? e.message : String(e);
