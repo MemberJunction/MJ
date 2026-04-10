@@ -6,7 +6,7 @@
       "ISO3166_2": "ZA-EC",
       "Latitude": -32.2172,
       "Longitude": 26.6386,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/ZA/boundaries/ZA-EC.geojson",
       "CommonAliases": [
         "Eastern Cape"
       ],
@@ -16,8 +16,8 @@
       "ID": "AC27AEA6-7BD2-462D-B6AA-40674CC0ADBC"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:39.921Z",
-      "checksum": "3d5ab29fb62307d9b825f29c20a5a6ab70dd15dd6eb0b8719505e10b7d2cdaa2"
+      "lastModified": "2026-04-10T02:34:31.837Z",
+      "checksum": "832db09346db5e87a805f635b14b6779bd5e820251445c394635b53c9dffa9aa"
     }
   },
   {
@@ -27,7 +27,7 @@
       "ISO3166_2": "ZA-FS",
       "Latitude": -28.7854,
       "Longitude": 26.4979,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/ZA/boundaries/ZA-FS.geojson",
       "CommonAliases": [
         "Free State"
       ],
@@ -37,8 +37,8 @@
       "ID": "6992BCE4-8B29-47E7-A283-FB82D23B9AA9"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:39.933Z",
-      "checksum": "9ebb8def2277ab930cc9deb50520061cee4ffcd048a6fba1ab8f306c34d0dbac"
+      "lastModified": "2026-04-10T02:34:31.852Z",
+      "checksum": "ad3217a0d809972825510e556c4abb42b83c6a473642bcf25686a7fedfb89b00"
     }
   },
   {
@@ -90,7 +90,7 @@
       "ISO3166_2": "ZA-LP",
       "Latitude": -23.4735,
       "Longitude": 29.3959,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/ZA/boundaries/ZA-LP.geojson",
       "CommonAliases": [
         "Limpopo"
       ],
@@ -100,8 +100,8 @@
       "ID": "D1AA5B25-20B6-4B07-ADAC-E5C697DECFD2"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:39.977Z",
-      "checksum": "65072a12bd9c79867736e8b340eb98204fa15e5667de3e0a840b1254c42efa9f"
+      "lastModified": "2026-04-10T02:34:31.868Z",
+      "checksum": "f28fb10c2489b5c8d99f4ebb6f64ff8e30e005314a24b5c00078c83a9aee2fad"
     }
   },
   {
@@ -111,7 +111,7 @@
       "ISO3166_2": "ZA-MP",
       "Latitude": -26.2768,
       "Longitude": 30.15,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/ZA/boundaries/ZA-MP.geojson",
       "CommonAliases": [
         "Mpumalanga"
       ],
@@ -121,8 +121,8 @@
       "ID": "002715D2-0FFC-4CF4-82D0-BA537D376642"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:39.992Z",
-      "checksum": "da89b389ea7a187cb428bb99f499db03549527be40096a2394686fa5c6f4a5d2"
+      "lastModified": "2026-04-10T02:34:31.881Z",
+      "checksum": "683bdf58cdff4fd7ff2da4c8f0e6758f1bca600ffac68feae7294a23957f0a1a"
     }
   },
   {
@@ -132,7 +132,7 @@
       "ISO3166_2": "ZA-NW",
       "Latitude": -26.1348,
       "Longitude": 25.6547,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/ZA/boundaries/ZA-NW.geojson",
       "CommonAliases": [
         "North West"
       ],
@@ -142,8 +142,8 @@
       "ID": "D59C8BB9-F3FD-42BD-8057-62182963332E"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:40.006Z",
-      "checksum": "4f8806fad27290d4802d8f229aac42fe22c1840947778787159d2d1b31df39c6"
+      "lastModified": "2026-04-10T02:34:31.896Z",
+      "checksum": "f8f3d6905cbd769a43c7fad6abfb7f674e7207fc5bec755cfe9d61727cdef0e7"
     }
   },
   {
@@ -153,7 +153,7 @@
       "ISO3166_2": "ZA-NC",
       "Latitude": -29.5734,
       "Longitude": 21.2051,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/ZA/boundaries/ZA-NC.geojson",
       "CommonAliases": [
         "Northern Cape"
       ],
@@ -163,8 +163,8 @@
       "ID": "91972ADA-CFE1-4F53-973D-D371AD5DEF1A"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:40.019Z",
-      "checksum": "879099e880d9310bd649a7dfd264c8b05468312141bb06fad24f36e21c68cadc"
+      "lastModified": "2026-04-10T02:34:31.911Z",
+      "checksum": "4b24ee7a0416901c9756667258e9f392fa6a5f883ebb578696497d9cba5fbfff"
     }
   },
   {
@@ -174,7 +174,7 @@
       "ISO3166_2": "ZA-WC",
       "Latitude": -33.547,
       "Longitude": 20.7275,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/ZA/boundaries/ZA-WC.geojson",
       "CommonAliases": [
         "Western Cape"
       ],
@@ -184,8 +184,8 @@
       "ID": "36FF13C5-EAB1-422F-A6B8-FF4144FBFEB1"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:40.030Z",
-      "checksum": "c9e932fca04b31af4e24b915ec1e54bd848d19584856d93e857d2fa3f6f9afef"
+      "lastModified": "2026-04-10T02:34:31.924Z",
+      "checksum": "2509274c30b0e35452e65e36330ede1c738a921918c93c1a7b115d55369774b6"
     }
   }
 ]

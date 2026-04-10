@@ -6,7 +6,7 @@
       "ISO3166_2": "ES-C",
       "Latitude": 43.371,
       "Longitude": -8.3959,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/ES/boundaries/ES-C.geojson",
       "CommonAliases": [
         "A Coruña"
       ],
@@ -16,8 +16,8 @@
       "ID": "ED14C67F-F431-4931-A824-539A3FAAA83E"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:26.635Z",
-      "checksum": "79ba42bfbf9526cad30a67c1c1ec111f6c0b31dd714ff90f49369fc36c0c5ab7"
+      "lastModified": "2026-04-10T02:33:46.548Z",
+      "checksum": "f068b15b867f58c56704f9b07d7e0ba844f35ae81cfacd94679354fe500e5cfa"
     }
   },
   {
@@ -27,7 +27,7 @@
       "ISO3166_2": "ES-AB",
       "Latitude": 38.9951,
       "Longitude": -1.8559,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/ES/boundaries/ES-AB.geojson",
       "CommonAliases": [
         "Albacete"
       ],
@@ -37,8 +37,8 @@
       "ID": "D7C2F4B0-5142-4768-8D21-72066201463B"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:26.647Z",
-      "checksum": "104a23ec5fbefa50337ff313a5b7062e44a19a9d702ef9c09a8d209dccb7c15f"
+      "lastModified": "2026-04-10T02:33:46.563Z",
+      "checksum": "002f14249a70e265bddd175e480d8852adaef49a3efe899f2a8c8049e78627ed"
     }
   },
   {
@@ -48,7 +48,7 @@
       "ISO3166_2": "ES-A",
       "Latitude": 38.3436,
       "Longitude": -0.4882,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/ES/boundaries/ES-A.geojson",
       "CommonAliases": [
         "Alicante"
       ],
@@ -58,8 +58,8 @@
       "ID": "3DEB29A6-8231-4126-8402-A10EBD8A179D"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:26.660Z",
-      "checksum": "95cecc8c5a28f1f2774e2f8f273ff6dd08252e729a8499bd87db77e54302067b"
+      "lastModified": "2026-04-10T02:33:46.575Z",
+      "checksum": "c0bc23cacc4a7e7bd32446d9b3c41584d44aa240b0ca8b9dccf3aaac9cb5926a"
     }
   },
   {
@@ -69,7 +69,7 @@
       "ISO3166_2": "ES-AL",
       "Latitude": 36.8414,
       "Longitude": -2.4628,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/ES/boundaries/ES-AL.geojson",
       "CommonAliases": [
         "Almeria"
       ],
@@ -79,8 +79,8 @@
       "ID": "A740F4AB-C51B-4E47-BBCD-1C3A26C6351C"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:26.674Z",
-      "checksum": "fdaa7b3795f397f103fac8bd90fd569db6a39470a9376058854545903077d520"
+      "lastModified": "2026-04-10T02:33:46.587Z",
+      "checksum": "9deb008f71a232a56eda7d3f991272681c69e8b6b9de5840f20bd76429112b60"
     }
   },
   {
@@ -111,7 +111,7 @@
       "ISO3166_2": "ES-VI",
       "Latitude": 42.8441,
       "Longitude": -2.6821,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/ES/boundaries/ES-VI.geojson",
       "CommonAliases": [
         "Araba"
       ],
@@ -121,8 +121,8 @@
       "ID": "8866982D-B2D9-4450-BC26-9AF2B35D178B"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:26.700Z",
-      "checksum": "980bdc3f12b5ed31d2dd231240e790523af0f216a7aab51006ec38eea3e40922"
+      "lastModified": "2026-04-10T02:33:46.604Z",
+      "checksum": "3e3f3a1aa440d8bdc83f49b03b102c42ee1c5b2858c0f03fdc78d472a0e3a53c"
     }
   },
   {
@@ -153,7 +153,7 @@
       "ISO3166_2": "ES-O",
       "Latitude": 43.3134,
       "Longitude": -5.9419,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/ES/boundaries/ES-O.geojson",
       "CommonAliases": [
         "Asturias"
       ],
@@ -163,8 +163,8 @@
       "ID": "A668BAD7-C1C3-4B61-A3F2-E94C98FD9896"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:26.727Z",
-      "checksum": "f38fe6bc2acf5e358a0407f95d6f708c195d6c1b6f1c86c989e1c2a8e2c90e9c"
+      "lastModified": "2026-04-10T02:33:46.619Z",
+      "checksum": "7243abd4e83629f80aa4416a12e2f92aca66379a653211aca1a42f9020f2a957"
     }
   },
   {
@@ -195,7 +195,7 @@
       "ISO3166_2": "ES-BA",
       "Latitude": 38.8782,
       "Longitude": -6.9701,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/ES/boundaries/ES-BA.geojson",
       "CommonAliases": [
         "Badajoz"
       ],
@@ -205,8 +205,8 @@
       "ID": "59A2BE56-A3C8-4B22-B13E-D4C3AB6EE351"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:26.754Z",
-      "checksum": "6a618a62f21665f05b21759bd793e8215d26b32d9cf945d95276379ab6977faf"
+      "lastModified": "2026-04-10T02:33:46.630Z",
+      "checksum": "36ab7301a74929057fd12c702db7e92adf7f894dacd34e8e71680ec1c86cebfa"
     }
   },
   {
@@ -237,7 +237,7 @@
       "ISO3166_2": "ES-B",
       "Latitude": 41.3826,
       "Longitude": 2.1771,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/ES/boundaries/ES-B.geojson",
       "CommonAliases": [
         "Barcelona"
       ],
@@ -247,8 +247,8 @@
       "ID": "3F6C0D75-A998-452E-9AB8-FB83769C4EC3"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:26.793Z",
-      "checksum": "cbd423843b249b982810250cbdbcd55c32daf84a8f61f4063f0dd8a389bea74d"
+      "lastModified": "2026-04-10T02:33:46.679Z",
+      "checksum": "88b2d5053f47056836e5c35bc539af8c8a8c1b73b7f26b8ea8a515bc19b29f68"
     }
   },
   {
@@ -279,7 +279,7 @@
       "ISO3166_2": "ES-BI",
       "Latitude": 43.2385,
       "Longitude": -2.8516,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/ES/boundaries/ES-BI.geojson",
       "CommonAliases": [
         "Bizkaia"
       ],
@@ -289,8 +289,8 @@
       "ID": "E1B6ACBE-90F3-409B-9DEA-C84C76AE1441"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:26.819Z",
-      "checksum": "4b15937b3eca142b5d44de296902aa8b1c624b2f12e8c85bcab04c9fc85e6845"
+      "lastModified": "2026-04-10T02:33:46.693Z",
+      "checksum": "4c8adab5b65a0a8494c59cecac9814dbd99b2f5b8eec544201ecc1d05630c928"
     }
   },
   {
@@ -300,7 +300,7 @@
       "ISO3166_2": "ES-BU",
       "Latitude": 42.3247,
       "Longitude": -3.6765,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/ES/boundaries/ES-BU.geojson",
       "CommonAliases": [
         "Burgos"
       ],
@@ -310,8 +310,8 @@
       "ID": "4CAE121D-1D35-4159-8611-402621468304"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:26.832Z",
-      "checksum": "f62815dd9d0656278eede9dc243bdb9be0def34e1f1e8c2d4d5c0cf8966dfbfd"
+      "lastModified": "2026-04-10T02:33:46.706Z",
+      "checksum": "22e84e37b9ec2aa7c2593c510edf907878c41909d15f3520538a10cf1e77c1fb"
     }
   },
   {
@@ -321,7 +321,7 @@
       "ISO3166_2": "ES-CC",
       "Latitude": 39.4745,
       "Longitude": -6.3717,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/ES/boundaries/ES-CC.geojson",
       "CommonAliases": [
         "Caceres"
       ],
@@ -331,8 +331,8 @@
       "ID": "B7D4DC5B-958C-488F-B430-4BA3190A587A"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:26.845Z",
-      "checksum": "cc35be19a599ba8588d97e788051e6461e722d1d0c1a62295c4de0d2fbf16499"
+      "lastModified": "2026-04-10T02:33:46.719Z",
+      "checksum": "d08a1563869daf1547df171298129c607626f521a436276b83e820ea72b0ce49"
     }
   },
   {
@@ -363,7 +363,7 @@
       "ISO3166_2": "ES-S",
       "Latitude": 43.1596,
       "Longitude": -4.0878,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/ES/boundaries/ES-S.geojson",
       "CommonAliases": [
         "Cantabria"
       ],
@@ -373,8 +373,8 @@
       "ID": "1325F4E0-7765-4E2D-B18C-5923A551E503"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:26.871Z",
-      "checksum": "d79018e227665b8781d50882100eae70583c981a8b80246792fcf0ca58e2d650"
+      "lastModified": "2026-04-10T02:33:46.733Z",
+      "checksum": "cc0ff5b0762d7ca603a4bb22f0ec700c051ff0031cdf1c3426ec05ad090b4984"
     }
   },
   {
@@ -405,7 +405,7 @@
       "ISO3166_2": "ES-CS",
       "Latitude": 40.2519,
       "Longitude": -0.0615,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/ES/boundaries/ES-CS.geojson",
       "CommonAliases": [
         "Castellón"
       ],
@@ -415,8 +415,8 @@
       "ID": "63687155-4C8F-4669-AC1F-817F5B68B3F1"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:26.898Z",
-      "checksum": "c7b3f2cc4e185680d0a71911320aeeb59b3a8933bc5b90f371c6686db10a0943"
+      "lastModified": "2026-04-10T02:33:46.745Z",
+      "checksum": "570f97e07636f69a503db89a0bb0bdec81aae1698b558d90cbbbb6b137f2cafe"
     }
   },
   {
@@ -489,7 +489,7 @@
       "ISO3166_2": "ES-CE",
       "Latitude": 35.8884,
       "Longitude": -5.3041,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/ES/boundaries/ES-CE.geojson",
       "CommonAliases": [
         "Ceuta"
       ],
@@ -499,8 +499,8 @@
       "ID": "F04FBE6F-C16B-4BA0-BD84-80FB56DBA9BA"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:26.966Z",
-      "checksum": "0b4549f62b4041e11fd5d64cbf1609d1212f245af8e4f78d1897d75f8489a525"
+      "lastModified": "2026-04-10T02:33:46.791Z",
+      "checksum": "b3611e5b46cec28186cc48f935174efb7e90a0285efc7435c2ca4ac8eba68e2c"
     }
   },
   {
@@ -510,7 +510,7 @@
       "ISO3166_2": "ES-CR",
       "Latitude": 38.9854,
       "Longitude": -3.9285,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/ES/boundaries/ES-CR.geojson",
       "CommonAliases": [
         "Ciudad Real"
       ],
@@ -520,8 +520,8 @@
       "ID": "6F3B0A9B-4EEF-4894-BB9A-7B3943D43A3D"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:26.980Z",
-      "checksum": "2bbbd95ee9a2a1eb87ac5f80ec3be3e89392cd43f31f3712835cfeb47cc32815"
+      "lastModified": "2026-04-10T02:33:46.805Z",
+      "checksum": "ee5601f578ac8458ea3dede7193e64118c23e930c267b9c05dae88eafdbc01f6"
     }
   },
   {
@@ -552,7 +552,7 @@
       "ISO3166_2": "ES-CU",
       "Latitude": 40.0661,
       "Longitude": -2.1314,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/ES/boundaries/ES-CU.geojson",
       "CommonAliases": [
         "Cuenca"
       ],
@@ -562,8 +562,8 @@
       "ID": "96EEEB4F-EB68-4656-A3C3-BFFF44AC893B"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:27.008Z",
-      "checksum": "6f099c16ef1df3dd84c8128746741bcf10cc5c930d2ee3e56ff5f15554159678"
+      "lastModified": "2026-04-10T02:33:46.818Z",
+      "checksum": "e4519df9585b401c005ed94b5c43f9e5337bf06bd3ed611583b1ed4bcd6bc292"
     }
   },
   {
@@ -573,7 +573,7 @@
       "ISO3166_2": "ES-CA",
       "Latitude": 36.5297,
       "Longitude": -6.2929,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/ES/boundaries/ES-CA.geojson",
       "CommonAliases": [
         "Cádiz"
       ],
@@ -583,8 +583,8 @@
       "ID": "93B73AD9-D970-4CE0-9B97-86F35F702FCB"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:27.021Z",
-      "checksum": "87a2263abc012c48b674461857837563328722dd13adf32d002583b26a0b68d0"
+      "lastModified": "2026-04-10T02:33:46.829Z",
+      "checksum": "d58696970569b21442d4dddbd4a80482a8c1b1f22a486d7d1fa72d7b8f3d0ae5"
     }
   },
   {
@@ -594,7 +594,7 @@
       "ISO3166_2": "ES-CO",
       "Latitude": 37.9567,
       "Longitude": -4.8477,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/ES/boundaries/ES-CO.geojson",
       "CommonAliases": [
         "Córdoba"
       ],
@@ -604,8 +604,8 @@
       "ID": "2EEDC6A7-3DC3-449E-A147-59B2F7F910DB"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:27.034Z",
-      "checksum": "dd4f0a4baa00e5b7ba7aa76d135a660c555168df785d7bae667bc4462c05197c"
+      "lastModified": "2026-04-10T02:33:46.842Z",
+      "checksum": "16c778cdd0aaf3b369a939388dcc152a1b945659d062469157b70e2aa01dd6bf"
     }
   },
   {
@@ -657,7 +657,7 @@
       "ISO3166_2": "ES-SS",
       "Latitude": 43.1445,
       "Longitude": -2.2038,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/ES/boundaries/ES-SS.geojson",
       "CommonAliases": [
         "Gipuzkoa"
       ],
@@ -667,8 +667,8 @@
       "ID": "F80A4695-DE2E-4A08-BEEC-AF25A369310F"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:27.091Z",
-      "checksum": "a7345cd3c3a45a144724f6326bc7d613191fdaba043b4c7a0f56e978721eb36f"
+      "lastModified": "2026-04-10T02:33:46.890Z",
+      "checksum": "4d09b08f2e639091235e624d05613f500534c2e242a47aeea63f239214779052"
     }
   },
   {
@@ -678,7 +678,7 @@
       "ISO3166_2": "ES-GI",
       "Latitude": 41.9793,
       "Longitude": 2.8199,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/ES/boundaries/ES-GI.geojson",
       "CommonAliases": [
         "Girona"
       ],
@@ -688,8 +688,8 @@
       "ID": "396A711B-9706-4C19-9DF6-1747E9EE036B"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:27.103Z",
-      "checksum": "3f47da77dcc3a7b748a7f50e5a370a4c8ebf78b28c4bab8eb0fae4624902b9b9"
+      "lastModified": "2026-04-10T02:33:46.906Z",
+      "checksum": "cd3d3bf84c899886b5243282e631869a7e64cfcce9d76c092838e844a53e1dce"
     }
   },
   {
@@ -699,7 +699,7 @@
       "ISO3166_2": "ES-GR",
       "Latitude": 37.1735,
       "Longitude": -3.5995,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/ES/boundaries/ES-GR.geojson",
       "CommonAliases": [
         "Granada"
       ],
@@ -709,8 +709,8 @@
       "ID": "DE984609-3696-4D55-ACDC-C597C75805C6"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:27.114Z",
-      "checksum": "ea24846cb2ccaba64950e9e5232e4d5fc8877dbe5b48e636d27bbc9c3c1d5453"
+      "lastModified": "2026-04-10T02:33:46.918Z",
+      "checksum": "90ea41b2303957ce707068766edff26db8644b1a4a6f722f785a4593582bbae3"
     }
   },
   {
@@ -720,7 +720,7 @@
       "ISO3166_2": "ES-GU",
       "Latitude": 40.6327,
       "Longitude": -3.1646,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/ES/boundaries/ES-GU.geojson",
       "CommonAliases": [
         "Guadalajara"
       ],
@@ -730,8 +730,8 @@
       "ID": "657EFAB3-20F1-43CC-B203-320221C253E9"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:27.125Z",
-      "checksum": "b81090a39cca20d68a68a42b57e6424ecd1580382454f0b519f1cd2b8664287e"
+      "lastModified": "2026-04-10T02:33:46.932Z",
+      "checksum": "c4755db287dd3c61ef25d01d3a2890b8a4ba534e7162041466bc5bd94d521f3c"
     }
   },
   {
@@ -741,7 +741,7 @@
       "ISO3166_2": "ES-H",
       "Latitude": 37.2576,
       "Longitude": -6.9485,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/ES/boundaries/ES-H.geojson",
       "CommonAliases": [
         "Huelva"
       ],
@@ -751,8 +751,8 @@
       "ID": "62C8CCA7-37B4-4B02-9639-9EF50713B7F5"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:27.139Z",
-      "checksum": "4248a0306d25bb690072bbd264b3b84878c1cf5862da6ecaad6886e851ab15b0"
+      "lastModified": "2026-04-10T02:33:46.945Z",
+      "checksum": "bd1617033adf8c28059ed6ec98842140dcfeb5a92b474745c948da61276a5f23"
     }
   },
   {
@@ -762,7 +762,7 @@
       "ISO3166_2": "ES-HU",
       "Latitude": 42.1364,
       "Longitude": -0.4366,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/ES/boundaries/ES-HU.geojson",
       "CommonAliases": [
         "Huesca"
       ],
@@ -772,8 +772,8 @@
       "ID": "3EF0AB87-FD42-43BB-9830-823842550132"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:27.150Z",
-      "checksum": "0c6091e212cc20d5ced3c9ba5086b87987c6cec73b2576224b01b31e403f90b5"
+      "lastModified": "2026-04-10T02:33:46.957Z",
+      "checksum": "da8d9edf0b4142e4c1d00030e328e757e8f00fc42a3d6e3e5d22d09acede913d"
     }
   },
   {
@@ -783,7 +783,7 @@
       "ISO3166_2": "ES-PM",
       "Latitude": 39.6134,
       "Longitude": 2.8829,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/ES/boundaries/ES-PM.geojson",
       "CommonAliases": [
         "Islas Baleares"
       ],
@@ -793,8 +793,8 @@
       "ID": "758969A7-0748-47A3-BEA3-E1EBD366488C"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:27.161Z",
-      "checksum": "668d9bd126c09d749535420b9a321a0afa1cc52b2313cd0691e64e79f4ad9d51"
+      "lastModified": "2026-04-10T02:33:46.971Z",
+      "checksum": "a87193cef14bdc67c30243c77ca5f97499d69b4a8138074c46e65130d23f16c7"
     }
   },
   {
@@ -804,7 +804,7 @@
       "ISO3166_2": "ES-J",
       "Latitude": 37.7729,
       "Longitude": -3.7883,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/ES/boundaries/ES-J.geojson",
       "CommonAliases": [
         "Jaén"
       ],
@@ -814,8 +814,8 @@
       "ID": "0828A75E-B6A0-42D0-BE1B-F89149E12220"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:27.174Z",
-      "checksum": "f9d53289fe3122fc62ac62d41969d140b04e43640c0da7bafce1771fe56e44b9"
+      "lastModified": "2026-04-10T02:33:46.983Z",
+      "checksum": "f80963e10956a7399ab40f3bc7482d259df0c2625ad0d17756a155ad22714658"
     }
   },
   {
@@ -846,7 +846,7 @@
       "ISO3166_2": "ES-LO",
       "Latitude": 42.2815,
       "Longitude": -2.4828,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/ES/boundaries/ES-LO.geojson",
       "CommonAliases": [
         "La Rioja"
       ],
@@ -856,8 +856,8 @@
       "ID": "A19590D5-A29B-4A31-BD7D-25DE4F535FE3"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:27.207Z",
-      "checksum": "d16cef5c9d8cde5269081ea0ebdef2ac1aaed46ffff04f2377e158ce1c4722ac"
+      "lastModified": "2026-04-10T02:33:47.042Z",
+      "checksum": "2c419034e0f4cf26665f3991ca62db6608f8fa96b2d813e095a51d0ef6feb41e"
     }
   },
   {
@@ -867,7 +867,7 @@
       "ISO3166_2": "ES-GC",
       "Latitude": 27.958,
       "Longitude": -15.6062,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/ES/boundaries/ES-GC.geojson",
       "CommonAliases": [
         "Las Palmas"
       ],
@@ -877,8 +877,8 @@
       "ID": "467C5016-6B39-42A8-A02C-1B7B35AAF9E8"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:27.220Z",
-      "checksum": "55c66dfd7b9e74cc26475c64cc2b2fad2c75ade6aec23a28e1566ae391e38583"
+      "lastModified": "2026-04-10T02:33:47.058Z",
+      "checksum": "600c1c5ffb85ce705f35213fcccd393632972bed645123b85f22aeb4857ce3d0"
     }
   },
   {
@@ -888,7 +888,7 @@
       "ISO3166_2": "ES-LE",
       "Latitude": 42.5987,
       "Longitude": -5.5671,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/ES/boundaries/ES-LE.geojson",
       "CommonAliases": [
         "León"
       ],
@@ -898,8 +898,8 @@
       "ID": "314428F7-21A2-483E-9B0B-C16311247F7B"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:27.236Z",
-      "checksum": "421d128284e99c9bf147cae7c7b47bdb054b95b8bd3b3b1064730e26c27b8c69"
+      "lastModified": "2026-04-10T02:33:47.071Z",
+      "checksum": "eded073182273074a8dc8d3dce3725ef314237e0978cfba2c57e2e26784b0305"
     }
   },
   {
@@ -909,7 +909,7 @@
       "ISO3166_2": "ES-L",
       "Latitude": 41.6148,
       "Longitude": 0.6268,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/ES/boundaries/ES-L.geojson",
       "CommonAliases": [
         "Lleida"
       ],
@@ -919,8 +919,8 @@
       "ID": "21298892-6E9F-4B1F-8B58-18689A1947C7"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:27.250Z",
-      "checksum": "af42247d5daa44bceff3c7e5da74abece6e439b536239ccd3525ed931dfa3ea8"
+      "lastModified": "2026-04-10T02:33:47.087Z",
+      "checksum": "1719f97ba9557294d41e884036434d9cb4f20726f572b0fc2b2d0136e1645d96"
     }
   },
   {
@@ -930,7 +930,7 @@
       "ISO3166_2": "ES-LU",
       "Latitude": 43.0118,
       "Longitude": -7.5566,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/ES/boundaries/ES-LU.geojson",
       "CommonAliases": [
         "Lugo"
       ],
@@ -940,8 +940,8 @@
       "ID": "57519460-CCC1-4FA9-ACC9-DA699C3E49F8"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:27.262Z",
-      "checksum": "b9684f33e4e66577be26e285524db94d4bcd49a57a047a5854f7e2815c8a70b2"
+      "lastModified": "2026-04-10T02:33:47.102Z",
+      "checksum": "51036081302c8edad7596de752ca6b298215fd34910f407e72ef1f009b2e9dd4"
     }
   },
   {
@@ -951,7 +951,7 @@
       "ISO3166_2": "ES-M",
       "Latitude": 40.4168,
       "Longitude": -3.7038,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/ES/boundaries/ES-M.geojson",
       "CommonAliases": [
         "Madrid"
       ],
@@ -961,8 +961,8 @@
       "ID": "82454519-75A5-4085-86F7-6FD1846E9FDB"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:27.274Z",
-      "checksum": "8168cbd4fcdc538564605ecacc9b225be324995c41a80b26cd45d43546ca14dd"
+      "lastModified": "2026-04-10T02:33:47.117Z",
+      "checksum": "ef6c3e378ccbc72756adbeb73531b97b7fb7591354067d78a51a99e7ea3216f0"
     }
   },
   {
@@ -972,7 +972,7 @@
       "ISO3166_2": "ES-ML",
       "Latitude": 35.2937,
       "Longitude": -2.9383,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/ES/boundaries/ES-ML.geojson",
       "CommonAliases": [
         "Melilla"
       ],
@@ -982,8 +982,8 @@
       "ID": "53F42C00-9EFD-45E4-8562-95F5B6040B95"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:27.288Z",
-      "checksum": "e990a30eee2c4234796d43dfa9c99e6ec2460d622962c7c42824a570de0684f6"
+      "lastModified": "2026-04-10T02:33:47.131Z",
+      "checksum": "75951cd6d729a1ab672a8f2c6e9d9eb261a8d2e9241125f4a2ed687ddd493ee7"
     }
   },
   {
@@ -993,7 +993,7 @@
       "ISO3166_2": "ES-MU",
       "Latitude": 37.9924,
       "Longitude": -1.1305,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/ES/boundaries/ES-MU.geojson",
       "CommonAliases": [
         "Murcia"
       ],
@@ -1003,8 +1003,8 @@
       "ID": "D905115E-01DE-473A-9C55-53024FA0B47C"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:27.304Z",
-      "checksum": "f288bf0da74e057095cdf3da87f8e565f45e2f77ac5b83a078ba7e91ff790d67"
+      "lastModified": "2026-04-10T02:33:47.145Z",
+      "checksum": "7ae72d3c5ee14eb3b1d822f7f0d4605b1bd1b1ee7fe7922b91173e4c3139b5c6"
     }
   },
   {
@@ -1014,7 +1014,7 @@
       "ISO3166_2": "ES-MA",
       "Latitude": 36.7213,
       "Longitude": -4.4216,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/ES/boundaries/ES-MA.geojson",
       "CommonAliases": [
         "Málaga"
       ],
@@ -1024,8 +1024,8 @@
       "ID": "5D90748E-17DE-4EC4-9F78-F5800CF98466"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:27.320Z",
-      "checksum": "c070407af155e9a2f041ef2b7a71139c3cc5ee623bc151e9ef5bf2a903d21588"
+      "lastModified": "2026-04-10T02:33:47.159Z",
+      "checksum": "62826dc9ee66138de711e867efaf04074c8aa2ff079ab130b85a1dcd6d97cbca"
     }
   },
   {
@@ -1035,7 +1035,7 @@
       "ISO3166_2": "ES-NA",
       "Latitude": 42.6125,
       "Longitude": -1.8308,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/ES/boundaries/ES-NA.geojson",
       "CommonAliases": [
         "Navarra"
       ],
@@ -1045,8 +1045,8 @@
       "ID": "BA8A9B4F-7B5E-4F03-A476-DE086035473F"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:27.332Z",
-      "checksum": "619623bfa9307c8879ec3688c81b7c5891794d88e65e68787b7114163284e68c"
+      "lastModified": "2026-04-10T02:33:47.172Z",
+      "checksum": "4684de4945283ed8ca7d1519f0e70f814efc04a15bf3efa8bdac914386c7985b"
     }
   },
   {
@@ -1077,7 +1077,7 @@
       "ISO3166_2": "ES-OR",
       "Latitude": 42.3439,
       "Longitude": -7.8572,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/ES/boundaries/ES-OR.geojson",
       "CommonAliases": [
         "Ourense"
       ],
@@ -1087,8 +1087,8 @@
       "ID": "AA8A7D93-462C-48E7-BD78-4069D8452427"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:27.377Z",
-      "checksum": "ca1b7b911bc5d322f7be8421433cacb5cb2e43b447cd4eb8922cdf013060112a"
+      "lastModified": "2026-04-10T02:33:47.223Z",
+      "checksum": "c631af9f9e15baaf9cc92e9523c11629589d6f9f0c411ef7079cf5d3f2fa91bb"
     }
   },
   {
@@ -1098,7 +1098,7 @@
       "ISO3166_2": "ES-P",
       "Latitude": 42.0097,
       "Longitude": -4.5288,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/ES/boundaries/ES-P.geojson",
       "CommonAliases": [
         "Palencia"
       ],
@@ -1108,8 +1108,8 @@
       "ID": "F2C1C775-F128-4924-944F-D63B96771E8E"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:27.390Z",
-      "checksum": "b6a49477d096bd0f50b35ca51824fbff173a4333edbdcc9872035e30350367c5"
+      "lastModified": "2026-04-10T02:33:47.237Z",
+      "checksum": "8a98c29a8337da06a67ee75efb5e6d36cd4c5b91896af18be3d60a6702e673e7"
     }
   },
   {
@@ -1119,7 +1119,7 @@
       "ISO3166_2": "ES-PO",
       "Latitude": 42.4319,
       "Longitude": -8.6432,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/ES/boundaries/ES-PO.geojson",
       "CommonAliases": [
         "Pontevedra"
       ],
@@ -1129,8 +1129,8 @@
       "ID": "869ACF44-123E-4E8B-A0B1-1F9EDA2B314A"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:27.402Z",
-      "checksum": "6ae6b8c094e26f1e4bbebf33bb6ec01186234326501a0b1f06b334ed30c115e7"
+      "lastModified": "2026-04-10T02:33:47.260Z",
+      "checksum": "c7aaad60a6c7538487f22f037f31c2c7771afe46760cc304773eaad904c2ecfd"
     }
   },
   {
@@ -1161,7 +1161,7 @@
       "ISO3166_2": "ES-SA",
       "Latitude": 40.7666,
       "Longitude": -6.0218,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/ES/boundaries/ES-SA.geojson",
       "CommonAliases": [
         "Salamanca"
       ],
@@ -1171,8 +1171,8 @@
       "ID": "79EB8A02-676A-4C25-84AE-73B3376CBCD4"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:27.430Z",
-      "checksum": "acadc35379eef267246ad06fda93bc0a50ea02985526f0280a9082d8748e052c"
+      "lastModified": "2026-04-10T02:33:47.279Z",
+      "checksum": "0a0a44925e43e1387484bcadf6a93975375aa8ac9fdc2d527441c5b4b8167ef3"
     }
   },
   {
@@ -1182,7 +1182,7 @@
       "ISO3166_2": "ES-TF",
       "Latitude": 28.4672,
       "Longitude": -16.2508,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/ES/boundaries/ES-TF.geojson",
       "CommonAliases": [
         "Santa Cruz de Tenerife"
       ],
@@ -1192,8 +1192,8 @@
       "ID": "F9A36FBB-D980-495C-9E7E-3B94144BD21B"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:27.443Z",
-      "checksum": "089e531cbe5ee3c344c645a37e7c3cbdb611b98b3224b357b5b7fabf04ddabd9"
+      "lastModified": "2026-04-10T02:33:47.293Z",
+      "checksum": "07522eb8aec020c1ec9a79050ee54f4610a5b2990b62f877f0903a50499a2fe4"
     }
   },
   {
@@ -1203,7 +1203,7 @@
       "ISO3166_2": "ES-SG",
       "Latitude": 40.9429,
       "Longitude": -4.1089,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/ES/boundaries/ES-SG.geojson",
       "CommonAliases": [
         "Segovia"
       ],
@@ -1213,8 +1213,8 @@
       "ID": "F0CD5B57-DF58-4C8C-B69E-2CEA0A966590"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:27.457Z",
-      "checksum": "c5988e8eb2ccb3e3d5aa5650a16b276c535051689e4ec000f80a0571a0698844"
+      "lastModified": "2026-04-10T02:33:47.306Z",
+      "checksum": "f2e8a58a869bfa326fe7372728be32e38af44496121c7243bfad6e9c57581601"
     }
   },
   {
@@ -1224,7 +1224,7 @@
       "ISO3166_2": "ES-SE",
       "Latitude": 37.3886,
       "Longitude": -5.9953,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/ES/boundaries/ES-SE.geojson",
       "CommonAliases": [
         "Sevilla"
       ],
@@ -1234,8 +1234,8 @@
       "ID": "8A4A3D63-C607-439E-B85D-1F760D475B15"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:27.472Z",
-      "checksum": "ac4131f065dabfe7c84298d07a4fc9397f31ee374b4a8cea8b4fbdb823a2a059"
+      "lastModified": "2026-04-10T02:33:47.319Z",
+      "checksum": "9d8131c21e3806f88525b742c88ccf70dc854bfef94273fbc50f60d3a44f5226"
     }
   },
   {
@@ -1245,7 +1245,7 @@
       "ISO3166_2": "ES-SO",
       "Latitude": 41.7634,
       "Longitude": -2.4642,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/ES/boundaries/ES-SO.geojson",
       "CommonAliases": [
         "Soria"
       ],
@@ -1255,8 +1255,8 @@
       "ID": "C6073314-98C1-49CD-B025-BCE69F68064C"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:27.483Z",
-      "checksum": "dfe04004c387e3fc1ce319fe0140b6762bb605b19dae648d785c86488e4fc33c"
+      "lastModified": "2026-04-10T02:33:47.332Z",
+      "checksum": "d481de906b52cccd333d6b383cf3b3d4e646951cd04c966bd8ae381b73e4ec83"
     }
   },
   {
@@ -1266,7 +1266,7 @@
       "ISO3166_2": "ES-T",
       "Latitude": 41.1172,
       "Longitude": 1.2546,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/ES/boundaries/ES-T.geojson",
       "CommonAliases": [
         "Tarragona"
       ],
@@ -1276,8 +1276,8 @@
       "ID": "0ADF7B56-EF33-4CDD-8A5F-47D51DD43A2C"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:27.510Z",
-      "checksum": "da9ce023b6902e8121948be46655d56d0035b7f029cc8fcbfae6180046e4e1c7"
+      "lastModified": "2026-04-10T02:33:47.378Z",
+      "checksum": "8b4e82df2eec21d905abc17e2dcd72a0535fd99524d755655d450b099b38a7f7"
     }
   },
   {
@@ -1287,7 +1287,7 @@
       "ISO3166_2": "ES-TE",
       "Latitude": 40.345,
       "Longitude": -1.1185,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/ES/boundaries/ES-TE.geojson",
       "CommonAliases": [
         "Teruel"
       ],
@@ -1297,8 +1297,8 @@
       "ID": "76A67C63-108D-4BAA-AEDD-4770F7445E8B"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:27.521Z",
-      "checksum": "09c09853959273fb8295b21e8c2341b83647e08b84174cd9f2ee78ba8ca5b304"
+      "lastModified": "2026-04-10T02:33:47.445Z",
+      "checksum": "deafa2c8e401747631f37df1af569671a0a1ab4e33950f5775971aafb8181d37"
     }
   },
   {
@@ -1308,7 +1308,7 @@
       "ISO3166_2": "ES-TO",
       "Latitude": 39.8561,
       "Longitude": -4.024,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/ES/boundaries/ES-TO.geojson",
       "CommonAliases": [
         "Toledo"
       ],
@@ -1318,8 +1318,8 @@
       "ID": "A772535D-0965-4C64-B775-79B260269844"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:27.534Z",
-      "checksum": "a6ec9b21303902804adc625c412109d85d1411871495f8733390ec5a1a4f2a57"
+      "lastModified": "2026-04-10T02:33:47.392Z",
+      "checksum": "9148beba9b78d158d576e3a11aec237505299fb940cb2488088fc146b2af7cd6"
     }
   },
   {
@@ -1329,7 +1329,7 @@
       "ISO3166_2": "ES-V",
       "Latitude": 39.3342,
       "Longitude": -0.7973,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/ES/boundaries/ES-V.geojson",
       "CommonAliases": [
         "Valencia"
       ],
@@ -1339,8 +1339,8 @@
       "ID": "D6F2D83A-546F-4CE9-9FDC-D5D6F0732B69"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:27.549Z",
-      "checksum": "371ab0934ac4de2d5821a80f7d3cb7f394aa9567347ed8fbd3abc9a4bdb6bdad"
+      "lastModified": "2026-04-10T02:33:47.404Z",
+      "checksum": "0a80ee9962432d86d5b1eed7c125f97e208881fad7e4020c47d8571a1c890e31"
     }
   },
   {
@@ -1371,7 +1371,7 @@
       "ISO3166_2": "ES-VA",
       "Latitude": 41.6517,
       "Longitude": -4.7245,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/ES/boundaries/ES-VA.geojson",
       "CommonAliases": [
         "Valladolid"
       ],
@@ -1381,8 +1381,8 @@
       "ID": "C10487F8-E658-41FA-AAE9-0750EFFFF77C"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:27.577Z",
-      "checksum": "495341b4315ebbd4a3682cc2648703ce1c6f917b4e7ab6799784a3613f5bc999"
+      "lastModified": "2026-04-10T02:33:47.421Z",
+      "checksum": "eb9f3e068e9ff4d0cf0e2f523449fb99c05a1324a1711fbec5d59ad31de278a7"
     }
   },
   {
@@ -1392,7 +1392,7 @@
       "ISO3166_2": "ES-ZA",
       "Latitude": 41.6858,
       "Longitude": -5.9423,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/ES/boundaries/ES-ZA.geojson",
       "CommonAliases": [
         "Zamora"
       ],
@@ -1402,8 +1402,8 @@
       "ID": "37667233-F5BD-48D6-93E3-22337CF982F8"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:27.590Z",
-      "checksum": "1700d61fea6a771b6c161c9238b131634468403dc894b7a4d9a003a9cc9c4dc5"
+      "lastModified": "2026-04-10T02:33:47.433Z",
+      "checksum": "984940874cd3fd525babaac03db183e1eeb43c13b5177a0b49d3e354361354ed"
     }
   },
   {
@@ -1413,7 +1413,7 @@
       "ISO3166_2": "ES-Z",
       "Latitude": 41.6521,
       "Longitude": -0.8809,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/ES/boundaries/ES-Z.geojson",
       "CommonAliases": [
         "Zaragoza"
       ],
@@ -1423,8 +1423,8 @@
       "ID": "933326C6-DA18-46BB-9558-3603639401C5"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:27.603Z",
-      "checksum": "10e4ab728ad2346ac4337ec7634c6b4da91c65433e92609dce6d856ca319f9b7"
+      "lastModified": "2026-04-10T02:33:47.459Z",
+      "checksum": "5a42c4bfbf9b0c31281c6ab140bff815544d4bfabc9ca72e2126a911e3add7ad"
     }
   },
   {
@@ -1434,7 +1434,7 @@
       "ISO3166_2": "ES-AV",
       "Latitude": 40.6233,
       "Longitude": -4.8354,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/ES/boundaries/ES-AV.geojson",
       "CommonAliases": [
         "Ávila"
       ],
@@ -1444,8 +1444,8 @@
       "ID": "3B9B8B9C-6333-4B7F-B38A-A39D3F1558CF"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:27.614Z",
-      "checksum": "c106644b09be09db695f9404653764ca37d55f1d7abd07a9275ef68598b566b2"
+      "lastModified": "2026-04-10T02:33:47.470Z",
+      "checksum": "59e736d8ad7a0ec11e8bf61424a8e8e92cc32a937ef22483cf2b9fb2d62d4018"
     }
   }
 ]

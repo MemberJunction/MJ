@@ -6,7 +6,7 @@
       "ISO3166_2": "NL-DR",
       "Latitude": 52.9068,
       "Longitude": 6.6368,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/NL/boundaries/NL-DR.geojson",
       "CommonAliases": [
         "Drenthe"
       ],
@@ -16,8 +16,8 @@
       "ID": "E0455CD8-C3F8-4373-B44E-86349B2A686A"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:36.055Z",
-      "checksum": "5837a4608d5fcffdedbe4cf08fc7a45308a7f98b77be8802d9abfa9ce51fc24b"
+      "lastModified": "2026-04-10T02:34:14.031Z",
+      "checksum": "06eb387198b8cc3e7074a5c3c1433652665b660d501db623477f3e5f027f4d7c"
     }
   },
   {
@@ -27,7 +27,7 @@
       "ISO3166_2": "NL-FL",
       "Latitude": 52.4484,
       "Longitude": 5.4235,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/NL/boundaries/NL-FL.geojson",
       "CommonAliases": [
         "Flevoland"
       ],
@@ -37,8 +37,8 @@
       "ID": "B75F809A-C063-4715-ADFA-F451CB4A2332"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:36.069Z",
-      "checksum": "b0fa996bdaf41887b8103ab3555c73912f38d85b95e69f4142528eb9ab0a7581"
+      "lastModified": "2026-04-10T02:34:14.043Z",
+      "checksum": "e0eb4ddfef2144d2f31d709f5229272c8b58dd29c8a289bc98f41cec5aa25445"
     }
   },
   {
@@ -48,7 +48,7 @@
       "ISO3166_2": "NL-FR",
       "Latitude": 53.0924,
       "Longitude": 5.777,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/NL/boundaries/NL-FR.geojson",
       "CommonAliases": [
         "Friesland"
       ],
@@ -58,8 +58,8 @@
       "ID": "3CB00E79-4AA5-4B06-9B08-06729D986888"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:36.082Z",
-      "checksum": "8781eb87361b920c64c7e7051fe17a6fb957b41dabf10f262759b7caf7ae0994"
+      "lastModified": "2026-04-10T02:34:14.058Z",
+      "checksum": "1140f047d56f2dc390cff17f127fac7b522ce4f6b35bfc1a707af77bc74f32e6"
     }
   },
   {
@@ -69,7 +69,7 @@
       "ISO3166_2": "NL-GE",
       "Latitude": 52.1014,
       "Longitude": 5.9516,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/NL/boundaries/NL-GE.geojson",
       "CommonAliases": [
         "Gelderland"
       ],
@@ -79,8 +79,8 @@
       "ID": "BA49BF54-EE0B-4B57-9398-1F338B5ADA6D"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:36.096Z",
-      "checksum": "f7cd83efc97beb9bebf3cb0aa6fa34e03ed7b7e7f715b685f08a8bf9867b5ea7"
+      "lastModified": "2026-04-10T02:34:14.072Z",
+      "checksum": "201fde13a6f6f25813b6f9727d243c2eb179a1037f5a66847590eb3059b16e3f"
     }
   },
   {
@@ -90,7 +90,7 @@
       "ISO3166_2": "NL-GR",
       "Latitude": 53.2194,
       "Longitude": 6.5665,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/NL/boundaries/NL-GR.geojson",
       "CommonAliases": [
         "Groningen"
       ],
@@ -100,8 +100,8 @@
       "ID": "FC592742-66F7-43EE-B24A-4AAC9CA0A409"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:36.112Z",
-      "checksum": "59dabf598e560c71ed304dbbb9240991bc21196d95dac7029c88a744116e94f3"
+      "lastModified": "2026-04-10T02:34:14.084Z",
+      "checksum": "1831502413db773f4811d5e4643ce670e0eb22529d75bfc5cc2c62f2e54ce3bf"
     }
   },
   {
@@ -111,7 +111,7 @@
       "ISO3166_2": "NL-LI",
       "Latitude": 51.2015,
       "Longitude": 5.9046,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/NL/boundaries/NL-LI.geojson",
       "CommonAliases": [
         "Limburg"
       ],
@@ -121,8 +121,8 @@
       "ID": "73B8E350-270D-4AEB-BE5D-08236E35A13A"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:36.125Z",
-      "checksum": "4390bcaaddcb1780b2ee3efd0b626d90ed336a18f5903b5f7539b806889d8af3"
+      "lastModified": "2026-04-10T02:34:14.099Z",
+      "checksum": "80c743227bdcf142f64216f648bd8553416c3c38e7f9c7bf61fc9fac60dcd86e"
     }
   },
   {
@@ -132,7 +132,7 @@
       "ISO3166_2": "NL-NB",
       "Latitude": 51.6018,
       "Longitude": 5.4441,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/NL/boundaries/NL-NB.geojson",
       "CommonAliases": [
         "North Brabant"
       ],
@@ -142,8 +142,8 @@
       "ID": "5B4ACC6F-29C8-47E1-8012-5D8C7558D516"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:36.138Z",
-      "checksum": "8186e1eee74f929967c06bf587f58dd972ea336bf2ce95504bfdeeefd7a7258b"
+      "lastModified": "2026-04-10T02:34:14.117Z",
+      "checksum": "3f2044c4f272e1b535e57c0acf186d13a6338bb2044d19ff57d45a96ee658777"
     }
   },
   {
@@ -153,7 +153,7 @@
       "ISO3166_2": "NL-NH",
       "Latitude": 52.7213,
       "Longitude": 4.8207,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/NL/boundaries/NL-NH.geojson",
       "CommonAliases": [
         "North Holland"
       ],
@@ -163,8 +163,8 @@
       "ID": "DF82D955-927F-4BED-9B6D-3DB70257284C"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:36.152Z",
-      "checksum": "a158b79d1a62a0d9e1ab1a0ae5e1798f6c88647ea49c6713d71b2aa3a682bbc8"
+      "lastModified": "2026-04-10T02:34:14.132Z",
+      "checksum": "4746e9cc6164aa8f44e8535ae970b25cb2c1bbe3d29074d2284fec7d8d1fc1e2"
     }
   },
   {
@@ -174,7 +174,7 @@
       "ISO3166_2": "NL-OV",
       "Latitude": 52.4254,
       "Longitude": 6.4611,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/NL/boundaries/NL-OV.geojson",
       "CommonAliases": [
         "Overijssel"
       ],
@@ -184,8 +184,8 @@
       "ID": "8C05854C-42FD-4C13-8316-0450E3D3AD08"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:36.166Z",
-      "checksum": "7884dcc083098349b5fe101343082d22094c5a54e6c35786be9a0b7f613eb512"
+      "lastModified": "2026-04-10T02:34:14.148Z",
+      "checksum": "7df4a66a99a27bdaa8eb7d0405860407a2dbc800ca9b574b25b3699e6506e8ab"
     }
   },
   {
@@ -195,7 +195,7 @@
       "ISO3166_2": "NL-ZH",
       "Latitude": 51.9967,
       "Longitude": 4.5597,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/NL/boundaries/NL-ZH.geojson",
       "CommonAliases": [
         "South Holland"
       ],
@@ -205,8 +205,8 @@
       "ID": "DFFC573D-F310-44ED-B9BC-8E5C1878D8B3"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:36.177Z",
-      "checksum": "1ecf1709bb3438a0636339bd12ad86afcd135ee9b468fe5afbe1d4e2fcaa6579"
+      "lastModified": "2026-04-10T02:34:14.161Z",
+      "checksum": "5d0dcdb6cb17e73819a4dd438e997bfb8b6e718c2e8355d53e619a9aef37472c"
     }
   },
   {
@@ -216,7 +216,7 @@
       "ISO3166_2": "NL-UT",
       "Latitude": 52.0907,
       "Longitude": 5.1214,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/NL/boundaries/NL-UT.geojson",
       "CommonAliases": [
         "Utrecht"
       ],
@@ -226,8 +226,8 @@
       "ID": "CE6E20CA-8CA7-4DEF-91A9-FD90002E316A"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:36.197Z",
-      "checksum": "7657e8c922efa81c5cac095dcbb5c368e6d854e629c13c322ba1454aa58b9c93"
+      "lastModified": "2026-04-10T02:34:14.190Z",
+      "checksum": "b50f7abcc809381d7c364742396dd645b5231987c568dcf3223d0440ba49fb3f"
     }
   },
   {
@@ -237,7 +237,7 @@
       "ISO3166_2": "NL-ZE",
       "Latitude": 51.4163,
       "Longitude": 3.7028,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/NL/boundaries/NL-ZE.geojson",
       "CommonAliases": [
         "Zeeland"
       ],
@@ -247,8 +247,8 @@
       "ID": "B638EFD6-3107-4278-93EE-433C7D19B4D0"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:36.208Z",
-      "checksum": "80774762afd1ae4c9dfc359a2562647d16068ef9dc739cbad141db26c5f0bbe6"
+      "lastModified": "2026-04-10T02:34:14.203Z",
+      "checksum": "8d8f636996eb67a54020fb2e0b6b9025f75a1273b218b5fcab81da2b02383d24"
     }
   }
 ]

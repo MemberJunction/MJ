@@ -6,7 +6,7 @@
       "ISO3166_2": "FR-01",
       "Latitude": 46.0652,
       "Longitude": 5.2848,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-01.geojson",
       "CommonAliases": [
         "Ain"
       ],
@@ -16,8 +16,8 @@
       "ID": "4111CE69-F1B2-4F30-92D7-36D943C26270"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:27.657Z",
-      "checksum": "44b85de62e4fd3b082ad72bc3ab695a0c47576f9994d8fe62bb2433cf09f004a"
+      "lastModified": "2026-04-10T02:33:48.027Z",
+      "checksum": "f8adfc089453fb59f78e09e59b6659a4093c2f1ba558f1261113dd62a89a131e"
     }
   },
   {
@@ -27,7 +27,7 @@
       "ISO3166_2": "FR-02",
       "Latitude": 49.4533,
       "Longitude": 3.6069,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-02.geojson",
       "CommonAliases": [
         "Aisne"
       ],
@@ -37,8 +37,8 @@
       "ID": "FE9BC0FD-DA08-4B26-88A5-4C7755E11062"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:27.669Z",
-      "checksum": "4eb439211fdb982452c8c30db81f109932f75b33df255661bec19f28b243729c"
+      "lastModified": "2026-04-10T02:33:48.045Z",
+      "checksum": "8aef45c3fc23600eec53bf5bfe20988cdc62d7dddafc0e7e7c5b0b193a00cd1f"
     }
   },
   {
@@ -48,7 +48,7 @@
       "ISO3166_2": "FR-03",
       "Latitude": 46.3675,
       "Longitude": 3.1639,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-03.geojson",
       "CommonAliases": [
         "Allier"
       ],
@@ -58,8 +58,8 @@
       "ID": "57D0B681-C97E-4504-99C9-23748AE142F0"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:27.680Z",
-      "checksum": "31f10e7409ff1111efdbba2a04e3499b8b20c29ef5675d371365cc2f605a269d"
+      "lastModified": "2026-04-10T02:33:48.060Z",
+      "checksum": "24e673c39104c58716edcfd41ff894184672831735813642cfc11de4c016d8b6"
     }
   },
   {
@@ -69,7 +69,7 @@
       "ISO3166_2": "FR-06",
       "Latitude": 43.942,
       "Longitude": 7.0203,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-06.geojson",
       "CommonAliases": [
         "Alpes-Maritimes"
       ],
@@ -79,8 +79,8 @@
       "ID": "45368ACD-1526-4206-8ADC-8A8BF05D156B"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:27.692Z",
-      "checksum": "d7fd90151c1244c66dc33088efd5a4d00f2380cd6ac7a8db107b051dc9cd00bd"
+      "lastModified": "2026-04-10T02:33:48.078Z",
+      "checksum": "74fb9c57930d57ea4f13ec994d7ae81a28eb8875aa77ca23893f17fbb9ef1a90"
     }
   },
   {
@@ -90,7 +90,7 @@
       "ISO3166_2": "FR-04",
       "Latitude": 44.1641,
       "Longitude": 6.1879,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-04.geojson",
       "CommonAliases": [
         "Alpes-de-Haute-Provence"
       ],
@@ -100,8 +100,8 @@
       "ID": "39EFA551-3E46-45DD-AE96-86B43E61A7C8"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:27.707Z",
-      "checksum": "4dc653dd88fcce2760d9c67c86f8df6ae7243c2ac49ee5eea630e9641aaa4e9b"
+      "lastModified": "2026-04-10T02:33:48.093Z",
+      "checksum": "1ec1800325adf197be014216bfcffc1fa0e279d2d75560776c43f6494819438e"
     }
   },
   {
@@ -132,7 +132,7 @@
       "ISO3166_2": "FR-08",
       "Latitude": 49.698,
       "Longitude": 4.6716,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-08.geojson",
       "CommonAliases": [
         "Ardennes"
       ],
@@ -142,8 +142,8 @@
       "ID": "C6893D1F-C4D8-4279-B1F7-17135EFF2C42"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:27.734Z",
-      "checksum": "072638243570596ca36c4f46d580c69f47ac66da2d63fa0aff3a71fac0aac6fa"
+      "lastModified": "2026-04-10T02:33:48.110Z",
+      "checksum": "48bfb99d7dc3c32d2185727c75241a86a4aa669f9b049bb5dba2c120dfd71ea1"
     }
   },
   {
@@ -153,7 +153,7 @@
       "ISO3166_2": "FR-07",
       "Latitude": 44.8152,
       "Longitude": 4.3987,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-07.geojson",
       "CommonAliases": [
         "Ardèche"
       ],
@@ -163,8 +163,8 @@
       "ID": "41E125A1-7230-4769-AC21-84C58B0E348B"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:27.747Z",
-      "checksum": "f46ab1344500982c2b345dbd2e4ea05daf326097dfd115576516cf6e8c9759e0"
+      "lastModified": "2026-04-10T02:33:48.125Z",
+      "checksum": "96ca62804f37465670ffa9c595c2641a1798ed1e8b1497c215ff112625244602"
     }
   },
   {
@@ -174,7 +174,7 @@
       "ISO3166_2": "FR-09",
       "Latitude": 42.9455,
       "Longitude": 1.4066,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-09.geojson",
       "CommonAliases": [
         "Ariège"
       ],
@@ -184,8 +184,8 @@
       "ID": "36749194-FC3C-4E5A-9A5B-D93923EE2517"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:27.761Z",
-      "checksum": "9d6c0eb40dcef24420ee72e918b80f7964b315a0af901c7427bc97ae7f1ffa8c"
+      "lastModified": "2026-04-10T02:33:48.139Z",
+      "checksum": "3a1a8a5dc016cc22b914135e4ca4b5336b97e45eeb7c69266ea35d4b169f3788"
     }
   },
   {
@@ -195,7 +195,7 @@
       "ISO3166_2": "FR-10",
       "Latitude": 48.3202,
       "Longitude": 4.1905,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-10.geojson",
       "CommonAliases": [
         "Aube"
       ],
@@ -205,8 +205,8 @@
       "ID": "A2540D6B-E1DB-47C3-B0B1-8EF9AAC41696"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:27.773Z",
-      "checksum": "82ddf46b8f8298b7c6cae825061fca5dcb75eda4b2049ec8cbbedecd0307c841"
+      "lastModified": "2026-04-10T02:33:48.153Z",
+      "checksum": "b3808b8668a605fc324e1970733a296a161b2178b7d39895585f88397de09a3b"
     }
   },
   {
@@ -216,7 +216,7 @@
       "ISO3166_2": "FR-11",
       "Latitude": 43.0543,
       "Longitude": 2.5125,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-11.geojson",
       "CommonAliases": [
         "Aude"
       ],
@@ -226,8 +226,8 @@
       "ID": "B541B8A1-C79C-4B41-AF61-68EEC952B665"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:27.801Z",
-      "checksum": "93e8c51c733d8f26b1180c47b7b502045d2885106ad2e9efd6faab94695b3529"
+      "lastModified": "2026-04-10T02:33:48.206Z",
+      "checksum": "9f8ef45236b17f93dd7da43075449a7608956900290ca173290b9b1ba358d788"
     }
   },
   {
@@ -258,7 +258,7 @@
       "ISO3166_2": "FR-12",
       "Latitude": 44.3159,
       "Longitude": 2.5066,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-12.geojson",
       "CommonAliases": [
         "Aveyron"
       ],
@@ -268,8 +268,8 @@
       "ID": "76F5958D-E7C1-4AD2-995F-684EAD3BCBA2"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:27.826Z",
-      "checksum": "a8da7582a0ff2ef0739cfbd3ca294cac0fa620fdfc44b61e989bf8be64b7f6d9"
+      "lastModified": "2026-04-10T02:33:48.222Z",
+      "checksum": "77f3d688c79227e8692450b8f1ba2cea51861fd4a09c09e431eaf43b784d62a0"
     }
   },
   {
@@ -279,7 +279,7 @@
       "ISO3166_2": "FR-67",
       "Latitude": 48.5992,
       "Longitude": 7.5337,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-67.geojson",
       "CommonAliases": [
         "Bas-Rhin"
       ],
@@ -289,8 +289,8 @@
       "ID": "93542866-34FF-49E8-8D2D-6B0B06333072"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:27.837Z",
-      "checksum": "62e1566d90f2b54416c2c323f2dd169d53d81e7a0d985c53fc54351a4b4d4d74"
+      "lastModified": "2026-04-10T02:33:48.238Z",
+      "checksum": "14d3c9b34670c518dde41e08747a3b1d9a3f0015a77ef834e82b74278aca98f0"
     }
   },
   {
@@ -300,7 +300,7 @@
       "ISO3166_2": "FR-13",
       "Latitude": 43.5424,
       "Longitude": 5.0343,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-13.geojson",
       "CommonAliases": [
         "Bouches-du-Rhône"
       ],
@@ -310,8 +310,8 @@
       "ID": "06F7FA86-8E4E-4849-BBCE-5AD0A595E85C"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:27.849Z",
-      "checksum": "7e545658bf814b02d3cb0f3cbf1141f4eafc5040e5b360019229164f5a7c54f1"
+      "lastModified": "2026-04-10T02:33:48.250Z",
+      "checksum": "4ef6cc7286be501e89ba0aa95bb02f73056974d4b1beb0ae8b79c68330319fb9"
     }
   },
   {
@@ -363,7 +363,7 @@
       "ISO3166_2": "FR-14",
       "Latitude": 49.0908,
       "Longitude": -0.2414,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-14.geojson",
       "CommonAliases": [
         "Calvados"
       ],
@@ -373,8 +373,8 @@
       "ID": "C6AD7B43-3801-4295-A6FE-BB306AB76A5E"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:27.888Z",
-      "checksum": "46ef9fd83e527089def99da074dc5989a7a95f346b5cf355245e11453f731c5a"
+      "lastModified": "2026-04-10T02:33:48.264Z",
+      "checksum": "d134058545882e3119d6a57e0e03422c1426147671b0e7db204164ca056f86c1"
     }
   },
   {
@@ -384,7 +384,7 @@
       "ISO3166_2": "FR-15",
       "Latitude": 45.0498,
       "Longitude": 2.6997,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-15.geojson",
       "CommonAliases": [
         "Cantal"
       ],
@@ -394,8 +394,8 @@
       "ID": "7CDCC147-21C2-4364-8E98-B09631A01552"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:27.901Z",
-      "checksum": "9527ce445524ea01089ef4f2ee4ebc36462d09935cc4109f865f599ac1ec4433"
+      "lastModified": "2026-04-10T02:33:48.277Z",
+      "checksum": "278600b358ae427d98b44dc79d6e62c1f6c109df4d7fa530c687ce7e13a1b504"
     }
   },
   {
@@ -426,7 +426,7 @@
       "ISO3166_2": "FR-16",
       "Latitude": 45.7302,
       "Longitude": -0.7213,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-16.geojson",
       "CommonAliases": [
         "Charente"
       ],
@@ -436,8 +436,8 @@
       "ID": "9404F641-157A-441E-890E-0817E82A1A18"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:27.949Z",
-      "checksum": "0226ef1649324e815edd4d2331f2eaa65c1273dcdcc30bd52f2f5a8b6dc28f96"
+      "lastModified": "2026-04-10T02:33:48.331Z",
+      "checksum": "357238ac6f43421f751b17e22b136905bc19646ad1b45b619a16530da3d66113"
     }
   },
   {
@@ -447,7 +447,7 @@
       "ISO3166_2": "FR-17",
       "Latitude": 45.7302,
       "Longitude": -0.7213,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-17.geojson",
       "CommonAliases": [
         "Charente-Maritime"
       ],
@@ -457,8 +457,8 @@
       "ID": "C1E56C4A-7CB0-44D7-BBC6-92517E30CE6C"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:27.962Z",
-      "checksum": "e47552f2b2fc2b69b26903b021cbb018325320ee219af18b984f6fff02c8f4e4"
+      "lastModified": "2026-04-10T02:33:48.345Z",
+      "checksum": "c42fa056d179b84294eacbaf350902bf51749a636e74f64cafed335f613da1ae"
     }
   },
   {
@@ -468,7 +468,7 @@
       "ISO3166_2": "FR-18",
       "Latitude": 47.0249,
       "Longitude": 2.5753,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-18.geojson",
       "CommonAliases": [
         "Cher"
       ],
@@ -478,8 +478,8 @@
       "ID": "61F7CA9E-0FC4-4A28-AC10-E67E566031ED"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:27.974Z",
-      "checksum": "a1b802ceeea7fd1a33d20a593a311474c5529b16907c98b65a38e07eced84047"
+      "lastModified": "2026-04-10T02:33:48.358Z",
+      "checksum": "ca9ab591f9aae80fb03882bfaebaa72b2ad404ffa90f34f6bf1f390845c33631"
     }
   },
   {
@@ -510,7 +510,7 @@
       "ISO3166_2": "FR-19",
       "Latitude": 45.3429,
       "Longitude": 1.8176,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-19.geojson",
       "CommonAliases": [
         "Corrèze"
       ],
@@ -520,8 +520,8 @@
       "ID": "7613EABB-5082-4370-855A-890A8145DFC0"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:27.998Z",
-      "checksum": "2bb58ea234aa04a14d3da5a91019bd031a4c2124646c81d4b4b1c551ae2ef7df"
+      "lastModified": "2026-04-10T02:33:48.370Z",
+      "checksum": "8889d0c70b2907324632141d1ad13a09fd46112137792726f2295fa0c0756b06"
     }
   },
   {
@@ -552,7 +552,7 @@
       "ISO3166_2": "FR-2A",
       "Latitude": 41.8734,
       "Longitude": 9.0087,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-2A.geojson",
       "CommonAliases": [
         "Corse-du-Sud"
       ],
@@ -562,8 +562,8 @@
       "ID": "CEFA2FDA-54CF-4EF0-8856-9B8F298F7DFD"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:28.023Z",
-      "checksum": "b2d50189ca18268f803c119101281294ffd3a5f7ac95941647abc38c26f31716"
+      "lastModified": "2026-04-10T02:33:48.382Z",
+      "checksum": "013de522fa53bfaef8bbb2a45b186d5a254432672b61c27a8265fb7bd75acb93"
     }
   },
   {
@@ -573,7 +573,7 @@
       "ISO3166_2": "FR-23",
       "Latitude": 46.0593,
       "Longitude": 2.0489,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-23.geojson",
       "CommonAliases": [
         "Creuse"
       ],
@@ -583,8 +583,8 @@
       "ID": "561EC5AE-CE58-4F52-8A2D-0BC6DDBFB6EC"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:28.037Z",
-      "checksum": "c8e815d54c4aa1b3313092bb396d698e82c0c0a1aef662e5809ebee5177692dc"
+      "lastModified": "2026-04-10T02:33:48.398Z",
+      "checksum": "9c0330329a07b3894eab580ecd95c42ef58beffb49b64d17d02f15f693c4d215"
     }
   },
   {
@@ -594,7 +594,7 @@
       "ISO3166_2": "FR-21",
       "Latitude": 47.4655,
       "Longitude": 4.7481,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-21.geojson",
       "CommonAliases": [
         "Côte-d'Or"
       ],
@@ -604,8 +604,8 @@
       "ID": "331369FB-86D9-4F68-83BA-1D8D8F592550"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:28.050Z",
-      "checksum": "76941a2a9aef14f67eeb42667f2674a92e4decb813e2ae57b0f6fbf783ce0079"
+      "lastModified": "2026-04-10T02:33:48.411Z",
+      "checksum": "5dff17449e8fe6ca43f177c8979fbb46a05886d7a4a73e3d529904d8545a0993"
     }
   },
   {
@@ -615,7 +615,7 @@
       "ISO3166_2": "FR-22",
       "Latitude": 48.4615,
       "Longitude": -2.7514,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-22.geojson",
       "CommonAliases": [
         "Côtes-d'Armor"
       ],
@@ -625,8 +625,8 @@
       "ID": "A84B5F0C-70F1-495F-8325-DD9EE271B661"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:28.061Z",
-      "checksum": "1013690181fb0f2a9b2de580dbf22b0844e86bac70df93dab6a4023a5d0d21d8"
+      "lastModified": "2026-04-10T02:33:48.424Z",
+      "checksum": "55068e1abffe4c9397ab7ac458507b8fd03bd3360130670d9eeca4567fc36827"
     }
   },
   {
@@ -636,7 +636,7 @@
       "ISO3166_2": "FR-79",
       "Latitude": 46.5391,
       "Longitude": -0.2995,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-79.geojson",
       "CommonAliases": [
         "Deux-Sèvres"
       ],
@@ -646,8 +646,8 @@
       "ID": "FCEAEEC7-71D8-4829-9125-9E0F77E12871"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:28.091Z",
-      "checksum": "25b19862426eda66013ca894eb0aeb3df19fa59de2494ce9d813a5b16c505b3a"
+      "lastModified": "2026-04-10T02:33:48.470Z",
+      "checksum": "e31b98b1b397a9fade4e63fb6aed9e63165c7cfd34934c32bee8d7fd8f721c56"
     }
   },
   {
@@ -657,7 +657,7 @@
       "ISO3166_2": "FR-24",
       "Latitude": 45.1429,
       "Longitude": 0.6321,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-24.geojson",
       "CommonAliases": [
         "Dordogne"
       ],
@@ -667,8 +667,8 @@
       "ID": "7DE73BD9-0ED9-417C-8C50-8CD17DCB10FF"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:28.102Z",
-      "checksum": "b9d6c2e32a7099c24c09e09f18fff15b7d8b544d2a3ec92930dbd36c774d2c57"
+      "lastModified": "2026-04-10T02:33:48.484Z",
+      "checksum": "d5b0da8f13f088fc22124dfb0bbee063a82fbb1ad50a57b3d329438cd5afb468"
     }
   },
   {
@@ -678,7 +678,7 @@
       "ISO3166_2": "FR-25",
       "Latitude": 46.9322,
       "Longitude": 6.3476,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-25.geojson",
       "CommonAliases": [
         "Doubs"
       ],
@@ -688,8 +688,8 @@
       "ID": "458591F9-2C25-4932-A9C0-91A4BE500325"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:28.117Z",
-      "checksum": "7bc6924622cc2bf529b7f291802b397f7c91da27400b7d860de18eac74e3c53d"
+      "lastModified": "2026-04-10T02:33:48.497Z",
+      "checksum": "cabe05f7ff6dcc14ff05f0c0b16552e0c4e033bb553cda9e0cecb4c0dba81d0e"
     }
   },
   {
@@ -699,7 +699,7 @@
       "ISO3166_2": "FR-26",
       "Latitude": 44.7295,
       "Longitude": 5.2046,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-26.geojson",
       "CommonAliases": [
         "Drôme"
       ],
@@ -709,8 +709,8 @@
       "ID": "69795EA4-F91A-4376-8D41-23E4BF57592B"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:28.130Z",
-      "checksum": "84caa5c797916b4f48035ad624da9179039770d596c31178a0c08e333c959296"
+      "lastModified": "2026-04-10T02:33:48.508Z",
+      "checksum": "417c4f968c786d16f2304db422166cfe4bebe99caa75f29cf9da54358cc7e0aa"
     }
   },
   {
@@ -720,7 +720,7 @@
       "ISO3166_2": "FR-91",
       "Latitude": 48.5303,
       "Longitude": 2.2393,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-91.geojson",
       "CommonAliases": [
         "Essonne"
       ],
@@ -730,8 +730,8 @@
       "ID": "EB551845-7F8F-4954-933E-59B6E5E93284"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:28.142Z",
-      "checksum": "dd43492aad035a54aa2236667b9c705ae78218383e2049ec55d7e76bfaa4e677"
+      "lastModified": "2026-04-10T02:33:48.521Z",
+      "checksum": "8e5b2954c48493489911238acf2848073c51386b375f418ccc3a32c0df40ba94"
     }
   },
   {
@@ -741,7 +741,7 @@
       "ISO3166_2": "FR-27",
       "Latitude": 49.0756,
       "Longitude": 0.9652,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-27.geojson",
       "CommonAliases": [
         "Eure"
       ],
@@ -751,8 +751,8 @@
       "ID": "78915CDD-BA4A-4969-908E-F0504868D179"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:28.155Z",
-      "checksum": "70c0865d7f9c77c9384440574c0fe43a5b65d87080dc4931626411d5f2ee8626"
+      "lastModified": "2026-04-10T02:33:48.533Z",
+      "checksum": "52eff67fbf9afce93226f84502b26b04d98fc26ea55633b924f11990cf8cbe1a"
     }
   },
   {
@@ -762,7 +762,7 @@
       "ISO3166_2": "FR-28",
       "Latitude": 48.4474,
       "Longitude": 1.3999,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-28.geojson",
       "CommonAliases": [
         "Eure-et-Loir"
       ],
@@ -772,8 +772,8 @@
       "ID": "5C594E90-7C96-4789-9D87-C4A77D3475E9"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:28.168Z",
-      "checksum": "7143861fa22f282c1b9972b89257a279bf4e15533292b6879fc850f62970a0ad"
+      "lastModified": "2026-04-10T02:33:48.546Z",
+      "checksum": "6a280890e534a41b32ba11cf81636a741421674ba536a2db0abff674041bab8b"
     }
   },
   {
@@ -783,7 +783,7 @@
       "ISO3166_2": "FR-29",
       "Latitude": 48.2451,
       "Longitude": -4.0441,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-29.geojson",
       "CommonAliases": [
         "Finistère"
       ],
@@ -793,8 +793,8 @@
       "ID": "506A3F8D-4A88-44CB-9DD4-15C4B34D9D52"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:28.181Z",
-      "checksum": "54938719d3fb2871e95f743128c5566f52b346466899cb1852a6fe6a79c16e20"
+      "lastModified": "2026-04-10T02:33:48.560Z",
+      "checksum": "62a4babf7ede8309eda6abf2a3024a95032577d16d865ebcfe4fdafab8eef2f8"
     }
   },
   {
@@ -867,7 +867,7 @@
       "ISO3166_2": "FR-30",
       "Latitude": 43.9599,
       "Longitude": 4.2976,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-30.geojson",
       "CommonAliases": [
         "Gard"
       ],
@@ -877,8 +877,8 @@
       "ID": "56B9DDCA-3CDB-4BF2-8FBE-A3E29C16D5E9"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:28.246Z",
-      "checksum": "71cf060377c4007e54c812444a9e6b76acd75a5764b409aad0d0c10b9d7a55d7"
+      "lastModified": "2026-04-10T02:33:48.607Z",
+      "checksum": "c8d9a0a69ebe7e4c90b69420478b05672dfe6c791110579cb9b55c6016a488c6"
     }
   },
   {
@@ -888,7 +888,7 @@
       "ISO3166_2": "FR-32",
       "Latitude": 43.6955,
       "Longitude": 0.4101,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-32.geojson",
       "CommonAliases": [
         "Gers"
       ],
@@ -898,8 +898,8 @@
       "ID": "AE2D90FA-E302-4AEE-9359-ABC0565B2BF9"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:28.258Z",
-      "checksum": "8879d288be3eb552809581b1ca246e90f28a64d71703fc16aa3f776a81c7919d"
+      "lastModified": "2026-04-10T02:33:48.622Z",
+      "checksum": "2485575abd7e58fe6c73f459d0394f06914bd4277ddd1cc5d31453925d5bdf95"
     }
   },
   {
@@ -909,7 +909,7 @@
       "ISO3166_2": "FR-33",
       "Latitude": 44.8837,
       "Longitude": -0.6051,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-33.geojson",
       "CommonAliases": [
         "Gironde"
       ],
@@ -919,8 +919,8 @@
       "ID": "FCA0F530-0D13-48C3-8905-97137F3F0540"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:28.272Z",
-      "checksum": "7a5cee8f41e3c5bdb8c6502411dedcfff04714f9e3744e8afb281240ae2f8320"
+      "lastModified": "2026-04-10T02:33:48.637Z",
+      "checksum": "fea872b6ef0e92e910ba5c8c3b1427ae69e530a80d70f065043ec585f2a42bbc"
     }
   },
   {
@@ -972,7 +972,7 @@
       "ISO3166_2": "FR-68",
       "Latitude": 47.8655,
       "Longitude": 7.2315,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-68.geojson",
       "CommonAliases": [
         "Haut-Rhin"
       ],
@@ -982,8 +982,8 @@
       "ID": "AACE9FF1-0E36-4B83-93DC-E86E90634C8D"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:28.311Z",
-      "checksum": "206a38c8fc5cecd05844405a0ee601caaff43c2fe8be12863ff850dba0190278"
+      "lastModified": "2026-04-10T02:33:48.651Z",
+      "checksum": "30e29f10c802d37c9b385c940e839681b5d3b2ab7de97ab14805bddd40ed2b7b"
     }
   },
   {
@@ -993,7 +993,7 @@
       "ISO3166_2": "FR-2B",
       "Latitude": 42.422,
       "Longitude": 9.1009,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-2B.geojson",
       "CommonAliases": [
         "Haute-Corse"
       ],
@@ -1003,8 +1003,8 @@
       "ID": "94387351-12CE-4F7A-A7BE-3277B2873C48"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:28.328Z",
-      "checksum": "f2d5f93375a1970bbbf5d9529d10f4f7d932c3fb17381f50d7e6dd7296daadb2"
+      "lastModified": "2026-04-10T02:33:48.662Z",
+      "checksum": "10b790cbf5cde7ed9e60b1cd21092e9f0c721a94720ed7173ba7b70788d2295e"
     }
   },
   {
@@ -1014,7 +1014,7 @@
       "ISO3166_2": "FR-31",
       "Latitude": 43.3055,
       "Longitude": 0.9717,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-31.geojson",
       "CommonAliases": [
         "Haute-Garonne"
       ],
@@ -1024,8 +1024,8 @@
       "ID": "01757975-B2C3-465D-BF82-38720405EAB3"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:28.342Z",
-      "checksum": "5b836806e3f96f22882b03351fdde945b31872c238280d446a0b81a285f6ae95"
+      "lastModified": "2026-04-10T02:33:48.674Z",
+      "checksum": "fcf10a2d862cad981fdd1f4456d8d7016a8ef8307a3343c4ecb81abebe61d6d5"
     }
   },
   {
@@ -1035,7 +1035,7 @@
       "ISO3166_2": "FR-43",
       "Latitude": 45.0857,
       "Longitude": 3.8338,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-43.geojson",
       "CommonAliases": [
         "Haute-Loire"
       ],
@@ -1045,8 +1045,8 @@
       "ID": "9165F71E-ECB4-43B5-AA2E-472FEBC2E17C"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:28.355Z",
-      "checksum": "e0be0fccee22dda0479f22c2d4b9179ff3ed127bfd0a4de73b401835a5071c7f"
+      "lastModified": "2026-04-10T02:33:48.687Z",
+      "checksum": "6b80c273137d068d79423c70e8e487335b5026dcde5b82a3ab81ffb3b5b3e686"
     }
   },
   {
@@ -1056,7 +1056,7 @@
       "ISO3166_2": "FR-52",
       "Latitude": 48.1329,
       "Longitude": 5.2529,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-52.geojson",
       "CommonAliases": [
         "Haute-Marne"
       ],
@@ -1066,8 +1066,8 @@
       "ID": "06247A3C-14A9-407D-B3DE-BDDB20D09A9B"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:28.385Z",
-      "checksum": "da68bf2e524a823fa61a4b21c60db6ec88d66a516af98ec710363ba547659903"
+      "lastModified": "2026-04-10T02:33:48.738Z",
+      "checksum": "2b8bd9e42c921a910c2bcc2558fc77263642e1b35c5648e5cd7a7441b050eb0b"
     }
   },
   {
@@ -1077,7 +1077,7 @@
       "ISO3166_2": "FR-74",
       "Latitude": 46.069,
       "Longitude": 6.3445,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-74.geojson",
       "CommonAliases": [
         "Haute-Savoie"
       ],
@@ -1087,8 +1087,8 @@
       "ID": "041F817F-8426-40A1-AA1F-5803E02FD87E"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:28.397Z",
-      "checksum": "8ba09b57b8ba44c515daf19b8386d69337953dea2296dce49a7d1b059de2e8fe"
+      "lastModified": "2026-04-10T02:33:48.753Z",
+      "checksum": "1d439198dbd1dc4160c0ee081a7c5fa3a199dcd7d5f45c0348932d2d8580df52"
     }
   },
   {
@@ -1098,7 +1098,7 @@
       "ISO3166_2": "FR-70",
       "Latitude": 47.6384,
       "Longitude": 6.0951,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-70.geojson",
       "CommonAliases": [
         "Haute-Saône"
       ],
@@ -1108,8 +1108,8 @@
       "ID": "350EF819-3D1F-44C7-A944-2A8747959E72"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:28.409Z",
-      "checksum": "5e07de7fec6d859fb99f52bc894c997a7b4fa616a488c6819012913fcfe1650d"
+      "lastModified": "2026-04-10T02:33:48.766Z",
+      "checksum": "15bf51aabf99fafef1ed34dc15f4d19847b954fc00f29c3cd7f4dd1db4df27f7"
     }
   },
   {
@@ -1119,7 +1119,7 @@
       "ISO3166_2": "FR-87",
       "Latitude": 45.919,
       "Longitude": 1.2032,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-87.geojson",
       "CommonAliases": [
         "Haute-Vienne"
       ],
@@ -1129,8 +1129,8 @@
       "ID": "6FA70367-5D91-4119-9108-03B199A738AA"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:28.421Z",
-      "checksum": "dfde0561e8cf274c8b11b96e1a57ad7b7d7af2738bd074a77a10820925565fa2"
+      "lastModified": "2026-04-10T02:33:48.779Z",
+      "checksum": "57a31f0d8a4aba004969a06084cbd5d703b48190045601fd3dc5fe08926e48bc"
     }
   },
   {
@@ -1140,7 +1140,7 @@
       "ISO3166_2": "FR-05",
       "Latitude": 44.6565,
       "Longitude": 6.352,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-05.geojson",
       "CommonAliases": [
         "Hautes-Alpes"
       ],
@@ -1150,8 +1150,8 @@
       "ID": "F03BAA93-ED04-4655-AF68-B7E1D64DF45F"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:28.436Z",
-      "checksum": "27aa602a6e66a900f4caadcac60a16d2c4898259078e8bdcc37abf1fff95553f"
+      "lastModified": "2026-04-10T02:33:48.793Z",
+      "checksum": "d622347f6d5a08539be91322292d9cee6bc9bc6c76ab0b9ed78dd5d51cf6d8d7"
     }
   },
   {
@@ -1161,7 +1161,7 @@
       "ISO3166_2": "FR-65",
       "Latitude": 43.1438,
       "Longitude": 0.1587,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-65.geojson",
       "CommonAliases": [
         "Hautes-Pyrénées"
       ],
@@ -1171,8 +1171,8 @@
       "ID": "C7CF7292-282F-4EED-9F88-255C9B8EB5EE"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:28.450Z",
-      "checksum": "87d1af621fd1284ad81421ff57ca5f32b1f39f337401b781d220733eb792e61f"
+      "lastModified": "2026-04-10T02:33:48.806Z",
+      "checksum": "a12c7fc792db9db328c193975233adab4e43a4a0912f2d674b87f74b2c1630eb"
     }
   },
   {
@@ -1203,7 +1203,7 @@
       "ISO3166_2": "FR-92",
       "Latitude": 48.8402,
       "Longitude": 2.1986,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-92.geojson",
       "CommonAliases": [
         "Hauts-de-Seine"
       ],
@@ -1213,8 +1213,8 @@
       "ID": "8CBD5316-38A3-4F68-87B6-84B0903B0B56"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:28.477Z",
-      "checksum": "d3527fc2f5f0f7d71dc0062da6bcfce6ff159171470844a0c47cbd8f89a4c270"
+      "lastModified": "2026-04-10T02:33:48.818Z",
+      "checksum": "24b17a98024fcde344c94bdb440230a6ac8fba1e156a8e3831f425cddd7e01d0"
     }
   },
   {
@@ -1224,7 +1224,7 @@
       "ISO3166_2": "FR-34",
       "Latitude": 43.5914,
       "Longitude": 3.3553,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-34.geojson",
       "CommonAliases": [
         "Hérault"
       ],
@@ -1234,8 +1234,8 @@
       "ID": "49F32AD4-A175-42C9-8378-D15FE3D53CA9"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:28.490Z",
-      "checksum": "0a74df2eef684267e5890bec60d537e46563f948545eadc82929b4444ec15314"
+      "lastModified": "2026-04-10T02:33:48.831Z",
+      "checksum": "eb185e16be3f14a4c1142628f0bba44d36217729ba61dea41ae6ca0be1da7c42"
     }
   },
   {
@@ -1245,7 +1245,7 @@
       "ISO3166_2": "FR-35",
       "Latitude": 48.1728,
       "Longitude": -1.6498,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-35.geojson",
       "CommonAliases": [
         "Ille-et-Vilaine"
       ],
@@ -1255,8 +1255,8 @@
       "ID": "CAA07AA7-CB1A-49B2-8F9D-5133BD0B3E46"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:28.501Z",
-      "checksum": "7be465f64fd4c2c3796ff2efd4f1db02ff02cf8f78b308969b52346ad87034ba"
+      "lastModified": "2026-04-10T02:33:48.842Z",
+      "checksum": "8d19f5738b52f6fac62ca20d4f7abcf46b84c14208b974d03526d6b0e046b2fb"
     }
   },
   {
@@ -1266,7 +1266,7 @@
       "ISO3166_2": "FR-36",
       "Latitude": 46.8121,
       "Longitude": 1.5382,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-36.geojson",
       "CommonAliases": [
         "Indre"
       ],
@@ -1276,8 +1276,8 @@
       "ID": "8283213F-E847-4633-A27F-2B998E7B3D85"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:28.533Z",
-      "checksum": "f4179ebcae6dc9395671bd8df5e06ce597ccf65f70a623f6b2676b0b6f6ea2d7"
+      "lastModified": "2026-04-10T02:33:48.893Z",
+      "checksum": "d23ed41706f7b5629305a4787469bc92bf1a4ba8a7e1b563350ab062a1bf7d87"
     }
   },
   {
@@ -1287,7 +1287,7 @@
       "ISO3166_2": "FR-37",
       "Latitude": 47.2232,
       "Longitude": 0.6867,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-37.geojson",
       "CommonAliases": [
         "Indre-et-Loire"
       ],
@@ -1297,8 +1297,8 @@
       "ID": "F16E19B7-02CA-4B36-912B-42B4D237FA2D"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:28.545Z",
-      "checksum": "91a841198adc4bddd70045fcb2df7ff74bd594774d97761a6de391c4dd8f0d6a"
+      "lastModified": "2026-04-10T02:33:48.908Z",
+      "checksum": "c39ac8d79c1db95af6e51e38ef041e2ab6c4b086961a5b8043929d50d5754bb3"
     }
   },
   {
@@ -1308,7 +1308,7 @@
       "ISO3166_2": "FR-38",
       "Latitude": 45.2898,
       "Longitude": 5.6344,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-38.geojson",
       "CommonAliases": [
         "Isère"
       ],
@@ -1318,8 +1318,8 @@
       "ID": "91172451-CABF-4D16-AC81-127BB37DA1FF"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:28.557Z",
-      "checksum": "8515328fbae47ed474acfbed32abe82ae85ead3b73c0aeca792f618275710961"
+      "lastModified": "2026-04-10T02:33:48.920Z",
+      "checksum": "bf0cd8c8b53f9d00dadb7458fe186a3515e3ec0c6ec6b59711b0a20e8b4e7d31"
     }
   },
   {
@@ -1329,7 +1329,7 @@
       "ISO3166_2": "FR-39",
       "Latitude": 46.7834,
       "Longitude": 5.7833,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-39.geojson",
       "CommonAliases": [
         "Jura"
       ],
@@ -1339,8 +1339,8 @@
       "ID": "E1646758-A1E8-42ED-8DFC-79E4ECBB06BA"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:28.570Z",
-      "checksum": "cbc487e4c3d1442575554d2c97800b0f2c23911c29bfc0f8ed68792c04f13b1c"
+      "lastModified": "2026-04-10T02:33:48.932Z",
+      "checksum": "230de460940de9340202e3c670a272b55e6f4050eb0d65132da87e412c4e4751"
     }
   },
   {
@@ -1371,7 +1371,7 @@
       "ISO3166_2": "FR-40",
       "Latitude": 44.01,
       "Longitude": -0.6434,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-40.geojson",
       "CommonAliases": [
         "Landes"
       ],
@@ -1381,8 +1381,8 @@
       "ID": "70548CE5-2E61-4E6A-8653-C8A2DC630CE5"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:28.598Z",
-      "checksum": "5b80498fa007a6040f516994171d8286afdf4528dc6761ce1b9d122affaeff00"
+      "lastModified": "2026-04-10T02:33:48.944Z",
+      "checksum": "7ab3c7ddc2bfcfebeebeccb966c2eb4b56b7a092b06e225ce1fe5f2b8d3cb53e"
     }
   },
   {
@@ -1392,7 +1392,7 @@
       "ISO3166_2": "FR-41",
       "Latitude": 47.6598,
       "Longitude": 1.2972,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-41.geojson",
       "CommonAliases": [
         "Loir-et-Cher"
       ],
@@ -1402,8 +1402,8 @@
       "ID": "0DC0CCFD-8571-49E8-BC38-04B77B725604"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:28.613Z",
-      "checksum": "3e9d464b564101d7150403d7eda0471a30a0e15530b602d2a542a4ddb9f7dd3c"
+      "lastModified": "2026-04-10T02:33:48.956Z",
+      "checksum": "e4e1a9294300f4af796892ea24c4386d3d2ebb953d0a6e8ff177c17bd97628c5"
     }
   },
   {
@@ -1413,7 +1413,7 @@
       "ISO3166_2": "FR-42",
       "Latitude": 47.6151,
       "Longitude": -0.9784,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-42.geojson",
       "CommonAliases": [
         "Loire"
       ],
@@ -1423,8 +1423,8 @@
       "ID": "5F9F442D-733A-4410-94FA-AB4427A5B1E9"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:28.626Z",
-      "checksum": "9e05f2d6946244b586e74c82521924e51437de1b25b36edf317ccfa7c3bf917c"
+      "lastModified": "2026-04-10T02:33:48.990Z",
+      "checksum": "2361019c5e709083fdf7ff6d79f56da82cc9f89fed084c1e1ec22656ee166f0b"
     }
   },
   {
@@ -1434,7 +1434,7 @@
       "ISO3166_2": "FR-44",
       "Latitude": 47.3482,
       "Longitude": -1.8727,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-44.geojson",
       "CommonAliases": [
         "Loire-Atlantique"
       ],
@@ -1444,8 +1444,8 @@
       "ID": "84F43A39-6258-4C2B-8869-DFA92FB318EC"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:28.640Z",
-      "checksum": "ada5aecef8593f56a8b8c9cd8271bbb337f929e740901e1c0a465804cb5c09b5"
+      "lastModified": "2026-04-10T02:33:48.975Z",
+      "checksum": "515bb251b87e459d21e28453877d16ecbb32ccf9f3a652325bb92dced59bf7aa"
     }
   },
   {
@@ -1455,7 +1455,7 @@
       "ISO3166_2": "FR-45",
       "Latitude": 47.9139,
       "Longitude": 2.3075,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-45.geojson",
       "CommonAliases": [
         "Loiret"
       ],
@@ -1465,8 +1465,8 @@
       "ID": "E64E9ACF-4994-4A83-819E-AB3E71886ADB"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:28.653Z",
-      "checksum": "6960c378cd078c87dc6c103804ae100ee544f9c7b0f7048f29480d0ad9d76839"
+      "lastModified": "2026-04-10T02:33:49.001Z",
+      "checksum": "6f42beb1150136f52ec8430d272f3f367b69bc534886f011b18a63f09c9b24c5"
     }
   },
   {
@@ -1476,7 +1476,7 @@
       "ISO3166_2": "FR-46",
       "Latitude": 44.625,
       "Longitude": 1.6658,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-46.geojson",
       "CommonAliases": [
         "Lot"
       ],
@@ -1486,8 +1486,8 @@
       "ID": "284264C7-5C34-4BF7-BA44-9F52E4E44CFF"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:28.682Z",
-      "checksum": "2d7cf9caf845c75a04d8a904b26ddbc9687c78fced9ad53c68e35533c5a42639"
+      "lastModified": "2026-04-10T02:33:49.062Z",
+      "checksum": "4b7aecc7eddc921bf9638a3cbbcbac9175cc8a07e20750581d8401bb6f4215ee"
     }
   },
   {
@@ -1497,7 +1497,7 @@
       "ISO3166_2": "FR-47",
       "Latitude": 44.3692,
       "Longitude": 0.4539,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-47.geojson",
       "CommonAliases": [
         "Lot-et-Garonne"
       ],
@@ -1507,8 +1507,8 @@
       "ID": "2C75E606-2C0F-4F6B-88F9-77A793274DE1"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:28.695Z",
-      "checksum": "5eebef86555d61dc99916da1101d14608b54c2e830fb587023e69d42863ec17c"
+      "lastModified": "2026-04-10T02:33:49.077Z",
+      "checksum": "094142610e6d05edd2c08b0f03269c066e4f37bcaa1e542c09fbfc710d04e510"
     }
   },
   {
@@ -1518,7 +1518,7 @@
       "ISO3166_2": "FR-48",
       "Latitude": 44.5426,
       "Longitude": 3.5211,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-48.geojson",
       "CommonAliases": [
         "Lozère"
       ],
@@ -1528,8 +1528,8 @@
       "ID": "37BB2DC8-A657-407D-9C9A-3A7FAE68428D"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:28.707Z",
-      "checksum": "9625eb65a3ba27c6c0cd36ee6de6df7f01664c22cd846b8955eef1bc9c7bbf45"
+      "lastModified": "2026-04-10T02:33:49.111Z",
+      "checksum": "cdd4f098578219a86bb4e311fbb5d88636729be933071197ca6f9afaf14aac6c"
     }
   },
   {
@@ -1539,7 +1539,7 @@
       "ISO3166_2": "FR-49",
       "Latitude": 47.3886,
       "Longitude": -0.3909,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-49.geojson",
       "CommonAliases": [
         "Maine-et-Loire"
       ],
@@ -1549,8 +1549,8 @@
       "ID": "6045A201-410F-4C2E-B542-64557C8C24EE"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:28.723Z",
-      "checksum": "7241d3161f7ee07c4ec99c7b18697be2123b137b669e2079b819158db0b57491"
+      "lastModified": "2026-04-10T02:33:49.134Z",
+      "checksum": "45a94d3fd91833e5ea00330e71ccc12f7bd869feb1d107e05b88aee9a50d94ed"
     }
   },
   {
@@ -1560,7 +1560,7 @@
       "ISO3166_2": "FR-50",
       "Latitude": 49.0919,
       "Longitude": -1.2455,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-50.geojson",
       "CommonAliases": [
         "Manche"
       ],
@@ -1570,8 +1570,8 @@
       "ID": "27643BE6-C41A-4729-A568-217178B48FC6"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:28.739Z",
-      "checksum": "1791bc75dd636e7eefdd7b2f79278d108f9bf764ce4bbc37e2511f94b7e7380a"
+      "lastModified": "2026-04-10T02:33:49.149Z",
+      "checksum": "603f6eafe84f4b8b6956abe68caa1a9ad49cfd97a7643987cbed269a9d9afd01"
     }
   },
   {
@@ -1581,7 +1581,7 @@
       "ISO3166_2": "FR-51",
       "Latitude": 48.9613,
       "Longitude": 4.3122,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-51.geojson",
       "CommonAliases": [
         "Marne"
       ],
@@ -1591,8 +1591,8 @@
       "ID": "88157AB6-AF6D-4AE7-ACA2-59470E0585E3"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:28.752Z",
-      "checksum": "a7a921d44ac03f361491ce028768a920049e13f701561605c32ea413416cea02"
+      "lastModified": "2026-04-10T02:33:49.164Z",
+      "checksum": "5ad09dd9b9a9891ef453252942832da99be0992607d1f0750f55bc2c7a6ca365"
     }
   },
   {
@@ -1623,7 +1623,7 @@
       "ISO3166_2": "FR-53",
       "Latitude": 48.3044,
       "Longitude": -0.618,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-53.geojson",
       "CommonAliases": [
         "Mayenne"
       ],
@@ -1633,8 +1633,8 @@
       "ID": "A40782EF-F8E9-4E21-B0E8-08B8829F1393"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:28.780Z",
-      "checksum": "89fd226aa2dd62d9557407c09a832f39b4f9a243823fad87d84368fc53547b1b"
+      "lastModified": "2026-04-10T02:33:49.178Z",
+      "checksum": "b4b5c64f04aca21f5572e5ad60a5ae7789d5cdcb06b01ac0088d50fc9b4f1c61"
     }
   },
   {
@@ -1665,7 +1665,7 @@
       "ISO3166_2": "FR-54",
       "Latitude": 48.956,
       "Longitude": 5.987,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-54.geojson",
       "CommonAliases": [
         "Meurthe-et-Moselle"
       ],
@@ -1675,8 +1675,8 @@
       "ID": "7C9505E7-19FC-4AEA-B807-09A0C86DF61B"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:28.805Z",
-      "checksum": "4dde8725ccb76f82c02bbeee983c8e012c742228b05521a5ddc2f91e853dd546"
+      "lastModified": "2026-04-10T02:33:49.190Z",
+      "checksum": "92b2600707d2f74adc8ab159f4abdb4f3d15c9c1f5b5cd2fe960f33c32c4b85c"
     }
   },
   {
@@ -1686,7 +1686,7 @@
       "ISO3166_2": "FR-55",
       "Latitude": 49.013,
       "Longitude": 5.4287,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-55.geojson",
       "CommonAliases": [
         "Meuse"
       ],
@@ -1696,8 +1696,8 @@
       "ID": "1BC279D0-DD6F-4E7B-B3D5-3F72EF89C531"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:28.826Z",
-      "checksum": "718b63a1ff262a2ae761dd855eb08dfc3d5bd2f248b0bfa821d75d47c71d8d43"
+      "lastModified": "2026-04-10T02:33:49.232Z",
+      "checksum": "47709e3fa64efedef3ad9ff215ca95506fc1cdfc7c23af8d90d2838b21655181"
     }
   },
   {
@@ -1707,7 +1707,7 @@
       "ISO3166_2": "FR-56",
       "Latitude": 47.826,
       "Longitude": -2.7633,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-56.geojson",
       "CommonAliases": [
         "Morbihan"
       ],
@@ -1717,8 +1717,8 @@
       "ID": "BF0D1C16-04E8-4BAC-94C1-39A407D9848D"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:28.838Z",
-      "checksum": "82019e6ddfd7ea4882ba6ca589c8b05ce2ac7016a7c41e59e8eea6d0f2a0cde7"
+      "lastModified": "2026-04-10T02:33:49.246Z",
+      "checksum": "f09463d2bce633df2f848941ff7a4459544ce7fa45cd2bfdd461cb357bce78a6"
     }
   },
   {
@@ -1728,7 +1728,7 @@
       "ISO3166_2": "FR-57",
       "Latitude": 49.0207,
       "Longitude": 6.538,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-57.geojson",
       "CommonAliases": [
         "Moselle"
       ],
@@ -1738,8 +1738,8 @@
       "ID": "65839BCC-1411-4EDC-B860-1C0EED7F5642"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:28.851Z",
-      "checksum": "84c636d56bcf8804b7d4f3c471cb0f629b93b2484611100ebead7cc3761c0efa"
+      "lastModified": "2026-04-10T02:33:49.259Z",
+      "checksum": "59958040d1ddd7f460b55f5bb47197685033cb7ce11491b0ca5fc4afba672464"
     }
   },
   {
@@ -1770,7 +1770,7 @@
       "ISO3166_2": "FR-58",
       "Latitude": 47.1197,
       "Longitude": 3.5449,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-58.geojson",
       "CommonAliases": [
         "Nièvre"
       ],
@@ -1780,8 +1780,8 @@
       "ID": "42A8EF10-DC92-4856-89A8-C9539178F677"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:28.875Z",
-      "checksum": "da0d5d92914fcb0d29d9cd1b93fa5f35f7e642dd6ee7c97cd6bee4bf91600543"
+      "lastModified": "2026-04-10T02:33:49.273Z",
+      "checksum": "8f9c20b4b64b307889d2ef57ae647d07ade91fe738ffa717bcf967f364fbda66"
     }
   },
   {
@@ -1791,7 +1791,7 @@
       "ISO3166_2": "FR-59",
       "Latitude": 50.529,
       "Longitude": 3.0884,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-59.geojson",
       "CommonAliases": [
         "Nord"
       ],
@@ -1801,8 +1801,8 @@
       "ID": "DDD0CAF3-F1AB-4F2B-B29F-9B6D79C29736"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:28.886Z",
-      "checksum": "4e77338dd8a74cfdaa81aa2062aeeba8cdcfff05a71a0d08a3c50ab7e692cc1c"
+      "lastModified": "2026-04-10T02:33:49.286Z",
+      "checksum": "ca32dec08208234618d24abb75e063a78f596f0a027a1616f8e16cb6d08a6d8d"
     }
   },
   {
@@ -1896,7 +1896,7 @@
       "ISO3166_2": "FR-60",
       "Latitude": 49.4121,
       "Longitude": 2.4065,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-60.geojson",
       "CommonAliases": [
         "Oise"
       ],
@@ -1906,8 +1906,8 @@
       "ID": "35586E5B-D98C-4FDD-8E80-240EC6653E3B"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:28.963Z",
-      "checksum": "d77fd1cd2dd48c8ec6430e42f6e9757ca6184a517d2718c5d90b65ef5510bbbf"
+      "lastModified": "2026-04-10T02:33:49.331Z",
+      "checksum": "7547b22aa632ee06544c495bb1da9fdf506f7989b975133768c33d44d71a801d"
     }
   },
   {
@@ -1917,7 +1917,7 @@
       "ISO3166_2": "FR-61",
       "Latitude": 48.5759,
       "Longitude": 0.0449,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-61.geojson",
       "CommonAliases": [
         "Orne"
       ],
@@ -1927,8 +1927,8 @@
       "ID": "3C46C0A1-16D3-460D-9E95-328222FF0104"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:28.976Z",
-      "checksum": "2e49c08453b5ffa3d5f04ebf6e27f088735371f74e919b5deec04cf24a42f920"
+      "lastModified": "2026-04-10T02:33:49.346Z",
+      "checksum": "5a098bf495e287f1151bf78a7755225547dbaba2140c03266effbf3909886e93"
     }
   },
   {
@@ -1959,7 +1959,7 @@
       "ISO3166_2": "FR-62",
       "Latitude": 50.5144,
       "Longitude": 2.258,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-62.geojson",
       "CommonAliases": [
         "Pas-de-Calais"
       ],
@@ -1969,8 +1969,8 @@
       "ID": "D60B238F-01ED-427B-B9C1-343B5843ED67"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:29.000Z",
-      "checksum": "c4c16ea52232569438585312cf1c050119570a29a93058a79385efef95d950dc"
+      "lastModified": "2026-04-10T02:33:49.361Z",
+      "checksum": "470fc6bd705a378fad23d423072db517cf0c1e2cef99138fb01f5a624f6ebe44"
     }
   },
   {
@@ -2022,7 +2022,7 @@
       "ISO3166_2": "FR-63",
       "Latitude": 45.7726,
       "Longitude": 2.9644,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-63.geojson",
       "CommonAliases": [
         "Puy-de-Dôme"
       ],
@@ -2032,8 +2032,8 @@
       "ID": "FBBE9029-CCF1-4F1C-8131-60760DEE22D5"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:29.049Z",
-      "checksum": "a402c2365d81633f12da7df8dfa9f1aa5de1e879ecca277504c9294d676952b7"
+      "lastModified": "2026-04-10T02:33:49.374Z",
+      "checksum": "f61a9362e2e69c861620b494c947ac8fd9e3fe3f0ab007963fb659df3ec8dac8"
     }
   },
   {
@@ -2043,7 +2043,7 @@
       "ISO3166_2": "FR-64",
       "Latitude": 43.1872,
       "Longitude": -0.7282,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-64.geojson",
       "CommonAliases": [
         "Pyrénées-Atlantiques"
       ],
@@ -2053,8 +2053,8 @@
       "ID": "C6572EF6-07FE-4B9A-A772-9EC03CD4DCCB"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:29.061Z",
-      "checksum": "a30cf4b89b34c4583cb0522724c9d5d5295209471b68ecd619ff24540e7ee8f2"
+      "lastModified": "2026-04-10T02:33:49.388Z",
+      "checksum": "b6fe3278376fd5f14a3fca3bb104276cd08ce94b5245fd7a010977d2e59c9dcb"
     }
   },
   {
@@ -2064,7 +2064,7 @@
       "ISO3166_2": "FR-66",
       "Latitude": 42.6259,
       "Longitude": 2.5065,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-66.geojson",
       "CommonAliases": [
         "Pyrénées-Orientales"
       ],
@@ -2074,8 +2074,8 @@
       "ID": "E79414A2-6198-41E0-9EFA-5F809F6A23A6"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:29.073Z",
-      "checksum": "0a88ce89474fc4f9b79c6743f72ab991d0905bcc16a0700ad97dc239b6074f0a"
+      "lastModified": "2026-04-10T02:33:49.401Z",
+      "checksum": "1b3a6a1f41686b776e31d28ea95caa8df4e3a8e66488b7cd37eb22231055631d"
     }
   },
   {
@@ -2085,7 +2085,7 @@
       "ISO3166_2": "FR-69",
       "Latitude": 45.8802,
       "Longitude": 4.5645,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-69.geojson",
       "CommonAliases": [
         "Rhône"
       ],
@@ -2095,8 +2095,8 @@
       "ID": "C438A55D-1A82-4D49-9FE4-982A6939273B"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:29.084Z",
-      "checksum": "8bafc996e77ad5c188350b5c4fe294896d5013925bf98c7c920e06b08b9e8aca"
+      "lastModified": "2026-04-10T02:33:49.412Z",
+      "checksum": "2aba6a8f384ee3aa1f49cb0c85e2bdd4b2019438f7b284623d3a61518417b775"
     }
   },
   {
@@ -2169,7 +2169,7 @@
       "ISO3166_2": "FR-72",
       "Latitude": 48.0269,
       "Longitude": 0.2538,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-72.geojson",
       "CommonAliases": [
         "Sarthe"
       ],
@@ -2179,8 +2179,8 @@
       "ID": "CCD90C0A-D390-4B64-AA12-64DB6CB241A4"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:29.146Z",
-      "checksum": "cc99a6dacd8ba723cf8afbbcb6a7065233cd6b164d1f354f81ad7ef50c8ef94d"
+      "lastModified": "2026-04-10T02:33:49.456Z",
+      "checksum": "6c2bf670487c4006685b5c74c1c932f81c99a0b8b6e0c040acb6c87ef90c5b58"
     }
   },
   {
@@ -2190,7 +2190,7 @@
       "ISO3166_2": "FR-73",
       "Latitude": 45.4949,
       "Longitude": 6.3847,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-73.geojson",
       "CommonAliases": [
         "Savoie"
       ],
@@ -2200,8 +2200,8 @@
       "ID": "F1047B85-7CA2-43DB-A44B-84F72421ADDC"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:29.157Z",
-      "checksum": "aa21b13c69d61e1c54de0108688e77c913d3fde38081440980262f28e6d9857f"
+      "lastModified": "2026-04-10T02:33:49.470Z",
+      "checksum": "7537cbc2175065f7aa0b79a1cf78284b65732b087572bf9022629004ed06a1cd"
     }
   },
   {
@@ -2211,7 +2211,7 @@
       "ISO3166_2": "FR-71",
       "Latitude": 46.6557,
       "Longitude": 4.5586,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-71.geojson",
       "CommonAliases": [
         "Saône-et-Loire"
       ],
@@ -2221,8 +2221,8 @@
       "ID": "E5E041B2-33ED-47E1-80B7-F1EE1FC196E9"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:29.171Z",
-      "checksum": "821101edc0d8db93dafd9189886081d9aa12f979f1d8965ea8447d7d948cfe13"
+      "lastModified": "2026-04-10T02:33:49.483Z",
+      "checksum": "1e9f6cbf5f24550569a72f9725e32ad42ab81192de4ea736903086cc6d442160"
     }
   },
   {
@@ -2232,7 +2232,7 @@
       "ISO3166_2": "FR-76",
       "Latitude": 49.6632,
       "Longitude": 0.9401,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-76.geojson",
       "CommonAliases": [
         "Seine-Maritime"
       ],
@@ -2242,8 +2242,8 @@
       "ID": "E1AE4231-C57D-455C-801A-EBF89DBE9F37"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:29.185Z",
-      "checksum": "0561eaaa52bd7cc42372d8604a32af7e6009ef105ffce51fb5762552a1199816"
+      "lastModified": "2026-04-10T02:33:49.496Z",
+      "checksum": "675a6f953423d997c6b31b66ec02a21e5b6f831b4e4f2b6d16b17541d055e80f"
     }
   },
   {
@@ -2253,7 +2253,7 @@
       "ISO3166_2": "FR-93",
       "Latitude": 48.9098,
       "Longitude": 2.4529,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-93.geojson",
       "CommonAliases": [
         "Seine-Saint-Denis"
       ],
@@ -2263,8 +2263,8 @@
       "ID": "3BC990B3-A730-4971-BE63-F467CE558427"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:29.197Z",
-      "checksum": "ab0f2e1d34916991450e774c32a823a4aae1e5441ebb872104e59de8764750be"
+      "lastModified": "2026-04-10T02:33:49.508Z",
+      "checksum": "2d4831eecfe9dd8c7e1877f3aa910a184f62021b3b9f13851a554114e48c6426"
     }
   },
   {
@@ -2274,7 +2274,7 @@
       "ISO3166_2": "FR-77",
       "Latitude": 48.619,
       "Longitude": 3.0418,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-77.geojson",
       "CommonAliases": [
         "Seine-et-Marne"
       ],
@@ -2284,8 +2284,8 @@
       "ID": "55F625F7-2BF3-443B-90F6-7DFEA57CABED"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:29.208Z",
-      "checksum": "7ec6b321a9287ca39020417bcbb2c5ecfa0352ae9f11a57b350a397efdc44dd2"
+      "lastModified": "2026-04-10T02:33:49.522Z",
+      "checksum": "c2a48e31aa23ef8cd7844749347f553f8545fdd7814456cd8ff27a16b3bc7bf8"
     }
   },
   {
@@ -2295,7 +2295,7 @@
       "ISO3166_2": "FR-80",
       "Latitude": 49.9689,
       "Longitude": 2.3739,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-80.geojson",
       "CommonAliases": [
         "Somme"
       ],
@@ -2305,8 +2305,8 @@
       "ID": "7D6F28D7-6399-4D86-B866-E77B2D9F33D8"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:29.219Z",
-      "checksum": "0930eaf37b23e518153f803a8debd733572b28db4bfa9a6cb80e59338af18965"
+      "lastModified": "2026-04-10T02:33:49.533Z",
+      "checksum": "2e0984053854b0fc3d0fb00017746a7a990932fa11124ad30e9289e45ff48191"
     }
   },
   {
@@ -2316,7 +2316,7 @@
       "ISO3166_2": "FR-81",
       "Latitude": 43.7922,
       "Longitude": 2.134,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-81.geojson",
       "CommonAliases": [
         "Tarn"
       ],
@@ -2326,8 +2326,8 @@
       "ID": "764CE969-F3B1-424B-88E8-3DD41C88562F"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:29.243Z",
-      "checksum": "4d0fabc7152fe4d45d234c69d616b03346a04e7555c366cd5dc092cc72674e66"
+      "lastModified": "2026-04-10T02:33:49.576Z",
+      "checksum": "e24ed57db85c17165b810552840f5891557a0c93daebb4184341400e10bc87e0"
     }
   },
   {
@@ -2337,7 +2337,7 @@
       "ISO3166_2": "FR-82",
       "Latitude": 44.0807,
       "Longitude": 1.2051,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-82.geojson",
       "CommonAliases": [
         "Tarn-et-Garonne"
       ],
@@ -2347,8 +2347,8 @@
       "ID": "EBB8E48A-29DA-46A6-8EA0-80AB41876700"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:29.257Z",
-      "checksum": "fbd47f85349c52a9721bdf30431382b965f4a672e9a7f9c117e7579b0e04faf5"
+      "lastModified": "2026-04-10T02:33:49.590Z",
+      "checksum": "fbfe439e999b3e76f96c27f24783b25044930353a195b1c2bf2c4fad51b687b4"
     }
   },
   {
@@ -2358,7 +2358,7 @@
       "ISO3166_2": "FR-90",
       "Latitude": 47.6292,
       "Longitude": 6.8993,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-90.geojson",
       "CommonAliases": [
         "Territoire de Belfort"
       ],
@@ -2368,8 +2368,8 @@
       "ID": "D66E657C-852A-4817-A504-32F7457D3937"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:29.269Z",
-      "checksum": "dc2a3fe5556c67a00644a6d37226e379a992016a1a536f1cbf446cc56feaceb8"
+      "lastModified": "2026-04-10T02:33:49.603Z",
+      "checksum": "d995b3ff2ca38ad2077e91df0204e2871532ce1be1ddd74b5f3575737bd62355"
     }
   },
   {
@@ -2379,7 +2379,7 @@
       "ISO3166_2": "FR-95",
       "Latitude": 49.0751,
       "Longitude": 2.2098,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-95.geojson",
       "CommonAliases": [
         "Val-d'Oise"
       ],
@@ -2389,8 +2389,8 @@
       "ID": "42D6B13B-0565-4FEF-ACCD-CDA421D914E5"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:29.280Z",
-      "checksum": "3254366fa2f082a6cdc0a843341138be0c0f7cbccb5843f82312848d808aab9a"
+      "lastModified": "2026-04-10T02:33:49.616Z",
+      "checksum": "63517a8d8aa9eaadb8983a577fe3da8cd84a23c9c5c8980a42da8ff91a62a5c0"
     }
   },
   {
@@ -2400,7 +2400,7 @@
       "ISO3166_2": "FR-94",
       "Latitude": 48.7745,
       "Longitude": 2.4543,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-94.geojson",
       "CommonAliases": [
         "Val-de-Marne"
       ],
@@ -2410,8 +2410,8 @@
       "ID": "6BCBD27B-4F17-4195-94E5-6B3D770D386E"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:29.292Z",
-      "checksum": "73607591152d918c7f46fe8db190a4da671a973a36781662662a728a30603b40"
+      "lastModified": "2026-04-10T02:33:49.628Z",
+      "checksum": "6d0bb98e77ba18f0f499c47e31e397992c90cf5913ab40276b4a28de30599678"
     }
   },
   {
@@ -2421,7 +2421,7 @@
       "ISO3166_2": "FR-83",
       "Latitude": 43.4174,
       "Longitude": 6.2665,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-83.geojson",
       "CommonAliases": [
         "Var"
       ],
@@ -2431,8 +2431,8 @@
       "ID": "FC6FC5D6-E303-444C-A528-AF4DF55EFBE7"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:29.304Z",
-      "checksum": "764928bad53f0fb1530bc6b77e3cf84d0b2eeb4ed2c388665b8dba0632cdfb6a"
+      "lastModified": "2026-04-10T02:33:49.641Z",
+      "checksum": "f337c9ec7b3b22b5fca8521ae2cd2f5f1992ead62c3943e73a9daf7b05ef8db6"
     }
   },
   {
@@ -2442,7 +2442,7 @@
       "ISO3166_2": "FR-84",
       "Latitude": 43.9939,
       "Longitude": 5.1819,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-84.geojson",
       "CommonAliases": [
         "Vaucluse"
       ],
@@ -2452,8 +2452,8 @@
       "ID": "705C5DD5-C33C-488D-873F-7505D46F85EF"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:29.318Z",
-      "checksum": "34ea6279fbe13622a391c1008ae0f0fa2b128d62b77f285222ee979826331a6e"
+      "lastModified": "2026-04-10T02:33:49.653Z",
+      "checksum": "02ec4feb8d3651ff983b94872b92a246b6303f066de68e26d8558e4c9267002b"
     }
   },
   {
@@ -2463,7 +2463,7 @@
       "ISO3166_2": "FR-85",
       "Latitude": 46.6758,
       "Longitude": -1.2914,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-85.geojson",
       "CommonAliases": [
         "Vendée"
       ],
@@ -2473,8 +2473,8 @@
       "ID": "988582F6-8A4A-4C09-B9A1-4FEC2A30DDA3"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:29.333Z",
-      "checksum": "844de573fc735fc57af650e9ed91ee4b253a4560bef4326d3f3da2df9ef76b1e"
+      "lastModified": "2026-04-10T02:33:49.666Z",
+      "checksum": "d5b5776cd01b3db6ccaf119f3e0eb67eb2904e61ccc870a11df8e5d7cba2c93d"
     }
   },
   {
@@ -2484,7 +2484,7 @@
       "ISO3166_2": "FR-86",
       "Latitude": 45.5252,
       "Longitude": 4.8748,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-86.geojson",
       "CommonAliases": [
         "Vienne"
       ],
@@ -2494,8 +2494,8 @@
       "ID": "98013FCF-425A-46D0-B0C7-11AA4CE1E2CB"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:29.348Z",
-      "checksum": "8ef43725be4b0582b720ce388cd5d8feacdc346925772fd103fb5e1f141db447"
+      "lastModified": "2026-04-10T02:33:49.679Z",
+      "checksum": "bd9749faed43c406dcde574e82050d2816c885af62d117a9a00123d4167e8be1"
     }
   },
   {
@@ -2505,7 +2505,7 @@
       "ISO3166_2": "FR-88",
       "Latitude": 48.1638,
       "Longitude": 6.3821,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-88.geojson",
       "CommonAliases": [
         "Vosges"
       ],
@@ -2515,8 +2515,8 @@
       "ID": "A3DE5931-7CAD-4518-B784-0B1D5A15AE78"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:29.360Z",
-      "checksum": "fb873d4932275178531f67c38d62010d51646be5da6ea2febcbf65bec187f8a3"
+      "lastModified": "2026-04-10T02:33:49.691Z",
+      "checksum": "c6c76809a1c0f15bf3cb9b0b9c5ee564e860c5bb94d8fb7bbe6bfb604e264fa4"
     }
   },
   {
@@ -2547,7 +2547,7 @@
       "ISO3166_2": "FR-89",
       "Latitude": 47.8551,
       "Longitude": 3.645,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-89.geojson",
       "CommonAliases": [
         "Yonne"
       ],
@@ -2557,8 +2557,8 @@
       "ID": "E547FCD1-E744-439E-8369-FD1321E7B40C"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:29.393Z",
-      "checksum": "275a223b7e530a1b34900787495ec8be75d213d43a9e74f3439ee7d7c8ba60e4"
+      "lastModified": "2026-04-10T02:33:49.721Z",
+      "checksum": "93c7f38b0731345ccdbbfd17ea0679688d2f882c0a953006bfe81ad4b80370f0"
     }
   },
   {
@@ -2568,7 +2568,7 @@
       "ISO3166_2": "FR-78",
       "Latitude": 48.762,
       "Longitude": 1.8871,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/FR/boundaries/FR-78.geojson",
       "CommonAliases": [
         "Yvelines"
       ],
@@ -2578,8 +2578,8 @@
       "ID": "C2C602FA-E85A-4961-96F7-F3FCBFE18C09"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:29.406Z",
-      "checksum": "9be6a64bab53c1c02da7fc12a5069ff7568d85827ae5600f5353a4a7f58aaf42"
+      "lastModified": "2026-04-10T02:33:49.733Z",
+      "checksum": "7fbafc33b123b07e58ec35212c199f9e3d330ee6e844784f35ebb51dfc98207b"
     }
   },
   {

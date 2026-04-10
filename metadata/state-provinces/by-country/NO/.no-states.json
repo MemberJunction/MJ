@@ -132,7 +132,7 @@
       "ISO3166_2": "NO-15",
       "Latitude": 62.8453,
       "Longitude": 7.5182,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/NO/boundaries/NO-15.geojson",
       "CommonAliases": [
         "Møre og Romsdal"
       ],
@@ -142,8 +142,8 @@
       "ID": "E2877BC1-6E6E-43BB-B501-0479451FA3B4"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:36.822Z",
-      "checksum": "d006845a3d930d84456f00a946af5c3e7ea077eb8e72175dcacd8c105a919860"
+      "lastModified": "2026-04-10T02:34:14.261Z",
+      "checksum": "3d1b3852d7fa0fe9a6d003aafece4d17e5bb406413eb7f6aea44871ff8bcf412"
     }
   },
   {
@@ -153,7 +153,7 @@
       "ISO3166_2": "NO-18",
       "Latitude": 67.2756,
       "Longitude": 13.8624,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/NO/boundaries/NO-18.geojson",
       "CommonAliases": [
         "Nordland"
       ],
@@ -163,8 +163,8 @@
       "ID": "00C2FD65-0695-4A6D-A6FF-D02D988926FA"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:36.836Z",
-      "checksum": "afe1c6986296bd861289c6a1a6d9bc2c4d283aac12b578f56cf45a9e1bf59edf"
+      "lastModified": "2026-04-10T02:34:14.280Z",
+      "checksum": "8064c1fa86a825f23c35cfbe236dba30cc608c7ac48054ee4633c3b8a556a26c"
     }
   },
   {
@@ -174,7 +174,7 @@
       "ISO3166_2": "NO-03",
       "Latitude": 59.9139,
       "Longitude": 10.7522,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/NO/boundaries/NO-03.geojson",
       "CommonAliases": [
         "Oslo"
       ],
@@ -184,8 +184,8 @@
       "ID": "AF11768A-C284-45BE-8693-888B745EE4F9"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:36.850Z",
-      "checksum": "8ed5c2ce7bfbe28f57c3af7bbf30abc2a2199ebbcbdb072b5279ff454ac8ea73"
+      "lastModified": "2026-04-10T02:34:14.293Z",
+      "checksum": "ac252a2ad243609a31de755d5a1799b0df6befd62a7278268049822d6a4420c0"
     }
   },
   {
@@ -195,7 +195,7 @@
       "ISO3166_2": "NO-11",
       "Latitude": 58.9363,
       "Longitude": 5.8059,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/NO/boundaries/NO-11.geojson",
       "CommonAliases": [
         "Rogaland"
       ],
@@ -205,8 +205,8 @@
       "ID": "C5C49C1C-AF3A-43D2-86A6-8AC3E15FE389"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:36.861Z",
-      "checksum": "da685953961eb744530853080f371f836ebb70103b86f1c8ae092e96f529bf1a"
+      "lastModified": "2026-04-10T02:34:14.307Z",
+      "checksum": "47a7e492aa2efe9ef6633edb82b866edb19228e630b33ea1be6dfb7abbe1b8c7"
     }
   },
   {
@@ -216,7 +216,7 @@
       "ISO3166_2": "NO-21",
       "Latitude": 78.7199,
       "Longitude": 20.3493,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/NO/boundaries/NO-21.geojson",
       "CommonAliases": [
         "Svalbard"
       ],
@@ -226,8 +226,8 @@
       "ID": "9B2CDF77-8A4A-4207-9CD2-A6A575C04376"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:36.888Z",
-      "checksum": "560f236d209cb6c154bb7f3f13572f53c39a69f8e42b14e2f6c4dc493df38f64"
+      "lastModified": "2026-04-10T02:34:14.348Z",
+      "checksum": "52d3c80c30d943cb5af7453f9a93d828575f4b10e90529d780fd905c87015ea1"
     }
   },
   {

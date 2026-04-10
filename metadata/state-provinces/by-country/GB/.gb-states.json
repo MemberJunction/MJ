@@ -6,7 +6,7 @@
       "ISO3166_2": "GB-ABE",
       "Latitude": 57.1497,
       "Longitude": -2.0943,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-ABE.geojson",
       "CommonAliases": [
         "Aberdeen"
       ],
@@ -16,8 +16,8 @@
       "ID": "A52C08D1-13C2-4176-8AC7-7A43513A64DF"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:29.461Z",
-      "checksum": "f972b13acaa8762370224213fd6067a84c6ff1a28b3a82bcf883191391fab843"
+      "lastModified": "2026-04-10T02:33:49.935Z",
+      "checksum": "9fd1544e2a7f67c1e498456b7d8f408c59c37014f607ac3c3e6eedccdd00a717"
     }
   },
   {
@@ -27,7 +27,7 @@
       "ISO3166_2": "GB-ABD",
       "Latitude": 57.1667,
       "Longitude": -2.6667,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-ABD.geojson",
       "CommonAliases": [
         "Aberdeenshire"
       ],
@@ -37,8 +37,8 @@
       "ID": "2AA23942-C7AA-40BE-B5FD-B99ACC05E74B"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:29.474Z",
-      "checksum": "358ec9d8c8a3ef7fe9c0da4a5346b53b2aa711665ac94176f0417cf7c61af5f0"
+      "lastModified": "2026-04-10T02:33:49.949Z",
+      "checksum": "09b50d90b67d44a50cf8a4b7216b3312b703857f26464d9ff325ab3f6b408b98"
     }
   },
   {
@@ -48,7 +48,7 @@
       "ISO3166_2": "GB-ANS",
       "Latitude": 56.6667,
       "Longitude": -2.9167,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-ANS.geojson",
       "CommonAliases": [
         "Angus"
       ],
@@ -58,8 +58,8 @@
       "ID": "81EB5479-2719-4F05-9884-AF485CBB4CA2"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:29.486Z",
-      "checksum": "a20c3d60372dc78ee6ee6e59f0a92677a0a8bb7060d4d7d00203710423654308"
+      "lastModified": "2026-04-10T02:33:49.963Z",
+      "checksum": "548d3eb2f2c4c1ac30dad65dbab57fbf4722ac0b9fead74df5b9fc5bcb068065"
     }
   },
   {
@@ -111,7 +111,7 @@
       "ISO3166_2": "GB-AGB",
       "Latitude": 56.4603,
       "Longitude": -5.8618,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-AGB.geojson",
       "CommonAliases": [
         "Argyll and Bute"
       ],
@@ -121,8 +121,8 @@
       "ID": "D08331C4-6857-417D-A316-921924263C0D"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:29.524Z",
-      "checksum": "30388d8f06b8618235aab060f3ddab06f870e5ee1f6c6f2b10fda3a6b9455993"
+      "lastModified": "2026-04-10T02:33:49.977Z",
+      "checksum": "6075326555aaebcaac67e3b8d31919a1ebb8dc0720a4f0f8f0cb33e1d467c278"
     }
   },
   {
@@ -153,7 +153,7 @@
       "ISO3166_2": "GB-BDG",
       "Latitude": 51.5541,
       "Longitude": 0.1505,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-BDG.geojson",
       "CommonAliases": [
         "Barking and Dagenham"
       ],
@@ -163,8 +163,8 @@
       "ID": "279A2211-57CB-433C-9CF1-E8C496A37B15"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:29.551Z",
-      "checksum": "b032e1d856bc525015a6403f23f3bf0253025de47d807674aaac93a5ad178364"
+      "lastModified": "2026-04-10T02:33:49.991Z",
+      "checksum": "21f5d89eda5ab712155e493e08cd8962bbc8c8f5953dcfe6b91bef1dcad9f761"
     }
   },
   {
@@ -174,7 +174,7 @@
       "ISO3166_2": "GB-BNE",
       "Latitude": 51.605,
       "Longitude": -0.2076,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-BNE.geojson",
       "CommonAliases": [
         "Barnet"
       ],
@@ -184,8 +184,8 @@
       "ID": "E5DF6A1C-7468-418C-B53F-ABDFEDCF265D"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:29.564Z",
-      "checksum": "34ff33e61104e192522346c44c7b3d01e66b0f8c1d386d67c4857704027e508c"
+      "lastModified": "2026-04-10T02:33:50.011Z",
+      "checksum": "5d822a795c25b6b759aae655b2190c8f0c4a786acefde7cf4a3565833f728d9d"
     }
   },
   {
@@ -195,7 +195,7 @@
       "ISO3166_2": "GB-BNS",
       "Latitude": 53.5528,
       "Longitude": -1.4828,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-BNS.geojson",
       "CommonAliases": [
         "Barnsley"
       ],
@@ -205,8 +205,8 @@
       "ID": "B00393B8-7DF1-406D-A705-861D4D290167"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:29.575Z",
-      "checksum": "f748e0add3b3064024f101747fe3a6f944c6826b63acae2c12c660d048df39c8"
+      "lastModified": "2026-04-10T02:33:50.027Z",
+      "checksum": "bd137068ec001bfd960dc03a52949c4f6a4ad1910410fcef251e8b63259e1d27"
     }
   },
   {
@@ -216,7 +216,7 @@
       "ISO3166_2": "GB-BAS",
       "Latitude": 51.3563,
       "Longitude": -2.4867,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-BAS.geojson",
       "CommonAliases": [
         "Bath and North East Somerset"
       ],
@@ -226,8 +226,8 @@
       "ID": "CBB8C0A7-DDE0-4113-9A47-BB467DE0C27C"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:29.604Z",
-      "checksum": "0c30c1b04365877c4e569c6fab4f1494c565b94e0ac82b9fe1c74e731b18e9dd"
+      "lastModified": "2026-04-10T02:33:50.080Z",
+      "checksum": "a30b686ed7ebb16bbd345dbfe67e01cf9ab93b44b214ec28757c02f6fa51a192"
     }
   },
   {
@@ -237,7 +237,7 @@
       "ISO3166_2": "GB-BDF",
       "Latitude": 52.1887,
       "Longitude": -0.4666,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-BDF.geojson",
       "CommonAliases": [
         "Bedford"
       ],
@@ -247,8 +247,8 @@
       "ID": "5C766E78-5AE0-43AB-AABF-ABBF80839A9D"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:29.616Z",
-      "checksum": "1d1814ace8efde29980ca7aae1ec193b08b96c1d3ebfd2d8fa447cf1d6498903"
+      "lastModified": "2026-04-10T02:33:50.095Z",
+      "checksum": "ca0f87cd48194888d5914250fc968c83f6812d0d30edcb03be188d41a86ee919"
     }
   },
   {
@@ -258,7 +258,7 @@
       "ISO3166_2": "GB-BFS",
       "Latitude": 54.5976,
       "Longitude": -5.9277,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-BFS.geojson",
       "CommonAliases": [
         "Belfast"
       ],
@@ -268,8 +268,8 @@
       "ID": "44BE5DA8-ECDE-4B21-9C75-8EB7C73AF4AD"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:29.628Z",
-      "checksum": "1660b81655ee8ccaf101067627a371b4dbcbc58c68d0de110a67dd2f648a18fd"
+      "lastModified": "2026-04-10T02:33:50.109Z",
+      "checksum": "ad94da2984781fd8ae039008ffe602ade28d905ef9d49390e16004cdb869d8e5"
     }
   },
   {
@@ -279,7 +279,7 @@
       "ISO3166_2": "GB-BEX",
       "Latitude": 51.4402,
       "Longitude": 0.1479,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-BEX.geojson",
       "CommonAliases": [
         "Bexley"
       ],
@@ -289,8 +289,8 @@
       "ID": "EC544CFC-D408-4B55-9ED1-DA874038F51C"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:29.640Z",
-      "checksum": "4300a69c12379ae314b10723401efed4f76ce7cfc3450dd95014febd035b39e9"
+      "lastModified": "2026-04-10T02:33:50.122Z",
+      "checksum": "be06a2d99e73cf5918666c1c52b6e04f736e983a35d05e87a6cd9d56cc0f5114"
     }
   },
   {
@@ -300,7 +300,7 @@
       "ISO3166_2": "GB-BIR",
       "Latitude": 52.4797,
       "Longitude": -1.9027,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-BIR.geojson",
       "CommonAliases": [
         "Birmingham"
       ],
@@ -310,8 +310,8 @@
       "ID": "9582EDFB-C58A-4957-AA9E-B5424C025C65"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:29.651Z",
-      "checksum": "4203e9ee4c85dbff3fa933e3599c0b7f832b46508550c2f0898d25e4de57b0e3"
+      "lastModified": "2026-04-10T02:33:50.135Z",
+      "checksum": "fc6af5e4b1f1170a8a22184bd62670f77d0024bb40fdc36086dc850c1620bce6"
     }
   },
   {
@@ -321,7 +321,7 @@
       "ISO3166_2": "GB-BBD",
       "Latitude": 53.6958,
       "Longitude": -2.4683,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-BBD.geojson",
       "CommonAliases": [
         "Blackburn with Darwen"
       ],
@@ -331,8 +331,8 @@
       "ID": "21E94E4F-B0F8-4550-B867-594E64DF845E"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:29.664Z",
-      "checksum": "a7b7c26f2f93efaa646de3bd4f0f389563a227ce1a5b56db35e4a0a116b58d3d"
+      "lastModified": "2026-04-10T02:33:50.147Z",
+      "checksum": "147d04a6fe92c19989fc65737090fd99be19ff7992cd694ed5319b13a07d1f8e"
     }
   },
   {
@@ -342,7 +342,7 @@
       "ISO3166_2": "GB-BPL",
       "Latitude": 53.8175,
       "Longitude": -3.0357,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-BPL.geojson",
       "CommonAliases": [
         "Blackpool"
       ],
@@ -352,8 +352,8 @@
       "ID": "E61A16CD-4735-4B2B-A050-5F608149CC28"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:29.678Z",
-      "checksum": "4de328cec9e13cab5623eda67fdadf0b5ddb07b9d56eedf727d6ba645ba8dfc4"
+      "lastModified": "2026-04-10T02:33:50.160Z",
+      "checksum": "fbaf4c9272361e9f3ee77865c33c76b1c2c159d54b5976db117ea7ee02b42ddd"
     }
   },
   {
@@ -363,7 +363,7 @@
       "ISO3166_2": "GB-BGW",
       "Latitude": 51.7534,
       "Longitude": -3.1848,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-BGW.geojson",
       "CommonAliases": [
         "Blaenau Gwent"
       ],
@@ -373,8 +373,8 @@
       "ID": "7626F6AC-0D0D-421E-BD76-E0960F96E3AC"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:29.691Z",
-      "checksum": "aa42829f4a07cf04b9dd75c991abdd5de6d03105b93055a09f8777af20f60213"
+      "lastModified": "2026-04-10T02:33:50.173Z",
+      "checksum": "c20a62b55a0b4dbaf430b794bc27a8b3f912af796244c5e58bb661e72ce387a4"
     }
   },
   {
@@ -384,7 +384,7 @@
       "ISO3166_2": "GB-BOL",
       "Latitude": 55.9208,
       "Longitude": -2.7906,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-BOL.geojson",
       "CommonAliases": [
         "Bolton"
       ],
@@ -394,8 +394,8 @@
       "ID": "D55A7CA2-0E78-48E4-BBB9-C0B007C59B86"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:29.704Z",
-      "checksum": "4999b5b128f335fee20fff0795f602cfeb1725a1818f252d9b86120cd8bedf42"
+      "lastModified": "2026-04-10T02:33:50.184Z",
+      "checksum": "3a89d0e684c0ddb562860b6a980907eb959acb2b641386bb4357699768706712"
     }
   },
   {
@@ -426,7 +426,7 @@
       "ISO3166_2": "GB-BRC",
       "Latitude": 51.4003,
       "Longitude": -0.7418,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-BRC.geojson",
       "CommonAliases": [
         "Bracknell Forest"
       ],
@@ -436,8 +436,8 @@
       "ID": "053FD9B3-AC7E-41BA-BF4E-EB662BDDC485"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:29.745Z",
-      "checksum": "7a8e2873478144503412f28af2ece5fe4c993de172873f8453549d4288bcf075"
+      "lastModified": "2026-04-10T02:33:50.231Z",
+      "checksum": "aacd442d23668b1ec73f4902515fb32d17c406f085f353ed7481d2da9a0ef3e7"
     }
   },
   {
@@ -447,7 +447,7 @@
       "ISO3166_2": "GB-BRD",
       "Latitude": 53.796,
       "Longitude": -1.7594,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-BRD.geojson",
       "CommonAliases": [
         "Bradford"
       ],
@@ -457,8 +457,8 @@
       "ID": "6B2FFB4D-B042-42FE-87C6-AC941B5B1095"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:29.758Z",
-      "checksum": "9596082e046630eaeaba96000636cda72f5facd6a6bf8daa9e0ed833547228f7"
+      "lastModified": "2026-04-10T02:33:50.246Z",
+      "checksum": "8be544808a66f4d73be51337b158214c027459a6f024b942bf6db1dd003b74eb"
     }
   },
   {
@@ -468,7 +468,7 @@
       "ISO3166_2": "GB-BEN",
       "Latitude": 52.0189,
       "Longitude": -0.7235,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-BEN.geojson",
       "CommonAliases": [
         "Brent"
       ],
@@ -478,8 +478,8 @@
       "ID": "B269DDB0-DD2B-4324-B0D5-97C18FE6D8AC"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:29.770Z",
-      "checksum": "085b55ba478f5ac0ba84d3b7c93147b0251e134c1167c8d1f3661fab07abdb60"
+      "lastModified": "2026-04-10T02:33:50.258Z",
+      "checksum": "0ed665cfc4c2a758ca07bff50fafe008441562fdec11bda50a092a3010376ebe"
     }
   },
   {
@@ -489,7 +489,7 @@
       "ISO3166_2": "GB-BGE",
       "Latitude": 51.5083,
       "Longitude": -3.5812,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-BGE.geojson",
       "CommonAliases": [
         "Bridgend"
       ],
@@ -499,8 +499,8 @@
       "ID": "CF0EE70E-B7E8-4698-A8D7-86128153708A"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:29.781Z",
-      "checksum": "03a6e7761406d4ec8b7eab5b3f535e98773dc10a6a555d52ac24042a040ddd3c"
+      "lastModified": "2026-04-10T02:33:50.270Z",
+      "checksum": "e74f49cb0681d18133d0e31429103c618c793d76034e61de99d15949a4c3731e"
     }
   },
   {
@@ -510,7 +510,7 @@
       "ISO3166_2": "GB-BNH",
       "Latitude": 50.8453,
       "Longitude": -0.1497,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-BNH.geojson",
       "CommonAliases": [
         "Brighton and Hove"
       ],
@@ -520,8 +520,8 @@
       "ID": "EA01D368-4CDE-4610-A541-EF9736BC2EB6"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:29.797Z",
-      "checksum": "ab8a330102f5e64bac0151d29c7cf3622961930daa833894f88765cf991464d9"
+      "lastModified": "2026-04-10T02:33:50.283Z",
+      "checksum": "6c2b04cd8087f63eef6e9052028a70c22e0e4973a388ab425a869fbd03d78dbc"
     }
   },
   {
@@ -531,7 +531,7 @@
       "ISO3166_2": "GB-BST",
       "Latitude": 51.4538,
       "Longitude": -2.5973,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-BST.geojson",
       "CommonAliases": [
         "Bristol"
       ],
@@ -541,8 +541,8 @@
       "ID": "135D50FB-348C-4A2F-8508-7249FA3025BE"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:29.810Z",
-      "checksum": "adf5a92ad8315b05e3cd9923151ce658369bbc09bfe093fb4357e44c200ede1b"
+      "lastModified": "2026-04-10T02:33:50.297Z",
+      "checksum": "77489f5afac344b7d2e9f4f1c2f5df1988e97db1ac9fbab7bf8d9fa4559d8678"
     }
   },
   {
@@ -552,7 +552,7 @@
       "ISO3166_2": "GB-BRY",
       "Latitude": 51.368,
       "Longitude": 0.0701,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-BRY.geojson",
       "CommonAliases": [
         "Bromley"
       ],
@@ -562,8 +562,8 @@
       "ID": "DBCF5818-CEF1-4CAE-B4E2-B3BA3DC044CF"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:29.822Z",
-      "checksum": "f4a6f786acb7f4de37cbac23eea3413b098768bcd443903599a26e682c2656f3"
+      "lastModified": "2026-04-10T02:33:50.308Z",
+      "checksum": "0b6cadf2e9e926e971ceca5d47905fd6337d74b9c8488756abfd3125035d7e1a"
     }
   },
   {
@@ -573,7 +573,7 @@
       "ISO3166_2": "GB-BKM",
       "Latitude": 51.7835,
       "Longitude": -0.8946,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-BKM.geojson",
       "CommonAliases": [
         "Buckinghamshire"
       ],
@@ -583,8 +583,8 @@
       "ID": "71C03BF8-1E38-49FC-8631-C49F929582C7"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:29.835Z",
-      "checksum": "b265a02a5cc792c392010b379120532330ed0ba33cd2e23dddfbfcca8c66ccb1"
+      "lastModified": "2026-04-10T02:33:50.323Z",
+      "checksum": "fc00ed15af906103dfbcbae0548f825d64fb798c766c21558b48e34d6792d6df"
     }
   },
   {
@@ -594,7 +594,7 @@
       "ISO3166_2": "GB-BUR",
       "Latitude": 53.5933,
       "Longitude": -2.2966,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-BUR.geojson",
       "CommonAliases": [
         "Bury"
       ],
@@ -604,8 +604,8 @@
       "ID": "6BA72E14-2972-4BF6-B969-8D72C640631D"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:29.849Z",
-      "checksum": "4b8c9fc2d650e9733a7af7fadfd42cbfeb2cded72c4f999d1870532800e71102"
+      "lastModified": "2026-04-10T02:33:50.336Z",
+      "checksum": "00b2aeb44518a92104d7ebcfcb41a7f8e4ee15366c680ee37f4f59d9c40e8ac7"
     }
   },
   {
@@ -615,7 +615,7 @@
       "ISO3166_2": "GB-CAY",
       "Latitude": 51.6724,
       "Longitude": -3.1784,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-CAY.geojson",
       "CommonAliases": [
         "Caerphilly"
       ],
@@ -625,8 +625,8 @@
       "ID": "D7D14BFA-8C5A-49E2-B340-D0ACD68D99F4"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:29.860Z",
-      "checksum": "e68167e42a47ddf9a8884997f0bc07888b6e27b5099829383159f79c37d068e9"
+      "lastModified": "2026-04-10T02:33:50.348Z",
+      "checksum": "7ae0e0944887a332342288e039456a262074a8a1765a6eb0aa048f3086db0bf5"
     }
   },
   {
@@ -636,7 +636,7 @@
       "ISO3166_2": "GB-CLD",
       "Latitude": 53.7205,
       "Longitude": -1.9623,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-CLD.geojson",
       "CommonAliases": [
         "Calderdale"
       ],
@@ -646,8 +646,8 @@
       "ID": "BE59EF7D-0095-4B02-A8DF-C46D730139EB"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:29.887Z",
-      "checksum": "6f65852b4acb9ad79fbd32e22a2ae6e4b8e3ed6ccf8eb4329e07dac0c78fc691"
+      "lastModified": "2026-04-10T02:33:50.394Z",
+      "checksum": "e75ac62700ddc505fa078c31fcbc9e407dbeed4c4ffe8c2aceaa16b57571cc9c"
     }
   },
   {
@@ -657,7 +657,7 @@
       "ISO3166_2": "GB-CAM",
       "Latitude": 52.3333,
       "Longitude": 0.0833,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-CAM.geojson",
       "CommonAliases": [
         "Cambridgeshire"
       ],
@@ -667,8 +667,8 @@
       "ID": "542E6A4D-E86D-4410-A405-CDE31A6EB718"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:29.899Z",
-      "checksum": "c51a357faecc1e112f2ac4d9466714beef10aea2e4559f5a6e7c2fbefabc8ebf"
+      "lastModified": "2026-04-10T02:33:50.408Z",
+      "checksum": "f3a1d87be183558d07f035dcc7b77b287f5a1b0aee425641397a9e61db10f7a9"
     }
   },
   {
@@ -678,7 +678,7 @@
       "ISO3166_2": "GB-CMD",
       "Latitude": 51.5455,
       "Longitude": -0.1628,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-CMD.geojson",
       "CommonAliases": [
         "Camden"
       ],
@@ -688,8 +688,8 @@
       "ID": "57C78C35-EBF4-41C4-AB5E-770A9A3DFB55"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:29.913Z",
-      "checksum": "a7aa03ae451088033c7222a57bcdcda7535958537ec906cffff054aa3c3906de"
+      "lastModified": "2026-04-10T02:33:50.421Z",
+      "checksum": "3cb6f9eaea9d86b9b8fcc04d803b4cf8e565072950aac5c2faf9908eed6b4275"
     }
   },
   {
@@ -699,7 +699,7 @@
       "ISO3166_2": "GB-CRF",
       "Latitude": 51.4816,
       "Longitude": -3.1791,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-CRF.geojson",
       "CommonAliases": [
         "Cardiff"
       ],
@@ -709,8 +709,8 @@
       "ID": "0788FE94-4B7B-4C0F-AF05-C198FA8C0C16"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:29.925Z",
-      "checksum": "945d3d503f9324a2a2fd0bc881eccf8e7751af828642b9d1571670e37e31e96b"
+      "lastModified": "2026-04-10T02:33:50.431Z",
+      "checksum": "12e519e72f8410773e4aaae0b364b7882555acb87be4926689d436ba0da06ca4"
     }
   },
   {
@@ -720,7 +720,7 @@
       "ISO3166_2": "GB-CMN",
       "Latitude": 51.8937,
       "Longitude": -4.2173,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-CMN.geojson",
       "CommonAliases": [
         "Carmarthenshire"
       ],
@@ -730,8 +730,8 @@
       "ID": "E6A8330F-A70B-43F1-8413-42936399F6BD"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:29.938Z",
-      "checksum": "4f457aefcebbc5966a341addb884cd6bdc9f831eeca874e415a900c538049b75"
+      "lastModified": "2026-04-10T02:33:50.443Z",
+      "checksum": "055a257ea15e2a042dc28788297dc819e082eea05f4ca726d5d5e006a4f3b132"
     }
   },
   {
@@ -762,7 +762,7 @@
       "ISO3166_2": "GB-CBF",
       "Latitude": 51.998,
       "Longitude": -0.4792,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-CBF.geojson",
       "CommonAliases": [
         "Central Bedfordshire"
       ],
@@ -772,8 +772,8 @@
       "ID": "ABC0E924-72CE-4273-974F-64F7D46829F5"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:29.964Z",
-      "checksum": "e30fbaa8263b2ba2310582adc9f781a3d6d433f945404f90d73989b63640b29d"
+      "lastModified": "2026-04-10T02:33:50.457Z",
+      "checksum": "3b854d1ce76753476708c5359e1dda7193bab3ee96fbdb7ee576100b0437d4d3"
     }
   },
   {
@@ -783,7 +783,7 @@
       "ISO3166_2": "GB-CGN",
       "Latitude": 52.2946,
       "Longitude": -3.9528,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-CGN.geojson",
       "CommonAliases": [
         "Ceredigion"
       ],
@@ -793,8 +793,8 @@
       "ID": "F25DEA6A-3037-4776-AF67-90A763205328"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:29.977Z",
-      "checksum": "2ba7e88855507451a9c0fea1cae3bdcfe232d2000d159062568f195396c48680"
+      "lastModified": "2026-04-10T02:33:50.470Z",
+      "checksum": "9b37db6617b76d7809ad46c061276efa7b9e72090ab2f45a7c8a9cfa14e32482"
     }
   },
   {
@@ -804,7 +804,7 @@
       "ISO3166_2": "GB-CHE",
       "Latitude": 53.1673,
       "Longitude": -2.2929,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-CHE.geojson",
       "CommonAliases": [
         "Cheshire East"
       ],
@@ -814,8 +814,8 @@
       "ID": "F73FCE0A-BEC4-4985-9C2D-B0A92A70723E"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:29.990Z",
-      "checksum": "df1ed864eeabab19fc6538a93581a7feb244999ba1f352d85ecba8b817f3f27f"
+      "lastModified": "2026-04-10T02:33:50.488Z",
+      "checksum": "be28c7fdd06c79d1d11e24a8045cdbd80806050bc5b771b2dec82d468a6e0dde"
     }
   },
   {
@@ -825,7 +825,7 @@
       "ISO3166_2": "GB-CHW",
       "Latitude": 53.1638,
       "Longitude": -2.7285,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-CHW.geojson",
       "CommonAliases": [
         "Cheshire West and Chester"
       ],
@@ -835,8 +835,8 @@
       "ID": "4E221478-051C-43EB-8DE9-562CD8AFA92C"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:30.003Z",
-      "checksum": "f279c1a86150cdeccc15d5d882b287d2a2be5d790423599ef29c3959c1cd0400"
+      "lastModified": "2026-04-10T02:33:50.502Z",
+      "checksum": "a5b20ce21d22c29236df247269dfe8ba5a964ecaf5d907aae24e4815220fab1d"
     }
   },
   {
@@ -846,7 +846,7 @@
       "ISO3166_2": "GB-KHL",
       "Latitude": 53.7676,
       "Longitude": -0.3274,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-KHL.geojson",
       "CommonAliases": [
         "City of Kingston upon Hull"
       ],
@@ -856,8 +856,8 @@
       "ID": "5CEF994A-A261-4CFC-B8C8-367FA27A8D50"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:30.030Z",
-      "checksum": "713401d3fef0e0c1ac7efad3c6b8bde46b9fe5578e1748c9948d9b0d8b9e0971"
+      "lastModified": "2026-04-10T02:33:50.554Z",
+      "checksum": "7557febb7186ecd9fd3262bdd903bd4427de64fbf03a2894560f50af9cb34e4a"
     }
   },
   {
@@ -867,7 +867,7 @@
       "ISO3166_2": "GB-STH",
       "Latitude": 50.9002,
       "Longitude": -1.414,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-STH.geojson",
       "CommonAliases": [
         "City of Southampton"
       ],
@@ -877,8 +877,8 @@
       "ID": "48144D74-506C-4F14-A093-1ECA2987E620"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:30.042Z",
-      "checksum": "861b86847b364c7467f67ef8803f17eacfbe68b37e297a9f5e0d1c3fd7f13737"
+      "lastModified": "2026-04-10T02:33:50.570Z",
+      "checksum": "de4788c0a4464242a48ee03d2981478fcf07b476869817e946833a21a74cedb5"
     }
   },
   {
@@ -888,7 +888,7 @@
       "ISO3166_2": "GB-CLK",
       "Latitude": 56.1664,
       "Longitude": -3.7514,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-CLK.geojson",
       "CommonAliases": [
         "Clackmannanshire"
       ],
@@ -898,8 +898,8 @@
       "ID": "7BF21D8B-416D-45E3-83C3-83A02DE64697"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:30.054Z",
-      "checksum": "62759b17616353de97336d0b569443f208196ecffb80c0d69aa514da54118344"
+      "lastModified": "2026-04-10T02:33:50.585Z",
+      "checksum": "e1dd14ceea459891427ae144a1278dea60deae36a14244c4a55383320db182e1"
     }
   },
   {
@@ -909,7 +909,7 @@
       "ISO3166_2": "GB-CWY",
       "Latitude": 53.2812,
       "Longitude": -3.8287,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-CWY.geojson",
       "CommonAliases": [
         "Conwy"
       ],
@@ -919,8 +919,8 @@
       "ID": "28A7589F-1A73-42AC-BBAB-D1851D61FD26"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:30.066Z",
-      "checksum": "eef30645ea78671f66d1fad841f0694279ea7c46efec936412855db91483c91a"
+      "lastModified": "2026-04-10T02:33:50.598Z",
+      "checksum": "09512d99b93df4d06ea489ea24d99c861e7e6e5ddd7576def4504a405326b0f2"
     }
   },
   {
@@ -930,7 +930,7 @@
       "ISO3166_2": "GB-CON",
       "Latitude": 50.4433,
       "Longitude": -4.6247,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-CON.geojson",
       "CommonAliases": [
         "Cornwall"
       ],
@@ -940,8 +940,8 @@
       "ID": "45DADC82-A1F5-4C01-BF78-CAEEB6D08546"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:30.080Z",
-      "checksum": "2471d9dffbf5996ffaec4ec85efeba78de64932a227b2a429b46da62af606d61"
+      "lastModified": "2026-04-10T02:33:50.613Z",
+      "checksum": "f01336ad61eff98fb47e2de79d3ad00527da72880f145075443222661326be5f"
     }
   },
   {
@@ -951,7 +951,7 @@
       "ISO3166_2": "GB-COV",
       "Latitude": 52.4068,
       "Longitude": -1.5197,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-COV.geojson",
       "CommonAliases": [
         "Coventry"
       ],
@@ -961,8 +961,8 @@
       "ID": "4E30BDDF-074A-44F0-AAE9-F7396B4743D8"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:30.093Z",
-      "checksum": "412cd5a406fe285efd1e9658a2652322d3125223dc16d5b7f21545f8de0152b5"
+      "lastModified": "2026-04-10T02:33:50.626Z",
+      "checksum": "4b06cbf0958a611302dcaab75eeea1e481785380836c08ded65b15720e334ee3"
     }
   },
   {
@@ -972,7 +972,7 @@
       "ISO3166_2": "GB-CRY",
       "Latitude": 51.3713,
       "Longitude": -0.102,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-CRY.geojson",
       "CommonAliases": [
         "Croydon"
       ],
@@ -982,8 +982,8 @@
       "ID": "FDA8C12B-263B-4720-A9CC-A5D3E5F8C8CC"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:30.108Z",
-      "checksum": "0a8e3aa06e936b9e64880f19836d880772ce6e3bb37f4a9d7b27488dcc04c60a"
+      "lastModified": "2026-04-10T02:33:50.638Z",
+      "checksum": "d8202e0f9baa166857729aa3e9a6e948ec56bca37a40294ce7b4a1f4f18649bb"
     }
   },
   {
@@ -993,7 +993,7 @@
       "ISO3166_2": "GB-CMA",
       "Latitude": 54.6143,
       "Longitude": -2.9421,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-CMA.geojson",
       "CommonAliases": [
         "Cumbria"
       ],
@@ -1003,8 +1003,8 @@
       "ID": "35606903-E297-4544-BCA1-B5D02F0DD561"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:30.121Z",
-      "checksum": "fe6698f14cd29ae9f5ad60d5b84c15c086b6c71b5c968deae0571689036c8677"
+      "lastModified": "2026-04-10T02:33:50.654Z",
+      "checksum": "29398e28c97127cc960fbd9c81fe30c1052bb16aa98cb37d025c427b2313875b"
     }
   },
   {
@@ -1014,7 +1014,7 @@
       "ISO3166_2": "GB-DAL",
       "Latitude": 54.5353,
       "Longitude": -1.5529,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-DAL.geojson",
       "CommonAliases": [
         "Darlington"
       ],
@@ -1024,8 +1024,8 @@
       "ID": "28F57EDA-1EAF-4C41-AE44-9DD451D2B8E4"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:30.133Z",
-      "checksum": "2423b45a475cb13ad04451117c7cb9b0b4adea613856ac3eed0e2fc0c4ea85bd"
+      "lastModified": "2026-04-10T02:33:50.669Z",
+      "checksum": "4daaf4008a3d480e7dfd4dc298e1b70583dbdf8fae3a7f856b057f177f6abf21"
     }
   },
   {
@@ -1035,7 +1035,7 @@
       "ISO3166_2": "GB-DEN",
       "Latitude": 53.1098,
       "Longitude": -3.3671,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-DEN.geojson",
       "CommonAliases": [
         "Denbighshire"
       ],
@@ -1045,8 +1045,8 @@
       "ID": "2A11016B-5574-4FAA-8E6B-C2C21B90F03A"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:30.144Z",
-      "checksum": "421f283845fff991a7b90a4e22d4c9425b7a0e0f05242cf34720cab8a3fd5863"
+      "lastModified": "2026-04-10T02:33:50.680Z",
+      "checksum": "e642af50239df864d24e7a6f574a9871aac30d9bd73785c8aa9c85cd6e7d972f"
     }
   },
   {
@@ -1056,7 +1056,7 @@
       "ISO3166_2": "GB-DER",
       "Latitude": 53.1667,
       "Longitude": -1.5833,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-DER.geojson",
       "CommonAliases": [
         "Derby"
       ],
@@ -1066,8 +1066,8 @@
       "ID": "13228C1A-236C-4A7C-A6C6-4ADE5A09B70D"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:30.174Z",
-      "checksum": "0d772c7bbb07e4412795747307e258a7a177da10852854f9adec9305ee560813"
+      "lastModified": "2026-04-10T02:33:50.733Z",
+      "checksum": "494adfc5aea24b9f68022b5640c45a199c9ede41f0116eca4fa5f1cb62c3d484"
     }
   },
   {
@@ -1077,7 +1077,7 @@
       "ISO3166_2": "GB-DBY",
       "Latitude": 53.1185,
       "Longitude": -1.5566,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-DBY.geojson",
       "CommonAliases": [
         "Derbyshire"
       ],
@@ -1087,8 +1087,8 @@
       "ID": "56F16B3C-A94E-4610-AE1E-EE3E079A1B21"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:30.185Z",
-      "checksum": "1e6b548bb32b76fd7c6364468abe1a9c68d295373f4f1d9f775821f640e6a190"
+      "lastModified": "2026-04-10T02:33:50.746Z",
+      "checksum": "97da95789eef4331bd58626b7aed814dae3d5cc39d2532dbec3622751e89db7e"
     }
   },
   {
@@ -1119,7 +1119,7 @@
       "ISO3166_2": "GB-DEV",
       "Latitude": 50.7241,
       "Longitude": -3.6608,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-DEV.geojson",
       "CommonAliases": [
         "Devon"
       ],
@@ -1129,8 +1129,8 @@
       "ID": "6E448E9E-A974-42EE-A163-F72F7F48526E"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:30.209Z",
-      "checksum": "b153bd05526d44faeb1a03827a2664d4917c8ee0883839b7cb8acbc5dc32d626"
+      "lastModified": "2026-04-10T02:33:50.759Z",
+      "checksum": "81040f06673e9b244cb4836bbcf22a58145358744bb617c61473fcfa09cd8803"
     }
   },
   {
@@ -1140,7 +1140,7 @@
       "ISO3166_2": "GB-DNC",
       "Latitude": 53.5228,
       "Longitude": -1.1285,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-DNC.geojson",
       "CommonAliases": [
         "Doncaster"
       ],
@@ -1150,8 +1150,8 @@
       "ID": "7C109D1F-9788-4644-9086-D1133BAD3231"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:30.220Z",
-      "checksum": "b947b4ee103f084b4b978b31b9840808aea5f4d4dab91eccabb9932ec217916a"
+      "lastModified": "2026-04-10T02:33:50.823Z",
+      "checksum": "b139ef71beb243be6d78fafb08e3fac96b8666343b74e3ea727e7c8f32b42174"
     }
   },
   {
@@ -1161,7 +1161,7 @@
       "ISO3166_2": "GB-DOR",
       "Latitude": 50.7488,
       "Longitude": -2.3445,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-DOR.geojson",
       "CommonAliases": [
         "Dorset"
       ],
@@ -1171,8 +1171,8 @@
       "ID": "67047F42-1BA8-4715-8799-44775E99C223"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:30.233Z",
-      "checksum": "a95fda9dbc1d30906c10e68a7ee6e5b4a04c8c182dab5a29566381ea98754ee7"
+      "lastModified": "2026-04-10T02:33:50.770Z",
+      "checksum": "bf1ba604938d16159536cf5c12219d8d6777df633cbecdfe0e7e6b52a1c7255d"
     }
   },
   {
@@ -1182,7 +1182,7 @@
       "ISO3166_2": "GB-DUD",
       "Latitude": 55.0541,
       "Longitude": -1.595,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-DUD.geojson",
       "CommonAliases": [
         "Dudley"
       ],
@@ -1192,8 +1192,8 @@
       "ID": "E3085844-01E5-4407-8241-E3D1BEE8E60D"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:30.246Z",
-      "checksum": "dac3ba0d3da99872a205e8cbd330ea14e94437c8b4e03deff8b44378d9eb45c1"
+      "lastModified": "2026-04-10T02:33:50.784Z",
+      "checksum": "359a8a19be4d6d1dfc16153eba68676bd51513aa3ecf0542ed5ef7497562fd26"
     }
   },
   {
@@ -1203,7 +1203,7 @@
       "ISO3166_2": "GB-DGY",
       "Latitude": 55.0833,
       "Longitude": -3.8333,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-DGY.geojson",
       "CommonAliases": [
         "Dumfries and Galloway"
       ],
@@ -1213,8 +1213,8 @@
       "ID": "2B9CA0BC-BBDE-4D7E-9267-365A4BC2AAAA"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:30.259Z",
-      "checksum": "105792576c8a7c0af6ee0bb1d138772ef737bdc3fbe99efb434b22407965f59d"
+      "lastModified": "2026-04-10T02:33:50.798Z",
+      "checksum": "3c94f6fd5f48426f501fb076f829929bbfa65d93b020baab582fc27515c4e553"
     }
   },
   {
@@ -1224,7 +1224,7 @@
       "ISO3166_2": "GB-DND",
       "Latitude": 56.462,
       "Longitude": -2.9707,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-DND.geojson",
       "CommonAliases": [
         "Dundee"
       ],
@@ -1234,8 +1234,8 @@
       "ID": "95CC14F5-2737-4AE3-B710-CC8FF158CA79"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:30.271Z",
-      "checksum": "64725670c9d791868926835bd78d799ca810ce3a238170efe9091acd89c2f2dd"
+      "lastModified": "2026-04-10T02:33:50.812Z",
+      "checksum": "0c7b38b79b62bd98bbc96ecdde489afe70522e208a30d0ba0301a313c6f81cfb"
     }
   },
   {
@@ -1245,7 +1245,7 @@
       "ISO3166_2": "GB-DUR",
       "Latitude": 54.6667,
       "Longitude": -1.75,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-DUR.geojson",
       "CommonAliases": [
         "Durham"
       ],
@@ -1255,8 +1255,8 @@
       "ID": "D92EBE72-982F-43A8-8E35-7EDCC0BF3A46"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:30.283Z",
-      "checksum": "faa88a001621b683e8b31c9879e7bb6d0ff9d4fb29fc6061fd7ec374d51bea0b"
+      "lastModified": "2026-04-10T02:33:50.835Z",
+      "checksum": "48820adc92fd23cb904cf0f26d24d11267c760cd55343be73b6b065743970755"
     }
   },
   {
@@ -1266,7 +1266,7 @@
       "ISO3166_2": "GB-EAL",
       "Latitude": 51.5251,
       "Longitude": -0.3143,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-EAL.geojson",
       "CommonAliases": [
         "Ealing"
       ],
@@ -1276,8 +1276,8 @@
       "ID": "51A32A64-7723-4A77-8E16-7B6F3A919643"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:30.318Z",
-      "checksum": "0a8603c1828a2a35e2d19894cfb65289da2b2f11c459355b8bdda2980d6618a4"
+      "lastModified": "2026-04-10T02:33:50.946Z",
+      "checksum": "ae993718d2384373d6bfa41ed010958c7ab0c1ac6e7c6b49c961c948218a1b18"
     }
   },
   {
@@ -1287,7 +1287,7 @@
       "ISO3166_2": "GB-EAY",
       "Latitude": 55.5,
       "Longitude": -4.25,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-EAY.geojson",
       "CommonAliases": [
         "East Ayrshire"
       ],
@@ -1297,8 +1297,8 @@
       "ID": "CBADB964-A633-4A11-BE99-4F1BB3A2460A"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:30.335Z",
-      "checksum": "0fababb004936b3713e7a837c2ace5eebea6174d676a85717bcb20d54bccc677"
+      "lastModified": "2026-04-10T02:33:50.882Z",
+      "checksum": "058ec5b18caac405722b45a402aaee36019fba60e1bbfde7bf411720d54e22cb"
     }
   },
   {
@@ -1308,7 +1308,7 @@
       "ISO3166_2": "GB-EDU",
       "Latitude": 55.9333,
       "Longitude": -4.2,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-EDU.geojson",
       "CommonAliases": [
         "East Dunbartonshire"
       ],
@@ -1318,8 +1318,8 @@
       "ID": "7F4E5968-0D74-48D8-B2CA-14AC92C99674"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:30.352Z",
-      "checksum": "a7bdd0ec246b2e5e7284883a010e8187dec7b98a4bf2083303c884ab4a1ba57c"
+      "lastModified": "2026-04-10T02:33:50.898Z",
+      "checksum": "6c0ba1ca85d48a59027f7d06eb6c9c9a4cef2d864f661ec2181b52c2e9903afb"
     }
   },
   {
@@ -1329,7 +1329,7 @@
       "ISO3166_2": "GB-ELN",
       "Latitude": 55.9158,
       "Longitude": -2.7512,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-ELN.geojson",
       "CommonAliases": [
         "East Lothian"
       ],
@@ -1339,8 +1339,8 @@
       "ID": "866882A9-FC4F-42EA-88E0-013DB5D7D8AB"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:30.366Z",
-      "checksum": "c0070e76d5d4131b3c5efce2531b97c0f656138523e9a8361de7095bd1edc820"
+      "lastModified": "2026-04-10T02:33:50.911Z",
+      "checksum": "b8db850ea594b280f7e658ca62c5cd3128107d4f291c1f3984bd36ccfc9051c2"
     }
   },
   {
@@ -1350,7 +1350,7 @@
       "ISO3166_2": "GB-ERW",
       "Latitude": 55.7495,
       "Longitude": -4.3607,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-ERW.geojson",
       "CommonAliases": [
         "East Renfrewshire"
       ],
@@ -1360,8 +1360,8 @@
       "ID": "7CAF7146-3DB2-451C-8D11-265108BDE816"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:30.380Z",
-      "checksum": "bda0ac2c7dd2ea2c4299588e5b5b1bf316fda405126c25a5006704d4e42e3944"
+      "lastModified": "2026-04-10T02:33:50.922Z",
+      "checksum": "1c4998418df79cf8a03aca001dfc8ea17f519a305075fdefebf63a3d5e18b344"
     }
   },
   {
@@ -1371,7 +1371,7 @@
       "ISO3166_2": "GB-ERY",
       "Latitude": 53.8736,
       "Longitude": -0.5348,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-ERY.geojson",
       "CommonAliases": [
         "East Riding of Yorkshire"
       ],
@@ -1381,8 +1381,8 @@
       "ID": "D683AB0C-2805-4548-8869-B71A35DBE493"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:30.393Z",
-      "checksum": "460ea29bced6f2d58600279fa5d52f35709108dff83399eebe844d5db8145421"
+      "lastModified": "2026-04-10T02:33:50.934Z",
+      "checksum": "51405c3cc017e35de98ca4792dcd9688782117b998dbdd4421e734a688a5af35"
     }
   },
   {
@@ -1392,7 +1392,7 @@
       "ISO3166_2": "GB-ESX",
       "Latitude": 50.9404,
       "Longitude": 0.37,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-ESX.geojson",
       "CommonAliases": [
         "East Sussex"
       ],
@@ -1402,8 +1402,8 @@
       "ID": "B86DFBC4-3D9F-4B2D-9FDD-FE3265C27950"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:30.408Z",
-      "checksum": "b92535c209365ce6b7fd901fe50e1bd536088b40d299f1284b9565816b4e3010"
+      "lastModified": "2026-04-10T02:33:50.960Z",
+      "checksum": "94014740f0385b6203fa7a68a714fb1865c6de2a112251508d179bda7f6d67f5"
     }
   },
   {
@@ -1413,7 +1413,7 @@
       "ISO3166_2": "GB-EDH",
       "Latitude": 55.9533,
       "Longitude": -3.1883,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-EDH.geojson",
       "CommonAliases": [
         "Edinburgh"
       ],
@@ -1423,8 +1423,8 @@
       "ID": "28D04CA2-0AAA-4125-9483-15ECD0EF2BFE"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:30.422Z",
-      "checksum": "ee8323f58652864a81d4b529ec2d1b1948a464146112ab0b5a3df84be9981196"
+      "lastModified": "2026-04-10T02:33:50.973Z",
+      "checksum": "f53982c51bda12c9453b37069880aea1288b7de28133c172ad042d87c6242412"
     }
   },
   {
@@ -1434,7 +1434,7 @@
       "ISO3166_2": "GB-ENF",
       "Latitude": 51.6526,
       "Longitude": -0.0909,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-ENF.geojson",
       "CommonAliases": [
         "Enfield"
       ],
@@ -1444,8 +1444,8 @@
       "ID": "EA7C34E8-9A46-4550-990F-87C75E22252C"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:30.436Z",
-      "checksum": "4b66a983bf24b5935766393c3b375ec1b1435d8d442062723a8be15bb89af389"
+      "lastModified": "2026-04-10T02:33:50.986Z",
+      "checksum": "0afab54e33ddfd8a78b40bc80c09639fdb6b6ec74b11a7a8db556c6a0d91cd32"
     }
   },
   {
@@ -1476,7 +1476,7 @@
       "ISO3166_2": "GB-ESS",
       "Latitude": 51.7705,
       "Longitude": 0.4647,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-ESS.geojson",
       "CommonAliases": [
         "Essex"
       ],
@@ -1486,8 +1486,8 @@
       "ID": "34A8A0BA-9774-4A3B-9256-8411BBECB3CE"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:30.481Z",
-      "checksum": "1406e94acbda37455e2fd9d9697d30b24f62ffe27d179109ceb21e8dd78782eb"
+      "lastModified": "2026-04-10T02:33:51.053Z",
+      "checksum": "7167b979669496b60c5e9851973d68c010ddf4cdb5bf8c7bec7c39ae2f368ba0"
     }
   },
   {
@@ -1497,7 +1497,7 @@
       "ISO3166_2": "GB-FAL",
       "Latitude": 56.0019,
       "Longitude": -3.7839,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-FAL.geojson",
       "CommonAliases": [
         "Falkirk"
       ],
@@ -1507,8 +1507,8 @@
       "ID": "805B47BA-F420-4FCC-A46A-157CCFF73FF0"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:30.495Z",
-      "checksum": "40fc2623baaf32c27b1df854e0894aa9e7b7c154debc9fee4a7582e95505623c"
+      "lastModified": "2026-04-10T02:33:51.078Z",
+      "checksum": "1ebf6fc00bf4ab94c58c38c6aa14e71b825ae07edf9a27d0a4b2f52b2560ce68"
     }
   },
   {
@@ -1539,7 +1539,7 @@
       "ISO3166_2": "GB-FIF",
       "Latitude": 56.3333,
       "Longitude": -3,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-FIF.geojson",
       "CommonAliases": [
         "Fife"
       ],
@@ -1549,8 +1549,8 @@
       "ID": "1D5019FF-A345-4083-9CA7-C94D81F20270"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:30.519Z",
-      "checksum": "b2748073a298e9375a80ebd76aaafed49ba1bcc071e580153b952c0b2a783c19"
+      "lastModified": "2026-04-10T02:33:51.094Z",
+      "checksum": "a947b7217698444bc097bb010d02d2913a3f3580c2455ac5d9e34453d791c233"
     }
   },
   {
@@ -1560,7 +1560,7 @@
       "ISO3166_2": "GB-FLN",
       "Latitude": 53.2165,
       "Longitude": -3.1402,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-FLN.geojson",
       "CommonAliases": [
         "Flintshire"
       ],
@@ -1570,8 +1570,8 @@
       "ID": "9CE3918F-7EE5-4C65-9AAF-B2A48FF97632"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:30.533Z",
-      "checksum": "b12448b3394ea57c06d27679a315197e5f5a70b6ac86cde78b08848da8bd8350"
+      "lastModified": "2026-04-10T02:33:51.108Z",
+      "checksum": "5cb700f0b21c9d79cac9b1952f86928529c98febd19259f389f99f49bba62820"
     }
   },
   {
@@ -1581,7 +1581,7 @@
       "ISO3166_2": "GB-GAT",
       "Latitude": 54.9626,
       "Longitude": -1.6019,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-GAT.geojson",
       "CommonAliases": [
         "Gateshead"
       ],
@@ -1591,8 +1591,8 @@
       "ID": "995A0588-D1BB-47FB-B267-19F0AACCEC06"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:30.545Z",
-      "checksum": "38293c48d1af11950a9b7f093cbcd73c2cc1fe593964d91a5b81f38221230b62"
+      "lastModified": "2026-04-10T02:33:51.120Z",
+      "checksum": "db66a5d6bda25ef531e6ec4ff848d99625fdfc5db3b88cb10af096c0f4e2a4ee"
     }
   },
   {
@@ -1602,7 +1602,7 @@
       "ISO3166_2": "GB-GLG",
       "Latitude": 55.8642,
       "Longitude": -4.2518,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-GLG.geojson",
       "CommonAliases": [
         "Glasgow"
       ],
@@ -1612,8 +1612,8 @@
       "ID": "21977CC3-4F37-4A12-AF25-CB030D23B212"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:30.559Z",
-      "checksum": "4c19a66f17d54650a2914d024826a53350d77b0c521655501f3b59919281eb78"
+      "lastModified": "2026-04-10T02:33:51.133Z",
+      "checksum": "ca2a9dea9cea4400f199ec8018bdaf5148695d6151c9a17b7b1b5fd32334f37c"
     }
   },
   {
@@ -1623,7 +1623,7 @@
       "ISO3166_2": "GB-GLS",
       "Latitude": 51.8333,
       "Longitude": -2.1667,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-GLS.geojson",
       "CommonAliases": [
         "Gloucestershire"
       ],
@@ -1633,8 +1633,8 @@
       "ID": "8AFCDADD-B5BB-45FD-9664-072100F4EA21"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:30.573Z",
-      "checksum": "a5a1614ff14a76308940c60ddde72b14e854f621c3a2547ef1074be95191b8d2"
+      "lastModified": "2026-04-10T02:33:51.146Z",
+      "checksum": "c1a2f689acabe0ade353626de42aae6eb16d86a9888b698371c04e70ce949560"
     }
   },
   {
@@ -1644,7 +1644,7 @@
       "ISO3166_2": "GB-GRE",
       "Latitude": 51.4686,
       "Longitude": 0.0488,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-GRE.geojson",
       "CommonAliases": [
         "Greenwich"
       ],
@@ -1654,8 +1654,8 @@
       "ID": "1714869F-0B27-4609-9CAA-2BF0824B1700"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:30.586Z",
-      "checksum": "a7b2cdab4e5da49cde32df2dd3dd8a68abee1493d86bb93abef9fbe917939929"
+      "lastModified": "2026-04-10T02:33:51.158Z",
+      "checksum": "a7fd9249cc542bd1d3475e267e89ef9ed6f2b60568453b1df88f2584b64a14c4"
     }
   },
   {
@@ -1665,7 +1665,7 @@
       "ISO3166_2": "GB-GWN",
       "Latitude": 52.909,
       "Longitude": -3.8335,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-GWN.geojson",
       "CommonAliases": [
         "Gwynedd"
       ],
@@ -1675,8 +1675,8 @@
       "ID": "7C69286F-C388-4DCE-BB8D-D30C21506B96"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:30.597Z",
-      "checksum": "ca09b23371ff2315998b6b754586274e5c39521a58a0a51472fff8a79a2f8c85"
+      "lastModified": "2026-04-10T02:33:51.168Z",
+      "checksum": "a8d8f441389f26cd6fbd922ef85d5792ed98eb0019b538f017541890e3dbb15e"
     }
   },
   {
@@ -1686,7 +1686,7 @@
       "ISO3166_2": "GB-HCK",
       "Latitude": 51.5489,
       "Longitude": -0.0477,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-HCK.geojson",
       "CommonAliases": [
         "Hackney"
       ],
@@ -1696,8 +1696,8 @@
       "ID": "FA6FFA5D-F9AC-4A91-B09C-A858C4EDDF2E"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:30.628Z",
-      "checksum": "2c4a310177318d69ec4cc742186170ad7e40d881e435daf5d940d12e71ea3726"
+      "lastModified": "2026-04-10T02:33:51.212Z",
+      "checksum": "22fa1f25db6b4aafa343252cf9ae53d733603d0394247541788cfe0f0feb0190"
     }
   },
   {
@@ -1707,7 +1707,7 @@
       "ISO3166_2": "GB-HAL",
       "Latitude": 55.0049,
       "Longitude": -2.0045,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-HAL.geojson",
       "CommonAliases": [
         "Halton"
       ],
@@ -1717,8 +1717,8 @@
       "ID": "B0540BBA-C19D-49F5-BC5E-C5B2F5C7B10F"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:30.640Z",
-      "checksum": "1e6c154d5374d998f50a9333af9a8f9850d5217d613b8a41ee9ddcecc4e90f34"
+      "lastModified": "2026-04-10T02:33:51.227Z",
+      "checksum": "63c6bedd1e1fcac1187fceeba7f92bc94104707dc297e7b374f37c0b150d4d96"
     }
   },
   {
@@ -1728,7 +1728,7 @@
       "ISO3166_2": "GB-HMF",
       "Latitude": 51.499,
       "Longitude": -0.2291,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-HMF.geojson",
       "CommonAliases": [
         "Hammersmith and Fulham"
       ],
@@ -1738,8 +1738,8 @@
       "ID": "68F36C0E-2780-4136-B2D1-427FE7B32929"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:30.653Z",
-      "checksum": "5b886f9bed5993ecfd0a49f71209344d391ad98fa18a48ffe20fe29a732440b3"
+      "lastModified": "2026-04-10T02:33:51.239Z",
+      "checksum": "ea71f4a071cc1e7e920fdcc0e3ab33a216db45c13cc7bc7c21b6164a2b876aec"
     }
   },
   {
@@ -1749,7 +1749,7 @@
       "ISO3166_2": "GB-HAM",
       "Latitude": 51.045,
       "Longitude": -1.2433,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-HAM.geojson",
       "CommonAliases": [
         "Hampshire"
       ],
@@ -1759,8 +1759,8 @@
       "ID": "D250048F-A0B1-4BA1-BEE4-02084841C201"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:30.665Z",
-      "checksum": "09a637f27decdb8a507318de934992ed90871ccf116411a965a62c6007c6e946"
+      "lastModified": "2026-04-10T02:33:51.251Z",
+      "checksum": "00476a0577d4076dbc3e869c48d49d6a3ae0c31419f91f65ba1184fcd619e77e"
     }
   },
   {
@@ -1770,7 +1770,7 @@
       "ISO3166_2": "GB-HRY",
       "Latitude": 51.5906,
       "Longitude": -0.111,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-HRY.geojson",
       "CommonAliases": [
         "Haringey"
       ],
@@ -1780,8 +1780,8 @@
       "ID": "35C6DEA7-0558-443E-BFD0-7E001FEC26C3"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:30.676Z",
-      "checksum": "10b7660784b782aaeb2cb17faa6216410de91095f48ff9f21ce8706a3df91d13"
+      "lastModified": "2026-04-10T02:33:51.323Z",
+      "checksum": "047b8cca0f752cc5cc309d70dfb1ccfe660c764496a813cb572b30f2baec199b"
     }
   },
   {
@@ -1791,7 +1791,7 @@
       "ISO3166_2": "GB-HRW",
       "Latitude": 51.5882,
       "Longitude": -0.3423,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-HRW.geojson",
       "CommonAliases": [
         "Harrow"
       ],
@@ -1801,8 +1801,8 @@
       "ID": "023B1B2F-010F-4ED7-BEFF-4B08C889A28D"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:30.689Z",
-      "checksum": "0c030daa269be7daf5026d69ee8a5162d91ec37bf5e62144de9454d9c0e377db"
+      "lastModified": "2026-04-10T02:33:51.262Z",
+      "checksum": "a74077fe6b5beb47fed1a73dabedf459dfd23cb6a2d37c48d481266fb9c3a9d7"
     }
   },
   {
@@ -1812,7 +1812,7 @@
       "ISO3166_2": "GB-HPL",
       "Latitude": 54.6917,
       "Longitude": -1.2129,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-HPL.geojson",
       "CommonAliases": [
         "Hartlepool"
       ],
@@ -1822,8 +1822,8 @@
       "ID": "B9D47871-6EC8-4165-AD46-71DAF8B320BC"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:30.702Z",
-      "checksum": "7cb56c90e791d1071e71939d93e258747e19ca05336f5ecd0adb2b340aad5924"
+      "lastModified": "2026-04-10T02:33:51.274Z",
+      "checksum": "98d7b1a308b9aedc5f3a4ab407241497ee2b3b6726d8c525ddadf066d5c1017a"
     }
   },
   {
@@ -1833,7 +1833,7 @@
       "ISO3166_2": "GB-HAV",
       "Latitude": 51.5579,
       "Longitude": 0.2498,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-HAV.geojson",
       "CommonAliases": [
         "Havering"
       ],
@@ -1843,8 +1843,8 @@
       "ID": "61DB00FE-430B-45F6-AC60-CE3F82D48002"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:30.716Z",
-      "checksum": "c044cacb7f81b920fd685ef79cade2fd0dd82941f5c30fe2b1316a66d84b7d68"
+      "lastModified": "2026-04-10T02:33:51.286Z",
+      "checksum": "423a12b5406c6a02a5cf0663426fd6548b4d9db81258eac2b8a340327994cfdf"
     }
   },
   {
@@ -1854,7 +1854,7 @@
       "ISO3166_2": "GB-HEF",
       "Latitude": 52.0833,
       "Longitude": -2.75,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-HEF.geojson",
       "CommonAliases": [
         "Herefordshire"
       ],
@@ -1864,8 +1864,8 @@
       "ID": "FA1E9D4B-750A-48F0-9554-44437B7C2F1E"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:30.732Z",
-      "checksum": "49843c023fd65e77c471687b05ccb59b2723ede8cb5889c5b6e862ea799318a5"
+      "lastModified": "2026-04-10T02:33:51.299Z",
+      "checksum": "1143513fd74555c14ea847ea373850725f3053cb86ee4a2e196bd7e88b74cfe7"
     }
   },
   {
@@ -1875,7 +1875,7 @@
       "ISO3166_2": "GB-HRT",
       "Latitude": 51.8401,
       "Longitude": -0.0979,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-HRT.geojson",
       "CommonAliases": [
         "Hertfordshire"
       ],
@@ -1885,8 +1885,8 @@
       "ID": "EF20CB87-CF36-41BF-A232-D5E68F70997F"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:30.744Z",
-      "checksum": "723f01d4542a4c95904e6e40beb0e8c936bcbb8d59359c57d79ef6f6d142fa16"
+      "lastModified": "2026-04-10T02:33:51.312Z",
+      "checksum": "adef4116b8b796d59f4d54d53475d1f105f358d97bfebd470894b1ffceddc18c"
     }
   },
   {
@@ -1896,7 +1896,7 @@
       "ISO3166_2": "GB-HLD",
       "Latitude": 57.5066,
       "Longitude": -5.0038,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-HLD.geojson",
       "CommonAliases": [
         "Highland"
       ],
@@ -1906,8 +1906,8 @@
       "ID": "36C4691A-DCA7-48C1-A26D-7AA8B96E6B32"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:30.770Z",
-      "checksum": "c39092c6e826993ca889178c42103d4e5c80e8c6ee4f55f63e7d1c1fb07335cb"
+      "lastModified": "2026-04-10T02:33:51.370Z",
+      "checksum": "a9f519ce27d6e3c5fca68e3cd43a77391277224b263432341e94095c3e39fd0b"
     }
   },
   {
@@ -1917,7 +1917,7 @@
       "ISO3166_2": "GB-HIL",
       "Latitude": 51.5352,
       "Longitude": -0.4481,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-HIL.geojson",
       "CommonAliases": [
         "Hillingdon"
       ],
@@ -1927,8 +1927,8 @@
       "ID": "9873944B-6EB0-4088-986D-C21A3F5C9E99"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:30.785Z",
-      "checksum": "213d4dde5e04061d617f6faac0af193701ea9a6cb3023d25a221d14e21eed1a7"
+      "lastModified": "2026-04-10T02:33:51.382Z",
+      "checksum": "3b2b53297b046a9d0f7a9cef6017fc53e7b6418d1ab2922e1594605d1a8e282e"
     }
   },
   {
@@ -1938,7 +1938,7 @@
       "ISO3166_2": "GB-HNS",
       "Latitude": 51.4617,
       "Longitude": -0.3801,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-HNS.geojson",
       "CommonAliases": [
         "Hounslow"
       ],
@@ -1948,8 +1948,8 @@
       "ID": "C3EFA29E-A4C2-4EDC-8E36-B1000D0A05C4"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:30.797Z",
-      "checksum": "f4e90946916ec6249d8369acdea20e66aa3ff3e9c8b384d908c2d224af31a5e9"
+      "lastModified": "2026-04-10T02:33:51.396Z",
+      "checksum": "118d009fe3923cc759a9e70478177ab601bee932ba2432e6963ccfa84a52bc74"
     }
   },
   {
@@ -1959,7 +1959,7 @@
       "ISO3166_2": "GB-IVC",
       "Latitude": 55.9,
       "Longitude": -4.75,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-IVC.geojson",
       "CommonAliases": [
         "Inverclyde"
       ],
@@ -1969,8 +1969,8 @@
       "ID": "9BB4222B-08DC-4554-AD4E-C66285687A20"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:30.812Z",
-      "checksum": "ecc65b5f10b1f27b2f5892ed7ca44f074efe4811cd5e1e099f56e3fc56f4e516"
+      "lastModified": "2026-04-10T02:33:51.407Z",
+      "checksum": "16d56698354328aff93b2bfb7201d7ddd9407fff0dba587eea4e0aab7ca25154"
     }
   },
   {
@@ -1980,7 +1980,7 @@
       "ISO3166_2": "GB-AGY",
       "Latitude": 53.2807,
       "Longitude": -4.69,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-AGY.geojson",
       "CommonAliases": [
         "Isle of Anglesey"
       ],
@@ -1990,8 +1990,8 @@
       "ID": "768D1717-1791-4F87-9B34-266678368D6D"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:30.826Z",
-      "checksum": "081ad11cf7b9dee879ff6ab0c88c1f7fdd3313d3714a9be3d9e0933b5f41bfbe"
+      "lastModified": "2026-04-10T02:33:51.420Z",
+      "checksum": "b7f0df9436f806815af0cc75928869852a1361a19bdfc07a0334356266cacec6"
     }
   },
   {
@@ -2001,7 +2001,7 @@
       "ISO3166_2": "GB-IOW",
       "Latitude": 50.671,
       "Longitude": -1.3327,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-IOW.geojson",
       "CommonAliases": [
         "Isle of Wight"
       ],
@@ -2011,8 +2011,8 @@
       "ID": "59A2A090-B7A4-47DE-A8E1-164EAFC66DBD"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:30.839Z",
-      "checksum": "282bf0ac7e867e63bfa48dc6a3143c895b43ff584b06486381b7184d54502f03"
+      "lastModified": "2026-04-10T02:33:51.433Z",
+      "checksum": "c1d4b0590194d79afaef9c0916b973b82704530f66768e5380748fd1368a8930"
     }
   },
   {
@@ -2022,7 +2022,7 @@
       "ISO3166_2": "GB-IOS",
       "Latitude": 49.9203,
       "Longitude": -6.2929,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-IOS.geojson",
       "CommonAliases": [
         "Isles of Scilly"
       ],
@@ -2032,8 +2032,8 @@
       "ID": "CD73D62D-5096-42F3-AB74-551101969E0E"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:30.851Z",
-      "checksum": "1dd4d32b02936b70a307af8047d822ac47ad5587ae06e4fd3eb139324cc56266"
+      "lastModified": "2026-04-10T02:33:51.444Z",
+      "checksum": "acb58ecf29dd2b317e61b31ed120997e4c4447ec8e12d3999f97e92e4d32c0d3"
     }
   },
   {
@@ -2043,7 +2043,7 @@
       "ISO3166_2": "GB-ISL",
       "Latitude": 51.5465,
       "Longitude": -0.1058,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-ISL.geojson",
       "CommonAliases": [
         "Islington"
       ],
@@ -2053,8 +2053,8 @@
       "ID": "15D6A460-ACAB-4C39-8F8D-B2B92C5BA6AF"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:30.865Z",
-      "checksum": "92b7ef978462e86703d3d177e5a2370b34fe0d7b319c7a7d3c61dc57e1d0ca05"
+      "lastModified": "2026-04-10T02:33:51.457Z",
+      "checksum": "56029f27de64ce9a4d8e6c55f62e74b103a93dfb50c39f2c20e63d86e2444b28"
     }
   },
   {
@@ -2064,7 +2064,7 @@
       "ISO3166_2": "GB-KEC",
       "Latitude": 51.4991,
       "Longitude": -0.1938,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-KEC.geojson",
       "CommonAliases": [
         "Kensington and Chelsea"
       ],
@@ -2074,8 +2074,8 @@
       "ID": "A868D868-C82D-4D48-B11A-5F74FE7A3508"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:30.878Z",
-      "checksum": "1422926848e002b3e5c20b64d3fea149eaa5cfaf411ec6a132589e5091d74863"
+      "lastModified": "2026-04-10T02:33:51.470Z",
+      "checksum": "b9b83128c3fd0d8d01bf6724abfad4dbc8f1e04b7f432c41ffa4738c289e3d94"
     }
   },
   {
@@ -2085,7 +2085,7 @@
       "ISO3166_2": "GB-KEN",
       "Latitude": 51.2071,
       "Longitude": 0.721,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-KEN.geojson",
       "CommonAliases": [
         "Kent"
       ],
@@ -2095,8 +2095,8 @@
       "ID": "97933FDE-8192-4459-8BEA-35A422C04317"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:30.890Z",
-      "checksum": "8c59065a513e79570dc70b5ae70d47f25ce4f6e276696488041b682cf5f948b5"
+      "lastModified": "2026-04-10T02:33:51.482Z",
+      "checksum": "05a7e9c50f86e9c31f21dcf996754c3ee13626180de08204a7a67daa91b203da"
     }
   },
   {
@@ -2106,7 +2106,7 @@
       "ISO3166_2": "GB-KTT",
       "Latitude": 51.3818,
       "Longitude": -0.277,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-KTT.geojson",
       "CommonAliases": [
         "Kingston upon Thames"
       ],
@@ -2116,8 +2116,8 @@
       "ID": "5D921DE3-7C69-4A56-96B4-AD0D6D76F11C"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:30.920Z",
-      "checksum": "c216376da4d070b8450e0dcf632c58204aca1ae52286a425f27ef8751fa9415f"
+      "lastModified": "2026-04-10T02:33:51.538Z",
+      "checksum": "c79cc4bcfbaf8e9fb43dbf3aadcab9798cb80e3bd6ac34d57590d8861100ad1d"
     }
   },
   {
@@ -2127,7 +2127,7 @@
       "ISO3166_2": "GB-KIR",
       "Latitude": 53.6423,
       "Longitude": -1.7809,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-KIR.geojson",
       "CommonAliases": [
         "Kirklees"
       ],
@@ -2137,8 +2137,8 @@
       "ID": "1E6C483E-127A-4B36-AE3D-E55127F2B5CE"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:30.932Z",
-      "checksum": "4e58b5dd6fd6c1fac6255b2aa5838d18e65f9b0ef2aca4bc7927a083a4d6ad70"
+      "lastModified": "2026-04-10T02:33:51.552Z",
+      "checksum": "d9237dbe5816f2e1276d12d233684e42f9a6f8f1c2a7a9a696ed13754cdba113"
     }
   },
   {
@@ -2148,7 +2148,7 @@
       "ISO3166_2": "GB-KWL",
       "Latitude": 53.4546,
       "Longitude": -2.8529,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-KWL.geojson",
       "CommonAliases": [
         "Knowsley"
       ],
@@ -2158,8 +2158,8 @@
       "ID": "DA6C5B1E-AAEF-42E2-A7A2-CDE80AF598DE"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:30.946Z",
-      "checksum": "e911715bca3fcff94ab8fa40cf73fd719923ad09706adf1782fb1816481f8a0c"
+      "lastModified": "2026-04-10T02:33:51.566Z",
+      "checksum": "e67951cd42e30ce699c423d1b7bae51f2db77e51410f2572519de178c03b8c10"
     }
   },
   {
@@ -2169,7 +2169,7 @@
       "ISO3166_2": "GB-LBH",
       "Latitude": 51.4952,
       "Longitude": -0.1163,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-LBH.geojson",
       "CommonAliases": [
         "Lambeth"
       ],
@@ -2179,8 +2179,8 @@
       "ID": "64777E9B-5B54-436A-A4CF-65DB8B2CF2F0"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:30.958Z",
-      "checksum": "bf2430aabcb404d94230591a71f5b5b6a1edb3a72d88f15b151b227116ff9b5a"
+      "lastModified": "2026-04-10T02:33:51.578Z",
+      "checksum": "0ea3ea9c3e06c987cecdc4d1772d968355b9bb70548d67803cebdc8125d6204c"
     }
   },
   {
@@ -2190,7 +2190,7 @@
       "ISO3166_2": "GB-LAN",
       "Latitude": 53.8612,
       "Longitude": -2.5651,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-LAN.geojson",
       "CommonAliases": [
         "Lancashire"
       ],
@@ -2200,8 +2200,8 @@
       "ID": "5BEDCD84-B4CD-45B9-8810-13AE5FA2F787"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:30.972Z",
-      "checksum": "162792ca1012b376f98c2e0ae4e358ec89a9e6b4c2ccebca742616c1bd6db1af"
+      "lastModified": "2026-04-10T02:33:51.591Z",
+      "checksum": "3e6608c8695cbb2ecb4bfa02120814e1fddcc9fc70c40262829d5446b25474b0"
     }
   },
   {
@@ -2211,7 +2211,7 @@
       "ISO3166_2": "GB-LDS",
       "Latitude": 53.8008,
       "Longitude": -1.5491,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-LDS.geojson",
       "CommonAliases": [
         "Leeds"
       ],
@@ -2221,8 +2221,8 @@
       "ID": "039C440B-EC3C-4D9B-AD9E-37DFDC182A66"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:30.986Z",
-      "checksum": "69b26580913600631dfa29dabe4395b76dbf328fb32f552426ea2f8e618d5694"
+      "lastModified": "2026-04-10T02:33:51.605Z",
+      "checksum": "21d3d4b7afc3dca763667da31a178c31b8bee856d5c9b8d808a587cd205639d3"
     }
   },
   {
@@ -2232,7 +2232,7 @@
       "ISO3166_2": "GB-LCE",
       "Latitude": 52.6369,
       "Longitude": -1.1398,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-LCE.geojson",
       "CommonAliases": [
         "Leicester"
       ],
@@ -2242,8 +2242,8 @@
       "ID": "EA15E947-4D47-4A0B-A351-A9EF784E62B6"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:30.999Z",
-      "checksum": "80cd9ec2b8de637615308d3d2d50a54c233244452d3727931bf8852bafdcdfc2"
+      "lastModified": "2026-04-10T02:33:51.619Z",
+      "checksum": "4e17a02cb8b02ac7f6aa04232155ca80c5eaacf1945c29f8001e61d1d173652e"
     }
   },
   {
@@ -2253,7 +2253,7 @@
       "ISO3166_2": "GB-LEC",
       "Latitude": 52.6849,
       "Longitude": -1.1848,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-LEC.geojson",
       "CommonAliases": [
         "Leicestershire"
       ],
@@ -2263,8 +2263,8 @@
       "ID": "B1EFE5F6-927F-4AC2-82C2-3109863879F1"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:31.012Z",
-      "checksum": "2b6663ee8aa2ba1b6019d6f9e6c36ffa21e0482f23e6d1fe4d6fab307af7af45"
+      "lastModified": "2026-04-10T02:33:51.634Z",
+      "checksum": "c64f6e15e029c15f38a49cac4a58a12c3668a47ac898430427ac152a10a48474"
     }
   },
   {
@@ -2274,7 +2274,7 @@
       "ISO3166_2": "GB-LEW",
       "Latitude": 51.4535,
       "Longitude": -0.0125,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-LEW.geojson",
       "CommonAliases": [
         "Lewisham"
       ],
@@ -2284,8 +2284,8 @@
       "ID": "2C663E98-8A3B-4CB3-9A04-4BD9CB0F4780"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:31.026Z",
-      "checksum": "5adbd456a8d35ae298cbd2248a6c7ef45339990cc4da04db7a049f39b8449780"
+      "lastModified": "2026-04-10T02:33:51.648Z",
+      "checksum": "dc355b8dbd79a53ecaecc79e2b51259f3151db85edba154a60d187520c311970"
     }
   },
   {
@@ -2295,7 +2295,7 @@
       "ISO3166_2": "GB-LIN",
       "Latitude": 53.1282,
       "Longitude": -0.1902,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-LIN.geojson",
       "CommonAliases": [
         "Lincolnshire"
       ],
@@ -2305,8 +2305,8 @@
       "ID": "476ECF3B-EAF9-4C9E-B291-7E7D3E8B3E37"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:31.038Z",
-      "checksum": "8498eaab80ebed4c833cf62ec7af9def6efb79870f46067ca4fed912c14ead25"
+      "lastModified": "2026-04-10T02:33:51.662Z",
+      "checksum": "1ab39a5312ba3145edbae054c3b0c7f29d61c6944dd02b87666e7a20b3027909"
     }
   },
   {
@@ -2337,7 +2337,7 @@
       "ISO3166_2": "GB-LIV",
       "Latitude": 53.4072,
       "Longitude": -2.9917,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-LIV.geojson",
       "CommonAliases": [
         "Liverpool"
       ],
@@ -2347,8 +2347,8 @@
       "ID": "EC6B4581-0062-4CBB-85D8-F0AF019A607A"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:31.077Z",
-      "checksum": "a30d55e55744a9f4e4106a9e51b3e21bd0241e1bb7c9f5eae25bee2a1a8c2cae"
+      "lastModified": "2026-04-10T02:33:51.709Z",
+      "checksum": "113c9669dc88a7923892f73b82de5dc23bb0aa4f5950542b1fff337ef57e2b08"
     }
   },
   {
@@ -2358,7 +2358,7 @@
       "ISO3166_2": "GB-LND",
       "Latitude": 51.5123,
       "Longitude": -0.091,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-LND.geojson",
       "CommonAliases": [
         "London"
       ],
@@ -2368,8 +2368,8 @@
       "ID": "C0A36E98-4E0B-489C-9D74-340E96D30E7B"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:31.088Z",
-      "checksum": "da34bc927818691961ca52578652d5b8da39fc8c5f3d01fa78b7142fa3206445"
+      "lastModified": "2026-04-10T02:33:51.721Z",
+      "checksum": "badff8b5d917e8b6387590efb0e5be3cbbf7a0dc60bc44e2145f7e6fce950e16"
     }
   },
   {
@@ -2379,7 +2379,7 @@
       "ISO3166_2": "GB-LUT",
       "Latitude": 51.8911,
       "Longitude": -0.5103,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-LUT.geojson",
       "CommonAliases": [
         "Luton"
       ],
@@ -2389,8 +2389,8 @@
       "ID": "78A36CB8-20C7-4AEA-8DE5-5832C5CAA368"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:31.100Z",
-      "checksum": "458240b3a19231a4f85db5056a751b66a67eaeae161d28594aefd0b41f7c56e6"
+      "lastModified": "2026-04-10T02:33:51.734Z",
+      "checksum": "43a9da1e9efb8d1dcb682372d403c778a89589fc0c1431316c84895589d29fc5"
     }
   },
   {
@@ -2400,7 +2400,7 @@
       "ISO3166_2": "GB-MAN",
       "Latitude": 53.4808,
       "Longitude": -2.2426,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-MAN.geojson",
       "CommonAliases": [
         "Manchester"
       ],
@@ -2410,8 +2410,8 @@
       "ID": "C902E0C0-3EAC-4C52-AB7B-6FA357488990"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:31.113Z",
-      "checksum": "6fc4251811d24224a4a7d0b5d9fa7025dbbe9ddd13b5f9af9c6e7261678a4410"
+      "lastModified": "2026-04-10T02:33:51.745Z",
+      "checksum": "1fcbe68b204d47206b783cc5a2492b7db36cffd302510960af8cb42c1602357c"
     }
   },
   {
@@ -2421,7 +2421,7 @@
       "ISO3166_2": "GB-MDW",
       "Latitude": 51.4157,
       "Longitude": 0.5687,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-MDW.geojson",
       "CommonAliases": [
         "Medway"
       ],
@@ -2431,8 +2431,8 @@
       "ID": "03B5940B-8924-43CB-A9B1-AC325F4ABF69"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:31.128Z",
-      "checksum": "bdc8cf976c83df108c59d44c5e38d0d2b8254195f1be5ae4239772f06f12d5cf"
+      "lastModified": "2026-04-10T02:33:51.758Z",
+      "checksum": "f8225c58570a5046c25a98490c84682abd538648071fcbf7247ae5b835dd744d"
     }
   },
   {
@@ -2442,7 +2442,7 @@
       "ISO3166_2": "GB-MTY",
       "Latitude": 51.7467,
       "Longitude": -3.3813,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-MTY.geojson",
       "CommonAliases": [
         "Merthyr Tydfil"
       ],
@@ -2452,8 +2452,8 @@
       "ID": "F026F8AE-600C-4AC4-9184-E183A09C7094"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:31.141Z",
-      "checksum": "3567cebfa9f9a87579f5288d1141885a6cd47387e55bcf6c75a99711529915b7"
+      "lastModified": "2026-04-10T02:33:51.772Z",
+      "checksum": "29900c35074a9c1b74eecb11a9928b3dc5795072154b079a81e51d5f75ed2a3c"
     }
   },
   {
@@ -2463,7 +2463,7 @@
       "ISO3166_2": "GB-MRT",
       "Latitude": 51.4109,
       "Longitude": -0.1881,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-MRT.geojson",
       "CommonAliases": [
         "Merton"
       ],
@@ -2473,8 +2473,8 @@
       "ID": "77458A49-4B49-48E8-BC6E-BAB9058BD62F"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:31.155Z",
-      "checksum": "a836e48150fa2620cfa6838575a37971393e525ca6bbe4c2a47ccd8b8f89c1e7"
+      "lastModified": "2026-04-10T02:33:51.786Z",
+      "checksum": "86626bc62d8d10a1b08b918a561759bc62eda1b42ce4c11b2db491950daddcf1"
     }
   },
   {
@@ -2526,7 +2526,7 @@
       "ISO3166_2": "GB-MDB",
       "Latitude": 54.5742,
       "Longitude": -1.235,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-MDB.geojson",
       "CommonAliases": [
         "Middlesbrough"
       ],
@@ -2536,8 +2536,8 @@
       "ID": "89444F5A-96CA-470C-A505-F4D29C4EF72A"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:31.207Z",
-      "checksum": "801b6e21a9da932a1ffd3daa0dbf2bb252195d5075b28e0b1178b163b122c560"
+      "lastModified": "2026-04-10T02:33:51.832Z",
+      "checksum": "53eeccd1a2e665d0d726131305f04de93296420da43788afaaf54b5075f197c4"
     }
   },
   {
@@ -2547,7 +2547,7 @@
       "ISO3166_2": "GB-MLN",
       "Latitude": 55.8333,
       "Longitude": -3.0833,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-MLN.geojson",
       "CommonAliases": [
         "Midlothian"
       ],
@@ -2557,8 +2557,8 @@
       "ID": "FF4C1DE4-D11B-4222-BA8F-99EC47F97AFC"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:31.221Z",
-      "checksum": "ae804447d4c4bcac7d10e89ba5c579937e9eb6d613d0fc61fafb843cce80d193"
+      "lastModified": "2026-04-10T02:33:51.845Z",
+      "checksum": "958c0363d26a54546afe7983d9631fa1449ad3db3f3fca8847501cafc19022ff"
     }
   },
   {
@@ -2568,7 +2568,7 @@
       "ISO3166_2": "GB-MIK",
       "Latitude": 52.0407,
       "Longitude": -0.7594,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-MIK.geojson",
       "CommonAliases": [
         "Milton Keynes"
       ],
@@ -2578,8 +2578,8 @@
       "ID": "988D2729-7D1E-4BA0-88F4-16BBDF329BF2"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:31.234Z",
-      "checksum": "4a0ced979d9d049758c406d6335349fa941442bf88dc14c5f9d4b48ab2e2c8e5"
+      "lastModified": "2026-04-10T02:33:51.859Z",
+      "checksum": "0d6d718e5adc088338df48b13090e963923e2ac1054f8b63b98ca36480bfa4e8"
     }
   },
   {
@@ -2589,7 +2589,7 @@
       "ISO3166_2": "GB-MON",
       "Latitude": 51.7501,
       "Longitude": -2.8333,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-MON.geojson",
       "CommonAliases": [
         "Monmouthshire"
       ],
@@ -2599,8 +2599,8 @@
       "ID": "9619AF3C-E13A-41C2-BBF7-A096B7EE391B"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:31.246Z",
-      "checksum": "01fa66375c73d900613a7605a7ffccbcd38ee9cca6680fc6ecb00046fe58a751"
+      "lastModified": "2026-04-10T02:33:51.872Z",
+      "checksum": "8a46fa4ea2c83b46da043b19da941ccd4ff522032a6d19da51e9129bf7a3a741"
     }
   },
   {
@@ -2610,7 +2610,7 @@
       "ISO3166_2": "GB-MRY",
       "Latitude": 57.4167,
       "Longitude": -3.25,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-MRY.geojson",
       "CommonAliases": [
         "Moray"
       ],
@@ -2620,8 +2620,8 @@
       "ID": "B111C4F8-EF37-4248-ADF7-E63EC154163F"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:31.257Z",
-      "checksum": "7af130c78dbbb99cdf80a5ca3163bd8d7c769245b6bf597838dd44721c29bbd9"
+      "lastModified": "2026-04-10T02:33:51.885Z",
+      "checksum": "9ac26b3ce3e84f754b51f7e50e7193648e5084512f518a5db773a217e6aab3de"
     }
   },
   {
@@ -2631,7 +2631,7 @@
       "ISO3166_2": "GB-NTL",
       "Latitude": 51.669,
       "Longitude": -3.7218,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-NTL.geojson",
       "CommonAliases": [
         "Neath Port Talbot"
       ],
@@ -2641,8 +2641,8 @@
       "ID": "2179AC52-C335-4CD5-99C3-C088FDF78221"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:31.270Z",
-      "checksum": "44a83bccd7f3cb8c01c845add1899533116c7e21b3edb606cd2cb48e7bb50e0b"
+      "lastModified": "2026-04-10T02:33:51.897Z",
+      "checksum": "d3c36dda23b6408230103ca8097fc8f0c18e32b55a4f281bae2fcb8813a15474"
     }
   },
   {
@@ -2652,7 +2652,7 @@
       "ISO3166_2": "GB-NET",
       "Latitude": 54.9783,
       "Longitude": -1.6178,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-NET.geojson",
       "CommonAliases": [
         "Newcastle upon Tyne"
       ],
@@ -2662,8 +2662,8 @@
       "ID": "AD873175-6CE0-4261-B02E-975FB1B342BA"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:31.283Z",
-      "checksum": "21eb08edcde726c63b315803f3720d1b983af27ac6994405e4c7a6680657b3a4"
+      "lastModified": "2026-04-10T02:33:51.909Z",
+      "checksum": "9fa869337327a2e9a45d708f4753e511ca3e9b1b0687ad55c720d3f47f1f4e38"
     }
   },
   {
@@ -2673,7 +2673,7 @@
       "ISO3166_2": "GB-NWM",
       "Latitude": 51.5255,
       "Longitude": 0.0352,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-NWM.geojson",
       "CommonAliases": [
         "Newham"
       ],
@@ -2683,8 +2683,8 @@
       "ID": "046F25FE-A158-4838-94C7-AF97A729EC53"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:31.296Z",
-      "checksum": "567b0e7f917cd1e405e7a53bccf89b2307bd252c8cf6466314a1794fb152ebc1"
+      "lastModified": "2026-04-10T02:33:51.922Z",
+      "checksum": "eff69914c37d6d54b451cbf57851d9ece7369a4f81e2e659d2d4b1c0fbac481d"
     }
   },
   {
@@ -2694,7 +2694,7 @@
       "ISO3166_2": "GB-NWP",
       "Latitude": 52.7689,
       "Longitude": -2.3784,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-NWP.geojson",
       "CommonAliases": [
         "Newport"
       ],
@@ -2704,8 +2704,8 @@
       "ID": "1B90194E-C067-49F7-9258-28B38D648D16"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:31.311Z",
-      "checksum": "947cac414c5e6a13c82db8707fd087759697ce62ca186221c324a3a52105835d"
+      "lastModified": "2026-04-10T02:33:51.934Z",
+      "checksum": "dc891cdc3abd362de6a766f1729873e3d9a2835b675f82eb85092283e06815c3"
     }
   },
   {
@@ -2736,7 +2736,7 @@
       "ISO3166_2": "GB-NFK",
       "Latitude": 52.6667,
       "Longitude": 1,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-NFK.geojson",
       "CommonAliases": [
         "Norfolk"
       ],
@@ -2746,8 +2746,8 @@
       "ID": "252422B4-CF1B-4F93-904A-51F3E1616E40"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:31.356Z",
-      "checksum": "f0f96be18daf8276bf29635d66b903c0c737fe5769815d09f3b22746abf14fcf"
+      "lastModified": "2026-04-10T02:33:52.035Z",
+      "checksum": "e004e2d51d5efa3aa4021c9861ec20c50ef0928b1e0cb0036896a8af434cb0fd"
     }
   },
   {
@@ -2757,7 +2757,7 @@
       "ISO3166_2": "GB-NAY",
       "Latitude": 55.7279,
       "Longitude": -4.7272,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-NAY.geojson",
       "CommonAliases": [
         "North Ayrshire"
       ],
@@ -2767,8 +2767,8 @@
       "ID": "65B52CAE-EB21-49D5-A41F-A54DFD44FA57"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:31.372Z",
-      "checksum": "963161195de9f2189cc60a0f2e557d3df7f4192d3bdb91c68ee608b5d4e825f2"
+      "lastModified": "2026-04-10T02:33:51.979Z",
+      "checksum": "94aa7df21b90f2afea46e21583458b069f76d218be7e48e68a1ab682ccddb0cf"
     }
   },
   {
@@ -2778,7 +2778,7 @@
       "ISO3166_2": "GB-NEL",
       "Latitude": 53.5368,
       "Longitude": -0.0937,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-NEL.geojson",
       "CommonAliases": [
         "North East Lincolnshire"
       ],
@@ -2788,8 +2788,8 @@
       "ID": "094F16EB-C02B-4323-B209-900896B98820"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:31.384Z",
-      "checksum": "5a2339f9d35c98506ae34ac7abdc69a937f83da946b7ac43ed6d387c3fb17ce4"
+      "lastModified": "2026-04-10T02:33:52.065Z",
+      "checksum": "bac62ccb42fd792d8c926d0fe130570bdb6b188889765dc0e87fc0fd97f481a8"
     }
   },
   {
@@ -2799,7 +2799,7 @@
       "ISO3166_2": "GB-NLK",
       "Latitude": 55.8831,
       "Longitude": -3.9462,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-NLK.geojson",
       "CommonAliases": [
         "North Lanarkshire"
       ],
@@ -2809,8 +2809,8 @@
       "ID": "D18FCC9E-1512-45D1-95FC-3555807E63DD"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:31.398Z",
-      "checksum": "1099aab5c1a75f74666c48899ac5a3191733050e4c9a583b66b0cec59cb27d9e"
+      "lastModified": "2026-04-10T02:33:51.991Z",
+      "checksum": "dea457e9c86595657b224585d445baaccbafdf0d9f73eb19a2843906e8f628b5"
     }
   },
   {
@@ -2820,7 +2820,7 @@
       "ISO3166_2": "GB-NLN",
       "Latitude": 53.5897,
       "Longitude": -0.6023,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-NLN.geojson",
       "CommonAliases": [
         "North Lincolnshire"
       ],
@@ -2830,8 +2830,8 @@
       "ID": "CD02DD4C-33B9-4F43-92D5-6D38C48D7BEB"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:31.411Z",
-      "checksum": "c2ad6cbeba08f706c56db495680fc467220e9875f324e89abf3f1f984ef968db"
+      "lastModified": "2026-04-10T02:33:52.004Z",
+      "checksum": "967ba0c73d0bc5b26a1ad85ddca19f3d1824255f2dcc6187cec841b2ec79b9ba"
     }
   },
   {
@@ -2862,7 +2862,7 @@
       "ISO3166_2": "GB-NSM",
       "Latitude": 51.3966,
       "Longitude": -2.7691,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-NSM.geojson",
       "CommonAliases": [
         "North Somerset"
       ],
@@ -2872,8 +2872,8 @@
       "ID": "12EB8566-B117-41A8-A100-0D5A749132A5"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:31.447Z",
-      "checksum": "d7df79cd7b2695b44c68e3312ecb5924ab2cf9247ae4b5b3ce2a720fa6d9507f"
+      "lastModified": "2026-04-10T02:33:52.020Z",
+      "checksum": "614d856d8d9d26e42264847c27d5f229f7c6f06dd6915ca97f830cb0a25b47b7"
     }
   },
   {
@@ -2883,7 +2883,7 @@
       "ISO3166_2": "GB-NTY",
       "Latitude": 55.0298,
       "Longitude": -1.5083,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-NTY.geojson",
       "CommonAliases": [
         "North Tyneside"
       ],
@@ -2893,8 +2893,8 @@
       "ID": "B4376D5A-8BC6-4D1F-B4AE-3444D2A6B887"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:31.464Z",
-      "checksum": "6655cb8d8ede372167c85bfecbee63fa9216b15ffe0a74abd351fa895de3cf4e"
+      "lastModified": "2026-04-10T02:33:52.051Z",
+      "checksum": "3c9285a2c425ef212bd5d927170afe1e22c2d0c2ddc9586d86994e5801ee21ce"
     }
   },
   {
@@ -2904,7 +2904,7 @@
       "ISO3166_2": "GB-NYK",
       "Latitude": 54.0916,
       "Longitude": -1.5359,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-NYK.geojson",
       "CommonAliases": [
         "North Yorkshire"
       ],
@@ -2914,8 +2914,8 @@
       "ID": "0620EDBB-CA00-40F7-ACE4-27AC17D62E59"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:31.480Z",
-      "checksum": "345c24e2e11db3a71fe29e59cc433e794b7191406cd584dfaf674bce32e3c2ce"
+      "lastModified": "2026-04-10T02:33:52.078Z",
+      "checksum": "775f0c115d6e789278e26bc6841da4961a290d35cbc3c13bffa3ccb529ff4f45"
     }
   },
   {
@@ -2946,7 +2946,7 @@
       "ISO3166_2": "GB-NBL",
       "Latitude": 55.25,
       "Longitude": -2.0006,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-NBL.geojson",
       "CommonAliases": [
         "Northumberland"
       ],
@@ -2956,8 +2956,8 @@
       "ID": "BA96AF1D-39FC-4F22-A067-51C8F207609A"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:31.521Z",
-      "checksum": "f16d527b4b6b2ee7fb85c24ccb74fe2f12876334f47bd46a28d10e290fcbbf1b"
+      "lastModified": "2026-04-10T02:33:52.129Z",
+      "checksum": "a5ae89edb23c8f4578b7837d4226342415b9b5e4d502956cba42ebcb2fd3a423"
     }
   },
   {
@@ -2967,7 +2967,7 @@
       "ISO3166_2": "GB-NGM",
       "Latitude": 52.9548,
       "Longitude": -1.1581,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-NGM.geojson",
       "CommonAliases": [
         "Nottingham"
       ],
@@ -2977,8 +2977,8 @@
       "ID": "57801EDA-6875-4DCD-B4EC-D4F64783A0C8"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:31.535Z",
-      "checksum": "4c656b8132551d0b9eb3c179d32aec5a75ca3067b51c71d03e4c45046136824c"
+      "lastModified": "2026-04-10T02:33:52.144Z",
+      "checksum": "a927a5d5063a6d272155ce85e6375d49b33d96792de71ddc17c2b43641568b62"
     }
   },
   {
@@ -2988,7 +2988,7 @@
       "ISO3166_2": "GB-NTT",
       "Latitude": 53.1459,
       "Longitude": -1.0215,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-NTT.geojson",
       "CommonAliases": [
         "Nottinghamshire"
       ],
@@ -2998,8 +2998,8 @@
       "ID": "439BA980-53D0-4189-B68B-DE50859CBCDC"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:31.549Z",
-      "checksum": "f71a591b72948d4e0c8b33d6e2e07929efb94be914807295ffb30747fba8f2a9"
+      "lastModified": "2026-04-10T02:33:52.156Z",
+      "checksum": "ea7b3096ad572316d4ccb489c848d9f82ea573bf9fa5bab4b8002e8a9ea6d968"
     }
   },
   {
@@ -3009,7 +3009,7 @@
       "ISO3166_2": "GB-OLD",
       "Latitude": 53.5416,
       "Longitude": -2.1148,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-OLD.geojson",
       "CommonAliases": [
         "Oldham"
       ],
@@ -3019,8 +3019,8 @@
       "ID": "BDE4D817-2CF0-4C83-9DC1-E8EFEC2E7F9E"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:31.561Z",
-      "checksum": "66d4c103abd93771e9cf331b724c5c20f415999ec3ac4ee8f94ed649f0ceb93e"
+      "lastModified": "2026-04-10T02:33:52.170Z",
+      "checksum": "d3496a5b509e27c4d6fcd699f0d647126c50b58c82b5c0a8493345372934cf7c"
     }
   },
   {
@@ -3030,7 +3030,7 @@
       "ISO3166_2": "GB-ORK",
       "Latitude": 58.9418,
       "Longitude": -3.1297,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-ORK.geojson",
       "CommonAliases": [
         "Orkney Islands"
       ],
@@ -3040,8 +3040,8 @@
       "ID": "B76A0CDB-E01D-4444-B418-81E28D2B0820"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:31.574Z",
-      "checksum": "97ac7a5fd7553f438ad3c27d46ad34d5bfdd87cf2bb21cdce73f1049b7956290"
+      "lastModified": "2026-04-10T02:33:52.186Z",
+      "checksum": "99e1ff6324697cda8341355307f5ce2e687055ec341381e98f3586071a7e3a7b"
     }
   },
   {
@@ -3051,7 +3051,7 @@
       "ISO3166_2": "GB-ELS",
       "Latitude": 57.6667,
       "Longitude": -7.1667,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-ELS.geojson",
       "CommonAliases": [
         "Outer Hebrides"
       ],
@@ -3061,8 +3061,8 @@
       "ID": "46448C34-F52A-407E-8D60-96F4356CD611"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:31.587Z",
-      "checksum": "18f794e0fb7fb00cc6a4fdb329c39e43b594daa52ff3392aabc0928900473629"
+      "lastModified": "2026-04-10T02:33:52.199Z",
+      "checksum": "144d35804e02654acd50ceab062518dda63e9f67969ddd51083783c3a090cd12"
     }
   },
   {
@@ -3072,7 +3072,7 @@
       "ISO3166_2": "GB-OXF",
       "Latitude": 51.8333,
       "Longitude": -1.25,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-OXF.geojson",
       "CommonAliases": [
         "Oxfordshire"
       ],
@@ -3082,8 +3082,8 @@
       "ID": "16470E80-633E-4858-A182-6D03BBCBD8B4"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:31.601Z",
-      "checksum": "0ec06bd1dfd56ca377c00109c10bfac55945fa76120121ec493afe88ff5cc5c1"
+      "lastModified": "2026-04-10T02:33:52.212Z",
+      "checksum": "eff5a514423a5a3f9e300f72455de1bb9d416cbb32027bcc27d94dae8a6d0452"
     }
   },
   {
@@ -3093,7 +3093,7 @@
       "ISO3166_2": "GB-PEM",
       "Latitude": 51.8339,
       "Longitude": -4.9167,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-PEM.geojson",
       "CommonAliases": [
         "Pembrokeshire"
       ],
@@ -3103,8 +3103,8 @@
       "ID": "CDC9D24E-D06F-4191-9F25-DD3AB9FFD7D2"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:31.615Z",
-      "checksum": "98a119752d99ea7deea430a75899905ada2a6696068be6e5b62300ade27eeb75"
+      "lastModified": "2026-04-10T02:33:52.225Z",
+      "checksum": "ce243cb48906107555fd1a85dd3166b8c0e77e1a0340ac0920470ba2d475a5e6"
     }
   },
   {
@@ -3114,7 +3114,7 @@
       "ISO3166_2": "GB-PKN",
       "Latitude": 56.5,
       "Longitude": -3.75,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-PKN.geojson",
       "CommonAliases": [
         "Perth and Kinross"
       ],
@@ -3124,8 +3124,8 @@
       "ID": "93F892F4-A688-4F12-B6E2-7409C1DE256E"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:31.627Z",
-      "checksum": "10f583782d74b53879e7ea6793b5eac36e4b1b4c4597c1f1eacaa096d4c2d4da"
+      "lastModified": "2026-04-10T02:33:52.236Z",
+      "checksum": "ca36c2f815ebb4323d97ad2b3a5ba3a645829c12aabd26c3135849930301c38e"
     }
   },
   {
@@ -3135,7 +3135,7 @@
       "ISO3166_2": "GB-PTE",
       "Latitude": 52.5726,
       "Longitude": -0.2427,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-PTE.geojson",
       "CommonAliases": [
         "Peterborough"
       ],
@@ -3145,8 +3145,8 @@
       "ID": "C5FA47A3-816C-4BDA-BF1D-B8B61DB54363"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:31.639Z",
-      "checksum": "aaea075f25610befcc3accc4356fbe21dad7c9b0dce7481e66f9238061f094b7"
+      "lastModified": "2026-04-10T02:33:52.249Z",
+      "checksum": "de1d49c10535a756d6072cd43ff164073f6962cac38d5b2b7b1730599e35966b"
     }
   },
   {
@@ -3156,7 +3156,7 @@
       "ISO3166_2": "GB-PLY",
       "Latitude": 50.3714,
       "Longitude": -4.1424,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-PLY.geojson",
       "CommonAliases": [
         "Plymouth"
       ],
@@ -3166,8 +3166,8 @@
       "ID": "16AE3EDE-5331-4A21-82E5-ED61BF1D6E1C"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:31.667Z",
-      "checksum": "e2ae777c7e1be5f1956018332add8c946e5281d5769e8a1933cea98d1cc467a1"
+      "lastModified": "2026-04-10T02:33:52.292Z",
+      "checksum": "56d0d4a37ebf066df738091a2451ba6093d0ef6510f27c935434797b6cca423c"
     }
   },
   {
@@ -3177,7 +3177,7 @@
       "ISO3166_2": "GB-POR",
       "Latitude": 50.8,
       "Longitude": -1.0906,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-POR.geojson",
       "CommonAliases": [
         "Portsmouth"
       ],
@@ -3187,8 +3187,8 @@
       "ID": "9D93B3F2-C9B1-42F9-8140-4025CEC7D369"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:31.679Z",
-      "checksum": "e571b292f5327b8c6bb532cec5bf7fc8d28b7609fa849766701bb9070bbed30f"
+      "lastModified": "2026-04-10T02:33:52.305Z",
+      "checksum": "3e7c703c24de84f4bed2173d52ab86f5d834a0b36924b2fa3791ac4f492880cf"
     }
   },
   {
@@ -3198,7 +3198,7 @@
       "ISO3166_2": "GB-POW",
       "Latitude": 52.3271,
       "Longitude": -3.3553,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-POW.geojson",
       "CommonAliases": [
         "Powys"
       ],
@@ -3208,8 +3208,8 @@
       "ID": "4083288F-4FD7-43BF-A741-594FB411B9B2"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:31.692Z",
-      "checksum": "77cbc40fa42671f4944611e40b58502d681b5236a8dcf178debc854c21a8c96b"
+      "lastModified": "2026-04-10T02:33:52.317Z",
+      "checksum": "cb581ec47e1e864a752639a992c24687bc0123086af1a9b77e892df28991ec1c"
     }
   },
   {
@@ -3219,7 +3219,7 @@
       "ISO3166_2": "GB-RDG",
       "Latitude": 51.4515,
       "Longitude": -0.9836,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-RDG.geojson",
       "CommonAliases": [
         "Reading"
       ],
@@ -3229,8 +3229,8 @@
       "ID": "6448DA2F-39BD-4AEF-B274-81B318AEFAB3"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:31.705Z",
-      "checksum": "7be6dd25543018a0147b4222f3a0ef306d29431193ed6af5584548616e9481a7"
+      "lastModified": "2026-04-10T02:33:52.329Z",
+      "checksum": "0d2ae5699dd4b9c2d8f94eae7c0d63177114279c4784cb017f50fcd1a7d10d3e"
     }
   },
   {
@@ -3240,7 +3240,7 @@
       "ISO3166_2": "GB-RDB",
       "Latitude": 51.5766,
       "Longitude": 0.0453,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-RDB.geojson",
       "CommonAliases": [
         "Redbridge"
       ],
@@ -3250,8 +3250,8 @@
       "ID": "7A8E833F-07BC-4446-98F9-188F904F14F1"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:31.719Z",
-      "checksum": "fbebfc6b6ea5c68194792edabfac9a7bc274512e46b464b039a1ed19ced0e3e4"
+      "lastModified": "2026-04-10T02:33:52.342Z",
+      "checksum": "c4668896e19531fbffc9f54f97d11d6113266dc6a299a3fe57277c66934638c5"
     }
   },
   {
@@ -3261,7 +3261,7 @@
       "ISO3166_2": "GB-RCC",
       "Latitude": 54.5679,
       "Longitude": -1.0055,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-RCC.geojson",
       "CommonAliases": [
         "Redcar and Cleveland"
       ],
@@ -3271,8 +3271,8 @@
       "ID": "F69CC037-F028-42E5-B3AB-98D8619293C0"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:31.731Z",
-      "checksum": "8f2da5d3abb515212a2b4127db9d97ca2763db9d4d6649ee04aa5b9602f27a09"
+      "lastModified": "2026-04-10T02:33:52.353Z",
+      "checksum": "511c548e232f2ee8a1bccad26175bc88bd22a2dec29ed52e0a2030b0870534d3"
     }
   },
   {
@@ -3282,7 +3282,7 @@
       "ISO3166_2": "GB-RFW",
       "Latitude": 55.8333,
       "Longitude": -4.5,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-RFW.geojson",
       "CommonAliases": [
         "Renfrewshire"
       ],
@@ -3292,8 +3292,8 @@
       "ID": "48A2A45C-2B89-480E-90EE-6F113D7FE13E"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:31.745Z",
-      "checksum": "31f7b817bffdf011305418c5a1a58572d65036ac2f4e75cc5d382ae1edbd002c"
+      "lastModified": "2026-04-10T02:33:52.365Z",
+      "checksum": "3bd0e6f9c3d57c7216c5d8b8aacc502148f7c7a06de9de647ec0fa0e5d814201"
     }
   },
   {
@@ -3303,7 +3303,7 @@
       "ISO3166_2": "GB-RCT",
       "Latitude": 51.6652,
       "Longitude": -3.4578,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-RCT.geojson",
       "CommonAliases": [
         "Rhondda Cynon Taf"
       ],
@@ -3313,8 +3313,8 @@
       "ID": "27820277-3F5A-47D8-BFC1-1E7DF7C9AA90"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:31.758Z",
-      "checksum": "cbab61d026547d7f30da313153a633022c604cc9e588fc60fa2f15e7f96f43a1"
+      "lastModified": "2026-04-10T02:33:52.378Z",
+      "checksum": "d4a11a82f69d567709e395b38d94b7391710971807baffa72034a39459ceac23"
     }
   },
   {
@@ -3324,7 +3324,7 @@
       "ISO3166_2": "GB-RIC",
       "Latitude": 51.4406,
       "Longitude": -0.3076,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-RIC.geojson",
       "CommonAliases": [
         "Richmond upon Thames"
       ],
@@ -3334,8 +3334,8 @@
       "ID": "1494C2F7-7180-49BD-A8EB-515F6EC1BC5D"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:31.772Z",
-      "checksum": "81016f0fd6f3d40761657946838bc9f0064d309ddfa4acef69a8f2f77b5597fe"
+      "lastModified": "2026-04-10T02:33:52.389Z",
+      "checksum": "d2548bb8d56d617a1cf150d8945255e5677c0a45e7242cff0f78c3849f65cd97"
     }
   },
   {
@@ -3345,7 +3345,7 @@
       "ISO3166_2": "GB-RCH",
       "Latitude": 53.6097,
       "Longitude": -2.1561,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-RCH.geojson",
       "CommonAliases": [
         "Rochdale"
       ],
@@ -3355,8 +3355,8 @@
       "ID": "D16B7C04-AF10-48E4-8A80-FC4D108960F3"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:31.783Z",
-      "checksum": "bb4d612b31c786219024b8b607373201f2b6450a6c1b4207e5eb35294cbe5350"
+      "lastModified": "2026-04-10T02:33:52.400Z",
+      "checksum": "e61ef22d97ac3f3048451b5df8a542d08521c0cf43e3889d779f91d897e953ab"
     }
   },
   {
@@ -3366,7 +3366,7 @@
       "ISO3166_2": "GB-ROT",
       "Latitude": 53.4326,
       "Longitude": -1.3635,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-ROT.geojson",
       "CommonAliases": [
         "Rotherham"
       ],
@@ -3376,8 +3376,8 @@
       "ID": "054D095C-850D-4FCF-B7CC-752867848BBA"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:31.809Z",
-      "checksum": "eeff2ce9e5bd094aedb0c1f4f6dec2f02e8d5b66b00dbca4b94d7eed22e37f58"
+      "lastModified": "2026-04-10T02:33:52.445Z",
+      "checksum": "fecabd898904c5128f3ffb3b5d6d486de914f91a36a74f9f2facf7a17e0fe472"
     }
   },
   {
@@ -3387,7 +3387,7 @@
       "ISO3166_2": "GB-RUT",
       "Latitude": 52.6423,
       "Longitude": -0.6633,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-RUT.geojson",
       "CommonAliases": [
         "Rutland"
       ],
@@ -3397,8 +3397,8 @@
       "ID": "5ED3B990-FB25-4CCC-A162-DA16B51382CE"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:31.821Z",
-      "checksum": "83beb574882e62c4cbccc1df255620c965e3b1caa44b03c412467b94d48e23d9"
+      "lastModified": "2026-04-10T02:33:52.459Z",
+      "checksum": "aefa34d6f5d9ab9a692d1c9cab85512ad1f784e8738e6b0909f8473f42b3de88"
     }
   },
   {
@@ -3408,7 +3408,7 @@
       "ISO3166_2": "GB-SLF",
       "Latitude": 53.4875,
       "Longitude": -2.2901,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-SLF.geojson",
       "CommonAliases": [
         "Salford"
       ],
@@ -3418,8 +3418,8 @@
       "ID": "8FBA53E2-7027-4639-81C8-90323C92BD5D"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:31.832Z",
-      "checksum": "cdea48852c9bcaf4039c824354a201595b99f2ae15c6ad652239a5fec908517a"
+      "lastModified": "2026-04-10T02:33:52.471Z",
+      "checksum": "33c530a7618b65d6272567ae2371864df91119ddbb4f7839f87cad6ac1ed79f9"
     }
   },
   {
@@ -3429,7 +3429,7 @@
       "ISO3166_2": "GB-SAW",
       "Latitude": 52.5148,
       "Longitude": -2.0135,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-SAW.geojson",
       "CommonAliases": [
         "Sandwell"
       ],
@@ -3439,8 +3439,8 @@
       "ID": "7C111870-CCD8-4221-A145-04B64336B656"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:31.844Z",
-      "checksum": "37fea5c8c821b96fe25b96e14a5e18fd4aa916c9bf835580b36e571889c36e1c"
+      "lastModified": "2026-04-10T02:33:52.482Z",
+      "checksum": "b4f1f83dc1a762740d27be8338a76e4cdf2b6f3e504d7cfacc3642268398f402"
     }
   },
   {
@@ -3471,7 +3471,7 @@
       "ISO3166_2": "GB-SCB",
       "Latitude": 55.5833,
       "Longitude": -2.8333,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-SCB.geojson",
       "CommonAliases": [
         "Scottish Borders"
       ],
@@ -3481,8 +3481,8 @@
       "ID": "79956A73-5AF7-4C00-A07E-255C7069E507"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:31.868Z",
-      "checksum": "a07afbd95f6c5177e97d5e73e31419b1387e9ebdc4be3eea685f10e33a209328"
+      "lastModified": "2026-04-10T02:33:52.496Z",
+      "checksum": "a3b5049f88ccba9fc7b7b274143416cc143a8943140126913f8be95fa9202370"
     }
   },
   {
@@ -3492,7 +3492,7 @@
       "ISO3166_2": "GB-SFT",
       "Latitude": 53.5034,
       "Longitude": -2.9704,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-SFT.geojson",
       "CommonAliases": [
         "Sefton"
       ],
@@ -3502,8 +3502,8 @@
       "ID": "CCA63367-CD13-4E89-B315-F9A103CCD14D"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:31.881Z",
-      "checksum": "76ab15840fae953deb35688b9ce92ccc0309bcefa66ee941bcc7707acefb86b7"
+      "lastModified": "2026-04-10T02:33:52.508Z",
+      "checksum": "669f2ace0843f89dfb7f08de486ccc7059d6a4e93ea93a75803d21953572ec94"
     }
   },
   {
@@ -3513,7 +3513,7 @@
       "ISO3166_2": "GB-SHF",
       "Latitude": 53.3807,
       "Longitude": -1.4702,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-SHF.geojson",
       "CommonAliases": [
         "Sheffield"
       ],
@@ -3523,8 +3523,8 @@
       "ID": "39D722C9-F749-4D7B-8484-5CE007828EB3"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:31.894Z",
-      "checksum": "f38d8735e4d80989977900127a9dcf79a96e439e145b23c5249597d848cc9a24"
+      "lastModified": "2026-04-10T02:33:52.520Z",
+      "checksum": "476906737f2dcf6d44b4bceea825896f0b13c07d73732a69f0b69f3628759542"
     }
   },
   {
@@ -3534,7 +3534,7 @@
       "ISO3166_2": "GB-ZET",
       "Latitude": 60.3333,
       "Longitude": -1.3333,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-ZET.geojson",
       "CommonAliases": [
         "Shetland Islands"
       ],
@@ -3544,8 +3544,8 @@
       "ID": "C8700CAD-7390-4A70-BA07-7ED803C233FF"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:31.906Z",
-      "checksum": "98a28d09053cb485278eb99de9c6a4d8ad234b4a982629cf1b24b13323944d22"
+      "lastModified": "2026-04-10T02:33:52.533Z",
+      "checksum": "f8d505431d662d08f844b8e4e5302f5a5af07f2ca5c6a343f4b802fdf37961de"
     }
   },
   {
@@ -3555,7 +3555,7 @@
       "ISO3166_2": "GB-SHR",
       "Latitude": 52.6523,
       "Longitude": -2.7959,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-SHR.geojson",
       "CommonAliases": [
         "Shropshire"
       ],
@@ -3565,8 +3565,8 @@
       "ID": "C0930CB5-B5FC-490A-8454-48683710903C"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:31.917Z",
-      "checksum": "83516242157477a4645bc4bf564cf2ddd0d5a36ad1011a085006aba6e3e0035e"
+      "lastModified": "2026-04-10T02:33:52.545Z",
+      "checksum": "9df8676097f0d65de0ac4b9d80c1630076bc428863516c170605202086ba9535"
     }
   },
   {
@@ -3576,7 +3576,7 @@
       "ISO3166_2": "GB-SLG",
       "Latitude": 51.5105,
       "Longitude": -0.595,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-SLG.geojson",
       "CommonAliases": [
         "Slough"
       ],
@@ -3586,8 +3586,8 @@
       "ID": "A3C40DD5-AEAB-448D-B783-57711C3AC46C"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:31.948Z",
-      "checksum": "5131cb3dfa92c185d69bd5ba0c2111c98da7296a029fc8e55a7184a597474f43"
+      "lastModified": "2026-04-10T02:33:52.589Z",
+      "checksum": "cc24130d7b672bdaafff76f7fd9d210ce053a0dcd28f4df96e2c6bf664e079b6"
     }
   },
   {
@@ -3597,7 +3597,7 @@
       "ISO3166_2": "GB-SOL",
       "Latitude": 52.4118,
       "Longitude": -1.7776,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-SOL.geojson",
       "CommonAliases": [
         "Solihull"
       ],
@@ -3607,8 +3607,8 @@
       "ID": "60774113-553D-4E63-8764-F27568E49D69"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:31.960Z",
-      "checksum": "842bc9f988a6f4263aedca34a96e54be8078d1d8a2248745ca869f14499554b1"
+      "lastModified": "2026-04-10T02:33:52.604Z",
+      "checksum": "f22547e1a34df65d142a6d6e177473c0acdaa3627d72d8dd0b36875acb15386b"
     }
   },
   {
@@ -3618,7 +3618,7 @@
       "ISO3166_2": "GB-SOM",
       "Latitude": 51.0833,
       "Longitude": -3,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-SOM.geojson",
       "CommonAliases": [
         "Somerset"
       ],
@@ -3628,8 +3628,8 @@
       "ID": "E87F6124-D8C3-4755-9E19-DA36D76A987B"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:31.972Z",
-      "checksum": "5a246a06c92a25024171092835cbbe41683a6406d6dc716d46241ee0edbd1fe0"
+      "lastModified": "2026-04-10T02:33:52.617Z",
+      "checksum": "b00787acb5d27831b88364133cba80bb61c1457cc5f0acc06a1b4fe9dbce854f"
     }
   },
   {
@@ -3639,7 +3639,7 @@
       "ISO3166_2": "GB-SAY",
       "Latitude": 55.2998,
       "Longitude": -4.646,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-SAY.geojson",
       "CommonAliases": [
         "South Ayrshire"
       ],
@@ -3649,8 +3649,8 @@
       "ID": "3C36D9A8-C141-4529-BC2A-E5C2F6EF8781"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:31.983Z",
-      "checksum": "ab934e22e4f8591e684439063faa16e96c0ec5bc7c54e99efb9e5c81545aee11"
+      "lastModified": "2026-04-10T02:33:52.631Z",
+      "checksum": "5867363afa27bcfe4b6ea6616c7ed849e77317ca079c0b887fb6be8dd971fc8a"
     }
   },
   {
@@ -3660,7 +3660,7 @@
       "ISO3166_2": "GB-SGC",
       "Latitude": 51.5492,
       "Longitude": -2.481,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-SGC.geojson",
       "CommonAliases": [
         "South Gloucestershire"
       ],
@@ -3670,8 +3670,8 @@
       "ID": "3F976CB7-6EBD-4CEB-BE4C-F3281519307F"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:31.995Z",
-      "checksum": "7a667192577af7748e3f63f9c135988ecc3bd0b8b010b5fa006fa3de7e0fbbb6"
+      "lastModified": "2026-04-10T02:33:52.643Z",
+      "checksum": "c4098691853f89e74e6ae6899c26a0ac93f09a22551d27628274f5f67b44d42c"
     }
   },
   {
@@ -3681,7 +3681,7 @@
       "ISO3166_2": "GB-SLK",
       "Latitude": 55.5832,
       "Longitude": -3.8332,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-SLK.geojson",
       "CommonAliases": [
         "South Lanarkshire"
       ],
@@ -3691,8 +3691,8 @@
       "ID": "26B2A299-2D37-409C-8FC9-1A2C83F86B8B"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:32.007Z",
-      "checksum": "479131c12d6f0163a9e90ee8c765aa2abea45432c4a9adde9d6238ca952b4376"
+      "lastModified": "2026-04-10T02:33:52.656Z",
+      "checksum": "5f522bb240f8de6777e4f7921047e143734ec1ee302670089098dcfd778ade09"
     }
   },
   {
@@ -3702,7 +3702,7 @@
       "ISO3166_2": "GB-STY",
       "Latitude": 54.9637,
       "Longitude": -1.4419,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-STY.geojson",
       "CommonAliases": [
         "South Tyneside"
       ],
@@ -3712,8 +3712,8 @@
       "ID": "F2EEB0A5-6AAC-4CF4-8C2D-DC23D28C4D9E"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:32.026Z",
-      "checksum": "56b29b4cd8904821fcabeea8bc52d2f0086f96c40dd31a25f3e30c515a6d310a"
+      "lastModified": "2026-04-10T02:33:52.669Z",
+      "checksum": "2283327cb5664ea7cb320fc0e5e6054f473d6045e7c691af8b323892c2acae7f"
     }
   },
   {
@@ -3723,7 +3723,7 @@
       "ISO3166_2": "GB-SOS",
       "Latitude": 51.5459,
       "Longitude": 0.7077,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-SOS.geojson",
       "CommonAliases": [
         "Southend-on-Sea"
       ],
@@ -3733,8 +3733,8 @@
       "ID": "D286CA77-255B-4A34-94C6-8E9160FF6340"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:32.039Z",
-      "checksum": "7f5daecb1a383d6cad71c1b4c86f6723553f58f604cb5f2b55ddd4f1a1d11502"
+      "lastModified": "2026-04-10T02:33:52.681Z",
+      "checksum": "736f3e94d88bf3ecda128c09f52177247e135441d2ed6f0c840dca28c9cf1cec"
     }
   },
   {
@@ -3744,7 +3744,7 @@
       "ISO3166_2": "GB-SWK",
       "Latitude": 51.4653,
       "Longitude": -0.069,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-SWK.geojson",
       "CommonAliases": [
         "Southwark"
       ],
@@ -3754,8 +3754,8 @@
       "ID": "00FCEE83-B57D-4E3F-BD96-FA7E2E698DDD"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:32.053Z",
-      "checksum": "8a5864e48fcc0009ed6b0a5bcea326ace8d3ba07d09c01861bf1a3038a010a56"
+      "lastModified": "2026-04-10T02:33:52.694Z",
+      "checksum": "9f5945947a9f11ec9e82240bbda969783074c127504a7bb3549bbbc59cf1223c"
     }
   },
   {
@@ -3765,7 +3765,7 @@
       "ISO3166_2": "GB-SHN",
       "Latitude": 53.4535,
       "Longitude": -2.7343,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-SHN.geojson",
       "CommonAliases": [
         "St Helens"
       ],
@@ -3775,8 +3775,8 @@
       "ID": "C325AA49-13E4-48EF-82C2-A66295FAD3EB"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:32.064Z",
-      "checksum": "8809416a86dab3edbeef2e00e416728dc6ee12be90e2c6a92a7ab63fb8294ae3"
+      "lastModified": "2026-04-10T02:33:52.706Z",
+      "checksum": "7ad1f3b7d248be20d343949715ed2b122ee579d69846803e1715b0810225ba13"
     }
   },
   {
@@ -3786,7 +3786,7 @@
       "ISO3166_2": "GB-STS",
       "Latitude": 52.8247,
       "Longitude": -2.0075,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-STS.geojson",
       "CommonAliases": [
         "Staffordshire"
       ],
@@ -3796,8 +3796,8 @@
       "ID": "C30519BE-D4BB-4E8C-931F-F18FF889BB1A"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:32.092Z",
-      "checksum": "ecbed032f13a1078c63fb6436b1a11528671b07d948145973f594128243d8ea7"
+      "lastModified": "2026-04-10T02:33:52.756Z",
+      "checksum": "fa6e77eb1de6a4003050a68e02bdde20a00b433a2d88c475e4dbcd57b512326a"
     }
   },
   {
@@ -3807,7 +3807,7 @@
       "ISO3166_2": "GB-STG",
       "Latitude": 56.1165,
       "Longitude": -3.9369,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-STG.geojson",
       "CommonAliases": [
         "Stirling"
       ],
@@ -3817,8 +3817,8 @@
       "ID": "19ADD84B-54A0-49D3-8D1C-BAF3A3F5414A"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:32.106Z",
-      "checksum": "e938455a0d2ec21fc2eaa586408282858c2d25da5f67060fb57b4c4459433082"
+      "lastModified": "2026-04-10T02:33:52.835Z",
+      "checksum": "e69195f2b2ebbdf3d956c6242e96d6971d0fdfb66c0d14a8f90a9495b44cbf1b"
     }
   },
   {
@@ -3828,7 +3828,7 @@
       "ISO3166_2": "GB-SKP",
       "Latitude": 53.4106,
       "Longitude": -2.1575,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-SKP.geojson",
       "CommonAliases": [
         "Stockport"
       ],
@@ -3838,8 +3838,8 @@
       "ID": "FAB3C59C-C089-4A17-8FCB-3E373346BE6E"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:32.117Z",
-      "checksum": "a4d4a328de22a6aa452622d73c599e95f61375fd89f9cda6a7c9d2b8c2477f13"
+      "lastModified": "2026-04-10T02:33:52.770Z",
+      "checksum": "85de80914d730fbfba9fdeb9f603ef1fb560d95670f2476cebf035bad0708b89"
     }
   },
   {
@@ -3849,7 +3849,7 @@
       "ISO3166_2": "GB-STT",
       "Latitude": 54.5641,
       "Longitude": -1.3129,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-STT.geojson",
       "CommonAliases": [
         "Stockton-on-Tees"
       ],
@@ -3859,8 +3859,8 @@
       "ID": "65282B7F-F3AC-4EB0-A1CC-90686D8CDEE4"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:32.129Z",
-      "checksum": "ff69febaf34a5be0e71ff749018cba63a6681a7a71a0d1397a21a8a671ea523b"
+      "lastModified": "2026-04-10T02:33:52.783Z",
+      "checksum": "c1c74b6359a38ef627469bbe2d45eb8b22575d3d66bb41e1f63adca340b5fdf7"
     }
   },
   {
@@ -3870,7 +3870,7 @@
       "ISO3166_2": "GB-STE",
       "Latitude": 53.0162,
       "Longitude": -2.1813,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-STE.geojson",
       "CommonAliases": [
         "Stoke-on-Trent"
       ],
@@ -3880,8 +3880,8 @@
       "ID": "089DA667-7B53-40EB-BB0C-77276C9B5CE7"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:32.141Z",
-      "checksum": "d9ba90492be41a7e7ce84329c1d9e47ee3c59b8f580dca90260bbff826ff857b"
+      "lastModified": "2026-04-10T02:33:52.849Z",
+      "checksum": "9b3300dbe2ac62e173d68e419dc17c41f2cf88a0bd3f17159cd410f8f2592724"
     }
   },
   {
@@ -3891,7 +3891,7 @@
       "ISO3166_2": "GB-SFK",
       "Latitude": 52.241,
       "Longitude": 1.0466,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-SFK.geojson",
       "CommonAliases": [
         "Suffolk"
       ],
@@ -3901,8 +3901,8 @@
       "ID": "139F1F5F-9CD8-4750-9780-50032508B26F"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:32.152Z",
-      "checksum": "a2046c4fa193f7c081ecce2f7792f6c9d9b8398b4b633cdb0ceb2be03fe52f57"
+      "lastModified": "2026-04-10T02:33:52.796Z",
+      "checksum": "453c51cbc04a0f970d59c469e191aedca8b27d2f58ec36c7b51f692393380efe"
     }
   },
   {
@@ -3912,7 +3912,7 @@
       "ISO3166_2": "GB-SND",
       "Latitude": 54.9059,
       "Longitude": -1.3829,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-SND.geojson",
       "CommonAliases": [
         "Sunderland"
       ],
@@ -3922,8 +3922,8 @@
       "ID": "427BBC84-25BE-4A7A-A0B8-10ECB711D09D"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:32.162Z",
-      "checksum": "5661d54920687a184f5343cefb6bfcbd4d3b258be9afb40e421bee17096d34e9"
+      "lastModified": "2026-04-10T02:33:52.808Z",
+      "checksum": "fcc7e395d66d790bc3daf87818435787eb218ca52fc7097248d0e92c7fd87498"
     }
   },
   {
@@ -3933,7 +3933,7 @@
       "ISO3166_2": "GB-SRY",
       "Latitude": 51.2715,
       "Longitude": -0.3415,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-SRY.geojson",
       "CommonAliases": [
         "Surrey"
       ],
@@ -3943,8 +3943,8 @@
       "ID": "42C84090-40DB-40A1-BDFB-B8327FABF827"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:32.175Z",
-      "checksum": "06315ace8b1e4dff106925e51f4d3d89d545900d88667d88886e1b69410a8e3a"
+      "lastModified": "2026-04-10T02:33:52.821Z",
+      "checksum": "839a919fc690bb45bd3faf7e8739dd90cc86ccb476f3ad40775e2207db49f171"
     }
   },
   {
@@ -3954,7 +3954,7 @@
       "ISO3166_2": "GB-STN",
       "Latitude": 51.3574,
       "Longitude": -0.1753,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-STN.geojson",
       "CommonAliases": [
         "Sutton"
       ],
@@ -3964,8 +3964,8 @@
       "ID": "C98EE009-6A77-4015-B5AD-BC5725EABDAB"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:32.188Z",
-      "checksum": "b943ab3c5eaafa1526197ec54285b830f785a602d6937d32a6f7d5f60f75717d"
+      "lastModified": "2026-04-10T02:33:52.862Z",
+      "checksum": "ab4dba62c4ecc27824b3822177bc73e8dbd2895964c494954f5d7313208d3530"
     }
   },
   {
@@ -3975,7 +3975,7 @@
       "ISO3166_2": "GB-SWA",
       "Latitude": 51.6214,
       "Longitude": -3.9436,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-SWA.geojson",
       "CommonAliases": [
         "Swansea"
       ],
@@ -3985,8 +3985,8 @@
       "ID": "6F82CF68-A1D3-449D-B17F-A2BF2A9AB626"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:32.198Z",
-      "checksum": "04f3f5470fb82667a4fb784c6665059e29c564f19f20f435f8694c5c26cc8fec"
+      "lastModified": "2026-04-10T02:33:52.875Z",
+      "checksum": "fb9aed7726a17f34c93a9f14692f2ccd123af84b54c91aedf4f48ccc6ce91ea5"
     }
   },
   {
@@ -3996,7 +3996,7 @@
       "ISO3166_2": "GB-SWD",
       "Latitude": 51.5558,
       "Longitude": -1.7797,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-SWD.geojson",
       "CommonAliases": [
         "Swindon"
       ],
@@ -4006,8 +4006,8 @@
       "ID": "B45F9F77-3A66-4980-8E6F-1D72EE4FEB90"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:32.222Z",
-      "checksum": "f9e04bb6dc5741875ddf3faa2d54f09860113d84a278641aaca3d4935061e1f9"
+      "lastModified": "2026-04-10T02:33:52.927Z",
+      "checksum": "ab7779d5e9605af5d28c1ded2594fd3400a0483df0993be7bd2a180943b83b9f"
     }
   },
   {
@@ -4017,7 +4017,7 @@
       "ISO3166_2": "GB-TAM",
       "Latitude": 53.4806,
       "Longitude": -2.081,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-TAM.geojson",
       "CommonAliases": [
         "Tameside"
       ],
@@ -4027,8 +4027,8 @@
       "ID": "5BAE2C94-5E06-4237-941F-4DF883F08872"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:32.233Z",
-      "checksum": "a93588a0700793efecc8bc4a72d2d04049140f3a1938481ecdc68c7e6f4cb477"
+      "lastModified": "2026-04-10T02:33:52.941Z",
+      "checksum": "50ff79cee541e8efecc6eeb6cb92a8ca1ed0ae04520830b4ee8068256913a98e"
     }
   },
   {
@@ -4038,7 +4038,7 @@
       "ISO3166_2": "GB-TFW",
       "Latitude": 52.7214,
       "Longitude": -2.5009,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-TFW.geojson",
       "CommonAliases": [
         "Telford and Wrekin"
       ],
@@ -4048,8 +4048,8 @@
       "ID": "D4CEDA3B-87D0-45B8-B422-04D03B6B966F"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:32.244Z",
-      "checksum": "c0d4e080b6fac7151542329a5208b1171ee0262c84ec5ff37adeb5b65d5310f3"
+      "lastModified": "2026-04-10T02:33:52.957Z",
+      "checksum": "d41a370a23a211c800480e570f5d0725aa9cdde9596ba0f08d5f642b203d3d20"
     }
   },
   {
@@ -4059,7 +4059,7 @@
       "ISO3166_2": "GB-THR",
       "Latitude": 51.508,
       "Longitude": 0.3963,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-THR.geojson",
       "CommonAliases": [
         "Thurrock"
       ],
@@ -4069,8 +4069,8 @@
       "ID": "73FEC140-B319-48AF-BDCA-CB49CC67AC7F"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:32.257Z",
-      "checksum": "6c042b10401413a5d0b7ca006cdb9d99bda082d6491f886374401e55240046a5"
+      "lastModified": "2026-04-10T02:33:52.970Z",
+      "checksum": "0e179cc2b19a6c6bb24c72705064f7dfe7b39f6dcedbffbf40f56b6b3c570493"
     }
   },
   {
@@ -4080,7 +4080,7 @@
       "ISO3166_2": "GB-TOB",
       "Latitude": 50.4392,
       "Longitude": -3.537,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-TOB.geojson",
       "CommonAliases": [
         "Torbay"
       ],
@@ -4090,8 +4090,8 @@
       "ID": "8E790621-C6AE-4979-99BB-70C4A7491A2C"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:32.268Z",
-      "checksum": "bb0c90445a5a33bca1f13717fb8e6a1f98157e163345f378308bd1a0ea64d37f"
+      "lastModified": "2026-04-10T02:33:52.987Z",
+      "checksum": "779ee46b88ebb9e4c89ea6a02babd010c05e235fd61cc5581b9fb2740ecb98b6"
     }
   },
   {
@@ -4101,7 +4101,7 @@
       "ISO3166_2": "GB-TOF",
       "Latitude": 51.7002,
       "Longitude": -3.0446,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-TOF.geojson",
       "CommonAliases": [
         "Torfaen"
       ],
@@ -4111,8 +4111,8 @@
       "ID": "0B81C588-5071-431C-BB00-237805924CBE"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:32.282Z",
-      "checksum": "52a5a977f173876984f5262f2a06fa0cc04bfdcfbadfd2d19f7141f461e9b295"
+      "lastModified": "2026-04-10T02:33:53.002Z",
+      "checksum": "ac8fd546d3c2695406023677dbc7f91e582390c23da5f190d971aab0727b986d"
     }
   },
   {
@@ -4122,7 +4122,7 @@
       "ISO3166_2": "GB-TWH",
       "Latitude": 51.1289,
       "Longitude": 1.2987,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-TWH.geojson",
       "CommonAliases": [
         "Tower Hamlets"
       ],
@@ -4132,8 +4132,8 @@
       "ID": "9D83009A-2684-4822-AB6D-09A0711FA587"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:32.293Z",
-      "checksum": "7abcdadaae4d5629e58d87a49b73535c4cfa61214c23d63139dbf4fb6dd9616e"
+      "lastModified": "2026-04-10T02:33:53.015Z",
+      "checksum": "e69eb8225209a7d7ace38b34d3700d12ad5e1d78a6886999b3bcdbbfd600a486"
     }
   },
   {
@@ -4143,7 +4143,7 @@
       "ISO3166_2": "GB-TRF",
       "Latitude": 53.4189,
       "Longitude": -2.3593,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-TRF.geojson",
       "CommonAliases": [
         "Trafford"
       ],
@@ -4153,8 +4153,8 @@
       "ID": "2043239B-9173-4268-8DAC-DCE7B0F639D3"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:32.305Z",
-      "checksum": "c14351a1b04cb65c445e3fdab8d4446649b54b1bf6148f2c612e2ceb5989f304"
+      "lastModified": "2026-04-10T02:33:53.031Z",
+      "checksum": "4128c334e88f742e63182d91dc66ac533afe2471abd7df389a24344927ced719"
     }
   },
   {
@@ -4164,7 +4164,7 @@
       "ISO3166_2": "GB-VGL",
       "Latitude": 51.4471,
       "Longitude": -3.3989,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-VGL.geojson",
       "CommonAliases": [
         "Vale of Glamorgan"
       ],
@@ -4174,8 +4174,8 @@
       "ID": "613CAC85-64BA-4F73-B545-237C8F757213"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:32.316Z",
-      "checksum": "379863b241fc3708a07926ed14440f54dc3ce1077818235fd83a785379f04806"
+      "lastModified": "2026-04-10T02:33:53.050Z",
+      "checksum": "02f68a337d840e0d86a6a7d2cc4a3c2971c8db489c7df513461880429a0c73c9"
     }
   },
   {
@@ -4185,7 +4185,7 @@
       "ISO3166_2": "GB-WKF",
       "Latitude": 53.683,
       "Longitude": -1.4967,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-WKF.geojson",
       "CommonAliases": [
         "Wakefield"
       ],
@@ -4195,8 +4195,8 @@
       "ID": "1CA208B3-DA46-44D0-8570-F776DB313341"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:32.328Z",
-      "checksum": "743d5136ac253a2278272f967ab6d522666978b593818cf2f8661d3c79b88ba5"
+      "lastModified": "2026-04-10T02:33:53.068Z",
+      "checksum": "5473c58f9d9122e455bf7b9dc5900ab8aa43caab4f01f88044f7d7e46d61e9f8"
     }
   },
   {
@@ -4227,7 +4227,7 @@
       "ISO3166_2": "GB-WLL",
       "Latitude": 52.5862,
       "Longitude": -1.9829,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-WLL.geojson",
       "CommonAliases": [
         "Walsall"
       ],
@@ -4237,8 +4237,8 @@
       "ID": "FF1E8293-BFCB-4A55-947F-E0F009C3435D"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:32.378Z",
-      "checksum": "b3bec95b2960f38a3e92f99a88a6e70b78e0f779374abe4a628367f401c00af4"
+      "lastModified": "2026-04-10T02:33:53.119Z",
+      "checksum": "863790e102fe0fc2fd0aff5df9e2dccad70780e44ed6625a5a1a92591aa83a86"
     }
   },
   {
@@ -4248,7 +4248,7 @@
       "ISO3166_2": "GB-WFT",
       "Latitude": 51.5983,
       "Longitude": -0.0177,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-WFT.geojson",
       "CommonAliases": [
         "Waltham Forest"
       ],
@@ -4258,8 +4258,8 @@
       "ID": "D592F9D3-412A-4286-A1CC-E02E9EA7476E"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:32.391Z",
-      "checksum": "22d9b6844f597ba00404a96c900dc59be1519f25d76adf87d7e1d40d121748c2"
+      "lastModified": "2026-04-10T02:33:53.133Z",
+      "checksum": "fc1b5fdd4c3f54c064848b10e5b34542162bfdd832bec7c5cf5a006f823bf43d"
     }
   },
   {
@@ -4269,7 +4269,7 @@
       "ISO3166_2": "GB-WND",
       "Latitude": 51.4568,
       "Longitude": -0.1897,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-WND.geojson",
       "CommonAliases": [
         "Wandsworth"
       ],
@@ -4279,8 +4279,8 @@
       "ID": "44CCBF7F-E9F6-46FF-8CCB-606ABDCCCD42"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:32.403Z",
-      "checksum": "98fed5c77307fd2381b10380c9f4f41a36ad0335fef40d90b8d447c711279db9"
+      "lastModified": "2026-04-10T02:33:53.150Z",
+      "checksum": "73dde89feafe50287a83c3f1565d1b747eb82d602c7cc00506edd03308fb9712"
     }
   },
   {
@@ -4290,7 +4290,7 @@
       "ISO3166_2": "GB-WRT",
       "Latitude": 53.3899,
       "Longitude": -2.5943,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-WRT.geojson",
       "CommonAliases": [
         "Warrington"
       ],
@@ -4300,8 +4300,8 @@
       "ID": "3E36D1DC-072B-403E-907B-ADBD358F986F"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:32.417Z",
-      "checksum": "55b3ef04b7a74f4986dc4af7ffeae6ee4ac7e7c860de6c6a5e2a1a0f835ed385"
+      "lastModified": "2026-04-10T02:33:53.164Z",
+      "checksum": "5826df00d99020fb19a82d3f38735668d4175ef1f2396ef920498f51d7fcd3c3"
     }
   },
   {
@@ -4311,7 +4311,7 @@
       "ISO3166_2": "GB-WAR",
       "Latitude": 52.3213,
       "Longitude": -1.5537,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-WAR.geojson",
       "CommonAliases": [
         "Warwickshire"
       ],
@@ -4321,8 +4321,8 @@
       "ID": "2C3C3D97-585B-4382-AA9D-875654279813"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:32.431Z",
-      "checksum": "191e0b97695f1f03baf5fc3baa04a29add38eb7d362dca20c290da0c90e6b786"
+      "lastModified": "2026-04-10T02:33:53.177Z",
+      "checksum": "33f114c55ef6dda034824c54fcccc038c07d5e6b8e59a6c13685f257365797cf"
     }
   },
   {
@@ -4332,7 +4332,7 @@
       "ISO3166_2": "GB-WBK",
       "Latitude": 51.4463,
       "Longitude": -1.2759,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-WBK.geojson",
       "CommonAliases": [
         "West Berkshire"
       ],
@@ -4342,8 +4342,8 @@
       "ID": "E490937D-D959-4B27-8DE9-348EC4954B18"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:32.446Z",
-      "checksum": "22a26a84ffa3d808938f1a08604b111d571f616d31c1e93d79f4dacb58756a9d"
+      "lastModified": "2026-04-10T02:33:53.190Z",
+      "checksum": "8f15a0780ef59666c3a61d52eb507f18df7f9971edc646e08cf62b8c94058dbb"
     }
   },
   {
@@ -4353,7 +4353,7 @@
       "ISO3166_2": "GB-WDU",
       "Latitude": 55.9667,
       "Longitude": -4.5333,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-WDU.geojson",
       "CommonAliases": [
         "West Dunbartonshire"
       ],
@@ -4363,8 +4363,8 @@
       "ID": "AA5B328F-4FAA-4740-B950-57B6235546B7"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:32.459Z",
-      "checksum": "164f77613936d744891ee542bd60abbfaefaa49c0d74e9e4ab570bffe77eb5c2"
+      "lastModified": "2026-04-10T02:33:53.205Z",
+      "checksum": "20e6f5737dad01cc4478a247666042bfbb3be47924b85f4efa126a9c176922a9"
     }
   },
   {
@@ -4374,7 +4374,7 @@
       "ISO3166_2": "GB-WLN",
       "Latitude": 55.9167,
       "Longitude": -3.5,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-WLN.geojson",
       "CommonAliases": [
         "West Lothian"
       ],
@@ -4384,8 +4384,8 @@
       "ID": "DF3DCFC5-8983-4A6C-A5A6-94DA4192BB7E"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:32.473Z",
-      "checksum": "3aaa6082e933d5d2fcb5439fce72ca81533df79321becedda3a30f48e3265396"
+      "lastModified": "2026-04-10T02:33:53.218Z",
+      "checksum": "537bf63efe63961c3a08238c14deb5241411492fd40ea62980bd4163891b5b26"
     }
   },
   {
@@ -4416,7 +4416,7 @@
       "ISO3166_2": "GB-WSX",
       "Latitude": 50.9446,
       "Longitude": -0.5278,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-WSX.geojson",
       "CommonAliases": [
         "West Sussex"
       ],
@@ -4426,8 +4426,8 @@
       "ID": "44517598-E90C-468E-BC3C-A29B4F3A319B"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:32.517Z",
-      "checksum": "1bd7975898734cecd73d5a3fbca3dbae7d33d9e44a85b173229831ded352b67c"
+      "lastModified": "2026-04-10T02:33:53.266Z",
+      "checksum": "36f0a5e1af9369072d5663e569b8ef0ef9970f5829aeb2def45d37cc07932980"
     }
   },
   {
@@ -4437,7 +4437,7 @@
       "ISO3166_2": "GB-WSM",
       "Latitude": 51.4973,
       "Longitude": -0.1371,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-WSM.geojson",
       "CommonAliases": [
         "Westminster"
       ],
@@ -4447,8 +4447,8 @@
       "ID": "58008EC4-A575-4E1D-A456-118C9595292F"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:32.529Z",
-      "checksum": "b4b9c274e5dbdff9eae6b78efdd9b527bf9a3aca8e6ea79253175d46d76cb5db"
+      "lastModified": "2026-04-10T02:33:53.279Z",
+      "checksum": "5854f33c846480d8eba883dc9f8d6293a51ecae20fb1bc8e3510990d7313c759"
     }
   },
   {
@@ -4458,7 +4458,7 @@
       "ISO3166_2": "GB-WGN",
       "Latitude": 53.5457,
       "Longitude": -2.6265,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-WGN.geojson",
       "CommonAliases": [
         "Wigan"
       ],
@@ -4468,8 +4468,8 @@
       "ID": "0536F994-EB15-45D7-8E81-17AA2DCD638A"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:32.541Z",
-      "checksum": "61158a9b6cb7404d3cfa02eca5db8e87cf9674049fe55a0ba7f9d68d37e210bc"
+      "lastModified": "2026-04-10T02:33:53.292Z",
+      "checksum": "fe779c9b3f6ebe9a41146b4ce73582080b074bc523968e73f6ec03e7787e6b84"
     }
   },
   {
@@ -4479,7 +4479,7 @@
       "ISO3166_2": "GB-WIL",
       "Latitude": 51.3242,
       "Longitude": -1.9032,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-WIL.geojson",
       "CommonAliases": [
         "Wiltshire"
       ],
@@ -4489,8 +4489,8 @@
       "ID": "D0011A6E-84B7-4C8A-9DB2-6256B006CCE7"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:32.553Z",
-      "checksum": "2194d678fd618d8b3e21d69d5f7edf51638905206cfb078ea8c88dfdd409b4e5"
+      "lastModified": "2026-04-10T02:33:53.305Z",
+      "checksum": "85db03af43bc06cefd0ed0ce543700afb3e8914263bfdb05f7bf00e79826fc8b"
     }
   },
   {
@@ -4500,7 +4500,7 @@
       "ISO3166_2": "GB-WNM",
       "Latitude": 51.4803,
       "Longitude": -0.677,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-WNM.geojson",
       "CommonAliases": [
         "Windsor and Maidenhead"
       ],
@@ -4510,8 +4510,8 @@
       "ID": "21490309-1267-4B2F-BA8C-F74DB5CEF2DE"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:32.564Z",
-      "checksum": "42e9b6ea0e653b271706a22b59f7725577d7687f33cf77301bdda2003ef20095"
+      "lastModified": "2026-04-10T02:33:53.318Z",
+      "checksum": "75596508c036d934f1362146a1636faaf6b6127b4a94593e529533963a8b0a98"
     }
   },
   {
@@ -4521,7 +4521,7 @@
       "ISO3166_2": "GB-WRL",
       "Latitude": 53.341,
       "Longitude": -3.0501,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-WRL.geojson",
       "CommonAliases": [
         "Wirral"
       ],
@@ -4531,8 +4531,8 @@
       "ID": "DC0D2A32-678D-4BD8-85FD-AB65E4222C33"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:32.578Z",
-      "checksum": "5f20f31fa7d9951e08f709f4c4258b2fabd43e8a352d1c086af0909ce3be4d78"
+      "lastModified": "2026-04-10T02:33:53.332Z",
+      "checksum": "226a62c50853581c29f44bd99ebc26e0f0223972b88a78d2d1f6707fc9474daa"
     }
   },
   {
@@ -4542,7 +4542,7 @@
       "ISO3166_2": "GB-WOK",
       "Latitude": 51.4105,
       "Longitude": -0.8339,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-WOK.geojson",
       "CommonAliases": [
         "Wokingham"
       ],
@@ -4552,8 +4552,8 @@
       "ID": "23B7BCDB-5BEC-4D9B-8297-D1D75E3AE45C"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:32.592Z",
-      "checksum": "f4d145944ebc72e74a579d29b70cc9068fc67dccc2fab28d9e7f5ac5620aff9f"
+      "lastModified": "2026-04-10T02:33:53.344Z",
+      "checksum": "2a17805ff136f3694bf7b3ab5a0bdf3b68eb213a29189ac04e602e3722951321"
     }
   },
   {
@@ -4563,7 +4563,7 @@
       "ISO3166_2": "GB-WLV",
       "Latitude": 52.5848,
       "Longitude": -2.1276,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-WLV.geojson",
       "CommonAliases": [
         "Wolverhampton"
       ],
@@ -4573,8 +4573,8 @@
       "ID": "7E856C85-CB5B-4B58-A552-670D194C583B"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:32.606Z",
-      "checksum": "3a51523be1f6f741f371cf2c11fc443db1e2e3adaa0c4e1b74930d4a3ea8e964"
+      "lastModified": "2026-04-10T02:33:53.357Z",
+      "checksum": "5d94ab067db2fb5e9dcd80775310f0382bb80560d80a0e6803a98a7e51226fc1"
     }
   },
   {
@@ -4584,7 +4584,7 @@
       "ISO3166_2": "GB-WOR",
       "Latitude": 52.2109,
       "Longitude": -2.157,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-WOR.geojson",
       "CommonAliases": [
         "Worcestershire"
       ],
@@ -4594,8 +4594,8 @@
       "ID": "E455BF0F-C3D7-4BE2-8FC8-CEAD8D3ED13E"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:32.619Z",
-      "checksum": "e98731932f422d4a03fb454aa6f132a5bf68c2529fe95636d3610393d5240315"
+      "lastModified": "2026-04-10T02:33:53.370Z",
+      "checksum": "317f7a6f1da0c361aa355d8b7e31f2cc9cca0665708658dc88e067da410ebd01"
     }
   },
   {
@@ -4605,7 +4605,7 @@
       "ISO3166_2": "GB-WRX",
       "Latitude": 53.0465,
       "Longitude": -2.9938,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-WRX.geojson",
       "CommonAliases": [
         "Wrexham"
       ],
@@ -4615,8 +4615,8 @@
       "ID": "E4DD9ECA-0FEB-43C2-A1A0-541309E6FAAE"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:32.630Z",
-      "checksum": "ffd66126298fa4cfed7e91eb1994ba0a1604c1324c7743f33b3ed59bbe460fe2"
+      "lastModified": "2026-04-10T02:33:53.382Z",
+      "checksum": "769758e08aa6779795f258f4ece2d217359200942ace389620449c0fbf38e09c"
     }
   },
   {
@@ -4626,7 +4626,7 @@
       "ISO3166_2": "GB-YOR",
       "Latitude": 53.96,
       "Longitude": -1.0873,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/GB/boundaries/GB-YOR.geojson",
       "CommonAliases": [
         "York"
       ],
@@ -4636,8 +4636,8 @@
       "ID": "41BB32FD-DE5B-49DC-ABAD-ED1E289E29EC"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:32.645Z",
-      "checksum": "b5c967de3c28f15a0910975dab2156a61f2ce5fbf725544a7cfa77a2e834c927"
+      "lastModified": "2026-04-10T02:33:53.401Z",
+      "checksum": "9e591269a681e7099402572847f9c397c37b4d270cea5f521c3826667271bc1c"
     }
   }
 ]

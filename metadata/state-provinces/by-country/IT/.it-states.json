@@ -27,7 +27,7 @@
       "ISO3166_2": "IT-AG",
       "Latitude": 37.3123,
       "Longitude": 13.5747,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-AG.geojson",
       "CommonAliases": [
         "Agrigento"
       ],
@@ -37,8 +37,8 @@
       "ID": "80E28945-333C-40AF-94BA-3A5658C20A7B"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:33.244Z",
-      "checksum": "506bfe00d14235a56f5ef75909a11f4ee0b25673bf8d45c44bb09b7bc99020ad"
+      "lastModified": "2026-04-10T02:34:00.702Z",
+      "checksum": "ce0a1c2ea076e3c48b58acc040748bb47c304ca77a046081052a3bfad2a045bf"
     }
   },
   {
@@ -48,7 +48,7 @@
       "ISO3166_2": "IT-AL",
       "Latitude": 44.835,
       "Longitude": 8.745,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-AL.geojson",
       "CommonAliases": [
         "Alessandria"
       ],
@@ -58,8 +58,8 @@
       "ID": "151327AD-DC1D-4509-A573-074B94AD0361"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:33.258Z",
-      "checksum": "c8e86ec5481cdbaa56923071687968848b1b1bd26cd987be11724aa022f5fe06"
+      "lastModified": "2026-04-10T02:34:00.715Z",
+      "checksum": "f052ac94e26bf0849f81710fa678aec31ab9fa3735c7751bb2682596eb241015"
     }
   },
   {
@@ -69,7 +69,7 @@
       "ISO3166_2": "IT-AN",
       "Latitude": 43.4801,
       "Longitude": 13.2187,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-AN.geojson",
       "CommonAliases": [
         "Ancona"
       ],
@@ -79,8 +79,8 @@
       "ID": "CF30A76B-8C96-46C1-B0CB-8C8985BA877D"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:33.270Z",
-      "checksum": "eee95cffefd1c0c075e7605eccfb6bd11ccb52d7e8a68d53aaed743e260e3d1f"
+      "lastModified": "2026-04-10T02:34:00.727Z",
+      "checksum": "6ac40c721684711ec13113ebf7fd20109e5e65344f3383ff8b03dfe6177d50b3"
     }
   },
   {
@@ -132,7 +132,7 @@
       "ISO3166_2": "IT-AR",
       "Latitude": 43.5171,
       "Longitude": 11.7639,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-AR.geojson",
       "CommonAliases": [
         "Arezzo"
       ],
@@ -142,8 +142,8 @@
       "ID": "3F50D6CD-5A18-4FEC-814B-26D598B922CA"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:33.309Z",
-      "checksum": "163ba362873fc3d3ad722844a25e70e67c43a6f6af192b61cdc421731433a1a8"
+      "lastModified": "2026-04-10T02:34:00.741Z",
+      "checksum": "fb32493941c804ea4eff6229ee91dff158c3987e9a28a6bfe3b2959206cce132"
     }
   },
   {
@@ -153,7 +153,7 @@
       "ISO3166_2": "IT-AP",
       "Latitude": 42.8546,
       "Longitude": 13.5755,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-AP.geojson",
       "CommonAliases": [
         "Ascoli Piceno"
       ],
@@ -163,8 +163,8 @@
       "ID": "84E31E74-A142-434A-A21B-30B59D3E8E7F"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:33.324Z",
-      "checksum": "08b1bfb2ceb3a5f85c66c8514b50546d115d6d81ae3aac59e08dea090c3669b7"
+      "lastModified": "2026-04-10T02:34:00.754Z",
+      "checksum": "9fbe5f3c81f502326e9703e8773015891aee5ec4627dd1af634f733f5e413bfa"
     }
   },
   {
@@ -174,7 +174,7 @@
       "ISO3166_2": "IT-AT",
       "Latitude": 44.9008,
       "Longitude": 8.2064,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-AT.geojson",
       "CommonAliases": [
         "Asti"
       ],
@@ -184,8 +184,8 @@
       "ID": "F4499368-D6FA-4AE2-84F4-15E263836D04"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:33.343Z",
-      "checksum": "02f6df6cc64d079f1474ac2f89c37702a6ab5a0eb765c3a0aee393e6ba122009"
+      "lastModified": "2026-04-10T02:34:00.767Z",
+      "checksum": "c8f1467ad6bcafe33541d3c6bf0af04071e7d8a5190bcafed29096f346186df0"
     }
   },
   {
@@ -195,7 +195,7 @@
       "ISO3166_2": "IT-AV",
       "Latitude": 40.9965,
       "Longitude": 15.1406,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-AV.geojson",
       "CommonAliases": [
         "Avellino"
       ],
@@ -205,8 +205,8 @@
       "ID": "02C9B8A7-43E3-4E62-9E75-EAA34A2D898B"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:33.359Z",
-      "checksum": "db881ce77727ac1176fc354542228b4f8159a9f7f358ab8b493dbaf0fd70eb7b"
+      "lastModified": "2026-04-10T02:34:00.780Z",
+      "checksum": "22fb1a09e2f433d79200355c3dbc28273300935771131b38afc5518e04f5b372"
     }
   },
   {
@@ -216,7 +216,7 @@
       "ISO3166_2": "IT-BA",
       "Latitude": 41.1171,
       "Longitude": 16.8719,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-BA.geojson",
       "CommonAliases": [
         "Bari"
       ],
@@ -226,8 +226,8 @@
       "ID": "2FC24C4F-B406-47E9-804E-B5EFB46BB69B"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:33.387Z",
-      "checksum": "a4ac9e30f385055b36a2b7495fb117ee83e60bf489cd5030935e9cde8473a60e"
+      "lastModified": "2026-04-10T02:34:00.827Z",
+      "checksum": "7c0b1c28b7334492db5007be638a0f917160e657a4d6af078fbc1347bbf691e7"
     }
   },
   {
@@ -237,7 +237,7 @@
       "ISO3166_2": "IT-BT",
       "Latitude": 41.1802,
       "Longitude": 16.1466,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-BT.geojson",
       "CommonAliases": [
         "Barletta-Andria-Trani"
       ],
@@ -247,8 +247,8 @@
       "ID": "3F552D60-8606-43B5-8B63-2579555E10CA"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:33.400Z",
-      "checksum": "3d092305be837c91a36a75f2d6dd8965836ddbacea701934f0c9f1a04179d9d6"
+      "lastModified": "2026-04-10T02:34:00.840Z",
+      "checksum": "612d417cb4dfba90e570e881ce6edf6dcc20a5d4835210038df0eacb5782b5b6"
     }
   },
   {
@@ -279,7 +279,7 @@
       "ISO3166_2": "IT-BL",
       "Latitude": 46.2805,
       "Longitude": 12.0789,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-BL.geojson",
       "CommonAliases": [
         "Belluno"
       ],
@@ -289,8 +289,8 @@
       "ID": "451B0582-67AF-48F9-B921-6C8D6769AADE"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:33.425Z",
-      "checksum": "a9feb68bd5937e962de635593c096d2104e4552ab2421be17aeeda6825fd2ffb"
+      "lastModified": "2026-04-10T02:34:00.852Z",
+      "checksum": "9253326c34eef237fd11c90c31623a4e1acf16d717c61528e7c32dc0a854b712"
     }
   },
   {
@@ -300,7 +300,7 @@
       "ISO3166_2": "IT-BN",
       "Latitude": 41.2476,
       "Longitude": 14.7057,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-BN.geojson",
       "CommonAliases": [
         "Benevento"
       ],
@@ -310,8 +310,8 @@
       "ID": "7289C4CE-83D3-4EDE-850B-006F0C3254A1"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:33.438Z",
-      "checksum": "68362b91e7a89625128c531122a72d68ddf669ee88cd544467b06d3738423c7c"
+      "lastModified": "2026-04-10T02:34:00.866Z",
+      "checksum": "425bed9b8cd349adbfde388c5cf81c4c89496ba15625990d277811419f91cd3c"
     }
   },
   {
@@ -321,7 +321,7 @@
       "ISO3166_2": "IT-BG",
       "Latitude": 45.6983,
       "Longitude": 9.6773,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-BG.geojson",
       "CommonAliases": [
         "Bergamo"
       ],
@@ -331,8 +331,8 @@
       "ID": "4A47F084-1A52-4D42-8474-700342E2016E"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:33.453Z",
-      "checksum": "fd705fab42eace11504a45055b965f6d41879c45d654317d07d39b3333017127"
+      "lastModified": "2026-04-10T02:34:00.880Z",
+      "checksum": "f74c20a58828473a6307e0955b227c8be782d05fca792d328adf15b1728d208f"
     }
   },
   {
@@ -342,7 +342,7 @@
       "ISO3166_2": "IT-BI",
       "Latitude": 45.5628,
       "Longitude": 8.0583,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-BI.geojson",
       "CommonAliases": [
         "Biella"
       ],
@@ -352,8 +352,8 @@
       "ID": "F6ACD8B6-3324-4D5E-906D-B93E9FCB1790"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:33.473Z",
-      "checksum": "c42860198981e40b21d6ee77981dde2fa959482f52a6171bc96561b77296dac7"
+      "lastModified": "2026-04-10T02:34:00.895Z",
+      "checksum": "01e21977ff63d9976973b8ce0d859b902de0c15a038e7d57692eabd47981403c"
     }
   },
   {
@@ -363,7 +363,7 @@
       "ISO3166_2": "IT-BO",
       "Latitude": 44.4949,
       "Longitude": 11.3426,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-BO.geojson",
       "CommonAliases": [
         "Bologna"
       ],
@@ -373,8 +373,8 @@
       "ID": "8C40A417-D3D6-401C-88D0-9EB6033C1F46"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:33.489Z",
-      "checksum": "8bc8c4981f648a89ef7b0e06a53bcf2895b7ee89a0654ff9d0867724da2dc6b2"
+      "lastModified": "2026-04-10T02:34:00.912Z",
+      "checksum": "b28aa8c9f8966c01b11e514e2e114b22fed7a60b147139c590cf7077b3105a3f"
     }
   },
   {
@@ -384,7 +384,7 @@
       "ISO3166_2": "IT-BS",
       "Latitude": 45.5416,
       "Longitude": 10.2118,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-BS.geojson",
       "CommonAliases": [
         "Brescia"
       ],
@@ -394,8 +394,8 @@
       "ID": "000960D6-6337-4413-87BD-F3ACED401F6F"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:33.503Z",
-      "checksum": "95f4a33e29104175bf463f4e9e75ac786a2d420276b2f294cae068b52134b69c"
+      "lastModified": "2026-04-10T02:34:00.928Z",
+      "checksum": "cfe36b98b2a650c867c63e906cf0ef588cd4611869fd35e111b40384bfca7f46"
     }
   },
   {
@@ -405,7 +405,7 @@
       "ISO3166_2": "IT-BR",
       "Latitude": 40.6359,
       "Longitude": 17.6885,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-BR.geojson",
       "CommonAliases": [
         "Brindisi"
       ],
@@ -415,8 +415,8 @@
       "ID": "CE2CD848-DF50-4BB4-BA5C-A1722F93D22E"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:33.515Z",
-      "checksum": "005136590c145b3370e6ce1dd371da3e173c5c064ef225197289c8c65ec811c9"
+      "lastModified": "2026-04-10T02:34:00.941Z",
+      "checksum": "a93b39a90e5a2adce3ff974e99d662436e0a791f55853611b5c099220337e159"
     }
   },
   {
@@ -426,7 +426,7 @@
       "ISO3166_2": "IT-CA",
       "Latitude": 39.2238,
       "Longitude": 9.1217,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-CA.geojson",
       "CommonAliases": [
         "Cagliari"
       ],
@@ -436,8 +436,8 @@
       "ID": "85EEDF6D-7CC5-47A3-8185-A141608BEC7F"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:33.547Z",
-      "checksum": "1987ac80304c6469497063dce27edafb8b115ab01aa79b9ec29c82a6c3937458"
+      "lastModified": "2026-04-10T02:34:00.993Z",
+      "checksum": "8dfb920ef2c134e2927e3523a853ccf8b237878ebad7f541b7f321b5e20b4bdd"
     }
   },
   {
@@ -468,7 +468,7 @@
       "ISO3166_2": "IT-CL",
       "Latitude": 37.486,
       "Longitude": 14.0615,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-CL.geojson",
       "CommonAliases": [
         "Caltanissetta"
       ],
@@ -478,8 +478,8 @@
       "ID": "4A1B9978-0E01-4976-BFC2-05C950710865"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:33.572Z",
-      "checksum": "29451c72c02d874a548d63306c3bf24d853baa4be455a3adbf907225ad062532"
+      "lastModified": "2026-04-10T02:34:01.008Z",
+      "checksum": "9be5cc7098ec4dd62244181cde58f655e6306fe9f12b40cd11c007f9b2209333"
     }
   },
   {
@@ -510,7 +510,7 @@
       "ISO3166_2": "IT-CB",
       "Latitude": 41.7173,
       "Longitude": 14.8262,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-CB.geojson",
       "CommonAliases": [
         "Campobasso"
       ],
@@ -520,8 +520,8 @@
       "ID": "23FD05EE-1523-4666-9130-2E44117E9341"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:33.596Z",
-      "checksum": "d2654cde6b1090fea10ae27484801109080f8b19ad73e731b56d569dbc45dfcb"
+      "lastModified": "2026-04-10T02:34:01.022Z",
+      "checksum": "e7683d70c6c214b4b43b69e7440ff80691112bb2bf78ef019ade7184f7a9c72f"
     }
   },
   {
@@ -531,7 +531,7 @@
       "ISO3166_2": "IT-CE",
       "Latitude": 41.2035,
       "Longitude": 14.1169,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-CE.geojson",
       "CommonAliases": [
         "Caserta"
       ],
@@ -541,8 +541,8 @@
       "ID": "6CEC3961-339D-4FD8-8BF0-1C98D9AC6314"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:33.610Z",
-      "checksum": "089c5bcaa258993f27360a0365f06e5fe786752ee1fe83d5c374c1d09d376262"
+      "lastModified": "2026-04-10T02:34:01.039Z",
+      "checksum": "d3240587cf295ef5896931daf1d4551088b77e2e3bf5fa40eed23537e78c5d45"
     }
   },
   {
@@ -552,7 +552,7 @@
       "ISO3166_2": "IT-CT",
       "Latitude": 37.5029,
       "Longitude": 15.087,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-CT.geojson",
       "CommonAliases": [
         "Catania"
       ],
@@ -562,8 +562,8 @@
       "ID": "C4E64279-4C0C-4FCE-91DF-FB3AD3CDB287"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:33.622Z",
-      "checksum": "06b4377595f747fbe32937453353ba505c29540f065774925abec43efe1c6859"
+      "lastModified": "2026-04-10T02:34:01.055Z",
+      "checksum": "1b1813ad0c4ffef97089f0f541bc7df993bf971a6c4cc2d4234a8363a45a319d"
     }
   },
   {
@@ -573,7 +573,7 @@
       "ISO3166_2": "IT-CZ",
       "Latitude": 38.83,
       "Longitude": 16.4316,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-CZ.geojson",
       "CommonAliases": [
         "Catanzaro"
       ],
@@ -583,8 +583,8 @@
       "ID": "7C316F59-79B8-41CF-A242-B9767EF3799B"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:33.635Z",
-      "checksum": "e88012e65993816f625156f4df54a1e0596de53d04bcc47d6dc224e6a4769200"
+      "lastModified": "2026-04-10T02:34:01.073Z",
+      "checksum": "c585814d441321e0a2e81c4cfef192d239efb9bdcab9ff8eef4069f467e2f870"
     }
   },
   {
@@ -594,7 +594,7 @@
       "ISO3166_2": "IT-CH",
       "Latitude": 42.1027,
       "Longitude": 14.4159,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-CH.geojson",
       "CommonAliases": [
         "Chieti"
       ],
@@ -604,8 +604,8 @@
       "ID": "AE4F09C1-B6D9-4ACA-8A0D-B3D9C9FD8360"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:33.649Z",
-      "checksum": "182031d991e8cfa82972b0225a8b6074558de0ac89c54ab88153843d8f9a31f0"
+      "lastModified": "2026-04-10T02:34:01.091Z",
+      "checksum": "64e09bfffee92620d51eac68eb9d32eaf140c66b17f4edea641bdae8c078266b"
     }
   },
   {
@@ -615,7 +615,7 @@
       "ISO3166_2": "IT-CO",
       "Latitude": 45.808,
       "Longitude": 9.0852,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-CO.geojson",
       "CommonAliases": [
         "Como"
       ],
@@ -625,8 +625,8 @@
       "ID": "04055C7B-7C18-4E82-8184-4785B2315658"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:33.661Z",
-      "checksum": "6c55cb8848bd688e060ab2e0f0f3c2e6c37492bddd40f8e69d0f4c484b672684"
+      "lastModified": "2026-04-10T02:34:01.102Z",
+      "checksum": "5473c960ab5a9dfa0d074f0949143e75205adbe685cb83f5a49ca503ddd29859"
     }
   },
   {
@@ -636,7 +636,7 @@
       "ISO3166_2": "IT-CS",
       "Latitude": 39.5967,
       "Longitude": 16.3331,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-CS.geojson",
       "CommonAliases": [
         "Cosenza"
       ],
@@ -646,8 +646,8 @@
       "ID": "3BACB34C-F964-4444-B5BD-408C5F29029B"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:33.691Z",
-      "checksum": "b9115a53946ed95cc9bee656b2d275972341bd38af070be979798fb0ad5fa6e2"
+      "lastModified": "2026-04-10T02:34:01.152Z",
+      "checksum": "fcaf98ec1d9930f1661f30f3ab13a2da7e2f494deeb77cb5b86669a829f3455d"
     }
   },
   {
@@ -657,7 +657,7 @@
       "ISO3166_2": "IT-CR",
       "Latitude": 45.2209,
       "Longitude": 10.037,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-CR.geojson",
       "CommonAliases": [
         "Cremona"
       ],
@@ -667,8 +667,8 @@
       "ID": "88893318-7510-4DF3-98CD-652C9D7F9607"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:33.703Z",
-      "checksum": "f109186d4acd447d7445c211be1bc90d951c07d0c55c14595444ee8504fb4b0f"
+      "lastModified": "2026-04-10T02:34:01.166Z",
+      "checksum": "c69c525b92dcecef1a18a8c4ce74fa208796713887e7ee11e92df26241b0fd70"
     }
   },
   {
@@ -678,7 +678,7 @@
       "ISO3166_2": "IT-KR",
       "Latitude": 39.0806,
       "Longitude": 17.1272,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-KR.geojson",
       "CommonAliases": [
         "Crotone"
       ],
@@ -688,8 +688,8 @@
       "ID": "70B7C2C8-FA96-42E4-8D6A-5C7AD8F3250A"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:33.716Z",
-      "checksum": "b5594e70aaee8889292635eddd36d8e2e2e5b6dc7448da26c3b46b7ba8ceba54"
+      "lastModified": "2026-04-10T02:34:01.180Z",
+      "checksum": "604448c136be4e1842ed9c82dc4adf0133ac878fad33f88448b1cddece584320"
     }
   },
   {
@@ -699,7 +699,7 @@
       "ISO3166_2": "IT-CN",
       "Latitude": 44.4581,
       "Longitude": 7.5581,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-CN.geojson",
       "CommonAliases": [
         "Cuneo"
       ],
@@ -709,8 +709,8 @@
       "ID": "45575932-6E83-4479-A884-9DC2C81C1584"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:33.728Z",
-      "checksum": "36bdd3de026b99b9f832236aac5358de24931c7fb200b614253a12af4edf9901"
+      "lastModified": "2026-04-10T02:34:01.194Z",
+      "checksum": "6d2a2ffa888e4efdde896985521c7e7ab5cb4656504f539b87d9567419a14600"
     }
   },
   {
@@ -741,7 +741,7 @@
       "ISO3166_2": "IT-EN",
       "Latitude": 37.5676,
       "Longitude": 14.2795,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-EN.geojson",
       "CommonAliases": [
         "Enna"
       ],
@@ -751,8 +751,8 @@
       "ID": "E471F456-3E5B-481B-95D6-4D3F574862A5"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:33.756Z",
-      "checksum": "bacce4af6a2e06fb5fe04c8ba2e5c9c3a9db551dff08555cad574a68c9b23867"
+      "lastModified": "2026-04-10T02:34:01.206Z",
+      "checksum": "ffa8841f8fb3211cdd50794fa642b800314751a633921ad32099cb9e5a0d65c1"
     }
   },
   {
@@ -762,7 +762,7 @@
       "ISO3166_2": "IT-FM",
       "Latitude": 43.0922,
       "Longitude": 13.6388,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-FM.geojson",
       "CommonAliases": [
         "Fermo"
       ],
@@ -772,8 +772,8 @@
       "ID": "F5B18D09-0D29-43A5-9E16-AE4789D2558E"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:33.769Z",
-      "checksum": "7bc2bee65740ef478627c0ef69eee9de965beff0d265a19bb14a6aa2d7f2773f"
+      "lastModified": "2026-04-10T02:34:01.218Z",
+      "checksum": "57d3d46b73506b83897b92691434d56032ab497ccb550b42485c2310de904106"
     }
   },
   {
@@ -783,7 +783,7 @@
       "ISO3166_2": "IT-FE",
       "Latitude": 44.7668,
       "Longitude": 11.8279,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-FE.geojson",
       "CommonAliases": [
         "Ferrara"
       ],
@@ -793,8 +793,8 @@
       "ID": "7576AAEE-38F5-415C-8C8F-1E734BB4A561"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:33.783Z",
-      "checksum": "c159b181896fca884f3e8872336ac35b73869b118487768ed4a3b2300660a45b"
+      "lastModified": "2026-04-10T02:34:01.232Z",
+      "checksum": "ad0b030e117aa80dffc8e762b5250d96b6508d18ad62aa1bd67c1774d503d28c"
     }
   },
   {
@@ -804,7 +804,7 @@
       "ISO3166_2": "IT-FI",
       "Latitude": 43.7692,
       "Longitude": 11.2559,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-FI.geojson",
       "CommonAliases": [
         "Florence"
       ],
@@ -814,8 +814,8 @@
       "ID": "6B4EC7BC-EB9E-4494-A007-0F89AEA08E94"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:33.796Z",
-      "checksum": "9ffe1698833ebc2059a954ebed7224f73307e9995ba65f5ff3a75b572d96871d"
+      "lastModified": "2026-04-10T02:34:01.245Z",
+      "checksum": "78e8c3cc6b439d8c363460872cd82d96cc6a9bf2bc579f367b4f657f5b15619a"
     }
   },
   {
@@ -825,7 +825,7 @@
       "ISO3166_2": "IT-FG",
       "Latitude": 41.5028,
       "Longitude": 15.4529,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-FG.geojson",
       "CommonAliases": [
         "Foggia"
       ],
@@ -835,8 +835,8 @@
       "ID": "2EA3BB5F-BBC3-4041-A68A-72B73E222D52"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:33.811Z",
-      "checksum": "ba86bc2e60d84bca4eef68bcd0b845c17a73c445b96447eb1807becb8f487147"
+      "lastModified": "2026-04-10T02:34:01.256Z",
+      "checksum": "f0d5002902e6831bf17e2537443c907d8cb946373a54b8d4c1469c2821d6d83a"
     }
   },
   {
@@ -846,7 +846,7 @@
       "ISO3166_2": "IT-FC",
       "Latitude": 44.0227,
       "Longitude": 12.0141,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-FC.geojson",
       "CommonAliases": [
         "Forlì-Cesena"
       ],
@@ -856,8 +856,8 @@
       "ID": "5F548DE2-16D7-4CFE-B377-66A821DBB854"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:33.838Z",
-      "checksum": "02e56c6a661bdef05c0440655838c98f1d58d864b0311bb461f95781b32e769e"
+      "lastModified": "2026-04-10T02:34:01.301Z",
+      "checksum": "2e0ae8a39b3c932b37d63c3b27a86bd62da6ef377fb57d0b17d6e302e228c068"
     }
   },
   {
@@ -888,7 +888,7 @@
       "ISO3166_2": "IT-FR",
       "Latitude": 41.6285,
       "Longitude": 13.5758,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-FR.geojson",
       "CommonAliases": [
         "Frosinone"
       ],
@@ -898,8 +898,8 @@
       "ID": "188FC24D-48FD-4CFB-9FEA-4017C3C20857"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:33.863Z",
-      "checksum": "26457404c4f412b66a2232c84904a6b367c2220e5546439713abe3b435b5d393"
+      "lastModified": "2026-04-10T02:34:01.318Z",
+      "checksum": "cf866afc635c22f78eafbed222b91e84f83948bb1c30911d517de811f3c69439"
     }
   },
   {
@@ -909,7 +909,7 @@
       "ISO3166_2": "IT-GE",
       "Latitude": 44.4115,
       "Longitude": 8.9329,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-GE.geojson",
       "CommonAliases": [
         "Genoa"
       ],
@@ -919,8 +919,8 @@
       "ID": "881D79BB-5EDD-46BE-B76F-AE6F60523FB3"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:33.876Z",
-      "checksum": "136282c9f4b177c2a62a8bf684714ae83a308fae9ddeee69555a5cced0c5b1f3"
+      "lastModified": "2026-04-10T02:34:01.331Z",
+      "checksum": "f15805c94ac2d4d6f59d3de3cb19ce2b43b23eebe901c9414a01e31bd8c10d78"
     }
   },
   {
@@ -930,7 +930,7 @@
       "ISO3166_2": "IT-GO",
       "Latitude": 45.8625,
       "Longitude": 13.4979,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-GO.geojson",
       "CommonAliases": [
         "Gorizia"
       ],
@@ -940,8 +940,8 @@
       "ID": "1305F603-18D8-496F-B601-53B815E9462F"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:33.890Z",
-      "checksum": "42af287e3cb71bdef0b4d5b20313791170819ac861ea18dfe4a7947e10f4dd3d"
+      "lastModified": "2026-04-10T02:34:01.344Z",
+      "checksum": "2865a4be5bd23a5b86235943bf70602dbdd21cae195c6b0fc99e5e566e7e5cbb"
     }
   },
   {
@@ -951,7 +951,7 @@
       "ISO3166_2": "IT-GR",
       "Latitude": 42.7751,
       "Longitude": 11.2878,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-GR.geojson",
       "CommonAliases": [
         "Grosseto"
       ],
@@ -961,8 +961,8 @@
       "ID": "6E50E806-CDB0-4D1A-9D04-DB4E912AE1E4"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:33.902Z",
-      "checksum": "ee20e48cc7874a098d665645ffbae24747e14e77da71051b11cb6626bab7dd3d"
+      "lastModified": "2026-04-10T02:34:01.358Z",
+      "checksum": "9864f7caa6af357833544f0e64304a7fb18fcb0d0c49bbc8977c97f709125d50"
     }
   },
   {
@@ -972,7 +972,7 @@
       "ISO3166_2": "IT-IM",
       "Latitude": 43.9584,
       "Longitude": 7.8667,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-IM.geojson",
       "CommonAliases": [
         "Imperia"
       ],
@@ -982,8 +982,8 @@
       "ID": "55167FA2-49C2-4EDF-AA61-42286E9A6075"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:33.913Z",
-      "checksum": "146c63883af394c7b5fb0c52c6c64b19be0f76e56ba0698fa6a1e893ec685090"
+      "lastModified": "2026-04-10T02:34:01.371Z",
+      "checksum": "6f85f51beeef80e6f8ab4a092224c8702bf9eac8a4dc6e27d657cd7e469046a4"
     }
   },
   {
@@ -993,7 +993,7 @@
       "ISO3166_2": "IT-IS",
       "Latitude": 41.6002,
       "Longitude": 14.2383,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-IS.geojson",
       "CommonAliases": [
         "Isernia"
       ],
@@ -1003,8 +1003,8 @@
       "ID": "FC7217F4-D95D-4F7E-8033-C57AA72F1C3C"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:33.925Z",
-      "checksum": "518d5aaf05ef0cf435d41427540323a975965ece91fabffccc6f13f8b34bad73"
+      "lastModified": "2026-04-10T02:34:01.384Z",
+      "checksum": "9e502c08dbd216b83645266c601472ddba12bcf76fea1d0621c81467d1ac38ed"
     }
   },
   {
@@ -1014,7 +1014,7 @@
       "ISO3166_2": "IT-AQ",
       "Latitude": 42.1369,
       "Longitude": 13.6103,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-AQ.geojson",
       "CommonAliases": [
         "L'Aquila"
       ],
@@ -1024,8 +1024,8 @@
       "ID": "2CFD5BF2-85BB-4DC5-98BC-50FD2927F31A"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:33.938Z",
-      "checksum": "8eab53606b8a7f04ea7701730e634d2e5b3c45f1b77825df637ea2870e0d1bd6"
+      "lastModified": "2026-04-10T02:34:01.399Z",
+      "checksum": "33e6d83bf596aadebad6a2265c49f45adbcbd8053939d2263082a6735cb9aa17"
     }
   },
   {
@@ -1035,7 +1035,7 @@
       "ISO3166_2": "IT-SP",
       "Latitude": 44.2384,
       "Longitude": 9.6912,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-SP.geojson",
       "CommonAliases": [
         "La Spezia"
       ],
@@ -1045,8 +1045,8 @@
       "ID": "7FD95AD6-042E-435C-85D5-49B032F4B68F"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:33.950Z",
-      "checksum": "36692fe67f5535fb28f026c3569c4fba4c6330cf7e4b2e4081b790a4a5e0866d"
+      "lastModified": "2026-04-10T02:34:01.410Z",
+      "checksum": "2ac66c5e80aef91cc91e9fb5d27dffd006aa69f34df8909d97fe5d13c77730f2"
     }
   },
   {
@@ -1056,7 +1056,7 @@
       "ISO3166_2": "IT-LT",
       "Latitude": 41.4595,
       "Longitude": 13.0126,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-LT.geojson",
       "CommonAliases": [
         "Latina"
       ],
@@ -1066,8 +1066,8 @@
       "ID": "38A4C0F6-9BDD-4AE5-8DC6-2604E9D31AC5"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:33.975Z",
-      "checksum": "669fe47a94782172e8cd5e13d1d97951cfba120b3685dd02a4ca1a4c1cb0a3fe"
+      "lastModified": "2026-04-10T02:34:01.461Z",
+      "checksum": "0b64dc24077ce63886455848e94fb34996d201ee040155ca57ea3cd37360224a"
     }
   },
   {
@@ -1098,7 +1098,7 @@
       "ISO3166_2": "IT-LE",
       "Latitude": 40.1522,
       "Longitude": 18.2261,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-LE.geojson",
       "CommonAliases": [
         "Lecce"
       ],
@@ -1108,8 +1108,8 @@
       "ID": "32E17E9E-0788-470D-8FF8-B4396BDFCC82"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:34.023Z",
-      "checksum": "4fd172caab8d451ec416a8ea38dce2c43106f8fcf4bc09db96d56c7df51c2144"
+      "lastModified": "2026-04-10T02:34:01.475Z",
+      "checksum": "99935211d4e91469e4713939bbea6c92f9f582d96736aae9a0048c2ff2ea5526"
     }
   },
   {
@@ -1119,7 +1119,7 @@
       "ISO3166_2": "IT-LC",
       "Latitude": 45.9005,
       "Longitude": 9.412,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-LC.geojson",
       "CommonAliases": [
         "Lecco"
       ],
@@ -1129,8 +1129,8 @@
       "ID": "40C8ED3E-ABAF-4091-A785-ED55CB58C2DE"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:34.037Z",
-      "checksum": "28cbbe93b26c02f6942f3483145031b95d8d9fcc6688ffa15ff3ce26e9e6f26c"
+      "lastModified": "2026-04-10T02:34:01.487Z",
+      "checksum": "d25f7903b54753492eb2489b2cd5fbd1a4b96e7a12496eb30ed46dd7dc4da257"
     }
   },
   {
@@ -1161,7 +1161,7 @@
       "ISO3166_2": "IT-LI",
       "Latitude": 42.7902,
       "Longitude": 10.3402,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-LI.geojson",
       "CommonAliases": [
         "Livorno"
       ],
@@ -1171,8 +1171,8 @@
       "ID": "818D179A-2C4D-41BA-8C9C-D74033B9183F"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:34.062Z",
-      "checksum": "639664607960c895866a3f45d8c0aea1caa0a9d6bb5d185d3c55bb0cd96e9d25"
+      "lastModified": "2026-04-10T02:34:01.500Z",
+      "checksum": "6b9f957dc0126a25d5ea0aa77ea7eafc0ee5225cfbfe08d48ea918588ecab439"
     }
   },
   {
@@ -1182,7 +1182,7 @@
       "ISO3166_2": "IT-LO",
       "Latitude": 45.2613,
       "Longitude": 9.4917,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-LO.geojson",
       "CommonAliases": [
         "Lodi"
       ],
@@ -1192,8 +1192,8 @@
       "ID": "9E714A1A-98EE-40AD-B15B-1387C5116283"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:34.073Z",
-      "checksum": "c80969ce6b152690966f60d8fa9373eb8c07b7067f7bc6ad803db5b4a5c008fb"
+      "lastModified": "2026-04-10T02:34:01.515Z",
+      "checksum": "292efe0c99ea4856ce615a3cae4d93dc674e882f88d8b8374fc05854c065366d"
     }
   },
   {
@@ -1224,7 +1224,7 @@
       "ISO3166_2": "IT-LU",
       "Latitude": 43.8377,
       "Longitude": 10.4951,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-LU.geojson",
       "CommonAliases": [
         "Lucca"
       ],
@@ -1234,8 +1234,8 @@
       "ID": "1924DBD1-06B5-4DC9-ACDA-808421A513A0"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:34.097Z",
-      "checksum": "12f6cb0349791f4cf9af74525a7149c33e6282156fe6c468b50beaed879682b1"
+      "lastModified": "2026-04-10T02:34:01.528Z",
+      "checksum": "0c8c92ec02f9f208d9b3c92158da3552e66c293beb53d850d190e70680d7c2d4"
     }
   },
   {
@@ -1245,7 +1245,7 @@
       "ISO3166_2": "IT-MC",
       "Latitude": 43.153,
       "Longitude": 13.1509,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-MC.geojson",
       "CommonAliases": [
         "Macerata"
       ],
@@ -1255,8 +1255,8 @@
       "ID": "275A21E8-B0C5-4FD4-80CA-E846D702E737"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:34.109Z",
-      "checksum": "6414d06d7d05d4243d0a1760f187223edf2f74b505c766e517ad4d90c21eae94"
+      "lastModified": "2026-04-10T02:34:01.539Z",
+      "checksum": "e8ed8833e4bfb7c2761ecd8f6ee185cc68eb7c664428ced1011b2c201b8b4cbc"
     }
   },
   {
@@ -1266,7 +1266,7 @@
       "ISO3166_2": "IT-MN",
       "Latitude": 45.1567,
       "Longitude": 10.7917,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-MN.geojson",
       "CommonAliases": [
         "Mantua"
       ],
@@ -1276,8 +1276,8 @@
       "ID": "9E7A886A-BE2D-494F-9A64-F7329B52DE89"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:34.134Z",
-      "checksum": "d94780950a220a56d912616f3bc02a801d0a93bbb38b04a6b9228279a4d85bd2"
+      "lastModified": "2026-04-10T02:34:01.584Z",
+      "checksum": "f3d4ad68dcbf6db545227d5aad467d4e11baf911b9d220db4095e5bccf1c284c"
     }
   },
   {
@@ -1308,7 +1308,7 @@
       "ISO3166_2": "IT-MS",
       "Latitude": 44.041,
       "Longitude": 10.1555,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-MS.geojson",
       "CommonAliases": [
         "Massa and Carrara"
       ],
@@ -1318,8 +1318,8 @@
       "ID": "137936E2-C84F-402C-884E-16CD36FD7A59"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:34.159Z",
-      "checksum": "5fd107f9e8aaa602b57c86ddac50154c6da550bb3595a551ac69499aca8b9d15"
+      "lastModified": "2026-04-10T02:34:01.596Z",
+      "checksum": "8e3da819bff13acd82bde322d2285f108507b0f8c8dbfb984f32a14d8d4d63d7"
     }
   },
   {
@@ -1329,7 +1329,7 @@
       "ISO3166_2": "IT-MT",
       "Latitude": 40.6663,
       "Longitude": 16.6044,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-MT.geojson",
       "CommonAliases": [
         "Matera"
       ],
@@ -1339,8 +1339,8 @@
       "ID": "475A4B12-EFB1-4772-A245-E9D8BB1CBABA"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:34.170Z",
-      "checksum": "b49cdc7aa413293856947c81e624d3fbe0c583d65d9be3a688f8f975ba6e7b9f"
+      "lastModified": "2026-04-10T02:34:01.609Z",
+      "checksum": "acaaef705e90a9b402040e72e5c751ec2c55d0fad932cdba1b86ab7b18fa7742"
     }
   },
   {
@@ -1350,7 +1350,7 @@
       "ISO3166_2": "IT-ME",
       "Latitude": 38.194,
       "Longitude": 15.5526,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-ME.geojson",
       "CommonAliases": [
         "Messina"
       ],
@@ -1360,8 +1360,8 @@
       "ID": "DECE6A9B-9F78-433A-923D-E778222CCD69"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:34.183Z",
-      "checksum": "18aabc504e102a29459c6f630db33060b6a9dc06d57a6ebdddb45d855dac2851"
+      "lastModified": "2026-04-10T02:34:01.624Z",
+      "checksum": "5f2d2cc9b1902c851873db703fad5bd51245b257507c98ae7092d8087ac413be"
     }
   },
   {
@@ -1371,7 +1371,7 @@
       "ISO3166_2": "IT-MI",
       "Latitude": 45.4668,
       "Longitude": 9.1901,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-MI.geojson",
       "CommonAliases": [
         "Milan"
       ],
@@ -1381,8 +1381,8 @@
       "ID": "546E03B5-0D5F-4F6B-9D03-0B46ACBD55F4"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:34.195Z",
-      "checksum": "56c8ccccd33cc3e7ae9c6c14fe694d1900275790d0ca16c5ee8777f0e38d7ef0"
+      "lastModified": "2026-04-10T02:34:01.636Z",
+      "checksum": "9c5861325e2e985d647b652d6bbf7917c7608a2a11e02ef5e0df4ac5baccc416"
     }
   },
   {
@@ -1392,7 +1392,7 @@
       "ISO3166_2": "IT-MO",
       "Latitude": 44.5385,
       "Longitude": 10.936,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-MO.geojson",
       "CommonAliases": [
         "Modena"
       ],
@@ -1402,8 +1402,8 @@
       "ID": "BB9030FB-AD82-45D3-A0AB-4577B6662C1C"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:34.207Z",
-      "checksum": "bdb10ee7707244146a81e6499dba479d29461e33ff5ca360538e00bd804458a0"
+      "lastModified": "2026-04-10T02:34:01.648Z",
+      "checksum": "ddf3ecf92fb29f1c959b88b4464f00dcd2726054fd681da4932ee4de71711839"
     }
   },
   {
@@ -1434,7 +1434,7 @@
       "ISO3166_2": "IT-MB",
       "Latitude": 45.6395,
       "Longitude": 9.2788,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-MB.geojson",
       "CommonAliases": [
         "Monza and Brianza"
       ],
@@ -1444,8 +1444,8 @@
       "ID": "95766192-F01C-46DF-AC39-AF73E36B8129"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:34.231Z",
-      "checksum": "943c7d845ba51a973cbb2e91836bbe4cf9446796e786efd1d00a1d5e90c5f6da"
+      "lastModified": "2026-04-10T02:34:01.661Z",
+      "checksum": "a6800839d4f3f4835b12174c92d9d57c3eb50b7b13e03c6c14588ca79970386e"
     }
   },
   {
@@ -1455,7 +1455,7 @@
       "ISO3166_2": "IT-NA",
       "Latitude": 40.8518,
       "Longitude": 14.2681,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-NA.geojson",
       "CommonAliases": [
         "Naples"
       ],
@@ -1465,8 +1465,8 @@
       "ID": "3173B50F-E771-4393-88E1-F8914E77072A"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:34.241Z",
-      "checksum": "5e317de07f11ab4818b2e12c934e4fb40a7df2650c399563246e7e21889d23cb"
+      "lastModified": "2026-04-10T02:34:01.672Z",
+      "checksum": "fda2a50c877ef40579a9ce8414094b210204dab4b040d1d65b8df4c2ce43afc8"
     }
   },
   {
@@ -1476,7 +1476,7 @@
       "ISO3166_2": "IT-NO",
       "Latitude": 45.5842,
       "Longitude": 8.546,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-NO.geojson",
       "CommonAliases": [
         "Novara"
       ],
@@ -1486,8 +1486,8 @@
       "ID": "434F4DF9-440E-4FE9-A065-AB0B2E253ABF"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:34.265Z",
-      "checksum": "76a2fe60369547374e6c552b939e528a7fbd625415c6c9194d6ee64591998d2b"
+      "lastModified": "2026-04-10T02:34:01.722Z",
+      "checksum": "8a3b7162195331f744fd3ba9eda5440456e326d528e1196a6510d9f53403fe38"
     }
   },
   {
@@ -1497,7 +1497,7 @@
       "ISO3166_2": "IT-NU",
       "Latitude": 40.3211,
       "Longitude": 9.3297,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-NU.geojson",
       "CommonAliases": [
         "Nuoro"
       ],
@@ -1507,8 +1507,8 @@
       "ID": "E919A27B-EC6F-44D7-807D-E3819AA9C811"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:34.279Z",
-      "checksum": "256b522aecb7f9e984d72f06b54bf2f892dd30dea2b89cb61d85111056dde3e9"
+      "lastModified": "2026-04-10T02:34:01.737Z",
+      "checksum": "c2cfc0fc575015f620c44b6b9439f34eaac7877d54a360fdefce20c699a692c9"
     }
   },
   {
@@ -1518,7 +1518,7 @@
       "ISO3166_2": "IT-OR",
       "Latitude": 40.0266,
       "Longitude": 8.6796,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-OR.geojson",
       "CommonAliases": [
         "Oristano"
       ],
@@ -1528,8 +1528,8 @@
       "ID": "342C437D-042A-43F2-A358-EC3D0F35F34F"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:34.290Z",
-      "checksum": "8ba43fde525c810dd826fa752e81261ff1e47f267d36f566adb4b896212c27c5"
+      "lastModified": "2026-04-10T02:34:01.749Z",
+      "checksum": "cca66d1e7e96cb90236cf4d830b869766085228be925065a016844b199ad50f8"
     }
   },
   {
@@ -1539,7 +1539,7 @@
       "ISO3166_2": "IT-PD",
       "Latitude": 45.3914,
       "Longitude": 11.8058,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-PD.geojson",
       "CommonAliases": [
         "Padua"
       ],
@@ -1549,8 +1549,8 @@
       "ID": "3D9C0E32-0C2C-4EB4-B928-96A3C30CA149"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:34.301Z",
-      "checksum": "ef9a0182cef4f577d2b2555c9a57346a8d9003df27f20e83b1509694b36c5c9b"
+      "lastModified": "2026-04-10T02:34:01.761Z",
+      "checksum": "4028df8031a5bc23d0e98a2634f6469f1e1e9da3d726aa45b8d1ade65062900b"
     }
   },
   {
@@ -1560,7 +1560,7 @@
       "ISO3166_2": "IT-PA",
       "Latitude": 38.1157,
       "Longitude": 13.3615,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-PA.geojson",
       "CommonAliases": [
         "Palermo"
       ],
@@ -1570,8 +1570,8 @@
       "ID": "E2A9120B-5AC1-4A8F-B0A5-1B4D937AE63C"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:34.312Z",
-      "checksum": "5755e8caf8425ad4a6d3275ea534ce6681b78eae337208067602e991ece162ab"
+      "lastModified": "2026-04-10T02:34:01.773Z",
+      "checksum": "e878716eaa0c2ac5c694d04415d7dc14b3f7cb53faedbeb8a42e8c4821979e0a"
     }
   },
   {
@@ -1581,7 +1581,7 @@
       "ISO3166_2": "IT-PR",
       "Latitude": 44.8015,
       "Longitude": 10.3279,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-PR.geojson",
       "CommonAliases": [
         "Parma"
       ],
@@ -1591,8 +1591,8 @@
       "ID": "B7620A63-877E-4CBF-A85A-61BBF9117215"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:34.325Z",
-      "checksum": "ac518eeb885cea75830e8560b0795ef394ec4f776b93e9b2edef0f0204f52408"
+      "lastModified": "2026-04-10T02:34:01.786Z",
+      "checksum": "332dfe846981baa4f4686c2a05a6f6a56ecaeda74c23e629269874a3075e83cb"
     }
   },
   {
@@ -1602,7 +1602,7 @@
       "ISO3166_2": "IT-PV",
       "Latitude": 45.186,
       "Longitude": 9.1546,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-PV.geojson",
       "CommonAliases": [
         "Pavia"
       ],
@@ -1612,8 +1612,8 @@
       "ID": "57CC9ECA-2AC8-4F6C-9187-CC5B3C249AA3"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:34.337Z",
-      "checksum": "45da02a7a39e107a65385e45f1adf32da3b8f8c029d715c61631ae9503b1cc90"
+      "lastModified": "2026-04-10T02:34:01.801Z",
+      "checksum": "bdfdf8db497f64836d65e1ddfa29fdecb4881252d9fe568e7abe40ee662ed28c"
     }
   },
   {
@@ -1623,7 +1623,7 @@
       "ISO3166_2": "IT-PG",
       "Latitude": 43.112,
       "Longitude": 12.389,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-PG.geojson",
       "CommonAliases": [
         "Perugia"
       ],
@@ -1633,8 +1633,8 @@
       "ID": "3A0B7269-C631-45BE-A60D-F563EB6EE79A"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:34.356Z",
-      "checksum": "952908244176e4e5ad795c28584d2eaa417aff59d3ea8eb999a49bf3d2affa9d"
+      "lastModified": "2026-04-10T02:34:01.815Z",
+      "checksum": "24675ed49ca7eb2400d8da7be3602d5ff18eae696c6a5925acd733dd5a20851b"
     }
   },
   {
@@ -1644,7 +1644,7 @@
       "ISO3166_2": "IT-PU",
       "Latitude": 43.613,
       "Longitude": 12.7135,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-PU.geojson",
       "CommonAliases": [
         "Pesaro and Urbino"
       ],
@@ -1654,8 +1654,8 @@
       "ID": "1119AC3B-FEAE-4494-AD26-C8A934BB4197"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:34.373Z",
-      "checksum": "eb5b6f862968d07fc41eab1d3956e3f50709145b009c5054d2b158cd29c679e0"
+      "lastModified": "2026-04-10T02:34:01.828Z",
+      "checksum": "3befe6fbf450b9c0e3adc29202fac8a731c3ef89916794d5612c38918297f6b0"
     }
   },
   {
@@ -1665,7 +1665,7 @@
       "ISO3166_2": "IT-PE",
       "Latitude": 42.3103,
       "Longitude": 13.9576,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-PE.geojson",
       "CommonAliases": [
         "Pescara"
       ],
@@ -1675,8 +1675,8 @@
       "ID": "936CE3F5-86FB-4BF1-AE65-C97FA31D887B"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:34.387Z",
-      "checksum": "fc1cbdc1194b684338c034880b296cfe9ba73d16513d461467311f970ec55e44"
+      "lastModified": "2026-04-10T02:34:01.840Z",
+      "checksum": "1cd2e3ca091bf73a9983facf65db8ea60f84c6bb3616ee18c5706574e5384bed"
     }
   },
   {
@@ -1686,7 +1686,7 @@
       "ISO3166_2": "IT-PC",
       "Latitude": 44.8476,
       "Longitude": 9.6665,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-PC.geojson",
       "CommonAliases": [
         "Piacenza"
       ],
@@ -1696,8 +1696,8 @@
       "ID": "4AD80678-4EFD-48FE-93CB-FBE3347C8676"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:34.413Z",
-      "checksum": "2dd5bc12912035200664a98ebf7409e8708e511ae26d71a4fbc586f281ec9b12"
+      "lastModified": "2026-04-10T02:34:01.890Z",
+      "checksum": "62809e680f0030f80546a392f100b30a781845fc97700ce30ed9f346976a062b"
     }
   },
   {
@@ -1728,7 +1728,7 @@
       "ISO3166_2": "IT-PI",
       "Latitude": 43.7228,
       "Longitude": 10.4017,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-PI.geojson",
       "CommonAliases": [
         "Pisa"
       ],
@@ -1738,8 +1738,8 @@
       "ID": "D57AFC8D-50F6-46F6-B2BD-6CD9A03F21FE"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:34.440Z",
-      "checksum": "354d131e0ed375fc58ff8e6b42944afba03e5903a951ddd4461070260dd970a2"
+      "lastModified": "2026-04-10T02:34:01.903Z",
+      "checksum": "5d71a91987bc599b2f450eb2a19d1dd921cdabf00baf540d4c204f41bbdc648f"
     }
   },
   {
@@ -1749,7 +1749,7 @@
       "ISO3166_2": "IT-PT",
       "Latitude": 43.9741,
       "Longitude": 10.8687,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-PT.geojson",
       "CommonAliases": [
         "Pistoia"
       ],
@@ -1759,8 +1759,8 @@
       "ID": "B81A93A4-2F27-4DA1-B408-5116209ADC83"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:34.452Z",
-      "checksum": "cdd8a0727cee207b537df4fd3d5698e4967c995ef793802e572ae6f909fad8c6"
+      "lastModified": "2026-04-10T02:34:01.917Z",
+      "checksum": "a0d26ba67087efdf34a0ef0045cd3799bad5fded4d92ad3818fbcab4877f7a72"
     }
   },
   {
@@ -1770,7 +1770,7 @@
       "ISO3166_2": "IT-PN",
       "Latitude": 46.1017,
       "Longitude": 12.7039,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-PN.geojson",
       "CommonAliases": [
         "Pordenone"
       ],
@@ -1780,8 +1780,8 @@
       "ID": "2ACDD465-AF2B-4DD3-BEB2-157FBC722C19"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:34.466Z",
-      "checksum": "015722143ce51b535dcb08ecf1060b32eaec89325f67bec5cf0aebe5bc7451ed"
+      "lastModified": "2026-04-10T02:34:01.930Z",
+      "checksum": "bcc2d7061383b8da4922fcfe950680f73f9bafe948a78701ae450ac6d1b8a5c3"
     }
   },
   {
@@ -1791,7 +1791,7 @@
       "ISO3166_2": "IT-PZ",
       "Latitude": 40.5173,
       "Longitude": 15.8216,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-PZ.geojson",
       "CommonAliases": [
         "Potenza"
       ],
@@ -1801,8 +1801,8 @@
       "ID": "34330BD9-670D-4859-ADE1-CB2C448CE9DA"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:34.479Z",
-      "checksum": "d09f9fd7a40b4ccfd5011598d7f6028a04ed9b0b09a6826c8bdde29381111d14"
+      "lastModified": "2026-04-10T02:34:01.944Z",
+      "checksum": "ea3e653517c4d9715f5a910266664cd7fe6af65ad5ffd8986d1ad67142ea5617"
     }
   },
   {
@@ -1812,7 +1812,7 @@
       "ISO3166_2": "IT-PO",
       "Latitude": 43.9357,
       "Longitude": 11.0941,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-PO.geojson",
       "CommonAliases": [
         "Prato"
       ],
@@ -1822,8 +1822,8 @@
       "ID": "C5263278-4480-405B-BA09-7580554FCDAF"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:34.492Z",
-      "checksum": "f66aec33719bb4eb92f401fea2eafecd4964d41956f6a6a14b2413611a204b2c"
+      "lastModified": "2026-04-10T02:34:01.957Z",
+      "checksum": "cd9b2b045dd1f989779d59ff47608a19d14674c86f0a5ac14b55b93825b4ef4c"
     }
   },
   {
@@ -1833,7 +1833,7 @@
       "ISO3166_2": "IT-RG",
       "Latitude": 36.9269,
       "Longitude": 14.7255,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-RG.geojson",
       "CommonAliases": [
         "Ragusa"
       ],
@@ -1843,8 +1843,8 @@
       "ID": "4556BC51-B81E-4782-A6D6-5E3BD9991718"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:34.506Z",
-      "checksum": "27acd50c81ad60db6705f5f8eeab0a1d91df8acec043b66037c4104464ed33fd"
+      "lastModified": "2026-04-10T02:34:01.970Z",
+      "checksum": "e0c95a94858ad8a6573ae59121d79a5f8ed3a5bcc054cb1d5c89b011d76f70db"
     }
   },
   {
@@ -1854,7 +1854,7 @@
       "ISO3166_2": "IT-RA",
       "Latitude": 44.4184,
       "Longitude": 12.2036,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-RA.geojson",
       "CommonAliases": [
         "Ravenna"
       ],
@@ -1864,8 +1864,8 @@
       "ID": "0FF8A108-70BE-4EF3-91A2-B88149402475"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:34.521Z",
-      "checksum": "c4b0c7671dc29ec480d4c905298554048340673e3517d0717e74281a2542f6eb"
+      "lastModified": "2026-04-10T02:34:01.982Z",
+      "checksum": "87f472b3bf59202ef8f608f039e2c37592144c4beb64b52b9caa0d9945bda1be"
     }
   },
   {
@@ -1875,7 +1875,7 @@
       "ISO3166_2": "IT-RC",
       "Latitude": 38.1088,
       "Longitude": 15.6439,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-RC.geojson",
       "CommonAliases": [
         "Reggio Calabria"
       ],
@@ -1885,8 +1885,8 @@
       "ID": "1E89BA6C-56BD-4BA8-843B-605FF5E60FD9"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:34.534Z",
-      "checksum": "21d0fb477c8708ccaba53629b9605e28da0da16391ffb7f31e7509675b80a18d"
+      "lastModified": "2026-04-10T02:34:01.993Z",
+      "checksum": "7b41dd5ea5cc0c720f1e7ece508083adc9e386c453cff068e3b21ee99c8781ac"
     }
   },
   {
@@ -1896,7 +1896,7 @@
       "ISO3166_2": "IT-RE",
       "Latitude": 44.6087,
       "Longitude": 10.5941,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-RE.geojson",
       "CommonAliases": [
         "Reggio Emilia"
       ],
@@ -1906,8 +1906,8 @@
       "ID": "6E2912B3-A77F-4D87-9BF2-07A360209945"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:34.567Z",
-      "checksum": "fc26eb48cd3efeba6ef81de2364970f56ee8c4e261e14e18f183250d33c24b15"
+      "lastModified": "2026-04-10T02:34:02.040Z",
+      "checksum": "0d7aa57d412e7e320b7b5b9f2cd47325dc6629f8a4ce90ab4bbb0dcdc96d833b"
     }
   },
   {
@@ -1917,7 +1917,7 @@
       "ISO3166_2": "IT-RI",
       "Latitude": 42.4027,
       "Longitude": 12.8608,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-RI.geojson",
       "CommonAliases": [
         "Rieti"
       ],
@@ -1927,8 +1927,8 @@
       "ID": "7075F8FB-39D5-4AB0-A2CC-00F9004FEE75"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:34.579Z",
-      "checksum": "91a4b7b876b235524bdbc6103134d04e9da7bc11e30a94d0327c570cee3ec319"
+      "lastModified": "2026-04-10T02:34:02.056Z",
+      "checksum": "0745af25beaf2eae519614ba7856b4c87504d6592feade25651399c1481885db"
     }
   },
   {
@@ -1938,7 +1938,7 @@
       "ISO3166_2": "IT-RN",
       "Latitude": 44.0678,
       "Longitude": 12.5695,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-RN.geojson",
       "CommonAliases": [
         "Rimini"
       ],
@@ -1948,8 +1948,8 @@
       "ID": "63239E87-3286-476B-9E0F-45AFE761F94E"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:34.591Z",
-      "checksum": "e2d8e77ada32e8e7c92df68d1980c3c0997cbe978eb701a8f116190d5d77c52c"
+      "lastModified": "2026-04-10T02:34:02.074Z",
+      "checksum": "35075512855e9cf8cfbeab007581ae7406960429b1a04868def26f2b5a5dbaa8"
     }
   },
   {
@@ -1959,7 +1959,7 @@
       "ISO3166_2": "IT-RM",
       "Latitude": 41.8928,
       "Longitude": 12.4837,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-RM.geojson",
       "CommonAliases": [
         "Rome"
       ],
@@ -1969,8 +1969,8 @@
       "ID": "B68146C4-BC88-4B10-B56F-CDD7D92B4A21"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:34.604Z",
-      "checksum": "dff1f7295d8a44eb74475159ac2004a59c63c64b015b3e08dfe0ba3529e6b9b6"
+      "lastModified": "2026-04-10T02:34:02.090Z",
+      "checksum": "94f6c4cffc618b4202a316afad41fbb959c5e18c4dcc31b09b34c6bda94faf4b"
     }
   },
   {
@@ -1980,7 +1980,7 @@
       "ISO3166_2": "IT-RO",
       "Latitude": 45.0698,
       "Longitude": 11.7888,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-RO.geojson",
       "CommonAliases": [
         "Rovigo"
       ],
@@ -1990,8 +1990,8 @@
       "ID": "56632E16-81FC-46AC-8BDB-3303486FBFBA"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:34.616Z",
-      "checksum": "77cffef71c89c6db2c3a492d36376d931ccaee23ae198eeedd19ad834017fd41"
+      "lastModified": "2026-04-10T02:34:02.108Z",
+      "checksum": "3425f079dda877f1353351ddab60bc00e31711d878c369f16a28efdfb008e545"
     }
   },
   {
@@ -2001,7 +2001,7 @@
       "ISO3166_2": "IT-SA",
       "Latitude": 40.4194,
       "Longitude": 15.3106,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-SA.geojson",
       "CommonAliases": [
         "Salerno"
       ],
@@ -2011,8 +2011,8 @@
       "ID": "11C7DBB6-01FF-4312-B01A-5A8323145ACC"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:34.629Z",
-      "checksum": "a1dc6f7222fb66042dcc8e6c863ac8fdfafd742bf9e06f91dc8b0f114ade2a4a"
+      "lastModified": "2026-04-10T02:34:02.121Z",
+      "checksum": "b35050445826b23fc220d898071dd9d67a06a0b9f15a527bce379844bca86345"
     }
   },
   {
@@ -2043,7 +2043,7 @@
       "ISO3166_2": "IT-SS",
       "Latitude": 40.7235,
       "Longitude": 8.5613,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-SS.geojson",
       "CommonAliases": [
         "Sassari"
       ],
@@ -2053,8 +2053,8 @@
       "ID": "4AF8A947-FD64-4B2E-8BAE-9B91F0D483F0"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:34.654Z",
-      "checksum": "379efddb7ac09098f682eaed1024b0f9a4834821f33753b6ae3a09e2c2afb927"
+      "lastModified": "2026-04-10T02:34:02.135Z",
+      "checksum": "0fb8057cbceaf03b615b659604a16dc2d5e8641fd64906190bf3294fc302083d"
     }
   },
   {
@@ -2064,7 +2064,7 @@
       "ISO3166_2": "IT-SV",
       "Latitude": 44.2334,
       "Longitude": 8.2526,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-SV.geojson",
       "CommonAliases": [
         "Savona"
       ],
@@ -2074,8 +2074,8 @@
       "ID": "10B704A5-8FC8-40D0-A165-61367C59E9FE"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:34.667Z",
-      "checksum": "d4c5097da7486edb015252906b86dfe6cf7b675b6a77bb969a571181dd6e5838"
+      "lastModified": "2026-04-10T02:34:02.148Z",
+      "checksum": "752ffc062869c27d5557f094057b8f2c7c54bef2dfc801590ce16cdb99a1cda4"
     }
   },
   {
@@ -2106,7 +2106,7 @@
       "ISO3166_2": "IT-SI",
       "Latitude": 43.3186,
       "Longitude": 11.3317,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-SI.geojson",
       "CommonAliases": [
         "Siena"
       ],
@@ -2116,8 +2116,8 @@
       "ID": "25CA350E-9D82-458D-A236-E7EB6ED0B901"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:34.706Z",
-      "checksum": "5b163e2601ee4aefc1bfc4876da35abe2910881a169112e56822ce53d44219c7"
+      "lastModified": "2026-04-10T02:34:02.201Z",
+      "checksum": "44f15d53804fc97127d77576f56704d72e905e72a78066e29b2715b47f23c240"
     }
   },
   {
@@ -2127,7 +2127,7 @@
       "ISO3166_2": "IT-SR",
       "Latitude": 37.0657,
       "Longitude": 15.2857,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-SR.geojson",
       "CommonAliases": [
         "Siracusa"
       ],
@@ -2137,8 +2137,8 @@
       "ID": "2E196016-063D-4772-85D3-C6A90393EDDD"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:34.718Z",
-      "checksum": "37db52a66d510233c82c2d32da6ddbe2394979b33024def2bf4984992d63e26d"
+      "lastModified": "2026-04-10T02:34:02.219Z",
+      "checksum": "c3a4ab63bd51d18b11341edd1e82b38f36d5cb41407d6f5d3636e56263505988"
     }
   },
   {
@@ -2148,7 +2148,7 @@
       "ISO3166_2": "IT-SO",
       "Latitude": 46.1714,
       "Longitude": 9.8734,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-SO.geojson",
       "CommonAliases": [
         "Sondrio"
       ],
@@ -2158,8 +2158,8 @@
       "ID": "E159274D-405C-4557-9E32-AA5C84AA2AAE"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:34.730Z",
-      "checksum": "459fbaa07ca5acacda00fa7da535d79be05c4f475d579d1abec7f6013482f418"
+      "lastModified": "2026-04-10T02:34:02.233Z",
+      "checksum": "b61f347367eb444a5e1da1ebaf01c77ecc2156d20cfd261bbfa9baab271dc848"
     }
   },
   {
@@ -2190,7 +2190,7 @@
       "ISO3166_2": "IT-BZ",
       "Latitude": 46.4993,
       "Longitude": 11.3566,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-BZ.geojson",
       "CommonAliases": [
         "South Tyrol"
       ],
@@ -2200,8 +2200,8 @@
       "ID": "5A150BB8-2851-4D43-B36F-C36C2ECD1800"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:34.753Z",
-      "checksum": "7a3ac06969b40d9f7ac6ac9ebb57dce10f854c478bbc8aa62ff5d04ca493698e"
+      "lastModified": "2026-04-10T02:34:02.245Z",
+      "checksum": "ed0c46242424012ea6e7c45e183c561b6cef4ba3e11a71cb523b4c933f91aedb"
     }
   },
   {
@@ -2211,7 +2211,7 @@
       "ISO3166_2": "IT-TA",
       "Latitude": 40.4712,
       "Longitude": 17.2432,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-TA.geojson",
       "CommonAliases": [
         "Taranto"
       ],
@@ -2221,8 +2221,8 @@
       "ID": "271CF650-0A4E-4B0B-A829-85BACCF032A6"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:34.767Z",
-      "checksum": "8aed92764f32fa30d1b4436d50566009dc4219df4a0c3dfa7f0f0783e040c4db"
+      "lastModified": "2026-04-10T02:34:02.259Z",
+      "checksum": "124d9de751fd44acd2f9aa4c034e1bc95e697a336173e532c8b613216117ea3d"
     }
   },
   {
@@ -2232,7 +2232,7 @@
       "ISO3166_2": "IT-TE",
       "Latitude": 42.6581,
       "Longitude": 13.6979,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-TE.geojson",
       "CommonAliases": [
         "Teramo"
       ],
@@ -2242,8 +2242,8 @@
       "ID": "D51CA3BB-7E80-487E-8E7F-4FC6FBC68B3E"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:34.780Z",
-      "checksum": "00263be3a5ccd59ac6cc3123827c2eb08135b48e768df177d14fb3f7bc54921a"
+      "lastModified": "2026-04-10T02:34:02.272Z",
+      "checksum": "cfe3ea7a4f723a94d09ac1f6e3c79ffa363ee3b47573eb919cd3cbc053482ff1"
     }
   },
   {
@@ -2253,7 +2253,7 @@
       "ISO3166_2": "IT-TR",
       "Latitude": 42.5641,
       "Longitude": 12.6405,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-TR.geojson",
       "CommonAliases": [
         "Terni"
       ],
@@ -2263,8 +2263,8 @@
       "ID": "2F4BEF86-6019-4C29-A7B1-B15CBC6289FA"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:34.793Z",
-      "checksum": "45aa1c6732e704f5e8c92cee90393a976b43b7f717164a0c02acd6cab24f8224"
+      "lastModified": "2026-04-10T02:34:02.284Z",
+      "checksum": "492ad3b8acc5deed16c0899d5886632a1ba158010c11392ed762812ae11b4fa6"
     }
   },
   {
@@ -2274,7 +2274,7 @@
       "ISO3166_2": "IT-TP",
       "Latitude": 38.0183,
       "Longitude": 12.5148,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-TP.geojson",
       "CommonAliases": [
         "Trapani"
       ],
@@ -2284,8 +2284,8 @@
       "ID": "072F4969-CF4E-43B3-99E4-3D0944FAFDDD"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:34.808Z",
-      "checksum": "970407a5510fb5d1dd4ba2e8edd2ab79aa1c8c21fd53caa80caf770f5d7141fb"
+      "lastModified": "2026-04-10T02:34:02.296Z",
+      "checksum": "a3237c7d31292a40a57aafaa922c93185caf8b117268464479ac658d093482fe"
     }
   },
   {
@@ -2295,7 +2295,7 @@
       "ISO3166_2": "IT-TN",
       "Latitude": 46.0679,
       "Longitude": 11.1211,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-TN.geojson",
       "CommonAliases": [
         "Trentino"
       ],
@@ -2305,8 +2305,8 @@
       "ID": "1890783C-AF66-431A-BFEA-2EF6BD386FE9"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:34.820Z",
-      "checksum": "fa78dc291c2b8e87d7941cadd1addf5d5d74faa38ae45459a91a93b506cf5922"
+      "lastModified": "2026-04-10T02:34:02.308Z",
+      "checksum": "d0d4ce018e0a482a8f33364a0c62b1846ae1b810ea868bbf33d8d35cc7bbe894"
     }
   },
   {
@@ -2337,7 +2337,7 @@
       "ISO3166_2": "IT-TV",
       "Latitude": 45.6669,
       "Longitude": 12.2431,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-TV.geojson",
       "CommonAliases": [
         "Treviso"
       ],
@@ -2347,8 +2347,8 @@
       "ID": "844D1FC9-A22B-4D21-BAA3-7AF502219A9D"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:34.864Z",
-      "checksum": "c026465e4cdd53921cf2833ad0aa81697d90816342cdad29341ce6ca0394aca2"
+      "lastModified": "2026-04-10T02:34:02.353Z",
+      "checksum": "15ad828a959f4f8a623c751ceac70e87bafad0fe6772152f619d9f9314888c17"
     }
   },
   {
@@ -2358,7 +2358,7 @@
       "ISO3166_2": "IT-TS",
       "Latitude": 45.6895,
       "Longitude": 13.7833,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-TS.geojson",
       "CommonAliases": [
         "Trieste"
       ],
@@ -2368,8 +2368,8 @@
       "ID": "8D5F9AAA-AD18-4260-8911-35002103C1E7"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:34.876Z",
-      "checksum": "26bc1b8df2768e5f607610f30debc5c2c78ef9e6724daff31e3125cec0aa12d2"
+      "lastModified": "2026-04-10T02:34:02.366Z",
+      "checksum": "def988beb7491d246a0231086e4ca8a06d094f94ee9740a94ed7706de2bc6985"
     }
   },
   {
@@ -2379,7 +2379,7 @@
       "ISO3166_2": "IT-TO",
       "Latitude": 45.0705,
       "Longitude": 7.6868,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-TO.geojson",
       "CommonAliases": [
         "Turin"
       ],
@@ -2389,8 +2389,8 @@
       "ID": "A0E7B1EB-8A86-428B-B4AE-F788943F7D6F"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:34.887Z",
-      "checksum": "5854fa1c2a0349e0dbefa926018c433fe5ab440492733a8b83c7336b8a6cdd37"
+      "lastModified": "2026-04-10T02:34:02.379Z",
+      "checksum": "dedb7f45a24b7c95ffc84a6f7ab3e05b2327e85356a36033e1fc5e233c1fff9a"
     }
   },
   {
@@ -2421,7 +2421,7 @@
       "ISO3166_2": "IT-UD",
       "Latitude": 46.1459,
       "Longitude": 13.2974,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-UD.geojson",
       "CommonAliases": [
         "Udine"
       ],
@@ -2431,8 +2431,8 @@
       "ID": "C7BD89ED-9E3E-4764-BDCD-7BBFE92A925B"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:34.913Z",
-      "checksum": "cb49a171c1bcdd7d5158b5a189993de0c61f21c679e6c5860f24731673a40d5e"
+      "lastModified": "2026-04-10T02:34:02.391Z",
+      "checksum": "85e09ca4ea1dc1fc0e3ed73a317ddccaee62e23942ef97e26d12dafdc875fe9f"
     }
   },
   {
@@ -2463,7 +2463,7 @@
       "ISO3166_2": "IT-VA",
       "Latitude": 45.8397,
       "Longitude": 8.7541,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-VA.geojson",
       "CommonAliases": [
         "Varese"
       ],
@@ -2473,8 +2473,8 @@
       "ID": "98EF65A6-C06D-4876-BE67-DA787406ADF7"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:34.942Z",
-      "checksum": "ce5070188a2094265d0381c0959c29e0741a89c7b0ccfb3085e943b4ad517568"
+      "lastModified": "2026-04-10T02:34:02.403Z",
+      "checksum": "1a5bf8a041c12f61a982efbe3d03deb5aa453241a87ac7db826f941c1261e33d"
     }
   },
   {
@@ -2505,7 +2505,7 @@
       "ISO3166_2": "IT-VE",
       "Latitude": 45.4341,
       "Longitude": 12.3389,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-VE.geojson",
       "CommonAliases": [
         "Venice"
       ],
@@ -2515,8 +2515,8 @@
       "ID": "F4707F4C-0199-4795-8734-7A2C50B71868"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:34.968Z",
-      "checksum": "c45bdb45a5258b378069ac6ca7b7cf507db297c2409705a6e16365fd1894d391"
+      "lastModified": "2026-04-10T02:34:02.414Z",
+      "checksum": "f936c5cac3e4cd45d3ab9a4211513fc373914487b85b7fee61cd0e25db3f4dca"
     }
   },
   {
@@ -2526,7 +2526,7 @@
       "ISO3166_2": "IT-VB",
       "Latitude": 46.1156,
       "Longitude": 8.3836,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-VB.geojson",
       "CommonAliases": [
         "Verbano-Cusio-Ossola"
       ],
@@ -2536,8 +2536,8 @@
       "ID": "63B2DCC9-69E3-4999-806D-04BC020F95F2"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:34.990Z",
-      "checksum": "bead9fa89d9ece4eebf5635dc12016fb894d312ac853f2f9067a5c9fbc69cfb7"
+      "lastModified": "2026-04-10T02:34:02.449Z",
+      "checksum": "2ad700d37922476257c249ca82b2e8a30138d679dbcb19af585a36c0a631e882"
     }
   },
   {
@@ -2547,7 +2547,7 @@
       "ISO3166_2": "IT-VC",
       "Latitude": 45.3202,
       "Longitude": 8.4185,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-VC.geojson",
       "CommonAliases": [
         "Vercelli"
       ],
@@ -2557,8 +2557,8 @@
       "ID": "ACF06D34-E210-4DE8-9CE0-2948B17F5A6B"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:35.003Z",
-      "checksum": "98574eb3d589cd17d56f8b71209fcf52dd36b76e9f70cb85c76e18eee2b690b0"
+      "lastModified": "2026-04-10T02:34:02.465Z",
+      "checksum": "52a5fb013178b69c8c7e419517ac4be31e627fa282525b3c533e67ba173ab7fc"
     }
   },
   {
@@ -2568,7 +2568,7 @@
       "ISO3166_2": "IT-VR",
       "Latitude": 45.4385,
       "Longitude": 10.9924,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-VR.geojson",
       "CommonAliases": [
         "Verona"
       ],
@@ -2578,8 +2578,8 @@
       "ID": "78D5E57A-03DA-4A52-8031-8A0FEEA4E745"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:35.015Z",
-      "checksum": "f75c9c20c56d748394fc2563cef8b08d1c25d2e32eb1483b09c49cce480c9c56"
+      "lastModified": "2026-04-10T02:34:02.477Z",
+      "checksum": "0b014660fa45764f2b9cefb7b2b4c977e925e8b599cb72571d929c009c2783c2"
     }
   },
   {
@@ -2589,7 +2589,7 @@
       "ISO3166_2": "IT-VV",
       "Latitude": 38.6267,
       "Longitude": 16.0987,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-VV.geojson",
       "CommonAliases": [
         "Vibo Valentia"
       ],
@@ -2599,8 +2599,8 @@
       "ID": "E610A60F-6DC2-40A1-85F8-3710A3267E81"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:35.028Z",
-      "checksum": "a23229d3acd3e4bcaa53071cf5e1acdf9451e993a6c3d60262ff73519507a058"
+      "lastModified": "2026-04-10T02:34:02.489Z",
+      "checksum": "a59d64e3bf4fa3582698b9adcf7a5a9cf7a636d8c252bfcfe44ab9cea2b7754c"
     }
   },
   {
@@ -2610,7 +2610,7 @@
       "ISO3166_2": "IT-VI",
       "Latitude": 45.6349,
       "Longitude": 11.4064,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-VI.geojson",
       "CommonAliases": [
         "Vicenza"
       ],
@@ -2620,8 +2620,8 @@
       "ID": "E504FFC4-66C4-4D1D-9948-0013E363C95D"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:35.042Z",
-      "checksum": "1e65ada3842c445c9b238bb5f632c61dace50c4895ffaf03e97c4703eeb5fd42"
+      "lastModified": "2026-04-10T02:34:02.501Z",
+      "checksum": "cd72bc2a9824df6d162e6492add4684f8bd220e54d4acfa81e2f46c59a8a9288"
     }
   },
   {
@@ -2631,7 +2631,7 @@
       "ISO3166_2": "IT-VT",
       "Latitude": 42.493,
       "Longitude": 11.9488,
-      "BoundaryGeoJSON": null,
+      "BoundaryGeoJSON": "@file:by-country/IT/boundaries/IT-VT.geojson",
       "CommonAliases": [
         "Viterbo"
       ],
@@ -2641,8 +2641,8 @@
       "ID": "8E0555D1-1819-471C-9DAF-9D31750C3D27"
     },
     "sync": {
-      "lastModified": "2026-04-10T01:54:35.053Z",
-      "checksum": "d2c2848bfee6c5d4ab6f28a32780d3b61da11ff95a36a8f431ece98c4c0f64f4"
+      "lastModified": "2026-04-10T02:34:02.513Z",
+      "checksum": "cac21474920e744df7f46aea6aa6f560f37b259e19be1304ff92df0849da3855"
     }
   }
 ]
