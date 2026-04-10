@@ -4522,7 +4522,9 @@ export class ManageMetadataBase {
       this.applySearchableFieldUpdates(sqlStatements, fields, result);
       this.applySearchPredicateUpdates(sqlStatements, fields, result);
       this.applyEntitySearchConfig(sqlStatements, entity, result);
-      this.applyFullTextSearchUpdates(sqlStatements, entity, fields, result);
+      if (configInfo.advancedGeneration?.allowFullTextSearchAutoUpdate) {
+         this.applyFullTextSearchUpdates(sqlStatements, entity, fields, result);
+      }
 
       // Execute all updates in one batch
       if (sqlStatements.length > 0) {

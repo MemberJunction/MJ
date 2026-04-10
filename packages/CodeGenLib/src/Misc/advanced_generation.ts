@@ -197,7 +197,8 @@ export class AdvancedGeneration {
                 relationships: entity.RelatedEntities?.map((r: any) => ({
                     Name: r.Name,
                     RelatedEntity: r.RelatedEntity
-                })) || []
+                })) || [],
+                allowFullTextSearch: configInfo.advancedGeneration?.allowFullTextSearchAutoUpdate ?? false
             };
             params.contextUser = contextUser;
 
