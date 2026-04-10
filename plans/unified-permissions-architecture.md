@@ -6,7 +6,7 @@ MemberJunction currently has **12+ distinct permission subsystems** that evolved
 
 This plan delivers the fix in two phases:
 
-- **Phase 1 — Application Roles & Immediate Fixes** (junior-dev scoped): Add `ApplicationRole` entity, wire enforcement, build admin UI in the Admin app, update CodeGen to auto-assign roles to new apps, and seed metadata for all shipped apps.
+- **Phase 1 — Application Roles & Immediate Fixes**: Add `ApplicationRole` entity, wire enforcement, build admin UI in the Admin app, update CodeGen to auto-assign roles to new apps, and seed metadata for all shipped apps.
 - **Phase 2 — Unified Permission Provider Architecture**: Define `IPermissionProvider` interface, create `PermissionDomain` catalog entity, wrap each existing permission subsystem in a provider, build a unified `PermissionEngine` singleton, and deliver a "Sharing Center" admin UI.
 
 ---
@@ -55,7 +55,7 @@ This plan delivers the fix in two phases:
 
 ---
 
-## Phase 1: Application Roles (Junior Dev Scope)
+## Phase 1: Application Roles (Tech Fellow)
 
 ### Overview
 
