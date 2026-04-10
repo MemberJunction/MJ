@@ -176,6 +176,9 @@ const advancedGenerationSchema = z.object({
    *  (full-text catalogs, indexes, installed FTS components) that may not be present. Admins should
    *  enable this explicitly only when their database supports full-text search. */
   allowFullTextSearchAutoUpdate: z.boolean().default(false),
+  /** Number of entities to process in parallel during advanced generation (default: 5).
+   *  Higher values speed up processing but increase concurrent LLM API calls. */
+  batchSize: z.number().min(1).default(5),
   // NOTE: AIVendor and AIModel have been removed. Model configuration is now per-prompt
   // in the AI Prompts table via the MJ: AI Prompt Models relationship.
   features: advancedGenerationFeatureSchema.array().default([
@@ -584,6 +587,7 @@ export const DEFAULT_CODEGEN_CONFIG: Partial<ConfigInfo> = {
   advancedGeneration: {
     enableAdvancedGeneration: true,
     allowFullTextSearchAutoUpdate: false,
+    batchSize: 5,
     features: [
       {
         name: 'EntityNames',

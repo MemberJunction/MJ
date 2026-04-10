@@ -4,7 +4,7 @@ import { SQLServerCodeGenProvider } from './providers/sqlserver/SQLServerCodeGen
 import { configInfo, currentWorkingDirectory, dbType, getSettingValue, mj_core_schema, outputDir } from '../Config/config';
 import { ApplicationInfo, CodeNameFromString, EntityFieldExtendedType, EntityFieldInfo, EntityInfo, ExtractActualDefaultValue, FieldCategoryInfo, LogError, LogStatus, Metadata, SeverityType, UserInfo } from "@memberjunction/core";
 import { MJApplicationEntity } from "@memberjunction/core-entities";
-import { logError, logMessage, logStatus } from "../Misc/status_logging";
+import { logError, logMessage, logStatus, startSpinner, updateSpinner, succeedSpinner } from "../Misc/status_logging";
 import { SQLUtilityBase } from "./sql";
 import { AdvancedGeneration, EntityDescriptionResult, EntityNameResult, SmartFieldIdentificationResult, FormLayoutResult, VirtualEntityDecorationResult } from "../Misc/advanced_generation";
 import { SQLParser } from "@memberjunction/sql-parser";
@@ -2411,11 +2411,13 @@ export class ManageMetadataBase {
       // Advanced Generation - Smart field identification and form layout
       if (!skipAdvancedGeneration) {
          const step7StartTime: Date = new Date();
+         startSpinner('Applying AI-powered advanced generation (smart fields, form layout)...');
          if (! await this.applyAdvancedGeneration(pool, excludeSchemas, currentUser)) {
             logError('Error applying advanced generation features');
             // Don't fail the entire process - advanced generation is optional
          }
-         logStatus(`      Applied advanced generation features in ${(new Date().getTime() - step7StartTime.getTime()) / 1000} seconds`);
+         const step7Elapsed = ((new Date().getTime() - step7StartTime.getTime()) / 1000).toFixed(1);
+         succeedSpinner(`Advanced generation completed (${step7Elapsed}s)`);
       }
 
       logStatus(`      Total time to manage entity fields: ${(new Date().getTime() - startTime.getTime()) / 1000} seconds`);
@@ -4312,27 +4314,23 @@ export class ManageMetadataBase {
    }
 
    /**
-    * Process entities in batches with parallel execution
-    * @param pool Database connection pool
-    * @param entities Entities to process
-    * @param allFields All fields for all entities (will be filtered per entity)
-    * @param ag AdvancedGeneration instance
-    * @param currentUser User context
-    * @param batchSize Number of entities to process in parallel (default 5)
+    * Process entities in batches with parallel execution.
+    * Batch size is configurable via advancedGeneration.batchSize in mj.config.cjs (default: 5).
     */
    protected async processEntitiesBatched(
       pool: CodeGenConnection,
       entities: any[],
       allFields: any[],
       ag: AdvancedGeneration,
-      currentUser: UserInfo,
-      batchSize: number = 5
+      currentUser: UserInfo
    ): Promise<boolean> {
+      const batchSize = configInfo.advancedGeneration?.batchSize ?? 5;
       let processedCount = 0;
       let errorCount = 0;
+      const total = entities.length;
 
       // Process in batches
-      for (let i = 0; i < entities.length; i += batchSize) {
+      for (let i = 0; i < total; i += batchSize) {
          const batch = entities.slice(i, i + batchSize);
 
          // Process batch in parallel
@@ -4350,10 +4348,10 @@ export class ManageMetadataBase {
             }
          }
 
-         logStatus(`      Progress: ${processedCount}/${entities.length} entities processed`);
+         const pct = Math.round((processedCount / total) * 100);
+         updateSpinner(`Advanced generation: ${processedCount}/${total} entities (${pct}%)${errorCount > 0 ? ` — ${errorCount} error(s)` : ''}`);
       }
 
-      logStatus(`      Advanced Generation complete: ${processedCount} entities processed, ${errorCount} errors`);
       return errorCount === 0;
    }
 
