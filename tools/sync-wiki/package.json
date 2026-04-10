@@ -1,0 +1,21 @@
+{
+  "name": "mj-sync-wiki",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Extracts MemberJunction repo knowledge into an Obsidian vault",
+  "type": "module",
+  "scripts": {
+    "sync": "tsx sync-wiki.ts",
+    "sync:full": "tsx sync-wiki.ts --full",
+    "sync:watch": "tsx sync-wiki.ts --watch"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0"
+  },
+  "dependencies": {
+    "chokidar": "^4.0.0",
+    "glob": "^11.0.0",
+    "gray-matter": "^4.0.3",
+    "tsx": "^4.19.0"
+  }
+}
