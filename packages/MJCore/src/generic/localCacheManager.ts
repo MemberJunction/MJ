@@ -125,8 +125,8 @@ export interface LocalCacheManagerConfig {
 
 const DEFAULT_CONFIG: LocalCacheManagerConfig = {
     enabled: true,
-    maxSizeBytes: 50 * 1024 * 1024, // 50MB
-    maxEntries: 1000,
+    maxSizeBytes: 150 * 1024 * 1024, // 150MB
+    maxEntries: 5000,
     defaultTTLMs: 5 * 60 * 1000, // 5 minutes
     evictionPolicy: 'lru'
 };
@@ -262,6 +262,14 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     private _initializePromise: Promise<void> | null = null;
     private _stats = { hits: 0, misses: 0 };
     private _config: LocalCacheManagerConfig = { ...DEFAULT_CONFIG };
+
+    /**
+     * Per-fingerprint mutation lock. Serializes concurrent read-modify-write
+     * operations (RemoveSingleEntity, UpsertSingleEntity) on the same cache entry
+     * to prevent lost updates when multiple entity events fire simultaneously
+     * (e.g., TransactionGroup batch deletes).
+     */
+    private _fingerprintLocks = new Map<string, Promise<void>>();
 
     private readonly REGISTRY_KEY = '__MJ_CACHE_REGISTRY__';
 
@@ -977,20 +985,37 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         // ResultType is intentionally excluded from the fingerprint.
         // The cache always stores plain JSON objects regardless of ResultType.
         // Transformation to entity objects happens post-cache at consumption time.
+        //
+        // Fields is also intentionally excluded. On cache miss, we always fetch ALL
+        // fields from the DB (overriding any caller-specified Fields). This means one
+        // cache entry per entity+filter satisfies all field subsets. On cache hit,
+        // the caller's Fields list is used to filter columns from the cached data.
+        // This avoids N separate cache entries for different field subsets and guarantees
+        // a narrow-field query never poisons the cache for a full-field query.
         const maxRows = params.MaxRows ?? -1;
         const startRow = params.StartRow ?? 0;
         const connection = connectionPrefix || '';
         const aggHash = this.generateAggregateHash(params.Aggregates);
 
+        // UserSearchString affects which rows are returned (generates LIKE/FTS WHERE clauses)
+        // and MUST be part of the fingerprint to prevent cross-query cache poisoning.
+        const userSearch = (params.UserSearchString ?? '').trim();
+
+        // NOTE: ViewID and ViewName are intentionally excluded from the fingerprint.
+        // Views are just containers for entity + filter + orderBy. Two different views
+        // that resolve to the same entity/filter/orderBy produce identical SQL and results,
+        // so they should share the same cache entry.
+
         // Build human-readable fingerprint with pipe separators
-        // Format: Entity|Filter|OrderBy|MaxRows|StartRow|AggHash[|Connection]
+        // Format: Entity|Filter|OrderBy|MaxRows|StartRow|AggHash|UserSearch[|Connection]
         const parts = [
             entity,
             filter || '_',           // Use underscore for empty filter
             orderBy || '_',          // Use underscore for empty orderBy
             maxRows.toString(),
             startRow.toString(),
-            aggHash                  // Aggregate hash (or '_' for no aggregates)
+            aggHash,                 // Aggregate hash (or '_' for no aggregates)
+            userSearch || '_'        // User search string (generates LIKE/FTS clauses)
         ];
 
         // Only include connection if provided
@@ -1270,6 +1295,32 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      * Used by BaseEngine for immediate cache sync when an entity is saved.
      * If the entity exists (by primary key), it is replaced; otherwise it is added.
      *
+     * Serializes async operations on the same cache fingerprint to prevent
+     * lost-update races. When multiple entity events fire simultaneously
+     * (e.g., 3 deletes from a TransactionGroup), each read-modify-write cycle
+     * must complete before the next one starts for the same fingerprint.
+     * Different fingerprints run concurrently with no contention.
+     */
+    private async withFingerprintLock<T>(fingerprint: string, fn: () => Promise<T>): Promise<T> {
+        const existing = this._fingerprintLocks.get(fingerprint) ?? Promise.resolve();
+
+        let releaseLock: () => void;
+        const lockPromise = new Promise<void>(resolve => { releaseLock = resolve; });
+        this._fingerprintLocks.set(fingerprint, lockPromise);
+
+        try {
+            await existing; // Wait for any previous operation on this fingerprint
+            return await fn();
+        } finally {
+            releaseLock!();
+            // Clean up if we're the last in the chain
+            if (this._fingerprintLocks.get(fingerprint) === lockPromise) {
+                this._fingerprintLocks.delete(fingerprint);
+            }
+        }
+    }
+
+    /**
      * @param fingerprint - The cache fingerprint to update
      * @param entityData - The entity data as a plain object (use entity.GetAll())
      * @param primaryKeyFieldName - Name of the primary key field
@@ -1284,35 +1335,37 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     ): Promise<boolean> {
         if (!this._storageProvider || !this._config.enabled) return false;
 
-        try {
-            const cached = await this.GetRunViewResult(fingerprint);
-            if (!cached) {
-                LogStatusVerbose(`LocalCacheManager.UpsertSingleEntity: No cached data found for fingerprint "${fingerprint.substring(0, 60)}" — skipping (cache will be populated on next RunView)`);
+        return this.withFingerprintLock(fingerprint, async () => {
+            try {
+                const cached = await this.GetRunViewResult(fingerprint);
+                if (!cached) {
+                    LogStatusVerbose(`LocalCacheManager.UpsertSingleEntity: No cached data found for fingerprint "${fingerprint.substring(0, 60)}" — skipping (cache will be populated on next RunView)`);
+                    return false;
+                }
+                LogStatusVerbose(`LocalCacheManager.UpsertSingleEntity: Found cached data with ${cached.results.length} rows, updating...`);
+
+                const pkFieldNames = key.KeyValuePairs.map(kv => kv.FieldName);
+                const keyStr = key.ToConcatenatedString();
+
+                // Build a map of existing records by composite key string
+                const resultMap = new Map<string, unknown>();
+                for (const row of cached.results) {
+                    const rowObj = row as Record<string, unknown>;
+                    const rowKey = this.buildCompositeKeyFromRow(rowObj, pkFieldNames);
+                    resultMap.set(rowKey.ToConcatenatedString(), row);
+                }
+
+                // Upsert the entity (add or replace)
+                resultMap.set(keyStr, entityData);
+
+                const updatedResults = Array.from(resultMap.values());
+
+                return await this.storeCachedResults(fingerprint, updatedResults, newMaxUpdatedAt);
+            } catch (e) {
+                LogError(`LocalCacheManager.UpsertSingleEntity failed: ${e}`);
                 return false;
             }
-            LogStatusVerbose(`LocalCacheManager.UpsertSingleEntity: Found cached data with ${cached.results.length} rows, updating...`);
-
-            const pkFieldNames = key.KeyValuePairs.map(kv => kv.FieldName);
-            const keyStr = key.ToConcatenatedString();
-
-            // Build a map of existing records by composite key string
-            const resultMap = new Map<string, unknown>();
-            for (const row of cached.results) {
-                const rowObj = row as Record<string, unknown>;
-                const rowKey = this.buildCompositeKeyFromRow(rowObj, pkFieldNames);
-                resultMap.set(rowKey.ToConcatenatedString(), row);
-            }
-
-            // Upsert the entity (add or replace)
-            resultMap.set(keyStr, entityData);
-
-            const updatedResults = Array.from(resultMap.values());
-
-            return await this.storeCachedResults(fingerprint, updatedResults, newMaxUpdatedAt);
-        } catch (e) {
-            LogError(`LocalCacheManager.UpsertSingleEntity failed: ${e}`);
-            return false;
-        }
+        });
     }
 
     /**
@@ -1331,36 +1384,38 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     ): Promise<boolean> {
         if (!this._storageProvider || !this._config.enabled) return false;
 
-        try {
-            const cached = await this.GetRunViewResult(fingerprint);
-            if (!cached) {
+        return this.withFingerprintLock(fingerprint, async () => {
+            try {
+                const cached = await this.GetRunViewResult(fingerprint);
+                if (!cached) {
+                    return false;
+                }
+
+                const pkFieldNames = key.KeyValuePairs.map(kv => kv.FieldName);
+                const keyStr = key.ToConcatenatedString();
+
+                // Build a map of existing records by composite key string
+                const resultMap = new Map<string, unknown>();
+                for (const row of cached.results) {
+                    const rowObj = row as Record<string, unknown>;
+                    const rowKey = this.buildCompositeKeyFromRow(rowObj, pkFieldNames);
+                    resultMap.set(rowKey.ToConcatenatedString(), row);
+                }
+
+                if (!resultMap.has(keyStr)) {
+                    return true; // Not in cache, no-op
+                }
+
+                resultMap.delete(keyStr);
+
+                const updatedResults = Array.from(resultMap.values());
+
+                return await this.storeCachedResults(fingerprint, updatedResults, newMaxUpdatedAt);
+            } catch (e) {
+                LogError(`LocalCacheManager.RemoveSingleEntity failed: ${e}`);
                 return false;
             }
-
-            const pkFieldNames = key.KeyValuePairs.map(kv => kv.FieldName);
-            const keyStr = key.ToConcatenatedString();
-
-            // Build a map of existing records by composite key string
-            const resultMap = new Map<string, unknown>();
-            for (const row of cached.results) {
-                const rowObj = row as Record<string, unknown>;
-                const rowKey = this.buildCompositeKeyFromRow(rowObj, pkFieldNames);
-                resultMap.set(rowKey.ToConcatenatedString(), row);
-            }
-
-            if (!resultMap.has(keyStr)) {
-                return true; // Not in cache, no-op
-            }
-
-            resultMap.delete(keyStr);
-
-            const updatedResults = Array.from(resultMap.values());
-
-            return await this.storeCachedResults(fingerprint, updatedResults, newMaxUpdatedAt);
-        } catch (e) {
-            LogError(`LocalCacheManager.RemoveSingleEntity failed: ${e}`);
-            return false;
-        }
+        });
     }
 
     /**

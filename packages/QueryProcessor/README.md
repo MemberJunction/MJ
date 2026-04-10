@@ -20,6 +20,7 @@ The processor reads the current platform from `RunQuerySQLFilterManager.Instance
 | Boolean values | `1` / `0` (BIT) | `true` / `false` |
 | `sqlBoolean` filter | Returns `1` or `0` | Returns `TRUE` or `FALSE` |
 | `sqlIdentifier` filter | `[name]` | `"name"` |
+| `sqlLikeContains` / `sqlLikeBegins` / `sqlLikeEnds` filters | Escapes `%` and `_` with `[%]` `[_]` | Escapes with `\%` `\_` |
 
 The Nunjucks environment is automatically recreated when the platform changes, since filters are baked in at creation time.
 

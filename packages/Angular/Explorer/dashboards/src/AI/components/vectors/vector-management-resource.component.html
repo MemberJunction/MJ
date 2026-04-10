@@ -94,6 +94,12 @@
                         }
                       </button>
                       <button
+                        class="schedule-btn"
+                        (click)="OpenScheduleSyncDialog(row.EntityDocumentID)"
+                        title="Schedule recurring sync">
+                        <i class="fa-regular fa-clock"></i>
+                      </button>
+                      <button
                         class="edit-btn"
                         (click)="OpenEditPanel(row.EntityDocumentID)"
                         title="Edit entity document">
@@ -182,6 +188,45 @@
               <label class="suggest-label">Entity</label>
               <span class="edit-readonly-value">{{ EditDocEntityName }}</span>
             </div>
+
+            <!-- Template Section -->
+            <div class="suggest-field">
+              <div class="edit-template-header">
+                <label class="suggest-label">Template</label>
+                <button class="edit-regenerate-btn"
+                        [disabled]="IsEditRegenerating"
+                        (click)="RegenerateTemplate()"
+                        title="Regenerate template using AI">
+                  @if (IsEditRegenerating) {
+                    <i class="fa-solid fa-spinner fa-spin"></i> Regenerating...
+                  } @else {
+                    <i class="fa-solid fa-wand-magic-sparkles"></i> Regenerate with AI
+                  }
+                </button>
+              </div>
+              <div class="template-editor-wrapper">
+                <mj-code-editor
+                  [value]="EditDocTemplate"
+                  language="markdown"
+                  [readonly]="false"
+                  [lineWrapping]="true"
+                  (change)="OnEditTemplateChange($event)">
+                </mj-code-editor>
+              </div>
+            </div>
+
+            <!-- Selected Fields (parsed from template) -->
+            @if (EditDocSelectedFields.length > 0) {
+              <div class="suggest-field">
+                <label class="suggest-label">Selected Fields</label>
+                <div class="result-tags">
+                  @for (field of EditDocSelectedFields; track field) {
+                    <span class="result-tag">{{ field }}</span>
+                  }
+                </div>
+              </div>
+            }
+
             <div class="suggest-field">
               <label class="suggest-label">Document Name</label>
               <input class="suggest-input" type="text" [(ngModel)]="EditDocName" />
@@ -240,6 +285,83 @@
               }
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- Schedule Sync Dialog -->
+  @if (ShowScheduleSyncDialog) {
+    <div class="slide-panel-overlay" (click)="CloseScheduleSyncDialog()">
+      <div class="schedule-dialog" (click)="$event.stopPropagation()">
+        <div class="suggest-dialog-header">
+          <h3 class="suggest-dialog-title">
+            <i class="fa-regular fa-clock"></i>
+            Schedule Vector Sync
+          </h3>
+          <button class="suggest-close-btn" (click)="CloseScheduleSyncDialog()">
+            <i class="fa-solid fa-times"></i>
+          </button>
+        </div>
+        <div class="suggest-dialog-body">
+          <div class="suggest-form">
+            <div class="suggest-field">
+              <label class="suggest-label">Entity Document</label>
+              <span class="edit-readonly-value">{{ ScheduleSyncDocName }}</span>
+            </div>
+            <div class="suggest-field">
+              <label class="suggest-label">Action</label>
+              <span class="edit-readonly-value">__VectorizeEntity</span>
+            </div>
+            <div class="suggest-field">
+              <label class="suggest-label">Cron Expression</label>
+              <input class="suggest-input" type="text" [(ngModel)]="ScheduleSyncCron" placeholder="0 2 * * *" />
+              <div class="schedule-cron-preview">
+                <i class="fa-solid fa-info-circle"></i>
+                {{ GetScheduleCronPreview(ScheduleSyncCron) }}
+              </div>
+            </div>
+            <div class="suggest-field schedule-toggle-row">
+              <label class="suggest-label">Enabled</label>
+              <input type="checkbox" class="mj-checkbox" [(ngModel)]="ScheduleSyncEnabled" />
+            </div>
+            <div class="result-actions" style="margin-top: 1rem">
+              @if (ScheduleSyncSaving) {
+                <mj-loading text="Saving..." size="small"></mj-loading>
+              } @else {
+                <button class="suggest-submit-btn" (click)="SaveScheduleSync()">
+                  <i class="fa-solid fa-check"></i> Create Schedule
+                </button>
+                <button class="suggest-close-action" (click)="CloseScheduleSyncDialog()">
+                  Cancel
+                </button>
+              }
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- No Vector Index Warning Dialog -->
+  @if (ShowNoIndexWarning) {
+    <div class="slide-panel-overlay" (click)="CloseNoIndexWarning()">
+      <div class="no-index-warning-dialog" (click)="$event.stopPropagation()">
+        <div class="no-index-warning-icon">
+          <i class="fa-solid fa-triangle-exclamation"></i>
+        </div>
+        <h3 class="no-index-warning-title">Vector Index Required</h3>
+        <p class="no-index-warning-message">
+          You need to create at least one vector database and index before creating entity documents.
+          Go to the Configuration section to set up a vector database and create an index.
+        </p>
+        <div class="no-index-warning-actions">
+          <button class="suggest-submit-btn" (click)="GoToConfiguration()">
+            <i class="fa-solid fa-gear"></i> Go to Configuration
+          </button>
+          <button class="suggest-close-action" (click)="CloseNoIndexWarning()">
+            Close
+          </button>
         </div>
       </div>
     </div>

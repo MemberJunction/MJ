@@ -51,6 +51,8 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   public EditMode: boolean = false;
   public FavoriteInitDone: boolean = false;
   public isHistoryDialogOpen: boolean = false;
+  public IsTagsPanelOpen: boolean = false;
+  public TagCount: number = 0;
   public showDeleteDialog: boolean = false;
   public showCreateDialog: boolean = false;
 
@@ -59,6 +61,18 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
    * Referenced by CodeGen-generated templates for entities with "top area" sections.
    */
   public TopAreaHeight: string = '300px';
+
+  /**
+   * Size of the top area as a percentage (0-100) for angular-split.
+   * Used by CodeGen-generated templates with as-split.
+   */
+  public TopAreaSize: number = 40;
+
+  /**
+   * Size of the bottom area as a percentage (0-100) for angular-split.
+   * Used by CodeGen-generated templates with as-split.
+   */
+  public BottomAreaSize: number = 60;
 
   /**
    * Called when the splitter layout changes (for entities with "top area" sections).
@@ -101,6 +115,13 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   /** Emitted when validation fails before save */
   @Output() ValidationFailed = new EventEmitter<ValidationFailedEvent>();
 
+  /**
+   * Emitted once after ngOnInit completes and the record is fully initialized
+   * (favorites loaded, form state initialized). This is the safe point for
+   * the container to start loading badge counts and other record-dependent data.
+   */
+  @Output() RecordReady = new EventEmitter<BaseEntity>();
+
   // #endregion
 
   /** Subscription to form state changes */
@@ -126,6 +147,11 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
           this.cdr.markForCheck();
         });
       }
+    }
+
+    // Signal that the record is fully initialized and ready for dependent operations
+    if (this.record) {
+      this.RecordReady.emit(this.record);
     }
 
     // Set up debounced filter subscription
@@ -216,6 +242,10 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
 
   public handleHistoryDialog(): void {
     this.isHistoryDialogOpen = !this.isHistoryDialogOpen;
+  }
+
+  public HandleTagsPanel(): void {
+    this.IsTagsPanelOpen = !this.IsTagsPanelOpen;
   }
 
   // #endregion

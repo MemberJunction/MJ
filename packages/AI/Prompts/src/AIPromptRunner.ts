@@ -1,4 +1,5 @@
 import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, GetAIAPIKey, ErrorAnalyzer, AIErrorInfo } from '@memberjunction/ai';
+import { AIModelRunner } from './AIModelRunner';
 import { ValidationAttempt, AIPromptRunResult, AIModelSelectionInfo } from '@memberjunction/ai-core-plus';
 import { LogErrorEx, LogStatus, LogStatusEx, IsVerboseLoggingEnabled, Metadata, UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { CleanJSON, MJGlobal, JSONValidator, ValidationResult, ValidationErrorInfo, ValidationErrorType, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
@@ -126,13 +127,23 @@ export class AIPromptRunner {
   private _executionPlanner: ExecutionPlanner;
   private _parallelCoordinator: ParallelExecutionCoordinator;
   private _jsonValidator: JSONValidator;
-  
+  private _modelRunner: AIModelRunner;
+
   constructor() {
     this._metadata = new Metadata();
     this._templateEngine = TemplateEngineServer.Instance;
     this._executionPlanner = new ExecutionPlanner();
     this._parallelCoordinator = new ParallelExecutionCoordinator();
     this._jsonValidator = new JSONValidator();
+    this._modelRunner = new AIModelRunner();
+  }
+
+  /**
+   * Access the underlying AIModelRunner for embedding and other non-LLM model calls.
+   * Use this when you need tracked embedding execution with AIPromptRun record creation.
+   */
+  public get ModelRunner(): AIModelRunner {
+    return this._modelRunner;
   }
 
   /**

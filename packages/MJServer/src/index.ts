@@ -42,6 +42,7 @@ import { GetAPIKeyEngine } from '@memberjunction/api-keys';
 import { RedisLocalStorageProvider } from '@memberjunction/redis-provider';
 import { GenericDatabaseProvider } from '@memberjunction/generic-database-provider';
 import { PubSubManager } from './generic/PubSubManager.js';
+import { ClientToolRequestManager } from '@memberjunction/ai-agents';
 import { CACHE_INVALIDATION_TOPIC } from './generic/CacheInvalidationResolver.js';
 import { ConnectorFactory, IntegrationEngine, IntegrationSyncOptions } from '@memberjunction/integration-engine';
 import { CronExpressionHelper } from '@memberjunction/scheduling-engine';
@@ -95,7 +96,10 @@ export * from './resolvers/RunAIPromptResolver.js';
 export * from './resolvers/RunAIAgentResolver.js';
 export * from './resolvers/VectorizeEntityResolver.js';
 export * from './resolvers/SearchKnowledgeResolver.js';
+export * from './resolvers/FetchEntityVectorsResolver.js';
 export * from './resolvers/PipelineProgressResolver.js';
+export * from './resolvers/ClientToolRequestResolver.js';
+export * from './resolvers/AutotagPipelineResolver.js';
 export * from './resolvers/TaskResolver.js';
 export * from './generic/KeyValuePairInput.js';
 export * from './generic/KeyInputOutputTypes.js';
@@ -104,6 +108,7 @@ export * from './generic/DeleteOptionsInput.js';
 export * from './agents/skip-agent.js';
 export * from './agents/skip-sdk.js';
 
+export * from './resolvers/GeoResolver.js';
 export * from './resolvers/ColorResolver.js';
 export * from './resolvers/ComponentRegistryResolver.js';
 export * from './resolvers/DatasetResolver.js';
@@ -581,6 +586,12 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     pubSub.asyncIterator = pubSub.asyncIterableIterator;
   }
   PubSubManager.Instance.SetPubSubEngine(pubSub as unknown as PubSubEngine);
+
+  // Wire the ClientToolRequestManager so BaseAgent can publish client tool requests
+  // via the same PubSub infrastructure used for pipeline progress and cache invalidation.
+  ClientToolRequestManager.Instance.SetPublishFunction(
+    (topic: string, payload: Record<string, unknown>) => PubSubManager.Instance.Publish(topic, payload)
+  );
 
   // Global listener: broadcast CACHE_INVALIDATION to all browser clients whenever
   // ANY BaseEntity save/delete occurs on this server — regardless of whether it

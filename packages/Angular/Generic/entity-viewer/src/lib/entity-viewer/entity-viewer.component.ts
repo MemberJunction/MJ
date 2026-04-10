@@ -7,6 +7,7 @@ import { MJUserViewEntityExtended } from '@memberjunction/core-entities';
 import { buildCompositeKey, buildPkString, computeFieldsList } from '../utils/record.util';
 import { PageChangeEvent } from '@memberjunction/ng-pagination';
 import { TimelineGroup, TimeSegmentGrouping, TimelineSortOrder, AfterEventClickArgs } from '@memberjunction/ng-timeline';
+import { MapDisplayState } from '@memberjunction/ng-map-view';
 import {
   EntityViewMode,
   EntityViewerConfig,
@@ -107,6 +108,9 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
 
     // Detect date fields for timeline support
     this.detectDateFields();
+
+    // Detect geocoding support for map view
+    this.updateGeoCodingSupport();
 
     if (this._initialized) {
       // If entity changed to a different entity, clear all stale state from the old entity
@@ -471,6 +475,9 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
 
   /** Whether the current entity has date fields available for timeline view */
   public hasDateFields: boolean = false;
+
+  /** Whether the current entity supports geocoding (has SupportsGeoCoding = 1) */
+  public HasGeoCoding: boolean = false;
 
   /** Available date fields from the entity (sorted by priority) */
   public availableDateFields: EntityFieldInfo[] = [];
@@ -930,18 +937,14 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
 
     // Priority 2: GridState.sortSettings (sort may only be stored here)
     if (view.GridState) {
-      try {
-        const gridState = JSON.parse(view.GridState) as ViewGridState;
-        if (gridState.sortSettings && gridState.sortSettings.length > 0) {
-          const firstSort = gridState.sortSettings[0];
-          this.internalSortState = {
-            field: firstSort.field,
-            direction: firstSort.dir === 'desc' ? 'desc' : 'asc'
-          };
-          return;
-        }
-      } catch {
-        // Invalid GridState JSON — ignore
+      const gridState = view.GridStateObject;
+      if (gridState?.sortSettings && gridState.sortSettings.length > 0) {
+        const firstSort = gridState.sortSettings[0];
+        this.internalSortState = {
+          field: firstSort.field,
+          direction: firstSort.dir === 'desc' ? 'desc' : 'asc'
+        };
+        return;
       }
     }
 
@@ -1113,6 +1116,9 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
         // Update pagination state
         this.pagination.totalRecords = result.TotalRowCount;
         this.pagination.hasMore = false; // No longer used with page-based paging
+
+        // Re-check geo support after data loads (effectiveEntity may have resolved via viewEntity)
+        this.updateGeoCodingSupport();
 
         this.dataLoaded.emit({
           totalRowCount: result.TotalRowCount,
@@ -1445,6 +1451,46 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
         compositeKey: buildCompositeKey(record, entity)
       });
     }
+  }
+
+  /**
+   * Update HasGeoCoding based on the current effectiveEntity.
+   * Called from entity setter and after data loads (when effectiveEntity may resolve via viewEntity).
+   */
+  private updateGeoCodingSupport(): void {
+    const entity = this.effectiveEntity;
+    const newValue = !!(entity && entity.SupportsGeoCoding);
+    if (newValue !== this.HasGeoCoding) {
+      this.HasGeoCoding = newValue;
+      this.cdr.detectChanges();
+    }
+  }
+
+  /**
+   * Handle map marker click — emit the record for the parent to handle (open record, etc.)
+   */
+  onMapMarkerClick(event: { RecordID: string; Latitude: number; Longitude: number; Record: Record<string, unknown> }): void {
+    const entity = this.effectiveEntity;
+    if (event.Record && entity) {
+      this.recordSelected.emit({
+        record: event.Record,
+        entity: entity,
+        compositeKey: buildCompositeKey(event.Record, entity)
+      });
+    }
+  }
+
+  /** Map display state — passed from parent for persistence across reloads. */
+  @Input() mapDisplayState: Partial<MapDisplayState> | null = null;
+
+  /** Emitted when the map's display state changes (zoom, center, render mode). */
+  @Output() mapDisplayStateChange = new EventEmitter<MapDisplayState>();
+
+  /**
+   * Handle map display state changes — bubble up to parent for persistence.
+   */
+  onMapDisplayStateChange(state: MapDisplayState): void {
+    this.mapDisplayStateChange.emit(state);
   }
 
   /**

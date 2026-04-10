@@ -22,6 +22,7 @@ describe('Search Types', () => {
                 EntityName: 'Contacts',
                 RecordID: 'rec-123',
                 SourceType: 'entity',
+                ResultType: 'entity-record',
                 Score: 0.85,
                 ScoreBreakdown: { Vector: 0.8, FullText: 0.9 },
                 Tags: ['customer', 'active'],
@@ -33,6 +34,7 @@ describe('Search Types', () => {
             expect(item.Score).toBe(0.85);
             expect(item.Tags).toHaveLength(2);
             expect(item.SourceType).toBe('entity');
+            expect(item.ResultType).toBe('entity-record');
         });
     });
 
@@ -94,7 +96,8 @@ describe('Search Types', () => {
                 Filters: [],
                 TotalCount: 42,
                 ElapsedMs: 150,
-                SourceCounts: { Vector: 20, FullText: 15, Entity: 7 }
+                SourceCounts: { Vector: 20, FullText: 15, Entity: 7, Storage: 0 },
+                Providers: []
             };
 
             expect(response.Success).toBe(true);
@@ -109,7 +112,8 @@ describe('Search Types', () => {
                 Filters: [],
                 TotalCount: 0,
                 ElapsedMs: 0,
-                SourceCounts: { Vector: 0, FullText: 0, Entity: 0 },
+                SourceCounts: { Vector: 0, FullText: 0, Entity: 0, Storage: 0 },
+                Providers: [],
                 ErrorMessage: 'Search service unavailable'
             };
 

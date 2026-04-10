@@ -297,7 +297,7 @@ export class ConfigurePhase {
       emitter, 'api-port', 'GraphQL API port:', '4000', yes
     ), 10);
     config.ExplorerPort = config.ExplorerPort ?? parseInt(await this.promptInput(
-      emitter, 'explorer-port', 'Explorer UI port:', '4201', yes
+      emitter, 'explorer-port', 'Explorer UI port:', '4200', yes
     ), 10);
 
     // Auth provider
@@ -599,6 +599,7 @@ ${newUserSection}  output: [],
   ): Promise<{ Written: string[]; Preserved: string[] }> {
     const envDirCandidates = [
       path.join(dir, 'packages', 'MJExplorer', 'src', 'environments'),
+      path.join(dir, 'apps', 'MJExplorer', 'src', 'environments'),
     ];
 
     // Find the first existing parent (MJExplorer/src/) to determine
@@ -691,7 +692,7 @@ ${newUserSection}  output: [],
       : '';
     const auth0Domain = config.AuthProviderValues?.Domain ?? '';
     const apiPort = config.APIPort ?? 4000;
-    const explorerPort = config.ExplorerPort ?? 4201;
+    const explorerPort = config.ExplorerPort ?? 4200;
     const redirectUri = `http://localhost:${explorerPort}`;
 
     return `export const environment = {
@@ -722,6 +723,7 @@ ${newUserSection}  output: [],
     const candidates = [
       path.join(dir, '.env'),
       path.join(dir, 'packages', 'MJAPI', '.env'),
+      path.join(dir, 'apps', 'MJAPI', '.env'),
     ];
 
     // Merge env vars from ALL existing .env files. Later files fill in
@@ -819,7 +821,7 @@ ${newUserSection}  output: [],
       : '';
     const auth0Domain = config.AuthProviderValues?.Domain ?? '';
     const apiPort = config.APIPort ?? 4000;
-    const explorerPort = config.ExplorerPort ?? 4201;
+    const explorerPort = config.ExplorerPort ?? 4200;
     const authType = this.mapAuthType(config.AuthProvider);
 
     // Map of field name → desired value. Only patch if the current value is empty.
@@ -962,7 +964,16 @@ ${newUserSection}  output: [],
    * Resolve the path to the MJAPI `.env` file in the monorepo layout.
    */
   private async resolveMjapiEnvPath(dir: string): Promise<string> {
-    return path.join(dir, 'packages', 'MJAPI', '.env');
+    const candidates = [
+      path.join(dir, 'packages', 'MJAPI', '.env'),
+      path.join(dir, 'apps', 'MJAPI', '.env'),
+    ];
+    for (const candidate of candidates) {
+      if (await this.fileSystem.DirectoryExists(path.dirname(candidate))) {
+        return candidate;
+      }
+    }
+    return candidates[0];
   }
 
   /**

@@ -1,24 +1,24 @@
 {
   "fields": {
     "Name": "Knowledge Hub",
-    "Description": "Unified knowledge management: semantic search, vector management, duplicate detection, content autotagging, and AI assistant",
+    "Description": "Unified knowledge management: semantic search, vector management, duplicate detection, content classification, and AI assistant",
     "Icon": "fa-solid fa-brain",
     "DefaultForNewUser": false,
     "Color": "#7c3aed",
     "DefaultSequence": 1010,
     "DefaultNavItems": [
       {
-        "Label": "Search",
-        "Icon": "fa-solid fa-magnifying-glass",
+        "Label": "Classify",
+        "Icon": "fa-solid fa-tags",
         "ResourceType": "Custom",
-        "DriverClass": "KnowledgeSearchResource",
+        "DriverClass": "AutotaggingPipelineResource",
         "isDefault": true
       },
       {
-        "Label": "Vectors",
-        "Icon": "fa-solid fa-cubes",
+        "Label": "Clusters",
+        "Icon": "fa-solid fa-circle-nodes",
         "ResourceType": "Custom",
-        "DriverClass": "VectorManagementResource",
+        "DriverClass": "ClusterVisualizationResource",
         "isDefault": false
       },
       {
@@ -29,10 +29,17 @@
         "isDefault": false
       },
       {
-        "Label": "Autotagging",
-        "Icon": "fa-solid fa-tags",
+        "Label": "Analytics",
+        "Icon": "fa-solid fa-chart-line",
         "ResourceType": "Custom",
-        "DriverClass": "AutotaggingPipelineResource",
+        "DriverClass": "AnalyticsResource",
+        "isDefault": false
+      },
+      {
+        "Label": "Vectors",
+        "Icon": "fa-solid fa-cubes",
+        "ResourceType": "Custom",
+        "DriverClass": "VectorManagementResource",
         "isDefault": false
       },
       {
@@ -51,7 +58,7 @@
     "ID": "796EB8B2-B392-428B-839C-E9637C3D7EDB"
   },
   "sync": {
-    "lastModified": "2026-03-29T22:29:25.630Z",
-    "checksum": "dc8be9d9a9eddc5d8421fb852a7d6172a40c6818411e74fdcc34654fa64ec0f4"
+    "lastModified": "2026-04-10T01:56:35.911Z",
+    "checksum": "44e3fe98472c42f46cf825e1d39ebc5259ac86646aa6f92972e0d88a33726fb1"
   }
 }

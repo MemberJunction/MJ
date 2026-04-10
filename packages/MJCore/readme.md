@@ -655,6 +655,9 @@ Parameterized queries use Nunjucks templates with built-in SQL injection protect
 | `sqlBoolean` | Converts to SQL bit | `{{ flag \| sqlBoolean }}` produces `1` |
 | `sqlIdentifier` | Brackets identifiers | `{{ table \| sqlIdentifier }}` produces `[UserAccounts]` |
 | `sqlIn` | Formats arrays for IN clauses | `{{ list \| sqlIn }}` produces `('A', 'B', 'C')` |
+| `sqlLikeContains` | Wraps value with `%` for LIKE contains | `{{ term \| sqlLikeContains }}` produces `'%Conference%'` |
+| `sqlLikeBegins` | Appends `%` for LIKE begins-with | `{{ term \| sqlLikeBegins }}` produces `'Conference%'` |
+| `sqlLikeEnds` | Prepends `%` for LIKE ends-with | `{{ term \| sqlLikeEnds }}` produces `'%Conference'` |
 | `sqlNoKeywordsExpression` | Blocks dangerous SQL keywords | Allows `Revenue DESC`, blocks `DROP TABLE` |
 
 ---

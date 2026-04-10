@@ -923,8 +923,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     private GenerateDedupKey(params: RunViewParams[], contextUser?: UserInfo): string {
         const parts = params.map(p => {
             const base = LocalCacheManager.Instance.GenerateRunViewFingerprint(p, this.InstanceConnectionString);
+            // Fields is intentionally excluded — cache stores full entity width
+            // and filters on return, so different Fields values are the same query.
             const extras = [
-                p.Fields?.join(',') ?? '',
                 p.UserSearchString ?? '',
                 p.ViewID ?? '',
                 p.ViewName ?? '',
@@ -1204,12 +1205,18 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         await this.EntityStatusCheck(params, 'PreRunView');
         const entityCheckTime = performance.now() - entityCheckStart;
 
-        // Handle entity_object result type - need all fields
+        // Save the caller's original Fields request for post-cache filtering.
+        // We always fetch ALL fields from the DB so the cache entry is a universal superset
+        // that satisfies any future query for the same entity+filter regardless of field subset.
         const entityLookupStart = performance.now();
-        if (params.ResultType === 'entity_object') {
-            const entity = this.EntityByName(params.EntityName);
-            if (!entity)
-                throw new Error(`Entity ${params.EntityName} not found in metadata`);
+        const callerRequestedFields = params.Fields && params.Fields.length > 0
+            ? params.Fields.map(f => f.trim().toLowerCase())
+            : null; // null = caller wants all fields
+
+        // Always override Fields to all entity fields for the DB query.
+        // This ensures one cache entry per entity+filter that satisfies all field subsets.
+        const entity = params.EntityName ? this.EntityByName(params.EntityName) : null;
+        if (entity) {
             params.Fields = entity.Fields.map(f => f.Name);
         }
         const entityLookupTime = performance.now() - entityLookupStart;
@@ -1220,16 +1227,31 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         let cachedResult: RunViewResult | undefined;
         let fingerprint: string | undefined;
 
-        if ((params.CacheLocal || this.TrustLocalCacheCompletely) && LocalCacheManager.Instance.IsInitialized) {
+        const entityCacheAllowed = this.IsServerCacheAllowedForEntity(params);
+        if ((params.CacheLocal || this.TrustLocalCacheCompletely) && entityCacheAllowed && LocalCacheManager.Instance.IsInitialized) {
             fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params, this.InstanceConnectionString);
             const cached = await LocalCacheManager.Instance.GetRunViewResult(fingerprint);
             if (cached) {
+                // Filter cached results to only the caller's requested fields (if specified)
+                let results = cached.results;
+                if (callerRequestedFields && params.ResultType !== 'entity_object') {
+                    results = results.map((row: Record<string, unknown>) => {
+                        const filtered: Record<string, unknown> = {};
+                        for (const key of Object.keys(row)) {
+                            if (callerRequestedFields.includes(key.toLowerCase())) {
+                                filtered[key] = row[key];
+                            }
+                        }
+                        return filtered;
+                    });
+                }
+
                 // Reconstruct RunViewResult from cached data
                 cachedResult = {
                     Success: true,
-                    Results: cached.results,
-                    RowCount: cached.results.length,
-                    TotalRowCount: cached.totalRowCount ?? cached.results.length,
+                    Results: results,
+                    RowCount: results.length,
+                    TotalRowCount: cached.totalRowCount ?? results.length,
                     ExecutionTime: 0, // Cached, no execution time
                     ErrorMessage: '',
                     UserViewRunID: '',
@@ -1237,7 +1259,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 };
                 cacheStatus = 'hit';
                 if (!params.CacheLocal && this.TrustLocalCacheCompletely) {
-                    LogStatusEx({ message: `  ✅ [Server Cache HIT] RunView "${params.EntityName || params.ViewName || 'unknown'}" — ${cached.results.length} rows served from server cache (no DB query)`, verboseOnly: true });
+                    LogStatusEx({ message: `  ✅ [Server Cache HIT] RunView "${params.EntityName || params.ViewName || 'unknown'}" — ${results.length} rows served from server cache (no DB query)`, verboseOnly: true });
                 }
             } else {
                 cacheStatus = 'miss';
@@ -1354,13 +1376,15 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // Entity status check
             await this.EntityStatusCheck(param, 'PreRunViews');
 
-            // Handle entity_object result type - need all fields
-            if (param.ResultType === 'entity_object') {
-                const entity = this.EntityByName(param.EntityName);
-                if (!entity) {
-                    throw new Error(`Entity ${param.EntityName} not found in metadata`);
-                }
-                param.Fields = entity.Fields.map(f => f.Name);
+            // Save caller's original Fields, then always fetch all fields from DB.
+            // One cache entry per entity+filter satisfies all field subsets.
+            const callerFields = param.Fields && param.Fields.length > 0
+                ? param.Fields.map(f => f.trim().toLowerCase())
+                : null;
+
+            const batchEntity = param.EntityName ? this.EntityByName(param.EntityName) : null;
+            if (batchEntity) {
+                param.Fields = batchEntity.Fields.map(f => f.Name);
             }
 
             // Check local cache if enabled or if server trusts its cache completely
@@ -1368,11 +1392,25 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(param, this.InstanceConnectionString);
                 const cached = await LocalCacheManager.Instance.GetRunViewResult(fingerprint);
                 if (cached) {
+                    // Filter cached results to caller's requested fields (if specified and not entity_object)
+                    let results = cached.results;
+                    if (callerFields && param.ResultType !== 'entity_object') {
+                        results = results.map((row: Record<string, unknown>) => {
+                            const filtered: Record<string, unknown> = {};
+                            for (const key of Object.keys(row)) {
+                                if (callerFields.includes(key.toLowerCase())) {
+                                    filtered[key] = row[key];
+                                }
+                            }
+                            return filtered;
+                        });
+                    }
+
                     const cachedViewResult: RunViewResult = {
                         Success: true,
-                        Results: cached.results,
-                        RowCount: cached.results.length,
-                        TotalRowCount: cached.totalRowCount ?? cached.results.length,
+                        Results: results,
+                        RowCount: results.length,
+                        TotalRowCount: cached.totalRowCount ?? results.length,
                         ExecutionTime: 0,
                         ErrorMessage: '',
                         UserViewRunID: '',
@@ -1777,7 +1815,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // with circular subscriber references that break JSON.stringify.
         // On cache read, TransformSimpleObjectToEntityObject is called to restore
         // entity objects when ResultType === 'entity_object'.
-        if (params.CacheLocal && result.Success && preResult.fingerprint && LocalCacheManager.Instance.IsInitialized) {
+        const postEntityCacheAllowed = this.IsServerCacheAllowedForEntity(params);
+        if ((params.CacheLocal || this.TrustLocalCacheCompletely) && postEntityCacheAllowed && result.Success && preResult.fingerprint && LocalCacheManager.Instance.IsInitialized) {
             const maxUpdatedAt = this.extractMaxUpdatedAt(result.Results);
             await LocalCacheManager.Instance.SetRunViewResult(
                 preResult.fingerprint,
@@ -1856,7 +1895,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             }
 
             const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params[i], this.InstanceConnectionString);
-            if (params[i].CacheLocal && results[i].Success && LocalCacheManager.Instance.IsInitialized) {
+            const batchEntityCacheAllowed = this.IsServerCacheAllowedForEntity(params[i]);
+            if ((params[i].CacheLocal || this.TrustLocalCacheCompletely) && batchEntityCacheAllowed && results[i].Success && LocalCacheManager.Instance.IsInitialized) {
                 const maxUpdatedAt = this.extractMaxUpdatedAt(results[i].Results);
                 cachePromises.push(LocalCacheManager.Instance.SetRunViewResult(
                     fingerprint,
@@ -2031,11 +2071,32 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * - No `ExtraFilter` (empty or undefined)
      * - No `OrderBy` (empty or undefined)
      */
+    /**
+     * Checks whether server-side caching is allowed for the entity in the given RunViewParams.
+     * Returns false for entities that have TrustServerCacheCompletely = false, or for
+     * Record Changes which is always exempt (rows are created via raw SQL side-effects,
+     * not BaseEntity.Save(), so cache invalidation events never fire).
+     */
+    protected IsServerCacheAllowedForEntity(params: RunViewParams): boolean {
+        if (!params.EntityName) return true; // View-based queries without entity name — allow caching
+        const entity = this.EntityByName(params.EntityName);
+        if (!entity) return true; // Entity not found — allow caching (will fail later anyway)
+
+        // Always exempt Record Changes — rows are created via spCreateRecordChange_Internal
+        // inside save SQL batches, never through BaseEntity.Save(), so the cache is never
+        // invalidated by entity events. Even if TrustServerCacheCompletely is accidentally
+        // set to true, we still skip caching for this entity.
+        if (entity.Name === 'MJ: Record Changes') return false;
+
+        return entity.TrustServerCacheCompletely !== false;
+    }
+
     protected shouldAutoCache(params: RunViewParams, result: RunViewResult): boolean {
         if (!this.TrustLocalCacheCompletely) return false;
         if (params.CacheLocal) return false; // already handled
         if (!LocalCacheManager.Instance.IsInitialized) return false;
         if (!result.Success) return false;
+        if (!this.IsServerCacheAllowedForEntity(params)) return false;
         if (ProviderBase.ServerAutoCacheMaxRows <= 0) return false;
         if ((result.Results?.length ?? 0) > ProviderBase.ServerAutoCacheMaxRows) return false;
 

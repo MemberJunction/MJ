@@ -1,0 +1,32 @@
+[
+  {
+    "_comments": [
+      "Sets JSONType metadata on Configuration (Content Process Runs entity) to enable",
+      "CodeGen to emit a typed ConfigurationObject accessor with IContentProcessRunConfiguration."
+    ],
+    "fields": {
+      "Name": "MJ: Content Process Runs"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "IContentProcessRunConfiguration",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IContentProcessRunConfiguration.ts"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Content Process Runs&Name=Configuration"
+          },
+          "sync": {
+            "lastModified": "2026-04-06T11:01:39.853Z",
+            "checksum": "bc2bcad3921d1eb5a932c51ee230d2ba32117f4c9f125e29e296a7c4948e21f6"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Content Process Runs"
+    }
+  }
+]

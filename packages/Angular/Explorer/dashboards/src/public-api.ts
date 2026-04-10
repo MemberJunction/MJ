@@ -32,14 +32,18 @@ export {
 
 // Knowledge Hub components
 export {
-  KnowledgeSearchResourceComponent,
-  LoadKnowledgeSearchResource
-} from './KnowledgeHub/components/search/knowledge-search-resource.component';
-export {
   KnowledgeConfigResourceComponent,
   LoadKnowledgeConfigResource
 } from './KnowledgeHub/components/config/knowledge-config-resource.component';
 export { SearchResultDetailComponent } from './KnowledgeHub/components/results-detail/search-result-detail.component';
+export {
+  ClusterVisualizationResourceComponent,
+  LoadClusterVisualizationResource
+} from './KnowledgeHub/components/clusters/cluster-visualization-resource.component';
+export {
+  AnalyticsResourceComponent,
+  LoadAnalyticsResource
+} from './KnowledgeHub/components/analytics/analytics-resource.component';
 
 // Export Actions components as resources (BaseResourceComponent-based)
 export {

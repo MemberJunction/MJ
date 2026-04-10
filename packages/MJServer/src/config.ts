@@ -402,6 +402,17 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
       clientSecret: process.env.AUTH0_CLIENT_SECRET,
       domain: process.env.AUTH0_DOMAIN
     } : null,
+    // AWS Cognito
+    process.env.COGNITO_USER_POOL_ID && process.env.COGNITO_CLIENT_ID && process.env.AWS_REGION ? {
+      name: 'cognito',
+      type: 'cognito',
+      issuer: `https://cognito-idp.${process.env.AWS_REGION}.amazonaws.com/${process.env.COGNITO_USER_POOL_ID}`,
+      audience: process.env.COGNITO_CLIENT_ID,
+      jwksUri: `https://cognito-idp.${process.env.AWS_REGION}.amazonaws.com/${process.env.COGNITO_USER_POOL_ID}/.well-known/jwks.json`,
+      clientId: process.env.COGNITO_CLIENT_ID,
+      region: process.env.AWS_REGION,
+      userPoolId: process.env.COGNITO_USER_POOL_ID
+    } : null,
   ].filter(Boolean),
 };
 

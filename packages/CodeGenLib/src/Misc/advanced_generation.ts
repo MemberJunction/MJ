@@ -10,12 +10,29 @@ export type EntityDescriptionResult = { entityDescription: string, tableName: st
 export type CheckConstraintParserResult = { Description: string, Code: string, MethodName: string, ModelID: string }
 
 export type SmartFieldIdentificationResult = {
-    nameField: string;
-    nameFieldReason: string;
+    /**
+     * One or more fields that together form the human-readable record name.
+     * For person entities: ["FirstName", "LastName"]
+     * For simple entities: ["Name"]
+     * Displayed concatenated with spaces in card titles, tooltips, etc.
+     */
+    nameFields: string[];
+    nameFieldsReason: string;
     defaultInView: string[];
     defaultInViewReason: string;
     searchableFields: string[];
     searchableFieldsReason: string;
+    /** Whether this entity should be searchable by users via the search API */
+    allowUserSearch?: boolean;
+    allowUserSearchReason?: string;
+    /** Per-field search predicate recommendations (BeginsWith, Contains, EndsWith, Exact) */
+    searchPredicates?: Array<{ field: string; predicate: 'BeginsWith' | 'Contains' | 'EndsWith' | 'Exact' }>;
+    searchPredicatesReason?: string;
+    /** Whether full-text search should be enabled for this entity */
+    enableFullTextSearch?: boolean;
+    /** Which fields should be included in the full-text search index */
+    fullTextSearchFields?: string[];
+    fullTextSearchReason?: string;
     confidence: 'high' | 'medium' | 'low';
 }
 
@@ -74,7 +91,7 @@ export type FormLayoutResult = {
         category: string;
         reason: string;
         displayName: string;
-        extendedType: 'Code' | 'Email' | 'FaceTime' | 'Geo' | 'MSTeams' | 'SIP' | 'SMS' | 'Skype' | 'Tel' | 'URL' | 'WhatsApp' | 'ZoomMtg' | null;
+        extendedType: 'Code' | 'Email' | 'FaceTime' | 'Geo' | 'GeoLatitude' | 'GeoLongitude' | 'GeoCountry' | 'GeoStateProvince' | 'GeoCity' | 'GeoPostalCode' | 'GeoAddress' | 'MSTeams' | 'SIP' | 'SMS' | 'Skype' | 'Tel' | 'URL' | 'WhatsApp' | 'ZoomMtg' | null;
         codeType: 'CSS' | 'HTML' | 'JavaScript' | 'SQL' | 'TypeScript' | 'Other' | null;
     }>;
     /** @deprecated Use categoryInfo instead */
@@ -165,12 +182,17 @@ export class AdvancedGeneration {
                 fields: entity.Fields.map((f: any) => ({
                     Name: f.Name,
                     Type: f.Type,
+                    MaxLength: f.MaxLength ?? null,
                     IsNullable: f.AllowsNull,
                     IsPrimaryKey: f.IsPrimaryKey,
                     IsUnique: f.IsUnique,
                     IsForeignKey: f.EntityIDFieldName != null || (f.RelatedEntityID && f.RelatedEntityID.length > 0),
                     RelatedEntity: f.RelatedEntity || null,
-                    Description: f.Description
+                    Description: f.Description,
+                    ExtendedType: f.ExtendedType || null,
+                    ValueListType: f.ValueListType || null,
+                    DefaultValue: f.DefaultValue || null,
+                    Sequence: f.Sequence ?? null,
                 })),
                 relationships: entity.RelatedEntities?.map((r: any) => ({
                     Name: r.Name,

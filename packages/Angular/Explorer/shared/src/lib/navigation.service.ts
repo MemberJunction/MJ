@@ -2,8 +2,28 @@ import { Injectable, OnDestroy } from '@angular/core';
 import { WorkspaceStateManager, NavItem, DynamicNavItem, TabRequest, ApplicationManager } from '@memberjunction/ng-base-application';
 import { NavigationOptions } from './navigation.interfaces';
 import { CompositeKey } from '@memberjunction/core';
-import { fromEvent, Subscription } from 'rxjs';
+import { fromEvent, Subject, Subscription } from 'rxjs';
 import { UUIDsEqual } from '@memberjunction/global';
+import { BaseResourceComponent } from './base-resource-component';
+
+/**
+ * Event emitted when a resource component reports its agent context or tools.
+ * The shell (which owns the ComponentCacheManager) subscribes to these events
+ * and updates the cache + active AppContextSnapshot accordingly.
+ */
+export interface AgentContextUpdate {
+    /** The component instance that reported the update */
+    Caller: BaseResourceComponent;
+    /** Dashboard-specific context for the agent (undefined = no change) */
+    AgentContext?: Record<string, unknown>;
+    /** Client tools available from this dashboard (undefined = no change) */
+    AgentClientTools?: Array<{
+        Name: string;
+        Description: string;
+        ParameterSchema: Record<string, unknown>;
+        Handler: (params: Record<string, unknown>) => Promise<unknown>;
+    }>;
+}
 
 /**
  * System application ID for non-app-specific resources (fallback only)
@@ -121,6 +141,51 @@ export class NavigationService implements OnDestroy {
   public clearHomeAppCache(): void {
     this._homeAppId = undefined;
     this._homeAppColor = null;
+  }
+
+  // ════════════════════════════════════════════
+  // Agent Context & Client Tools
+  // ════════════════════════════════════════════
+
+  /**
+   * Observable stream of agent context updates from resource components.
+   * The shell subscribes to this to update the ComponentCacheManager and
+   * push changes to the chat overlay's AppContextSnapshot.DashboardContext.
+   */
+  public readonly AgentContextUpdated$ = new Subject<AgentContextUpdate>();
+
+  /**
+   * Report the current agent-visible state from a resource component.
+   * Call this whenever the dashboard's internal state changes (tab switch,
+   * filter change, pipeline status change, drill-down, etc.).
+   *
+   * @param caller - Pass `this` from the calling component. Used to match
+   *   against the ComponentCacheManager to identify which cached component
+   *   this update belongs to.
+   * @param context - Key-value pairs representing dashboard state the agent
+   *   should know about. Each dashboard defines its own shape.
+   */
+  public SetAgentContext(caller: BaseResourceComponent, context: Record<string, unknown>): void {
+    this.AgentContextUpdated$.next({ Caller: caller, AgentContext: context });
+  }
+
+  /**
+   * Register the client tools available from a resource component.
+   * Call this on component init and whenever the available tools change.
+   * Tools are automatically unregistered when the component becomes inactive
+   * (tab switch) and re-registered when it becomes active again.
+   *
+   * @param caller - Pass `this` from the calling component.
+   * @param tools - Array of tool definitions with Name, Description,
+   *   ParameterSchema (JSON Schema), and Handler function.
+   */
+  public SetAgentClientTools(caller: BaseResourceComponent, tools: Array<{
+    Name: string;
+    Description: string;
+    ParameterSchema: Record<string, unknown>;
+    Handler: (params: Record<string, unknown>) => Promise<unknown>;
+  }>): void {
+    this.AgentContextUpdated$.next({ Caller: caller, AgentClientTools: tools });
   }
 
   ngOnDestroy(): void {
@@ -555,6 +620,51 @@ export class NavigationService implements OnDestroy {
       },
       ResourceRecordId: '',  // Empty for new records
       IsPinned: options?.pinTab || false
+    };
+
+    // Handle transition from single-resource mode
+    this.handleSingleResourceModeTransition(forceNew, request);
+
+    if (forceNew) {
+      return this.workspaceManager.OpenTabForced(request, appColor);
+    } else {
+      return this.workspaceManager.OpenTab(request, appColor);
+    }
+  }
+
+  /**
+   * Open a universal search results tab for the given query.
+   * This is the primary way to open search results from anywhere in the application.
+   *
+   * @param query The search query text
+   * @param searchOptions Optional search-specific options (e.g., minRelevance)
+   * @param options Navigation options
+   */
+  public OpenSearch(
+    query: string,
+    searchOptions?: { minRelevance?: number },
+    options?: NavigationOptions
+  ): string {
+    const appId = this.getDefaultApplicationId();
+    const appColor = this.getDefaultAppColor();
+    const forceNew = this.shouldForceNewTab(options);
+
+    const config: Record<string, unknown> = {
+      resourceType: 'Search Results',
+      Query: query,
+      SearchInput: query,
+      recordId: `search-${query}`
+    };
+    if (searchOptions?.minRelevance != null) {
+      config['MinRelevance'] = searchOptions.minRelevance;
+    }
+
+    const request: TabRequest = {
+      ApplicationId: appId,
+      Title: `Search: ${query}`,
+      Configuration: config,
+      ResourceRecordId: `search-${query}`,
+      IsPinned: false
     };
 
     // Handle transition from single-resource mode

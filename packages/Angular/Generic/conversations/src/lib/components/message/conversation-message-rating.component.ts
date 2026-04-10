@@ -1,7 +1,6 @@
 import { Component, Input, OnInit, ChangeDetectorRef } from '@angular/core';
 import { Metadata, RunView, UserInfo } from '@memberjunction/core';
-import { MJConversationDetailRatingEntity } from '@memberjunction/core-entities';
-import { RatingJSON } from '../../models/conversation-complete-query.model';
+import { MJConversationDetailRatingEntity, RatingJSON } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
 
 /**

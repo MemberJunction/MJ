@@ -4,6 +4,9 @@ Don't say "You're absolutely right" each time I correct you. Mix it up, that's s
 ## Claude Code Fast Mode
 To enable fast mode (2.5x faster Opus 4.6 responses), add `"fastMode": true` to `~/.claude/settings.json`. This is the reliable way to enable it in the **VSCode IDE extension** — the `/fast` slash command only works consistently in CLI mode. The setting persists across sessions. Note: fast mode bills to extra usage at a higher per-token rate.
 
+## Full Autonomy Development (Sandboxed Environments Only)
+See **[claude-full-auto.md](claude-full-auto.md)** for the full-autonomy development guide — used when Claude operates as an independent developer on sandboxed/air-gapped machines with full database, build, and testing access. **Not for regular development machines.**
+
 # MemberJunction Development Guide
 
 ## 🚨 CRITICAL RULES - VIOLATIONS ARE UNACCEPTABLE 🚨
@@ -344,6 +347,28 @@ MemberJunction uses `@RegisterClass` decorators with a dynamic class factory (`M
   - Always use hardcoded UUIDs (not NEWID())
   - Never insert __mj timestamp columns
   - Use `${flyway:defaultSchema}` placeholder
+  - **Consolidate ALTER TABLE statements**: When adding multiple columns to the same table, use a SINGLE `ALTER TABLE` with multiple `ADD` clauses separated by commas — never multiple separate `ALTER TABLE` statements for the same table. This is more efficient and cleaner.
+    ```sql
+    -- ✅ CORRECT - Single ALTER TABLE with multiple columns
+    ALTER TABLE ${flyway:defaultSchema}.EntityField ADD
+        UserSearchPredicateAPI NVARCHAR(20) NOT NULL DEFAULT 'Contains',
+        AutoUpdateUserSearchPredicate BIT NOT NULL DEFAULT 1,
+        AutoUpdateFullTextSearch BIT NOT NULL DEFAULT 1;
+
+    -- ❌ WRONG - Separate ALTER TABLEs for the same table
+    ALTER TABLE ${flyway:defaultSchema}.EntityField ADD UserSearchPredicateAPI NVARCHAR(20) NOT NULL DEFAULT 'Contains';
+    ALTER TABLE ${flyway:defaultSchema}.EntityField ADD AutoUpdateUserSearchPredicate BIT NOT NULL DEFAULT 1;
+    ALTER TABLE ${flyway:defaultSchema}.EntityField ADD AutoUpdateFullTextSearch BIT NOT NULL DEFAULT 1;
+    ```
+  - **Always add `sp_addextendedproperty`** for every new column (except primary keys and foreign keys which CodeGen handles). This provides descriptions that CodeGen uses:
+    ```sql
+    EXEC sp_addextendedproperty
+        @name = N'MS_Description',
+        @value = N'Description of what this column does',
+        @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+        @level1type = N'TABLE',  @level1name = N'TableName',
+        @level2type = N'COLUMN', @level2name = N'ColumnName';
+    ```
 
 ### 🚨 CRITICAL: CodeGen Handles These Automatically
 **NEVER include the following in migration CREATE TABLE statements - CodeGen generates them:**
@@ -1479,6 +1504,33 @@ When encountering `ExpressionChangedAfterItHasBeenCheckedError` in Angular compo
   ```
 - Size presets: `'small'` (40x22px), `'medium'` (80x45px), `'large'` (120x67px), `'auto'` (fills container)
 - The component displays the animated MJ logo with optional text below
+
+### 🚨 CRITICAL: BaseResourceComponent Subclasses MUST Call NotifyLoadComplete() 🚨
+
+Every class that extends `BaseResourceComponent` (including `BaseDashboard` subclasses) **MUST** call `this.NotifyLoadComplete()` when its initial load is finished. Without this call, the app loading screen will hang indefinitely when navigating directly to a URL that targets that resource.
+
+- **`BaseDashboard` subclasses**: Handled automatically — `BaseDashboard.ngOnInit()` calls `NotifyLoadComplete()` after `loadData()` completes
+- **Direct `BaseResourceComponent` subclasses**: You MUST call `this.NotifyLoadComplete()` yourself, typically at the end of `ngOnInit()` or `ngAfterViewInit()`
+
+```typescript
+// ✅ CORRECT — NotifyLoadComplete called after initialization
+export class MyResourceComponent extends BaseResourceComponent implements OnInit {
+    async ngOnInit(): Promise<void> {
+        await this.loadMyData();
+        this.NotifyLoadComplete(); // REQUIRED — signals the loading screen to clear
+    }
+}
+
+// ❌ WRONG — missing NotifyLoadComplete causes permanent loading screen
+export class MyResourceComponent extends BaseResourceComponent implements OnInit {
+    async ngOnInit(): Promise<void> {
+        await this.loadMyData();
+        // Loading screen will hang forever on direct URL navigation!
+    }
+}
+```
+
+**Why this matters**: The shell's loading screen waits for the first resource component to signal completion via `LoadCompleteEvent`, which is wired to `NotifyLoadComplete()`. If the component never calls it, the loading animation plays indefinitely.
 
 ### Creating Custom Entity Forms
 

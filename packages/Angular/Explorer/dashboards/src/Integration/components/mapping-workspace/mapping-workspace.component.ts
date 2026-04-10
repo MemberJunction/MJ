@@ -195,6 +195,7 @@ export class MappingWorkspaceComponent extends BaseResourceComponent implements 
 
   async ngOnInit(): Promise<void> {
     await this.LoadIntegrations();
+    this.NotifyLoadComplete();
   }
 
   // =====================================================================

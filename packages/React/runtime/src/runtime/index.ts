@@ -39,3 +39,8 @@ export {
   reactRootManager,
   ManagedReactRoot
 } from './react-root-manager';
+
+export {
+  RuntimeHook,
+  RootHookContext
+} from './runtime-hooks';

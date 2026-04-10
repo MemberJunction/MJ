@@ -31,6 +31,14 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="IncludeInGlobalSearch"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
 
     </mj-collapsible-panel>
 
@@ -86,6 +94,35 @@
             [FormContext]="formContext"
         ></mj-form-field>
 
+    </mj-collapsible-panel>
+
+    <!-- ========================================
+         RELATED ENTITY PANELS
+         ======================================== -->
+
+    <!-- File Storage Account Permissions Section -->
+    <mj-collapsible-panel
+        SectionKey="mJFileStorageAccountPermissions"
+        SectionName="File Storage Account Permissions"
+        Icon="fa fa-shield-alt"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJFileStorageAccountPermissions')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: File Storage Account Permissions','FileStorageAccountID')"
+                [NewRecordValues]="NewRecordValues('MJ: File Storage Account Permissions')"
+                [AllowLoad]="IsSectionExpanded('mJFileStorageAccountPermissions')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJFileStorageAccountPermissions', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
     </mj-collapsible-panel>
 </mj-record-form-container>
         

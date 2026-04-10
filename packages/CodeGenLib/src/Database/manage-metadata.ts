@@ -2,7 +2,7 @@ import { SQLDialect } from '@memberjunction/sql-dialect';
 import { CodeGenConnection, CodeGenTransaction, CodeGenQueryResult, CodeGenDatabaseProvider } from './codeGenDatabaseProvider';
 import { SQLServerCodeGenProvider } from './providers/sqlserver/SQLServerCodeGenProvider';
 import { configInfo, currentWorkingDirectory, dbType, getSettingValue, mj_core_schema, outputDir } from '../Config/config';
-import { ApplicationInfo, CodeNameFromString, EntityFieldInfo, EntityInfo, ExtractActualDefaultValue, FieldCategoryInfo, LogError, LogStatus, Metadata, SeverityType, UserInfo } from "@memberjunction/core";
+import { ApplicationInfo, CodeNameFromString, EntityFieldExtendedType, EntityFieldInfo, EntityInfo, ExtractActualDefaultValue, FieldCategoryInfo, LogError, LogStatus, Metadata, SeverityType, UserInfo } from "@memberjunction/core";
 import { MJApplicationEntity } from "@memberjunction/core-entities";
 import { logError, logMessage, logStatus } from "../Misc/status_logging";
 import { SQLUtilityBase } from "./sql";
@@ -1699,11 +1699,12 @@ export class ManageMetadataBase {
    /**
     * Valid values for EntityField.ExtendedType, plus common LLM aliases mapped to valid values.
     */
-   private static readonly VALID_EXTENDED_TYPES = new Set([
-      'Code', 'Email', 'FaceTime', 'Geo', 'MSTeams', 'Other', 'SIP', 'SMS', 'Skype', 'Tel', 'URL', 'WhatsApp', 'ZoomMtg'
+   private static readonly VALID_EXTENDED_TYPES = new Set<EntityFieldExtendedType>([
+      'Code', 'Email', 'FaceTime', 'Geo', 'GeoLatitude', 'GeoLongitude', 'GeoCountry', 'GeoStateProvince',
+      'GeoCity', 'GeoPostalCode', 'GeoAddress', 'MSTeams', 'Other', 'SIP', 'SMS', 'Skype', 'Tel', 'URL', 'WhatsApp', 'ZoomMtg'
    ]);
 
-   private static readonly EXTENDED_TYPE_ALIASES: Record<string, string> = {
+   private static readonly EXTENDED_TYPE_ALIASES: Record<string, EntityFieldExtendedType> = {
       'phone': 'Tel',
       'telephone': 'Tel',
       'website': 'URL',
@@ -1714,6 +1715,19 @@ export class ManageMetadataBase {
       'text': 'SMS',
       'location': 'Geo',
       'address': 'Geo',
+      'latitude': 'GeoLatitude',
+      'lat': 'GeoLatitude',
+      'longitude': 'GeoLongitude',
+      'lng': 'GeoLongitude',
+      'lon': 'GeoLongitude',
+      'country': 'GeoCountry',
+      'state': 'GeoStateProvince',
+      'province': 'GeoStateProvince',
+      'city': 'GeoCity',
+      'postalcode': 'GeoPostalCode',
+      'zipcode': 'GeoPostalCode',
+      'zip': 'GeoPostalCode',
+      'streetaddress': 'GeoAddress',
       'teams': 'MSTeams',
       'facetime': 'FaceTime',
       'zoom': 'ZoomMtg',
@@ -1725,7 +1739,7 @@ export class ManageMetadataBase {
     * Validates an LLM-suggested ExtendedType against the allowed values in EntityField.
     * Returns the valid value (case-corrected) or null if invalid.
     */
-   protected validateExtendedType(suggested: string): string | null {
+   protected validateExtendedType(suggested: string): EntityFieldExtendedType | null {
       // Direct match (case-insensitive)
       for (const valid of ManageMetadataBase.VALID_EXTENDED_TYPES) {
          if (valid.toLowerCase() === suggested.toLowerCase()) {
@@ -2639,7 +2653,11 @@ export class ManageMetadataBase {
             // statement in its own batch to avoid this.
             const statements = sql.split(';\n').filter(s => s.trim().length > 0);
             for (const stmt of statements) {
-               await this.LogSQLAndExecute(pool, stmt, `SQL text to add special date field ${fieldName} to entity ${entity.SchemaName}.${entity.BaseTable}`);
+               // Each statement needs a batch separator in the log so that ALTER TABLE ADD column
+               // and the subsequent UPDATE referencing that column run in separate batches.
+               // SQL Server compiles an entire batch before executing, so without the separator
+               // the UPDATE fails with "Invalid column name" since the column doesn't exist yet at compile time.
+               await this.LogSQLAndExecute(pool, stmt, `SQL text to add special date field ${fieldName} to entity ${entity.SchemaName}.${entity.BaseTable}`, false, true, this.dbProvider.BatchSeparator);
             }
          }
          else {
@@ -4193,7 +4211,11 @@ export class ManageMetadataBase {
                e.Description,
                e.SchemaName,
                e.BaseTable,
-               e.ParentID
+               e.ParentID,
+               e.AllowUserSearchAPI,
+               e.AutoUpdateAllowUserSearchAPI,
+               e.FullTextSearchEnabled,
+               e.AutoUpdateFullTextSearch
             FROM
                ${this.qs(mj_core_schema(), 'vwEntities')} e
             WHERE
@@ -4234,7 +4256,12 @@ export class ManageMetadataBase {
                ef.AllowUpdateAPI,
                ef.IsNameField,
                ef.DefaultInView,
-               ef.IncludeInUserSearchAPI
+               ef.IncludeInUserSearchAPI,
+               ef.UserSearchPredicateAPI,
+               ef.AutoUpdateUserSearchPredicate,
+               ef.FullTextSearchEnabled,
+               ef.AutoUpdateFullTextSearch,
+               ef.Length as MaxLength
             FROM
                ${this.qs(mj_core_schema(), 'vwEntityFields')} ef
             WHERE
@@ -4353,8 +4380,13 @@ export class ManageMetadataBase {
          const isNewEntity = ManageMetadataBase.newEntityList.includes(entity.Name);
 
          // Smart Field Identification
-         // Only run if at least one field allows auto-update for any of the smart field properties
-         if (fields.some((f: any) => f.AutoUpdateIsNameField || f.AutoUpdateDefaultInView || f.AutoUpdateIncludeInUserSearchAPI)) {
+         // Only run if at least one field allows auto-update for any of the smart field properties,
+         // or if entity-level search/FTS auto-update flags are set
+         const needsFieldAnalysis = fields.some((f: any) => f.AutoUpdateIsNameField || f.AutoUpdateDefaultInView || f.AutoUpdateIncludeInUserSearchAPI || f.AutoUpdateUserSearchPredicate || f.AutoUpdateFullTextSearch);
+         // entity-level auto-update flags come from the raw SQL query, not EntityInfo
+         const entityRecord = entity as unknown as Record<string, unknown>;
+         const needsEntitySearchConfig = entityRecord.AutoUpdateAllowUserSearchAPI || entityRecord.AutoUpdateFullTextSearch;
+         if (needsFieldAnalysis || needsEntitySearchConfig) {
             const fieldAnalysis = await ag.identifyFields({
                Name: entity.Name,
                Description: entity.Description,
@@ -4362,7 +4394,13 @@ export class ManageMetadataBase {
             }, currentUser);
 
             if (fieldAnalysis) {
-               await this.applySmartFieldIdentification(pool, entity.ID, fields, fieldAnalysis);
+               await this.applySmartFieldIdentification(pool, {
+                  ID: entity.ID,
+                  AllowUserSearchAPI: entityRecord.AllowUserSearchAPI as boolean | undefined,
+                  AutoUpdateAllowUserSearchAPI: entityRecord.AutoUpdateAllowUserSearchAPI as boolean | undefined,
+                  FullTextSearchEnabled: entityRecord.FullTextSearchEnabled as boolean | undefined,
+                  AutoUpdateFullTextSearch: entityRecord.AutoUpdateFullTextSearch as boolean | undefined,
+               }, fields, fieldAnalysis);
             }
          }
 
@@ -4469,83 +4507,22 @@ export class ManageMetadataBase {
    }
 
    /**
-    * Apply smart field identification results to entity fields
+    * Apply smart field identification results to entity fields and entity-level search configuration
     */
    protected async applySmartFieldIdentification(
       pool: CodeGenConnection,
-      entityId: string,
-      fields: any[],
+      entity: { ID: string; AllowUserSearchAPI?: boolean; AutoUpdateAllowUserSearchAPI?: boolean; FullTextSearchEnabled?: boolean; AutoUpdateFullTextSearch?: boolean },
+      fields: Array<Record<string, unknown>>,
       result: SmartFieldIdentificationResult
    ): Promise<void> {
       const sqlStatements: string[] = [];
 
-      // Find the name field (exactly one)
-      const nameField = fields.find(f => f.Name === result.nameField);
-
-      if (nameField && nameField.AutoUpdateIsNameField && nameField.ID && !nameField.IsNameField /*don't waste SQL to set the value if IsNameField already set */) {
-         sqlStatements.push(`
-            UPDATE ${this.qs(mj_core_schema(), 'EntityField')}
-            SET IsNameField = 1
-            WHERE ID = '${nameField.ID}'
-            AND AutoUpdateIsNameField = 1
-         `);
-      } else if (!nameField) {
-         logError(`Smart field identification returned invalid nameField: '${result.nameField}' not found in entity fields`);
-      }
-
-      // Find all default in view fields (one or more)
-      const defaultInViewFields = fields.filter(f =>
-         result.defaultInView.includes(f.Name) && f.AutoUpdateDefaultInView && f.ID
-      );
-
-      // Warn about any fields that weren't found
-      const missingFields = result.defaultInView.filter(name =>
-         !fields.some(f => f.Name === name)
-      );
-      if (missingFields.length > 0) {
-         logError(`Smart field identification returned invalid defaultInView fields: ${missingFields.join(', ')} not found in entity`);
-      }
-
-      // Build update statements for all default in view fields
-      for (const field of defaultInViewFields) {
-         if (!field.DefaultInView) {
-            // only set these when DefaultInView not already on, otherwise wasteful
-            sqlStatements.push(`
-               UPDATE ${this.qs(mj_core_schema(), 'EntityField')}
-               SET DefaultInView = 1
-               WHERE ID = '${field.ID}'
-               AND AutoUpdateDefaultInView = 1
-            `);
-         }
-      }
-
-      // Find all searchable fields (one or more) - for IncludeInUserSearchAPI
-      if (result.searchableFields && result.searchableFields.length > 0) {
-         const searchableFields = fields.filter(f =>
-            result.searchableFields.includes(f.Name) && f.AutoUpdateIncludeInUserSearchAPI && f.ID
-         );
-
-         // Warn about any fields that weren't found
-         const missingSearchableFields = result.searchableFields.filter(name =>
-            !fields.some(f => f.Name === name)
-         );
-         if (missingSearchableFields.length > 0) {
-            logError(`Smart field identification returned invalid searchableFields: ${missingSearchableFields.join(', ')} not found in entity`);
-         }
-
-         // Build update statements for all searchable fields
-         for (const field of searchableFields) {
-            if (!field.IncludeInUserSearchAPI) {
-               // only set this if IncludeInUserSearchAPI isn't already set
-               sqlStatements.push(`
-                  UPDATE ${this.qs(mj_core_schema(), 'EntityField')}
-                  SET IncludeInUserSearchAPI = 1
-                  WHERE ID = '${field.ID}'
-                  AND AutoUpdateIncludeInUserSearchAPI = 1
-               `);
-            }
-         }
-      }
+      this.applyNameFieldUpdates(sqlStatements, fields, result);
+      this.applyDefaultInViewUpdates(sqlStatements, fields, result);
+      this.applySearchableFieldUpdates(sqlStatements, fields, result);
+      this.applySearchPredicateUpdates(sqlStatements, fields, result);
+      this.applyEntitySearchConfig(sqlStatements, entity, result);
+      this.applyFullTextSearchUpdates(sqlStatements, entity, fields, result);
 
       // Execute all updates in one batch
       if (sqlStatements.length > 0) {
@@ -4555,6 +4532,201 @@ export class ManageMetadataBase {
          }
          catch (ex) {
             logError('Error executing combined smart field SQL: ', ex)
+         }
+      }
+   }
+
+   /**
+    * Generate SQL UPDATEs for IsNameField on the identified name fields
+    */
+   protected applyNameFieldUpdates(
+      sqlStatements: string[],
+      fields: Array<Record<string, unknown>>,
+      result: SmartFieldIdentificationResult
+   ): void {
+      const nameFieldNames: string[] = result.nameFields ?? [];
+
+      for (const nfName of nameFieldNames) {
+         const nameField = fields.find(f => f.Name === nfName);
+         if (nameField && nameField.AutoUpdateIsNameField && nameField.ID && !nameField.IsNameField) {
+            sqlStatements.push(`
+               UPDATE ${this.qs(mj_core_schema(), 'EntityField')}
+               SET IsNameField = 1
+               WHERE ID = '${nameField.ID}'
+               AND AutoUpdateIsNameField = 1
+            `);
+         } else if (!nameField) {
+            logError(`Smart field identification returned invalid nameField: '${nfName}' not found in entity fields`);
+         }
+      }
+   }
+
+   /**
+    * Generate SQL UPDATEs for DefaultInView on the identified default view fields
+    */
+   protected applyDefaultInViewUpdates(
+      sqlStatements: string[],
+      fields: Array<Record<string, unknown>>,
+      result: SmartFieldIdentificationResult
+   ): void {
+      const defaultInViewFields = fields.filter(f =>
+         result.defaultInView.includes(f.Name as string) && f.AutoUpdateDefaultInView && f.ID
+      );
+
+      const missingFields = result.defaultInView.filter(name =>
+         !fields.some(f => f.Name === name)
+      );
+      if (missingFields.length > 0) {
+         logError(`Smart field identification returned invalid defaultInView fields: ${missingFields.join(', ')} not found in entity`);
+      }
+
+      for (const field of defaultInViewFields) {
+         if (!field.DefaultInView) {
+            sqlStatements.push(`
+               UPDATE ${this.qs(mj_core_schema(), 'EntityField')}
+               SET DefaultInView = 1
+               WHERE ID = '${field.ID}'
+               AND AutoUpdateDefaultInView = 1
+            `);
+         }
+      }
+   }
+
+   /**
+    * Generate SQL UPDATEs for IncludeInUserSearchAPI on the identified searchable fields
+    */
+   protected applySearchableFieldUpdates(
+      sqlStatements: string[],
+      fields: Array<Record<string, unknown>>,
+      result: SmartFieldIdentificationResult
+   ): void {
+      if (!result.searchableFields || result.searchableFields.length === 0) {
+         return;
+      }
+
+      const searchableFields = fields.filter(f =>
+         result.searchableFields.includes(f.Name as string) && f.AutoUpdateIncludeInUserSearchAPI && f.ID
+      );
+
+      const missingSearchableFields = result.searchableFields.filter(name =>
+         !fields.some(f => f.Name === name)
+      );
+      if (missingSearchableFields.length > 0) {
+         logError(`Smart field identification returned invalid searchableFields: ${missingSearchableFields.join(', ')} not found in entity`);
+      }
+
+      for (const field of searchableFields) {
+         if (!field.IncludeInUserSearchAPI) {
+            sqlStatements.push(`
+               UPDATE ${this.qs(mj_core_schema(), 'EntityField')}
+               SET IncludeInUserSearchAPI = 1
+               WHERE ID = '${field.ID}'
+               AND AutoUpdateIncludeInUserSearchAPI = 1
+            `);
+         }
+      }
+   }
+
+   /**
+    * Generate SQL UPDATEs for UserSearchPredicateAPI on each searchable field
+    */
+   protected applySearchPredicateUpdates(
+      sqlStatements: string[],
+      fields: Array<Record<string, unknown>>,
+      result: SmartFieldIdentificationResult
+   ): void {
+      if (!result.searchPredicates || result.searchPredicates.length === 0) {
+         return;
+      }
+
+      for (const sp of result.searchPredicates) {
+         const field = fields.find(f => f.Name === sp.field);
+         if (!field) {
+            logError(`Smart field identification returned invalid searchPredicate field: '${sp.field}' not found in entity fields`);
+            continue;
+         }
+         if (!field.AutoUpdateUserSearchPredicate || !field.ID) {
+            continue;
+         }
+         // Only update if the current value differs from the recommended predicate
+         if (field.UserSearchPredicateAPI !== sp.predicate) {
+            sqlStatements.push(`
+               UPDATE ${this.qs(mj_core_schema(), 'EntityField')}
+               SET UserSearchPredicateAPI = '${sp.predicate}'
+               WHERE ID = '${field.ID}'
+               AND AutoUpdateUserSearchPredicate = 1
+            `);
+         }
+      }
+   }
+
+   /**
+    * Generate SQL UPDATEs for entity-level AllowUserSearchAPI
+    */
+   protected applyEntitySearchConfig(
+      sqlStatements: string[],
+      entity: { ID: string; AllowUserSearchAPI?: boolean; AutoUpdateAllowUserSearchAPI?: boolean },
+      result: SmartFieldIdentificationResult
+   ): void {
+      if (result.allowUserSearch == null || !entity.AutoUpdateAllowUserSearchAPI) {
+         return;
+      }
+      const newValue = result.allowUserSearch ? 1 : 0;
+      const currentValue = entity.AllowUserSearchAPI ? 1 : 0;
+      if (newValue !== currentValue) {
+         sqlStatements.push(`
+            UPDATE ${this.qs(mj_core_schema(), 'Entity')}
+            SET AllowUserSearchAPI = ${newValue}
+            WHERE ID = '${entity.ID}'
+            AND AutoUpdateAllowUserSearchAPI = 1
+         `);
+      }
+   }
+
+   /**
+    * Generate SQL UPDATEs for entity-level and field-level FullTextSearch configuration
+    */
+   protected applyFullTextSearchUpdates(
+      sqlStatements: string[],
+      entity: { ID: string; FullTextSearchEnabled?: boolean; AutoUpdateFullTextSearch?: boolean },
+      fields: Array<Record<string, unknown>>,
+      result: SmartFieldIdentificationResult
+   ): void {
+      // Entity-level FullTextSearchEnabled
+      if (result.enableFullTextSearch != null && entity.AutoUpdateFullTextSearch) {
+         const newValue = result.enableFullTextSearch ? 1 : 0;
+         const currentValue = entity.FullTextSearchEnabled ? 1 : 0;
+         if (newValue !== currentValue) {
+            sqlStatements.push(`
+               UPDATE ${this.qs(mj_core_schema(), 'Entity')}
+               SET FullTextSearchEnabled = ${newValue}
+               WHERE ID = '${entity.ID}'
+               AND AutoUpdateFullTextSearch = 1
+            `);
+         }
+      }
+
+      // Field-level FullTextSearchEnabled
+      if (!result.fullTextSearchFields || result.fullTextSearchFields.length === 0) {
+         return;
+      }
+
+      for (const ftsFieldName of result.fullTextSearchFields) {
+         const field = fields.find(f => f.Name === ftsFieldName);
+         if (!field) {
+            logError(`Smart field identification returned invalid fullTextSearchField: '${ftsFieldName}' not found in entity fields`);
+            continue;
+         }
+         if (!field.AutoUpdateFullTextSearch || !field.ID) {
+            continue;
+         }
+         if (!field.FullTextSearchEnabled) {
+            sqlStatements.push(`
+               UPDATE ${this.qs(mj_core_schema(), 'EntityField')}
+               SET FullTextSearchEnabled = 1
+               WHERE ID = '${field.ID}'
+               AND AutoUpdateFullTextSearch = 1
+            `);
          }
       }
    }
@@ -4579,6 +4751,9 @@ export class ManageMetadataBase {
 
       await this.applyFieldCategories(pool, entity, fields, result.fieldCategories, existingCategories);
 
+      // Auto-detect geo-capable entities and set SupportsGeoCoding
+      await this.detectAndSetGeoCodingSupport(pool, entity, result.fieldCategories);
+
       if (result.entityIcon) {
          await this.applyEntityIcon(pool, entity.ID, result.entityIcon);
       }
@@ -4596,6 +4771,59 @@ export class ManageMetadataBase {
 
       if (isNewEntity && result.entityImportance) {
          await this.applyEntityImportance(pool, entity.ID, result.entityImportance);
+      }
+   }
+
+   /**
+    * Detect if an entity has geo-capable fields based on LLM-assigned ExtendedType values.
+    * If any field has a Geo* ExtendedType, set Entity.SupportsGeoCoding = 1.
+    * Respects the AutoUpdateSupportsGeoCoding flag — if 0, the value is locked.
+    */
+   protected async detectAndSetGeoCodingSupport(
+      pool: CodeGenConnection,
+      entity: EntityInfo,
+      fieldCategories: Array<{ fieldName: string; extendedType: EntityFieldExtendedType | null }>
+   ): Promise<void> {
+      // Check if the entity's AutoUpdateSupportsGeoCoding flag allows us to modify it
+      const autoUpdateResult = await pool.query(`
+         SELECT AutoUpdateSupportsGeoCoding, SupportsGeoCoding
+         FROM ${mj_core_schema()}.Entity
+         WHERE ID = '${entity.ID}'
+      `);
+      const row = autoUpdateResult?.recordset?.[0];
+      if (!row || !row.AutoUpdateSupportsGeoCoding) {
+         return; // Flag is locked, don't modify
+      }
+
+      // Detect geo-capable fields from the LLM results
+      const geoExtendedTypes = new Set<EntityFieldExtendedType>([
+         'Geo', 'GeoLatitude', 'GeoLongitude', 'GeoCountry', 'GeoStateProvince',
+         'GeoCity', 'GeoPostalCode', 'GeoAddress'
+      ]);
+      const hasGeoFields = fieldCategories.some(fc =>
+         fc.extendedType != null && geoExtendedTypes.has(fc.extendedType)
+      );
+
+      // Also check existing fields in the database for Geo* ExtendedTypes
+      // (in case the LLM didn't re-assign them this run but they were previously set)
+      const existingGeoResult = await pool.query(`
+         SELECT COUNT(*) AS GeoFieldCount
+         FROM ${mj_core_schema()}.EntityField
+         WHERE EntityID = '${entity.ID}'
+           AND ExtendedType IN ('Geo', 'GeoLatitude', 'GeoLongitude', 'GeoCountry', 'GeoStateProvince', 'GeoCity', 'GeoPostalCode', 'GeoAddress')
+      `);
+      const existingGeoCount = existingGeoResult?.recordset?.[0]?.GeoFieldCount ?? 0;
+
+      const shouldSupportGeo = hasGeoFields || existingGeoCount > 0;
+      const currentValue = row.SupportsGeoCoding ? true : false;
+
+      if (shouldSupportGeo !== currentValue) {
+         await pool.query(`
+            UPDATE ${mj_core_schema()}.Entity
+            SET SupportsGeoCoding = ${shouldSupportGeo ? 1 : 0}
+            WHERE ID = '${entity.ID}' AND AutoUpdateSupportsGeoCoding = 1
+         `);
+         logStatus(`  Entity ${entity.Name}: SupportsGeoCoding = ${shouldSupportGeo ? 1 : 0} (auto-detected from ${hasGeoFields ? 'LLM' : 'existing'} geo fields)`);
       }
    }
 
@@ -4855,7 +5083,7 @@ WHERE
     * @param isRecurringScript - if set to true tells the logger that the provided SQL represents a recurring script meaning it is something that is executed, generally, for all CodeGen runs. In these cases, the Config settings can result in omitting these recurring scripts from being logged because the configuration environment may have those recurring scripts already set to run after all run-specific migrations get run.
     * @returns - The result of the query execution.
     */
-   private async LogSQLAndExecute(pool: CodeGenConnection, query: string, description?: string, isRecurringScript: boolean = false): Promise<any> {
-      return await SQLLogging.LogSQLAndExecute(pool, this.qsql(query), description, isRecurringScript);
+   private async LogSQLAndExecute(pool: CodeGenConnection, query: string, description?: string, isRecurringScript: boolean = false, includeBatchSeparator: boolean = false, batchSeparator: string = 'GO'): Promise<any> {
+      return await SQLLogging.LogSQLAndExecute(pool, this.qsql(query), description, isRecurringScript, includeBatchSeparator, batchSeparator);
    }
 }
