@@ -1,5 +1,5 @@
 import { RegisterClass } from '@memberjunction/global';
-import { BufferBaseAction, BufferAssets, BufferPost, BufferShareMode } from '../buffer-base.action';
+import { BufferBaseAction, BufferAssets, BufferPost, BufferPostStatus, BufferShareMode } from '../buffer-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { BaseAction } from '@memberjunction/actions';
 
@@ -42,7 +42,7 @@ interface CreatedPostSummary {
   id: string;
   channelId: string;
   channelService: string;
-  status: string;
+  status: BufferPostStatus;
   scheduledAt: string | null;
   text: string;
 }

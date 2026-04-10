@@ -12,8 +12,8 @@ import { ActionParam, ActionResultSimple } from '@memberjunction/actions-base';
 export type BufferPostStatus = 'draft' | 'buffer' | 'sent' | 'failed' | 'canceled' | 'approved' | 'rejected';
 export type BufferShareMode = 'addToQueue' | 'shareNext' | 'shareNow' | 'customScheduled';
 
-/** Max pages to fetch during search pagination to prevent runaway iteration. */
 const MAX_SEARCH_PAGES = 50;
+const MAX_RATE_LIMIT_RETRIES = 3;
 
 // ---------------------------------------------------------------------------
 // GraphQL response types
@@ -310,7 +310,7 @@ export abstract class BufferBaseAction extends BaseSocialMediaAction {
 
       return response.data.data;
     } catch (error) {
-      return this.handleExecutionError<T>(error, query, variables);
+      return this.handleExecutionError<T>(error, query, variables, 0);
     }
   }
 
@@ -321,14 +321,21 @@ export abstract class BufferBaseAction extends BaseSocialMediaAction {
     }
   }
 
-  private async handleExecutionError<T>(error: unknown, query: string, variables?: Record<string, unknown>): Promise<T> {
+  private async handleExecutionError<T>(error: unknown, query: string, variables: Record<string, unknown> | undefined, retryCount: number): Promise<T> {
     if (error instanceof BufferGraphQLError) throw error;
 
     if (axios.isAxiosError(error) && error.response?.status === 429) {
+      if (retryCount >= MAX_RATE_LIMIT_RETRIES) {
+        throw new Error(`Buffer API rate limit exceeded after ${MAX_RATE_LIMIT_RETRIES} retries`);
+      }
       const retryAfter = error.response.headers['retry-after'];
-      const seconds = retryAfter ? parseInt(String(retryAfter)) : 60;
+      const seconds = retryAfter ? parseInt(String(retryAfter)) || 60 : 60;
       await this.handleRateLimit(seconds);
-      return this.executeGraphQL<T>(query, variables);
+      try {
+        return await this.executeGraphQL<T>(query, variables);
+      } catch (retryError) {
+        return this.handleExecutionError<T>(retryError, query, variables, retryCount + 1);
+      }
     }
 
     throw error;
@@ -372,7 +379,7 @@ export abstract class BufferBaseAction extends BaseSocialMediaAction {
     organizationId: string,
     filters?: {
       channelIds?: string[];
-      status?: string;
+      status?: BufferPostStatus;
       startDate?: string;
       endDate?: string;
       tags?: string[];
@@ -393,7 +400,7 @@ export abstract class BufferBaseAction extends BaseSocialMediaAction {
     organizationId: string,
     filters?: {
       channelIds?: string[];
-      status?: string;
+      status?: BufferPostStatus;
       startDate?: string;
       endDate?: string;
       tags?: string[];
@@ -417,7 +424,7 @@ export abstract class BufferBaseAction extends BaseSocialMediaAction {
   protected async createBufferPost(input: {
     channelId: string;
     text: string;
-    mode?: string;
+    mode?: BufferShareMode;
     dueAt?: string;
     schedulingType?: string;
     assets?: BufferAssets;
@@ -490,11 +497,11 @@ export abstract class BufferBaseAction extends BaseSocialMediaAction {
 
   private buildSearchFilters(params: { channelIds?: string[]; startDate?: Date; endDate?: Date }): {
     channelIds?: string[];
-    status: string;
+    status: BufferPostStatus;
     startDate?: string;
     endDate?: string;
   } {
-    const filters: { channelIds?: string[]; status: string; startDate?: string; endDate?: string } = {
+    const filters: { channelIds?: string[]; status: BufferPostStatus; startDate?: string; endDate?: string } = {
       status: 'sent',
     };
     if (params.channelIds?.length) filters.channelIds = params.channelIds;
@@ -505,7 +512,7 @@ export abstract class BufferBaseAction extends BaseSocialMediaAction {
 
   private async collectSearchResults(
     params: { query?: string; hashtags?: string[]; limit?: number; organizationId?: string },
-    filters: { channelIds?: string[]; status: string; startDate?: string; endDate?: string },
+    filters: { channelIds?: string[]; status: BufferPostStatus; startDate?: string; endDate?: string },
   ): Promise<SocialPost[]> {
     const limit = params.limit || 100;
     const pageSize = Math.min(limit, 100);

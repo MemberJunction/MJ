@@ -22,7 +22,7 @@ export class BufferGetPendingPostsAction extends BufferBaseAction {
 
       const organizationId = await this.resolveOrganizationId(Params);
       const status: BufferPostStatus = 'buffer';
-      const filters: { status: string; channelIds?: string[] } = { status };
+      const filters: { status: BufferPostStatus; channelIds?: string[] } = { status };
       if (channelId) filters.channelIds = [channelId];
 
       const connection = await this.fetchPosts(organizationId, filters, limit, cursor || undefined);

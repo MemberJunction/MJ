@@ -24,7 +24,7 @@ export class BufferGetSentPostsAction extends BufferBaseAction {
 
       const organizationId = await this.resolveOrganizationId(Params);
       const status: BufferPostStatus = 'sent';
-      const filters: { status: string; channelIds?: string[]; startDate?: string; endDate?: string } = { status };
+      const filters: { status: BufferPostStatus; channelIds?: string[]; startDate?: string; endDate?: string } = { status };
       if (channelId) filters.channelIds = [channelId];
       if (startDate) filters.startDate = new Date(startDate).toISOString();
       if (endDate) filters.endDate = new Date(endDate).toISOString();
