@@ -740,7 +740,7 @@ mj-tab-container ::ng-deep .lm_stack {
     max-width: 520px;
     margin: 0 12px;
     position: relative;
-    z-index: 100;
+    z-index: 99999;
 }
 @media (max-width: 768px) {
     .shell-search-bar { display: none; }
