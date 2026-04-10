@@ -1,6 +1,6 @@
 import { ProviderBase } from "./providerBase";
 import { UserInfo } from "./securityInfo";
-import { EntityDependency, EntityFieldTSType, EntityInfo, EntityPermissionType, RecordChange, RecordDependency, RecordMergeRequest, RecordMergeResult, RecordMergeDetailResult } from "./entityInfo";
+import { EntityDependency, EntityFieldInfo, EntityFieldTSType, EntityInfo, EntityPermissionType, RecordChange, RecordDependency, RecordMergeRequest, RecordMergeResult, RecordMergeDetailResult } from "./entityInfo";
 import { BaseEntity, BaseEntityResult } from "./baseEntity";
 import { EntitySaveOptions, EntityDeleteOptions, EntityMergeOptions, PotentialDuplicateRequest, PotentialDuplicateResponse } from "./interfaces";
 import { TransactionItem } from "./transactionGroup";
@@ -46,6 +46,38 @@ export interface DeleteSQLResult {
     fullSQL: string;
     simpleSQL?: string;
     parameters?: unknown[] | null;
+}
+
+/**
+ * Pre-save snapshot of a single field's state.
+ * Captures dirty flag and old value before the save clears them.
+ * The EntityFieldInfo reference provides access to all field metadata
+ * (Name, ExtendedType, TSType, etc.) without duplication.
+ */
+export interface SaveContextField {
+    /** Reference to the field's metadata (Name, ExtendedType, TSType, etc.) */
+    FieldInfo: EntityFieldInfo;
+    /** Whether this field was modified before save */
+    WasDirty: boolean;
+    /** The value before the save (original loaded value) */
+    OldValue: unknown;
+}
+
+/**
+ * Context object that flows through the entire save pipeline.
+ * Created once at the start of Save(), populated with pre-save field state,
+ * and passed to every hook. Hooks can read field state and write to the
+ * extensible State bag to pass data to downstream hooks.
+ *
+ * This is parallel-safe — each Save() call gets its own SaveContext instance.
+ */
+export interface SaveContext {
+    /** Whether this is a new record (not yet saved to the database) */
+    IsNew: boolean;
+    /** Pre-save snapshot of all field states (dirty flags, old/new values) */
+    Fields: SaveContextField[];
+    /** Extensible key-value bag for hooks to pass data across the save pipeline */
+    State: Record<string, unknown>;
 }
 
 /**
@@ -700,7 +732,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      * Return a non-empty string to abort the save with that message; return null to proceed.
      * SQL Server overrides this to delegate to HandleEntityActions('validate', ...).
      */
-    protected async OnValidateBeforeSave(_entity: BaseEntity, _user: UserInfo): Promise<string | null> {
+    protected async OnValidateBeforeSave(_entity: BaseEntity, _user: UserInfo, _context: SaveContext): Promise<string | null> {
         return null;
     }
 
@@ -708,7 +740,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      * Called before the save SQL is executed.
      * SQL Server overrides this to fire before-save entity actions and AI actions.
      */
-    protected async OnBeforeSaveExecute(_entity: BaseEntity, _user: UserInfo, _options: EntitySaveOptions): Promise<void> {
+    protected async OnBeforeSaveExecute(_entity: BaseEntity, _user: UserInfo, _options: EntitySaveOptions, _context: SaveContext): Promise<void> {
         /* no-op by default */
     }
 
@@ -717,7 +749,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      * Intentionally synchronous (fire-and-forget) — SQL Server overrides to dispatch
      * after-save entity actions and AI actions without awaiting.
      */
-    protected OnAfterSaveExecute(_entity: BaseEntity, _user: UserInfo, _options: EntitySaveOptions): void {
+    protected OnAfterSaveExecute(_entity: BaseEntity, _user: UserInfo, _options: EntitySaveOptions, _context: SaveContext): void {
         /* no-op by default */
     }
 
@@ -750,7 +782,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      * Called after a direct (non-transaction) save succeeds, before returning.
      * SQL Server overrides to propagate record-change entries to IS-A sibling branches.
      */
-    protected async OnSaveCompleted(_entity: BaseEntity, _saveSQLResult: SaveSQLResult, _user: UserInfo, _options: EntitySaveOptions): Promise<void> {
+    protected async OnSaveCompleted(_entity: BaseEntity, _saveSQLResult: SaveSQLResult, _user: UserInfo, _options: EntitySaveOptions, _context: SaveContext): Promise<void> {
         /* no-op by default */
     }
 
@@ -1139,6 +1171,17 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                 entityResult.StartedAt = new Date();
                 entityResult.Type = bNewRecord ? 'create' : 'update';
 
+                // Build SaveContext with pre-save field state snapshot
+                const saveContext: SaveContext = {
+                    IsNew: bNewRecord,
+                    Fields: entity.Fields.map(f => ({
+                        FieldInfo: f.EntityFieldInfo,
+                        WasDirty: f.Dirty,
+                        OldValue: f.OldValue,
+                    })),
+                    State: {},
+                };
+
                 entityResult.OriginalValues = entity.Fields.map((f) => {
                     const tempStatus = f.ActiveStatusAssertions;
                     f.ActiveStatusAssertions = false;
@@ -1150,7 +1193,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
 
                 // Step 2: Validation hook
                 if (!bReplay) {
-                    const validationMessage = await this.OnValidateBeforeSave(entity, user);
+                    const validationMessage = await this.OnValidateBeforeSave(entity, user, saveContext);
                     if (validationMessage) {
                         entityResult.Success = false;
                         entityResult.EndedAt = new Date();
@@ -1184,7 +1227,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
 
                 // Step 3: Before-save hook (entity actions, AI actions)
                 if (!bReplay) {
-                    await this.OnBeforeSaveExecute(entity, user, options);
+                    await this.OnBeforeSaveExecute(entity, user, options, saveContext);
                 }
 
                 // Step 4: Generate provider-specific SQL
@@ -1212,7 +1255,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                                 this.OnResumeRefresh();
                                 entityResult.EndedAt = new Date();
                                 if (success && transactionResult) {
-                                    this.OnAfterSaveExecute(entity, user, options);
+                                    this.OnAfterSaveExecute(entity, user, options, saveContext);
                                     entityResult.Success = true;
                                     entityResult.NewValues = this.MapTransactionResultToNewValues(transactionResult);
                                 } else {
@@ -1245,9 +1288,9 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                     entityResult.EndedAt = new Date();
 
                     if (result && result.length > 0) {
-                        this.OnAfterSaveExecute(entity, user, options);
+                        this.OnAfterSaveExecute(entity, user, options, saveContext);
                         entityResult.Success = true;
-                        await this.OnSaveCompleted(entity, sqlDetails, user, options);
+                        await this.OnSaveCompleted(entity, sqlDetails, user, options, saveContext);
                         return result[0];
                     } else {
                         if (bNewRecord)

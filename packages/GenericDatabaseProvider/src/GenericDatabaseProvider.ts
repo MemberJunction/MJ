@@ -59,6 +59,9 @@ import {
     QueryCacheManager,
     DatabasePlatform,
     QueryExecutionSpec,
+    SaveContext,
+    SaveContextField,
+    SaveSQLResult,
 } from '@memberjunction/core';
 
 import { MJGlobal, SQLExpressionValidator, UUIDsEqual } from '@memberjunction/global';
@@ -83,6 +86,7 @@ import { QueueManager } from '@memberjunction/queue';
 import { EntityActionEngineServer } from '@memberjunction/actions';
 import { ActionResult } from '@memberjunction/actions-base';
 import { EncryptionEngine } from '@memberjunction/encryption';
+import { GeoCodeSyncService } from '@memberjunction/geo-core';
 
 /**
  * Configuration options for batch SQL execution.
@@ -104,6 +108,12 @@ export interface ExecuteSQLBatchOptions {
  * Platform-specific providers should extend this class instead of DatabaseProviderBase
  * to inherit these shared behaviors.
  */
+/** ExtendedType values that indicate a geo-relevant field */
+const GEO_EXTENDED_TYPES = new Set([
+    'Geo', 'GeoAddress', 'GeoCity', 'GeoStateProvince',
+    'GeoCountry', 'GeoPostalCode', 'GeoLatitude', 'GeoLongitude'
+]);
+
 export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     private _compositionEngine = new QueryCompositionEngine();
 
@@ -528,18 +538,42 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         return null;
     }
 
-    protected override async OnBeforeSaveExecute(entity: BaseEntity, user: UserInfo, options: EntitySaveOptions): Promise<void> {
+    protected override async OnBeforeSaveExecute(entity: BaseEntity, user: UserInfo, options: EntitySaveOptions, context: SaveContext): Promise<void> {
         if (options.SkipEntityActions !== true)
             await this.HandleEntityActions(entity, 'save', true, user);
         if (options.SkipEntityAIActions !== true)
             await this.HandleEntityAIActions(entity, 'save', true, user);
+
+        // Flag geo sync needed in the SaveContext state bag.
+        // Check: entity supports geocoding AND (new record OR any geo field was dirty)
+        if (entity.EntityInfo.SupportsGeoCoding) {
+            const needsGeoSync = context.IsNew || context.Fields.some(
+                (f: SaveContextField) => f.WasDirty && f.FieldInfo.ExtendedType != null && GEO_EXTENDED_TYPES.has(f.FieldInfo.ExtendedType)
+            );
+            if (needsGeoSync) {
+                context.State['geoSyncNeeded'] = true;
+            }
+        }
     }
 
-    protected override OnAfterSaveExecute(entity: BaseEntity, user: UserInfo, options: EntitySaveOptions): void {
+    protected override OnAfterSaveExecute(entity: BaseEntity, user: UserInfo, options: EntitySaveOptions, _context: SaveContext): void {
         if (options.SkipEntityAIActions !== true)
             this.HandleEntityAIActions(entity, 'save', false, user); // NO AWAIT INTENTIONALLY
         if (options.SkipEntityActions !== true)
             this.HandleEntityActions(entity, 'save', false, user); // NO AWAIT INTENTIONALLY
+    }
+
+    protected override async OnSaveCompleted(entity: BaseEntity, saveSQLResult: SaveSQLResult, user: UserInfo, options: EntitySaveOptions, context: SaveContext): Promise<void> {
+        await super.OnSaveCompleted(entity, saveSQLResult, user, options, context);
+
+        // Fire-and-forget geocoding if geo fields were dirty before save
+        if (context.State['geoSyncNeeded']) {
+            // No await — geocoding runs async, errors are captured in RecordGeoCode
+            GeoCodeSyncService.Instance.SyncIfChanged(entity).catch(e => {
+                const msg = e instanceof Error ? e.message : String(e);
+                LogError(`GenericDatabaseProvider: Geo sync failed for ${entity.EntityInfo.Name}: ${msg}`);
+            });
+        }
     }
 
     protected override async OnBeforeDeleteExecute(entity: BaseEntity, user: UserInfo, options: EntityDeleteOptions): Promise<void> {

@@ -52,6 +52,7 @@ import {
   RunViewsWithCacheCheckResponse,
   RunViewWithCacheCheckResult,
   RunQueryWithCacheCheckParams,
+  SaveContext,
 } from '@memberjunction/core';
 import { NodeFileSystemProvider } from './NodeFileSystemProvider';
 
@@ -1286,6 +1287,7 @@ export class SQLServerDataProvider
     saveSQLResult: SaveSQLResult,
     user: UserInfo,
     options: EntitySaveOptions,
+    context: SaveContext,
   ): Promise<void> {
     const overlappingChangeData = saveSQLResult.extraData?.overlappingChangeData as
       | { changesJSON: string; changesDescription: string }

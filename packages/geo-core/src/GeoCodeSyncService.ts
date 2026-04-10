@@ -1,5 +1,5 @@
 import { BaseSingleton } from '@memberjunction/global';
-import { BaseEntity, Metadata, RunView, LogError, LogStatus } from '@memberjunction/core';
+import { BaseEntity, EntityFieldInfo, EntityInfo, Metadata, RunView, LogError, LogStatus } from '@memberjunction/core';
 import { MJRecordGeoCodeEntity } from '@memberjunction/core-entities';
 import { GeoFieldMapping, GeocodeResult, GeocodeStatus } from './types';
 import { ComputeGeoSourceHash } from './hash';
@@ -33,10 +33,11 @@ export class GeoCodeSyncService extends BaseSingleton<GeoCodeSyncService> {
      * This method never throws — all errors are captured in RecordGeoCode rows.
      *
      * @param entity - The entity instance that was just saved
-     * @param mappings - CodeGen-generated field-to-location mappings
+     * @param mappings - Field-to-location mappings (if not provided, derived from EntityField.ExtendedType metadata)
      */
-    public async SyncIfChanged(entity: BaseEntity, mappings: GeoFieldMapping[]): Promise<void> {
-        for (const mapping of mappings) {
+    public async SyncIfChanged(entity: BaseEntity, mappings?: GeoFieldMapping[]): Promise<void> {
+        const resolvedMappings = mappings ?? GeoCodeSyncService.BuildMappingsFromMetadata(entity.EntityInfo);
+        for (const mapping of resolvedMappings) {
             try {
                 await this.ProcessMapping(entity, mapping);
             } catch (e: unknown) {
@@ -44,6 +45,39 @@ export class GeoCodeSyncService extends BaseSingleton<GeoCodeSyncService> {
                 LogError(`GeoCodeSyncService: Error processing ${mapping.LocationType} for ${entity.EntityInfo.Name} ${entity.PrimaryKey.ToString()}: ${message}`);
             }
         }
+    }
+
+    /**
+     * Derive geo field mappings from EntityField.ExtendedType metadata.
+     * Finds all fields with Geo* ExtendedType values and groups them into
+     * a Primary location mapping.
+     *
+     * @param entityInfo - The entity metadata to inspect
+     * @returns Array of geo field mappings (empty if no geo fields found)
+     */
+    public static BuildMappingsFromMetadata(entityInfo: EntityInfo): GeoFieldMapping[] {
+        const geoExtTypes = new Set([
+            'Geo', 'GeoAddress', 'GeoCity', 'GeoStateProvince',
+            'GeoCountry', 'GeoPostalCode', 'GeoLatitude', 'GeoLongitude'
+        ]);
+        const geoFields = entityInfo.Fields.filter(
+            (f: EntityFieldInfo) => f.ExtendedType != null && geoExtTypes.has(f.ExtendedType)
+        );
+        if (geoFields.length === 0) return [];
+
+        return [{
+            LocationType: 'Primary',
+            Fields: geoFields.map((f: EntityFieldInfo) => f.Name)
+        }];
+    }
+
+    /**
+     * Check if an entity has any geo fields defined in its metadata.
+     * @param entityInfo - The entity metadata to check
+     * @returns true if the entity has at least one field with a Geo* ExtendedType
+     */
+    public static HasGeoFields(entityInfo: EntityInfo): boolean {
+        return entityInfo.SupportsGeoCoding && GeoCodeSyncService.BuildMappingsFromMetadata(entityInfo).length > 0;
     }
 
     /**
