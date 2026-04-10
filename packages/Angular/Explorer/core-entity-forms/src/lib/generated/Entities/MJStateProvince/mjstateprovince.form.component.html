@@ -8,11 +8,11 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Details Section -->
+    <!-- Administrative Details Section -->
     <mj-collapsible-panel
-        SectionKey="details"
-        SectionName="Details"
-        Icon="fa fa-align-left"
+        SectionKey="administrativeDetails"
+        SectionName="Administrative Details"
+        Icon="fa fa-id-card"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -48,6 +48,16 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Geospatial Information Section -->
+    <mj-collapsible-panel
+        SectionKey="geospatialInformation"
+        SectionName="Geospatial Information"
+        Icon="fa fa-globe-americas"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -68,7 +78,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="BoundaryGeoJSON"
-            Type="textarea"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -76,10 +86,20 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="CommonAliases"
-            Type="textarea"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- System Metadata Section -->
+    <mj-collapsible-panel
+        SectionKey="systemMetadata"
+        SectionName="System Metadata"
+        Icon="fa fa-cog"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -107,7 +127,7 @@
     <mj-collapsible-panel
         SectionKey="mJRecordGeoCodes"
         SectionName="Record Geo Codes"
-        Icon="fa fa-table"
+        Icon="fa fa-map-marked-alt"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"

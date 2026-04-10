@@ -4261,7 +4261,7 @@ export class ManageMetadataBase {
                ef.AutoUpdateUserSearchPredicate,
                ef.FullTextSearchEnabled,
                ef.AutoUpdateFullTextSearch,
-               ef.MaxLength
+               ef.Length as MaxLength
             FROM
                ${this.qs(mj_core_schema(), 'vwEntityFields')} ef
             WHERE
