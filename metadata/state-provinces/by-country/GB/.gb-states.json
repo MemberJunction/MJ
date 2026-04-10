@@ -1,2654 +1,4643 @@
 [
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Aberdeen",
       "Code": "ABE",
       "ISO3166_2": "GB-ABE",
       "Latitude": 57.1497,
       "Longitude": -2.0943,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Aberdeen\"]"
+      "CommonAliases": [
+        "Aberdeen"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "A52C08D1-13C2-4176-8AC7-7A43513A64DF"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:29.461Z",
+      "checksum": "f972b13acaa8762370224213fd6067a84c6ff1a28b3a82bcf883191391fab843"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Aberdeenshire",
       "Code": "ABD",
       "ISO3166_2": "GB-ABD",
       "Latitude": 57.1667,
       "Longitude": -2.6667,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Aberdeenshire\"]"
+      "CommonAliases": [
+        "Aberdeenshire"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "2AA23942-C7AA-40BE-B5FD-B99ACC05E74B"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:29.474Z",
+      "checksum": "358ec9d8c8a3ef7fe9c0da4a5346b53b2aa711665ac94176f0417cf7c61af5f0"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Angus",
       "Code": "ANS",
       "ISO3166_2": "GB-ANS",
       "Latitude": 56.6667,
       "Longitude": -2.9167,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Angus\"]"
+      "CommonAliases": [
+        "Angus"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "81EB5479-2719-4F05-9884-AF485CBB4CA2"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:29.486Z",
+      "checksum": "a20c3d60372dc78ee6ee6e59f0a92677a0a8bb7060d4d7d00203710423654308"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Antrim and Newtownabbey",
       "Code": "ANN",
       "ISO3166_2": "GB-ANN",
       "Latitude": 54.6897,
       "Longitude": -6.1711,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Antrim and Newtownabbey\"]"
+      "CommonAliases": [
+        "Antrim and Newtownabbey"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "FDD01E92-2EC3-4208-B494-7F4096086CBA"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:29.500Z",
+      "checksum": "13f033e9afa0f09647e91548f3f94fab14322a4e6f1ed5cf12e13cf98ee257a7"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Ards and North Down",
       "Code": "AND",
       "ISO3166_2": "GB-AND",
       "Latitude": 54.649,
       "Longitude": -5.5628,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Ards and North Down\"]"
+      "CommonAliases": [
+        "Ards and North Down"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "7C30AC11-4CB0-4B0F-8571-8FDC99606092"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:29.513Z",
+      "checksum": "c1027b289d40e8b306fdfea319a18dfd5dd678fb68254477cabb0fd4ad25ed72"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Argyll and Bute",
       "Code": "AGB",
       "ISO3166_2": "GB-AGB",
       "Latitude": 56.4603,
       "Longitude": -5.8618,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Argyll and Bute\"]"
+      "CommonAliases": [
+        "Argyll and Bute"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "D08331C4-6857-417D-A316-921924263C0D"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:29.524Z",
+      "checksum": "30388d8f06b8618235aab060f3ddab06f870e5ee1f6c6f2b10fda3a6b9455993"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Armagh, Banbridge and Craigavon",
       "Code": "ABC",
       "ISO3166_2": "GB-ABC",
       "Latitude": 54.3161,
       "Longitude": -6.7189,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Armagh, Banbridge and Craigavon\"]"
+      "CommonAliases": [
+        "Armagh, Banbridge and Craigavon"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "812A7B96-3448-49DD-A413-7C4E96640D6F"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:29.538Z",
+      "checksum": "0f04c6cfe23c87282b06c592bdda20c68204e7ccfce1293ce89d2754703e7540"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Barking and Dagenham",
       "Code": "BDG",
       "ISO3166_2": "GB-BDG",
       "Latitude": 51.5541,
       "Longitude": 0.1505,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Barking and Dagenham\"]"
+      "CommonAliases": [
+        "Barking and Dagenham"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "279A2211-57CB-433C-9CF1-E8C496A37B15"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:29.551Z",
+      "checksum": "b032e1d856bc525015a6403f23f3bf0253025de47d807674aaac93a5ad178364"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Barnet",
       "Code": "BNE",
       "ISO3166_2": "GB-BNE",
       "Latitude": 51.605,
       "Longitude": -0.2076,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Barnet\"]"
+      "CommonAliases": [
+        "Barnet"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "E5DF6A1C-7468-418C-B53F-ABDFEDCF265D"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:29.564Z",
+      "checksum": "34ff33e61104e192522346c44c7b3d01e66b0f8c1d386d67c4857704027e508c"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Barnsley",
       "Code": "BNS",
       "ISO3166_2": "GB-BNS",
       "Latitude": 53.5528,
       "Longitude": -1.4828,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Barnsley\"]"
+      "CommonAliases": [
+        "Barnsley"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "B00393B8-7DF1-406D-A705-861D4D290167"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:29.575Z",
+      "checksum": "f748e0add3b3064024f101747fe3a6f944c6826b63acae2c12c660d048df39c8"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Bath and North East Somerset",
       "Code": "BAS",
       "ISO3166_2": "GB-BAS",
       "Latitude": 51.3563,
       "Longitude": -2.4867,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Bath and North East Somerset\"]"
+      "CommonAliases": [
+        "Bath and North East Somerset"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "CBB8C0A7-DDE0-4113-9A47-BB467DE0C27C"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:29.604Z",
+      "checksum": "0c30c1b04365877c4e569c6fab4f1494c565b94e0ac82b9fe1c74e731b18e9dd"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Bedford",
       "Code": "BDF",
       "ISO3166_2": "GB-BDF",
       "Latitude": 52.1887,
       "Longitude": -0.4666,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Bedford\"]"
+      "CommonAliases": [
+        "Bedford"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "5C766E78-5AE0-43AB-AABF-ABBF80839A9D"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:29.616Z",
+      "checksum": "1d1814ace8efde29980ca7aae1ec193b08b96c1d3ebfd2d8fa447cf1d6498903"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Belfast",
       "Code": "BFS",
       "ISO3166_2": "GB-BFS",
       "Latitude": 54.5976,
       "Longitude": -5.9277,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Belfast\"]"
+      "CommonAliases": [
+        "Belfast"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "44BE5DA8-ECDE-4B21-9C75-8EB7C73AF4AD"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:29.628Z",
+      "checksum": "1660b81655ee8ccaf101067627a371b4dbcbc58c68d0de110a67dd2f648a18fd"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Bexley",
       "Code": "BEX",
       "ISO3166_2": "GB-BEX",
       "Latitude": 51.4402,
       "Longitude": 0.1479,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Bexley\"]"
+      "CommonAliases": [
+        "Bexley"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "EC544CFC-D408-4B55-9ED1-DA874038F51C"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:29.640Z",
+      "checksum": "4300a69c12379ae314b10723401efed4f76ce7cfc3450dd95014febd035b39e9"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Birmingham",
       "Code": "BIR",
       "ISO3166_2": "GB-BIR",
       "Latitude": 52.4797,
       "Longitude": -1.9027,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Birmingham\"]"
+      "CommonAliases": [
+        "Birmingham"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "9582EDFB-C58A-4957-AA9E-B5424C025C65"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:29.651Z",
+      "checksum": "4203e9ee4c85dbff3fa933e3599c0b7f832b46508550c2f0898d25e4de57b0e3"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Blackburn with Darwen",
       "Code": "BBD",
       "ISO3166_2": "GB-BBD",
       "Latitude": 53.6958,
       "Longitude": -2.4683,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Blackburn with Darwen\"]"
+      "CommonAliases": [
+        "Blackburn with Darwen"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "21E94E4F-B0F8-4550-B867-594E64DF845E"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:29.664Z",
+      "checksum": "a7b7c26f2f93efaa646de3bd4f0f389563a227ce1a5b56db35e4a0a116b58d3d"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Blackpool",
       "Code": "BPL",
       "ISO3166_2": "GB-BPL",
       "Latitude": 53.8175,
       "Longitude": -3.0357,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Blackpool\"]"
+      "CommonAliases": [
+        "Blackpool"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "E61A16CD-4735-4B2B-A050-5F608149CC28"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:29.678Z",
+      "checksum": "4de328cec9e13cab5623eda67fdadf0b5ddb07b9d56eedf727d6ba645ba8dfc4"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Blaenau Gwent",
       "Code": "BGW",
       "ISO3166_2": "GB-BGW",
       "Latitude": 51.7534,
       "Longitude": -3.1848,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Blaenau Gwent\"]"
+      "CommonAliases": [
+        "Blaenau Gwent"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "7626F6AC-0D0D-421E-BD76-E0960F96E3AC"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:29.691Z",
+      "checksum": "aa42829f4a07cf04b9dd75c991abdd5de6d03105b93055a09f8777af20f60213"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Bolton",
       "Code": "BOL",
       "ISO3166_2": "GB-BOL",
       "Latitude": 55.9208,
       "Longitude": -2.7906,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Bolton\"]"
+      "CommonAliases": [
+        "Bolton"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "D55A7CA2-0E78-48E4-BBB9-C0B007C59B86"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:29.704Z",
+      "checksum": "4999b5b128f335fee20fff0795f602cfeb1725a1818f252d9b86120cd8bedf42"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Bournemouth, Christchurch and Poole",
       "Code": "BCP",
       "ISO3166_2": "GB-BCP",
       "Latitude": 50.7457,
       "Longitude": -2.1906,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Bournemouth, Christchurch and Poole\"]"
+      "CommonAliases": [
+        "Bournemouth, Christchurch and Poole"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "3A04376F-17FD-4C7E-A115-DDDC8B9F5EEB"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:29.716Z",
+      "checksum": "77027cfbfa06678af3383ed095b13bd5c37ddc8c12b7a8e908bad5ab34775ce2"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Bracknell Forest",
       "Code": "BRC",
       "ISO3166_2": "GB-BRC",
       "Latitude": 51.4003,
       "Longitude": -0.7418,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Bracknell Forest\"]"
+      "CommonAliases": [
+        "Bracknell Forest"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "053FD9B3-AC7E-41BA-BF4E-EB662BDDC485"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:29.745Z",
+      "checksum": "7a8e2873478144503412f28af2ece5fe4c993de172873f8453549d4288bcf075"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Bradford",
       "Code": "BRD",
       "ISO3166_2": "GB-BRD",
       "Latitude": 53.796,
       "Longitude": -1.7594,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Bradford\"]"
+      "CommonAliases": [
+        "Bradford"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "6B2FFB4D-B042-42FE-87C6-AC941B5B1095"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:29.758Z",
+      "checksum": "9596082e046630eaeaba96000636cda72f5facd6a6bf8daa9e0ed833547228f7"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Brent",
       "Code": "BEN",
       "ISO3166_2": "GB-BEN",
       "Latitude": 52.0189,
       "Longitude": -0.7235,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Brent\"]"
+      "CommonAliases": [
+        "Brent"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "B269DDB0-DD2B-4324-B0D5-97C18FE6D8AC"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:29.770Z",
+      "checksum": "085b55ba478f5ac0ba84d3b7c93147b0251e134c1167c8d1f3661fab07abdb60"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Bridgend",
       "Code": "BGE",
       "ISO3166_2": "GB-BGE",
       "Latitude": 51.5083,
       "Longitude": -3.5812,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Bridgend\"]"
+      "CommonAliases": [
+        "Bridgend"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "CF0EE70E-B7E8-4698-A8D7-86128153708A"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:29.781Z",
+      "checksum": "03a6e7761406d4ec8b7eab5b3f535e98773dc10a6a555d52ac24042a040ddd3c"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Brighton and Hove",
       "Code": "BNH",
       "ISO3166_2": "GB-BNH",
       "Latitude": 50.8453,
       "Longitude": -0.1497,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Brighton and Hove\"]"
+      "CommonAliases": [
+        "Brighton and Hove"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "EA01D368-4CDE-4610-A541-EF9736BC2EB6"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:29.797Z",
+      "checksum": "ab8a330102f5e64bac0151d29c7cf3622961930daa833894f88765cf991464d9"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Bristol",
       "Code": "BST",
       "ISO3166_2": "GB-BST",
       "Latitude": 51.4538,
       "Longitude": -2.5973,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Bristol\"]"
+      "CommonAliases": [
+        "Bristol"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "135D50FB-348C-4A2F-8508-7249FA3025BE"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:29.810Z",
+      "checksum": "adf5a92ad8315b05e3cd9923151ce658369bbc09bfe093fb4357e44c200ede1b"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Bromley",
       "Code": "BRY",
       "ISO3166_2": "GB-BRY",
       "Latitude": 51.368,
       "Longitude": 0.0701,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Bromley\"]"
+      "CommonAliases": [
+        "Bromley"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "DBCF5818-CEF1-4CAE-B4E2-B3BA3DC044CF"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:29.822Z",
+      "checksum": "f4a6f786acb7f4de37cbac23eea3413b098768bcd443903599a26e682c2656f3"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Buckinghamshire",
       "Code": "BKM",
       "ISO3166_2": "GB-BKM",
       "Latitude": 51.7835,
       "Longitude": -0.8946,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Buckinghamshire\"]"
+      "CommonAliases": [
+        "Buckinghamshire"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "71C03BF8-1E38-49FC-8631-C49F929582C7"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:29.835Z",
+      "checksum": "b265a02a5cc792c392010b379120532330ed0ba33cd2e23dddfbfcca8c66ccb1"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Bury",
       "Code": "BUR",
       "ISO3166_2": "GB-BUR",
       "Latitude": 53.5933,
       "Longitude": -2.2966,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Bury\"]"
+      "CommonAliases": [
+        "Bury"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "6BA72E14-2972-4BF6-B969-8D72C640631D"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:29.849Z",
+      "checksum": "4b8c9fc2d650e9733a7af7fadfd42cbfeb2cded72c4f999d1870532800e71102"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Caerphilly",
       "Code": "CAY",
       "ISO3166_2": "GB-CAY",
       "Latitude": 51.6724,
       "Longitude": -3.1784,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Caerphilly\"]"
+      "CommonAliases": [
+        "Caerphilly"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "D7D14BFA-8C5A-49E2-B340-D0ACD68D99F4"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:29.860Z",
+      "checksum": "e68167e42a47ddf9a8884997f0bc07888b6e27b5099829383159f79c37d068e9"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Calderdale",
       "Code": "CLD",
       "ISO3166_2": "GB-CLD",
       "Latitude": 53.7205,
       "Longitude": -1.9623,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Calderdale\"]"
+      "CommonAliases": [
+        "Calderdale"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "BE59EF7D-0095-4B02-A8DF-C46D730139EB"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:29.887Z",
+      "checksum": "6f65852b4acb9ad79fbd32e22a2ae6e4b8e3ed6ccf8eb4329e07dac0c78fc691"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Cambridgeshire",
       "Code": "CAM",
       "ISO3166_2": "GB-CAM",
       "Latitude": 52.3333,
       "Longitude": 0.0833,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Cambridgeshire\"]"
+      "CommonAliases": [
+        "Cambridgeshire"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "542E6A4D-E86D-4410-A405-CDE31A6EB718"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:29.899Z",
+      "checksum": "c51a357faecc1e112f2ac4d9466714beef10aea2e4559f5a6e7c2fbefabc8ebf"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Camden",
       "Code": "CMD",
       "ISO3166_2": "GB-CMD",
       "Latitude": 51.5455,
       "Longitude": -0.1628,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Camden\"]"
+      "CommonAliases": [
+        "Camden"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "57C78C35-EBF4-41C4-AB5E-770A9A3DFB55"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:29.913Z",
+      "checksum": "a7aa03ae451088033c7222a57bcdcda7535958537ec906cffff054aa3c3906de"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Cardiff",
       "Code": "CRF",
       "ISO3166_2": "GB-CRF",
       "Latitude": 51.4816,
       "Longitude": -3.1791,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Cardiff\"]"
+      "CommonAliases": [
+        "Cardiff"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "0788FE94-4B7B-4C0F-AF05-C198FA8C0C16"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:29.925Z",
+      "checksum": "945d3d503f9324a2a2fd0bc881eccf8e7751af828642b9d1571670e37e31e96b"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Carmarthenshire",
       "Code": "CMN",
       "ISO3166_2": "GB-CMN",
       "Latitude": 51.8937,
       "Longitude": -4.2173,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Carmarthenshire\"]"
+      "CommonAliases": [
+        "Carmarthenshire"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "E6A8330F-A70B-43F1-8413-42936399F6BD"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:29.938Z",
+      "checksum": "4f457aefcebbc5966a341addb884cd6bdc9f831eeca874e415a900c538049b75"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Causeway Coast and Glens",
       "Code": "CCG",
       "ISO3166_2": "GB-CCG",
       "Latitude": 55.0361,
       "Longitude": -6.5909,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Causeway Coast and Glens\"]"
+      "CommonAliases": [
+        "Causeway Coast and Glens"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "C45514E0-DD53-4037-9937-DB33C5DA200F"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:29.951Z",
+      "checksum": "4ebacf899d7d7025f4e4519c76b374bef4e5bf8468aa6b3466fbbaa43e05eab0"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Central Bedfordshire",
       "Code": "CBF",
       "ISO3166_2": "GB-CBF",
       "Latitude": 51.998,
       "Longitude": -0.4792,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Central Bedfordshire\"]"
+      "CommonAliases": [
+        "Central Bedfordshire"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "ABC0E924-72CE-4273-974F-64F7D46829F5"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:29.964Z",
+      "checksum": "e30fbaa8263b2ba2310582adc9f781a3d6d433f945404f90d73989b63640b29d"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Ceredigion",
       "Code": "CGN",
       "ISO3166_2": "GB-CGN",
       "Latitude": 52.2946,
       "Longitude": -3.9528,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Ceredigion\"]"
+      "CommonAliases": [
+        "Ceredigion"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "F25DEA6A-3037-4776-AF67-90A763205328"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:29.977Z",
+      "checksum": "2ba7e88855507451a9c0fea1cae3bdcfe232d2000d159062568f195396c48680"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Cheshire East",
       "Code": "CHE",
       "ISO3166_2": "GB-CHE",
       "Latitude": 53.1673,
       "Longitude": -2.2929,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Cheshire East\"]"
+      "CommonAliases": [
+        "Cheshire East"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "F73FCE0A-BEC4-4985-9C2D-B0A92A70723E"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:29.990Z",
+      "checksum": "df1ed864eeabab19fc6538a93581a7feb244999ba1f352d85ecba8b817f3f27f"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Cheshire West and Chester",
       "Code": "CHW",
       "ISO3166_2": "GB-CHW",
       "Latitude": 53.1638,
       "Longitude": -2.7285,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Cheshire West and Chester\"]"
+      "CommonAliases": [
+        "Cheshire West and Chester"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "4E221478-051C-43EB-8DE9-562CD8AFA92C"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:30.003Z",
+      "checksum": "f279c1a86150cdeccc15d5d882b287d2a2be5d790423599ef29c3959c1cd0400"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "City of Kingston upon Hull",
       "Code": "KHL",
       "ISO3166_2": "GB-KHL",
       "Latitude": 53.7676,
       "Longitude": -0.3274,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"City of Kingston upon Hull\"]"
+      "CommonAliases": [
+        "City of Kingston upon Hull"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "5CEF994A-A261-4CFC-B8C8-367FA27A8D50"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:30.030Z",
+      "checksum": "713401d3fef0e0c1ac7efad3c6b8bde46b9fe5578e1748c9948d9b0d8b9e0971"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "City of Southampton",
       "Code": "STH",
       "ISO3166_2": "GB-STH",
       "Latitude": 50.9002,
       "Longitude": -1.414,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"City of Southampton\"]"
+      "CommonAliases": [
+        "City of Southampton"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "48144D74-506C-4F14-A093-1ECA2987E620"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:30.042Z",
+      "checksum": "861b86847b364c7467f67ef8803f17eacfbe68b37e297a9f5e0d1c3fd7f13737"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Clackmannanshire",
       "Code": "CLK",
       "ISO3166_2": "GB-CLK",
       "Latitude": 56.1664,
       "Longitude": -3.7514,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Clackmannanshire\"]"
+      "CommonAliases": [
+        "Clackmannanshire"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "7BF21D8B-416D-45E3-83C3-83A02DE64697"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:30.054Z",
+      "checksum": "62759b17616353de97336d0b569443f208196ecffb80c0d69aa514da54118344"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Conwy",
       "Code": "CWY",
       "ISO3166_2": "GB-CWY",
       "Latitude": 53.2812,
       "Longitude": -3.8287,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Conwy\"]"
+      "CommonAliases": [
+        "Conwy"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "28A7589F-1A73-42AC-BBAB-D1851D61FD26"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:30.066Z",
+      "checksum": "eef30645ea78671f66d1fad841f0694279ea7c46efec936412855db91483c91a"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Cornwall",
       "Code": "CON",
       "ISO3166_2": "GB-CON",
       "Latitude": 50.4433,
       "Longitude": -4.6247,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Cornwall\"]"
+      "CommonAliases": [
+        "Cornwall"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "45DADC82-A1F5-4C01-BF78-CAEEB6D08546"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:30.080Z",
+      "checksum": "2471d9dffbf5996ffaec4ec85efeba78de64932a227b2a429b46da62af606d61"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Coventry",
       "Code": "COV",
       "ISO3166_2": "GB-COV",
       "Latitude": 52.4068,
       "Longitude": -1.5197,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Coventry\"]"
+      "CommonAliases": [
+        "Coventry"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "4E30BDDF-074A-44F0-AAE9-F7396B4743D8"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:30.093Z",
+      "checksum": "412cd5a406fe285efd1e9658a2652322d3125223dc16d5b7f21545f8de0152b5"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Croydon",
       "Code": "CRY",
       "ISO3166_2": "GB-CRY",
       "Latitude": 51.3713,
       "Longitude": -0.102,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Croydon\"]"
+      "CommonAliases": [
+        "Croydon"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "FDA8C12B-263B-4720-A9CC-A5D3E5F8C8CC"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:30.108Z",
+      "checksum": "0a8e3aa06e936b9e64880f19836d880772ce6e3bb37f4a9d7b27488dcc04c60a"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Cumbria",
       "Code": "CMA",
       "ISO3166_2": "GB-CMA",
       "Latitude": 54.6143,
       "Longitude": -2.9421,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Cumbria\"]"
+      "CommonAliases": [
+        "Cumbria"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "35606903-E297-4544-BCA1-B5D02F0DD561"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:30.121Z",
+      "checksum": "fe6698f14cd29ae9f5ad60d5b84c15c086b6c71b5c968deae0571689036c8677"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Darlington",
       "Code": "DAL",
       "ISO3166_2": "GB-DAL",
       "Latitude": 54.5353,
       "Longitude": -1.5529,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Darlington\"]"
+      "CommonAliases": [
+        "Darlington"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "28F57EDA-1EAF-4C41-AE44-9DD451D2B8E4"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:30.133Z",
+      "checksum": "2423b45a475cb13ad04451117c7cb9b0b4adea613856ac3eed0e2fc0c4ea85bd"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Denbighshire",
       "Code": "DEN",
       "ISO3166_2": "GB-DEN",
       "Latitude": 53.1098,
       "Longitude": -3.3671,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Denbighshire\"]"
+      "CommonAliases": [
+        "Denbighshire"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "2A11016B-5574-4FAA-8E6B-C2C21B90F03A"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:30.144Z",
+      "checksum": "421f283845fff991a7b90a4e22d4c9425b7a0e0f05242cf34720cab8a3fd5863"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Derby",
       "Code": "DER",
       "ISO3166_2": "GB-DER",
       "Latitude": 53.1667,
       "Longitude": -1.5833,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Derby\"]"
+      "CommonAliases": [
+        "Derby"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "13228C1A-236C-4A7C-A6C6-4ADE5A09B70D"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:30.174Z",
+      "checksum": "0d772c7bbb07e4412795747307e258a7a177da10852854f9adec9305ee560813"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Derbyshire",
       "Code": "DBY",
       "ISO3166_2": "GB-DBY",
       "Latitude": 53.1185,
       "Longitude": -1.5566,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Derbyshire\"]"
+      "CommonAliases": [
+        "Derbyshire"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "56F16B3C-A94E-4610-AE1E-EE3E079A1B21"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:30.185Z",
+      "checksum": "1e6b548bb32b76fd7c6364468abe1a9c68d295373f4f1d9f775821f640e6a190"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Derry City and Strabane",
       "Code": "DRS",
       "ISO3166_2": "GB-DRS",
       "Latitude": 55.0047,
       "Longitude": -7.3209,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Derry City and Strabane\"]"
+      "CommonAliases": [
+        "Derry City and Strabane"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "A4F5C44F-458A-4B8F-B7E2-60F85680C893"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:30.196Z",
+      "checksum": "88fbe7e1d93c603a0546c8701e93723df95cfa3b8cf7852d1325f56e2524e14f"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Devon",
       "Code": "DEV",
       "ISO3166_2": "GB-DEV",
       "Latitude": 50.7241,
       "Longitude": -3.6608,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Devon\"]"
+      "CommonAliases": [
+        "Devon"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "6E448E9E-A974-42EE-A163-F72F7F48526E"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:30.209Z",
+      "checksum": "b153bd05526d44faeb1a03827a2664d4917c8ee0883839b7cb8acbc5dc32d626"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Doncaster",
       "Code": "DNC",
       "ISO3166_2": "GB-DNC",
       "Latitude": 53.5228,
       "Longitude": -1.1285,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Doncaster\"]"
+      "CommonAliases": [
+        "Doncaster"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "7C109D1F-9788-4644-9086-D1133BAD3231"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:30.220Z",
+      "checksum": "b947b4ee103f084b4b978b31b9840808aea5f4d4dab91eccabb9932ec217916a"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Dorset",
       "Code": "DOR",
       "ISO3166_2": "GB-DOR",
       "Latitude": 50.7488,
       "Longitude": -2.3445,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Dorset\"]"
+      "CommonAliases": [
+        "Dorset"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "67047F42-1BA8-4715-8799-44775E99C223"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:30.233Z",
+      "checksum": "a95fda9dbc1d30906c10e68a7ee6e5b4a04c8c182dab5a29566381ea98754ee7"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Dudley",
       "Code": "DUD",
       "ISO3166_2": "GB-DUD",
       "Latitude": 55.0541,
       "Longitude": -1.595,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Dudley\"]"
+      "CommonAliases": [
+        "Dudley"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "E3085844-01E5-4407-8241-E3D1BEE8E60D"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:30.246Z",
+      "checksum": "dac3ba0d3da99872a205e8cbd330ea14e94437c8b4e03deff8b44378d9eb45c1"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Dumfries and Galloway",
       "Code": "DGY",
       "ISO3166_2": "GB-DGY",
       "Latitude": 55.0833,
       "Longitude": -3.8333,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Dumfries and Galloway\"]"
+      "CommonAliases": [
+        "Dumfries and Galloway"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "2B9CA0BC-BBDE-4D7E-9267-365A4BC2AAAA"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:30.259Z",
+      "checksum": "105792576c8a7c0af6ee0bb1d138772ef737bdc3fbe99efb434b22407965f59d"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Dundee",
       "Code": "DND",
       "ISO3166_2": "GB-DND",
       "Latitude": 56.462,
       "Longitude": -2.9707,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Dundee\"]"
+      "CommonAliases": [
+        "Dundee"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "95CC14F5-2737-4AE3-B710-CC8FF158CA79"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:30.271Z",
+      "checksum": "64725670c9d791868926835bd78d799ca810ce3a238170efe9091acd89c2f2dd"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Durham",
       "Code": "DUR",
       "ISO3166_2": "GB-DUR",
       "Latitude": 54.6667,
       "Longitude": -1.75,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Durham\"]"
+      "CommonAliases": [
+        "Durham"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "D92EBE72-982F-43A8-8E35-7EDCC0BF3A46"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:30.283Z",
+      "checksum": "faa88a001621b683e8b31c9879e7bb6d0ff9d4fb29fc6061fd7ec374d51bea0b"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Ealing",
       "Code": "EAL",
       "ISO3166_2": "GB-EAL",
       "Latitude": 51.5251,
       "Longitude": -0.3143,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Ealing\"]"
+      "CommonAliases": [
+        "Ealing"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "51A32A64-7723-4A77-8E16-7B6F3A919643"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:30.318Z",
+      "checksum": "0a8603c1828a2a35e2d19894cfb65289da2b2f11c459355b8bdda2980d6618a4"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "East Ayrshire",
       "Code": "EAY",
       "ISO3166_2": "GB-EAY",
       "Latitude": 55.5,
       "Longitude": -4.25,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"East Ayrshire\"]"
+      "CommonAliases": [
+        "East Ayrshire"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "CBADB964-A633-4A11-BE99-4F1BB3A2460A"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:30.335Z",
+      "checksum": "0fababb004936b3713e7a837c2ace5eebea6174d676a85717bcb20d54bccc677"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "East Dunbartonshire",
       "Code": "EDU",
       "ISO3166_2": "GB-EDU",
       "Latitude": 55.9333,
       "Longitude": -4.2,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"East Dunbartonshire\"]"
+      "CommonAliases": [
+        "East Dunbartonshire"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "7F4E5968-0D74-48D8-B2CA-14AC92C99674"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:30.352Z",
+      "checksum": "a7bdd0ec246b2e5e7284883a010e8187dec7b98a4bf2083303c884ab4a1ba57c"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "East Lothian",
       "Code": "ELN",
       "ISO3166_2": "GB-ELN",
       "Latitude": 55.9158,
       "Longitude": -2.7512,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"East Lothian\"]"
+      "CommonAliases": [
+        "East Lothian"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "866882A9-FC4F-42EA-88E0-013DB5D7D8AB"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:30.366Z",
+      "checksum": "c0070e76d5d4131b3c5efce2531b97c0f656138523e9a8361de7095bd1edc820"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "East Renfrewshire",
       "Code": "ERW",
       "ISO3166_2": "GB-ERW",
       "Latitude": 55.7495,
       "Longitude": -4.3607,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"East Renfrewshire\"]"
+      "CommonAliases": [
+        "East Renfrewshire"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "7CAF7146-3DB2-451C-8D11-265108BDE816"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:30.380Z",
+      "checksum": "bda0ac2c7dd2ea2c4299588e5b5b1bf316fda405126c25a5006704d4e42e3944"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "East Riding of Yorkshire",
       "Code": "ERY",
       "ISO3166_2": "GB-ERY",
       "Latitude": 53.8736,
       "Longitude": -0.5348,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"East Riding of Yorkshire\"]"
+      "CommonAliases": [
+        "East Riding of Yorkshire"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "D683AB0C-2805-4548-8869-B71A35DBE493"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:30.393Z",
+      "checksum": "460ea29bced6f2d58600279fa5d52f35709108dff83399eebe844d5db8145421"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "East Sussex",
       "Code": "ESX",
       "ISO3166_2": "GB-ESX",
       "Latitude": 50.9404,
       "Longitude": 0.37,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"East Sussex\"]"
+      "CommonAliases": [
+        "East Sussex"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "B86DFBC4-3D9F-4B2D-9FDD-FE3265C27950"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:30.408Z",
+      "checksum": "b92535c209365ce6b7fd901fe50e1bd536088b40d299f1284b9565816b4e3010"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Edinburgh",
       "Code": "EDH",
       "ISO3166_2": "GB-EDH",
       "Latitude": 55.9533,
       "Longitude": -3.1883,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Edinburgh\"]"
+      "CommonAliases": [
+        "Edinburgh"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "28D04CA2-0AAA-4125-9483-15ECD0EF2BFE"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:30.422Z",
+      "checksum": "ee8323f58652864a81d4b529ec2d1b1948a464146112ab0b5a3df84be9981196"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Enfield",
       "Code": "ENF",
       "ISO3166_2": "GB-ENF",
       "Latitude": 51.6526,
       "Longitude": -0.0909,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Enfield\"]"
+      "CommonAliases": [
+        "Enfield"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "EA7C34E8-9A46-4550-990F-87C75E22252C"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:30.436Z",
+      "checksum": "4b66a983bf24b5935766393c3b375ec1b1435d8d442062723a8be15bb89af389"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "England",
       "Code": "ENG",
       "ISO3166_2": "GB-ENG",
       "Latitude": 52.531,
       "Longitude": -1.2649,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"England\"]"
+      "CommonAliases": [
+        "England"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "87525D43-3005-477A-A355-723DAA427F8B"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:30.448Z",
+      "checksum": "04df5578f8f73e6e41ed27a4bdb883b789b35ba91812c775560491c5d36d3d71"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Essex",
       "Code": "ESS",
       "ISO3166_2": "GB-ESS",
       "Latitude": 51.7705,
       "Longitude": 0.4647,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Essex\"]"
+      "CommonAliases": [
+        "Essex"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "34A8A0BA-9774-4A3B-9256-8411BBECB3CE"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:30.481Z",
+      "checksum": "1406e94acbda37455e2fd9d9697d30b24f62ffe27d179109ceb21e8dd78782eb"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Falkirk",
       "Code": "FAL",
       "ISO3166_2": "GB-FAL",
       "Latitude": 56.0019,
       "Longitude": -3.7839,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Falkirk\"]"
+      "CommonAliases": [
+        "Falkirk"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "805B47BA-F420-4FCC-A46A-157CCFF73FF0"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:30.495Z",
+      "checksum": "40fc2623baaf32c27b1df854e0894aa9e7b7c154debc9fee4a7582e95505623c"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Fermanagh and Omagh",
       "Code": "FMO",
       "ISO3166_2": "GB-FMO",
       "Latitude": 54.3559,
       "Longitude": -7.5937,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Fermanagh and Omagh\"]"
+      "CommonAliases": [
+        "Fermanagh and Omagh"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "EFDAB60B-628F-4DD5-BB47-85241A943730"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:30.508Z",
+      "checksum": "b6615464bc07d1c05c3f02831f19b1119be7cd34075bac215f18351b62ea0087"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Fife",
       "Code": "FIF",
       "ISO3166_2": "GB-FIF",
       "Latitude": 56.3333,
-      "Longitude": -3.0,
+      "Longitude": -3,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Fife\"]"
+      "CommonAliases": [
+        "Fife"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "1D5019FF-A345-4083-9CA7-C94D81F20270"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:30.519Z",
+      "checksum": "b2748073a298e9375a80ebd76aaafed49ba1bcc071e580153b952c0b2a783c19"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Flintshire",
       "Code": "FLN",
       "ISO3166_2": "GB-FLN",
       "Latitude": 53.2165,
       "Longitude": -3.1402,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Flintshire\"]"
+      "CommonAliases": [
+        "Flintshire"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "9CE3918F-7EE5-4C65-9AAF-B2A48FF97632"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:30.533Z",
+      "checksum": "b12448b3394ea57c06d27679a315197e5f5a70b6ac86cde78b08848da8bd8350"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Gateshead",
       "Code": "GAT",
       "ISO3166_2": "GB-GAT",
       "Latitude": 54.9626,
       "Longitude": -1.6019,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Gateshead\"]"
+      "CommonAliases": [
+        "Gateshead"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "995A0588-D1BB-47FB-B267-19F0AACCEC06"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:30.545Z",
+      "checksum": "38293c48d1af11950a9b7f093cbcd73c2cc1fe593964d91a5b81f38221230b62"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Glasgow",
       "Code": "GLG",
       "ISO3166_2": "GB-GLG",
       "Latitude": 55.8642,
       "Longitude": -4.2518,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Glasgow\"]"
+      "CommonAliases": [
+        "Glasgow"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "21977CC3-4F37-4A12-AF25-CB030D23B212"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:30.559Z",
+      "checksum": "4c19a66f17d54650a2914d024826a53350d77b0c521655501f3b59919281eb78"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Gloucestershire",
       "Code": "GLS",
       "ISO3166_2": "GB-GLS",
       "Latitude": 51.8333,
       "Longitude": -2.1667,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Gloucestershire\"]"
+      "CommonAliases": [
+        "Gloucestershire"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "8AFCDADD-B5BB-45FD-9664-072100F4EA21"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:30.573Z",
+      "checksum": "a5a1614ff14a76308940c60ddde72b14e854f621c3a2547ef1074be95191b8d2"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Greenwich",
       "Code": "GRE",
       "ISO3166_2": "GB-GRE",
       "Latitude": 51.4686,
       "Longitude": 0.0488,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Greenwich\"]"
+      "CommonAliases": [
+        "Greenwich"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "1714869F-0B27-4609-9CAA-2BF0824B1700"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:30.586Z",
+      "checksum": "a7b2cdab4e5da49cde32df2dd3dd8a68abee1493d86bb93abef9fbe917939929"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Gwynedd",
       "Code": "GWN",
       "ISO3166_2": "GB-GWN",
       "Latitude": 52.909,
       "Longitude": -3.8335,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Gwynedd\"]"
+      "CommonAliases": [
+        "Gwynedd"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "7C69286F-C388-4DCE-BB8D-D30C21506B96"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:30.597Z",
+      "checksum": "ca09b23371ff2315998b6b754586274e5c39521a58a0a51472fff8a79a2f8c85"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Hackney",
       "Code": "HCK",
       "ISO3166_2": "GB-HCK",
       "Latitude": 51.5489,
       "Longitude": -0.0477,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Hackney\"]"
+      "CommonAliases": [
+        "Hackney"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "FA6FFA5D-F9AC-4A91-B09C-A858C4EDDF2E"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:30.628Z",
+      "checksum": "2c4a310177318d69ec4cc742186170ad7e40d881e435daf5d940d12e71ea3726"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Halton",
       "Code": "HAL",
       "ISO3166_2": "GB-HAL",
       "Latitude": 55.0049,
       "Longitude": -2.0045,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Halton\"]"
+      "CommonAliases": [
+        "Halton"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "B0540BBA-C19D-49F5-BC5E-C5B2F5C7B10F"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:30.640Z",
+      "checksum": "1e6c154d5374d998f50a9333af9a8f9850d5217d613b8a41ee9ddcecc4e90f34"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Hammersmith and Fulham",
       "Code": "HMF",
       "ISO3166_2": "GB-HMF",
       "Latitude": 51.499,
       "Longitude": -0.2291,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Hammersmith and Fulham\"]"
+      "CommonAliases": [
+        "Hammersmith and Fulham"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "68F36C0E-2780-4136-B2D1-427FE7B32929"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:30.653Z",
+      "checksum": "5b886f9bed5993ecfd0a49f71209344d391ad98fa18a48ffe20fe29a732440b3"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Hampshire",
       "Code": "HAM",
       "ISO3166_2": "GB-HAM",
       "Latitude": 51.045,
       "Longitude": -1.2433,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Hampshire\"]"
+      "CommonAliases": [
+        "Hampshire"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "D250048F-A0B1-4BA1-BEE4-02084841C201"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:30.665Z",
+      "checksum": "09a637f27decdb8a507318de934992ed90871ccf116411a965a62c6007c6e946"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Haringey",
       "Code": "HRY",
       "ISO3166_2": "GB-HRY",
       "Latitude": 51.5906,
       "Longitude": -0.111,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Haringey\"]"
+      "CommonAliases": [
+        "Haringey"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "35C6DEA7-0558-443E-BFD0-7E001FEC26C3"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:30.676Z",
+      "checksum": "10b7660784b782aaeb2cb17faa6216410de91095f48ff9f21ce8706a3df91d13"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Harrow",
       "Code": "HRW",
       "ISO3166_2": "GB-HRW",
       "Latitude": 51.5882,
       "Longitude": -0.3423,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Harrow\"]"
+      "CommonAliases": [
+        "Harrow"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "023B1B2F-010F-4ED7-BEFF-4B08C889A28D"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:30.689Z",
+      "checksum": "0c030daa269be7daf5026d69ee8a5162d91ec37bf5e62144de9454d9c0e377db"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Hartlepool",
       "Code": "HPL",
       "ISO3166_2": "GB-HPL",
       "Latitude": 54.6917,
       "Longitude": -1.2129,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Hartlepool\"]"
+      "CommonAliases": [
+        "Hartlepool"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "B9D47871-6EC8-4165-AD46-71DAF8B320BC"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:30.702Z",
+      "checksum": "7cb56c90e791d1071e71939d93e258747e19ca05336f5ecd0adb2b340aad5924"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Havering",
       "Code": "HAV",
       "ISO3166_2": "GB-HAV",
       "Latitude": 51.5579,
       "Longitude": 0.2498,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Havering\"]"
+      "CommonAliases": [
+        "Havering"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "61DB00FE-430B-45F6-AC60-CE3F82D48002"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:30.716Z",
+      "checksum": "c044cacb7f81b920fd685ef79cade2fd0dd82941f5c30fe2b1316a66d84b7d68"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Herefordshire",
       "Code": "HEF",
       "ISO3166_2": "GB-HEF",
       "Latitude": 52.0833,
       "Longitude": -2.75,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Herefordshire\"]"
+      "CommonAliases": [
+        "Herefordshire"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "FA1E9D4B-750A-48F0-9554-44437B7C2F1E"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:30.732Z",
+      "checksum": "49843c023fd65e77c471687b05ccb59b2723ede8cb5889c5b6e862ea799318a5"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Hertfordshire",
       "Code": "HRT",
       "ISO3166_2": "GB-HRT",
       "Latitude": 51.8401,
       "Longitude": -0.0979,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Hertfordshire\"]"
+      "CommonAliases": [
+        "Hertfordshire"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "EF20CB87-CF36-41BF-A232-D5E68F70997F"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:30.744Z",
+      "checksum": "723f01d4542a4c95904e6e40beb0e8c936bcbb8d59359c57d79ef6f6d142fa16"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Highland",
       "Code": "HLD",
       "ISO3166_2": "GB-HLD",
       "Latitude": 57.5066,
       "Longitude": -5.0038,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Highland\"]"
+      "CommonAliases": [
+        "Highland"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "36C4691A-DCA7-48C1-A26D-7AA8B96E6B32"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:30.770Z",
+      "checksum": "c39092c6e826993ca889178c42103d4e5c80e8c6ee4f55f63e7d1c1fb07335cb"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Hillingdon",
       "Code": "HIL",
       "ISO3166_2": "GB-HIL",
       "Latitude": 51.5352,
       "Longitude": -0.4481,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Hillingdon\"]"
+      "CommonAliases": [
+        "Hillingdon"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "9873944B-6EB0-4088-986D-C21A3F5C9E99"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:30.785Z",
+      "checksum": "213d4dde5e04061d617f6faac0af193701ea9a6cb3023d25a221d14e21eed1a7"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Hounslow",
       "Code": "HNS",
       "ISO3166_2": "GB-HNS",
       "Latitude": 51.4617,
       "Longitude": -0.3801,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Hounslow\"]"
+      "CommonAliases": [
+        "Hounslow"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "C3EFA29E-A4C2-4EDC-8E36-B1000D0A05C4"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:30.797Z",
+      "checksum": "f4e90946916ec6249d8369acdea20e66aa3ff3e9c8b384d908c2d224af31a5e9"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Inverclyde",
       "Code": "IVC",
       "ISO3166_2": "GB-IVC",
       "Latitude": 55.9,
       "Longitude": -4.75,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Inverclyde\"]"
+      "CommonAliases": [
+        "Inverclyde"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "9BB4222B-08DC-4554-AD4E-C66285687A20"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:30.812Z",
+      "checksum": "ecc65b5f10b1f27b2f5892ed7ca44f074efe4811cd5e1e099f56e3fc56f4e516"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Isle of Anglesey",
       "Code": "AGY",
       "ISO3166_2": "GB-AGY",
       "Latitude": 53.2807,
       "Longitude": -4.69,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Isle of Anglesey\"]"
+      "CommonAliases": [
+        "Isle of Anglesey"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "768D1717-1791-4F87-9B34-266678368D6D"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:30.826Z",
+      "checksum": "081ad11cf7b9dee879ff6ab0c88c1f7fdd3313d3714a9be3d9e0933b5f41bfbe"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Isle of Wight",
       "Code": "IOW",
       "ISO3166_2": "GB-IOW",
       "Latitude": 50.671,
       "Longitude": -1.3327,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Isle of Wight\"]"
+      "CommonAliases": [
+        "Isle of Wight"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "59A2A090-B7A4-47DE-A8E1-164EAFC66DBD"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:30.839Z",
+      "checksum": "282bf0ac7e867e63bfa48dc6a3143c895b43ff584b06486381b7184d54502f03"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Isles of Scilly",
       "Code": "IOS",
       "ISO3166_2": "GB-IOS",
       "Latitude": 49.9203,
       "Longitude": -6.2929,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Isles of Scilly\"]"
+      "CommonAliases": [
+        "Isles of Scilly"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "CD73D62D-5096-42F3-AB74-551101969E0E"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:30.851Z",
+      "checksum": "1dd4d32b02936b70a307af8047d822ac47ad5587ae06e4fd3eb139324cc56266"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Islington",
       "Code": "ISL",
       "ISO3166_2": "GB-ISL",
       "Latitude": 51.5465,
       "Longitude": -0.1058,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Islington\"]"
+      "CommonAliases": [
+        "Islington"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "15D6A460-ACAB-4C39-8F8D-B2B92C5BA6AF"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:30.865Z",
+      "checksum": "92b7ef978462e86703d3d177e5a2370b34fe0d7b319c7a7d3c61dc57e1d0ca05"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Kensington and Chelsea",
       "Code": "KEC",
       "ISO3166_2": "GB-KEC",
       "Latitude": 51.4991,
       "Longitude": -0.1938,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Kensington and Chelsea\"]"
+      "CommonAliases": [
+        "Kensington and Chelsea"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "A868D868-C82D-4D48-B11A-5F74FE7A3508"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:30.878Z",
+      "checksum": "1422926848e002b3e5c20b64d3fea149eaa5cfaf411ec6a132589e5091d74863"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Kent",
       "Code": "KEN",
       "ISO3166_2": "GB-KEN",
       "Latitude": 51.2071,
       "Longitude": 0.721,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Kent\"]"
+      "CommonAliases": [
+        "Kent"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "97933FDE-8192-4459-8BEA-35A422C04317"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:30.890Z",
+      "checksum": "8c59065a513e79570dc70b5ae70d47f25ce4f6e276696488041b682cf5f948b5"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Kingston upon Thames",
       "Code": "KTT",
       "ISO3166_2": "GB-KTT",
       "Latitude": 51.3818,
       "Longitude": -0.277,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Kingston upon Thames\"]"
+      "CommonAliases": [
+        "Kingston upon Thames"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "5D921DE3-7C69-4A56-96B4-AD0D6D76F11C"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:30.920Z",
+      "checksum": "c216376da4d070b8450e0dcf632c58204aca1ae52286a425f27ef8751fa9415f"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Kirklees",
       "Code": "KIR",
       "ISO3166_2": "GB-KIR",
       "Latitude": 53.6423,
       "Longitude": -1.7809,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Kirklees\"]"
+      "CommonAliases": [
+        "Kirklees"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "1E6C483E-127A-4B36-AE3D-E55127F2B5CE"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:30.932Z",
+      "checksum": "4e58b5dd6fd6c1fac6255b2aa5838d18e65f9b0ef2aca4bc7927a083a4d6ad70"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Knowsley",
       "Code": "KWL",
       "ISO3166_2": "GB-KWL",
       "Latitude": 53.4546,
       "Longitude": -2.8529,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Knowsley\"]"
+      "CommonAliases": [
+        "Knowsley"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "DA6C5B1E-AAEF-42E2-A7A2-CDE80AF598DE"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:30.946Z",
+      "checksum": "e911715bca3fcff94ab8fa40cf73fd719923ad09706adf1782fb1816481f8a0c"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Lambeth",
       "Code": "LBH",
       "ISO3166_2": "GB-LBH",
       "Latitude": 51.4952,
       "Longitude": -0.1163,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Lambeth\"]"
+      "CommonAliases": [
+        "Lambeth"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "64777E9B-5B54-436A-A4CF-65DB8B2CF2F0"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:30.958Z",
+      "checksum": "bf2430aabcb404d94230591a71f5b5b6a1edb3a72d88f15b151b227116ff9b5a"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Lancashire",
       "Code": "LAN",
       "ISO3166_2": "GB-LAN",
       "Latitude": 53.8612,
       "Longitude": -2.5651,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Lancashire\"]"
+      "CommonAliases": [
+        "Lancashire"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "5BEDCD84-B4CD-45B9-8810-13AE5FA2F787"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:30.972Z",
+      "checksum": "162792ca1012b376f98c2e0ae4e358ec89a9e6b4c2ccebca742616c1bd6db1af"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Leeds",
       "Code": "LDS",
       "ISO3166_2": "GB-LDS",
       "Latitude": 53.8008,
       "Longitude": -1.5491,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Leeds\"]"
+      "CommonAliases": [
+        "Leeds"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "039C440B-EC3C-4D9B-AD9E-37DFDC182A66"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:30.986Z",
+      "checksum": "69b26580913600631dfa29dabe4395b76dbf328fb32f552426ea2f8e618d5694"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Leicester",
       "Code": "LCE",
       "ISO3166_2": "GB-LCE",
       "Latitude": 52.6369,
       "Longitude": -1.1398,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Leicester\"]"
+      "CommonAliases": [
+        "Leicester"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "EA15E947-4D47-4A0B-A351-A9EF784E62B6"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:30.999Z",
+      "checksum": "80cd9ec2b8de637615308d3d2d50a54c233244452d3727931bf8852bafdcdfc2"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Leicestershire",
       "Code": "LEC",
       "ISO3166_2": "GB-LEC",
       "Latitude": 52.6849,
       "Longitude": -1.1848,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Leicestershire\"]"
+      "CommonAliases": [
+        "Leicestershire"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "B1EFE5F6-927F-4AC2-82C2-3109863879F1"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:31.012Z",
+      "checksum": "2b6663ee8aa2ba1b6019d6f9e6c36ffa21e0482f23e6d1fe4d6fab307af7af45"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Lewisham",
       "Code": "LEW",
       "ISO3166_2": "GB-LEW",
       "Latitude": 51.4535,
       "Longitude": -0.0125,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Lewisham\"]"
+      "CommonAliases": [
+        "Lewisham"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "2C663E98-8A3B-4CB3-9A04-4BD9CB0F4780"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:31.026Z",
+      "checksum": "5adbd456a8d35ae298cbd2248a6c7ef45339990cc4da04db7a049f39b8449780"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Lincolnshire",
       "Code": "LIN",
       "ISO3166_2": "GB-LIN",
       "Latitude": 53.1282,
       "Longitude": -0.1902,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Lincolnshire\"]"
+      "CommonAliases": [
+        "Lincolnshire"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "476ECF3B-EAF9-4C9E-B291-7E7D3E8B3E37"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:31.038Z",
+      "checksum": "8498eaab80ebed4c833cf62ec7af9def6efb79870f46067ca4fed912c14ead25"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Lisburn and Castlereagh",
       "Code": "LBC",
       "ISO3166_2": "GB-LBC",
       "Latitude": 54.4974,
       "Longitude": -6.0331,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Lisburn and Castlereagh\"]"
+      "CommonAliases": [
+        "Lisburn and Castlereagh"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "70558143-91F5-48B7-80D7-7789142AE351"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:31.065Z",
+      "checksum": "1219b495e43a82fe47618b5641d3f906b13a9bd22a799a409c604404d14809c1"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Liverpool",
       "Code": "LIV",
       "ISO3166_2": "GB-LIV",
       "Latitude": 53.4072,
       "Longitude": -2.9917,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Liverpool\"]"
+      "CommonAliases": [
+        "Liverpool"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "EC6B4581-0062-4CBB-85D8-F0AF019A607A"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:31.077Z",
+      "checksum": "a30d55e55744a9f4e4106a9e51b3e21bd0241e1bb7c9f5eae25bee2a1a8c2cae"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "London",
       "Code": "LND",
       "ISO3166_2": "GB-LND",
       "Latitude": 51.5123,
       "Longitude": -0.091,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"London\"]"
+      "CommonAliases": [
+        "London"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "C0A36E98-4E0B-489C-9D74-340E96D30E7B"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:31.088Z",
+      "checksum": "da34bc927818691961ca52578652d5b8da39fc8c5f3d01fa78b7142fa3206445"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Luton",
       "Code": "LUT",
       "ISO3166_2": "GB-LUT",
       "Latitude": 51.8911,
       "Longitude": -0.5103,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Luton\"]"
+      "CommonAliases": [
+        "Luton"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "78A36CB8-20C7-4AEA-8DE5-5832C5CAA368"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:31.100Z",
+      "checksum": "458240b3a19231a4f85db5056a751b66a67eaeae161d28594aefd0b41f7c56e6"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Manchester",
       "Code": "MAN",
       "ISO3166_2": "GB-MAN",
       "Latitude": 53.4808,
       "Longitude": -2.2426,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Manchester\"]"
+      "CommonAliases": [
+        "Manchester"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "C902E0C0-3EAC-4C52-AB7B-6FA357488990"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:31.113Z",
+      "checksum": "6fc4251811d24224a4a7d0b5d9fa7025dbbe9ddd13b5f9af9c6e7261678a4410"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Medway",
       "Code": "MDW",
       "ISO3166_2": "GB-MDW",
       "Latitude": 51.4157,
       "Longitude": 0.5687,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Medway\"]"
+      "CommonAliases": [
+        "Medway"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "03B5940B-8924-43CB-A9B1-AC325F4ABF69"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:31.128Z",
+      "checksum": "bdc8cf976c83df108c59d44c5e38d0d2b8254195f1be5ae4239772f06f12d5cf"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Merthyr Tydfil",
       "Code": "MTY",
       "ISO3166_2": "GB-MTY",
       "Latitude": 51.7467,
       "Longitude": -3.3813,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Merthyr Tydfil\"]"
+      "CommonAliases": [
+        "Merthyr Tydfil"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "F026F8AE-600C-4AC4-9184-E183A09C7094"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:31.141Z",
+      "checksum": "3567cebfa9f9a87579f5288d1141885a6cd47387e55bcf6c75a99711529915b7"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Merton",
       "Code": "MRT",
       "ISO3166_2": "GB-MRT",
       "Latitude": 51.4109,
       "Longitude": -0.1881,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Merton\"]"
+      "CommonAliases": [
+        "Merton"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "77458A49-4B49-48E8-BC6E-BAB9058BD62F"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:31.155Z",
+      "checksum": "a836e48150fa2620cfa6838575a37971393e525ca6bbe4c2a47ccd8b8f89c1e7"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Mid Ulster",
       "Code": "MUL",
       "ISO3166_2": "GB-MUL",
       "Latitude": 54.6386,
       "Longitude": -6.6926,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Mid Ulster\"]"
+      "CommonAliases": [
+        "Mid Ulster"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "1E6C6F04-6998-4AB3-AB99-8358EEAD5A8E"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:31.167Z",
+      "checksum": "f9a1b97ee1577eb51f975eee55278f670b9144ba17f3a058e1b709c73fa3c063"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Mid and East Antrim",
       "Code": "MEA",
       "ISO3166_2": "GB-MEA",
       "Latitude": 54.8726,
       "Longitude": -6.1502,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Mid and East Antrim\"]"
+      "CommonAliases": [
+        "Mid and East Antrim"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "63CF4012-956D-49FE-8BA7-040A8991EE29"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:31.178Z",
+      "checksum": "6555252429e5a8fff3203b6221e28e375e4ed6c7498e4545407250ca805d9719"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Middlesbrough",
       "Code": "MDB",
       "ISO3166_2": "GB-MDB",
       "Latitude": 54.5742,
       "Longitude": -1.235,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Middlesbrough\"]"
+      "CommonAliases": [
+        "Middlesbrough"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "89444F5A-96CA-470C-A505-F4D29C4EF72A"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:31.207Z",
+      "checksum": "801b6e21a9da932a1ffd3daa0dbf2bb252195d5075b28e0b1178b163b122c560"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Midlothian",
       "Code": "MLN",
       "ISO3166_2": "GB-MLN",
       "Latitude": 55.8333,
       "Longitude": -3.0833,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Midlothian\"]"
+      "CommonAliases": [
+        "Midlothian"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "FF4C1DE4-D11B-4222-BA8F-99EC47F97AFC"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:31.221Z",
+      "checksum": "ae804447d4c4bcac7d10e89ba5c579937e9eb6d613d0fc61fafb843cce80d193"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Milton Keynes",
       "Code": "MIK",
       "ISO3166_2": "GB-MIK",
       "Latitude": 52.0407,
       "Longitude": -0.7594,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Milton Keynes\"]"
+      "CommonAliases": [
+        "Milton Keynes"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "988D2729-7D1E-4BA0-88F4-16BBDF329BF2"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:31.234Z",
+      "checksum": "4a0ced979d9d049758c406d6335349fa941442bf88dc14c5f9d4b48ab2e2c8e5"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Monmouthshire",
       "Code": "MON",
       "ISO3166_2": "GB-MON",
       "Latitude": 51.7501,
       "Longitude": -2.8333,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Monmouthshire\"]"
+      "CommonAliases": [
+        "Monmouthshire"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "9619AF3C-E13A-41C2-BBF7-A096B7EE391B"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:31.246Z",
+      "checksum": "01fa66375c73d900613a7605a7ffccbcd38ee9cca6680fc6ecb00046fe58a751"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Moray",
       "Code": "MRY",
       "ISO3166_2": "GB-MRY",
       "Latitude": 57.4167,
       "Longitude": -3.25,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Moray\"]"
+      "CommonAliases": [
+        "Moray"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "B111C4F8-EF37-4248-ADF7-E63EC154163F"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:31.257Z",
+      "checksum": "7af130c78dbbb99cdf80a5ca3163bd8d7c769245b6bf597838dd44721c29bbd9"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Neath Port Talbot",
       "Code": "NTL",
       "ISO3166_2": "GB-NTL",
       "Latitude": 51.669,
       "Longitude": -3.7218,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Neath Port Talbot\"]"
+      "CommonAliases": [
+        "Neath Port Talbot"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "2179AC52-C335-4CD5-99C3-C088FDF78221"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:31.270Z",
+      "checksum": "44a83bccd7f3cb8c01c845add1899533116c7e21b3edb606cd2cb48e7bb50e0b"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Newcastle upon Tyne",
       "Code": "NET",
       "ISO3166_2": "GB-NET",
       "Latitude": 54.9783,
       "Longitude": -1.6178,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Newcastle upon Tyne\"]"
+      "CommonAliases": [
+        "Newcastle upon Tyne"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "AD873175-6CE0-4261-B02E-975FB1B342BA"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:31.283Z",
+      "checksum": "21eb08edcde726c63b315803f3720d1b983af27ac6994405e4c7a6680657b3a4"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Newham",
       "Code": "NWM",
       "ISO3166_2": "GB-NWM",
       "Latitude": 51.5255,
       "Longitude": 0.0352,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Newham\"]"
+      "CommonAliases": [
+        "Newham"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "046F25FE-A158-4838-94C7-AF97A729EC53"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:31.296Z",
+      "checksum": "567b0e7f917cd1e405e7a53bccf89b2307bd252c8cf6466314a1794fb152ebc1"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Newport",
       "Code": "NWP",
       "ISO3166_2": "GB-NWP",
       "Latitude": 52.7689,
       "Longitude": -2.3784,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Newport\"]"
+      "CommonAliases": [
+        "Newport"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "1B90194E-C067-49F7-9258-28B38D648D16"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:31.311Z",
+      "checksum": "947cac414c5e6a13c82db8707fd087759697ce62ca186221c324a3a52105835d"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Newry, Mourne and Down",
       "Code": "NMD",
       "ISO3166_2": "GB-NMD",
       "Latitude": 54.1775,
       "Longitude": -6.3375,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Newry, Mourne and Down\"]"
+      "CommonAliases": [
+        "Newry, Mourne and Down"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "AE26ACDD-4773-4CB9-8A3B-8170AAB7CEA3"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:31.323Z",
+      "checksum": "5ded7cab7139da27ad937363fa1fc6616214694b951e09a0e4c5e3dcef7661eb"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Norfolk",
       "Code": "NFK",
       "ISO3166_2": "GB-NFK",
       "Latitude": 52.6667,
-      "Longitude": 1.0,
+      "Longitude": 1,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Norfolk\"]"
+      "CommonAliases": [
+        "Norfolk"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "252422B4-CF1B-4F93-904A-51F3E1616E40"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:31.356Z",
+      "checksum": "f0f96be18daf8276bf29635d66b903c0c737fe5769815d09f3b22746abf14fcf"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "North Ayrshire",
       "Code": "NAY",
       "ISO3166_2": "GB-NAY",
       "Latitude": 55.7279,
       "Longitude": -4.7272,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"North Ayrshire\"]"
+      "CommonAliases": [
+        "North Ayrshire"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "65B52CAE-EB21-49D5-A41F-A54DFD44FA57"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:31.372Z",
+      "checksum": "963161195de9f2189cc60a0f2e557d3df7f4192d3bdb91c68ee608b5d4e825f2"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "North East Lincolnshire",
       "Code": "NEL",
       "ISO3166_2": "GB-NEL",
       "Latitude": 53.5368,
       "Longitude": -0.0937,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"North East Lincolnshire\"]"
+      "CommonAliases": [
+        "North East Lincolnshire"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "094F16EB-C02B-4323-B209-900896B98820"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:31.384Z",
+      "checksum": "5a2339f9d35c98506ae34ac7abdc69a937f83da946b7ac43ed6d387c3fb17ce4"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "North Lanarkshire",
       "Code": "NLK",
       "ISO3166_2": "GB-NLK",
       "Latitude": 55.8831,
       "Longitude": -3.9462,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"North Lanarkshire\"]"
+      "CommonAliases": [
+        "North Lanarkshire"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "D18FCC9E-1512-45D1-95FC-3555807E63DD"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:31.398Z",
+      "checksum": "1099aab5c1a75f74666c48899ac5a3191733050e4c9a583b66b0cec59cb27d9e"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "North Lincolnshire",
       "Code": "NLN",
       "ISO3166_2": "GB-NLN",
       "Latitude": 53.5897,
       "Longitude": -0.6023,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"North Lincolnshire\"]"
+      "CommonAliases": [
+        "North Lincolnshire"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "CD02DD4C-33B9-4F43-92D5-6D38C48D7BEB"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:31.411Z",
+      "checksum": "c2ad6cbeba08f706c56db495680fc467220e9875f324e89abf3f1f984ef968db"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "North Northamptonshire",
       "Code": "NNH",
       "ISO3166_2": "GB-NNH",
       "Latitude": 52.4171,
       "Longitude": -0.9536,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"North Northamptonshire\"]"
+      "CommonAliases": [
+        "North Northamptonshire"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "B619A17E-496D-488E-82B3-74705C2B3A27"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:31.424Z",
+      "checksum": "eac8b496ed451188c5f732f349cfcb413d7ca591b37c67746943004ad1cbbccf"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "North Somerset",
       "Code": "NSM",
       "ISO3166_2": "GB-NSM",
       "Latitude": 51.3966,
       "Longitude": -2.7691,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"North Somerset\"]"
+      "CommonAliases": [
+        "North Somerset"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "12EB8566-B117-41A8-A100-0D5A749132A5"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:31.447Z",
+      "checksum": "d7df79cd7b2695b44c68e3312ecb5924ab2cf9247ae4b5b3ce2a720fa6d9507f"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "North Tyneside",
       "Code": "NTY",
       "ISO3166_2": "GB-NTY",
       "Latitude": 55.0298,
       "Longitude": -1.5083,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"North Tyneside\"]"
+      "CommonAliases": [
+        "North Tyneside"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "B4376D5A-8BC6-4D1F-B4AE-3444D2A6B887"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:31.464Z",
+      "checksum": "6655cb8d8ede372167c85bfecbee63fa9216b15ffe0a74abd351fa895de3cf4e"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "North Yorkshire",
       "Code": "NYK",
       "ISO3166_2": "GB-NYK",
       "Latitude": 54.0916,
       "Longitude": -1.5359,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"North Yorkshire\"]"
+      "CommonAliases": [
+        "North Yorkshire"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "0620EDBB-CA00-40F7-ACE4-27AC17D62E59"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:31.480Z",
+      "checksum": "345c24e2e11db3a71fe29e59cc433e794b7191406cd584dfaf674bce32e3c2ce"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Northern Ireland",
       "Code": "NIR",
       "ISO3166_2": "GB-NIR",
       "Latitude": 54.586,
       "Longitude": -6.9592,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Northern Ireland\"]"
+      "CommonAliases": [
+        "Northern Ireland"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "6883BEDD-FA5C-48CE-B360-8F2838F7C5F4"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:31.492Z",
+      "checksum": "6436bf07efd2941d7dfeeeca51d754ac8a2142bd9a46c92b28b36eab8cf41f04"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Northumberland",
       "Code": "NBL",
       "ISO3166_2": "GB-NBL",
       "Latitude": 55.25,
       "Longitude": -2.0006,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Northumberland\"]"
+      "CommonAliases": [
+        "Northumberland"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "BA96AF1D-39FC-4F22-A067-51C8F207609A"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:31.521Z",
+      "checksum": "f16d527b4b6b2ee7fb85c24ccb74fe2f12876334f47bd46a28d10e290fcbbf1b"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Nottingham",
       "Code": "NGM",
       "ISO3166_2": "GB-NGM",
       "Latitude": 52.9548,
       "Longitude": -1.1581,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Nottingham\"]"
+      "CommonAliases": [
+        "Nottingham"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "57801EDA-6875-4DCD-B4EC-D4F64783A0C8"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:31.535Z",
+      "checksum": "4c656b8132551d0b9eb3c179d32aec5a75ca3067b51c71d03e4c45046136824c"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Nottinghamshire",
       "Code": "NTT",
       "ISO3166_2": "GB-NTT",
       "Latitude": 53.1459,
       "Longitude": -1.0215,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Nottinghamshire\"]"
+      "CommonAliases": [
+        "Nottinghamshire"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "439BA980-53D0-4189-B68B-DE50859CBCDC"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:31.549Z",
+      "checksum": "f71a591b72948d4e0c8b33d6e2e07929efb94be914807295ffb30747fba8f2a9"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Oldham",
       "Code": "OLD",
       "ISO3166_2": "GB-OLD",
       "Latitude": 53.5416,
       "Longitude": -2.1148,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Oldham\"]"
+      "CommonAliases": [
+        "Oldham"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "BDE4D817-2CF0-4C83-9DC1-E8EFEC2E7F9E"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:31.561Z",
+      "checksum": "66d4c103abd93771e9cf331b724c5c20f415999ec3ac4ee8f94ed649f0ceb93e"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Orkney Islands",
       "Code": "ORK",
       "ISO3166_2": "GB-ORK",
       "Latitude": 58.9418,
       "Longitude": -3.1297,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Orkney Islands\"]"
+      "CommonAliases": [
+        "Orkney Islands"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "B76A0CDB-E01D-4444-B418-81E28D2B0820"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:31.574Z",
+      "checksum": "97ac7a5fd7553f438ad3c27d46ad34d5bfdd87cf2bb21cdce73f1049b7956290"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Outer Hebrides",
       "Code": "ELS",
       "ISO3166_2": "GB-ELS",
       "Latitude": 57.6667,
       "Longitude": -7.1667,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Outer Hebrides\"]"
+      "CommonAliases": [
+        "Outer Hebrides"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "46448C34-F52A-407E-8D60-96F4356CD611"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:31.587Z",
+      "checksum": "18f794e0fb7fb00cc6a4fdb329c39e43b594daa52ff3392aabc0928900473629"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Oxfordshire",
       "Code": "OXF",
       "ISO3166_2": "GB-OXF",
       "Latitude": 51.8333,
       "Longitude": -1.25,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Oxfordshire\"]"
+      "CommonAliases": [
+        "Oxfordshire"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "16470E80-633E-4858-A182-6D03BBCBD8B4"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:31.601Z",
+      "checksum": "0ec06bd1dfd56ca377c00109c10bfac55945fa76120121ec493afe88ff5cc5c1"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Pembrokeshire",
       "Code": "PEM",
       "ISO3166_2": "GB-PEM",
       "Latitude": 51.8339,
       "Longitude": -4.9167,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Pembrokeshire\"]"
+      "CommonAliases": [
+        "Pembrokeshire"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "CDC9D24E-D06F-4191-9F25-DD3AB9FFD7D2"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:31.615Z",
+      "checksum": "98a119752d99ea7deea430a75899905ada2a6696068be6e5b62300ade27eeb75"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Perth and Kinross",
       "Code": "PKN",
       "ISO3166_2": "GB-PKN",
       "Latitude": 56.5,
       "Longitude": -3.75,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Perth and Kinross\"]"
+      "CommonAliases": [
+        "Perth and Kinross"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "93F892F4-A688-4F12-B6E2-7409C1DE256E"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:31.627Z",
+      "checksum": "10f583782d74b53879e7ea6793b5eac36e4b1b4c4597c1f1eacaa096d4c2d4da"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Peterborough",
       "Code": "PTE",
       "ISO3166_2": "GB-PTE",
       "Latitude": 52.5726,
       "Longitude": -0.2427,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Peterborough\"]"
+      "CommonAliases": [
+        "Peterborough"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "C5FA47A3-816C-4BDA-BF1D-B8B61DB54363"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:31.639Z",
+      "checksum": "aaea075f25610befcc3accc4356fbe21dad7c9b0dce7481e66f9238061f094b7"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Plymouth",
       "Code": "PLY",
       "ISO3166_2": "GB-PLY",
       "Latitude": 50.3714,
       "Longitude": -4.1424,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Plymouth\"]"
+      "CommonAliases": [
+        "Plymouth"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "16AE3EDE-5331-4A21-82E5-ED61BF1D6E1C"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:31.667Z",
+      "checksum": "e2ae777c7e1be5f1956018332add8c946e5281d5769e8a1933cea98d1cc467a1"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Portsmouth",
       "Code": "POR",
       "ISO3166_2": "GB-POR",
       "Latitude": 50.8,
       "Longitude": -1.0906,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Portsmouth\"]"
+      "CommonAliases": [
+        "Portsmouth"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "9D93B3F2-C9B1-42F9-8140-4025CEC7D369"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:31.679Z",
+      "checksum": "e571b292f5327b8c6bb532cec5bf7fc8d28b7609fa849766701bb9070bbed30f"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Powys",
       "Code": "POW",
       "ISO3166_2": "GB-POW",
       "Latitude": 52.3271,
       "Longitude": -3.3553,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Powys\"]"
+      "CommonAliases": [
+        "Powys"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "4083288F-4FD7-43BF-A741-594FB411B9B2"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:31.692Z",
+      "checksum": "77cbc40fa42671f4944611e40b58502d681b5236a8dcf178debc854c21a8c96b"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Reading",
       "Code": "RDG",
       "ISO3166_2": "GB-RDG",
       "Latitude": 51.4515,
       "Longitude": -0.9836,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Reading\"]"
+      "CommonAliases": [
+        "Reading"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "6448DA2F-39BD-4AEF-B274-81B318AEFAB3"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:31.705Z",
+      "checksum": "7be6dd25543018a0147b4222f3a0ef306d29431193ed6af5584548616e9481a7"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Redbridge",
       "Code": "RDB",
       "ISO3166_2": "GB-RDB",
       "Latitude": 51.5766,
       "Longitude": 0.0453,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Redbridge\"]"
+      "CommonAliases": [
+        "Redbridge"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "7A8E833F-07BC-4446-98F9-188F904F14F1"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:31.719Z",
+      "checksum": "fbebfc6b6ea5c68194792edabfac9a7bc274512e46b464b039a1ed19ced0e3e4"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Redcar and Cleveland",
       "Code": "RCC",
       "ISO3166_2": "GB-RCC",
       "Latitude": 54.5679,
       "Longitude": -1.0055,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Redcar and Cleveland\"]"
+      "CommonAliases": [
+        "Redcar and Cleveland"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "F69CC037-F028-42E5-B3AB-98D8619293C0"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:31.731Z",
+      "checksum": "8f2da5d3abb515212a2b4127db9d97ca2763db9d4d6649ee04aa5b9602f27a09"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Renfrewshire",
       "Code": "RFW",
       "ISO3166_2": "GB-RFW",
       "Latitude": 55.8333,
       "Longitude": -4.5,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Renfrewshire\"]"
+      "CommonAliases": [
+        "Renfrewshire"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "48A2A45C-2B89-480E-90EE-6F113D7FE13E"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:31.745Z",
+      "checksum": "31f7b817bffdf011305418c5a1a58572d65036ac2f4e75cc5d382ae1edbd002c"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Rhondda Cynon Taf",
       "Code": "RCT",
       "ISO3166_2": "GB-RCT",
       "Latitude": 51.6652,
       "Longitude": -3.4578,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Rhondda Cynon Taf\"]"
+      "CommonAliases": [
+        "Rhondda Cynon Taf"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "27820277-3F5A-47D8-BFC1-1E7DF7C9AA90"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:31.758Z",
+      "checksum": "cbab61d026547d7f30da313153a633022c604cc9e588fc60fa2f15e7f96f43a1"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Richmond upon Thames",
       "Code": "RIC",
       "ISO3166_2": "GB-RIC",
       "Latitude": 51.4406,
       "Longitude": -0.3076,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Richmond upon Thames\"]"
+      "CommonAliases": [
+        "Richmond upon Thames"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "1494C2F7-7180-49BD-A8EB-515F6EC1BC5D"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:31.772Z",
+      "checksum": "81016f0fd6f3d40761657946838bc9f0064d309ddfa4acef69a8f2f77b5597fe"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Rochdale",
       "Code": "RCH",
       "ISO3166_2": "GB-RCH",
       "Latitude": 53.6097,
       "Longitude": -2.1561,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Rochdale\"]"
+      "CommonAliases": [
+        "Rochdale"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "D16B7C04-AF10-48E4-8A80-FC4D108960F3"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:31.783Z",
+      "checksum": "bb4d612b31c786219024b8b607373201f2b6450a6c1b4207e5eb35294cbe5350"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Rotherham",
       "Code": "ROT",
       "ISO3166_2": "GB-ROT",
       "Latitude": 53.4326,
       "Longitude": -1.3635,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Rotherham\"]"
+      "CommonAliases": [
+        "Rotherham"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "054D095C-850D-4FCF-B7CC-752867848BBA"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:31.809Z",
+      "checksum": "eeff2ce9e5bd094aedb0c1f4f6dec2f02e8d5b66b00dbca4b94d7eed22e37f58"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Rutland",
       "Code": "RUT",
       "ISO3166_2": "GB-RUT",
       "Latitude": 52.6423,
       "Longitude": -0.6633,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Rutland\"]"
+      "CommonAliases": [
+        "Rutland"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "5ED3B990-FB25-4CCC-A162-DA16B51382CE"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:31.821Z",
+      "checksum": "83beb574882e62c4cbccc1df255620c965e3b1caa44b03c412467b94d48e23d9"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Salford",
       "Code": "SLF",
       "ISO3166_2": "GB-SLF",
       "Latitude": 53.4875,
       "Longitude": -2.2901,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Salford\"]"
+      "CommonAliases": [
+        "Salford"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "8FBA53E2-7027-4639-81C8-90323C92BD5D"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:31.832Z",
+      "checksum": "cdea48852c9bcaf4039c824354a201595b99f2ae15c6ad652239a5fec908517a"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Sandwell",
       "Code": "SAW",
       "ISO3166_2": "GB-SAW",
       "Latitude": 52.5148,
       "Longitude": -2.0135,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Sandwell\"]"
+      "CommonAliases": [
+        "Sandwell"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "7C111870-CCD8-4221-A145-04B64336B656"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:31.844Z",
+      "checksum": "37fea5c8c821b96fe25b96e14a5e18fd4aa916c9bf835580b36e571889c36e1c"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Scotland",
       "Code": "SCT",
       "ISO3166_2": "GB-SCT",
       "Latitude": 56.7861,
       "Longitude": -4.1141,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Scotland\"]"
+      "CommonAliases": [
+        "Scotland"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "5158E9D3-1689-4567-97EB-85B984B45803"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:31.856Z",
+      "checksum": "8690691ca84e6dcfc5ed3f616159aa0557ff0868543b46ab62c52f5a4b68c6be"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Scottish Borders",
       "Code": "SCB",
       "ISO3166_2": "GB-SCB",
       "Latitude": 55.5833,
       "Longitude": -2.8333,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Scottish Borders\"]"
+      "CommonAliases": [
+        "Scottish Borders"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "79956A73-5AF7-4C00-A07E-255C7069E507"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:31.868Z",
+      "checksum": "a07afbd95f6c5177e97d5e73e31419b1387e9ebdc4be3eea685f10e33a209328"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Sefton",
       "Code": "SFT",
       "ISO3166_2": "GB-SFT",
       "Latitude": 53.5034,
       "Longitude": -2.9704,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Sefton\"]"
+      "CommonAliases": [
+        "Sefton"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "CCA63367-CD13-4E89-B315-F9A103CCD14D"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:31.881Z",
+      "checksum": "76ab15840fae953deb35688b9ce92ccc0309bcefa66ee941bcc7707acefb86b7"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Sheffield",
       "Code": "SHF",
       "ISO3166_2": "GB-SHF",
       "Latitude": 53.3807,
       "Longitude": -1.4702,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Sheffield\"]"
+      "CommonAliases": [
+        "Sheffield"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "39D722C9-F749-4D7B-8484-5CE007828EB3"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:31.894Z",
+      "checksum": "f38d8735e4d80989977900127a9dcf79a96e439e145b23c5249597d848cc9a24"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Shetland Islands",
       "Code": "ZET",
       "ISO3166_2": "GB-ZET",
       "Latitude": 60.3333,
       "Longitude": -1.3333,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Shetland Islands\"]"
+      "CommonAliases": [
+        "Shetland Islands"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "C8700CAD-7390-4A70-BA07-7ED803C233FF"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:31.906Z",
+      "checksum": "98a28d09053cb485278eb99de9c6a4d8ad234b4a982629cf1b24b13323944d22"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Shropshire",
       "Code": "SHR",
       "ISO3166_2": "GB-SHR",
       "Latitude": 52.6523,
       "Longitude": -2.7959,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Shropshire\"]"
+      "CommonAliases": [
+        "Shropshire"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "C0930CB5-B5FC-490A-8454-48683710903C"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:31.917Z",
+      "checksum": "83516242157477a4645bc4bf564cf2ddd0d5a36ad1011a085006aba6e3e0035e"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Slough",
       "Code": "SLG",
       "ISO3166_2": "GB-SLG",
       "Latitude": 51.5105,
       "Longitude": -0.595,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Slough\"]"
+      "CommonAliases": [
+        "Slough"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "A3C40DD5-AEAB-448D-B783-57711C3AC46C"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:31.948Z",
+      "checksum": "5131cb3dfa92c185d69bd5ba0c2111c98da7296a029fc8e55a7184a597474f43"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Solihull",
       "Code": "SOL",
       "ISO3166_2": "GB-SOL",
       "Latitude": 52.4118,
       "Longitude": -1.7776,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Solihull\"]"
+      "CommonAliases": [
+        "Solihull"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "60774113-553D-4E63-8764-F27568E49D69"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:31.960Z",
+      "checksum": "842bc9f988a6f4263aedca34a96e54be8078d1d8a2248745ca869f14499554b1"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Somerset",
       "Code": "SOM",
       "ISO3166_2": "GB-SOM",
       "Latitude": 51.0833,
-      "Longitude": -3.0,
+      "Longitude": -3,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Somerset\"]"
+      "CommonAliases": [
+        "Somerset"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "E87F6124-D8C3-4755-9E19-DA36D76A987B"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:31.972Z",
+      "checksum": "5a246a06c92a25024171092835cbbe41683a6406d6dc716d46241ee0edbd1fe0"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "South Ayrshire",
       "Code": "SAY",
       "ISO3166_2": "GB-SAY",
       "Latitude": 55.2998,
       "Longitude": -4.646,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"South Ayrshire\"]"
+      "CommonAliases": [
+        "South Ayrshire"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "3C36D9A8-C141-4529-BC2A-E5C2F6EF8781"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:31.983Z",
+      "checksum": "ab934e22e4f8591e684439063faa16e96c0ec5bc7c54e99efb9e5c81545aee11"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "South Gloucestershire",
       "Code": "SGC",
       "ISO3166_2": "GB-SGC",
       "Latitude": 51.5492,
       "Longitude": -2.481,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"South Gloucestershire\"]"
+      "CommonAliases": [
+        "South Gloucestershire"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "3F976CB7-6EBD-4CEB-BE4C-F3281519307F"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:31.995Z",
+      "checksum": "7a667192577af7748e3f63f9c135988ecc3bd0b8b010b5fa006fa3de7e0fbbb6"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "South Lanarkshire",
       "Code": "SLK",
       "ISO3166_2": "GB-SLK",
       "Latitude": 55.5832,
       "Longitude": -3.8332,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"South Lanarkshire\"]"
+      "CommonAliases": [
+        "South Lanarkshire"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "26B2A299-2D37-409C-8FC9-1A2C83F86B8B"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:32.007Z",
+      "checksum": "479131c12d6f0163a9e90ee8c765aa2abea45432c4a9adde9d6238ca952b4376"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "South Tyneside",
       "Code": "STY",
       "ISO3166_2": "GB-STY",
       "Latitude": 54.9637,
       "Longitude": -1.4419,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"South Tyneside\"]"
+      "CommonAliases": [
+        "South Tyneside"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "F2EEB0A5-6AAC-4CF4-8C2D-DC23D28C4D9E"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:32.026Z",
+      "checksum": "56b29b4cd8904821fcabeea8bc52d2f0086f96c40dd31a25f3e30c515a6d310a"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Southend-on-Sea",
       "Code": "SOS",
       "ISO3166_2": "GB-SOS",
       "Latitude": 51.5459,
       "Longitude": 0.7077,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Southend-on-Sea\"]"
+      "CommonAliases": [
+        "Southend-on-Sea"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "D286CA77-255B-4A34-94C6-8E9160FF6340"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:32.039Z",
+      "checksum": "7f5daecb1a383d6cad71c1b4c86f6723553f58f604cb5f2b55ddd4f1a1d11502"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Southwark",
       "Code": "SWK",
       "ISO3166_2": "GB-SWK",
       "Latitude": 51.4653,
       "Longitude": -0.069,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Southwark\"]"
+      "CommonAliases": [
+        "Southwark"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "00FCEE83-B57D-4E3F-BD96-FA7E2E698DDD"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:32.053Z",
+      "checksum": "8a5864e48fcc0009ed6b0a5bcea326ace8d3ba07d09c01861bf1a3038a010a56"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "St Helens",
       "Code": "SHN",
       "ISO3166_2": "GB-SHN",
       "Latitude": 53.4535,
       "Longitude": -2.7343,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"St Helens\"]"
+      "CommonAliases": [
+        "St Helens"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "C325AA49-13E4-48EF-82C2-A66295FAD3EB"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:32.064Z",
+      "checksum": "8809416a86dab3edbeef2e00e416728dc6ee12be90e2c6a92a7ab63fb8294ae3"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Staffordshire",
       "Code": "STS",
       "ISO3166_2": "GB-STS",
       "Latitude": 52.8247,
       "Longitude": -2.0075,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Staffordshire\"]"
+      "CommonAliases": [
+        "Staffordshire"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "C30519BE-D4BB-4E8C-931F-F18FF889BB1A"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:32.092Z",
+      "checksum": "ecbed032f13a1078c63fb6436b1a11528671b07d948145973f594128243d8ea7"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Stirling",
       "Code": "STG",
       "ISO3166_2": "GB-STG",
       "Latitude": 56.1165,
       "Longitude": -3.9369,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Stirling\"]"
+      "CommonAliases": [
+        "Stirling"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "19ADD84B-54A0-49D3-8D1C-BAF3A3F5414A"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:32.106Z",
+      "checksum": "e938455a0d2ec21fc2eaa586408282858c2d25da5f67060fb57b4c4459433082"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Stockport",
       "Code": "SKP",
       "ISO3166_2": "GB-SKP",
       "Latitude": 53.4106,
       "Longitude": -2.1575,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Stockport\"]"
+      "CommonAliases": [
+        "Stockport"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "FAB3C59C-C089-4A17-8FCB-3E373346BE6E"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:32.117Z",
+      "checksum": "a4d4a328de22a6aa452622d73c599e95f61375fd89f9cda6a7c9d2b8c2477f13"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Stockton-on-Tees",
       "Code": "STT",
       "ISO3166_2": "GB-STT",
       "Latitude": 54.5641,
       "Longitude": -1.3129,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Stockton-on-Tees\"]"
+      "CommonAliases": [
+        "Stockton-on-Tees"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "65282B7F-F3AC-4EB0-A1CC-90686D8CDEE4"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:32.129Z",
+      "checksum": "ff69febaf34a5be0e71ff749018cba63a6681a7a71a0d1397a21a8a671ea523b"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Stoke-on-Trent",
       "Code": "STE",
       "ISO3166_2": "GB-STE",
       "Latitude": 53.0162,
       "Longitude": -2.1813,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Stoke-on-Trent\"]"
+      "CommonAliases": [
+        "Stoke-on-Trent"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "089DA667-7B53-40EB-BB0C-77276C9B5CE7"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:32.141Z",
+      "checksum": "d9ba90492be41a7e7ce84329c1d9e47ee3c59b8f580dca90260bbff826ff857b"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Suffolk",
       "Code": "SFK",
       "ISO3166_2": "GB-SFK",
       "Latitude": 52.241,
       "Longitude": 1.0466,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Suffolk\"]"
+      "CommonAliases": [
+        "Suffolk"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "139F1F5F-9CD8-4750-9780-50032508B26F"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:32.152Z",
+      "checksum": "a2046c4fa193f7c081ecce2f7792f6c9d9b8398b4b633cdb0ceb2be03fe52f57"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Sunderland",
       "Code": "SND",
       "ISO3166_2": "GB-SND",
       "Latitude": 54.9059,
       "Longitude": -1.3829,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Sunderland\"]"
+      "CommonAliases": [
+        "Sunderland"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "427BBC84-25BE-4A7A-A0B8-10ECB711D09D"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:32.162Z",
+      "checksum": "5661d54920687a184f5343cefb6bfcbd4d3b258be9afb40e421bee17096d34e9"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Surrey",
       "Code": "SRY",
       "ISO3166_2": "GB-SRY",
       "Latitude": 51.2715,
       "Longitude": -0.3415,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Surrey\"]"
+      "CommonAliases": [
+        "Surrey"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "42C84090-40DB-40A1-BDFB-B8327FABF827"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:32.175Z",
+      "checksum": "06315ace8b1e4dff106925e51f4d3d89d545900d88667d88886e1b69410a8e3a"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Sutton",
       "Code": "STN",
       "ISO3166_2": "GB-STN",
       "Latitude": 51.3574,
       "Longitude": -0.1753,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Sutton\"]"
+      "CommonAliases": [
+        "Sutton"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "C98EE009-6A77-4015-B5AD-BC5725EABDAB"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:32.188Z",
+      "checksum": "b943ab3c5eaafa1526197ec54285b830f785a602d6937d32a6f7d5f60f75717d"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Swansea",
       "Code": "SWA",
       "ISO3166_2": "GB-SWA",
       "Latitude": 51.6214,
       "Longitude": -3.9436,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Swansea\"]"
+      "CommonAliases": [
+        "Swansea"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "6F82CF68-A1D3-449D-B17F-A2BF2A9AB626"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:32.198Z",
+      "checksum": "04f3f5470fb82667a4fb784c6665059e29c564f19f20f435f8694c5c26cc8fec"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Swindon",
       "Code": "SWD",
       "ISO3166_2": "GB-SWD",
       "Latitude": 51.5558,
       "Longitude": -1.7797,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Swindon\"]"
+      "CommonAliases": [
+        "Swindon"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "B45F9F77-3A66-4980-8E6F-1D72EE4FEB90"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:32.222Z",
+      "checksum": "f9e04bb6dc5741875ddf3faa2d54f09860113d84a278641aaca3d4935061e1f9"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Tameside",
       "Code": "TAM",
       "ISO3166_2": "GB-TAM",
       "Latitude": 53.4806,
       "Longitude": -2.081,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Tameside\"]"
+      "CommonAliases": [
+        "Tameside"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "5BAE2C94-5E06-4237-941F-4DF883F08872"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:32.233Z",
+      "checksum": "a93588a0700793efecc8bc4a72d2d04049140f3a1938481ecdc68c7e6f4cb477"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Telford and Wrekin",
       "Code": "TFW",
       "ISO3166_2": "GB-TFW",
       "Latitude": 52.7214,
       "Longitude": -2.5009,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Telford and Wrekin\"]"
+      "CommonAliases": [
+        "Telford and Wrekin"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "D4CEDA3B-87D0-45B8-B422-04D03B6B966F"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:32.244Z",
+      "checksum": "c0d4e080b6fac7151542329a5208b1171ee0262c84ec5ff37adeb5b65d5310f3"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Thurrock",
       "Code": "THR",
       "ISO3166_2": "GB-THR",
       "Latitude": 51.508,
       "Longitude": 0.3963,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Thurrock\"]"
+      "CommonAliases": [
+        "Thurrock"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "73FEC140-B319-48AF-BDCA-CB49CC67AC7F"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:32.257Z",
+      "checksum": "6c042b10401413a5d0b7ca006cdb9d99bda082d6491f886374401e55240046a5"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Torbay",
       "Code": "TOB",
       "ISO3166_2": "GB-TOB",
       "Latitude": 50.4392,
       "Longitude": -3.537,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Torbay\"]"
+      "CommonAliases": [
+        "Torbay"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "8E790621-C6AE-4979-99BB-70C4A7491A2C"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:32.268Z",
+      "checksum": "bb0c90445a5a33bca1f13717fb8e6a1f98157e163345f378308bd1a0ea64d37f"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Torfaen",
       "Code": "TOF",
       "ISO3166_2": "GB-TOF",
       "Latitude": 51.7002,
       "Longitude": -3.0446,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Torfaen\"]"
+      "CommonAliases": [
+        "Torfaen"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "0B81C588-5071-431C-BB00-237805924CBE"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:32.282Z",
+      "checksum": "52a5a977f173876984f5262f2a06fa0cc04bfdcfbadfd2d19f7141f461e9b295"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Tower Hamlets",
       "Code": "TWH",
       "ISO3166_2": "GB-TWH",
       "Latitude": 51.1289,
       "Longitude": 1.2987,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Tower Hamlets\"]"
+      "CommonAliases": [
+        "Tower Hamlets"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "9D83009A-2684-4822-AB6D-09A0711FA587"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:32.293Z",
+      "checksum": "7abcdadaae4d5629e58d87a49b73535c4cfa61214c23d63139dbf4fb6dd9616e"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Trafford",
       "Code": "TRF",
       "ISO3166_2": "GB-TRF",
       "Latitude": 53.4189,
       "Longitude": -2.3593,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Trafford\"]"
+      "CommonAliases": [
+        "Trafford"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "2043239B-9173-4268-8DAC-DCE7B0F639D3"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:32.305Z",
+      "checksum": "c14351a1b04cb65c445e3fdab8d4446649b54b1bf6148f2c612e2ceb5989f304"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Vale of Glamorgan",
       "Code": "VGL",
       "ISO3166_2": "GB-VGL",
       "Latitude": 51.4471,
       "Longitude": -3.3989,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Vale of Glamorgan\"]"
+      "CommonAliases": [
+        "Vale of Glamorgan"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "613CAC85-64BA-4F73-B545-237C8F757213"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:32.316Z",
+      "checksum": "379863b241fc3708a07926ed14440f54dc3ce1077818235fd83a785379f04806"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Wakefield",
       "Code": "WKF",
       "ISO3166_2": "GB-WKF",
       "Latitude": 53.683,
       "Longitude": -1.4967,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Wakefield\"]"
+      "CommonAliases": [
+        "Wakefield"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "1CA208B3-DA46-44D0-8570-F776DB313341"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:32.328Z",
+      "checksum": "743d5136ac253a2278272f967ab6d522666978b593818cf2f8661d3c79b88ba5"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Wales",
       "Code": "WLS",
       "ISO3166_2": "GB-WLS",
       "Latitude": 52.2928,
       "Longitude": -3.7389,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Wales\"]"
+      "CommonAliases": [
+        "Wales"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "BBEC4F9C-18E6-444A-A2E1-FDEADEB761AA"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:32.363Z",
+      "checksum": "be6cde7bf7075452f0bfc7c5b8f1d626b7aa335184d5a602945e2f0b208ac1b3"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Walsall",
       "Code": "WLL",
       "ISO3166_2": "GB-WLL",
       "Latitude": 52.5862,
       "Longitude": -1.9829,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Walsall\"]"
+      "CommonAliases": [
+        "Walsall"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "FF1E8293-BFCB-4A55-947F-E0F009C3435D"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:32.378Z",
+      "checksum": "b3bec95b2960f38a3e92f99a88a6e70b78e0f779374abe4a628367f401c00af4"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Waltham Forest",
       "Code": "WFT",
       "ISO3166_2": "GB-WFT",
       "Latitude": 51.5983,
       "Longitude": -0.0177,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Waltham Forest\"]"
+      "CommonAliases": [
+        "Waltham Forest"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "D592F9D3-412A-4286-A1CC-E02E9EA7476E"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:32.391Z",
+      "checksum": "22d9b6844f597ba00404a96c900dc59be1519f25d76adf87d7e1d40d121748c2"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Wandsworth",
       "Code": "WND",
       "ISO3166_2": "GB-WND",
       "Latitude": 51.4568,
       "Longitude": -0.1897,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Wandsworth\"]"
+      "CommonAliases": [
+        "Wandsworth"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "44CCBF7F-E9F6-46FF-8CCB-606ABDCCCD42"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:32.403Z",
+      "checksum": "98fed5c77307fd2381b10380c9f4f41a36ad0335fef40d90b8d447c711279db9"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Warrington",
       "Code": "WRT",
       "ISO3166_2": "GB-WRT",
       "Latitude": 53.3899,
       "Longitude": -2.5943,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Warrington\"]"
+      "CommonAliases": [
+        "Warrington"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "3E36D1DC-072B-403E-907B-ADBD358F986F"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:32.417Z",
+      "checksum": "55b3ef04b7a74f4986dc4af7ffeae6ee4ac7e7c860de6c6a5e2a1a0f835ed385"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Warwickshire",
       "Code": "WAR",
       "ISO3166_2": "GB-WAR",
       "Latitude": 52.3213,
       "Longitude": -1.5537,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Warwickshire\"]"
+      "CommonAliases": [
+        "Warwickshire"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "2C3C3D97-585B-4382-AA9D-875654279813"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:32.431Z",
+      "checksum": "191e0b97695f1f03baf5fc3baa04a29add38eb7d362dca20c290da0c90e6b786"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "West Berkshire",
       "Code": "WBK",
       "ISO3166_2": "GB-WBK",
       "Latitude": 51.4463,
       "Longitude": -1.2759,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"West Berkshire\"]"
+      "CommonAliases": [
+        "West Berkshire"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "E490937D-D959-4B27-8DE9-348EC4954B18"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:32.446Z",
+      "checksum": "22a26a84ffa3d808938f1a08604b111d571f616d31c1e93d79f4dacb58756a9d"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "West Dunbartonshire",
       "Code": "WDU",
       "ISO3166_2": "GB-WDU",
       "Latitude": 55.9667,
       "Longitude": -4.5333,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"West Dunbartonshire\"]"
+      "CommonAliases": [
+        "West Dunbartonshire"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "AA5B328F-4FAA-4740-B950-57B6235546B7"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:32.459Z",
+      "checksum": "164f77613936d744891ee542bd60abbfaefaa49c0d74e9e4ab570bffe77eb5c2"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "West Lothian",
       "Code": "WLN",
       "ISO3166_2": "GB-WLN",
       "Latitude": 55.9167,
       "Longitude": -3.5,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"West Lothian\"]"
+      "CommonAliases": [
+        "West Lothian"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "DF3DCFC5-8983-4A6C-A5A6-94DA4192BB7E"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:32.473Z",
+      "checksum": "3aaa6082e933d5d2fcb5439fce72ca81533df79321becedda3a30f48e3265396"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "West Northamptonshire",
       "Code": "WNH",
       "ISO3166_2": "GB-WNH",
       "Latitude": 52.2269,
       "Longitude": -1.3483,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"West Northamptonshire\"]"
+      "CommonAliases": [
+        "West Northamptonshire"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "4579C812-6406-455A-8EC0-8A49D825B303"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:32.485Z",
+      "checksum": "7c2a5332ac32753496645488b80b0bbbd5a82a96b8ad7cb3cb886a3669192a95"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "West Sussex",
       "Code": "WSX",
       "ISO3166_2": "GB-WSX",
       "Latitude": 50.9446,
       "Longitude": -0.5278,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"West Sussex\"]"
+      "CommonAliases": [
+        "West Sussex"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "44517598-E90C-468E-BC3C-A29B4F3A319B"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:32.517Z",
+      "checksum": "1bd7975898734cecd73d5a3fbca3dbae7d33d9e44a85b173229831ded352b67c"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Westminster",
       "Code": "WSM",
       "ISO3166_2": "GB-WSM",
       "Latitude": 51.4973,
       "Longitude": -0.1371,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Westminster\"]"
+      "CommonAliases": [
+        "Westminster"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "58008EC4-A575-4E1D-A456-118C9595292F"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:32.529Z",
+      "checksum": "b4b9c274e5dbdff9eae6b78efdd9b527bf9a3aca8e6ea79253175d46d76cb5db"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Wigan",
       "Code": "WGN",
       "ISO3166_2": "GB-WGN",
       "Latitude": 53.5457,
       "Longitude": -2.6265,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Wigan\"]"
+      "CommonAliases": [
+        "Wigan"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "0536F994-EB15-45D7-8E81-17AA2DCD638A"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:32.541Z",
+      "checksum": "61158a9b6cb7404d3cfa02eca5db8e87cf9674049fe55a0ba7f9d68d37e210bc"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Wiltshire",
       "Code": "WIL",
       "ISO3166_2": "GB-WIL",
       "Latitude": 51.3242,
       "Longitude": -1.9032,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Wiltshire\"]"
+      "CommonAliases": [
+        "Wiltshire"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "D0011A6E-84B7-4C8A-9DB2-6256B006CCE7"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:32.553Z",
+      "checksum": "2194d678fd618d8b3e21d69d5f7edf51638905206cfb078ea8c88dfdd409b4e5"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Windsor and Maidenhead",
       "Code": "WNM",
       "ISO3166_2": "GB-WNM",
       "Latitude": 51.4803,
       "Longitude": -0.677,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Windsor and Maidenhead\"]"
+      "CommonAliases": [
+        "Windsor and Maidenhead"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "21490309-1267-4B2F-BA8C-F74DB5CEF2DE"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:32.564Z",
+      "checksum": "42e9b6ea0e653b271706a22b59f7725577d7687f33cf77301bdda2003ef20095"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Wirral",
       "Code": "WRL",
       "ISO3166_2": "GB-WRL",
       "Latitude": 53.341,
       "Longitude": -3.0501,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Wirral\"]"
+      "CommonAliases": [
+        "Wirral"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "DC0D2A32-678D-4BD8-85FD-AB65E4222C33"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:32.578Z",
+      "checksum": "5f20f31fa7d9951e08f709f4c4258b2fabd43e8a352d1c086af0909ce3be4d78"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Wokingham",
       "Code": "WOK",
       "ISO3166_2": "GB-WOK",
       "Latitude": 51.4105,
       "Longitude": -0.8339,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Wokingham\"]"
+      "CommonAliases": [
+        "Wokingham"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "23B7BCDB-5BEC-4D9B-8297-D1D75E3AE45C"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:32.592Z",
+      "checksum": "f4d145944ebc72e74a579d29b70cc9068fc67dccc2fab28d9e7f5ac5620aff9f"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Wolverhampton",
       "Code": "WLV",
       "ISO3166_2": "GB-WLV",
       "Latitude": 52.5848,
       "Longitude": -2.1276,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Wolverhampton\"]"
+      "CommonAliases": [
+        "Wolverhampton"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "7E856C85-CB5B-4B58-A552-670D194C583B"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:32.606Z",
+      "checksum": "3a51523be1f6f741f371cf2c11fc443db1e2e3adaa0c4e1b74930d4a3ea8e964"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Worcestershire",
       "Code": "WOR",
       "ISO3166_2": "GB-WOR",
       "Latitude": 52.2109,
       "Longitude": -2.157,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Worcestershire\"]"
+      "CommonAliases": [
+        "Worcestershire"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "E455BF0F-C3D7-4BE2-8FC8-CEAD8D3ED13E"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:32.619Z",
+      "checksum": "e98731932f422d4a03fb454aa6f132a5bf68c2529fe95636d3610393d5240315"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "Wrexham",
       "Code": "WRX",
       "ISO3166_2": "GB-WRX",
       "Latitude": 53.0465,
       "Longitude": -2.9938,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Wrexham\"]"
+      "CommonAliases": [
+        "Wrexham"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "E4DD9ECA-0FEB-43C2-A1A0-541309E6FAAE"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:32.630Z",
+      "checksum": "ffd66126298fa4cfed7e91eb1994ba0a1604c1324c7743f33b3ed59bbe460fe2"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "GB",
       "Name": "York",
       "Code": "YOR",
       "ISO3166_2": "GB-YOR",
       "Latitude": 53.96,
       "Longitude": -1.0873,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"York\"]"
+      "CommonAliases": [
+        "York"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GB"
+    },
+    "primaryKey": {
+      "ID": "41BB32FD-DE5B-49DC-ABAD-ED1E289E29EC"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:32.645Z",
+      "checksum": "b5c967de3c28f15a0910975dab2156a61f2ce5fbf725544a7cfa77a2e834c927"
     }
   }
 ]

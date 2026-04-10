@@ -1,566 +1,989 @@
 [
   {
     "fields": {
-      "_CountryISO2": "JP",
       "Name": "Aichi",
       "Code": "23",
       "ISO3166_2": "JP-23",
       "Latitude": 34.9992,
       "Longitude": 137.2546,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Aichi\"]"
+      "CommonAliases": [
+        "Aichi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JP"
+    },
+    "primaryKey": {
+      "ID": "F79804B1-3A5F-4B64-8E23-76AB43E66669"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:35.097Z",
+      "checksum": "81ce5192c80cc858e8f56fe9142c80c97cc6f6d39140c308cf90fb87c96a2718"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "JP",
       "Name": "Akita",
       "Code": "05",
       "ISO3166_2": "JP-05",
       "Latitude": 39.6899,
       "Longitude": 140.3426,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Akita\"]"
+      "CommonAliases": [
+        "Akita"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JP"
+    },
+    "primaryKey": {
+      "ID": "0021AC67-1396-48FB-A923-3185C73CF863"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:35.109Z",
+      "checksum": "c64a5a63a54b9adfd399b70b04988480baec3321744a086e8e75f3a8f9b10bae"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "JP",
       "Name": "Aomori",
       "Code": "02",
       "ISO3166_2": "JP-02",
       "Latitude": 40.8223,
       "Longitude": 140.7472,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Aomori\"]"
+      "CommonAliases": [
+        "Aomori"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JP"
+    },
+    "primaryKey": {
+      "ID": "DDB97FAA-25B1-4603-B9CB-1E784FECCB4D"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:35.122Z",
+      "checksum": "bc2f806ef2961c0288ce99702100b8735b948c1a7cfb391c510c4f2454b0734f"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "JP",
       "Name": "Chiba",
       "Code": "12",
       "ISO3166_2": "JP-12",
       "Latitude": 35.5494,
       "Longitude": 140.2647,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Chiba\"]"
+      "CommonAliases": [
+        "Chiba"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JP"
+    },
+    "primaryKey": {
+      "ID": "369C7201-5990-42CD-8D26-C42370F1DFD1"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:35.134Z",
+      "checksum": "8311a2d39d601393bf132c2fc86281994071d8350667c3f0d893ea407104c872"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "JP",
       "Name": "Ehime",
       "Code": "38",
       "ISO3166_2": "JP-38",
       "Latitude": 33.6014,
       "Longitude": 132.8185,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Ehime\"]"
+      "CommonAliases": [
+        "Ehime"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JP"
+    },
+    "primaryKey": {
+      "ID": "2A2F0836-435E-4742-99EA-75C62C402A3D"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:35.147Z",
+      "checksum": "6fbf115be2a198f3120533ed4ba2b773fdf52d5ed272d01c55255c5820407ac0"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "JP",
       "Name": "Fukui",
       "Code": "18",
       "ISO3166_2": "JP-18",
       "Latitude": 36.0618,
       "Longitude": 136.2261,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Fukui\"]"
+      "CommonAliases": [
+        "Fukui"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JP"
+    },
+    "primaryKey": {
+      "ID": "1469CED5-FC60-4E56-A26A-AFCFA73353CB"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:35.159Z",
+      "checksum": "85452f03979664edeacc586d6c25824bf28d5d32a85b671847a298d77ae76ea0"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "JP",
       "Name": "Fukuoka",
       "Code": "40",
       "ISO3166_2": "JP-40",
       "Latitude": 33.6251,
       "Longitude": 130.618,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Fukuoka\"]"
+      "CommonAliases": [
+        "Fukuoka"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JP"
+    },
+    "primaryKey": {
+      "ID": "7152CAEF-2E19-49BA-A343-83588ACD231E"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:35.174Z",
+      "checksum": "c7c223dfb5950c14d9ec8f3b4dc42e127af085767b096173efcc98c4a3f98db1"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "JP",
       "Name": "Fukushima",
       "Code": "07",
       "ISO3166_2": "JP-07",
       "Latitude": 37.7608,
       "Longitude": 140.4746,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Fukushima\"]"
+      "CommonAliases": [
+        "Fukushima"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JP"
+    },
+    "primaryKey": {
+      "ID": "E859CAC4-B310-460B-9519-4EC2A6403523"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:35.188Z",
+      "checksum": "c0e2f78d2a4cedb32b805f66756dfae0da3e58f6051823f22e922d2aaf02a0f9"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "JP",
       "Name": "Gifu",
       "Code": "21",
       "ISO3166_2": "JP-21",
       "Latitude": 35.7867,
       "Longitude": 137.0461,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Gifu\"]"
+      "CommonAliases": [
+        "Gifu"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JP"
+    },
+    "primaryKey": {
+      "ID": "24B1FEDD-7413-4AE2-8E76-56E1D93F2501"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:35.201Z",
+      "checksum": "81a481e7f06ed94018cbebf806e08c659778390f50595201901477402fdd8382"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "JP",
       "Name": "Gunma",
       "Code": "10",
       "ISO3166_2": "JP-10",
       "Latitude": 36.522,
       "Longitude": 139.0335,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Gunma\"]"
+      "CommonAliases": [
+        "Gunma"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JP"
+    },
+    "primaryKey": {
+      "ID": "BE3BC1BD-A4A8-4DF2-AF5E-FCEA444CF087"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:35.213Z",
+      "checksum": "55024964916301b99c852aaa1a361db36b71219c47f3216161eb67386f4c07d5"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "JP",
       "Name": "Hiroshima",
       "Code": "34",
       "ISO3166_2": "JP-34",
       "Latitude": 34.3917,
       "Longitude": 132.4518,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Hiroshima\"]"
+      "CommonAliases": [
+        "Hiroshima"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JP"
+    },
+    "primaryKey": {
+      "ID": "812930D0-C669-44A9-82E4-A922F5FA8713"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:35.241Z",
+      "checksum": "ff9d9e1c6e197156a430c68860c443f8d3761ff3327ce739bb2dc71627a84d1e"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "JP",
       "Name": "Hokkaidō",
       "Code": "01",
       "ISO3166_2": "JP-01",
       "Latitude": 43.452,
       "Longitude": 142.8198,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Hokkaid\\u014d\"]"
+      "CommonAliases": [
+        "Hokkaidō"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JP"
+    },
+    "primaryKey": {
+      "ID": "4AAF6852-30E0-49DF-A2B4-310A32DD5A24"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:35.255Z",
+      "checksum": "ba5053270c100d95b4fd7e60795fed95c72746101b089ac595683065a5ddc5b1"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "JP",
       "Name": "Hyōgo",
       "Code": "28",
       "ISO3166_2": "JP-28",
       "Latitude": 34.9149,
       "Longitude": 134.8607,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Hy\\u014dgo\"]"
+      "CommonAliases": [
+        "Hyōgo"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JP"
+    },
+    "primaryKey": {
+      "ID": "C3FB0DBD-2C2B-460C-B0CB-447F6EFDEF25"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:35.266Z",
+      "checksum": "2eb1292f287d29f676dfc6bd287654fcee55416c4bb688ebbdd7a3aca97660fb"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "JP",
       "Name": "Ibaraki",
       "Code": "08",
       "ISO3166_2": "JP-08",
       "Latitude": 36.2871,
       "Longitude": 140.4241,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Ibaraki\"]"
+      "CommonAliases": [
+        "Ibaraki"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JP"
+    },
+    "primaryKey": {
+      "ID": "B0608277-AF41-489F-B280-4DB13F97A114"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:35.279Z",
+      "checksum": "0a5bfec63c7139e35b72e59eedc61e63598f2a5ad22fa11720e4b6c3c899718d"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "JP",
       "Name": "Ishikawa",
       "Code": "17",
       "ISO3166_2": "JP-17",
       "Latitude": 36.9891,
       "Longitude": 136.8163,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Ishikawa\"]"
+      "CommonAliases": [
+        "Ishikawa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JP"
+    },
+    "primaryKey": {
+      "ID": "3FAEC46D-07E7-421F-97C1-2231E71EA81C"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:35.293Z",
+      "checksum": "6490ba9b848696d0d3948c37ee4cb724ef9fd78fe13a6e31f78ff62efc671b5e"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "JP",
       "Name": "Iwate",
       "Code": "03",
       "ISO3166_2": "JP-03",
       "Latitude": 39.5714,
       "Longitude": 141.4254,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Iwate\"]"
+      "CommonAliases": [
+        "Iwate"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JP"
+    },
+    "primaryKey": {
+      "ID": "A7C71DA5-E2E7-4DD4-95FF-1FCBD02D1098"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:35.305Z",
+      "checksum": "1e586ea493041036b950190fd627f84f06e78000f4b9ec421aff4c9d90d03312"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "JP",
       "Name": "Kagawa",
       "Code": "37",
       "ISO3166_2": "JP-37",
       "Latitude": 34.248,
       "Longitude": 134.0587,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Kagawa\"]"
+      "CommonAliases": [
+        "Kagawa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JP"
+    },
+    "primaryKey": {
+      "ID": "E16F1958-DDB1-4965-BB59-C5900FFC8E75"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:35.318Z",
+      "checksum": "08f2d4eb591fb0fc60b6aa6fc8a27e294f30bd8510a5ab5921c036cbcc9489f4"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "JP",
       "Name": "Kagoshima",
       "Code": "46",
       "ISO3166_2": "JP-46",
       "Latitude": 31.5216,
       "Longitude": 130.5474,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Kagoshima\"]"
+      "CommonAliases": [
+        "Kagoshima"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JP"
+    },
+    "primaryKey": {
+      "ID": "74B31A39-4531-4DDC-AFA3-8F53E048F3ED"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:35.333Z",
+      "checksum": "cd7e4ba99305d8f1c0a13b131f037908034ff300d28283564dba132c2ee1d132"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "JP",
       "Name": "Kanagawa",
       "Code": "14",
       "ISO3166_2": "JP-14",
       "Latitude": 35.4343,
       "Longitude": 139.3748,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Kanagawa\"]"
+      "CommonAliases": [
+        "Kanagawa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JP"
+    },
+    "primaryKey": {
+      "ID": "BD4A136A-28FC-43A2-802A-CE9C693444F4"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:35.349Z",
+      "checksum": "0d960fdc6ea755f09d71a55e3d60dd607d4406fda9d6f5ab836e4a369fc5f23d"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "JP",
       "Name": "Kumamoto",
       "Code": "43",
       "ISO3166_2": "JP-43",
       "Latitude": 32.8034,
       "Longitude": 130.7083,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Kumamoto\"]"
+      "CommonAliases": [
+        "Kumamoto"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JP"
+    },
+    "primaryKey": {
+      "ID": "60A575B8-5BB0-404A-8BEE-945E80F505E6"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:35.363Z",
+      "checksum": "40c44f986b8f74dc63b42242a7ad7d1f1bc85c91298993f4f07b96f74c7468ac"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "JP",
       "Name": "Kyōto",
       "Code": "26",
       "ISO3166_2": "JP-26",
       "Latitude": 35.0116,
       "Longitude": 135.7681,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Ky\\u014dto\"]"
+      "CommonAliases": [
+        "Kyōto"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JP"
+    },
+    "primaryKey": {
+      "ID": "4129AE3B-0124-48AB-80A5-D5790FFC3147"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:35.390Z",
+      "checksum": "59cf98bb48bcca9dbf5bfe97fe4091feab0120211876f490da7a5b98a7b0e783"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "JP",
       "Name": "Kōchi",
       "Code": "39",
       "ISO3166_2": "JP-39",
       "Latitude": 33.568,
       "Longitude": 133.5394,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"K\\u014dchi\"]"
+      "CommonAliases": [
+        "Kōchi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JP"
+    },
+    "primaryKey": {
+      "ID": "28FBF498-943E-42FF-A20A-2A86124957BA"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:35.403Z",
+      "checksum": "c88a0767cc199e970ded163498de5b4d0cd33d41d0259c622b40c88f43d8f332"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "JP",
       "Name": "Mie",
       "Code": "24",
       "ISO3166_2": "JP-24",
       "Latitude": 34.734,
       "Longitude": 136.5154,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Mie\"]"
+      "CommonAliases": [
+        "Mie"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JP"
+    },
+    "primaryKey": {
+      "ID": "2FCC9D6C-9969-47D9-B582-29D749E258D9"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:35.416Z",
+      "checksum": "b39ff1b232d2b29552def50ca3ebb86308ca4ced4b87211e08dab9f8e91b9ae4"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "JP",
       "Name": "Miyagi",
       "Code": "04",
       "ISO3166_2": "JP-04",
       "Latitude": 38.388,
       "Longitude": 140.9761,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Miyagi\"]"
+      "CommonAliases": [
+        "Miyagi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JP"
+    },
+    "primaryKey": {
+      "ID": "C3F35CBC-1AEA-42C7-8681-EB544629CB33"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:35.429Z",
+      "checksum": "22780edb0d537ab526ec03a1fb16084f2e623ce513f607e34d1b98a96835a125"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "JP",
       "Name": "Miyazaki",
       "Code": "45",
       "ISO3166_2": "JP-45",
       "Latitude": 32.0977,
       "Longitude": 131.2945,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Miyazaki\"]"
+      "CommonAliases": [
+        "Miyazaki"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JP"
+    },
+    "primaryKey": {
+      "ID": "090CC99E-7D54-4AA9-A67A-A5B56556ABB0"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:35.444Z",
+      "checksum": "2d2d6496e49d2b4a1e6016e85b270bcfd4eb34cdfbc860041062323e5f298cea"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "JP",
       "Name": "Nagano",
       "Code": "20",
       "ISO3166_2": "JP-20",
       "Latitude": 36.1144,
       "Longitude": 138.0319,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Nagano\"]"
+      "CommonAliases": [
+        "Nagano"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JP"
+    },
+    "primaryKey": {
+      "ID": "5B091E40-41E9-496A-8FEC-91143E4BD8FB"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:35.458Z",
+      "checksum": "ebc63a5dc2dec471720d4ed6758240fa5b49b1e4ed5f039e93ec4add17122992"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "JP",
       "Name": "Nagasaki",
       "Code": "42",
       "ISO3166_2": "JP-42",
       "Latitude": 33.1155,
       "Longitude": 129.7874,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Nagasaki\"]"
+      "CommonAliases": [
+        "Nagasaki"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JP"
+    },
+    "primaryKey": {
+      "ID": "A3729C7D-686A-4DA9-A35B-43A5960523EA"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:35.472Z",
+      "checksum": "780dcb2711957e6b4e9a1391827c57e3e4490cbac87e3a2801207bfd16490bef"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "JP",
       "Name": "Nara",
       "Code": "29",
       "ISO3166_2": "JP-29",
       "Latitude": 34.2963,
       "Longitude": 135.8817,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Nara\"]"
+      "CommonAliases": [
+        "Nara"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JP"
+    },
+    "primaryKey": {
+      "ID": "988A3C2E-D752-439B-9D85-983EB971443F"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:35.485Z",
+      "checksum": "d3178f795accb75d900b866e6ba053fcd692e5ccca09cfc036861a3d6b391713"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "JP",
       "Name": "Niigata",
       "Code": "15",
       "ISO3166_2": "JP-15",
       "Latitude": 37.6452,
       "Longitude": 138.7669,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Niigata\"]"
+      "CommonAliases": [
+        "Niigata"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JP"
+    },
+    "primaryKey": {
+      "ID": "C5D398DE-DD67-41FA-8C0E-79CE9199C6BF"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:35.500Z",
+      "checksum": "19d526f72719980b80f7814702adc524b57c3c43c3e61cc2b6547931954fa472"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "JP",
       "Name": "Okayama",
       "Code": "33",
       "ISO3166_2": "JP-33",
       "Latitude": 34.8581,
       "Longitude": 133.7759,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Okayama\"]"
+      "CommonAliases": [
+        "Okayama"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JP"
+    },
+    "primaryKey": {
+      "ID": "BCFCDB66-BD17-49D9-8D20-8D8A49943746"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:35.512Z",
+      "checksum": "0f10b2b91f449b41098877e296565be35305be9fc98c6b08def1000f127c7735"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "JP",
       "Name": "Okinawa",
       "Code": "47",
       "ISO3166_2": "JP-47",
       "Latitude": 26.3344,
       "Longitude": 127.8057,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Okinawa\"]"
+      "CommonAliases": [
+        "Okinawa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JP"
+    },
+    "primaryKey": {
+      "ID": "3E15C95A-F001-4DC1-860E-11D0371A351B"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:35.542Z",
+      "checksum": "c0f5b239a381f03fcd7c2a8312e8ca71fe29d92cd15c9f6a48015a47b52fc7be"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "JP",
       "Name": "Saga",
       "Code": "41",
       "ISO3166_2": "JP-41",
       "Latitude": 33.2639,
       "Longitude": 130.3008,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Saga\"]"
+      "CommonAliases": [
+        "Saga"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JP"
+    },
+    "primaryKey": {
+      "ID": "32A0D7DF-2AA5-48FF-9C10-5B1D43C8C682"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:35.553Z",
+      "checksum": "70c292952d982a1022be0c48b63083cc99ba52140a89b11f0a9a9142f23d2edb"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "JP",
       "Name": "Saitama",
       "Code": "11",
       "ISO3166_2": "JP-11",
       "Latitude": 35.9754,
       "Longitude": 139.416,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Saitama\"]"
+      "CommonAliases": [
+        "Saitama"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JP"
+    },
+    "primaryKey": {
+      "ID": "D9E56C23-242B-4742-A996-66CA78097106"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:35.565Z",
+      "checksum": "9273be25289e1062928d9069413e77d78cbe6e3b97da3af2f7d1136d7c10687b"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "JP",
       "Name": "Shiga",
       "Code": "25",
       "ISO3166_2": "JP-25",
       "Latitude": 35.2472,
       "Longitude": 136.1094,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Shiga\"]"
+      "CommonAliases": [
+        "Shiga"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JP"
+    },
+    "primaryKey": {
+      "ID": "40D9F824-B7BD-4AA4-B0BC-76E9D6ABD56F"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:35.578Z",
+      "checksum": "bf793f3ed7cc6e6440846cc36a5ffdfe9b3a74af1bab17384ac84c21dae1c5fb"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "JP",
       "Name": "Shimane",
       "Code": "32",
       "ISO3166_2": "JP-32",
       "Latitude": 34.9418,
       "Longitude": 132.5374,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Shimane\"]"
+      "CommonAliases": [
+        "Shimane"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JP"
+    },
+    "primaryKey": {
+      "ID": "A886512E-A6C9-41AB-9419-F9821DEF4F27"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:35.590Z",
+      "checksum": "d6a4409513885201dfe0203cf454e40b3436698e5ec1b40eeb43b4ad5db0daa2"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "JP",
       "Name": "Shizuoka",
       "Code": "22",
       "ISO3166_2": "JP-22",
       "Latitude": 34.9752,
       "Longitude": 138.3832,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Shizuoka\"]"
+      "CommonAliases": [
+        "Shizuoka"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JP"
+    },
+    "primaryKey": {
+      "ID": "D3043D31-6FAF-44A5-B8BC-6D8D996DAE0B"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:35.602Z",
+      "checksum": "b4dbf74788ba9b160f4677080ff2b524047943d9b38928dd991469c4b475387c"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "JP",
       "Name": "Tochigi",
       "Code": "09",
       "ISO3166_2": "JP-09",
       "Latitude": 36.6782,
       "Longitude": 139.8097,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Tochigi\"]"
+      "CommonAliases": [
+        "Tochigi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JP"
+    },
+    "primaryKey": {
+      "ID": "D44F60A3-1298-4F95-978A-C72B89253C45"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:35.614Z",
+      "checksum": "a3c5db798348d4c6f7428c086073a5c7def6fb1fbe533d95cff711de52aa13af"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "JP",
       "Name": "Tokushima",
       "Code": "36",
       "ISO3166_2": "JP-36",
       "Latitude": 33.9196,
       "Longitude": 134.251,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Tokushima\"]"
+      "CommonAliases": [
+        "Tokushima"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JP"
+    },
+    "primaryKey": {
+      "ID": "F24C9B90-A976-4334-A128-335A064E3999"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:35.627Z",
+      "checksum": "a40c722318947ff9f66c9fd30da9e7a3b16f9fff9f0f135ee27b7bd9a5a76e93"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "JP",
       "Name": "Tokyo",
       "Code": "13",
       "ISO3166_2": "JP-13",
       "Latitude": 35.6769,
       "Longitude": 139.7639,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Tokyo\"]"
+      "CommonAliases": [
+        "Tokyo"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JP"
+    },
+    "primaryKey": {
+      "ID": "063FE3E3-6336-4AB1-A70C-F15D7302DAAC"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:35.639Z",
+      "checksum": "7fd2b0e6b9aef8d40f8c402953c25ab671d393adc7607cb54e3b0209a3205c7a"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "JP",
       "Name": "Tottori",
       "Code": "31",
       "ISO3166_2": "JP-31",
       "Latitude": 35.3555,
       "Longitude": 133.8679,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Tottori\"]"
+      "CommonAliases": [
+        "Tottori"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JP"
+    },
+    "primaryKey": {
+      "ID": "B5D61113-CF1E-4546-B453-EC94A99CA7B6"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:35.651Z",
+      "checksum": "df8c7944697d25fc02a19fecd55b48edfaed8ab367ecc89974c7abaa7c93708e"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "JP",
       "Name": "Toyama",
       "Code": "16",
       "ISO3166_2": "JP-16",
       "Latitude": 36.6958,
       "Longitude": 137.2137,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Toyama\"]"
+      "CommonAliases": [
+        "Toyama"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JP"
+    },
+    "primaryKey": {
+      "ID": "7716E13A-EFA2-45E0-A347-1AF2C3621F28"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:35.677Z",
+      "checksum": "b02788476216162e76dddace02427f61d88cdf8097f95aa955fd2bc96291e732"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "JP",
       "Name": "Wakayama",
       "Code": "30",
       "ISO3166_2": "JP-30",
       "Latitude": 33.807,
       "Longitude": 135.5931,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Wakayama\"]"
+      "CommonAliases": [
+        "Wakayama"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JP"
+    },
+    "primaryKey": {
+      "ID": "349A1528-1D73-4539-AE0D-8FA4BCBF7D05"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:35.688Z",
+      "checksum": "8605620ebb951890d41eeb328bf2a826c191906a3ee2ab2f87dfea4a6d6ff902"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "JP",
       "Name": "Yamagata",
       "Code": "06",
       "ISO3166_2": "JP-06",
       "Latitude": 38.4747,
       "Longitude": 140.0832,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Yamagata\"]"
+      "CommonAliases": [
+        "Yamagata"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JP"
+    },
+    "primaryKey": {
+      "ID": "ABFFAB54-958F-4BB0-80B6-49EEDA44909F"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:35.701Z",
+      "checksum": "fcf81f8cc799eec4afa402ef3423a760e50178520b746d62fd2750e47b33be21"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "JP",
       "Name": "Yamaguchi",
       "Code": "35",
       "ISO3166_2": "JP-35",
       "Latitude": 34.238,
       "Longitude": 131.5874,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Yamaguchi\"]"
+      "CommonAliases": [
+        "Yamaguchi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JP"
+    },
+    "primaryKey": {
+      "ID": "1C14E6E3-C80A-48B9-B8FE-7455133118B4"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:35.714Z",
+      "checksum": "8f6b05efe305312d2ffba3cbf496fd0b4074edece2c3ea324ad814a25d2d6c69"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "JP",
       "Name": "Yamanashi",
       "Code": "19",
       "ISO3166_2": "JP-19",
       "Latitude": 35.6399,
       "Longitude": 138.638,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Yamanashi\"]"
+      "CommonAliases": [
+        "Yamanashi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JP"
+    },
+    "primaryKey": {
+      "ID": "F7C4A669-C46B-48AA-AC39-90D43AE2CF9F"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:35.726Z",
+      "checksum": "f3e7fb432b820a43f3073fb1c7135bb250b17b7e763196e87c7c29101312b9da"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "JP",
       "Name": "Ōita",
       "Code": "44",
       "ISO3166_2": "JP-44",
       "Latitude": 33.182,
       "Longitude": 131.427,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"\\u014cita\"]"
+      "CommonAliases": [
+        "Ōita"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JP"
+    },
+    "primaryKey": {
+      "ID": "ED552AFE-B6E1-498B-B148-542597CE4C71"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:35.739Z",
+      "checksum": "6a3c3036876b49a8713d45bff6515ac69527ed3cf287a911849ec147245bed41"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "JP",
       "Name": "Ōsaka",
       "Code": "27",
       "ISO3166_2": "JP-27",
       "Latitude": 34.6199,
       "Longitude": 135.4904,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"\\u014csaka\"]"
+      "CommonAliases": [
+        "Ōsaka"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JP"
+    },
+    "primaryKey": {
+      "ID": "F6F84541-172C-49EF-AA5F-AC568EA04B13"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:35.750Z",
+      "checksum": "ec4f6a111d59d2673859d33ef197e2c07424dda59b3ee864bd0cdd17e15d3953"
     }
   }
 ]

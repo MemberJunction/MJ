@@ -1,146 +1,254 @@
 [
   {
     "fields": {
-      "_CountryISO2": "NL",
       "Name": "Drenthe",
       "Code": "DR",
       "ISO3166_2": "NL-DR",
       "Latitude": 52.9068,
       "Longitude": 6.6368,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Drenthe\"]"
+      "CommonAliases": [
+        "Drenthe"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NL"
+    },
+    "primaryKey": {
+      "ID": "E0455CD8-C3F8-4373-B44E-86349B2A686A"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:36.055Z",
+      "checksum": "5837a4608d5fcffdedbe4cf08fc7a45308a7f98b77be8802d9abfa9ce51fc24b"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "NL",
       "Name": "Flevoland",
       "Code": "FL",
       "ISO3166_2": "NL-FL",
       "Latitude": 52.4484,
       "Longitude": 5.4235,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Flevoland\"]"
+      "CommonAliases": [
+        "Flevoland"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NL"
+    },
+    "primaryKey": {
+      "ID": "B75F809A-C063-4715-ADFA-F451CB4A2332"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:36.069Z",
+      "checksum": "b0fa996bdaf41887b8103ab3555c73912f38d85b95e69f4142528eb9ab0a7581"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "NL",
       "Name": "Friesland",
       "Code": "FR",
       "ISO3166_2": "NL-FR",
       "Latitude": 53.0924,
       "Longitude": 5.777,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Friesland\"]"
+      "CommonAliases": [
+        "Friesland"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NL"
+    },
+    "primaryKey": {
+      "ID": "3CB00E79-4AA5-4B06-9B08-06729D986888"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:36.082Z",
+      "checksum": "8781eb87361b920c64c7e7051fe17a6fb957b41dabf10f262759b7caf7ae0994"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "NL",
       "Name": "Gelderland",
       "Code": "GE",
       "ISO3166_2": "NL-GE",
       "Latitude": 52.1014,
       "Longitude": 5.9516,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Gelderland\"]"
+      "CommonAliases": [
+        "Gelderland"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NL"
+    },
+    "primaryKey": {
+      "ID": "BA49BF54-EE0B-4B57-9398-1F338B5ADA6D"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:36.096Z",
+      "checksum": "f7cd83efc97beb9bebf3cb0aa6fa34e03ed7b7e7f715b685f08a8bf9867b5ea7"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "NL",
       "Name": "Groningen",
       "Code": "GR",
       "ISO3166_2": "NL-GR",
       "Latitude": 53.2194,
       "Longitude": 6.5665,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Groningen\"]"
+      "CommonAliases": [
+        "Groningen"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NL"
+    },
+    "primaryKey": {
+      "ID": "FC592742-66F7-43EE-B24A-4AAC9CA0A409"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:36.112Z",
+      "checksum": "59dabf598e560c71ed304dbbb9240991bc21196d95dac7029c88a744116e94f3"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "NL",
       "Name": "Limburg",
       "Code": "LI",
       "ISO3166_2": "NL-LI",
       "Latitude": 51.2015,
       "Longitude": 5.9046,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Limburg\"]"
+      "CommonAliases": [
+        "Limburg"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NL"
+    },
+    "primaryKey": {
+      "ID": "73B8E350-270D-4AEB-BE5D-08236E35A13A"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:36.125Z",
+      "checksum": "4390bcaaddcb1780b2ee3efd0b626d90ed336a18f5903b5f7539b806889d8af3"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "NL",
       "Name": "North Brabant",
       "Code": "NB",
       "ISO3166_2": "NL-NB",
       "Latitude": 51.6018,
       "Longitude": 5.4441,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"North Brabant\"]"
+      "CommonAliases": [
+        "North Brabant"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NL"
+    },
+    "primaryKey": {
+      "ID": "5B4ACC6F-29C8-47E1-8012-5D8C7558D516"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:36.138Z",
+      "checksum": "8186e1eee74f929967c06bf587f58dd972ea336bf2ce95504bfdeeefd7a7258b"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "NL",
       "Name": "North Holland",
       "Code": "NH",
       "ISO3166_2": "NL-NH",
       "Latitude": 52.7213,
       "Longitude": 4.8207,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"North Holland\"]"
+      "CommonAliases": [
+        "North Holland"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NL"
+    },
+    "primaryKey": {
+      "ID": "DF82D955-927F-4BED-9B6D-3DB70257284C"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:36.152Z",
+      "checksum": "a158b79d1a62a0d9e1ab1a0ae5e1798f6c88647ea49c6713d71b2aa3a682bbc8"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "NL",
       "Name": "Overijssel",
       "Code": "OV",
       "ISO3166_2": "NL-OV",
       "Latitude": 52.4254,
       "Longitude": 6.4611,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Overijssel\"]"
+      "CommonAliases": [
+        "Overijssel"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NL"
+    },
+    "primaryKey": {
+      "ID": "8C05854C-42FD-4C13-8316-0450E3D3AD08"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:36.166Z",
+      "checksum": "7884dcc083098349b5fe101343082d22094c5a54e6c35786be9a0b7f613eb512"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "NL",
       "Name": "South Holland",
       "Code": "ZH",
       "ISO3166_2": "NL-ZH",
       "Latitude": 51.9967,
       "Longitude": 4.5597,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"South Holland\"]"
+      "CommonAliases": [
+        "South Holland"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NL"
+    },
+    "primaryKey": {
+      "ID": "DFFC573D-F310-44ED-B9BC-8E5C1878D8B3"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:36.177Z",
+      "checksum": "1ecf1709bb3438a0636339bd12ad86afcd135ee9b468fe5afbe1d4e2fcaa6579"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "NL",
       "Name": "Utrecht",
       "Code": "UT",
       "ISO3166_2": "NL-UT",
       "Latitude": 52.0907,
       "Longitude": 5.1214,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Utrecht\"]"
+      "CommonAliases": [
+        "Utrecht"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NL"
+    },
+    "primaryKey": {
+      "ID": "CE6E20CA-8CA7-4DEF-91A9-FD90002E316A"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:36.197Z",
+      "checksum": "7657e8c922efa81c5cac095dcbb5c368e6d854e629c13c322ba1454aa58b9c93"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "NL",
       "Name": "Zeeland",
       "Code": "ZE",
       "ISO3166_2": "NL-ZE",
       "Latitude": 51.4163,
       "Longitude": 3.7028,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Zeeland\"]"
+      "CommonAliases": [
+        "Zeeland"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NL"
+    },
+    "primaryKey": {
+      "ID": "B638EFD6-3107-4278-93EE-433C7D19B4D0"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:36.208Z",
+      "checksum": "80774762afd1ae4c9dfc359a2562647d16068ef9dc739cbad141db26c5f0bbe6"
     }
   }
 ]

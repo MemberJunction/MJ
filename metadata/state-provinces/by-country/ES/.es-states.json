@@ -1,830 +1,1451 @@
 [
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "A Coruña",
       "Code": "C",
       "ISO3166_2": "ES-C",
       "Latitude": 43.371,
       "Longitude": -8.3959,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"A Coru\\u00f1a\"]"
+      "CommonAliases": [
+        "A Coruña"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "ED14C67F-F431-4931-A824-539A3FAAA83E"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:26.635Z",
+      "checksum": "79ba42bfbf9526cad30a67c1c1ec111f6c0b31dd714ff90f49369fc36c0c5ab7"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "Albacete",
       "Code": "AB",
       "ISO3166_2": "ES-AB",
       "Latitude": 38.9951,
       "Longitude": -1.8559,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Albacete\"]"
+      "CommonAliases": [
+        "Albacete"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "D7C2F4B0-5142-4768-8D21-72066201463B"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:26.647Z",
+      "checksum": "104a23ec5fbefa50337ff313a5b7062e44a19a9d702ef9c09a8d209dccb7c15f"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "Alicante",
       "Code": "A",
       "ISO3166_2": "ES-A",
       "Latitude": 38.3436,
       "Longitude": -0.4882,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Alicante\"]"
+      "CommonAliases": [
+        "Alicante"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "3DEB29A6-8231-4126-8402-A10EBD8A179D"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:26.660Z",
+      "checksum": "95cecc8c5a28f1f2774e2f8f273ff6dd08252e729a8499bd87db77e54302067b"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "Almeria",
       "Code": "AL",
       "ISO3166_2": "ES-AL",
       "Latitude": 36.8414,
       "Longitude": -2.4628,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Almeria\"]"
+      "CommonAliases": [
+        "Almeria"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "A740F4AB-C51B-4E47-BBCD-1C3A26C6351C"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:26.674Z",
+      "checksum": "fdaa7b3795f397f103fac8bd90fd569db6a39470a9376058854545903077d520"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "Andalusia",
       "Code": "AN",
       "ISO3166_2": "ES-AN",
       "Latitude": 37.34,
       "Longitude": -4.5812,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Andalusia\"]"
+      "CommonAliases": [
+        "Andalusia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "3A85C4B5-165A-4417-BF12-662EAE891CA6"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:26.687Z",
+      "checksum": "5914f20294ef6ed12fca73b52984aad1e08b2aa8804e85647980c92bb85cdc65"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "Araba",
       "Code": "VI",
       "ISO3166_2": "ES-VI",
       "Latitude": 42.8441,
       "Longitude": -2.6821,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Araba\"]"
+      "CommonAliases": [
+        "Araba"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "8866982D-B2D9-4450-BC26-9AF2B35D178B"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:26.700Z",
+      "checksum": "980bdc3f12b5ed31d2dd231240e790523af0f216a7aab51006ec38eea3e40922"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "Aragon",
       "Code": "AR",
       "ISO3166_2": "ES-AR",
       "Latitude": 41.3787,
       "Longitude": -0.7639,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Aragon\"]"
+      "CommonAliases": [
+        "Aragon"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "C178D9FF-9490-4DE1-8FE3-C7F2D3C744E8"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:26.713Z",
+      "checksum": "4101f89d02b41bc2994bf7d9a75241f2418037973ae36f4df561b0291378ab5f"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "Asturias",
       "Code": "O",
       "ISO3166_2": "ES-O",
       "Latitude": 43.3134,
       "Longitude": -5.9419,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Asturias\"]"
+      "CommonAliases": [
+        "Asturias"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "A668BAD7-C1C3-4B61-A3F2-E94C98FD9896"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:26.727Z",
+      "checksum": "f38fe6bc2acf5e358a0407f95d6f708c195d6c1b6f1c86c989e1c2a8e2c90e9c"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "Asturias, Principality of",
       "Code": "AS",
       "ISO3166_2": "ES-AS",
       "Latitude": 43.3614,
       "Longitude": -5.8478,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Asturias, Principality of\"]"
+      "CommonAliases": [
+        "Asturias, Principality of"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "998AD112-AC23-442F-8D4E-02FDD5D2050A"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:26.742Z",
+      "checksum": "4cd54b4ff35d8a2659f1334f67f46540c457534382eff6fb9fbf437f31bb4a25"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "Badajoz",
       "Code": "BA",
       "ISO3166_2": "ES-BA",
       "Latitude": 38.8782,
       "Longitude": -6.9701,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Badajoz\"]"
+      "CommonAliases": [
+        "Badajoz"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "59A2BE56-A3C8-4B22-B13E-D4C3AB6EE351"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:26.754Z",
+      "checksum": "6a618a62f21665f05b21759bd793e8215d26b32d9cf945d95276379ab6977faf"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "Balearic Islands",
       "Code": "IB",
       "ISO3166_2": "ES-IB",
       "Latitude": 39.6134,
       "Longitude": 2.8829,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Balearic Islands\"]"
+      "CommonAliases": [
+        "Balearic Islands"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "57AEB9B8-0BEE-4898-ACBF-0144F7B718E9"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:26.782Z",
+      "checksum": "6d8478fb4eb5143601e831fd9a78b40c8248e6d80b43b6cec5268884ef6ca343"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "Barcelona",
       "Code": "B",
       "ISO3166_2": "ES-B",
       "Latitude": 41.3826,
       "Longitude": 2.1771,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Barcelona\"]"
+      "CommonAliases": [
+        "Barcelona"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "3F6C0D75-A998-452E-9AB8-FB83769C4EC3"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:26.793Z",
+      "checksum": "cbd423843b249b982810250cbdbcd55c32daf84a8f61f4063f0dd8a389bea74d"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "Basque Country",
       "Code": "PV",
       "ISO3166_2": "ES-PV",
       "Latitude": 42.9912,
       "Longitude": -2.5543,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Basque Country\"]"
+      "CommonAliases": [
+        "Basque Country"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "DF4D2E07-6317-4859-8B8F-B1BA270AD668"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:26.806Z",
+      "checksum": "3bb62ecefea6c7252b88725509159d6e82d4a227a4415f4db2fa50cfb84413fe"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "Bizkaia",
       "Code": "BI",
       "ISO3166_2": "ES-BI",
       "Latitude": 43.2385,
       "Longitude": -2.8516,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Bizkaia\"]"
+      "CommonAliases": [
+        "Bizkaia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "E1B6ACBE-90F3-409B-9DEA-C84C76AE1441"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:26.819Z",
+      "checksum": "4b15937b3eca142b5d44de296902aa8b1c624b2f12e8c85bcab04c9fc85e6845"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "Burgos",
       "Code": "BU",
       "ISO3166_2": "ES-BU",
       "Latitude": 42.3247,
       "Longitude": -3.6765,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Burgos\"]"
+      "CommonAliases": [
+        "Burgos"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "4CAE121D-1D35-4159-8611-402621468304"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:26.832Z",
+      "checksum": "f62815dd9d0656278eede9dc243bdb9be0def34e1f1e8c2d4d5c0cf8966dfbfd"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "Caceres",
       "Code": "CC",
       "ISO3166_2": "ES-CC",
       "Latitude": 39.4745,
       "Longitude": -6.3717,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Caceres\"]"
+      "CommonAliases": [
+        "Caceres"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "B7D4DC5B-958C-488F-B430-4BA3190A587A"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:26.845Z",
+      "checksum": "cc35be19a599ba8588d97e788051e6461e722d1d0c1a62295c4de0d2fbf16499"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "Canary Islands",
       "Code": "CN",
       "ISO3166_2": "ES-CN",
       "Latitude": 28.2936,
       "Longitude": -16.6214,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Canary Islands\"]"
+      "CommonAliases": [
+        "Canary Islands"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "34CCE2FE-C1D5-4DD0-9DB9-1764EBA91E04"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:26.858Z",
+      "checksum": "58de1920867824c599efae52c90b85869efa8e42988a96eef13bf231608c1796"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "Cantabria",
       "Code": "S",
       "ISO3166_2": "ES-S",
       "Latitude": 43.1596,
       "Longitude": -4.0878,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Cantabria\"]"
+      "CommonAliases": [
+        "Cantabria"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "1325F4E0-7765-4E2D-B18C-5923A551E503"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:26.871Z",
+      "checksum": "d79018e227665b8781d50882100eae70583c981a8b80246792fcf0ca58e2d650"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "Cantabria",
       "Code": "CB",
       "ISO3166_2": "ES-CB",
       "Latitude": 43.3333,
-      "Longitude": -4.0,
+      "Longitude": -4,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Cantabria\"]"
+      "CommonAliases": [
+        "Cantabria"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "C7A75D1F-A3F9-42E7-8373-DB7FD562B72E"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:26.885Z",
+      "checksum": "fc8027a29979a5b469d7326d5e44ed607705b11de9d98e1a56d98257f436a4a5"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "Castellón",
       "Code": "CS",
       "ISO3166_2": "ES-CS",
       "Latitude": 40.2519,
       "Longitude": -0.0615,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Castell\\u00f3n\"]"
+      "CommonAliases": [
+        "Castellón"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "63687155-4C8F-4669-AC1F-817F5B68B3F1"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:26.898Z",
+      "checksum": "c7b3f2cc4e185680d0a71911320aeeb59b3a8933bc5b90f371c6686db10a0943"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "Castile and Leon",
       "Code": "CL",
       "ISO3166_2": "ES-CL",
       "Latitude": 41.55,
       "Longitude": -5.1387,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Castile and Leon\"]"
+      "CommonAliases": [
+        "Castile and Leon"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "06FD1B57-0270-4B6A-98F8-D195016ED8C2"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:26.929Z",
+      "checksum": "243df9956223f013911d49066b38e1c9c0fef0b2067a93ccf616a643212d9087"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "Castilla-La Mancha",
       "Code": "CM",
       "ISO3166_2": "ES-CM",
       "Latitude": 39.4178,
       "Longitude": -2.6232,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Castilla-La Mancha\"]"
+      "CommonAliases": [
+        "Castilla-La Mancha"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "FDC8A512-4F11-4429-821A-15A79F049F53"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:26.941Z",
+      "checksum": "7320ca10c4050d1973121d47804b92dfa0eea42edf353bc7a7cfbde3be8dc5f9"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "Catalonia",
       "Code": "CT",
       "ISO3166_2": "ES-CT",
       "Latitude": 41.8523,
       "Longitude": 1.5745,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Catalonia\"]"
+      "CommonAliases": [
+        "Catalonia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "A870A1AD-BC4D-42B5-9A40-00BF00FA1088"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:26.952Z",
+      "checksum": "f222d3857908a731c64fe7bd91a8544d81e754b59e912a7399761d685f6c8151"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "Ceuta",
       "Code": "CE",
       "ISO3166_2": "ES-CE",
       "Latitude": 35.8884,
       "Longitude": -5.3041,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Ceuta\"]"
+      "CommonAliases": [
+        "Ceuta"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "F04FBE6F-C16B-4BA0-BD84-80FB56DBA9BA"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:26.966Z",
+      "checksum": "0b4549f62b4041e11fd5d64cbf1609d1212f245af8e4f78d1897d75f8489a525"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "Ciudad Real",
       "Code": "CR",
       "ISO3166_2": "ES-CR",
       "Latitude": 38.9854,
       "Longitude": -3.9285,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Ciudad Real\"]"
+      "CommonAliases": [
+        "Ciudad Real"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "6F3B0A9B-4EEF-4894-BB9A-7B3943D43A3D"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:26.980Z",
+      "checksum": "2bbbd95ee9a2a1eb87ac5f80ec3be3e89392cd43f31f3712835cfeb47cc32815"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "Community of Madrid",
       "Code": "MD",
       "ISO3166_2": "ES-MD",
       "Latitude": 40.5248,
       "Longitude": -3.7716,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Community of Madrid\"]"
+      "CommonAliases": [
+        "Community of Madrid"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "1A65C48F-C618-4D36-8B7B-445298507361"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:26.995Z",
+      "checksum": "b99a58ef754fd02842eefeaa2d2b185900048fb7b6314bb687bd6b5bd544bb44"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "Cuenca",
       "Code": "CU",
       "ISO3166_2": "ES-CU",
       "Latitude": 40.0661,
       "Longitude": -2.1314,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Cuenca\"]"
+      "CommonAliases": [
+        "Cuenca"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "96EEEB4F-EB68-4656-A3C3-BFFF44AC893B"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:27.008Z",
+      "checksum": "6f099c16ef1df3dd84c8128746741bcf10cc5c930d2ee3e56ff5f15554159678"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "Cádiz",
       "Code": "CA",
       "ISO3166_2": "ES-CA",
       "Latitude": 36.5297,
       "Longitude": -6.2929,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"C\\u00e1diz\"]"
+      "CommonAliases": [
+        "Cádiz"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "93B73AD9-D970-4CE0-9B97-86F35F702FCB"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:27.021Z",
+      "checksum": "87a2263abc012c48b674461857837563328722dd13adf32d002583b26a0b68d0"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "Córdoba",
       "Code": "CO",
       "ISO3166_2": "ES-CO",
       "Latitude": 37.9567,
       "Longitude": -4.8477,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"C\\u00f3rdoba\"]"
+      "CommonAliases": [
+        "Córdoba"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "2EEDC6A7-3DC3-449E-A147-59B2F7F910DB"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:27.034Z",
+      "checksum": "dd4f0a4baa00e5b7ba7aa76d135a660c555168df785d7bae667bc4462c05197c"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "Estremadura",
       "Code": "EX",
       "ISO3166_2": "ES-EX",
       "Latitude": 39.1748,
       "Longitude": -6.153,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Estremadura\"]"
+      "CommonAliases": [
+        "Estremadura"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "13A592B5-C1D4-4E88-BCD9-EE530044E230"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:27.046Z",
+      "checksum": "56873cd8a5ccc5cfbde15281e7385d49ef72186018cbfaa00143822c465e0198"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "Galicia",
       "Code": "GA",
       "ISO3166_2": "ES-GA",
       "Latitude": 42.6195,
       "Longitude": -7.8631,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Galicia\"]"
+      "CommonAliases": [
+        "Galicia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "A97CAF51-98A8-497B-825A-0F97F9DA9DCA"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:27.077Z",
+      "checksum": "c384ab120da5df9fbd3518502401e4a3cbce681e1d1a77795325d2d4e4c7cf69"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "Gipuzkoa",
       "Code": "SS",
       "ISO3166_2": "ES-SS",
       "Latitude": 43.1445,
       "Longitude": -2.2038,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Gipuzkoa\"]"
+      "CommonAliases": [
+        "Gipuzkoa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "F80A4695-DE2E-4A08-BEEC-AF25A369310F"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:27.091Z",
+      "checksum": "a7345cd3c3a45a144724f6326bc7d613191fdaba043b4c7a0f56e978721eb36f"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "Girona",
       "Code": "GI",
       "ISO3166_2": "ES-GI",
       "Latitude": 41.9793,
       "Longitude": 2.8199,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Girona\"]"
+      "CommonAliases": [
+        "Girona"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "396A711B-9706-4C19-9DF6-1747E9EE036B"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:27.103Z",
+      "checksum": "3f47da77dcc3a7b748a7f50e5a370a4c8ebf78b28c4bab8eb0fae4624902b9b9"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "Granada",
       "Code": "GR",
       "ISO3166_2": "ES-GR",
       "Latitude": 37.1735,
       "Longitude": -3.5995,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Granada\"]"
+      "CommonAliases": [
+        "Granada"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "DE984609-3696-4D55-ACDC-C597C75805C6"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:27.114Z",
+      "checksum": "ea24846cb2ccaba64950e9e5232e4d5fc8877dbe5b48e636d27bbc9c3c1d5453"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "Guadalajara",
       "Code": "GU",
       "ISO3166_2": "ES-GU",
       "Latitude": 40.6327,
       "Longitude": -3.1646,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Guadalajara\"]"
+      "CommonAliases": [
+        "Guadalajara"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "657EFAB3-20F1-43CC-B203-320221C253E9"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:27.125Z",
+      "checksum": "b81090a39cca20d68a68a42b57e6424ecd1580382454f0b519f1cd2b8664287e"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "Huelva",
       "Code": "H",
       "ISO3166_2": "ES-H",
       "Latitude": 37.2576,
       "Longitude": -6.9485,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Huelva\"]"
+      "CommonAliases": [
+        "Huelva"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "62C8CCA7-37B4-4B02-9639-9EF50713B7F5"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:27.139Z",
+      "checksum": "4248a0306d25bb690072bbd264b3b84878c1cf5862da6ecaad6886e851ab15b0"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "Huesca",
       "Code": "HU",
       "ISO3166_2": "ES-HU",
       "Latitude": 42.1364,
       "Longitude": -0.4366,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Huesca\"]"
+      "CommonAliases": [
+        "Huesca"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "3EF0AB87-FD42-43BB-9830-823842550132"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:27.150Z",
+      "checksum": "0c6091e212cc20d5ced3c9ba5086b87987c6cec73b2576224b01b31e403f90b5"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "Islas Baleares",
       "Code": "PM",
       "ISO3166_2": "ES-PM",
       "Latitude": 39.6134,
       "Longitude": 2.8829,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Islas Baleares\"]"
+      "CommonAliases": [
+        "Islas Baleares"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "758969A7-0748-47A3-BEA3-E1EBD366488C"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:27.161Z",
+      "checksum": "668d9bd126c09d749535420b9a321a0afa1cc52b2313cd0691e64e79f4ad9d51"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "Jaén",
       "Code": "J",
       "ISO3166_2": "ES-J",
       "Latitude": 37.7729,
       "Longitude": -3.7883,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Ja\\u00e9n\"]"
+      "CommonAliases": [
+        "Jaén"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "0828A75E-B6A0-42D0-BE1B-F89149E12220"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:27.174Z",
+      "checksum": "f9d53289fe3122fc62ac62d41969d140b04e43640c0da7bafce1771fe56e44b9"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "La Rioja",
       "Code": "RI",
       "ISO3166_2": "ES-RI",
       "Latitude": 42.25,
       "Longitude": -2.5,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"La Rioja\"]"
+      "CommonAliases": [
+        "La Rioja"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "B0285854-93E4-43DE-BBC5-705FA9AFBA54"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:27.184Z",
+      "checksum": "70f90e48f7c8e75bb61b53e3845264312430411af38ed26526921b307a2a9105"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "La Rioja",
       "Code": "LO",
       "ISO3166_2": "ES-LO",
       "Latitude": 42.2815,
       "Longitude": -2.4828,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"La Rioja\"]"
+      "CommonAliases": [
+        "La Rioja"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "A19590D5-A29B-4A31-BD7D-25DE4F535FE3"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:27.207Z",
+      "checksum": "d16cef5c9d8cde5269081ea0ebdef2ac1aaed46ffff04f2377e158ce1c4722ac"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "Las Palmas",
       "Code": "GC",
       "ISO3166_2": "ES-GC",
       "Latitude": 27.958,
       "Longitude": -15.6062,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Las Palmas\"]"
+      "CommonAliases": [
+        "Las Palmas"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "467C5016-6B39-42A8-A02C-1B7B35AAF9E8"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:27.220Z",
+      "checksum": "55c66dfd7b9e74cc26475c64cc2b2fad2c75ade6aec23a28e1566ae391e38583"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "León",
       "Code": "LE",
       "ISO3166_2": "ES-LE",
       "Latitude": 42.5987,
       "Longitude": -5.5671,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Le\\u00f3n\"]"
+      "CommonAliases": [
+        "León"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "314428F7-21A2-483E-9B0B-C16311247F7B"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:27.236Z",
+      "checksum": "421d128284e99c9bf147cae7c7b47bdb054b95b8bd3b3b1064730e26c27b8c69"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "Lleida",
       "Code": "L",
       "ISO3166_2": "ES-L",
       "Latitude": 41.6148,
       "Longitude": 0.6268,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Lleida\"]"
+      "CommonAliases": [
+        "Lleida"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "21298892-6E9F-4B1F-8B58-18689A1947C7"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:27.250Z",
+      "checksum": "af42247d5daa44bceff3c7e5da74abece6e439b536239ccd3525ed931dfa3ea8"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "Lugo",
       "Code": "LU",
       "ISO3166_2": "ES-LU",
       "Latitude": 43.0118,
       "Longitude": -7.5566,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Lugo\"]"
+      "CommonAliases": [
+        "Lugo"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "57519460-CCC1-4FA9-ACC9-DA699C3E49F8"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:27.262Z",
+      "checksum": "b9684f33e4e66577be26e285524db94d4bcd49a57a047a5854f7e2815c8a70b2"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "Madrid",
       "Code": "M",
       "ISO3166_2": "ES-M",
       "Latitude": 40.4168,
       "Longitude": -3.7038,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Madrid\"]"
+      "CommonAliases": [
+        "Madrid"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "82454519-75A5-4085-86F7-6FD1846E9FDB"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:27.274Z",
+      "checksum": "8168cbd4fcdc538564605ecacc9b225be324995c41a80b26cd45d43546ca14dd"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "Melilla",
       "Code": "ML",
       "ISO3166_2": "ES-ML",
       "Latitude": 35.2937,
       "Longitude": -2.9383,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Melilla\"]"
+      "CommonAliases": [
+        "Melilla"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "53F42C00-9EFD-45E4-8562-95F5B6040B95"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:27.288Z",
+      "checksum": "e990a30eee2c4234796d43dfa9c99e6ec2460d622962c7c42824a570de0684f6"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "Murcia",
       "Code": "MU",
       "ISO3166_2": "ES-MU",
       "Latitude": 37.9924,
       "Longitude": -1.1305,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Murcia\"]"
+      "CommonAliases": [
+        "Murcia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "D905115E-01DE-473A-9C55-53024FA0B47C"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:27.304Z",
+      "checksum": "f288bf0da74e057095cdf3da87f8e565f45e2f77ac5b83a078ba7e91ff790d67"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "Málaga",
       "Code": "MA",
       "ISO3166_2": "ES-MA",
       "Latitude": 36.7213,
       "Longitude": -4.4216,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"M\\u00e1laga\"]"
+      "CommonAliases": [
+        "Málaga"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "5D90748E-17DE-4EC4-9F78-F5800CF98466"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:27.320Z",
+      "checksum": "c070407af155e9a2f041ef2b7a71139c3cc5ee623bc151e9ef5bf2a903d21588"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "Navarra",
       "Code": "NA",
       "ISO3166_2": "ES-NA",
       "Latitude": 42.6125,
       "Longitude": -1.8308,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Navarra\"]"
+      "CommonAliases": [
+        "Navarra"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "BA8A9B4F-7B5E-4F03-A476-DE086035473F"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:27.332Z",
+      "checksum": "619623bfa9307c8879ec3688c81b7c5891794d88e65e68787b7114163284e68c"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "Navarre",
       "Code": "NC",
       "ISO3166_2": "ES-NC",
       "Latitude": 42.6125,
       "Longitude": -1.8308,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Navarre\"]"
+      "CommonAliases": [
+        "Navarre"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "E8D0372E-7CBE-4EEC-B834-F3B581548207"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:27.362Z",
+      "checksum": "7cec471ca7c0afc622778fbe82caa30a894b2052fd5765e3ea5ab3bd27a6492d"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "Ourense",
       "Code": "OR",
       "ISO3166_2": "ES-OR",
       "Latitude": 42.3439,
       "Longitude": -7.8572,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Ourense\"]"
+      "CommonAliases": [
+        "Ourense"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "AA8A7D93-462C-48E7-BD78-4069D8452427"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:27.377Z",
+      "checksum": "ca1b7b911bc5d322f7be8421433cacb5cb2e43b447cd4eb8922cdf013060112a"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "Palencia",
       "Code": "P",
       "ISO3166_2": "ES-P",
       "Latitude": 42.0097,
       "Longitude": -4.5288,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Palencia\"]"
+      "CommonAliases": [
+        "Palencia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "F2C1C775-F128-4924-944F-D63B96771E8E"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:27.390Z",
+      "checksum": "b6a49477d096bd0f50b35ca51824fbff173a4333edbdcc9872035e30350367c5"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "Pontevedra",
       "Code": "PO",
       "ISO3166_2": "ES-PO",
       "Latitude": 42.4319,
       "Longitude": -8.6432,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Pontevedra\"]"
+      "CommonAliases": [
+        "Pontevedra"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "869ACF44-123E-4E8B-A0B1-1F9EDA2B314A"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:27.402Z",
+      "checksum": "6ae6b8c094e26f1e4bbebf33bb6ec01186234326501a0b1f06b334ed30c115e7"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "Region of Murcia",
       "Code": "MC",
       "ISO3166_2": "ES-MC",
       "Latitude": 38.064,
       "Longitude": -1.6719,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Region of Murcia\"]"
+      "CommonAliases": [
+        "Region of Murcia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "34971928-6987-4BB1-92C3-BAD7EB8EB328"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:27.416Z",
+      "checksum": "5ca7f380a6580028ea5eafa495d089be196144242e1d9b1e69a42507033d25f5"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "Salamanca",
       "Code": "SA",
       "ISO3166_2": "ES-SA",
       "Latitude": 40.7666,
       "Longitude": -6.0218,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Salamanca\"]"
+      "CommonAliases": [
+        "Salamanca"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "79EB8A02-676A-4C25-84AE-73B3376CBCD4"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:27.430Z",
+      "checksum": "acadc35379eef267246ad06fda93bc0a50ea02985526f0280a9082d8748e052c"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "Santa Cruz de Tenerife",
       "Code": "TF",
       "ISO3166_2": "ES-TF",
       "Latitude": 28.4672,
       "Longitude": -16.2508,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Santa Cruz de Tenerife\"]"
+      "CommonAliases": [
+        "Santa Cruz de Tenerife"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "F9A36FBB-D980-495C-9E7E-3B94144BD21B"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:27.443Z",
+      "checksum": "089e531cbe5ee3c344c645a37e7c3cbdb611b98b3224b357b5b7fabf04ddabd9"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "Segovia",
       "Code": "SG",
       "ISO3166_2": "ES-SG",
       "Latitude": 40.9429,
       "Longitude": -4.1089,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Segovia\"]"
+      "CommonAliases": [
+        "Segovia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "F0CD5B57-DF58-4C8C-B69E-2CEA0A966590"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:27.457Z",
+      "checksum": "c5988e8eb2ccb3e3d5aa5650a16b276c535051689e4ec000f80a0571a0698844"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "Sevilla",
       "Code": "SE",
       "ISO3166_2": "ES-SE",
       "Latitude": 37.3886,
       "Longitude": -5.9953,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Sevilla\"]"
+      "CommonAliases": [
+        "Sevilla"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "8A4A3D63-C607-439E-B85D-1F760D475B15"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:27.472Z",
+      "checksum": "ac4131f065dabfe7c84298d07a4fc9397f31ee374b4a8cea8b4fbdb823a2a059"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "Soria",
       "Code": "SO",
       "ISO3166_2": "ES-SO",
       "Latitude": 41.7634,
       "Longitude": -2.4642,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Soria\"]"
+      "CommonAliases": [
+        "Soria"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "C6073314-98C1-49CD-B025-BCE69F68064C"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:27.483Z",
+      "checksum": "dfe04004c387e3fc1ce319fe0140b6762bb605b19dae648d785c86488e4fc33c"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "Tarragona",
       "Code": "T",
       "ISO3166_2": "ES-T",
       "Latitude": 41.1172,
       "Longitude": 1.2546,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Tarragona\"]"
+      "CommonAliases": [
+        "Tarragona"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "0ADF7B56-EF33-4CDD-8A5F-47D51DD43A2C"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:27.510Z",
+      "checksum": "da9ce023b6902e8121948be46655d56d0035b7f029cc8fcbfae6180046e4e1c7"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "Teruel",
       "Code": "TE",
       "ISO3166_2": "ES-TE",
       "Latitude": 40.345,
       "Longitude": -1.1185,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Teruel\"]"
+      "CommonAliases": [
+        "Teruel"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "76A67C63-108D-4BAA-AEDD-4770F7445E8B"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:27.521Z",
+      "checksum": "09c09853959273fb8295b21e8c2341b83647e08b84174cd9f2ee78ba8ca5b304"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "Toledo",
       "Code": "TO",
       "ISO3166_2": "ES-TO",
       "Latitude": 39.8561,
       "Longitude": -4.024,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Toledo\"]"
+      "CommonAliases": [
+        "Toledo"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "A772535D-0965-4C64-B775-79B260269844"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:27.534Z",
+      "checksum": "a6ec9b21303902804adc625c412109d85d1411871495f8733390ec5a1a4f2a57"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "Valencia",
       "Code": "V",
       "ISO3166_2": "ES-V",
       "Latitude": 39.3342,
       "Longitude": -0.7973,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Valencia\"]"
+      "CommonAliases": [
+        "Valencia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "D6F2D83A-546F-4CE9-9FDC-D5D6F0732B69"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:27.549Z",
+      "checksum": "371ab0934ac4de2d5821a80f7d3cb7f394aa9567347ed8fbd3abc9a4bdb6bdad"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "Valencian Community",
       "Code": "VC",
       "ISO3166_2": "ES-VC",
       "Latitude": 39.682,
       "Longitude": -0.7654,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Valencian Community\"]"
+      "CommonAliases": [
+        "Valencian Community"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "FC33B188-8AEF-4081-B1A4-62C64D915478"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:27.562Z",
+      "checksum": "2942cc0bfde8fa79b414aa3020a53dc60c044eda85791fa11e0fbff31b47a9c0"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "Valladolid",
       "Code": "VA",
       "ISO3166_2": "ES-VA",
       "Latitude": 41.6517,
       "Longitude": -4.7245,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Valladolid\"]"
+      "CommonAliases": [
+        "Valladolid"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "C10487F8-E658-41FA-AAE9-0750EFFFF77C"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:27.577Z",
+      "checksum": "495341b4315ebbd4a3682cc2648703ce1c6f917b4e7ab6799784a3613f5bc999"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "Zamora",
       "Code": "ZA",
       "ISO3166_2": "ES-ZA",
       "Latitude": 41.6858,
       "Longitude": -5.9423,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Zamora\"]"
+      "CommonAliases": [
+        "Zamora"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "37667233-F5BD-48D6-93E3-22337CF982F8"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:27.590Z",
+      "checksum": "1700d61fea6a771b6c161c9238b131634468403dc894b7a4d9a003a9cc9c4dc5"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "Zaragoza",
       "Code": "Z",
       "ISO3166_2": "ES-Z",
       "Latitude": 41.6521,
       "Longitude": -0.8809,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Zaragoza\"]"
+      "CommonAliases": [
+        "Zaragoza"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "933326C6-DA18-46BB-9558-3603639401C5"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:27.603Z",
+      "checksum": "10e4ab728ad2346ac4337ec7634c6b4da91c65433e92609dce6d856ca319f9b7"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "ES",
       "Name": "Ávila",
       "Code": "AV",
       "ISO3166_2": "ES-AV",
       "Latitude": 40.6233,
       "Longitude": -4.8354,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"\\u00c1vila\"]"
+      "CommonAliases": [
+        "Ávila"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ES"
+    },
+    "primaryKey": {
+      "ID": "3B9B8B9C-6333-4B7F-B38A-A39D3F1558CF"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:27.614Z",
+      "checksum": "c106644b09be09db695f9404653764ca37d55f1d7abd07a9275ef68598b566b2"
     }
   }
 ]

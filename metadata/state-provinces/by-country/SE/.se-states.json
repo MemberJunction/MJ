@@ -1,254 +1,443 @@
 [
   {
     "fields": {
-      "_CountryISO2": "SE",
       "Name": "Blekinge",
       "Code": "K",
       "ISO3166_2": "SE-K",
       "Latitude": 56.124,
       "Longitude": 15.4022,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Blekinge\"]"
+      "CommonAliases": [
+        "Blekinge"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SE"
+    },
+    "primaryKey": {
+      "ID": "87B61C25-3C4D-4D02-B922-BE47847AF7CC"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:38.780Z",
+      "checksum": "f9414aa788087a489dcfe4d8cd2a236617eb0aac2441ef03143090f0347aac7b"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "SE",
       "Name": "Dalarna",
       "Code": "W",
       "ISO3166_2": "SE-W",
       "Latitude": 61.0604,
       "Longitude": 14.2151,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Dalarna\"]"
+      "CommonAliases": [
+        "Dalarna"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SE"
+    },
+    "primaryKey": {
+      "ID": "B3A1DF84-8039-45D4-966A-0674B7EAFB82"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:38.792Z",
+      "checksum": "b78f210723e8936b394817bb7b1133c8c52f01ccf1723f3c3b35345209957345"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "SE",
       "Name": "Gotland",
       "Code": "I",
       "ISO3166_2": "SE-I",
       "Latitude": 57.4999,
       "Longitude": 18.4999,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Gotland\"]"
+      "CommonAliases": [
+        "Gotland"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SE"
+    },
+    "primaryKey": {
+      "ID": "E7A0C5E2-CCEF-4B05-AAEF-BF43A80C3E24"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:38.804Z",
+      "checksum": "7a953d65908c6c49f03e6d35c279d815a598c4eac818ddad0f97ffeff66ea048"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "SE",
       "Name": "Gävleborg",
       "Code": "X",
       "ISO3166_2": "SE-X",
       "Latitude": 61.2603,
       "Longitude": 16.6947,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"G\\u00e4vleborg\"]"
+      "CommonAliases": [
+        "Gävleborg"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SE"
+    },
+    "primaryKey": {
+      "ID": "9E6D86F0-E4C4-4D5B-8DD0-85C85103DF09"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:38.818Z",
+      "checksum": "ecda7a8c39b124a3eef3388e204bd3590671a70da98e5e641f694dce580bb29d"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "SE",
       "Name": "Halland",
       "Code": "N",
       "ISO3166_2": "SE-N",
       "Latitude": 56.9608,
       "Longitude": 12.8547,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Halland\"]"
+      "CommonAliases": [
+        "Halland"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SE"
+    },
+    "primaryKey": {
+      "ID": "F9FB24EE-E4D9-4A36-ABFD-01E2FFA2D728"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:38.833Z",
+      "checksum": "69d24e6b7ba23b7c0c86a5271a32a318be026f3a7a9b7e8cb70b0958d70510fd"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "SE",
       "Name": "Jämtland",
       "Code": "Z",
       "ISO3166_2": "SE-Z",
       "Latitude": 63.3452,
       "Longitude": 14.125,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"J\\u00e4mtland\"]"
+      "CommonAliases": [
+        "Jämtland"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SE"
+    },
+    "primaryKey": {
+      "ID": "4CFE5277-6CB4-4138-ACE9-44278EF6BC06"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:38.846Z",
+      "checksum": "0ab9eb249b5b5effd3dc78a09070e091df217ca81b13f2502352e08fe8c7aff3"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "SE",
       "Name": "Jönköping",
       "Code": "F",
       "ISO3166_2": "SE-F",
       "Latitude": 57.7826,
       "Longitude": 14.1657,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"J\\u00f6nk\\u00f6ping\"]"
+      "CommonAliases": [
+        "Jönköping"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SE"
+    },
+    "primaryKey": {
+      "ID": "6F05FC41-8B5D-49FF-9D5A-7E562831E548"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:38.860Z",
+      "checksum": "5e80caea86513b085455aa8927527049bf763468d8f4d5921856043d14c72fe1"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "SE",
       "Name": "Kalmar",
       "Code": "H",
       "ISO3166_2": "SE-H",
       "Latitude": 56.6667,
       "Longitude": 16.3331,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Kalmar\"]"
+      "CommonAliases": [
+        "Kalmar"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SE"
+    },
+    "primaryKey": {
+      "ID": "0F98084D-D761-4486-9BFF-AF0C3BD31F1D"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:38.874Z",
+      "checksum": "f3dc736de93309ccef5ef95069c5b2159811cf4320ef817bc5996dcfba9a1dce"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "SE",
       "Name": "Kronoberg",
       "Code": "G",
       "ISO3166_2": "SE-G",
       "Latitude": 56.8007,
       "Longitude": 14.4112,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Kronoberg\"]"
+      "CommonAliases": [
+        "Kronoberg"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SE"
+    },
+    "primaryKey": {
+      "ID": "F3819E57-3EE5-4192-B3E3-205C0C0BC9F5"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:38.887Z",
+      "checksum": "b8356bc533a20faf5bace2f992fdae78052b7bc4ccc1090fc1ac077f81279da1"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "SE",
       "Name": "Norrbotten",
       "Code": "BD",
       "ISO3166_2": "SE-BD",
       "Latitude": 66.5282,
       "Longitude": 22.953,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Norrbotten\"]"
+      "CommonAliases": [
+        "Norrbotten"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SE"
+    },
+    "primaryKey": {
+      "ID": "68B2200F-F3D5-4B96-B00B-81A39EAB7923"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:38.911Z",
+      "checksum": "dc5f43d782c6f2af754f352b9c6d9fccdd121402c49309bb6aaf14bbda5f278e"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "SE",
       "Name": "Skåne",
       "Code": "M",
       "ISO3166_2": "SE-M",
       "Latitude": 55.8479,
       "Longitude": 13.6337,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Sk\\u00e5ne\"]"
+      "CommonAliases": [
+        "Skåne"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SE"
+    },
+    "primaryKey": {
+      "ID": "571C7605-9E4F-4B71-84A1-8337618D91F8"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:38.939Z",
+      "checksum": "7813f3791402872e52aab74e029e31c875457629f40f24f984a57b63c2f2b8c6"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "SE",
       "Name": "Stockholm",
       "Code": "AB",
       "ISO3166_2": "SE-AB",
       "Latitude": 59.3336,
       "Longitude": 18.0277,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Stockholm\"]"
+      "CommonAliases": [
+        "Stockholm"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SE"
+    },
+    "primaryKey": {
+      "ID": "67B81C24-85EE-450E-A0C7-BFAC84C3D5F1"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:38.952Z",
+      "checksum": "da4cd4b264028c0d9716fdba41a2e68a56cdd655cbda6a3d920ec53d3b1b51b2"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "SE",
       "Name": "Södermanland",
       "Code": "D",
       "ISO3166_2": "SE-D",
       "Latitude": 58.9649,
       "Longitude": 16.7294,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"S\\u00f6dermanland\"]"
+      "CommonAliases": [
+        "Södermanland"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SE"
+    },
+    "primaryKey": {
+      "ID": "F2C4CD86-E1B4-4520-A637-3C85B4AA290F"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:38.964Z",
+      "checksum": "4077be4d334de4e7a6fb02d6031ff70e0c49a5ed8b013942ba0f1a0b31d71329"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "SE",
       "Name": "Uppsala",
       "Code": "C",
       "ISO3166_2": "SE-C",
       "Latitude": 59.8662,
       "Longitude": 17.5984,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Uppsala\"]"
+      "CommonAliases": [
+        "Uppsala"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SE"
+    },
+    "primaryKey": {
+      "ID": "EB9A12FB-6DCF-4442-8FA3-DBD6666703FE"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:38.978Z",
+      "checksum": "9337cfa8a20158a9d7e8c95a4760b147851367753c1c49030d445ceb461644a8"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "SE",
       "Name": "Värmland",
       "Code": "S",
       "ISO3166_2": "SE-S",
       "Latitude": 59.8908,
       "Longitude": 13.2948,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"V\\u00e4rmland\"]"
+      "CommonAliases": [
+        "Värmland"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SE"
+    },
+    "primaryKey": {
+      "ID": "CC9213FF-8C90-460E-8477-5635C8288818"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:38.991Z",
+      "checksum": "836b9c712809ad8aa5b8ce5e093914b7ecde0f23da1ebeb0162e6280abbc684e"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "SE",
       "Name": "Västerbotten",
       "Code": "AC",
       "ISO3166_2": "SE-AC",
       "Latitude": 64.7285,
       "Longitude": 18.5533,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"V\\u00e4sterbotten\"]"
+      "CommonAliases": [
+        "Västerbotten"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SE"
+    },
+    "primaryKey": {
+      "ID": "71CA6970-3D1B-4AF5-8C67-BAEAE31F42A3"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:39.002Z",
+      "checksum": "f3843c12b26a7b1e7f847f5f567aac4d1765f712c6168eb7fc5f4c36e7fbf134"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "SE",
       "Name": "Västernorrland",
       "Code": "Y",
       "ISO3166_2": "SE-Y",
       "Latitude": 63.059,
       "Longitude": 18.1014,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"V\\u00e4sternorrland\"]"
+      "CommonAliases": [
+        "Västernorrland"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SE"
+    },
+    "primaryKey": {
+      "ID": "429D730E-E737-4120-B0C6-E76104C0F9ED"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:39.013Z",
+      "checksum": "c27e615da3f0ba216c3d6006fb844800d78b6486fcd6088ac9cb6f4edd204990"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "SE",
       "Name": "Västmanland",
       "Code": "U",
       "ISO3166_2": "SE-U",
       "Latitude": 59.6966,
       "Longitude": 16.1847,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"V\\u00e4stmanland\"]"
+      "CommonAliases": [
+        "Västmanland"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SE"
+    },
+    "primaryKey": {
+      "ID": "441EFCC7-1E47-462B-902F-E8B24EC92A2E"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:39.025Z",
+      "checksum": "fadf89805058af5d238327b56cad732b693fb4aa4ffd7bc0f15cd014c66ee572"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "SE",
       "Name": "Västra Götaland",
       "Code": "O",
       "ISO3166_2": "SE-O",
       "Latitude": 58.2159,
       "Longitude": 12.6518,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"V\\u00e4stra G\\u00f6taland\"]"
+      "CommonAliases": [
+        "Västra Götaland"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SE"
+    },
+    "primaryKey": {
+      "ID": "64B7E7B3-E65B-414B-BAA6-652135318646"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:39.036Z",
+      "checksum": "a1ca8d25a97a39b79c6e9ca25128cc3b4bcc0acaa084a92c56a3020fb5756cfe"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "SE",
       "Name": "Örebro",
       "Code": "T",
       "ISO3166_2": "SE-T",
       "Latitude": 59.2747,
       "Longitude": 15.2151,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"\\u00d6rebro\"]"
+      "CommonAliases": [
+        "Örebro"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SE"
+    },
+    "primaryKey": {
+      "ID": "289FB23C-D0FE-44E7-AE43-B461638F37EF"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:39.047Z",
+      "checksum": "91fade068c5b5d258afe9eb887fa1867ed74735edc3ad20be4d77913ae12caa3"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "SE",
       "Name": "Östergötland",
       "Code": "E",
       "ISO3166_2": "SE-E",
       "Latitude": 58.365,
       "Longitude": 16.0447,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"\\u00d6sterg\\u00f6tland\"]"
+      "CommonAliases": [
+        "Östergötland"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SE"
+    },
+    "primaryKey": {
+      "ID": "F4DB0951-D44A-4B78-B51F-3915AFB7C29C"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:39.059Z",
+      "checksum": "026304bf24f3a52afc17685a556bc6f6bfb436b8bf5e57baf942a7520a950ad5"
     }
   }
 ]

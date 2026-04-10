@@ -4,6 +4,8 @@
     "autoCreateMissingRecords": true
   },
   "directoryOrder": [
+    "countries",
+    "state-provinces",
     "encryption-key-sources",
     "encryption-algorithms",
     "encryption-keys",

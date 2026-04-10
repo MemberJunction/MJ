@@ -2132,11 +2132,18 @@
       "Name": "SimpleMap",
       "Namespace": "Generic/UI/Map",
       "Title": "Simple Map",
-      "Type": "Map",
+      "Type": "Other",
       "Version": "1.0.0",
       "VersionSequence": 1,
       "Status": "Published",
       "Specification": "@file:spec/generic/simple-map.spec.json"
+    },
+    "primaryKey": {
+      "ID": "2AD46B3C-D0B2-49A7-9F0B-8DCE68A0C118"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:56:35.469Z",
+      "checksum": "aca4b8ce01679f5d4ad4fc42d612d37bf00fd94b6b7b3cdb55d68e4d23d62a45"
     }
   }
 ]

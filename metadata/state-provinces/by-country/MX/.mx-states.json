@@ -1,386 +1,674 @@
 [
   {
     "fields": {
-      "_CountryISO2": "MX",
       "Name": "Aguascalientes",
       "Code": "AGU",
       "ISO3166_2": "MX-AGU",
       "Latitude": 21.8853,
       "Longitude": -102.2916,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Aguascalientes\"]"
+      "CommonAliases": [
+        "Aguascalientes"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MX"
+    },
+    "primaryKey": {
+      "ID": "BFEA4A04-2499-44EF-BA4E-19F6E9448307"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:36.249Z",
+      "checksum": "39afb60cfe4906cec2ff4a07b7e227d30d77eaa535b900e109ddd54c36b91a62"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "MX",
       "Name": "Baja California",
       "Code": "BCN",
       "ISO3166_2": "MX-BCN",
       "Latitude": 30.0339,
       "Longitude": -115.1425,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Baja California\"]"
+      "CommonAliases": [
+        "Baja California"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MX"
+    },
+    "primaryKey": {
+      "ID": "730BC18F-8E58-42CE-A29F-5CC574696D37"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:36.261Z",
+      "checksum": "8f79b4165d4ae068126286a2c0eb6d2cca12a6f6828f9e4390ba6c727469d5e0"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "MX",
       "Name": "Baja California Sur",
       "Code": "BCS",
       "ISO3166_2": "MX-BCS",
       "Latitude": 25.5818,
       "Longitude": -111.5706,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Baja California Sur\"]"
+      "CommonAliases": [
+        "Baja California Sur"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MX"
+    },
+    "primaryKey": {
+      "ID": "854E3883-55B9-4735-80AB-7E11A52ED0C7"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:36.273Z",
+      "checksum": "d8c3247d50ab5d89afc74670754f34c0541fd7b3fb351c9a1527cfa7848f5bba"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "MX",
       "Name": "Campeche",
       "Code": "CAM",
       "ISO3166_2": "MX-CAM",
       "Latitude": 19.8381,
       "Longitude": -90.5198,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Campeche\"]"
+      "CommonAliases": [
+        "Campeche"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MX"
+    },
+    "primaryKey": {
+      "ID": "2ED65C2B-72D8-420D-8511-33C56CAE78D3"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:36.284Z",
+      "checksum": "7686e1d1e5d44581c3b7e0dcc38bd7e90e9b17b1992cfc7f5779f367389a6168"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "MX",
       "Name": "Chiapas",
       "Code": "CHP",
       "ISO3166_2": "MX-CHP",
       "Latitude": 16.5,
       "Longitude": -92.5,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Chiapas\"]"
+      "CommonAliases": [
+        "Chiapas"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MX"
+    },
+    "primaryKey": {
+      "ID": "E632B70A-EFA0-43CB-B29B-274E8BC3E0CE"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:36.295Z",
+      "checksum": "6f1472f913a5208054c92557eed9edeaf9f5415d08a437431e4ba46893f701df"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "MX",
       "Name": "Chihuahua",
       "Code": "CHH",
       "ISO3166_2": "MX-CHH",
       "Latitude": 28.633,
       "Longitude": -106.0691,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Chihuahua\"]"
+      "CommonAliases": [
+        "Chihuahua"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MX"
+    },
+    "primaryKey": {
+      "ID": "1A99D217-E1F1-445B-A1C6-ADCD8C4052B0"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:36.311Z",
+      "checksum": "eb159edaeacd29194760b01390bb3e77e196eee77d7bbce432f0e6452cfdfe8b"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "MX",
       "Name": "Ciudad de México",
       "Code": "CMX",
       "ISO3166_2": "MX-CMX",
       "Latitude": 19.4326,
       "Longitude": -99.1332,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Ciudad de M\\u00e9xico\"]"
+      "CommonAliases": [
+        "Ciudad de México"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MX"
+    },
+    "primaryKey": {
+      "ID": "6AF355B7-E583-4FFD-8212-B2DEBAF3C411"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:36.324Z",
+      "checksum": "c8ac92c4ce6a6cf238bebc1b6dbb1a06e55d7cad726210a4e8302a93f51563f4"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "MX",
       "Name": "Coahuila de Zaragoza",
       "Code": "COA",
       "ISO3166_2": "MX-COA",
       "Latitude": 27.3333,
-      "Longitude": -102.0,
+      "Longitude": -102,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Coahuila de Zaragoza\"]"
+      "CommonAliases": [
+        "Coahuila de Zaragoza"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MX"
+    },
+    "primaryKey": {
+      "ID": "65BAC25A-5917-4FD8-850B-12699AA4990A"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:36.340Z",
+      "checksum": "4615d1289b62be62570377fc4ed56c69eeac500d083d587e11422c7332429d13"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "MX",
       "Name": "Colima",
       "Code": "COL",
       "ISO3166_2": "MX-COL",
       "Latitude": 19.2452,
       "Longitude": -103.7241,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Colima\"]"
+      "CommonAliases": [
+        "Colima"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MX"
+    },
+    "primaryKey": {
+      "ID": "CB63B891-6F4C-4F48-8087-3905E0EC5871"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:36.357Z",
+      "checksum": "7bfd7fae7257f94fbc5493eefa9c6cf97b5fe9d58a93b9f44176b2065139c27f"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "MX",
       "Name": "Durango",
       "Code": "DUR",
       "ISO3166_2": "MX-DUR",
       "Latitude": 24.8333,
       "Longitude": -104.8333,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Durango\"]"
+      "CommonAliases": [
+        "Durango"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MX"
+    },
+    "primaryKey": {
+      "ID": "E21E0404-CFDE-4BE1-8063-176889F97669"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:36.373Z",
+      "checksum": "893fe53625b1f1ae504e6c6e7f1d986ab9f21e525f86df9385489b57cce73ba7"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "MX",
       "Name": "Estado de México",
       "Code": "MEX",
       "ISO3166_2": "MX-MEX",
       "Latitude": 19.4839,
       "Longitude": -99.69,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Estado de M\\u00e9xico\"]"
+      "CommonAliases": [
+        "Estado de México"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MX"
+    },
+    "primaryKey": {
+      "ID": "98B13F6D-B176-4809-A657-D3B0026F3FB5"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:36.406Z",
+      "checksum": "2a154583abb7e63008f9c2dea508e3bb8be3ee00ddb2039d4f926c95b1e36d69"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "MX",
       "Name": "Guanajuato",
       "Code": "GUA",
       "ISO3166_2": "MX-GUA",
       "Latitude": 21.019,
       "Longitude": -101.2574,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Guanajuato\"]"
+      "CommonAliases": [
+        "Guanajuato"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MX"
+    },
+    "primaryKey": {
+      "ID": "E9C39D00-5662-4B4D-93EB-3D0A6E14357F"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:36.418Z",
+      "checksum": "685eb5d2f1d63ae3153f3f835194a5be7c5c3dd9e7a1dcfc1f1759c55fcbeed7"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "MX",
       "Name": "Guerrero",
       "Code": "GRO",
       "ISO3166_2": "MX-GRO",
       "Latitude": 17.6667,
-      "Longitude": -100.0,
+      "Longitude": -100,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Guerrero\"]"
+      "CommonAliases": [
+        "Guerrero"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MX"
+    },
+    "primaryKey": {
+      "ID": "85680504-833B-40BC-AF9F-E10E5A4A3D87"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:36.430Z",
+      "checksum": "0363af5156a7e397c233fab2e4879f6ea61d81dd441ff424ecf89b45ce9837fb"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "MX",
       "Name": "Hidalgo",
       "Code": "HID",
       "ISO3166_2": "MX-HID",
       "Latitude": 24.1686,
       "Longitude": -99.3874,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Hidalgo\"]"
+      "CommonAliases": [
+        "Hidalgo"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MX"
+    },
+    "primaryKey": {
+      "ID": "6B958BBF-7946-464A-9D91-10E7B6E37D8A"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:36.443Z",
+      "checksum": "88f0b146334c55704dc0b946ed5bf330ba7b73eeb2826ade381bc5b344827287"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "MX",
       "Name": "Jalisco",
       "Code": "JAL",
       "ISO3166_2": "MX-JAL",
       "Latitude": 20.3333,
       "Longitude": -103.6667,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Jalisco\"]"
+      "CommonAliases": [
+        "Jalisco"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MX"
+    },
+    "primaryKey": {
+      "ID": "3B07BF6B-BE2E-4434-9B80-FB7F0213D216"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:36.457Z",
+      "checksum": "cedf89d55237500a2185f3e3d3490e87ead12e9e9816fd2442bcb53c0679903a"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "MX",
       "Name": "Michoacán de Ocampo",
       "Code": "MIC",
       "ISO3166_2": "MX-MIC",
       "Latitude": 19.2071,
       "Longitude": -101.8781,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Michoac\\u00e1n de Ocampo\"]"
+      "CommonAliases": [
+        "Michoacán de Ocampo"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MX"
+    },
+    "primaryKey": {
+      "ID": "01BA96DB-AED5-4F2D-96C7-1C8DB2F07BEC"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:36.470Z",
+      "checksum": "0d2566592a62929cf0aa6cf4d8053c485e210d5735674a2626fd5d5ef69653ef"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "MX",
       "Name": "Morelos",
       "Code": "MOR",
       "ISO3166_2": "MX-MOR",
       "Latitude": 18.75,
-      "Longitude": -99.0,
+      "Longitude": -99,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Morelos\"]"
+      "CommonAliases": [
+        "Morelos"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MX"
+    },
+    "primaryKey": {
+      "ID": "656334B9-0CBF-4579-AB06-BF07AE0D7E5C"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:36.484Z",
+      "checksum": "4bce6929bdbcf070af8356c64d8eb6951d0c114cf242f48ac0434793c5405bec"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "MX",
       "Name": "Nayarit",
       "Code": "NAY",
       "ISO3166_2": "MX-NAY",
-      "Latitude": 22.0,
-      "Longitude": -105.0,
+      "Latitude": 22,
+      "Longitude": -105,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Nayarit\"]"
+      "CommonAliases": [
+        "Nayarit"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MX"
+    },
+    "primaryKey": {
+      "ID": "CCECE149-963C-46F3-B6D5-B1E2D1BD7683"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:36.499Z",
+      "checksum": "904a97c1643ee6e6eb2de76eb43d2bdc4fa90ffd10fedc787466d5356f7ba305"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "MX",
       "Name": "Nuevo León",
       "Code": "NLE",
       "ISO3166_2": "MX-NLE",
       "Latitude": 26.2384,
       "Longitude": -99.8873,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Nuevo Le\\u00f3n\"]"
+      "CommonAliases": [
+        "Nuevo León"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MX"
+    },
+    "primaryKey": {
+      "ID": "5717E11E-19F0-4AF2-9DA2-76819DAF8A8C"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:36.513Z",
+      "checksum": "4f6dfa826200cfd014c21c34ba42c738e8548d5ef3316c6fa0cb6374884659e9"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "MX",
       "Name": "Oaxaca",
       "Code": "OAX",
       "ISO3166_2": "MX-OAX",
-      "Latitude": 17.0,
+      "Latitude": 17,
       "Longitude": -96.5,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Oaxaca\"]"
+      "CommonAliases": [
+        "Oaxaca"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MX"
+    },
+    "primaryKey": {
+      "ID": "4B780690-EA30-420C-9C67-F515139C7B4A"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:36.526Z",
+      "checksum": "c3fd1cbd90af306244220158ced250472fc637c316a5a96c0bb1abf78c859f88"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "MX",
       "Name": "Puebla",
       "Code": "PUE",
       "ISO3166_2": "MX-PUE",
       "Latitude": 19.0414,
       "Longitude": -98.2063,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Puebla\"]"
+      "CommonAliases": [
+        "Puebla"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MX"
+    },
+    "primaryKey": {
+      "ID": "DF0230AA-48C2-4500-8200-53B20121405D"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:36.555Z",
+      "checksum": "a0490c930dfa3a89e8dad643ebbf75675c7198187c6020ef31c77ff54b282923"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "MX",
       "Name": "Querétaro",
       "Code": "QUE",
       "ISO3166_2": "MX-QUE",
       "Latitude": 20.5888,
       "Longitude": -100.3899,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Quer\\u00e9taro\"]"
+      "CommonAliases": [
+        "Querétaro"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MX"
+    },
+    "primaryKey": {
+      "ID": "212C3357-FB5E-4953-805C-E70E0D514FAE"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:36.570Z",
+      "checksum": "69f7f3eddc0ec95cdf1c3aba7965bb55e9544e28c31a2cabf758f160b6cca89e"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "MX",
       "Name": "Quintana Roo",
       "Code": "ROO",
       "ISO3166_2": "MX-ROO",
       "Latitude": 19.6667,
       "Longitude": -88.5,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Quintana Roo\"]"
+      "CommonAliases": [
+        "Quintana Roo"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MX"
+    },
+    "primaryKey": {
+      "ID": "09AE4EB5-4608-4F59-A1FD-BA2D09A232A1"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:36.583Z",
+      "checksum": "c472cf7581f6e58e30868266ab575081e87498d6dbd66ec0ea7d8f53e3261c44"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "MX",
       "Name": "San Luis Potosí",
       "Code": "SLP",
       "ISO3166_2": "MX-SLP",
       "Latitude": 22.1516,
       "Longitude": -100.9764,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"San Luis Potos\\u00ed\"]"
+      "CommonAliases": [
+        "San Luis Potosí"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MX"
+    },
+    "primaryKey": {
+      "ID": "ECF53F40-18EA-4119-A297-25E75E087E4B"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:36.595Z",
+      "checksum": "9e8689de73b9428eed3c4f4501dc3f44a4454dbc9dba9571572f038695ca8d67"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "MX",
       "Name": "Sinaloa",
       "Code": "SIN",
       "ISO3166_2": "MX-SIN",
-      "Latitude": 25.0,
+      "Latitude": 25,
       "Longitude": -107.5,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Sinaloa\"]"
+      "CommonAliases": [
+        "Sinaloa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MX"
+    },
+    "primaryKey": {
+      "ID": "C9F7C92B-7A6C-49CF-845F-5246F79DC430"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:36.607Z",
+      "checksum": "d318d14d05937b8a1d3b9427aad9406ebd6c490f35152d075faf63ea369f89aa"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "MX",
       "Name": "Sonora",
       "Code": "SON",
       "ISO3166_2": "MX-SON",
       "Latitude": 29.3333,
       "Longitude": -110.6667,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Sonora\"]"
+      "CommonAliases": [
+        "Sonora"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MX"
+    },
+    "primaryKey": {
+      "ID": "A7C94301-7172-44F3-B731-A6EE1A317CCE"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:36.620Z",
+      "checksum": "21abc263cf786e03765da56d62c29d6f4e2427e35733c4afa8792c3de4b1bfcd"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "MX",
       "Name": "Tabasco",
       "Code": "TAB",
       "ISO3166_2": "MX-TAB",
       "Latitude": 17.9999,
       "Longitude": -92.6682,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Tabasco\"]"
+      "CommonAliases": [
+        "Tabasco"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MX"
+    },
+    "primaryKey": {
+      "ID": "E352E57B-838C-4848-A046-79D1683EAE49"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:36.633Z",
+      "checksum": "0c680423f55cbb6ea9963827151efa51887217011b27dffddd45fec3a3b28b1e"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "MX",
       "Name": "Tamaulipas",
       "Code": "TAM",
       "ISO3166_2": "MX-TAM",
       "Latitude": 23.9892,
       "Longitude": -98.7027,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Tamaulipas\"]"
+      "CommonAliases": [
+        "Tamaulipas"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MX"
+    },
+    "primaryKey": {
+      "ID": "26963DC7-547A-4995-82B6-609F54D3577C"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:36.647Z",
+      "checksum": "0f4f747aedc0591200be92dd5a383075f88f9ce266b0d76270411b349bd19f57"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "MX",
       "Name": "Tlaxcala",
       "Code": "TLA",
       "ISO3166_2": "MX-TLA",
       "Latitude": 19.3182,
       "Longitude": -98.2375,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Tlaxcala\"]"
+      "CommonAliases": [
+        "Tlaxcala"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MX"
+    },
+    "primaryKey": {
+      "ID": "54C935B2-8F8F-437E-AC12-E552649F3A83"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:36.660Z",
+      "checksum": "2d1b21abf5be23afeab80ddc5bcb70b1085c74148b1b054f4ee10619a2b7d190"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "MX",
       "Name": "Veracruz de Ignacio de la Llave",
       "Code": "VER",
       "ISO3166_2": "MX-VER",
       "Latitude": 19.3333,
       "Longitude": -96.6667,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Veracruz de Ignacio de la Llave\"]"
+      "CommonAliases": [
+        "Veracruz de Ignacio de la Llave"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MX"
+    },
+    "primaryKey": {
+      "ID": "64AA40EF-22AB-4E1E-A8C7-407EBB2A1372"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:36.671Z",
+      "checksum": "e9e33530030bc7202050cd1f61d899ea011cec6ac2a5dcbdedb908fed7e7dc89"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "MX",
       "Name": "Yucatán",
       "Code": "YUC",
       "ISO3166_2": "MX-YUC",
       "Latitude": 20.6846,
       "Longitude": -88.8756,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Yucat\\u00e1n\"]"
+      "CommonAliases": [
+        "Yucatán"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MX"
+    },
+    "primaryKey": {
+      "ID": "BC5C4D0A-45CA-4259-A155-3ED14D7A1AC4"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:36.691Z",
+      "checksum": "84678b4eabd8d892f8d3144c0f7bc07da72dc043b2759719f0811b0fb4ae4cb3"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "MX",
       "Name": "Zacatecas",
       "Code": "ZAC",
       "ISO3166_2": "MX-ZAC",
       "Latitude": 22.7754,
       "Longitude": -102.5723,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Zacatecas\"]"
+      "CommonAliases": [
+        "Zacatecas"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MX"
+    },
+    "primaryKey": {
+      "ID": "AC0E29A1-90A8-4CB6-8449-3944AC45EF75"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:36.702Z",
+      "checksum": "22b830ed642c106b3a689503983f8d8f2c401b4284dfc13afc8e60f03926744d"
     }
   }
 ]

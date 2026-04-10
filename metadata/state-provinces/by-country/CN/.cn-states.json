@@ -1,410 +1,716 @@
 [
   {
     "fields": {
-      "_CountryISO2": "CN",
       "Name": "Anhui",
       "Code": "AH",
       "ISO3166_2": "CN-AH",
-      "Latitude": 32.0,
-      "Longitude": 117.0,
+      "Latitude": 32,
+      "Longitude": 117,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Anhui\"]"
+      "CommonAliases": [
+        "Anhui"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CN"
+    },
+    "primaryKey": {
+      "ID": "D991584F-06EE-43A5-9653-7FFC7F5E30EB"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:25.522Z",
+      "checksum": "b33a23a701f0a1089e25430b2ba47c3846e45f5db2facbd3e81a6cf43bf36861"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "CN",
       "Name": "Beijing",
       "Code": "BJ",
       "ISO3166_2": "CN-BJ",
       "Latitude": 39.9057,
       "Longitude": 116.3913,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Beijing\"]"
+      "CommonAliases": [
+        "Beijing"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CN"
+    },
+    "primaryKey": {
+      "ID": "E550A03E-5CA0-490E-A400-C7C5666931DA"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:25.535Z",
+      "checksum": "dc0c1adf022f6b7cca14df711d32b7c0c377f125bf969d8e1e29afa0849586aa"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "CN",
       "Name": "Chongqing",
       "Code": "CQ",
       "ISO3166_2": "CN-CQ",
       "Latitude": 30.0552,
       "Longitude": 107.8749,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Chongqing\"]"
+      "CommonAliases": [
+        "Chongqing"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CN"
+    },
+    "primaryKey": {
+      "ID": "92AD2A4B-3958-412D-A5C8-ADD4B048B37D"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:25.547Z",
+      "checksum": "c8ceef89db560e646265bd14ac66097832d6a17e96bdd134f5975407753fd4a4"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "CN",
       "Name": "Fujian",
       "Code": "FJ",
       "ISO3166_2": "CN-FJ",
       "Latitude": 26.1932,
       "Longitude": 118.2209,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Fujian\"]"
+      "CommonAliases": [
+        "Fujian"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CN"
+    },
+    "primaryKey": {
+      "ID": "1B82E0AD-AA99-4192-8454-1AD8EA835136"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:25.559Z",
+      "checksum": "e52e246caae39122d048f7464cab79d4f5a769b1241591414dfad0d1d782b701"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "CN",
       "Name": "Gansu",
       "Code": "GS",
       "ISO3166_2": "CN-GS",
-      "Latitude": 38.0,
-      "Longitude": 102.0,
+      "Latitude": 38,
+      "Longitude": 102,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Gansu\"]"
+      "CommonAliases": [
+        "Gansu"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CN"
+    },
+    "primaryKey": {
+      "ID": "CBD55F3E-7FF6-494B-9E8B-004A8330AD3F"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:25.575Z",
+      "checksum": "cd90c93084c7941e22dc9e9a774082df80f3ec7ab94f257ea9d3e1e3e9cb0846"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "CN",
       "Name": "Guangdong",
       "Code": "GD",
       "ISO3166_2": "CN-GD",
       "Latitude": 23.1358,
       "Longitude": 113.1983,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Guangdong\"]"
+      "CommonAliases": [
+        "Guangdong"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CN"
+    },
+    "primaryKey": {
+      "ID": "4FA68ECD-C518-42B5-B019-B268840DE126"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:25.587Z",
+      "checksum": "b2147f5fdaa018688b53dc95c4cac916360105316d4c0ae087eb27070a57ad21"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "CN",
       "Name": "Guangxi",
       "Code": "GX",
       "ISO3166_2": "CN-GX",
-      "Latitude": 24.0,
-      "Longitude": 109.0,
+      "Latitude": 24,
+      "Longitude": 109,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Guangxi\"]"
+      "CommonAliases": [
+        "Guangxi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CN"
+    },
+    "primaryKey": {
+      "ID": "C843041E-EAB0-42D4-A4F4-5091362435EB"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:25.600Z",
+      "checksum": "74ac6f9b567d57e2442416e5d3a8f49dac3f4399892af0122581c14f1f5f74a3"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "CN",
       "Name": "Guizhou",
       "Code": "GZ",
       "ISO3166_2": "CN-GZ",
-      "Latitude": 27.0,
-      "Longitude": 107.0,
+      "Latitude": 27,
+      "Longitude": 107,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Guizhou\"]"
+      "CommonAliases": [
+        "Guizhou"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CN"
+    },
+    "primaryKey": {
+      "ID": "36A81BFD-9347-4270-8BDB-A0BFBA658C03"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:25.614Z",
+      "checksum": "24ee62ed09f741ea15b956fb9f932ac24c7c2a3cc64f5f1db5b6c7defdad1fd3"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "CN",
       "Name": "Hainan",
       "Code": "HI",
       "ISO3166_2": "CN-HI",
       "Latitude": 19.2,
       "Longitude": 109.6,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Hainan\"]"
+      "CommonAliases": [
+        "Hainan"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CN"
+    },
+    "primaryKey": {
+      "ID": "E594C41E-5852-465F-934E-17EDEA1CF5F1"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:25.627Z",
+      "checksum": "0477579a9b757d7a89678c9fd7a6038e37b021fb6ea80b063a1622bea336c985"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "CN",
       "Name": "Hebei",
       "Code": "HE",
       "ISO3166_2": "CN-HE",
-      "Latitude": 39.0,
-      "Longitude": 116.0,
+      "Latitude": 39,
+      "Longitude": 116,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Hebei\"]"
+      "CommonAliases": [
+        "Hebei"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CN"
+    },
+    "primaryKey": {
+      "ID": "2F329384-88F8-4F14-BC59-56C6F6909DED"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:25.638Z",
+      "checksum": "7ac1b6a21cbe2c0220da44d3c828785cf340a222a881aa26463389648853cfab"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "CN",
       "Name": "Heilongjiang",
       "Code": "HL",
       "ISO3166_2": "CN-HL",
-      "Latitude": 48.0,
-      "Longitude": 128.0,
+      "Latitude": 48,
+      "Longitude": 128,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Heilongjiang\"]"
+      "CommonAliases": [
+        "Heilongjiang"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CN"
+    },
+    "primaryKey": {
+      "ID": "9580DCBC-8625-4154-A8E9-564C97A50935"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:25.668Z",
+      "checksum": "fd4df1ca34dfa5a1ea9d9e102f8dde82b408b5d6d571c6e4a83a98a3d5eaa57f"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "CN",
       "Name": "Henan",
       "Code": "HA",
       "ISO3166_2": "CN-HA",
-      "Latitude": 34.0,
-      "Longitude": 114.0,
+      "Latitude": 34,
+      "Longitude": 114,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Henan\"]"
+      "CommonAliases": [
+        "Henan"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CN"
+    },
+    "primaryKey": {
+      "ID": "08AF9906-33C1-43FE-A9D2-7A88BC5B32B7"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:25.680Z",
+      "checksum": "a27c38afdce204174c30e9b00fd98cc6d4a116bb201e3f3a71f090d81d7c1d75"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "CN",
       "Name": "Hong Kong SAR",
       "Code": "HK",
       "ISO3166_2": "CN-HK",
       "Latitude": 22.3506,
       "Longitude": 114.1849,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Hong Kong SAR\"]"
+      "CommonAliases": [
+        "Hong Kong SAR"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CN"
+    },
+    "primaryKey": {
+      "ID": "83EB2756-A2C4-4EFA-A839-68CF2B543CC9"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:25.693Z",
+      "checksum": "dd56f3171164893b8e25958256cc0e3f135374b782f6072d2413aac557810f83"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "CN",
       "Name": "Hubei",
       "Code": "HB",
       "ISO3166_2": "CN-HB",
-      "Latitude": 31.0,
-      "Longitude": 112.0,
+      "Latitude": 31,
+      "Longitude": 112,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Hubei\"]"
+      "CommonAliases": [
+        "Hubei"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CN"
+    },
+    "primaryKey": {
+      "ID": "4ACCFF56-AD72-4BF9-B680-1E2F0844242B"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:25.707Z",
+      "checksum": "97966345632d8885b731c4ac6ccfe9a93e169772de500a0239fa4800e02a1fc0"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "CN",
       "Name": "Hunan",
       "Code": "HN",
       "ISO3166_2": "CN-HN",
       "Latitude": 27.6662,
       "Longitude": 111.7487,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Hunan\"]"
+      "CommonAliases": [
+        "Hunan"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CN"
+    },
+    "primaryKey": {
+      "ID": "5E923B54-B36A-40C8-BEEA-45DC2BFBB5F9"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:25.720Z",
+      "checksum": "ea34ec71fcea3b89988b291c79845e2e4cc7c50badc008bd1c076bf5a4ec5426"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "CN",
       "Name": "Inner Mongolia",
       "Code": "NM",
       "ISO3166_2": "CN-NM",
       "Latitude": 43.2443,
       "Longitude": 114.3252,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Inner Mongolia\"]"
+      "CommonAliases": [
+        "Inner Mongolia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CN"
+    },
+    "primaryKey": {
+      "ID": "4179DA1A-6C89-4246-896D-3C4B27256B19"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:25.734Z",
+      "checksum": "ca978a7af4c1cb18d7a2e1b099b58b9d4253bec8b22c41e3ac2e55a19554e6db"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "CN",
       "Name": "Jiangsu",
       "Code": "JS",
       "ISO3166_2": "CN-JS",
-      "Latitude": 33.0,
-      "Longitude": 120.0,
+      "Latitude": 33,
+      "Longitude": 120,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Jiangsu\"]"
+      "CommonAliases": [
+        "Jiangsu"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CN"
+    },
+    "primaryKey": {
+      "ID": "18CF8E84-7D49-41AE-8C09-F48B3D4BF04F"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:25.747Z",
+      "checksum": "0e5473a30467e77bd7b024f57ff5979ca7ff39057d7eefd3114e808bf13114e2"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "CN",
       "Name": "Jiangxi",
       "Code": "JX",
       "ISO3166_2": "CN-JX",
-      "Latitude": 28.0,
-      "Longitude": 116.0,
+      "Latitude": 28,
+      "Longitude": 116,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Jiangxi\"]"
+      "CommonAliases": [
+        "Jiangxi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CN"
+    },
+    "primaryKey": {
+      "ID": "A35D8BC4-00CA-42A2-964D-FAE29732DDEC"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:25.760Z",
+      "checksum": "d789d6be88b59a3c202209a2fbafe6fa7c77b950946209dbe0833c98b21dd506"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "CN",
       "Name": "Jilin",
       "Code": "JL",
       "ISO3166_2": "CN-JL",
       "Latitude": 43.8379,
       "Longitude": 126.5496,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Jilin\"]"
+      "CommonAliases": [
+        "Jilin"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CN"
+    },
+    "primaryKey": {
+      "ID": "ACBA1480-F7A6-4071-8E4D-9E8BFF7DF541"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:25.773Z",
+      "checksum": "11c3662d69ee0e3ef7aa1b7ee058d3e85d184ada031810e9593b2a5fb8c065fa"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "CN",
       "Name": "Liaoning",
       "Code": "LN",
       "ISO3166_2": "CN-LN",
       "Latitude": 41.2374,
       "Longitude": 122.9955,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Liaoning\"]"
+      "CommonAliases": [
+        "Liaoning"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CN"
+    },
+    "primaryKey": {
+      "ID": "DAAB51AC-AC0C-400D-A365-D08813441E18"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:25.786Z",
+      "checksum": "d88d90d8becd97374418e068ee7ec84901c17462a53f6bf950ac20aa1c1254da"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "CN",
       "Name": "Macau SAR",
       "Code": "MO",
       "ISO3166_2": "CN-MO",
       "Latitude": 22.3145,
       "Longitude": 113.9472,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Macau SAR\"]"
+      "CommonAliases": [
+        "Macau SAR"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CN"
+    },
+    "primaryKey": {
+      "ID": "8927C581-B15A-4966-9EF7-B8791CCC5C02"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:25.816Z",
+      "checksum": "ba66c16cee26e35daac0e726de2ef66e2a47f7958c93c137fb581efa58dc1deb"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "CN",
       "Name": "Ningxia",
       "Code": "NX",
       "ISO3166_2": "CN-NX",
-      "Latitude": 37.0,
-      "Longitude": 106.0,
+      "Latitude": 37,
+      "Longitude": 106,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Ningxia\"]"
+      "CommonAliases": [
+        "Ningxia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CN"
+    },
+    "primaryKey": {
+      "ID": "6CFA5BA4-1701-4D2D-BDA1-D5B6827EF21C"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:25.828Z",
+      "checksum": "a5578f8a5481a3724e9c78c8cd42c08cc165846e6bf294fee2a803ba94686a6b"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "CN",
       "Name": "Qinghai",
       "Code": "QH",
       "ISO3166_2": "CN-QH",
-      "Latitude": 36.0,
-      "Longitude": 96.0,
+      "Latitude": 36,
+      "Longitude": 96,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Qinghai\"]"
+      "CommonAliases": [
+        "Qinghai"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CN"
+    },
+    "primaryKey": {
+      "ID": "A27323F1-BBAD-42D5-8F64-2B0C34FCC833"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:25.839Z",
+      "checksum": "857e24c4469e15f88d72a510e585e8d8d33a67f9c9041c3385b2524154461084"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "CN",
       "Name": "Shaanxi",
       "Code": "SN",
       "ISO3166_2": "CN-SN",
       "Latitude": 35.5896,
       "Longitude": 109.3013,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Shaanxi\"]"
+      "CommonAliases": [
+        "Shaanxi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CN"
+    },
+    "primaryKey": {
+      "ID": "B5805787-2E66-4A8D-A2DC-E333885E5932"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:25.852Z",
+      "checksum": "ec7977d1ad8b187061588312ee47d7eb3a69b0b064d980047456c0803e0c550b"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "CN",
       "Name": "Shandong",
       "Code": "SD",
       "ISO3166_2": "CN-SD",
       "Latitude": 36.399,
       "Longitude": 118.5056,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Shandong\"]"
+      "CommonAliases": [
+        "Shandong"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CN"
+    },
+    "primaryKey": {
+      "ID": "A0AAC79D-78EF-4AFC-8FCA-D051FB1D6B34"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:25.864Z",
+      "checksum": "0b8060a951775370a4b297e835ed78859f24742ba49bc447110abd5480611c49"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "CN",
       "Name": "Shanghai",
       "Code": "SH",
       "ISO3166_2": "CN-SH",
       "Latitude": 31.2304,
       "Longitude": 121.4737,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Shanghai\"]"
+      "CommonAliases": [
+        "Shanghai"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CN"
+    },
+    "primaryKey": {
+      "ID": "C41A625F-950F-4516-B2C4-9D988923D8E6"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:25.876Z",
+      "checksum": "9d9e4c47b178a0e3e0078341ce2278ac5685084efb3c99861cd3accdbe424731"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "CN",
       "Name": "Shanxi",
       "Code": "SX",
       "ISO3166_2": "CN-SX",
-      "Latitude": 37.0,
-      "Longitude": 112.0,
+      "Latitude": 37,
+      "Longitude": 112,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Shanxi\"]"
+      "CommonAliases": [
+        "Shanxi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CN"
+    },
+    "primaryKey": {
+      "ID": "9E8D7547-9AA6-4A34-98FF-A9DEC70ABD8A"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:25.889Z",
+      "checksum": "3166a72fcf5f69d9a81b3c3336982c69c948111e0e47143a3bd7dd86018168b6"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "CN",
       "Name": "Sichuan",
       "Code": "SC",
       "ISO3166_2": "CN-SC",
       "Latitude": 30.5,
       "Longitude": 102.5,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Sichuan\"]"
+      "CommonAliases": [
+        "Sichuan"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CN"
+    },
+    "primaryKey": {
+      "ID": "C9B9152C-D496-45C6-ADCB-E7E2762F7556"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:25.903Z",
+      "checksum": "db279c92a0488c26ff8e7ce7daf7ee4c9180d636886c96a2f3918a20ca6f6627"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "CN",
       "Name": "Taiwan",
       "Code": "TW",
       "ISO3166_2": "CN-TW",
       "Latitude": 23.9739,
       "Longitude": 120.982,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Taiwan\"]"
+      "CommonAliases": [
+        "Taiwan"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CN"
+    },
+    "primaryKey": {
+      "ID": "4A3D6158-13B2-488F-9417-5B0312E39DA6"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:25.916Z",
+      "checksum": "6bbfa769fc2dab1544e7bd68a1fc47a03d95b591262883f5cdb78b033e97c460"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "CN",
       "Name": "Tianjin",
       "Code": "TJ",
       "ISO3166_2": "CN-TJ",
       "Latitude": 39.0845,
       "Longitude": 117.1957,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Tianjin\"]"
+      "CommonAliases": [
+        "Tianjin"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CN"
+    },
+    "primaryKey": {
+      "ID": "62FCC19F-D3C3-4AD7-8606-812EC6767845"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:25.927Z",
+      "checksum": "09a536b526fc3820f2c64d4acf1019257d33712cfd3bf77138960f3c393f71df"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "CN",
       "Name": "Tibet",
       "Code": "XZ",
       "ISO3166_2": "CN-XZ",
       "Latitude": 29.8556,
       "Longitude": 90.875,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Tibet\"]"
+      "CommonAliases": [
+        "Tibet"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CN"
+    },
+    "primaryKey": {
+      "ID": "75FE7B40-E809-4A22-948D-A69E332FB9D7"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:25.951Z",
+      "checksum": "d024c8666390817a0ebfedd4767632875d4498953ee245d4e1a17f4eb17807fc"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "CN",
       "Name": "Xinjiang",
       "Code": "XJ",
       "ISO3166_2": "CN-XJ",
       "Latitude": 42.4805,
       "Longitude": 85.4633,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Xinjiang\"]"
+      "CommonAliases": [
+        "Xinjiang"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CN"
+    },
+    "primaryKey": {
+      "ID": "FB933C6C-BF88-4C97-98FC-6FB72F541239"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:25.964Z",
+      "checksum": "04b0eef69997a64fd5fed8f5b45f8b1c49e58248ca3915e38801b5dba4bfadce"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "CN",
       "Name": "Yunnan",
       "Code": "YN",
       "ISO3166_2": "CN-YN",
-      "Latitude": 25.0,
-      "Longitude": 102.0,
+      "Latitude": 25,
+      "Longitude": 102,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Yunnan\"]"
+      "CommonAliases": [
+        "Yunnan"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CN"
+    },
+    "primaryKey": {
+      "ID": "E0A9AE55-7305-4429-B837-614562A9D585"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:25.977Z",
+      "checksum": "72f35c29261df7fe638f34904649cfa4104637944536d880b8e2d9b130a3308b"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "CN",
       "Name": "Zhejiang",
       "Code": "ZJ",
       "ISO3166_2": "CN-ZJ",
-      "Latitude": 29.0,
-      "Longitude": 120.0,
+      "Latitude": 29,
+      "Longitude": 120,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Zhejiang\"]"
+      "CommonAliases": [
+        "Zhejiang"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CN"
+    },
+    "primaryKey": {
+      "ID": "11A4CF83-5A17-4558-8658-AA32B28A936C"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:25.989Z",
+      "checksum": "1862e53259112358ad833aa7ebaa2b58bcb08b38e29e80ff07108190b78c8868"
     }
   }
 ]

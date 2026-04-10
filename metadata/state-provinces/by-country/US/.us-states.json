@@ -1,686 +1,1199 @@
 [
   {
     "fields": {
-      "_CountryISO2": "US",
       "Name": "Alabama",
       "Code": "AL",
       "ISO3166_2": "US-AL",
       "Latitude": 33.2589,
       "Longitude": -86.8295,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Alabama\"]"
+      "CommonAliases": [
+        "Alabama"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=US"
+    },
+    "primaryKey": {
+      "ID": "ED839A39-123A-4AD2-B26A-FE0F1C744B71"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:39.102Z",
+      "checksum": "f2d4d17d903ea4e68b11ad41716feaa84359d7b64c8eb9be9404d4892ee1f057"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "US",
       "Name": "Alaska",
       "Code": "AK",
       "ISO3166_2": "US-AK",
       "Latitude": 64.446,
       "Longitude": -149.6809,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Alaska\"]"
+      "CommonAliases": [
+        "Alaska"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=US"
+    },
+    "primaryKey": {
+      "ID": "CA3C562E-D35C-45A3-83BD-342FF48FF5DD"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:39.115Z",
+      "checksum": "154bbf9c52ad2e95d700d1b30c52a2c776ff999ece97d3217e0352a8208351a0"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "US",
       "Name": "American Samoa",
       "Code": "AS",
       "ISO3166_2": "US-AS",
       "Latitude": -14.2971,
       "Longitude": -170.7131,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"American Samoa\"]"
+      "CommonAliases": [
+        "American Samoa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=US"
+    },
+    "primaryKey": {
+      "ID": "C157B3A3-939E-4067-B487-39D564E1199C"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:39.126Z",
+      "checksum": "5c38bd44d3389d58edf0fb6ec701935b42437e9922b6baa83172e362d9b8b406"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "US",
       "Name": "Arizona",
       "Code": "AZ",
       "ISO3166_2": "US-AZ",
       "Latitude": 34.3953,
       "Longitude": -111.7633,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Arizona\"]"
+      "CommonAliases": [
+        "Arizona"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=US"
+    },
+    "primaryKey": {
+      "ID": "E96C3F25-FED6-496E-A5B0-123741135A2C"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:39.138Z",
+      "checksum": "9060c49a781e2c0399242027432f6390e78d14a216c48aaf0aadb6d3f93934ba"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "US",
       "Name": "Arkansas",
       "Code": "AR",
       "ISO3166_2": "US-AR",
       "Latitude": 35.2049,
       "Longitude": -92.4479,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Arkansas\"]"
+      "CommonAliases": [
+        "Arkansas"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=US"
+    },
+    "primaryKey": {
+      "ID": "6BE68C9F-12CB-44A2-B23B-D7564A93FDDA"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:39.150Z",
+      "checksum": "66d0e509e33e73eb8e3f75a66bec33d4a2018386be139761f073c4a29602dbcf"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "US",
       "Name": "California",
       "Code": "CA",
       "ISO3166_2": "US-CA",
       "Latitude": 36.7015,
       "Longitude": -118.756,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"California\"]"
+      "CommonAliases": [
+        "California"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=US"
+    },
+    "primaryKey": {
+      "ID": "8DBB5767-C447-489E-8D82-6E218074C49A"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:39.164Z",
+      "checksum": "c6566296365952a94d1ac6cac076c3bfc61859b0388e0d55e4db40a09b5740cf"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "US",
       "Name": "Colorado",
       "Code": "CO",
       "ISO3166_2": "US-CO",
       "Latitude": 38.7252,
       "Longitude": -105.6077,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Colorado\"]"
+      "CommonAliases": [
+        "Colorado"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=US"
+    },
+    "primaryKey": {
+      "ID": "F3F80137-60B0-4CED-859A-BB93E810AF59"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:39.175Z",
+      "checksum": "64063be2b45bc4f50a24a7b49c4dc1ef41ac1d0ffbf5398efd0d7103b16774d8"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "US",
       "Name": "Connecticut",
       "Code": "CT",
       "ISO3166_2": "US-CT",
       "Latitude": 41.65,
       "Longitude": -72.7342,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Connecticut\"]"
+      "CommonAliases": [
+        "Connecticut"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=US"
+    },
+    "primaryKey": {
+      "ID": "E54E41AE-F7B9-4FA4-9669-D5DEEC8A219C"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:39.188Z",
+      "checksum": "a8f20890e64bbfeeeff2f9ce38ef27a6d8b536c764489321c26dcce700f097c4"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "US",
       "Name": "Delaware",
       "Code": "DE",
       "ISO3166_2": "US-DE",
       "Latitude": 38.692,
       "Longitude": -75.4013,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Delaware\"]"
+      "CommonAliases": [
+        "Delaware"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=US"
+    },
+    "primaryKey": {
+      "ID": "337A9666-9440-4EC8-BAD5-A2C8522F0B35"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:39.200Z",
+      "checksum": "6ddda7a73440423ed5af8d7953716f581fac39c641622208f2c090a2b1a5e301"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "US",
       "Name": "District of Columbia",
       "Code": "DC",
       "ISO3166_2": "US-DC",
       "Latitude": 38.895,
       "Longitude": -77.0365,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"District of Columbia\"]"
+      "CommonAliases": [
+        "District of Columbia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=US"
+    },
+    "primaryKey": {
+      "ID": "E9BFE193-73E7-45B0-9037-2A3629077579"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:39.212Z",
+      "checksum": "0d0797d614bbf8fc195f7b35a2606efd74831883a34079deef0492138fd8c1e1"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "US",
       "Name": "Florida",
       "Code": "FL",
       "ISO3166_2": "US-FL",
       "Latitude": 27.7568,
       "Longitude": -81.464,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Florida\"]"
+      "CommonAliases": [
+        "Florida"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=US"
+    },
+    "primaryKey": {
+      "ID": "54B7930D-F3BD-4F89-812A-9FE8AAA8633E"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:39.238Z",
+      "checksum": "0664bc8bcfd0bcf1822be62ce59ccbadac41d2a961d06eb568e570596eca147b"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "US",
       "Name": "Georgia",
       "Code": "GA",
       "ISO3166_2": "US-GA",
       "Latitude": 32.3294,
       "Longitude": -83.1137,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Georgia\"]"
+      "CommonAliases": [
+        "Georgia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=US"
+    },
+    "primaryKey": {
+      "ID": "A9681959-8EF3-4814-A1BF-E7EECC717735"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:39.251Z",
+      "checksum": "853b4d9f87e5356cd90aede75a73d37600f4e13760be6fbee0565242a8720857"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "US",
       "Name": "Guam",
       "Code": "GU",
       "ISO3166_2": "US-GU",
       "Latitude": 13.45,
       "Longitude": 144.7652,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Guam\"]"
+      "CommonAliases": [
+        "Guam"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=US"
+    },
+    "primaryKey": {
+      "ID": "00D3CAE9-5A11-42D2-A8DF-C0694AE85BA9"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:39.263Z",
+      "checksum": "55f476c802aeb3d31be214f3dc0b846ae77222214979d69ef842b99bc29ab275"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "US",
       "Name": "Hawaii",
       "Code": "HI",
       "ISO3166_2": "US-HI",
       "Latitude": 19.6273,
       "Longitude": -155.5646,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Hawaii\"]"
+      "CommonAliases": [
+        "Hawaii"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=US"
+    },
+    "primaryKey": {
+      "ID": "5CF644FD-A24F-48C3-9B06-485C4BD095F4"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:39.275Z",
+      "checksum": "d679c375c368e27d37590c79c950cd59f459807b90e57c351ecf7c2737b3f3d0"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "US",
       "Name": "Idaho",
       "Code": "ID",
       "ISO3166_2": "US-ID",
       "Latitude": 43.6448,
       "Longitude": -114.0154,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Idaho\"]"
+      "CommonAliases": [
+        "Idaho"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=US"
+    },
+    "primaryKey": {
+      "ID": "BEDCBB4C-CD66-4829-9930-FFCE401AC253"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:39.288Z",
+      "checksum": "8cffc421d3ac203384d81c986001bafcb8544724b53d1517570782f5f21f7a40"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "US",
       "Name": "Illinois",
       "Code": "IL",
       "ISO3166_2": "US-IL",
       "Latitude": 40.0797,
       "Longitude": -89.4337,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Illinois\"]"
+      "CommonAliases": [
+        "Illinois"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=US"
+    },
+    "primaryKey": {
+      "ID": "00871753-573B-40A0-BA19-2476B42F84DD"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:39.299Z",
+      "checksum": "79dbd160728aebb8025c322474c8206989fed4748f4f0a32d19e0b96b8fd584c"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "US",
       "Name": "Indiana",
       "Code": "IN",
       "ISO3166_2": "US-IN",
       "Latitude": 40.327,
       "Longitude": -86.1747,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Indiana\"]"
+      "CommonAliases": [
+        "Indiana"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=US"
+    },
+    "primaryKey": {
+      "ID": "1DB0AF30-C56F-4838-B86E-9F21B441A583"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:39.311Z",
+      "checksum": "46955a0760388b3b8ef6414fc7633081c1ef4d38cfdd1b10f52dbf3b306bc0ed"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "US",
       "Name": "Iowa",
       "Code": "IA",
       "ISO3166_2": "US-IA",
       "Latitude": 41.9217,
       "Longitude": -93.3123,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Iowa\"]"
+      "CommonAliases": [
+        "Iowa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=US"
+    },
+    "primaryKey": {
+      "ID": "B457B86E-8414-406F-9E24-E638550A3FEA"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:39.324Z",
+      "checksum": "63c23c450e92a3f3202e335b504e2b73a0548355a824854fd9d2462a096dfa18"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "US",
       "Name": "Kansas",
       "Code": "KS",
       "ISO3166_2": "US-KS",
       "Latitude": 38.2731,
       "Longitude": -98.5822,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Kansas\"]"
+      "CommonAliases": [
+        "Kansas"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=US"
+    },
+    "primaryKey": {
+      "ID": "CF4CB105-D38B-4866-BE52-20D123384BE2"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:39.335Z",
+      "checksum": "9d4ad0c06a31e35a1722d6070f518c866da402649d354e133ca8727f1c0990e8"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "US",
       "Name": "Kentucky",
       "Code": "KY",
       "ISO3166_2": "US-KY",
       "Latitude": 37.5726,
       "Longitude": -85.1551,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Kentucky\"]"
+      "CommonAliases": [
+        "Kentucky"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=US"
+    },
+    "primaryKey": {
+      "ID": "6086FBF8-270E-4B27-A52A-3D6AB09E3F27"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:39.347Z",
+      "checksum": "beba741ffa90fd1ad22f4ebe0a80d3256afd67cccb999c57d982e631d5ca5bac"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "US",
       "Name": "Louisiana",
       "Code": "LA",
       "ISO3166_2": "US-LA",
       "Latitude": 30.8704,
       "Longitude": -92.0071,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Louisiana\"]"
+      "CommonAliases": [
+        "Louisiana"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=US"
+    },
+    "primaryKey": {
+      "ID": "7906167B-C007-497A-BBB7-296B71309C50"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:39.376Z",
+      "checksum": "36791722c7463402f49a4113d2e04965f0bdb34bea89ecd0dd9d105ada26a888"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "US",
       "Name": "Maine",
       "Code": "ME",
       "ISO3166_2": "US-ME",
       "Latitude": 45.7091,
       "Longitude": -68.859,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Maine\"]"
+      "CommonAliases": [
+        "Maine"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=US"
+    },
+    "primaryKey": {
+      "ID": "E5275888-A26F-4F01-9962-1E19D98F4AA1"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:39.390Z",
+      "checksum": "31b1af322e86b535ed3b5c4845cdb4b65a1d91c29e1f2d6eacad0c6b17eb9bb3"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "US",
       "Name": "Maryland",
       "Code": "MD",
       "ISO3166_2": "US-MD",
       "Latitude": 39.5162,
       "Longitude": -76.9382,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Maryland\"]"
+      "CommonAliases": [
+        "Maryland"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=US"
+    },
+    "primaryKey": {
+      "ID": "C9BAB700-DE86-4D71-BFBC-30D80050B615"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:39.406Z",
+      "checksum": "8964baa95295d0e5e41c8a4fc89ff12663ec7d275b46bf6225b150f5b3e4a281"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "US",
       "Name": "Massachusetts",
       "Code": "MA",
       "ISO3166_2": "US-MA",
       "Latitude": 42.3789,
       "Longitude": -72.0324,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Massachusetts\"]"
+      "CommonAliases": [
+        "Massachusetts"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=US"
+    },
+    "primaryKey": {
+      "ID": "25BC30FC-99ED-4FFD-AA67-25078EC66957"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:39.422Z",
+      "checksum": "086e8a1be869cfa65228f74074b130893c8540bdfef92c44fbe35e52354ba86f"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "US",
       "Name": "Michigan",
       "Code": "MI",
       "ISO3166_2": "US-MI",
       "Latitude": 43.6212,
       "Longitude": -84.6824,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Michigan\"]"
+      "CommonAliases": [
+        "Michigan"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=US"
+    },
+    "primaryKey": {
+      "ID": "5A4B92F7-3227-4DB8-ABAC-A8B2946368D4"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:39.436Z",
+      "checksum": "0aed7a1310c4b6210c043bb308d026872a86cecca9669a9a256e6cd44c4ec654"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "US",
       "Name": "Minnesota",
       "Code": "MN",
       "ISO3166_2": "US-MN",
       "Latitude": 45.9897,
       "Longitude": -94.6113,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Minnesota\"]"
+      "CommonAliases": [
+        "Minnesota"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=US"
+    },
+    "primaryKey": {
+      "ID": "F0AF7ECF-4EB9-43F6-9A33-150FB6A29136"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:39.449Z",
+      "checksum": "cff6a2770d233eda9b41a54a6e4d37801183b975cf0030fec400c05cc70520ea"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "US",
       "Name": "Mississippi",
       "Code": "MS",
       "ISO3166_2": "US-MS",
       "Latitude": 32.9715,
       "Longitude": -89.7348,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Mississippi\"]"
+      "CommonAliases": [
+        "Mississippi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=US"
+    },
+    "primaryKey": {
+      "ID": "2746677B-2369-4FEF-9B96-6EC132054D0B"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:39.463Z",
+      "checksum": "b91fbd6d62f5ea8ad0f1ea60fd6ddba6d6782d5d2be0964862b9fa8c97b50d28"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "US",
       "Name": "Missouri",
       "Code": "MO",
       "ISO3166_2": "US-MO",
       "Latitude": 38.7605,
       "Longitude": -92.5618,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Missouri\"]"
+      "CommonAliases": [
+        "Missouri"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=US"
+    },
+    "primaryKey": {
+      "ID": "29D2BE52-9DC7-437E-B415-C8344CBCDA22"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:39.476Z",
+      "checksum": "c3eadd8dc7c7f116102a87c2aa3b5b8271207b0fa044f43af3ce42693b382af3"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "US",
       "Name": "Montana",
       "Code": "MT",
       "ISO3166_2": "US-MT",
       "Latitude": 47.3753,
       "Longitude": -109.6388,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Montana\"]"
+      "CommonAliases": [
+        "Montana"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=US"
+    },
+    "primaryKey": {
+      "ID": "C762E8F5-1E56-494C-94A0-49A9FC303AEB"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:39.491Z",
+      "checksum": "fe494ba7efd78433b40c5fbd7bc017f91726af9dc108c6d57e361a21c9e9b100"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "US",
       "Name": "Nebraska",
       "Code": "NE",
       "ISO3166_2": "US-NE",
       "Latitude": 41.737,
       "Longitude": -99.5874,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Nebraska\"]"
+      "CommonAliases": [
+        "Nebraska"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=US"
+    },
+    "primaryKey": {
+      "ID": "D7B48043-18B3-4EE6-9649-3FFA813D77E6"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:39.503Z",
+      "checksum": "c1eb12350a2c4f13a908dd898b97d2a93a52e07a7dab11c55178a5142293fa73"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "US",
       "Name": "Nevada",
       "Code": "NV",
       "ISO3166_2": "US-NV",
       "Latitude": 39.5159,
       "Longitude": -116.8537,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Nevada\"]"
+      "CommonAliases": [
+        "Nevada"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=US"
+    },
+    "primaryKey": {
+      "ID": "CD6827A3-D082-43CC-B76C-0BA113982D46"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:39.529Z",
+      "checksum": "6d0cbf65c675fc31931655d293ca11966bf8b78a4a25e592cef0db3dd9d014fd"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "US",
       "Name": "New Hampshire",
       "Code": "NH",
       "ISO3166_2": "US-NH",
       "Latitude": 43.4849,
       "Longitude": -71.6554,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"New Hampshire\"]"
+      "CommonAliases": [
+        "New Hampshire"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=US"
+    },
+    "primaryKey": {
+      "ID": "5B568EBA-2374-4A0B-83A4-C1C09EC7E9E4"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:39.540Z",
+      "checksum": "6b262369ef5f8d2f3b9eaf028f3466124d5eb79eb44ed39207e25411f22f1aaf"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "US",
       "Name": "New Jersey",
       "Code": "NJ",
       "ISO3166_2": "US-NJ",
       "Latitude": 40.0757,
       "Longitude": -74.4042,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"New Jersey\"]"
+      "CommonAliases": [
+        "New Jersey"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=US"
+    },
+    "primaryKey": {
+      "ID": "1D63D0EB-129C-4A8D-BEBB-7CBC4132792D"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:39.554Z",
+      "checksum": "00c1858eb1535cbd2c042f25ed9b14a915731200522b2e7a6d31ba5aefc02f2f"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "US",
       "Name": "New Mexico",
       "Code": "NM",
       "ISO3166_2": "US-NM",
       "Latitude": 34.5802,
       "Longitude": -105.996,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"New Mexico\"]"
+      "CommonAliases": [
+        "New Mexico"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=US"
+    },
+    "primaryKey": {
+      "ID": "C3220E74-DAC5-4060-9896-E1DA1542E89D"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:39.566Z",
+      "checksum": "a7a9f28aab68f2617e6ae9c6e06db04bafe00c8fd4401bb4805f74fea71f244e"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "US",
       "Name": "New York",
       "Code": "NY",
       "ISO3166_2": "US-NY",
       "Latitude": 40.7128,
       "Longitude": -74.006,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"New York\"]"
+      "CommonAliases": [
+        "New York"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=US"
+    },
+    "primaryKey": {
+      "ID": "E56517D1-B1A3-422C-9499-34666CD67B78"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:39.578Z",
+      "checksum": "50d30961c972d1d7200f3e2052c7cef1f85464c5e9ecf8c26751af2f018e91a4"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "US",
       "Name": "North Carolina",
       "Code": "NC",
       "ISO3166_2": "US-NC",
       "Latitude": 35.673,
       "Longitude": -79.0393,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"North Carolina\"]"
+      "CommonAliases": [
+        "North Carolina"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=US"
+    },
+    "primaryKey": {
+      "ID": "A93E3197-9B28-4439-82B9-419CC251FE02"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:39.589Z",
+      "checksum": "6112f08f3c137c874e63ddc40d08d2d804c2096de9ea8333866181bfa52f07c2"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "US",
       "Name": "North Dakota",
       "Code": "ND",
       "ISO3166_2": "US-ND",
       "Latitude": 47.6201,
       "Longitude": -100.5407,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"North Dakota\"]"
+      "CommonAliases": [
+        "North Dakota"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=US"
+    },
+    "primaryKey": {
+      "ID": "81D1BD58-1620-4A1E-AA76-2A6DA4C582C3"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:39.602Z",
+      "checksum": "7645fe5b6e9df6784e5c57373e0644ffd0a66f2c70a823b5490b5d68d3095c1b"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "US",
       "Name": "Northern Mariana Islands",
       "Code": "MP",
       "ISO3166_2": "US-MP",
       "Latitude": 15.1754,
       "Longitude": 145.7379,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Northern Mariana Islands\"]"
+      "CommonAliases": [
+        "Northern Mariana Islands"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=US"
+    },
+    "primaryKey": {
+      "ID": "82815277-995F-477F-B12E-876FFD639746"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:39.615Z",
+      "checksum": "a6d91845c07cb81fc83a850e28e80023232d503402766acbc598a08ef768ad2b"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "US",
       "Name": "Ohio",
       "Code": "OH",
       "ISO3166_2": "US-OH",
       "Latitude": 40.2254,
       "Longitude": -82.6881,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Ohio\"]"
+      "CommonAliases": [
+        "Ohio"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=US"
+    },
+    "primaryKey": {
+      "ID": "62834716-A192-4490-854D-819033F34993"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:39.627Z",
+      "checksum": "344cdf2930ce13c925147822a0e5d929cf231e99ff05579d4539c529572286aa"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "US",
       "Name": "Oklahoma",
       "Code": "OK",
       "ISO3166_2": "US-OK",
       "Latitude": 35.5545,
       "Longitude": -97.4366,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Oklahoma\"]"
+      "CommonAliases": [
+        "Oklahoma"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=US"
+    },
+    "primaryKey": {
+      "ID": "15A419F2-D33C-4AC2-8E42-2278A875721D"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:39.639Z",
+      "checksum": "61e0a7e184b31f5b33da782aefb7e3ae30803f1596ee581675992c7db6b688e5"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "US",
       "Name": "Oregon",
       "Code": "OR",
       "ISO3166_2": "US-OR",
       "Latitude": 43.9793,
       "Longitude": -120.7373,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Oregon\"]"
+      "CommonAliases": [
+        "Oregon"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=US"
+    },
+    "primaryKey": {
+      "ID": "9C9AD535-626A-450D-959C-53173DA662BF"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:39.668Z",
+      "checksum": "8a03fb8361be54db2601161c89e25c28ef8bba15578861bda03a8229778279e5"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "US",
       "Name": "Pennsylvania",
       "Code": "PA",
       "ISO3166_2": "US-PA",
       "Latitude": 40.97,
       "Longitude": -77.7279,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Pennsylvania\"]"
+      "CommonAliases": [
+        "Pennsylvania"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=US"
+    },
+    "primaryKey": {
+      "ID": "002DD2C4-A51C-41FF-B2BC-29501E2B0183"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:39.681Z",
+      "checksum": "fd98c65c02790a88c392a2c7ed98061f56357b80ce0a8dd48c6e5598119f8cd3"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "US",
       "Name": "Puerto Rico",
       "Code": "PR",
       "ISO3166_2": "US-PR",
       "Latitude": 18.2248,
       "Longitude": -66.4858,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Puerto Rico\"]"
+      "CommonAliases": [
+        "Puerto Rico"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=US"
+    },
+    "primaryKey": {
+      "ID": "DA5206A2-16A3-45BC-A07E-EE76497316F1"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:39.692Z",
+      "checksum": "0278261642ec9ac6d02352785e6be631bb1617cae10a5279646871481219a1e3"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "US",
       "Name": "Rhode Island",
       "Code": "RI",
       "ISO3166_2": "US-RI",
       "Latitude": 41.7962,
       "Longitude": -71.5992,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Rhode Island\"]"
+      "CommonAliases": [
+        "Rhode Island"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=US"
+    },
+    "primaryKey": {
+      "ID": "F375D8F9-4450-40A6-8A1A-630FB8D70EC8"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:39.703Z",
+      "checksum": "956a7ffbf7dd65a63eb24aab21298afe93eb07fa14fbdfbe1de9242e2b6f06cd"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "US",
       "Name": "South Carolina",
       "Code": "SC",
       "ISO3166_2": "US-SC",
       "Latitude": 33.6874,
       "Longitude": -80.4364,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"South Carolina\"]"
+      "CommonAliases": [
+        "South Carolina"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=US"
+    },
+    "primaryKey": {
+      "ID": "58DE561E-4D18-4783-A4BC-5FF980CE21FB"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:39.716Z",
+      "checksum": "238c9aad92b2446ae4c58b43a28451968e4d9ee442916d340e2a9a4d76b154d3"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "US",
       "Name": "South Dakota",
       "Code": "SD",
       "ISO3166_2": "US-SD",
       "Latitude": 44.6472,
       "Longitude": -100.3488,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"South Dakota\"]"
+      "CommonAliases": [
+        "South Dakota"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=US"
+    },
+    "primaryKey": {
+      "ID": "647FBC1D-FF97-4B02-90DD-2376A303670F"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:39.732Z",
+      "checksum": "c649a5b17af7f7d08a4579ed27fbcc19ff23bf7359e2fbfbb90d3f48e51cce7c"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "US",
       "Name": "Tennessee",
       "Code": "TN",
       "ISO3166_2": "US-TN",
       "Latitude": 35.773,
       "Longitude": -86.282,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Tennessee\"]"
+      "CommonAliases": [
+        "Tennessee"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=US"
+    },
+    "primaryKey": {
+      "ID": "6DB9BFC8-447A-4919-8664-CCB7DD2805CE"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:39.747Z",
+      "checksum": "2890908d1ae591dafdbbea9a059a7a4677c9d473112b080d4f6f341ff2f20254"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "US",
       "Name": "Texas",
       "Code": "TX",
       "ISO3166_2": "US-TX",
       "Latitude": 31.2639,
       "Longitude": -98.5456,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Texas\"]"
+      "CommonAliases": [
+        "Texas"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=US"
+    },
+    "primaryKey": {
+      "ID": "50893346-F482-4A80-9864-49D8D3E04337"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:39.760Z",
+      "checksum": "75d0c64cb61b05e2a9dfef22032c3975a64f908e4892a9ae52931ef0204b728a"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "US",
       "Name": "United States Minor Outlying Islands",
       "Code": "UM",
       "ISO3166_2": "US-UM",
       "Latitude": 28.2361,
       "Longitude": -177.3686,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"United States Minor Outlying Islands\"]"
+      "CommonAliases": [
+        "United States Minor Outlying Islands"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=US"
+    },
+    "primaryKey": {
+      "ID": "5BA2356F-FB22-4112-BB7A-D5AC258A5EC9"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:39.774Z",
+      "checksum": "303a6fbef610af2e351adaf74a98a0471ed87cd28da18e0d1ee3c5745940af5c"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "US",
       "Name": "United States Virgin Islands",
       "Code": "VI",
       "ISO3166_2": "US-VI",
       "Latitude": 17.7892,
       "Longitude": -64.7081,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"United States Virgin Islands\"]"
+      "CommonAliases": [
+        "United States Virgin Islands"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=US"
+    },
+    "primaryKey": {
+      "ID": "784D8118-2E2C-461B-9734-9CFDDDFD6E6F"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:39.784Z",
+      "checksum": "9b91c811b972a07daf940288b0d29b4308e59dea050c86b810fe840d96f4dcf3"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "US",
       "Name": "Utah",
       "Code": "UT",
       "ISO3166_2": "US-UT",
       "Latitude": 39.4225,
       "Longitude": -111.7144,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Utah\"]"
+      "CommonAliases": [
+        "Utah"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=US"
+    },
+    "primaryKey": {
+      "ID": "782417DE-33D0-4BE3-9234-FF897F0D9AB0"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:39.813Z",
+      "checksum": "9488f19c363501d3bab53210587633f9a02b4a095f7d5f1f8e0c1e6aa38154d1"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "US",
       "Name": "Vermont",
       "Code": "VT",
       "ISO3166_2": "US-VT",
       "Latitude": 44.5991,
       "Longitude": -72.5003,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Vermont\"]"
+      "CommonAliases": [
+        "Vermont"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=US"
+    },
+    "primaryKey": {
+      "ID": "B7B49935-3736-4300-A304-A8DEB9F77081"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:39.825Z",
+      "checksum": "abb81673b410bc6e0064869e1d2637c021ad681eff5b6f3fa29f7b94083bd603"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "US",
       "Name": "Virginia",
       "Code": "VA",
       "ISO3166_2": "US-VA",
       "Latitude": 37.1232,
       "Longitude": -78.4928,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Virginia\"]"
+      "CommonAliases": [
+        "Virginia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=US"
+    },
+    "primaryKey": {
+      "ID": "77C10574-94B4-4866-9C2C-87F9867AC492"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:39.837Z",
+      "checksum": "9f26d443f38c464b47a961c2d06c916a1659b8d3559552460c13153c9b0108fa"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "US",
       "Name": "Washington",
       "Code": "WA",
       "ISO3166_2": "US-WA",
       "Latitude": 47.2868,
       "Longitude": -120.2126,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Washington\"]"
+      "CommonAliases": [
+        "Washington"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=US"
+    },
+    "primaryKey": {
+      "ID": "E6A10599-DEF9-4DFA-BF19-C255A448FAEA"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:39.850Z",
+      "checksum": "8118684206eb78a89855e30b0e0955c9294e9823cb6c2af792eb5cc2f985c3c1"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "US",
       "Name": "West Virginia",
       "Code": "WV",
       "ISO3166_2": "US-WV",
       "Latitude": 38.4758,
       "Longitude": -80.8408,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"West Virginia\"]"
+      "CommonAliases": [
+        "West Virginia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=US"
+    },
+    "primaryKey": {
+      "ID": "B0A07A57-5E64-4124-B466-88BC2B21B804"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:39.862Z",
+      "checksum": "828fc8bd456e82783d65832bcc027acd3c22b06fb3dc230252a2db9b4c8e85f4"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "US",
       "Name": "Wisconsin",
       "Code": "WI",
       "ISO3166_2": "US-WI",
       "Latitude": 44.4309,
       "Longitude": -89.6885,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Wisconsin\"]"
+      "CommonAliases": [
+        "Wisconsin"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=US"
+    },
+    "primaryKey": {
+      "ID": "C0B891C4-57C0-4D05-848B-2D135D2BE0CA"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:39.875Z",
+      "checksum": "68187ae363b5d0eff23bd552568de82bcc144eefe08ebd401baf966c0021466a"
     }
   },
   {
     "fields": {
-      "_CountryISO2": "US",
       "Name": "Wyoming",
       "Code": "WY",
       "ISO3166_2": "US-WY",
       "Latitude": 43.17,
       "Longitude": -107.5685,
       "BoundaryGeoJSON": null,
-      "CommonAliases": "[\"Wyoming\"]"
+      "CommonAliases": [
+        "Wyoming"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=US"
+    },
+    "primaryKey": {
+      "ID": "45CF07CA-C252-45D6-BA98-0D194C09535E"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T01:54:39.887Z",
+      "checksum": "1b5053b948b0d9e4e35adf966ab52aa37a8cd558c39cce16af564cbd099f563a"
     }
   }
 ]
