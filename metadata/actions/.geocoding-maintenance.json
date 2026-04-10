@@ -1,0 +1,62 @@
+[
+  {
+    "fields": {
+      "Name": "Scheduled Geocoding",
+      "Description": "Maintenance action that finds records missing geocodes, retries failed geocoding attempts, and cleans up orphaned RecordGeoCode rows. Designed to run on a schedule as a safety net for records that bypass BaseEntity.Save() (bulk SQL imports, direct DB operations).",
+      "DriverClass": "Scheduled Geocoding",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-map-location-dot",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Data"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "BatchSize",
+            "DefaultValue": "100",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum number of records to process per run. Limits total work across all three tasks (missing, retries, orphans).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "C114AC2A-8887-4058-B5A1-5EFFB47DB46A"
+          },
+          "sync": {
+            "lastModified": "2026-04-10T14:19:42.417Z",
+            "checksum": "f90200633c5cb9bd765111788ed31fe5a0e4de87b9e913275f045e895df4497b"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxRetries",
+            "DefaultValue": "5",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum number of retry attempts for failed geocoding before giving up on a record.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "704F1B8F-6E39-4042-8C93-3BAA6CF90793"
+          },
+          "sync": {
+            "lastModified": "2026-04-10T14:19:42.450Z",
+            "checksum": "113882aebc9aa7a8de8546e0c6d78ae20861fc60fb7a6bc54ad4c08a9304081f"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "F4CB29B2-49F0-46B1-92CA-CB89C1E80652"
+    },
+    "sync": {
+      "lastModified": "2026-04-10T14:19:42.381Z",
+      "checksum": "f24d7a6e31f6feeef4d8e7339290d41ed66b323c36b1933eb22044526fb4495e"
+    }
+  }
+]

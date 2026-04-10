@@ -8,7 +8,7 @@ import { CodeGenDatabaseProvider, BaseViewGenerationContext, CascadeDeleteContex
 import { SQLServerCodeGenProvider } from './providers/sqlserver/SQLServerCodeGenProvider';
 
 import { autoIndexForeignKeys, configInfo, customSqlScripts, dbDatabase, mjCoreSchema, MAX_INDEX_NAME_LENGTH } from '../Config/config';
-import { ManageMetadataBase } from './manage-metadata';
+import { ManageMetadataBase, ViewRegenEntry } from './manage-metadata';
 
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { combineFiles, logIf, sortBySequenceAndCreatedAt } from '../Misc/util';
@@ -295,14 +295,15 @@ export class SQLCodeGenBase {
             // Regenerate ONLY those entities' views, then re-sync their fields to pick up new virtual columns.
             const regenList = ManageMetadataBase.EntitiesRequiringViewRegen;
             if (regenList.length > 0) {
-                startSpinner(`Regenerating ${regenList.length} entities with late-phase view changes...`);
+                const uniqueEntityNames = [...new Set(regenList.map(e => e.EntityName))];
+                startSpinner(`Regenerating ${uniqueEntityNames.length} entities with late-phase view changes...`);
 
                 // Refresh metadata to pick up DB changes from Step 3 (e.g., SupportsGeoCoding = 1)
                 const regenMd = new Metadata();
                 await regenMd.Refresh();
 
                 // Resolve entity names to EntityInfo objects from the refreshed metadata
-                const entitiesToRegen = regenList
+                const entitiesToRegen = uniqueEntityNames
                     .map(name => { try { return regenMd.EntityByName(name); } catch { return null; } })
                     .filter((e): e is EntityInfo => e !== null);
 
@@ -323,6 +324,10 @@ export class SQLCodeGenBase {
                         // Re-sync entity fields to pick up new virtual columns (e.g., __mj_Latitude, __mj_Longitude)
                         // No LLM needed — just detect new/changed fields from the regenerated views
                         await manageMD.manageEntityFields(pool, configInfo.excludeSchemas, true, true, currentUser, true, false);
+
+                        // Apply reason-specific fixups
+                        await this.applyLatePhaseFixups(pool, regenList, entitiesToRegen);
+
                         succeedSpinner(`Regenerated ${entitiesToRegen.length} late-phase entities`);
                     } else {
                         failSpinner('Late-phase view regeneration failed');
@@ -374,6 +379,36 @@ export class SQLCodeGenBase {
             // Clean up temp batch files on error
             TempBatchFile.cleanup();
             return false;
+        }
+    }
+
+    /**
+     * Apply reason-specific fixups after late-phase view regeneration.
+     * Each regen reason may require additional SQL to be executed and logged
+     * to the migration output file.
+     */
+    protected async applyLatePhaseFixups(
+        pool: CodeGenConnection,
+        regenList: ViewRegenEntry[],
+        regenEntities: EntityInfo[]
+    ): Promise<void> {
+        // Geocoding fixup: set ExtendedType on virtual __mj_Latitude / __mj_Longitude fields
+        const geoEntities = regenEntities.filter(e =>
+            regenList.some(r => r.EntityName === e.Name && r.Reason === 'Geocoding')
+        );
+        if (geoEntities.length > 0) {
+            const qi = this._dbProvider.Dialect.QuoteIdentifier.bind(this._dbProvider.Dialect);
+            const qs = this._dbProvider.Dialect.QuoteSchema.bind(this._dbProvider.Dialect);
+            const entityIds = geoEntities.map(e => `'${e.ID}'`).join(',');
+
+            const latSQL = `UPDATE ${qs(mjCoreSchema, 'EntityField')} SET ${qi('ExtendedType')} = 'GeoLatitude' WHERE ${qi('Name')} = '__mj_Latitude' AND ${qi('ExtendedType')} IS NULL AND ${qi('EntityID')} IN (${entityIds})`;
+            const lngSQL = `UPDATE ${qs(mjCoreSchema, 'EntityField')} SET ${qi('ExtendedType')} = 'GeoLongitude' WHERE ${qi('Name')} = '__mj_Longitude' AND ${qi('ExtendedType')} IS NULL AND ${qi('EntityID')} IN (${entityIds})`;
+
+            // Execute and log to migration output
+            SQLLogging.appendToSQLLogFile(latSQL, 'Set ExtendedType=GeoLatitude on virtual geo fields');
+            await pool.query(latSQL);
+            SQLLogging.appendToSQLLogFile(lngSQL, 'Set ExtendedType=GeoLongitude on virtual geo fields');
+            await pool.query(lngSQL);
         }
     }
 

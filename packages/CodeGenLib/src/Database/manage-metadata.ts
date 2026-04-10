@@ -210,6 +210,19 @@ type SchemaInfoRecord = {
    EntityNameSuffix: string | null;
 };
 
+/**
+ * Reason why an entity requires late-phase view regeneration.
+ */
+export type ViewRegenReason = 'Geocoding';
+
+/**
+ * Entry in the late-phase view regeneration list.
+ */
+export interface ViewRegenEntry {
+   EntityName: string;
+   Reason: ViewRegenReason;
+}
+
 export class ManageMetadataBase {
 
    // ─── Database Provider Infrastructure ─────────────────────────────
@@ -388,17 +401,18 @@ export class ManageMetadataBase {
    public static get modifiedEntityList(): string[] {
       return this._modifiedEntityList;
    }
-   private static _entitiesRequiringViewRegen: string[] = [];
+   private static _entitiesRequiringViewRegen: ViewRegenEntry[] = [];
    /**
-    * Entities that had late-phase changes (e.g., SupportsGeoCoding toggled during advanced generation)
-    * requiring their base views to be regenerated after the main SQL generation pass.
+    * Entities that had late-phase changes requiring their base views to be
+    * regenerated after the main SQL generation pass. Each entry includes
+    * the reason for regen so downstream logic can apply reason-specific fixups.
     */
-   public static get EntitiesRequiringViewRegen(): string[] {
+   public static get EntitiesRequiringViewRegen(): ViewRegenEntry[] {
       return this._entitiesRequiringViewRegen;
    }
-   public static AddEntityRequiringViewRegen(entityName: string): void {
-      if (!this._entitiesRequiringViewRegen.includes(entityName)) {
-         this._entitiesRequiringViewRegen.push(entityName);
+   public static AddEntityRequiringViewRegen(entityName: string, reason: ViewRegenReason): void {
+      if (!this._entitiesRequiringViewRegen.some(e => e.EntityName === entityName && e.Reason === reason)) {
+         this._entitiesRequiringViewRegen.push({ EntityName: entityName, Reason: reason });
       }
    }
    private static _generatedValidators: ValidatorResult[] = [];
@@ -4841,7 +4855,7 @@ export class ManageMetadataBase {
          logStatus(`  Entity ${entity.Name}: SupportsGeoCoding = ${shouldSupportGeo ? 1 : 0} (auto-detected from ${hasGeoFields ? 'LLM' : 'existing'} geo fields)`);
          // Queue for late-phase view regeneration — the view was already generated
          // before this flag was set, so it needs to be regenerated with the geo JOIN
-         ManageMetadataBase.AddEntityRequiringViewRegen(entity.Name);
+         ManageMetadataBase.AddEntityRequiringViewRegen(entity.Name, 'Geocoding');
       }
    }
 

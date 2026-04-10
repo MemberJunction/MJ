@@ -1,8 +1,28 @@
 import { BaseSingleton } from '@memberjunction/global';
 import { BaseEntity, EntityFieldInfo, EntityInfo, Metadata, RunView, LogError, LogStatus } from '@memberjunction/core';
-import { MJRecordGeoCodeEntity } from '@memberjunction/core-entities';
-import { GeoFieldMapping, GeocodeResult, GeocodeStatus } from './types';
+import { MJRecordGeoCodeEntity, MJCountryEntity, MJStateProvinceEntity } from '@memberjunction/core-entities';
+import { GeoFieldMapping, GeocodeResult, GeocodeStatus, GeocodePrecision } from './types';
 import { ComputeGeoSourceHash } from './hash';
+
+/**
+ * Response shape from the Google Geocoding API.
+ */
+interface GoogleGeocodingResponse {
+    results: Array<{
+        address_components: Array<{
+            long_name: string;
+            short_name: string;
+            types: string[];
+        }>;
+        formatted_address: string;
+        geometry: {
+            location: { lat: number; lng: number };
+            location_type: string;
+        };
+    }>;
+    status: string;
+    error_message?: string;
+}
 
 /**
  * Singleton service that manages the geocoding lifecycle for entity records.
@@ -242,24 +262,229 @@ export class GeoCodeSyncService extends BaseSingleton<GeoCodeSyncService> {
             }
         }
 
-        // Strategy 2: Build address string from mapped fields and attempt geocoding
-        // For now, collect field values and log. External API integration (Google Geocode Action)
-        // will be wired up when API credentials are available in the environment.
-        const addressParts = fields
-            .map(f => entity.Get(f) as unknown)
-            .filter((v): v is string | number => v != null && String(v).trim() !== '')
-            .map(v => String(v).trim());
+        // Collect address field values organized by their geo role
+        const geoValues = this.extractGeoFieldValues(entity);
 
-        if (addressParts.length === 0) {
-            LogStatus(`GeoCodeSyncService: No non-empty address fields for ${entity.EntityInfo.Name} ${entity.PrimaryKey.ToString()}`);
+        // Strategy 2: Google Geocoding API (if API key is available)
+        const apiKey = this.getGoogleApiKey();
+        if (apiKey) {
+            const addressString = this.buildAddressString(geoValues);
+            if (addressString) {
+                const googleResult = await this.geocodeViaGoogle(addressString, apiKey);
+                if (googleResult) {
+                    // Resolve country/state IDs from Google's response
+                    await this.resolveReferenceIDs(googleResult, entity);
+                    return googleResult;
+                }
+            }
+        }
+
+        // Strategy 3: Reference data centroid lookup (country/state → approximate lat/lng)
+        return this.geocodeViaReferenceData(geoValues);
+    }
+
+    /**
+     * Extract geo field values organized by their ExtendedType role.
+     */
+    private extractGeoFieldValues(entity: BaseEntity): Record<string, string> {
+        const values: Record<string, string> = {};
+        for (const field of entity.EntityInfo.Fields) {
+            if (field.ExtendedType && field.ExtendedType.startsWith('Geo')) {
+                const val: unknown = entity.Get(field.Name);
+                if (val != null && String(val).trim() !== '') {
+                    values[field.ExtendedType] = String(val).trim();
+                }
+            }
+        }
+        return values;
+    }
+
+    /**
+     * Build an address string suitable for the Google Geocoding API from geo field values.
+     * Orders components logically: Address, City, StateProvince, PostalCode, Country.
+     */
+    private buildAddressString(geoValues: Record<string, string>): string | null {
+        const parts: string[] = [];
+        if (geoValues['GeoAddress']) parts.push(geoValues['GeoAddress']);
+        if (geoValues['GeoCity']) parts.push(geoValues['GeoCity']);
+        if (geoValues['GeoStateProvince']) parts.push(geoValues['GeoStateProvince']);
+        if (geoValues['GeoPostalCode']) parts.push(geoValues['GeoPostalCode']);
+        if (geoValues['GeoCountry']) parts.push(geoValues['GeoCountry']);
+        if (geoValues['Geo']) parts.push(geoValues['Geo']); // generic location field
+        return parts.length > 0 ? parts.join(', ') : null;
+    }
+
+    /**
+     * Call the Google Geocoding API to convert an address string to coordinates.
+     */
+    private async geocodeViaGoogle(address: string, apiKey: string): Promise<GeocodeResult | null> {
+        try {
+            const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${apiKey}`;
+            const response = await fetch(url);
+            if (!response.ok) {
+                LogError(`GeoCodeSyncService: Google API HTTP error: ${response.status}`);
+                return null;
+            }
+
+            const data = await response.json() as GoogleGeocodingResponse;
+            if (data.status !== 'OK' || !data.results?.length) {
+                LogStatus(`GeoCodeSyncService: Google returned status "${data.status}" for "${address}"`);
+                return null;
+            }
+
+            const result = data.results[0];
+            const locationType = result.geometry.location_type;
+
+            // Map Google's location_type to our precision enum
+            let precision: GeocodePrecision = 'city';
+            if (locationType === 'ROOFTOP') precision = 'exact';
+            else if (locationType === 'RANGE_INTERPOLATED') precision = 'exact';
+            else if (locationType === 'GEOMETRIC_CENTER') precision = 'city';
+            else if (locationType === 'APPROXIMATE') precision = 'state_province';
+
+            return {
+                Latitude: result.geometry.location.lat,
+                Longitude: result.geometry.location.lng,
+                Precision: precision,
+                CountryID: null,     // resolved in resolveReferenceIDs
+                StateProvinceID: null, // resolved in resolveReferenceIDs
+                Source: 'google'
+            };
+        } catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : String(e);
+            LogError(`GeoCodeSyncService: Google geocoding error: ${msg}`);
+            return null;
+        }
+    }
+
+    /**
+     * Resolve CountryID and StateProvinceID from entity geo field values
+     * against the reference Country/StateProvince tables.
+     */
+    private async resolveReferenceIDs(result: GeocodeResult, entity: BaseEntity): Promise<void> {
+        const geoValues = this.extractGeoFieldValues(entity);
+        const rv = new RunView();
+
+        // Resolve country
+        const countryVal = geoValues['GeoCountry'];
+        if (countryVal) {
+            const countryResult = await rv.RunView<{ ID: string }>({
+                EntityName: 'MJ: Countries',
+                ExtraFilter: `Name = '${countryVal.replace(/'/g, "''")}' OR ISO2 = '${countryVal.replace(/'/g, "''")}' OR ISO3 = '${countryVal.replace(/'/g, "''")}'`,
+                Fields: ['ID'],
+                ResultType: 'simple',
+                MaxRows: 1
+            });
+            if (countryResult.Success && countryResult.Results.length > 0) {
+                result.CountryID = countryResult.Results[0].ID;
+
+                // Resolve state within this country
+                const stateVal = geoValues['GeoStateProvince'];
+                if (stateVal) {
+                    const stateResult = await rv.RunView<{ ID: string }>({
+                        EntityName: 'MJ: State Provinces',
+                        ExtraFilter: `CountryID = '${result.CountryID}' AND (Name = '${stateVal.replace(/'/g, "''")}' OR Code = '${stateVal.replace(/'/g, "''")}')`,
+                        Fields: ['ID'],
+                        ResultType: 'simple',
+                        MaxRows: 1
+                    });
+                    if (stateResult.Success && stateResult.Results.length > 0) {
+                        result.StateProvinceID = stateResult.Results[0].ID;
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Fallback geocoding using reference table centroids.
+     * Looks up Country/StateProvince by name and returns their centroid coordinates.
+     */
+    private async geocodeViaReferenceData(geoValues: Record<string, string>): Promise<GeocodeResult | null> {
+        const rv = new RunView();
+        const countryVal = geoValues['GeoCountry'];
+        const stateVal = geoValues['GeoStateProvince'];
+
+        if (!countryVal && !stateVal) {
             return null;
         }
 
-        const addressString = addressParts.join(', ');
-        LogStatus(`GeoCodeSyncService: Address to geocode: "${addressString}" — awaiting geocode provider`);
+        // Try state-level first (more precise)
+        if (countryVal && stateVal) {
+            const countryResult = await rv.RunView<{ ID: string }>({
+                EntityName: 'MJ: Countries',
+                ExtraFilter: `Name = '${countryVal.replace(/'/g, "''")}' OR ISO2 = '${countryVal.replace(/'/g, "''")}' OR ISO3 = '${countryVal.replace(/'/g, "''")}'`,
+                Fields: ['ID'],
+                ResultType: 'simple',
+                MaxRows: 1
+            });
+            if (countryResult.Success && countryResult.Results.length > 0) {
+                const countryID = countryResult.Results[0].ID;
+                const stateResult = await rv.RunView<{ ID: string; Latitude: number; Longitude: number }>({
+                    EntityName: 'MJ: State Provinces',
+                    ExtraFilter: `CountryID = '${countryID}' AND (Name = '${stateVal.replace(/'/g, "''")}' OR Code = '${stateVal.replace(/'/g, "''")}')`,
+                    Fields: ['ID', 'Latitude', 'Longitude'],
+                    ResultType: 'simple',
+                    MaxRows: 1
+                });
+                if (stateResult.Success && stateResult.Results.length > 0) {
+                    const state = stateResult.Results[0];
+                    if (state.Latitude != null && state.Longitude != null) {
+                        return {
+                            Latitude: state.Latitude,
+                            Longitude: state.Longitude,
+                            Precision: 'state_province',
+                            CountryID: countryID,
+                            StateProvinceID: state.ID,
+                            Source: 'reference_data'
+                        };
+                    }
+                }
+            }
+        }
 
-        // The actual Google Geocode Action call will be integrated here.
-        // For now, return null so the scheduled job picks this up when API credentials are configured.
+        // Fall back to country-level centroid
+        if (countryVal) {
+            const countryResult = await rv.RunView<{ ID: string; Latitude: number; Longitude: number }>({
+                EntityName: 'MJ: Countries',
+                ExtraFilter: `Name = '${countryVal.replace(/'/g, "''")}' OR ISO2 = '${countryVal.replace(/'/g, "''")}' OR ISO3 = '${countryVal.replace(/'/g, "''")}'`,
+                Fields: ['ID', 'Latitude', 'Longitude'],
+                ResultType: 'simple',
+                MaxRows: 1
+            });
+            if (countryResult.Success && countryResult.Results.length > 0) {
+                const country = countryResult.Results[0];
+                if (country.Latitude != null && country.Longitude != null) {
+                    return {
+                        Latitude: country.Latitude,
+                        Longitude: country.Longitude,
+                        Precision: 'country',
+                        CountryID: country.ID,
+                        StateProvinceID: null,
+                        Source: 'reference_data'
+                    };
+                }
+            }
+        }
+
         return null;
+    }
+
+    /**
+     * Get the Google Geocoding API key from config or environment.
+     */
+    private getGoogleApiKey(): string | null {
+        // Check environment variables
+        const envKey = process.env.GOOGLE_GEOCODING_API_KEY || process.env.GOOGLE_MAPS_API_KEY;
+        if (envKey) return envKey;
+
+        // Try mj.config.cjs via cosmiconfig pattern
+        try {
+            // Dynamic import to avoid hard dependency on cosmiconfig
+            const configVal = (globalThis as Record<string, unknown>)['__mj_config_apiIntegrations'] as Record<string, Record<string, Record<string, string>>> | undefined;
+            return configVal?.google?.geocoding?.apiKey ?? null;
+        } catch {
+            return null;
+        }
     }
 }
