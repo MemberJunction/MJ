@@ -1,6 +1,6 @@
-import { EntityFieldExtendedType, EntityFieldInfo, EntityFieldValueInfo, EntityInfo, EntityRelationshipInfo } from "@memberjunction/core";
+import { EntityFieldExtendedType, EntityFieldInfo, EntityFieldValueInfo, EntityInfo, EntityOrganicKeyInfo, EntityOrganicKeyRelatedEntityInfo, EntityRelationshipInfo, Metadata } from "@memberjunction/core";
 import { SimpleEntityInfo, SimpleEntityFieldInfo } from "@memberjunction/interactive-component-types";
-import { SkipEntityFieldInfo, SkipEntityFieldValueInfo, SkipEntityInfo, SkipEntityRelationshipInfo } from "./entity-metadata-types";
+import { SkipEntityFieldInfo, SkipEntityFieldValueInfo, SkipEntityInfo, SkipEntityOrganicKeyInfo, SkipEntityOrganicKeyRelatedEntityInfo, SkipEntityRelationshipInfo } from "./entity-metadata-types";
 
 // ============================================================================
 // EntityInfo <-> SkipEntityInfo conversions
@@ -24,8 +24,68 @@ export function MapEntityInfoToSkipEntityInfo(e: EntityInfo): SkipEntityInfo {
         baseView: e.BaseView,
         fields: e.Fields.map(f => MapEntityFieldInfoToSkipEntityFieldInfo(f)),
         relatedEntities: e.RelatedEntities?.map(r => MapEntityRelationshipInfoToSkipEntityRelationshipInfo(r)) || [],
+        organicKeys: (e.OrganicKeys ?? [])
+            .filter(ok => ok.Status === 'Active')
+            .map(ok => MapEntityOrganicKeyInfoToSkipEntityOrganicKeyInfo(ok)),
         rowsPacked: e.RowsToPackWithSchema as 'None' | 'Sample' | 'All',
         rowsSampleMethod: e.RowsToPackSampleMethod as 'random' | 'top n' | 'bottom n'
+    };
+}
+
+/**
+ * Maps a MemberJunction EntityOrganicKeyInfo object to a SkipEntityOrganicKeyInfo object.
+ *
+ * Organic keys express cross-entity relationships via shared business data (email, acronym,
+ * domain, etc.) rather than database FK constraints.
+ *
+ * @param ok - The source EntityOrganicKeyInfo from MemberJunction core
+ * @returns A SkipEntityOrganicKeyInfo object
+ */
+export function MapEntityOrganicKeyInfoToSkipEntityOrganicKeyInfo(ok: EntityOrganicKeyInfo): SkipEntityOrganicKeyInfo {
+    return {
+        id: ok.ID,
+        name: ok.Name,
+        description: ok.Description ?? undefined,
+        matchFieldNames: ok.MatchFieldNamesArray,
+        normalizationStrategy: ok.NormalizationStrategy,
+        customNormalizationExpression: ok.CustomNormalizationExpression ?? undefined,
+        sequence: ok.Sequence,
+        relatedEntities: ok.RelatedEntities
+            .map(re => MapEntityOrganicKeyRelatedEntityInfoToSkipEntityOrganicKeyRelatedEntityInfo(re))
+            .filter((re): re is SkipEntityOrganicKeyRelatedEntityInfo => re !== null)
+    };
+}
+
+/**
+ * Maps a MemberJunction EntityOrganicKeyRelatedEntityInfo to its Skip equivalent.
+ * Looks up the related entity's schema name and base view from the global Metadata
+ * provider, since they are not stored on the organic key related entity directly.
+ *
+ * @param re - The source EntityOrganicKeyRelatedEntityInfo from MemberJunction core
+ * @returns A SkipEntityOrganicKeyRelatedEntityInfo, or null if the related entity cannot be resolved
+ */
+export function MapEntityOrganicKeyRelatedEntityInfoToSkipEntityOrganicKeyRelatedEntityInfo(
+    re: EntityOrganicKeyRelatedEntityInfo
+): SkipEntityOrganicKeyRelatedEntityInfo | null {
+    const relatedEntity = Metadata.Provider?.Entities?.find(ent => ent.ID === re.RelatedEntityID);
+    if (!relatedEntity) {
+        return null;
+    }
+    return {
+        id: re.ID,
+        relatedEntityID: re.RelatedEntityID,
+        relatedEntityName: relatedEntity.Name,
+        relatedEntitySchemaName: relatedEntity.SchemaName,
+        relatedEntityBaseView: relatedEntity.BaseView,
+        isDirectMatch: re.IsDirectMatch,
+        isTransitiveMatch: re.IsTransitiveMatch,
+        relatedEntityFieldNames: re.IsDirectMatch ? re.RelatedEntityFieldNamesArray : undefined,
+        transitiveObjectName: re.TransitiveObjectName ?? undefined,
+        transitiveObjectMatchFieldNames: re.IsTransitiveMatch ? re.TransitiveObjectMatchFieldNamesArray : undefined,
+        transitiveObjectOutputFieldName: re.TransitiveObjectOutputFieldName ?? undefined,
+        relatedEntityJoinFieldName: re.RelatedEntityJoinFieldName ?? undefined,
+        displayName: re.DisplayName ?? undefined,
+        sequence: re.Sequence
     };
 }
 
@@ -215,7 +275,8 @@ export function MapSimpleEntityInfoToSkipEntityInfo(simpleEntity: SimpleEntityIn
         schemaName: '',
         baseView: '',
         fields: simpleEntity.fields.map(f => MapSimpleEntityFieldInfoToSkipEntityFieldInfo(f)),
-        relatedEntities: []
+        relatedEntities: [],
+        organicKeys: []
     };
 }
 
