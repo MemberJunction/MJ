@@ -442,7 +442,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="RowsToPackSampleOrder"
-            Type="code"
+            Type="textarea"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -466,6 +466,14 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="TrustServerCacheCompletely"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="AllowCaching"
             Type="checkbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"

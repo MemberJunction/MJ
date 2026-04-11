@@ -450,8 +450,21 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   }
   // Ensure LocalCacheManager is initialized (no-op if already done during engine loading)
   if (!LocalCacheManager.Instance.IsInitialized) {
-    await LocalCacheManager.Instance.Initialize(Metadata.Provider.LocalStorageProvider);
-    console.log('LocalCacheManager initialized');
+    // Build cache config from mj.config.cjs cacheSettings
+    const cs = configInfo.cacheSettings;
+    const cacheConfig = {
+      maxSizeBytes: (cs.maxMemoryMB ?? 150) * 1024 * 1024,
+      maxEntriesPerEntity: cs.maxEntriesPerEntity ?? 50,
+      defaultTTLMs: (cs.defaultTTLSeconds ?? 0) * 1000,
+      evictionSweepIntervalMs: (cs.evictionSweepIntervalSeconds ?? 300) * 1000,
+      verboseLogging: cs.verboseLogging ?? false,
+    };
+    await LocalCacheManager.Instance.Initialize(Metadata.Provider.LocalStorageProvider, cacheConfig);
+    console.log('LocalCacheManager initialized with cache config:', JSON.stringify({
+      maxMemoryMB: cs.maxMemoryMB ?? 150,
+      maxEntriesPerEntity: cs.maxEntriesPerEntity ?? 50,
+      evictionSweepIntervalSeconds: cs.evictionSweepIntervalSeconds ?? 300,
+    }));
   }
 
   // Initialize APIKeyEngine singleton — reads apiKeyGeneration from mj.config.cjs automatically

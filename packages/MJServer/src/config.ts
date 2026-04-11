@@ -192,6 +192,19 @@ const serverExtensionSchema = z.object({
   Settings: z.record(z.unknown()).default({})
 }).passthrough();
 
+const cacheSettingsSchema = z.object({
+  /** Maximum total estimated memory for all cached results in MB. Default: 150. Set to 0 to disable memory-based eviction. */
+  maxMemoryMB: z.number().optional().default(150),
+  /** Maximum cached entries per entity. Default: 50. Set to 0 for unlimited. */
+  maxEntriesPerEntity: z.number().optional().default(50),
+  /** Default TTL in seconds. 0 = no TTL, rely on event-based invalidation. Default: 0. */
+  defaultTTLSeconds: z.number().optional().default(0),
+  /** Interval in seconds for periodic eviction sweep. 0 = disabled. Default: 300 (5 minutes). */
+  evictionSweepIntervalSeconds: z.number().optional().default(300),
+  /** Enable verbose cache logging (hits, misses, evictions). Default: false. */
+  verboseLogging: z.boolean().optional().default(false),
+});
+
 const configInfoSchema = z.object({
   userHandling: userHandlingInfoSchema,
   databaseSettings: databaseSettingsInfoSchema,
@@ -206,6 +219,7 @@ const configInfoSchema = z.object({
   queryDialects: queryDialectSchema.optional().default({}),
   multiTenancy: multiTenancySchema.optional().default({}),
   serverExtensions: z.array(serverExtensionSchema).optional().default([]),
+  cacheSettings: cacheSettingsSchema.optional().default({}),
 
   apiKey: z.string().optional(),
   baseUrl: z.string().default('http://localhost'),
@@ -252,6 +266,7 @@ export type TelemetryConfig = z.infer<typeof telemetrySchema>;
 export type QueryDialectConfig = z.infer<typeof queryDialectSchema>;
 export type MultiTenancyConfig = z.infer<typeof multiTenancySchema>;
 export type ServerExtensionConfig = z.infer<typeof serverExtensionSchema>;
+export type CacheSettingsConfig = z.infer<typeof cacheSettingsSchema>;
 export type ConfigInfo = z.infer<typeof configInfoSchema>;
 
 /**
@@ -376,6 +391,15 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
   telemetry: {
     enabled: true,
     level: 'standard'
+  },
+
+  // Cache settings defaults
+  cacheSettings: {
+    maxMemoryMB: 150,
+    maxEntriesPerEntity: 50,
+    defaultTTLSeconds: 0,
+    evictionSweepIntervalSeconds: 300,
+    verboseLogging: false,
   },
 
   // Auth providers (environment-driven)

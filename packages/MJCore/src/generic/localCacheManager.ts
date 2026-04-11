@@ -109,14 +109,32 @@ export interface CachedRunViewResult {
 export interface LocalCacheManagerConfig {
     /** Whether caching is enabled */
     enabled: boolean;
-    /** Maximum cache size in bytes (default: 50MB) */
+    /** Maximum cache size in bytes (default: 150MB) */
     maxSizeBytes: number;
-    /** Maximum number of cache entries (default: 1000) */
+    /** Maximum number of cache entries (default: 5000) */
     maxEntries: number;
-    /** Default TTL in milliseconds (default: 5 minutes) */
+    /** Default TTL in milliseconds (default: 0 = no TTL, rely on event-based invalidation) */
     defaultTTLMs: number;
     /** Eviction policy when cache is full */
     evictionPolicy: 'lru' | 'lfu' | 'fifo';
+    /**
+     * Maximum number of cached query fingerprints per entity.
+     * Prevents a single entity from dominating the cache.
+     * Default: 50. Set to 0 for unlimited.
+     */
+    maxEntriesPerEntity: number;
+    /**
+     * Interval in milliseconds for the periodic eviction sweep.
+     * Catches entries that should have been evicted (TTL expired) but weren't
+     * because no new stores triggered eviction. 0 = disabled.
+     * Default: 300000 (5 minutes).
+     */
+    evictionSweepIntervalMs: number;
+    /**
+     * Enable verbose cache logging (hits, misses, evictions, memory stats).
+     * Default: false.
+     */
+    verboseLogging: boolean;
 }
 
 // ============================================================================
@@ -127,8 +145,11 @@ const DEFAULT_CONFIG: LocalCacheManagerConfig = {
     enabled: true,
     maxSizeBytes: 150 * 1024 * 1024, // 150MB
     maxEntries: 5000,
-    defaultTTLMs: 5 * 60 * 1000, // 5 minutes
-    evictionPolicy: 'lru'
+    defaultTTLMs: 0, // No TTL — event-based invalidation is the primary mechanism
+    evictionPolicy: 'lru',
+    maxEntriesPerEntity: 50,
+    evictionSweepIntervalMs: 300000, // 5 minutes
+    verboseLogging: false,
 };
 
 // ============================================================================
@@ -334,6 +355,9 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         await this.loadRegistry();
         this._initialized = true;
 
+        // Start periodic eviction sweep for TTL-expired entries
+        this.startEvictionSweep();
+
         // Subscribe to BaseEntity events for universal cache invalidation.
         // When any entity is saved/deleted, update all cached RunView results for that entity.
         this.subscribeToBaseEntityEvents();
@@ -515,6 +539,10 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         if (!baseEntity?.EntityInfo?.Name) return;
 
         const entityName = baseEntity.EntityInfo.Name;
+
+        // Short-circuit: if caching is disabled for this entity, skip the fingerprint scan
+        if (baseEntity.EntityInfo.AllowCaching === false) return;
+
         const fingerprints = this._entityFingerprintIndex.get(entityName);
         if (!fingerprints || fingerprints.size === 0) return;
 
@@ -557,14 +585,17 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         const entityName = entityEvent.entityName;
         if (!entityName) return;
 
+        // Short-circuit: if caching is disabled for this entity, skip processing
+        const md = new Metadata();
+        const entityInfo = md.EntityByName(entityName);
+        if (entityInfo && !entityInfo.AllowCaching) return;
+
         const fingerprints = this._entityFingerprintIndex.get(entityName);
         if (!fingerprints || fingerprints.size === 0) return;
 
         const action = payload?.action;
 
-        // Look up entity metadata for PK field names
-        const md = new Metadata();
-        const entityInfo = md.EntityByName(entityName);
+        // entityInfo was looked up above for the AllowCaching check
         if (!entityInfo) {
             LogStatusVerbose(`LocalCacheManager: remote-invalidate — entity "${entityName}" not found in metadata, invalidating caches`);
             for (const fp of [...fingerprints]) {
@@ -1096,7 +1127,11 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         const value = JSON.stringify(data);
         const sizeBytes = this.estimateSize(value);
 
-        // Check if we need to evict entries
+        // Per-entity entry cap: evict oldest entries for this entity if at limit
+        const entityName = params.EntityName || 'Unknown';
+        await this.enforcePerEntityCap(entityName);
+
+        // Check if we need to evict entries (global budget)
         await this.evictIfNeeded(sizeBytes);
 
         try {
@@ -2007,5 +2042,129 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         }
 
         await this.persistRegistry();
+    }
+
+    /**
+     * Enforces the per-entity entry cap. When an entity has more cached entries
+     * than maxEntriesPerEntity, evicts the least-recently-accessed entries for
+     * that entity until under the cap.
+     */
+    private async enforcePerEntityCap(entityName: string): Promise<void> {
+        const cap = this._config.maxEntriesPerEntity;
+        if (cap <= 0 || !this._storageProvider) return; // 0 = unlimited
+
+        const fingerprints = this._entityFingerprintIndex.get(entityName);
+        if (!fingerprints || fingerprints.size <= cap) return;
+
+        // Sort entries for this entity by lastAccessedAt ascending (LRU)
+        const entries = [...fingerprints]
+            .map(fp => this._registry.get(fp))
+            .filter((e): e is CacheEntryInfo => !!e)
+            .sort((a, b) => a.lastAccessedAt - b.lastAccessedAt);
+
+        const toEvict = entries.length - cap;
+        if (toEvict <= 0) return;
+
+        if (this._config.verboseLogging) {
+            LogStatusEx({ message: `    🗑️ [Cache PER-ENTITY EVICT] Entity "${entityName}" has ${entries.length} entries (cap: ${cap}), evicting ${toEvict} oldest`, verboseOnly: true });
+        }
+
+        for (let i = 0; i < toEvict && i < entries.length; i++) {
+            const entry = entries[i];
+            try {
+                const category = this.getCategoryForType(entry.type);
+                await this._storageProvider.Remove(entry.key, category);
+                this.removeFromEntityIndex(entry.key);
+                this._registry.delete(entry.key);
+            } catch {
+                // Continue evicting
+            }
+        }
+
+        this.debouncedPersistRegistry();
+    }
+
+    /**
+     * Handle for the periodic eviction sweep timer.
+     */
+    private _sweepTimer: ReturnType<typeof setInterval> | null = null;
+
+    /**
+     * Starts the periodic eviction sweep timer. Called during initialization.
+     * The sweep catches entries that should have been evicted (TTL expired)
+     * but weren't because no new stores triggered eviction.
+     */
+    private startEvictionSweep(): void {
+        this.stopEvictionSweep(); // Clear any existing timer
+
+        const intervalMs = this._config.evictionSweepIntervalMs;
+        if (intervalMs <= 0) return; // Disabled
+
+        this._sweepTimer = setInterval(() => {
+            this.runEvictionSweep().catch(err => {
+                LogError(`LocalCacheManager: eviction sweep failed: ${(err as Error).message}`);
+            });
+        }, intervalMs) as unknown as ReturnType<typeof setInterval>;
+
+        // Don't prevent Node.js process from exiting
+        if (typeof this._sweepTimer === 'object' && 'unref' in this._sweepTimer) {
+            (this._sweepTimer as { unref(): void }).unref();
+        }
+    }
+
+    /**
+     * Stops the periodic eviction sweep timer.
+     */
+    private stopEvictionSweep(): void {
+        if (this._sweepTimer) {
+            clearInterval(this._sweepTimer);
+            this._sweepTimer = null;
+        }
+    }
+
+    /**
+     * Runs a single eviction sweep: evicts entries that have exceeded their TTL
+     * or entries for entities that are over their per-entity cap.
+     */
+    private async runEvictionSweep(): Promise<void> {
+        if (!this._storageProvider || !this._config.enabled) return;
+
+        const now = Date.now();
+        const ttlMs = this._config.defaultTTLMs;
+        const toDelete: string[] = [];
+
+        for (const [key, entry] of this._registry) {
+            // TTL expiry check
+            if (ttlMs > 0 && entry.cachedAt + ttlMs < now) {
+                toDelete.push(key);
+                continue;
+            }
+            // expiresAt check (if set individually)
+            if (entry.expiresAt && entry.expiresAt < now) {
+                toDelete.push(key);
+            }
+        }
+
+        if (toDelete.length > 0) {
+            if (this._config.verboseLogging) {
+                LogStatusEx({ message: `    🗑️ [Cache SWEEP] Evicting ${toDelete.length} TTL-expired entries`, verboseOnly: true });
+            }
+
+            for (const key of toDelete) {
+                try {
+                    const entry = this._registry.get(key);
+                    const category = this.getCategoryForType(entry?.type);
+                    await this._storageProvider.Remove(key, category);
+                    if (entry?.fingerprint) {
+                        this.removeFromEntityIndex(entry.fingerprint);
+                    }
+                    this._registry.delete(key);
+                } catch {
+                    // Continue
+                }
+            }
+
+            await this.persistRegistry();
+        }
     }
 }
