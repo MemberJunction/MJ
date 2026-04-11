@@ -48,23 +48,30 @@ export class GeoCodeSyncService extends BaseSingleton<GeoCodeSyncService> {
 
     /**
      * Check if any geo field mappings have changed and dispatch geocoding if needed.
-     * Called from generated entity subclass AfterSave hooks.
+     * Called from the GenericDatabaseProvider OnSaveCompleted hook.
      *
      * This method never throws — all errors are captured in RecordGeoCode rows.
      *
      * @param entity - The entity instance that was just saved
+     * @param contextUser - The user context for data operations
      * @param mappings - Field-to-location mappings (if not provided, derived from EntityField.ExtendedType metadata)
+     * @returns The geocode result from the first successfully geocoded mapping, or null
+     *          if no geocoding was performed (e.g., hash unchanged) or all attempts failed.
+     *          The caller can use this to patch virtual lat/lng fields on the entity's
+     *          SP result before finalizeSave() loads it into the entity object.
      */
-    public async SyncIfChanged(entity: BaseEntity, contextUser: UserInfo, mappings?: GeoFieldMapping[]): Promise<void> {
+    public async SyncIfChanged(entity: BaseEntity, contextUser: UserInfo, mappings?: GeoFieldMapping[]): Promise<GeocodeResult | null> {
         const resolvedMappings = mappings ?? GeoCodeSyncService.BuildMappingsFromMetadata(entity.EntityInfo);
         for (const mapping of resolvedMappings) {
             try {
-                await this.ProcessMapping(entity, mapping, contextUser);
+                const result = await this.ProcessMapping(entity, mapping, contextUser);
+                if (result) return result;
             } catch (e: unknown) {
                 const message = e instanceof Error ? e.message : String(e);
                 LogError(`GeoCodeSyncService: Error processing ${mapping.LocationType} for ${entity.EntityInfo.Name} ${entity.PrimaryKey.ToString()}: ${message}`);
             }
         }
+        return null;
     }
 
     /**
@@ -102,8 +109,10 @@ export class GeoCodeSyncService extends BaseSingleton<GeoCodeSyncService> {
 
     /**
      * Process a single field mapping for a single entity record.
+     * @returns The geocode result if geocoding was performed successfully, or null if
+     *          no geocoding was needed (hash unchanged) or the attempt failed.
      */
-    protected async ProcessMapping(entity: BaseEntity, mapping: GeoFieldMapping, contextUser: UserInfo): Promise<void> {
+    protected async ProcessMapping(entity: BaseEntity, mapping: GeoFieldMapping, contextUser: UserInfo): Promise<GeocodeResult | null> {
         const hash = ComputeGeoSourceHash(entity, mapping.Fields);
 
         // Build RecordID matching the format used in the view's LEFT JOIN to vwRecordGeoCodes:
@@ -123,7 +132,7 @@ export class GeoCodeSyncService extends BaseSingleton<GeoCodeSyncService> {
         );
 
         if (existing && existing.SourceFieldHash === hash && existing.Status === 'success') {
-            return; // No change, already geocoded successfully
+            return null; // No change, already geocoded successfully
         }
 
         // Upsert a pending row
@@ -136,7 +145,7 @@ export class GeoCodeSyncService extends BaseSingleton<GeoCodeSyncService> {
 
         if (!row) {
             LogError(`GeoCodeSyncService: Failed to create/find RecordGeoCode row`);
-            return;
+            return null;
         }
 
         row.SourceFieldHash = hash;
@@ -146,7 +155,7 @@ export class GeoCodeSyncService extends BaseSingleton<GeoCodeSyncService> {
         const pendingSaved = await row.Save();
         if (!pendingSaved) {
             LogError(`GeoCodeSyncService: Failed to save pending RecordGeoCode: ${row.LatestResult?.CompleteMessage ?? 'unknown error'}`);
-            return;
+            return null;
         }
 
         // Attempt geocoding
@@ -154,6 +163,7 @@ export class GeoCodeSyncService extends BaseSingleton<GeoCodeSyncService> {
             const result = await this.Geocode(entity, mapping);
             if (result) {
                 await this.UpdateSuccess(row, result, hash);
+                return result;
             } else {
                 // No result means the address can't be geocoded (e.g., "Conference Room B").
                 // Mark as not_geocodable so the retry job skips it. If the user later edits
@@ -165,6 +175,7 @@ export class GeoCodeSyncService extends BaseSingleton<GeoCodeSyncService> {
             const message = e instanceof Error ? e.message : String(e);
             await this.UpdateFailure(row, message);
         }
+        return null;
     }
 
     /**
@@ -280,9 +291,11 @@ export class GeoCodeSyncService extends BaseSingleton<GeoCodeSyncService> {
         entity: BaseEntity,
         _mapping: GeoFieldMapping,
     ): Promise<GeocodeResult | null> {
-        // Strategy 1: Check for native lat/lng fields (ExtendedType = GeoLatitude/GeoLongitude)
-        const latField = entity.EntityInfo.Fields.find(f => f.ExtendedType === 'GeoLatitude');
-        const lngField = entity.EntityInfo.Fields.find(f => f.ExtendedType === 'GeoLongitude');
+        // Strategy 1: Check for native (non-virtual) lat/lng fields.
+        // Virtual fields like __mj_Latitude/__mj_Longitude come from the RecordGeoCode JOIN
+        // and would create circular logic — reading old geocoded values instead of re-geocoding.
+        const latField = entity.EntityInfo.Fields.find(f => f.ExtendedType === 'GeoLatitude' && !f.IsVirtual);
+        const lngField = entity.EntityInfo.Fields.find(f => f.ExtendedType === 'GeoLongitude' && !f.IsVirtual);
         if (latField && lngField) {
             const latVal: unknown = entity.Get(latField.Name);
             const lngVal: unknown = entity.Get(lngField.Name);

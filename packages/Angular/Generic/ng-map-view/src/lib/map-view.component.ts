@@ -62,6 +62,13 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
     /** Persisted display state from UserView. */
     @Input() DisplayState: Partial<MapDisplayState> | null = null;
 
+    /**
+     * Total record count from the server (before any client-side cap).
+     * When this exceeds the number of Records passed in, the map shows
+     * a truncation indicator so the user knows not all data is displayed.
+     */
+    @Input() TotalRecordCount: number = 0;
+
     /** Emitted when a marker is clicked. */
     @Output() MarkerClick = new EventEmitter<MapMarkerClickEvent>();
 
@@ -77,6 +84,11 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
     private pendingRender = false;
     IsLoading = true;
     MarkerCount = 0;
+
+    /** Whether the displayed records are truncated (more exist than were loaded). */
+    get IsTruncated(): boolean {
+        return this.TotalRecordCount > 0 && this.Records.length < this.TotalRecordCount;
+    }
 
     ngOnInit(): void {
         // Map initialization happens when the component becomes visible

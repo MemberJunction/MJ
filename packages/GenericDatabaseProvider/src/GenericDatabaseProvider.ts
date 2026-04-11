@@ -87,7 +87,7 @@ import { QueueManager } from '@memberjunction/queue';
 import { EntityActionEngineServer } from '@memberjunction/actions';
 import { ActionResult } from '@memberjunction/actions-base';
 import { EncryptionEngine } from '@memberjunction/encryption';
-import { GeoCodeSyncService } from '@memberjunction/geo-core';
+import { GeoCodeSyncService, GeocodeResult } from '@memberjunction/geo-core';
 
 /**
  * Configuration options for batch SQL execution.
@@ -564,17 +564,63 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             this.HandleEntityActions(entity, 'save', false, user); // NO AWAIT INTENTIONALLY
     }
 
-    protected override async OnSaveCompleted(entity: BaseEntity, saveSQLResult: SaveSQLResult, user: UserInfo, options: EntitySaveOptions, context: SaveContext): Promise<void> {
-        await super.OnSaveCompleted(entity, saveSQLResult, user, options, context);
+    protected override async OnSaveCompleted(entity: BaseEntity, saveSQLResult: SaveSQLResult, user: UserInfo, options: EntitySaveOptions, context: SaveContext): Promise<Record<string, unknown> | null> {
+        const superPatches = await super.OnSaveCompleted(entity, saveSQLResult, user, options, context);
 
-        // Fire-and-forget geocoding if geo fields were dirty before save
-        if (context.State['geoSyncNeeded']) {
-            // No await — geocoding runs async, errors are captured in RecordGeoCode
-            GeoCodeSyncService.Instance.SyncIfChanged(entity, user).catch(e => {
+        // Build parallel post-save tasks — geocoding and ISA sibling propagation
+        // are independent (write to RecordGeoCode and RecordChange respectively).
+        let geoResult: GeocodeResult | null = null;
+
+        // Geocoding: awaited so the SP result can be patched with fresh lat/lng
+        const geoPromise = context.State['geoSyncNeeded']
+            ? GeoCodeSyncService.Instance.SyncIfChanged(entity, user).catch(e => {
                 const msg = e instanceof Error ? e.message : String(e);
                 LogError(`GenericDatabaseProvider: Geo sync failed for ${entity.EntityInfo.Name}: ${msg}`);
-            });
+                return null;
+            })
+            : null;
+
+        // ISA sibling record-change propagation — when saving an overlapping-subtype entity,
+        // propagate the record change to sibling branches so their change history stays in sync.
+        const overlappingChangeData = saveSQLResult.extraData?.overlappingChangeData as
+            | { changesJSON: string; changesDescription: string }
+            | undefined;
+        const siblingPromise = (
+            overlappingChangeData &&
+            entity.EntityInfo.AllowMultipleSubtypes &&
+            entity.EntityInfo.TrackRecordChanges
+        )
+            ? this.PropagateRecordChangesToSiblings(
+                entity.EntityInfo,
+                overlappingChangeData,
+                entity.PrimaryKey.Values(),
+                user?.ID ?? '',
+                options.ISAActiveChildEntityName,
+                entity.ProviderTransaction ? { connectionSource: entity.ProviderTransaction } : undefined,
+            )
+            : null;
+
+        // Await both in parallel
+        if (geoPromise && siblingPromise) {
+            [geoResult] = await Promise.all([geoPromise, siblingPromise]);
+        } else if (geoPromise) {
+            geoResult = await geoPromise;
+        } else if (siblingPromise) {
+            await siblingPromise;
         }
+
+        // Build patches: merge super's patches with geocoding lat/lng if available.
+        // These patch the SP result row before finalizeSave() loads it into the entity,
+        // ensuring the entity object has fresh coordinates without a re-query.
+        if (geoResult) {
+            const geoPatches: Record<string, unknown> = {
+                __mj_Latitude: geoResult.Latitude,
+                __mj_Longitude: geoResult.Longitude,
+            };
+            return superPatches ? { ...superPatches, ...geoPatches } : geoPatches;
+        }
+
+        return superPatches;
     }
 
     protected override async OnBeforeDeleteExecute(entity: BaseEntity, user: UserInfo, options: EntityDeleteOptions): Promise<void> {

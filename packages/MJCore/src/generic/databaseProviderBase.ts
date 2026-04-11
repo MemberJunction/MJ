@@ -779,11 +779,41 @@ export abstract class DatabaseProviderBase extends ProviderBase {
     }
 
     /**
-     * Called after a direct (non-transaction) save succeeds, before returning.
-     * SQL Server overrides to propagate record-change entries to IS-A sibling branches.
+     * Called after a direct (non-transaction) save succeeds, before the result is returned
+     * to the caller and loaded into the entity via finalizeSave().
+     *
+     * ## Post-Save Patch Mechanism
+     *
+     * This hook can optionally return a `Record<string, unknown>` containing field values
+     * that should be patched onto the SP result row before it is loaded into the entity.
+     * This solves a timing problem: the SP result is captured before OnSaveCompleted runs,
+     * so any data created by post-save hooks (e.g., geocoding writing to a JOINed table)
+     * would be stale in the returned entity without this patch.
+     *
+     * ### How it works:
+     * 1. The SP executes and returns `result[0]` with the current view data
+     * 2. `OnSaveCompleted` runs post-save logic (geocoding, ISA propagation, etc.)
+     * 3. If this method returns a non-null Record, those key/value pairs are merged
+     *    onto `result[0]` via `Object.assign()`, overwriting stale values
+     * 4. The patched result is then returned to BaseEntity.finalizeSave() which calls
+     *    SetMany() to load the corrected data into the entity
+     *
+     * ### Example — Geocoding patch:
+     * After geocoding updates RecordGeoCode, the new lat/lng are returned as patches
+     * for the `__mj_Latitude` and `__mj_Longitude` virtual fields that come from the
+     * RecordGeoCode JOIN in the entity's base view. Without this patch, those fields
+     * would contain the pre-geocoding values until the next query.
+     *
+     * ### Guidelines for subclass implementors:
+     * - Return `null` if no patches are needed (default behavior)
+     * - Only include fields that were actually changed by your post-save logic
+     * - Always call `await super.OnSaveCompleted(...)` and merge its patches with yours
+     * - Patches are shallow-merged via Object.assign — last writer wins for each key
+     *
+     * @returns Patch fields to apply to the SP result, or null if no patches needed
      */
-    protected async OnSaveCompleted(_entity: BaseEntity, _saveSQLResult: SaveSQLResult, _user: UserInfo, _options: EntitySaveOptions, _context: SaveContext): Promise<void> {
-        /* no-op by default */
+    protected async OnSaveCompleted(_entity: BaseEntity, _saveSQLResult: SaveSQLResult, _user: UserInfo, _options: EntitySaveOptions, _context: SaveContext): Promise<Record<string, unknown> | null> {
+        return null; /* no-op by default */
     }
 
     /**
@@ -1290,7 +1320,15 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                     if (result && result.length > 0) {
                         this.OnAfterSaveExecute(entity, user, options, saveContext);
                         entityResult.Success = true;
-                        await this.OnSaveCompleted(entity, sqlDetails, user, options, saveContext);
+
+                        // OnSaveCompleted may return patch fields (e.g., updated lat/lng
+                        // from geocoding) that need to be merged onto the SP result before
+                        // the entity loads the data via finalizeSave().
+                        const patches = await this.OnSaveCompleted(entity, sqlDetails, user, options, saveContext);
+                        if (patches) {
+                            Object.assign(result[0], patches);
+                        }
+
                         return result[0];
                     } else {
                         if (bNewRecord)
