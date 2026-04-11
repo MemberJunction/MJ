@@ -96,6 +96,68 @@ The shell owns ALL URL ↔ workspace synchronization, including query param chan
 2. A way to **receive** query param changes from back/forward (`OnQueryParamsChanged`)
 3. URL generation that **preserves** query params across all resource types
 
+### Prerequisites: ResourceData.TabId + BaseResourceComponent Lifecycle
+
+These must be implemented before any Layer work begins.
+
+#### Add TabId to ResourceData
+**File:** `packages/MJCoreEntities/src/custom/ResourcePermissions/ResourceData.ts`
+
+`ResourceData` currently has: `ID`, `Name`, `ResourceTypeID`, `ResourceRecordID`, `Configuration`. **No `TabId` field.**
+
+**Fix:** Add `TabId` to the `Configuration` object during tab content loading.
+
+**File:** `packages/Angular/Explorer/explorer-core/src/lib/shell/components/tabs/tab-container.component.ts`
+
+In `getResourceDataFromTab()` (line ~953), the `resourceConfig` object is built from tab configuration. Add the tab ID:
+
+```typescript
+// Line ~953 — add tab.id to the configuration
+const resourceConfig = {
+    ...config,
+    applicationId: tab.applicationId,
+    resourceTypeDriverClass: driverClass,
+    tabId: tab.id  // ← ADD THIS — needed for query param notification scoping
+};
+```
+
+#### Add destroy$ and ngOnInit/ngOnDestroy to BaseResourceComponent
+**File:** `packages/Angular/Explorer/shared/src/lib/base-resource-component.ts`
+
+`BaseResourceComponent` currently has **no `ngOnInit`**, **no `ngOnDestroy`**, and **no `destroy$` Subject**. These must be added for the query param subscription to work. Each subclass that already overrides `ngOnInit` or `ngOnDestroy` must call `super.ngOnInit()` / `super.ngOnDestroy()`.
+
+```typescript
+export abstract class BaseResourceComponent extends BaseNavigationComponent implements OnInit, OnDestroy {
+    private destroy$ = new Subject<void>();
+
+    ngOnInit(): void {
+        this.setupQueryParamSubscription();
+    }
+
+    ngOnDestroy(): void {
+        this.destroy$.next();
+        this.destroy$.complete();
+    }
+
+    // ... query param methods from Layer 3 ...
+}
+```
+
+**⚠️ IMPORTANT:** Audit all existing `BaseResourceComponent` subclasses that override `ngOnInit` or `ngOnDestroy` to ensure they call `super.ngOnInit()` / `super.ngOnDestroy()`. If they don't, the query param subscription won't be set up or cleaned up. Key subclasses to check:
+- `DataExplorerDashboardComponent` (extends `BaseDashboard` which extends `BaseResourceComponent`)
+- `QueryBrowserResourceComponent`
+- `MCPDashboardComponent`
+- `ActionExplorerComponent`
+- `ChatTasksResource`
+- `ChatCollectionsResource`
+- `SearchResultsResource`
+- `UserViewResource`
+- All dashboard components in `packages/Angular/Explorer/dashboards/`
+
+Note: `BaseDashboard` already has `ngOnInit()` — verify it calls `super.ngOnInit()` after this change.
+
+---
+
 ### Layer 0: Fix shouldReuseRoute (Eliminate Race Condition)
 **File:** `packages/Angular/Explorer/explorer-core/src/app-routing.module.ts`
 
@@ -383,32 +445,138 @@ Also update all state change handlers (entity selection, filter change, view mod
 #### E2: Query Browser Resource
 **File:** `dashboards/src/QueryBrowser/query-browser-resource.component.ts`
 
-**Remove:** `Router`, `NavigationEnd` import, `router.events` subscription (line 126-128), `router.url` reads (lines 778, 807-808), custom URL parsing/tracking boilerplate.
+**State shape:** Single query param `queryId` (UUID of selected query).
 
-**Replace:** Override `OnQueryParamsChanged()` for back/forward, call `UpdateQueryParams()` on state changes.
+**Remove:**
+- `import { Router, NavigationEnd } from '@angular/router'` (line 3)
+- `private router: Router` constructor injection
+- `skipUrlUpdate` flag (line 79)
+- `lastNavigatedUrl` tracking (line 80)
+- `router.events` / `NavigationEnd` subscription (lines 126-136)
+- `onExternalNavigation()` method and `parseUrlFromString()` helper
+- `updateUrl()` method (lines 785-799)
+
+**Replace with:**
+```typescript
+// In init (after data loads)
+const params = this.GetQueryParams();
+if (params['queryId']) {
+    this.selectQueryById(params['queryId']);
+}
+
+protected override OnQueryParamsChanged(params: Record<string, string>, source: 'popstate' | 'deeplink'): void {
+    if (params['queryId']) {
+        this.selectQueryById(params['queryId']);
+    } else {
+        this.selectedQuery = null;
+    }
+}
+
+// On query selection (replace updateUrl call sites)
+this.UpdateQueryParams({
+    queryId: this.selectedQuery?.ID ?? null
+});
+```
 
 #### E3: MCP Dashboard
 **File:** `dashboards/src/MCP/mcp-dashboard.component.ts`
 
-**Remove:** `Router`, `ActivatedRoute`, `NavigationEnd` imports (line 13), `router.events` subscription (lines 379-381), `router.navigate()` calls (lines 1506, 1525), `router.url` reads (lines 337, 344, 519), `lastNavigatedUrl` tracking.
+**State shape:** Single query param `tab` (value: `'servers'` | `'connections'` | `'tools'` | `'logs'`).
 
-**Replace:** Override `OnQueryParamsChanged()`, call `UpdateQueryParams()`.
+**Remove:**
+- `import { Router, NavigationEnd, ActivatedRoute } from '@angular/router'` (line 13)
+- `private router: Router` and `private route: ActivatedRoute` constructor injections
+- `skipUrlUpdate` flag (line 273)
+- `lastNavigatedUrl` tracking (line 274)
+- `subscribeToRouterEvents()` method (lines 378-389)
+- `onExternalNavigation()` method and `parseUrlFromString()` helper
+- `updateUrl()` method (lines 511-520)
+- `router.navigate()` calls (lines 1506, 1525) — replace with `UpdateQueryParams`
+- `router.url` reads (lines 337, 344, 519)
+
+**Replace with:**
+```typescript
+// In init (after data loads)
+const params = this.GetQueryParams();
+if (params['tab']) {
+    this.ActiveTab = params['tab'] as MCPDashboardTab;
+}
+
+protected override OnQueryParamsChanged(params: Record<string, string>, source: 'popstate' | 'deeplink'): void {
+    if (params['tab']) {
+        this.ActiveTab = params['tab'] as MCPDashboardTab;
+        this.loadTabData();
+    }
+}
+
+// On tab switch (replace updateUrl and router.navigate call sites)
+this.UpdateQueryParams({ tab: this.ActiveTab });
+```
 
 #### E4: Action Explorer
 **File:** `dashboards/src/Actions/components/explorer/action-explorer.component.ts`
 
-**Remove:** `Router`, `NavigationEnd` import (line 9), `router.events` subscription (lines 108-110), `router.url` reads (lines 121, 272).
+**State shape:** Query params built by `ActionExplorerStateService.buildQueryParams()` — likely includes `viewMode`, `categoryId`, and filter/sort state. Check `buildQueryParams()` for the exact param names.
 
-**Replace:** Override `OnQueryParamsChanged()`, call `UpdateQueryParams()`.
+**Remove:**
+- `import { Router, NavigationEnd } from '@angular/router'` (line 9)
+- `private router: Router` constructor injection
+- `skipUrlUpdate` flag (line 53)
+- `lastNavigatedUrl` tracking (line 52)
+- `subscribeToRouterEvents()` method (lines 107-116)
+- `onExternalNavigation()` method and URL parsing helpers
+- `updateUrl()` method (lines 267-273)
+
+**Replace with:**
+```typescript
+// In init (after data loads)
+const params = this.GetQueryParams();
+if (Object.keys(params).length > 0) {
+    this.StateService.applyQueryParams(params);  // or parse manually if no applyQueryParams exists
+}
+
+protected override OnQueryParamsChanged(params: Record<string, string>, source: 'popstate' | 'deeplink'): void {
+    this.StateService.applyQueryParams(params);
+}
+
+// On state changes (replace updateUrl call sites)
+this.UpdateQueryParams(this.StateService.buildQueryParams());
+```
+
+**Note:** If `ActionExplorerStateService` doesn't have an `applyQueryParams()` method (inverse of `buildQueryParams()`), one must be created. It should parse the query param values and update the state service's observables (ViewMode$, SelectedCategoryId$, Filters$, SortConfig$).
 
 #### E5: User Notifications (Different Category — Cross-Tab Navigation, Not Query Param Sub-Navigation)
 **File:** `explorer-core/src/lib/user-notifications/user-notifications.component.ts`
 
 **Note:** This component is NOT doing query param sub-navigation. It uses Router to navigate to entirely different resources (opening records/views from notification clicks). The fix is to use NavigationService's existing navigation methods, NOT the `OnQueryParamsChanged` pattern.
 
-**Remove:** `import { Router }` (line 5), `router.navigateByUrl()` (line 363), `router.navigate()` (line 366).
+**Remove:** `import { Router }` (line 5), `private router: Router` constructor injection.
 
-**Replace:** Use `NavigationService.OpenEntityRecord()`, `NavigationService.OpenView()`, or `NavigationService.OpenDashboard()` for notification click handlers. The notification data should contain enough info (entity name, record ID, view ID) to call the appropriate NavigationService method.
+**Router usage at lines 363 and 366:**
+```typescript
+// Current code (line 363):
+const fullUrl = `${info.urlParts.join('/')}${info.queryString ? '?' + info.queryString : ''}`;
+this.router.navigateByUrl(fullUrl);
+
+// Current code (line 366):
+this.router.navigate(info.urlParts);
+```
+
+The notification data provides: `notification.ResourceTypeID`, `notification.ResourceRecordID`, `notification.ResourceConfiguration` (JSON string with optional `Entity`, `type`, `conversationId`, `requestId`, etc.).
+
+The component already uses `NavigationService` in some code paths (lines 388-391, 436-439):
+```typescript
+this.navigationService.OpenNavItemByName('Agent Requests', { requestId: config.requestId }, aiApp.ID);
+this.navigationService.OpenNavItemByName('Conversations', navConfig, chatApp.ID);
+```
+
+**Replace the Router calls** by parsing the notification's `ResourceConfiguration` and routing through NavigationService:
+- If `config.Entity` is present → `navigationService.OpenEntityRecord(entityName, compositeKey)`
+- If `config.type === 'conversation'` → `navigationService.OpenNavItemByName('Conversations', ...)`
+- If `config.type === 'agent-request'` → `navigationService.OpenNavItemByName('Agent Requests', ...)`
+- For other resource types, parse `info.urlParts` to determine entity/record/view and call the appropriate NavigationService method
+
+The exact mapping depends on what `info.urlParts` contains for each notification type — the developer should trace the `parseNotificationUrl()` method (or equivalent) to understand the URL structure for each case.
 
 #### E6: Single Dashboard (unused import)
 **File:** `explorer-core/src/lib/single-dashboard/single-dashboard.component.ts`
@@ -487,11 +655,19 @@ User clicks Back
 Phases 1-5 are committed work in this plan — none are optional. Phase 6 (declarative adapter) is a separate follow-up plan. Each phase includes writing unit tests for every change made in that phase (see Testing Requirements above).
 
 ### Phase 1: Framework Foundation (prerequisite for all migrations)
+0. **Prerequisites**: Add `tabId` to ResourceData configuration in tab-container.component.ts. Add `destroy$`, `ngOnInit`, `ngOnDestroy` to BaseResourceComponent. Audit all subclasses for `super.ngOnInit()` / `super.ngOnDestroy()` calls.
 1. **Layer 0**: Fix `shouldReuseRoute` — eliminate race condition + unit tests
 2. **Layer 1**: Shell `syncWorkspaceWithUrl` — detect query param changes on active tab + unit tests for extractQueryParamsFromUrl, queryParamsEqual, and the new branch logic
 3. **Layer 2**: NavigationService — add `QueryParamChanged$` observable + unit tests
-4. **Layer 3**: BaseResourceComponent — add `OnQueryParamsChanged`, `UpdateQueryParams`, `GetQueryParams` + unit tests for suppression, lifecycle, edge cases
+4. **Layer 3**: BaseResourceComponent — add `OnQueryParamsChanged`, `UpdateQueryParams`, `GetQueryParams`, `setupQueryParamSubscription` + unit tests for suppression, lifecycle, edge cases
 5. **Layer 4**: `buildResourceUrl` — add `appendQueryParams` helper, apply to all resource types + unit tests for every resource type URL
+
+**Phase 1 Isolation Testing:** After Phase 1 is complete but before any Phase 3 migrations, verify the framework works end-to-end using Data Explorer as-is. The existing Data Explorer still has its own NavigationEnd subscription, so both the old and new mechanisms will fire. Verify:
+- The shell's new `else if` branch detects query param changes (add `console.log` temporarily)
+- `NavigationService.QueryParamChanged$` emits (add a temporary test subscriber)
+- `BaseResourceComponent.OnQueryParamsChanged` is called (the default is a no-op, so nothing visible, but unit tests confirm wiring)
+- No regressions in nav item switching, tab switching, or record opening
+- `shouldReuseRoute` returning `true` for query-param-only changes doesn't break any existing flows
 
 ### Phase 2: Enforcement & Documentation
 6. **Layer 5**: Add `CLAUDE.md` to `packages/Angular/Generic/` with no-Router rule
@@ -683,6 +859,8 @@ These changes are load-bearing for every navigation path in the application. A b
 
 | File | Phase | Change |
 |------|-------|--------|
+| `explorer-core/src/lib/shell/components/tabs/tab-container.component.ts` | 1 (prereq) | Add `tabId: tab.id` to resourceConfig in `getResourceDataFromTab()` |
+| `MJCoreEntities/src/custom/ResourcePermissions/ResourceData.ts` | 1 (prereq) | Verify type supports `tabId` in Configuration (may need no change if Configuration is `any`) |
 | `explorer-core/src/app-routing.module.ts` | 1 | Fix `shouldReuseRoute` to ignore query params |
 | `explorer-core/src/lib/shell/shell.component.ts` | 1 | Add query param detection in `syncWorkspaceWithUrl` + `appendQueryParams` helper in `buildResourceUrl` |
 | `shared/src/lib/navigation.service.ts` | 1 | Add `QueryParamChanged$` observable + `NotifyQueryParamsChanged` |
