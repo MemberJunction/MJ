@@ -2,7 +2,7 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { BaseAction } from "@memberjunction/actions";
 import { RunView, UserInfo } from "@memberjunction/core";
 import { MJFileStorageAccountEntity, MJFileStorageProviderEntity } from "@memberjunction/core-entities";
-import { FileStorageBase, initializeDriverWithAccountCredentials } from "@memberjunction/storage";
+import { FileStorageBase, FileStorageEngine } from "@memberjunction/storage";
 
 /**
  * Abstract base class for file storage operations.
@@ -57,22 +57,17 @@ export abstract class BaseFileStorageAction extends BaseAction {
     }
 
     /**
-     * Initialize storage driver using the enterprise credential model
+     * Initialize storage driver using the enterprise credential model via FileStorageEngine.
      * @param accountEntity - MJFileStorageAccountEntity to initialize
-     * @param providerEntity - MJFileStorageProviderEntity for the account
      * @param contextUser - User context for credential access
      * @returns Initialized FileStorageBase driver
      */
     protected async initializeDriver(
         accountEntity: MJFileStorageAccountEntity,
-        providerEntity: MJFileStorageProviderEntity,
         contextUser: UserInfo
     ): Promise<FileStorageBase> {
-        return initializeDriverWithAccountCredentials({
-            accountEntity,
-            providerEntity,
-            contextUser
-        });
+        await FileStorageEngine.Instance.Config(false, contextUser);
+        return FileStorageEngine.Instance.GetDriver(accountEntity.ID, contextUser);
     }
 
     /**
@@ -103,7 +98,7 @@ export abstract class BaseFileStorageAction extends BaseAction {
             };
         }
 
-        const driver = await this.initializeDriver(account, provider, params.ContextUser);
+        const driver = await this.initializeDriver(account, params.ContextUser);
         return { driver };
     }
 

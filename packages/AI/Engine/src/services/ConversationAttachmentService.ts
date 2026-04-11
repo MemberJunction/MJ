@@ -12,7 +12,7 @@
  * @since 2.130.0
  */
 
-import { Metadata, RunView, UserInfo, IMetadataProvider, IRunViewProvider } from '@memberjunction/core';
+import { Metadata, RunView, UserInfo, IMetadataProvider } from '@memberjunction/core';
 import {
     MJFileStorageProviderEntity,
     MJFileStorageAccountEntity,
@@ -20,11 +20,10 @@ import {
     MJAIAgentEntity,
     MJAIModelEntity,
     MJConversationDetailAttachmentEntity,
-    MJAIModalityEntity,
-    FileStorageEngine
+    MJAIModalityEntity
 } from '@memberjunction/core-entities';
 import { MJGlobal } from '@memberjunction/global';
-import { FileStorageBase, initializeDriverWithAccountCredentials } from '@memberjunction/storage';
+import { FileStorageBase, FileStorageEngine } from '@memberjunction/storage';
 import {
     ConversationUtility,
     AttachmentType,
@@ -99,11 +98,6 @@ export class ConversationAttachmentService {
         return provider ?? this._defaultProvider;
     }
 
-    /** Casts the resolved IMetadataProvider to IRunViewProvider for RunView construction.
-     *  Safe because the runtime object is always a ProviderBase which implements both interfaces. */
-    private asRunViewProvider(provider?: IMetadataProvider): IRunViewProvider {
-        return <IRunViewProvider><any>(provider ?? this._defaultProvider); // eslint-disable-line @typescript-eslint/no-explicit-any
-    }
 
     /**
      * Load and cache modalities for efficient lookup
@@ -113,7 +107,7 @@ export class ConversationAttachmentService {
             return;
         }
 
-        const rv = new RunView(this.asRunViewProvider(provider));
+        const rv = RunView.FromMetadataProvider(provider ?? this._defaultProvider);
         const result = await rv.RunView<MJAIModalityEntity>({
             EntityName: 'MJ: AI Modalities',
             ResultType: 'entity_object'
@@ -342,7 +336,7 @@ export class ConversationAttachmentService {
             }
 
             // Find the FileStorageAccount that links to this provider
-            const rv = new RunView(this.asRunViewProvider(provider));
+            const rv = RunView.FromMetadataProvider(provider ?? this._defaultProvider);
             const accountResult = await rv.RunView<MJFileStorageAccountEntity>({
                 EntityName: 'MJ: File Storage Accounts',
                 ExtraFilter: `ProviderID = '${file.ProviderID}'`,
@@ -352,12 +346,8 @@ export class ConversationAttachmentService {
 
             let driver: FileStorageBase;
             if (accountResult.Success && accountResult.Results.length > 0) {
-                // Initialize driver with account credentials (handles OAuth token refresh)
-                driver = await initializeDriverWithAccountCredentials({
-                    accountEntity: accountResult.Results[0],
-                    providerEntity: storageProvider,
-                    contextUser
-                });
+                // Initialize driver with account credentials via FileStorageEngine
+                driver = await FileStorageEngine.Instance.GetDriver(accountResult.Results[0].ID, contextUser);
             } else {
                 // Fallback: create driver without account credentials (env vars only)
                 driver = MJGlobal.Instance.ClassFactory.CreateInstance<FileStorageBase>(
@@ -419,7 +409,7 @@ export class ConversationAttachmentService {
         contextUser: UserInfo,
         provider?: IMetadataProvider
     ): Promise<MJConversationDetailAttachmentEntity[]> {
-        const rv = new RunView(this.asRunViewProvider(provider));
+        const rv = RunView.FromMetadataProvider(provider ?? this._defaultProvider);
         const result = await rv.RunView<MJConversationDetailAttachmentEntity>({
             EntityName: 'MJ: Conversation Detail Attachments',
             ExtraFilter: `ConversationDetailID='${conversationDetailId}'`,
@@ -452,7 +442,7 @@ export class ConversationAttachmentService {
 
         const idList = conversationDetailIds.map(id => `'${id}'`).join(',');
 
-        const rv = new RunView(this.asRunViewProvider(provider));
+        const rv = RunView.FromMetadataProvider(provider ?? this._defaultProvider);
         const result = await rv.RunView<MJConversationDetailAttachmentEntity>({
             EntityName: 'MJ: Conversation Detail Attachments',
             ExtraFilter: `ConversationDetailID IN (${idList})`,
@@ -554,7 +544,7 @@ export class ConversationAttachmentService {
      * 1. Agent's `DefaultStorageAccountID` (account-based, with credentials)
      * 2. Fallback: Agent's `AttachmentStorageProviderID` (legacy provider-based)
      *
-     * When an account is resolved, uses `initializeDriverWithAccountCredentials()`
+     * When an account is resolved, uses `FileStorageEngine.Instance.UploadFile()`
      * for proper OAuth credential handling.
      */
     private async uploadToStorage(
@@ -566,44 +556,43 @@ export class ConversationAttachmentService {
         provider?: IMetadataProvider
     ): Promise<{ success: boolean; fileId?: string; error?: string }> {
         const md = this.resolveProvider(provider);
-        let driver: FileStorageBase;
-        let providerId: string;
 
-        // Prefer account-based resolution (new path with proper credentials)
+        // Prefer account-based resolution (new path via FileStorageEngine)
         const storageAccountId = agent?.DefaultStorageAccountID ?? null;
         if (storageAccountId) {
             await FileStorageEngine.Instance.Config(false, contextUser);
-            const resolved = FileStorageEngine.Instance.GetAccountWithProvider(storageAccountId);
-            if (!resolved) {
-                return { success: false, error: `Storage account ${storageAccountId} not found` };
+            try {
+                const result = await FileStorageEngine.Instance.UploadFile({
+                    content: Buffer.from(base64Data, 'base64'),
+                    fileName,
+                    mimeType,
+                    contextUser,
+                    storageAccountId,
+                    provider: md,
+                    pathPrefix: `conversation-attachments/${Date.now()}`
+                });
+                return { success: true, fileId: result.FileID };
+            } catch (err) {
+                return { success: false, error: (err as Error).message };
             }
-            driver = await initializeDriverWithAccountCredentials({
-                accountEntity: resolved.account,
-                providerEntity: resolved.provider,
-                contextUser
-            });
-            providerId = resolved.provider.ID;
-        } else {
-            // Legacy fallback: provider-based resolution (no account credentials)
-            const legacyProviderId = agent?.AttachmentStorageProviderID ?? null;
-            if (!legacyProviderId) {
-                return { success: false, error: 'No storage provider configured for attachments' };
-            }
-            const storageProviderEntity = await md.GetEntityObject<MJFileStorageProviderEntity>('MJ: File Storage Providers', contextUser);
-            if (!await storageProviderEntity.Load(legacyProviderId)) {
-                return { success: false, error: 'Failed to load storage provider' };
-            }
-            driver = MJGlobal.Instance.ClassFactory.CreateInstance<FileStorageBase>(
-                FileStorageBase,
-                storageProviderEntity.ServerDriverKey
-            );
-            providerId = legacyProviderId;
         }
 
+        // Legacy fallback: provider-based resolution (no account credentials)
+        const legacyProviderId = agent?.AttachmentStorageProviderID ?? null;
+        if (!legacyProviderId) {
+            return { success: false, error: 'No storage provider configured for attachments' };
+        }
+        const storageProviderEntity = await md.GetEntityObject<MJFileStorageProviderEntity>('MJ: File Storage Providers', contextUser);
+        if (!await storageProviderEntity.Load(legacyProviderId)) {
+            return { success: false, error: 'Failed to load storage provider' };
+        }
+        const driver = MJGlobal.Instance.ClassFactory.CreateInstance<FileStorageBase>(
+            FileStorageBase,
+            storageProviderEntity.ServerDriverKey
+        );
+
         // Determine storage path
-        const basePath = 'conversation-attachments';
-        const timestamp = Date.now();
-        const objectName = `${basePath}/${timestamp}_${fileName}`;
+        const objectName = `conversation-attachments/${Date.now()}_${fileName}`;
 
         // Convert base64 to buffer and upload
         const buffer = Buffer.from(base64Data, 'base64');
@@ -615,7 +604,7 @@ export class ConversationAttachmentService {
         // Create File entity record
         const file = await md.GetEntityObject<MJFileEntity>('MJ: Files', contextUser);
         file.Name = fileName;
-        file.ProviderID = providerId;
+        file.ProviderID = legacyProviderId;
         file.ContentType = mimeType;
         file.ProviderKey = objectName;
         file.Status = 'Uploaded';

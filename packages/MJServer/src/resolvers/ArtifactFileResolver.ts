@@ -1,7 +1,7 @@
 import { Resolver, Query, Arg, Ctx } from 'type-graphql';
-import { Metadata, RunView, IMetadataProvider, IRunViewProvider } from '@memberjunction/core';
-import { MJArtifactVersionEntity, MJFileEntity, MJFileStorageAccountEntity, MJFileStorageProviderEntity } from '@memberjunction/core-entities';
-import { initializeDriverWithAccountCredentials } from '@memberjunction/storage';
+import { Metadata, RunView, IMetadataProvider } from '@memberjunction/core';
+import { MJArtifactVersionEntity, MJFileEntity, MJFileStorageAccountEntity } from '@memberjunction/core-entities';
+import { FileStorageEngine } from '@memberjunction/storage';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { AppContext } from '../types.js';
 import { GetReadWriteProvider } from '../util.js';
@@ -58,11 +58,8 @@ export class ArtifactFileResolver extends ResolverBase {
             throw new Error(`File record ${fileId} not found`);
         }
 
-        const providerEntity = await provider.GetEntityObject<MJFileStorageProviderEntity>('MJ: File Storage Providers', user);
-        await providerEntity.Load(fileEntity.ProviderID);
-
-        // Load the storage account so we can use the credential engine for OAuth providers (e.g. Box)
-        const rv = new RunView(<IRunViewProvider><any>provider);
+        // Find the storage account for this file's provider
+        const rv = RunView.FromMetadataProvider(provider);
         const accountResult = await rv.RunView<MJFileStorageAccountEntity>({
             EntityName: 'MJ: File Storage Accounts',
             ExtraFilter: `ProviderID = '${fileEntity.ProviderID}'`,
@@ -74,12 +71,8 @@ export class ArtifactFileResolver extends ResolverBase {
             throw new Error(`No FileStorageAccount found for ProviderID ${fileEntity.ProviderID}. Cannot generate download URL.`);
         }
 
-        const accountEntity = accountResult.Results[0];
-        const driver = await initializeDriverWithAccountCredentials({
-            accountEntity,
-            providerEntity,
-            contextUser: user!,
-        });
+        await FileStorageEngine.Instance.Config(false, user!);
+        const driver = await FileStorageEngine.Instance.GetDriver(accountResult.Results[0].ID, user!);
         return driver.CreatePreAuthDownloadUrl(fileEntity.ProviderKey ?? fileEntity.Name);
     }
 }
