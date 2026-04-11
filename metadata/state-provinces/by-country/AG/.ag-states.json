@@ -1,0 +1,23 @@
+[
+  {
+    "fields": {
+      "Name": "Antigua & Barbuda",
+      "Code": "AG",
+      "ISO3166_2": "AG-AG",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Antigua & Barbuda"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AG"
+    },
+    "primaryKey": {
+      "ID": "929A3CE5-A4FE-4A6C-9FBB-41EFF6F24502"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:26.653Z",
+      "checksum": "6cbcb17eb372af8450d1f07ca0c636103721d8e7ef0f9d3ea83533ab6cebfee7"
+    }
+  }
+]

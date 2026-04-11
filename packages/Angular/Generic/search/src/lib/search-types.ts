@@ -37,6 +37,12 @@ export interface SearchResultItem {
     MatchedAt: Date;
     /** Raw vector metadata JSON — contains all entity fields stored in the vector DB */
     RawMetadata?: string;
+    /** ID of the SearchProvider metadata record that produced this result */
+    ProviderId?: string;
+    /** Display label from the SearchProvider metadata (e.g., "Database", "Semantic Search") */
+    ProviderLabel?: string;
+    /** Font Awesome icon class from the SearchProvider metadata */
+    ProviderIcon?: string;
 }
 
 /** Breakdown of score contribution from each search source */
@@ -102,6 +108,22 @@ export interface SearchRequest {
     MinScore?: number;
 }
 
+/** Metadata about an active search provider from the server */
+export interface SearchProviderInfo {
+    /** SearchProvider record ID */
+    ID: string;
+    /** Provider name */
+    Name: string;
+    /** UI display label */
+    DisplayName: string;
+    /** Font Awesome icon class */
+    Icon: string;
+    /** The SourceType key this provider uses */
+    SourceType: string;
+    /** Priority (lower = higher) */
+    Priority: number;
+}
+
 /** Search response from the service */
 export interface SearchResponse {
     /** Whether the search succeeded */
@@ -118,6 +140,8 @@ export interface SearchResponse {
     ElapsedMs: number;
     /** Count of results from each source */
     SourceCounts: { Vector: number; FullText: number; Entity: number; Storage: number };
+    /** Active search providers metadata (for UI labels and icons) */
+    Providers: SearchProviderInfo[];
     /** Error message if Success is false */
     ErrorMessage?: string;
 }

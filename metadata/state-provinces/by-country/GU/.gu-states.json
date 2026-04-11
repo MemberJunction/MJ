@@ -1,0 +1,23 @@
+[
+  {
+    "fields": {
+      "Name": "Guam",
+      "Code": "GU",
+      "ISO3166_2": "GU-GU",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Guam"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GU"
+    },
+    "primaryKey": {
+      "ID": "3C2739D1-AB77-4BF7-8B84-8EF5327ED271"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:59.037Z",
+      "checksum": "99aefadee58e5a1b463303be32d239014e3939539fe96d88914da86faa905a05"
+    }
+  }
+]

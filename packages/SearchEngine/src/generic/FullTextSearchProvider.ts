@@ -10,7 +10,8 @@
  */
 
 import { LogError, Metadata, UserInfo } from '@memberjunction/core';
-import { ISearchProvider } from './ISearchProvider';
+import { RegisterClass } from '@memberjunction/global';
+import { BaseSearchProvider, SearchProviderConfig } from './ISearchProvider';
 import { SearchSource, SearchFilters, SearchResultItem, SearchResultType } from './search.types';
 import { SearchEnricher } from './SearchEnricher';
 
@@ -18,21 +19,15 @@ import { SearchEnricher } from './SearchEnricher';
  * Provides full-text search using the MJ Metadata.FullTextSearch() method.
  * Always available since it relies on the standard MJ provider infrastructure.
  */
-export class FullTextSearchProvider implements ISearchProvider {
+@RegisterClass(BaseSearchProvider, 'FullTextSearchProvider')
+export class FullTextSearchProvider extends BaseSearchProvider {
     public readonly SourceType: SearchSource = 'fulltext';
 
-    private enricher: SearchEnricher;
+    private enricher: SearchEnricher | null = null;
 
-    constructor(enricher: SearchEnricher) {
+    /** Set the enricher instance. Called by SearchEngine after construction. */
+    public SetEnricher(enricher: SearchEnricher): void {
         this.enricher = enricher;
-    }
-
-    /**
-     * Full-text search is always available since it uses the standard
-     * Metadata.FullTextSearch() infrastructure.
-     */
-    public IsAvailable(): boolean {
-        return true;
     }
 
     /**
@@ -64,7 +59,7 @@ export class FullTextSearchProvider implements ISearchProvider {
             }
 
             const results: SearchResultItem[] = ftsResult.Results.map(r => ({
-                ID: `ft-${r.EntityName}-${r.RecordID}`,
+                ID: r.RecordID,
                 EntityName: r.EntityName,
                 RecordID: r.RecordID,
                 SourceType: 'fulltext',
@@ -78,11 +73,13 @@ export class FullTextSearchProvider implements ISearchProvider {
             }));
 
             // Batch-load tags for FTS results
-            await this.enricher.EnrichWithTags(results, contextUser);
+            if (this.enricher) {
+                await this.enricher.EnrichWithTags(results, contextUser);
 
-            // Apply tag filter if specified
-            if (filters?.Tags?.length) {
-                return this.enricher.FilterByTags(results, filters.Tags);
+                // Apply tag filter if specified
+                if (filters?.Tags?.length) {
+                    return this.enricher.FilterByTags(results, filters.Tags);
+                }
             }
 
             return results;

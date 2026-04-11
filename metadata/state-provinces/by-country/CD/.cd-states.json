@@ -1,0 +1,233 @@
+[
+  {
+    "fields": {
+      "Name": "Bandundu",
+      "Code": "BN",
+      "ISO3166_2": "CD-BN",
+      "Latitude": -4.6178,
+      "Longitude": 18.4474,
+      "BoundaryGeoJSON": "@file:by-country/CD/boundaries/CD-BN.geojson",
+      "CommonAliases": [
+        "Bandundu"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CD"
+    },
+    "primaryKey": {
+      "ID": "7032C2E4-7BDC-4F39-AB7D-9CC1918612C2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:36.089Z",
+      "checksum": "3bc28db473b02c90c15bbebe80f785b244c5fc06e66b6f05bc24488b4db3066b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bas-Congo",
+      "Code": "BC",
+      "ISO3166_2": "CD-BC",
+      "Latitude": -5.3191,
+      "Longitude": 14.2052,
+      "BoundaryGeoJSON": "@file:by-country/CD/boundaries/CD-BC.geojson",
+      "CommonAliases": [
+        "Bas-Congo"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CD"
+    },
+    "primaryKey": {
+      "ID": "4AF9A40A-CEB9-4A69-8464-216DFCE0AF78"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:36.110Z",
+      "checksum": "6ad7584b97347ce20d07472c3c40d3fb9863686b9a2bc9e250b2a134139fceb4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Équateur",
+      "Code": "EQ",
+      "ISO3166_2": "CD-EQ",
+      "Latitude": 1.2184,
+      "Longitude": 20.4731,
+      "BoundaryGeoJSON": "@file:by-country/CD/boundaries/CD-EQ.geojson",
+      "CommonAliases": [
+        "Équateur"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CD"
+    },
+    "primaryKey": {
+      "ID": "71EAF687-1E6D-4885-88DA-6ECF03DAE124"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:36.132Z",
+      "checksum": "60a4d2948d862c04af773aa18f2a77426ce759c02b0ec2743b884c2fdb7cac8f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Haut-Congo",
+      "Code": "HC",
+      "ISO3166_2": "CD-HC",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Haut-Congo"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CD"
+    },
+    "primaryKey": {
+      "ID": "F3C48449-3FE5-437C-B56C-590239FBC0A0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:36.152Z",
+      "checksum": "0770d60a6f8275c3dcb29ce22393ba078c06e604a72a701c28c32fe793383f28"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kasai-Occidental",
+      "Code": "KW",
+      "ISO3166_2": "CD-KW",
+      "Latitude": -4.8758,
+      "Longitude": 21.7144,
+      "BoundaryGeoJSON": "@file:by-country/CD/boundaries/CD-KW.geojson",
+      "CommonAliases": [
+        "Kasai-Occidental"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CD"
+    },
+    "primaryKey": {
+      "ID": "F792EA04-E8D5-4DB0-A4C8-EF0905AF55C1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:36.171Z",
+      "checksum": "eaf8f663e4bd9a79b769258574c8baf4d3790e06f8e6043d019c64c6cd845a4d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kasai-Oriental",
+      "Code": "KE",
+      "ISO3166_2": "CD-KE",
+      "Latitude": -4.4051,
+      "Longitude": 24.0842,
+      "BoundaryGeoJSON": "@file:by-country/CD/boundaries/CD-KE.geojson",
+      "CommonAliases": [
+        "Kasai-Oriental"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CD"
+    },
+    "primaryKey": {
+      "ID": "E40DD541-BB2C-4DC4-A354-E4435EA7DDBC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:36.189Z",
+      "checksum": "bb732125b3ec34c232a4b97e1a1fe6d30b09ce4ad549b7be7237fceeb21e3699"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Katanga",
+      "Code": "KA",
+      "ISO3166_2": "CD-KA",
+      "Latitude": -8.4837,
+      "Longitude": 26.2512,
+      "BoundaryGeoJSON": "@file:by-country/CD/boundaries/CD-KA.geojson",
+      "CommonAliases": [
+        "Katanga"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CD"
+    },
+    "primaryKey": {
+      "ID": "95F57F1F-479C-4978-A02F-2323E69048D0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:36.208Z",
+      "checksum": "7988ff15606c534ae14eb3728e48b7fb77e379202ab3d49a6c9fb1a3f8b35de5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kinshasa",
+      "Code": "KN",
+      "ISO3166_2": "CD-KN",
+      "Latitude": -4.4952,
+      "Longitude": 15.8492,
+      "BoundaryGeoJSON": "@file:by-country/CD/boundaries/CD-KN.geojson",
+      "CommonAliases": [
+        "Kinshasa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CD"
+    },
+    "primaryKey": {
+      "ID": "99D0C122-E931-4028-BD56-3A20C44D54E9"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:36.226Z",
+      "checksum": "83dceba78b15a46765599c266b888c3ad093d243a102d25ed40adecfdc7a4eb4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Maniema",
+      "Code": "MA",
+      "ISO3166_2": "CD-MA",
+      "Latitude": -3.2602,
+      "Longitude": 26.0336,
+      "BoundaryGeoJSON": "@file:by-country/CD/boundaries/CD-MA.geojson",
+      "CommonAliases": [
+        "Maniema"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CD"
+    },
+    "primaryKey": {
+      "ID": "72652BA6-0825-4AEF-BAED-A4E978F3AF88"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:36.244Z",
+      "checksum": "528ec349803d9e65f5997ba0344747ba3f65650086ef1820f8a83674ad620375"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nord-Kivu",
+      "Code": "NK",
+      "ISO3166_2": "CD-NK",
+      "Latitude": -0.6591,
+      "Longitude": 28.5939,
+      "BoundaryGeoJSON": "@file:by-country/CD/boundaries/CD-NK.geojson",
+      "CommonAliases": [
+        "Nord-Kivu"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CD"
+    },
+    "primaryKey": {
+      "ID": "43BCB128-978B-4271-9F87-84553FAB5EE4"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:36.260Z",
+      "checksum": "c39c8dfacbe5cb72f36843c930a62ac802d377a66ec9c1db90667aa6a4f67cda"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sud-Kivu",
+      "Code": "SK",
+      "ISO3166_2": "CD-SK",
+      "Latitude": -3.1047,
+      "Longitude": 28.1159,
+      "BoundaryGeoJSON": "@file:by-country/CD/boundaries/CD-SK.geojson",
+      "CommonAliases": [
+        "Sud-Kivu"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CD"
+    },
+    "primaryKey": {
+      "ID": "A5BBB786-435A-4A6D-964B-5FA753C99707"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:36.285Z",
+      "checksum": "f55ba06df9d0ad7aabe0d383bf6454397c9b0b1dc0f732a48d13fe39bd04aa49"
+    }
+  }
+]

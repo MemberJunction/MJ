@@ -1,0 +1,1220 @@
+[
+  {
+    "fields": {
+      "Name": "Agadir",
+      "Code": "AGD",
+      "ISO3166_2": "MA-AGD",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Agadir"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MA"
+    },
+    "primaryKey": {
+      "ID": "14C269FF-A981-4EAC-90A7-76F2B661DBB8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:13.914Z",
+      "checksum": "2f5e19fead1b4cd70c310b2e34e868d89bbbb915411b6a8ef0ebf52919555461"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Aït Baha",
+      "Code": "BAH",
+      "ISO3166_2": "MA-BAH",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Aït Baha"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MA"
+    },
+    "primaryKey": {
+      "ID": "DBC62678-282E-4301-8272-A5C9DDBA42A3"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:13.931Z",
+      "checksum": "796f8eeba2a46fa44c4c6c3232ac2a0d4d263634b8afb563bc7b5257a0c7e6bf"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Aït Melloul",
+      "Code": "MEL",
+      "ISO3166_2": "MA-MEL",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Aït Melloul"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MA"
+    },
+    "primaryKey": {
+      "ID": "739B342C-CB4F-4F2A-BFF0-55630D7B7450"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:13.947Z",
+      "checksum": "ebf073b7043092863b0deff56a529f7e90363fda4bdfbc9a16b422ea880ce5d7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Al Haouz",
+      "Code": "HAO",
+      "ISO3166_2": "MA-HAO",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Al Haouz"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MA"
+    },
+    "primaryKey": {
+      "ID": "DCCE0327-C410-412A-B6C5-5544B438649C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:13.963Z",
+      "checksum": "e5e852b4f923648d91120da379c8dacf0fecc5d8d04cb250cbba4c5026310af5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Al Hoceïma",
+      "Code": "HOC",
+      "ISO3166_2": "MA-HOC",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Al Hoceïma"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MA"
+    },
+    "primaryKey": {
+      "ID": "88F1882F-D3F7-42B8-B880-78D0779AC09E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:13.980Z",
+      "checksum": "09bf51f36e499851de9daca76bbd0db1729db8f609b681c70b3ea16052d76c87"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Assa-Zag",
+      "Code": "ASZ",
+      "ISO3166_2": "MA-ASZ",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Assa-Zag"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MA"
+    },
+    "primaryKey": {
+      "ID": "4AECF4A6-1AE9-4B51-8653-BA6576ABC468"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:13.996Z",
+      "checksum": "b706bf2a940850291c3b9107e6cf1a508ec7e1188a68b362044066205d133ab2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Azilal",
+      "Code": "AZI",
+      "ISO3166_2": "MA-AZI",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Azilal"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MA"
+    },
+    "primaryKey": {
+      "ID": "6110514E-CD46-4124-9491-9832512BA6D2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:14.011Z",
+      "checksum": "553ca6cea3668afe6be86d75d0ead1b3f446fd19cf1d2c60385dcaf225f35a34"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ben Slimane",
+      "Code": "BES",
+      "ISO3166_2": "MA-BES",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Ben Slimane"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MA"
+    },
+    "primaryKey": {
+      "ID": "BB4BC3E7-5153-42B9-AD60-A717828507D5"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:14.027Z",
+      "checksum": "5d16e1f7197a43719103cca01b6845a1f5de4b26c04000fe631ad85284da84ce"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Beni Mellal",
+      "Code": "BEM",
+      "ISO3166_2": "MA-BEM",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Beni Mellal"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MA"
+    },
+    "primaryKey": {
+      "ID": "F4D43387-EE37-45C6-91A7-4DF5A08C560A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:14.043Z",
+      "checksum": "0c0d79c80d2d3ab03e463057490364eb2bee881dd134ce98c55aa5d3eb0347d5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Berkane",
+      "Code": "BER",
+      "ISO3166_2": "MA-BER",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Berkane"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MA"
+    },
+    "primaryKey": {
+      "ID": "9A8BB692-D0F8-4FFA-8188-9EF7DA49CC33"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:14.059Z",
+      "checksum": "49c5bb035f2629bec427335dbc84d5457d401f137269a868aa790c79a3834951"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Boujdour (EH)",
+      "Code": "BOD",
+      "ISO3166_2": "MA-BOD",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Boujdour (EH)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MA"
+    },
+    "primaryKey": {
+      "ID": "3A84D5B4-B376-4301-8566-FE8A10790861"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:14.120Z",
+      "checksum": "fc491ff6a93991ff52b5f9f10203bfecfb651034db8938eadb7c31a60c922575"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Boulemane",
+      "Code": "BOM",
+      "ISO3166_2": "MA-BOM",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Boulemane"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MA"
+    },
+    "primaryKey": {
+      "ID": "AEB380B9-941C-47D9-9698-0CF63A753319"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:14.137Z",
+      "checksum": "015fd0d01d7fcaf9df021511a26b2766e065882330f778bb49edae689a406906"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Casablanca [Dar el Beïda]",
+      "Code": "CAS",
+      "ISO3166_2": "MA-CAS",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Casablanca [Dar el Beïda]"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MA"
+    },
+    "primaryKey": {
+      "ID": "C680CE6B-E490-417F-97CA-19BD07E01EE8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:14.153Z",
+      "checksum": "fce4854f6130ea9a95a9a918af647037747c7b60291e02561fb45886e866fc6d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Centre",
+      "Code": "CE",
+      "ISO3166_2": "MA-CE",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Centre"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MA"
+    },
+    "primaryKey": {
+      "ID": "E72CAD8A-7289-44F9-9FB6-9DB135F70BED"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:14.169Z",
+      "checksum": "77540e52941f23e74c4e81915e78b674bf5ba12349a27e286839c06f255c8d7c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Centre-Nord",
+      "Code": "CN",
+      "ISO3166_2": "MA-CN",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Centre-Nord"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MA"
+    },
+    "primaryKey": {
+      "ID": "854D5680-89CD-48C5-A1D1-5AC9F7CCAE8E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:14.184Z",
+      "checksum": "478ff83834376f35c4905d3aa19055952ada68131cd717e75ae6809ec216935e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Centre-Sud",
+      "Code": "CS",
+      "ISO3166_2": "MA-CS",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Centre-Sud"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MA"
+    },
+    "primaryKey": {
+      "ID": "2B4E205B-CAD9-422F-AC95-8F8E03BE5CA9"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:14.201Z",
+      "checksum": "46a5d1e775b5e7738a2e33db52e75a2c7da85c022c1a6419446bce104d993c17"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Chefchaouene",
+      "Code": "CHE",
+      "ISO3166_2": "MA-CHE",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Chefchaouene"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MA"
+    },
+    "primaryKey": {
+      "ID": "DB4FDB70-461D-4089-B761-B959E6FBB10E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:14.218Z",
+      "checksum": "45b9be53d2221f4007a5613c64d532ff739e9e5429b88a0d536547ddbfa7fb29"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Chichaoua",
+      "Code": "CHI",
+      "ISO3166_2": "MA-CHI",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Chichaoua"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MA"
+    },
+    "primaryKey": {
+      "ID": "5F31BEEE-0E40-44BA-988D-2621B69896DC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:14.238Z",
+      "checksum": "be84685cb710c0521557bb49014a2fc78ae1520ceb5148b590ebf2b37c411c7d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "El Hajeb",
+      "Code": "HAJ",
+      "ISO3166_2": "MA-HAJ",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "El Hajeb"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MA"
+    },
+    "primaryKey": {
+      "ID": "B8B2D07C-38C9-4627-BE0A-F91E606AE291"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:14.259Z",
+      "checksum": "d5af3967a5b28d54b7bac435b4e104d5d4a59d28824d9e52d8df5cc11409f071"
+    }
+  },
+  {
+    "fields": {
+      "Name": "El Jadida",
+      "Code": "JDI",
+      "ISO3166_2": "MA-JDI",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "El Jadida"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MA"
+    },
+    "primaryKey": {
+      "ID": "05F58822-D2FC-478C-8E59-7B5922BE8C3A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:14.275Z",
+      "checksum": "f58e1fd29ac89fb18db34ec4d33395702f65c5b2953e8b78b5b0b41c67755577"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Errachidia",
+      "Code": "ERR",
+      "ISO3166_2": "MA-ERR",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Errachidia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MA"
+    },
+    "primaryKey": {
+      "ID": "BFFAE409-AC92-4204-BECE-269B1E5AC97C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:14.342Z",
+      "checksum": "7d06b02ee28ece1495d4a4999e4dc2cd8f7acb91ad34d8ba5e2a7920ea81629e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Es Semara (EH)",
+      "Code": "ESM",
+      "ISO3166_2": "MA-ESM",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Es Semara (EH)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MA"
+    },
+    "primaryKey": {
+      "ID": "91643C5E-BFD8-4C4A-9566-3B848C1E429B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:14.360Z",
+      "checksum": "3125fec5eabde0cf36e94d3bf4c6ffb0e7b0ac8801f03701c3734810159430c9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Essaouira",
+      "Code": "ESI",
+      "ISO3166_2": "MA-ESI",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Essaouira"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MA"
+    },
+    "primaryKey": {
+      "ID": "8AB03948-60BC-4FFB-B722-9C413D66BB37"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:14.378Z",
+      "checksum": "0be001cf486021abf9384aef073bd7be1dd567fbf97670d95d7de00514ab4465"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Est",
+      "Code": "ES",
+      "ISO3166_2": "MA-ES",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Est"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MA"
+    },
+    "primaryKey": {
+      "ID": "EC9C47BF-1CFB-4A28-BDD7-E344154B4D0B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:14.396Z",
+      "checksum": "5a5dbded991c76d2d936d3ccc50125e6d96224c00ef6639f642269a2a6db71a2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Fès",
+      "Code": "FES",
+      "ISO3166_2": "MA-FES",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Fès"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MA"
+    },
+    "primaryKey": {
+      "ID": "60CF6FD5-F483-49A7-8E48-17A6CB16FF7A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:14.413Z",
+      "checksum": "7fdd82553ff8eaf15eef33610b5ec1d34b68a66fa5dfb6cc8f913b6c95aab38a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Figuig",
+      "Code": "FIG",
+      "ISO3166_2": "MA-FIG",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Figuig"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MA"
+    },
+    "primaryKey": {
+      "ID": "4EC9BD2E-9284-4C4E-B2CB-36FA10B4FE23"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:14.430Z",
+      "checksum": "1caf4d4114db916788b8d61df13fa31cf86f4d19bf875f53015a1a93f9c19b30"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Guelmim",
+      "Code": "GUE",
+      "ISO3166_2": "MA-GUE",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Guelmim"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MA"
+    },
+    "primaryKey": {
+      "ID": "B40C5326-6D8A-4731-A3D1-D26356437072"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:14.446Z",
+      "checksum": "e807a3c8497b79a58bcadd7a5e031f6f90f8eb030bc5b8aa53787412d0b51f2f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ifrane",
+      "Code": "IFR",
+      "ISO3166_2": "MA-IFR",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Ifrane"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MA"
+    },
+    "primaryKey": {
+      "ID": "32DA9572-A646-494D-8E30-CCF3BCD11B69"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:14.463Z",
+      "checksum": "c9bfee08ca890601cc16b9c1a21f8477924e6d615498373e71efc01583da27c9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Jrada",
+      "Code": "IRA",
+      "ISO3166_2": "MA-IRA",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Jrada"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MA"
+    },
+    "primaryKey": {
+      "ID": "1068D31F-9D1A-4C25-BE6E-585F6982640C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:14.480Z",
+      "checksum": "9d2c596eda384f0ec921ecf006b25ca67e01aba4fb8700a9c315edfe86d0edb7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kelaat Sraghna",
+      "Code": "KES",
+      "ISO3166_2": "MA-KES",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Kelaat Sraghna"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MA"
+    },
+    "primaryKey": {
+      "ID": "BB5ACBF4-44A5-4EB2-99DD-EB8372DD153B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:14.493Z",
+      "checksum": "82eac270b6932fcf53c302e9ea7430410aab5c7980d013d9bd32517fca97ba2c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kénitra",
+      "Code": "KEN",
+      "ISO3166_2": "MA-KEN",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Kénitra"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MA"
+    },
+    "primaryKey": {
+      "ID": "6E68CF95-AEFA-466E-B6C1-8D7BC1FBB8E0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:14.553Z",
+      "checksum": "ff658b58a899d0fcfcfa59acb9a9a4b7b2ca25e69bb9d96331495f429e82c777"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Khemisset",
+      "Code": "KHE",
+      "ISO3166_2": "MA-KHE",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Khemisset"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MA"
+    },
+    "primaryKey": {
+      "ID": "DEC71A1E-3185-4939-941A-86BD588C17C5"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:14.569Z",
+      "checksum": "bf4c2b35367fb531bd1df1f19d88d7b3c47b564d9846116caaf8904ef0658072"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Khenifra",
+      "Code": "KHN",
+      "ISO3166_2": "MA-KHN",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Khenifra"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MA"
+    },
+    "primaryKey": {
+      "ID": "0F7AF403-E87E-4E36-93D9-7DE99B9E88F2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:14.584Z",
+      "checksum": "0d964ab451a91ceff00c88fd0a83796707e1dc60a20b44e2843b469ae023539e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Khouribga",
+      "Code": "KHO",
+      "ISO3166_2": "MA-KHO",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Khouribga"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MA"
+    },
+    "primaryKey": {
+      "ID": "3D4D9608-FF8C-43FF-9170-B053544C0B73"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:14.601Z",
+      "checksum": "5de7bd9108328a901c4267ff9580eae5ae79f6393029efd0861a5a64df38599d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Laayoune (EH)",
+      "Code": "LAA",
+      "ISO3166_2": "MA-LAA",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Laayoune (EH)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MA"
+    },
+    "primaryKey": {
+      "ID": "42AABEAB-9D9A-44AB-B0FE-3F2486D6ECE8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:14.617Z",
+      "checksum": "06fc252c93fd67ed4907cfdd90da1f7b46dbe22358e21b525466558d223fa290"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Larache",
+      "Code": "LAR",
+      "ISO3166_2": "MA-LAR",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Larache"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MA"
+    },
+    "primaryKey": {
+      "ID": "E8DD26E7-5524-4CD2-A695-CF65E5E9FFBC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:14.634Z",
+      "checksum": "9720ff04430b796a2d4d0ca425a329c84bc4b6e02c4729a563b73ef788783674"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Marrakech",
+      "Code": "MAR",
+      "ISO3166_2": "MA-MAR",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Marrakech"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MA"
+    },
+    "primaryKey": {
+      "ID": "2A777970-4EE1-4E83-A536-1362004EFCE0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:14.649Z",
+      "checksum": "1e22c62bd032d64856807dd17dbf56e588bf01bc5709fdbe2b29e1f993fea7c4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Meknès",
+      "Code": "MEK",
+      "ISO3166_2": "MA-MEK",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Meknès"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MA"
+    },
+    "primaryKey": {
+      "ID": "D3C48FCD-6F12-41F5-8370-D76E7D931E2D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:14.665Z",
+      "checksum": "7649fed3da2c9ee5957472e6412e4c33ff642735154c42ab1c4981be62908d79"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nador",
+      "Code": "NAD",
+      "ISO3166_2": "MA-NAD",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Nador"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MA"
+    },
+    "primaryKey": {
+      "ID": "BB469B4C-7CF1-4000-88FD-BC186D82AE59"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:14.680Z",
+      "checksum": "45e7d24754c442b67f9121c45b5323f8839cfec91a892184467b7e58ecb336b7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nord-Ouest",
+      "Code": "NO",
+      "ISO3166_2": "MA-NO",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Nord-Ouest"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MA"
+    },
+    "primaryKey": {
+      "ID": "3D294D39-8F74-458C-A587-07AE350D7460"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:14.693Z",
+      "checksum": "4da38cd014987628467d0aa99ff5eab11964dc96b628358118b942d7e1540322"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ouarzazate",
+      "Code": "OUA",
+      "ISO3166_2": "MA-OUA",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Ouarzazate"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MA"
+    },
+    "primaryKey": {
+      "ID": "B10A842F-628E-4A24-ACFB-BFC3D9075E88"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:14.749Z",
+      "checksum": "7088dc9dc495fc3c21ecfd10240d730d965986862f94ca9f516710bffec81732"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Oued ed Dahab (EH)",
+      "Code": "OUD",
+      "ISO3166_2": "MA-OUD",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Oued ed Dahab (EH)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MA"
+    },
+    "primaryKey": {
+      "ID": "6ED832D2-B93B-4213-944F-D2AFDE928640"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:14.763Z",
+      "checksum": "cecc908b70c3bd7a85a58cc3522a104aadb19dd01009f0c7b20454cc5f414cc4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Oujda",
+      "Code": "OUJ",
+      "ISO3166_2": "MA-OUJ",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Oujda"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MA"
+    },
+    "primaryKey": {
+      "ID": "87ECAF17-01BD-485B-A3D5-CA7E09088E51"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:14.778Z",
+      "checksum": "e75dbe25b1fffa07b438b293de7f432082c2e11590ba66ef9be8ec0212ba5ae6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rabat-Salé",
+      "Code": "RBA",
+      "ISO3166_2": "MA-RBA",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Rabat-Salé"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MA"
+    },
+    "primaryKey": {
+      "ID": "D4D5D686-38C0-4233-B470-BA5903AA8047"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:14.794Z",
+      "checksum": "1b7a86b5bfb78f1b65006fcb53a794d7e4bb45f01d9855bb1488d38012ee3fb2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Safi",
+      "Code": "SAF",
+      "ISO3166_2": "MA-SAF",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Safi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MA"
+    },
+    "primaryKey": {
+      "ID": "15748415-1975-4DFC-94B5-C8607E016F48"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:14.810Z",
+      "checksum": "dee67c773d1836ecd126177cb020123724d9f1c30e5bc5a3a3f8d523e3e54e4e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sefrou",
+      "Code": "SEF",
+      "ISO3166_2": "MA-SEF",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Sefrou"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MA"
+    },
+    "primaryKey": {
+      "ID": "91A456E5-35D7-4C58-991A-8D3DF80BB342"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:14.826Z",
+      "checksum": "651c747b0b8deaf0efd69233345701c26e8165a509f899d8079d6d90c9f94a5b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Settat",
+      "Code": "SET",
+      "ISO3166_2": "MA-SET",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Settat"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MA"
+    },
+    "primaryKey": {
+      "ID": "FB37BA35-F363-4A1E-92C2-AE33A3FE47BB"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:14.844Z",
+      "checksum": "e8d3a7ea178ab384f094c37f3d8583a50f3f964167407701f10c1ca22c018e9b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sidi Kacem",
+      "Code": "SIK",
+      "ISO3166_2": "MA-SIK",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Sidi Kacem"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MA"
+    },
+    "primaryKey": {
+      "ID": "645B0596-E0A6-4874-9064-609512A1AA49"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:14.860Z",
+      "checksum": "c374e2c141f0e84c28b2ff8493503f337d8b5c9ea06838a671858e1ab11ad003"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sud",
+      "Code": "SU",
+      "ISO3166_2": "MA-SU",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Sud"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MA"
+    },
+    "primaryKey": {
+      "ID": "A59337C8-4AA8-48DC-910E-046AD30FA686"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:14.877Z",
+      "checksum": "5b6f867b4449f047bbfd64da013c37d56e86245e5a9c29e1e9abbb970ed8dcb2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tan-Tan",
+      "Code": "TNT",
+      "ISO3166_2": "MA-TNT",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Tan-Tan"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MA"
+    },
+    "primaryKey": {
+      "ID": "1ED05EDA-A712-450E-920B-BC16923F3BD7"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:14.891Z",
+      "checksum": "762b946c59401934f094f05c4f6e446c603e1dfaa78f6104b030524cf8fc44db"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tanger",
+      "Code": "TNG",
+      "ISO3166_2": "MA-TNG",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Tanger"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MA"
+    },
+    "primaryKey": {
+      "ID": "4B348E6C-95AE-4F44-843D-A2F93041C337"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:14.945Z",
+      "checksum": "4a172087fd8bedd79898d1e8402fc91fde20592a57e708e2171b35c2b1d0bea6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Taounate",
+      "Code": "TAO",
+      "ISO3166_2": "MA-TAO",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Taounate"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MA"
+    },
+    "primaryKey": {
+      "ID": "0C708A03-C219-4595-8B37-D2A3C087F001"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:14.961Z",
+      "checksum": "11363b951f22c5d9982c49288463c1d41767353ec4a5ced09a079657ac66b00e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Taroudannt",
+      "Code": "TAR",
+      "ISO3166_2": "MA-TAR",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Taroudannt"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MA"
+    },
+    "primaryKey": {
+      "ID": "2A079029-2476-4F75-99BC-535859E0FA01"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:14.976Z",
+      "checksum": "e92536f571416e5fc2aeca7a9adaf393cf1f0027a3d514c23a2c79b8974a4acf"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tata",
+      "Code": "TAT",
+      "ISO3166_2": "MA-TAT",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Tata"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MA"
+    },
+    "primaryKey": {
+      "ID": "32D95E96-A37A-4295-9BBA-3782A5CDB88E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:14.992Z",
+      "checksum": "0b53c596e4208cc0590faa33034e64d51c0ac25b2146e18ba498d91fa7a4f934"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Taza",
+      "Code": "TAZ",
+      "ISO3166_2": "MA-TAZ",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Taza"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MA"
+    },
+    "primaryKey": {
+      "ID": "8EF88BF9-EE96-41F5-8659-EAFA16C96D34"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:15.016Z",
+      "checksum": "0c8958f7da0e71b277d1bb19cc270dae95339e2b399d82e8d962ec2366459753"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tensift",
+      "Code": "TS",
+      "ISO3166_2": "MA-TS",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Tensift"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MA"
+    },
+    "primaryKey": {
+      "ID": "C534A67F-9B5A-4130-B86D-5FE48307A992"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:15.034Z",
+      "checksum": "aceecc44f4afeb14cb54857f4c37fbd4b83f462f2ecb5c0dca093a2a67bbf77e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tétouan",
+      "Code": "TET",
+      "ISO3166_2": "MA-TET",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Tétouan"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MA"
+    },
+    "primaryKey": {
+      "ID": "9A15B3BF-C1CB-40D7-BA9E-42A93E7E18FE"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:15.049Z",
+      "checksum": "d5588b14f29d43384c4bf1219816dd2804417c18c9e2b356cc4608fd72cc92fc"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tiznit",
+      "Code": "TIZ",
+      "ISO3166_2": "MA-TIZ",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Tiznit"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MA"
+    },
+    "primaryKey": {
+      "ID": "B34862DE-21C9-4F38-853C-879EACCD6BC7"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:15.062Z",
+      "checksum": "236f88381b60bb1e818ebc4ad3eff915b9d7caf522c737504dacff09561cb837"
+    }
+  }
+]

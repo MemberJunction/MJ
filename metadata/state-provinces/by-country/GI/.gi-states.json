@@ -1,0 +1,23 @@
+[
+  {
+    "fields": {
+      "Name": "Gibraltar",
+      "Code": "GI",
+      "ISO3166_2": "GI-GI",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Gibraltar"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GI"
+    },
+    "primaryKey": {
+      "ID": "B7F334FF-3A30-40D2-AC26-772A2ACC1686"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:56.029Z",
+      "checksum": "9b4f277a950c9ea5de8814385beaefe2fc9d0627f64c26bc48dafc08aebf7891"
+    }
+  }
+]

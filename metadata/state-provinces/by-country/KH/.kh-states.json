@@ -1,0 +1,464 @@
+[
+  {
+    "fields": {
+      "Name": "Baat Dambang [Bătdâmbâng]",
+      "Code": "2",
+      "ISO3166_2": "KH-2",
+      "Latitude": 12.9675,
+      "Longitude": 103.068,
+      "BoundaryGeoJSON": "@file:by-country/KH/boundaries/KH-2.geojson",
+      "CommonAliases": [
+        "Baat Dambang [Bătdâmbâng]"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KH"
+    },
+    "primaryKey": {
+      "ID": "E4FD3BB6-7929-4EB7-87C3-38D904F7150B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:09.141Z",
+      "checksum": "ae774d9284d10bb010c5eac707d2bd0cb93d3218e6f847a904b6f01095a1207c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Banteay Mean Chey [Bântéay Méanchey]",
+      "Code": "1",
+      "ISO3166_2": "KH-1",
+      "Latitude": 13.7359,
+      "Longitude": 102.873,
+      "BoundaryGeoJSON": "@file:by-country/KH/boundaries/KH-1.geojson",
+      "CommonAliases": [
+        "Banteay Mean Chey [Bântéay Méanchey]"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KH"
+    },
+    "primaryKey": {
+      "ID": "4597E99E-63E8-4D88-AC5A-4BB067E46B65"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:09.155Z",
+      "checksum": "3bfb812219934e68e36b8403e3e067348b1453619425f007fb19dfcacd228c0b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kampong Chaam [Kâmpóng Cham]",
+      "Code": "3",
+      "ISO3166_2": "KH-3",
+      "Latitude": 12.1206,
+      "Longitude": 105.629,
+      "BoundaryGeoJSON": "@file:by-country/KH/boundaries/KH-3.geojson",
+      "CommonAliases": [
+        "Kampong Chaam [Kâmpóng Cham]"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KH"
+    },
+    "primaryKey": {
+      "ID": "9B528F4D-6BA4-46DF-A0A8-E2F278CABA08"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:09.169Z",
+      "checksum": "3e18d5744ae458e05b565ed5aade0088c6be671b555685f0a88aeffd387fa9ac"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kampong Chhnang [Kâmpóng Chhnăng]",
+      "Code": "4",
+      "ISO3166_2": "KH-4",
+      "Latitude": 12.1624,
+      "Longitude": 104.548,
+      "BoundaryGeoJSON": "@file:by-country/KH/boundaries/KH-4.geojson",
+      "CommonAliases": [
+        "Kampong Chhnang [Kâmpóng Chhnăng]"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KH"
+    },
+    "primaryKey": {
+      "ID": "38DE581B-8110-4095-BF25-741DE51E6EFE"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:09.184Z",
+      "checksum": "eec6c0a32cbc3ace3cf239aca01d727b919766b85498382875198f7dfee889f1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kampong Spueu [Kâmpóng Spœ]",
+      "Code": "5",
+      "ISO3166_2": "KH-5",
+      "Latitude": 11.5221,
+      "Longitude": 104.282,
+      "BoundaryGeoJSON": "@file:by-country/KH/boundaries/KH-5.geojson",
+      "CommonAliases": [
+        "Kampong Spueu [Kâmpóng Spœ]"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KH"
+    },
+    "primaryKey": {
+      "ID": "96CABAAD-19C4-489C-B233-A843D67FC601"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:09.205Z",
+      "checksum": "9a354f693e78e92d12c998f66d0f790c1a598ca4b1cc4cec436e09c45829ebf3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kampong Thum [Kâmpóng Thum]",
+      "Code": "6",
+      "ISO3166_2": "KH-6",
+      "Latitude": 12.6883,
+      "Longitude": 104.972,
+      "BoundaryGeoJSON": "@file:by-country/KH/boundaries/KH-6.geojson",
+      "CommonAliases": [
+        "Kampong Thum [Kâmpóng Thum]"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KH"
+    },
+    "primaryKey": {
+      "ID": "B50C2D90-5414-4CC4-B747-B8118AEFC00E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:09.227Z",
+      "checksum": "2447513d6a11aaa17a96d862ecbad5099ea1c685bba598f5dfa90232677e19b5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kampot [Kâmpôt]",
+      "Code": "7",
+      "ISO3166_2": "KH-7",
+      "Latitude": 10.8503,
+      "Longitude": 104.328,
+      "BoundaryGeoJSON": "@file:by-country/KH/boundaries/KH-7.geojson",
+      "CommonAliases": [
+        "Kampot [Kâmpôt]"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KH"
+    },
+    "primaryKey": {
+      "ID": "0501D81B-343F-4C75-B854-5240380B990C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:09.247Z",
+      "checksum": "8e07a6681d56635a375217c5f9fd422f078bc6c8965a93a9e9db1c1ea3ac37f1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kandaal [Kândal]",
+      "Code": "8",
+      "ISO3166_2": "KH-8",
+      "Latitude": 11.5453,
+      "Longitude": 104.973,
+      "BoundaryGeoJSON": "@file:by-country/KH/boundaries/KH-8.geojson",
+      "CommonAliases": [
+        "Kandaal [Kândal]"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KH"
+    },
+    "primaryKey": {
+      "ID": "02F75F05-0441-41E5-BAE6-BB9A9C4407D0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:09.264Z",
+      "checksum": "dc7d3b50e37a5bd9352c64d33b9e18157f11b22558d24050d2644fd8146ce5f1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kracheh [Krâchéh]",
+      "Code": "10",
+      "ISO3166_2": "KH-10",
+      "Latitude": 12.66,
+      "Longitude": 106.184,
+      "BoundaryGeoJSON": "@file:by-country/KH/boundaries/KH-10.geojson",
+      "CommonAliases": [
+        "Kracheh [Krâchéh]"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KH"
+    },
+    "primaryKey": {
+      "ID": "3FAC545E-0FEE-46FF-A154-F25E69436D33"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:09.281Z",
+      "checksum": "abad14abbf6aa52fa79d17ccba533c0edacc7dbacf689f9fd4a1ec5b9b17df7a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Krong Kaeb [Krŏng Kêb]",
+      "Code": "23",
+      "ISO3166_2": "KH-23",
+      "Latitude": 10.5308,
+      "Longitude": 104.346,
+      "BoundaryGeoJSON": "@file:by-country/KH/boundaries/KH-23.geojson",
+      "CommonAliases": [
+        "Krong Kaeb [Krŏng Kêb]"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KH"
+    },
+    "primaryKey": {
+      "ID": "09128AB9-1142-49B4-AF0B-917C8214B88E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:09.296Z",
+      "checksum": "3dab82f2528faa8d909c87f6ccf78fc461ef8ab2bbf66783d09d9ba70443d9cc"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Krong Preah Sihanouk [Krŏng Preăh Sihanouk]",
+      "Code": "18",
+      "ISO3166_2": "KH-18",
+      "Latitude": 10.4854,
+      "Longitude": 103.775,
+      "BoundaryGeoJSON": "@file:by-country/KH/boundaries/KH-18.geojson",
+      "CommonAliases": [
+        "Krong Preah Sihanouk [Krŏng Preăh Sihanouk]"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KH"
+    },
+    "primaryKey": {
+      "ID": "0091ADC9-9DC1-4418-BA69-629F52915A21"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:09.353Z",
+      "checksum": "bda0584fadeab963402ea0798552505d4a8eba5c00d04324658fed9d43033e13"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mond01 Kiri [Môndól Kiri]",
+      "Code": "11",
+      "ISO3166_2": "KH-11",
+      "Latitude": 12.6284,
+      "Longitude": 106.961,
+      "BoundaryGeoJSON": "@file:by-country/KH/boundaries/KH-11.geojson",
+      "CommonAliases": [
+        "Mond01 Kiri [Môndól Kiri]"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KH"
+    },
+    "primaryKey": {
+      "ID": "18EE4B73-F2ED-4862-96F3-EEE5D0E99AD5"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:09.371Z",
+      "checksum": "3c80089471b9db5f1d584a422b242477373fb5bd4c8ea3210e78e9a90be14e93"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Otdar Mean Chey [Ŏtdâr Méanchey]",
+      "Code": "22",
+      "ISO3166_2": "KH-22",
+      "Latitude": 14.1712,
+      "Longitude": 103.55,
+      "BoundaryGeoJSON": "@file:by-country/KH/boundaries/KH-22.geojson",
+      "CommonAliases": [
+        "Otdar Mean Chey [Ŏtdâr Méanchey]"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KH"
+    },
+    "primaryKey": {
+      "ID": "6C0FDCCC-ED5A-4FBF-B33A-8E238CCB364A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:09.391Z",
+      "checksum": "823d182d0beb4e3cd160d7faadf00cb220db8fceae9131ae5c95d25aa57de2cd"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Phnom Penh [Phnum Pénh]",
+      "Code": "12",
+      "ISO3166_2": "KH-12",
+      "Latitude": 11.5733,
+      "Longitude": 104.874,
+      "BoundaryGeoJSON": "@file:by-country/KH/boundaries/KH-12.geojson",
+      "CommonAliases": [
+        "Phnom Penh [Phnum Pénh]"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KH"
+    },
+    "primaryKey": {
+      "ID": "82AD8FF9-06C5-45D3-972E-6D32F617E0A1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:09.407Z",
+      "checksum": "13dfd206639df00911566c53ee90c0503549bf39a9756ee76dd660f56e86b741"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Pousaat [Poŭthĭsăt]",
+      "Code": "15",
+      "ISO3166_2": "KH-15",
+      "Latitude": 12.3391,
+      "Longitude": 103.549,
+      "BoundaryGeoJSON": "@file:by-country/KH/boundaries/KH-15.geojson",
+      "CommonAliases": [
+        "Pousaat [Poŭthĭsăt]"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KH"
+    },
+    "primaryKey": {
+      "ID": "2CF8E805-0C23-4581-9974-8A7AFEAB7865"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:09.424Z",
+      "checksum": "5f251982045fb4630cd028cd84ac4efea31080a7a2b8c6effce06454de043e8b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Preah Vihear [Preăh Vihéar]",
+      "Code": "13",
+      "ISO3166_2": "KH-13",
+      "Latitude": 13.728,
+      "Longitude": 105.125,
+      "BoundaryGeoJSON": "@file:by-country/KH/boundaries/KH-13.geojson",
+      "CommonAliases": [
+        "Preah Vihear [Preăh Vihéar]"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KH"
+    },
+    "primaryKey": {
+      "ID": "C6E53CA1-E82A-47CA-BFBA-278A02F9E324"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:09.440Z",
+      "checksum": "f2062d1cf8092c89bd33b3b0e5b503c97dca4a4cddcfad99ce61cf4b17617ee8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Prey Veaeng [Prey Vêng]",
+      "Code": "14",
+      "ISO3166_2": "KH-14",
+      "Latitude": 11.3561,
+      "Longitude": 105.473,
+      "BoundaryGeoJSON": "@file:by-country/KH/boundaries/KH-14.geojson",
+      "CommonAliases": [
+        "Prey Veaeng [Prey Vêng]"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KH"
+    },
+    "primaryKey": {
+      "ID": "85A8EF47-9062-40E9-B465-FFA94015D267"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:09.459Z",
+      "checksum": "07a39c30bcabada6c985414b1c570bfa67b4cb0ea982008614dd6d8feb43e1d3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rotanak Kiri [Rôtânôkiri]",
+      "Code": "16",
+      "ISO3166_2": "KH-16",
+      "Latitude": 13.2418,
+      "Longitude": 107.082,
+      "BoundaryGeoJSON": "@file:by-country/KH/boundaries/KH-16.geojson",
+      "CommonAliases": [
+        "Rotanak Kiri [Rôtânôkiri]"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KH"
+    },
+    "primaryKey": {
+      "ID": "4C979AED-BA24-4451-9740-889650427616"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:09.475Z",
+      "checksum": "16f82c8908288e2d81b35e928d84336c1e3a5379bd33713c5967c0646531c98c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Siem Reab [Siĕmréab]",
+      "Code": "17",
+      "ISO3166_2": "KH-17",
+      "Latitude": 13.5711,
+      "Longitude": 104.043,
+      "BoundaryGeoJSON": "@file:by-country/KH/boundaries/KH-17.geojson",
+      "CommonAliases": [
+        "Siem Reab [Siĕmréab]"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KH"
+    },
+    "primaryKey": {
+      "ID": "7FBB1A63-B1C3-4CDC-ABAB-DAA32E8A3FA7"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:09.492Z",
+      "checksum": "11e4a6e10b4d3a44d812f7e35bb7b0e640f7b1fcbc9753b232b795b3fe7ab093"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Stueng Traeng [Stœng Trêng]",
+      "Code": "19",
+      "ISO3166_2": "KH-19",
+      "Latitude": 13.6662,
+      "Longitude": 106.095,
+      "BoundaryGeoJSON": "@file:by-country/KH/boundaries/KH-19.geojson",
+      "CommonAliases": [
+        "Stueng Traeng [Stœng Trêng]"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KH"
+    },
+    "primaryKey": {
+      "ID": "E7BE4E55-8779-4103-AE8F-4AE627E88556"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:09.504Z",
+      "checksum": "7b19e5f6b2cd1b4a200e23c84c18c4f6f768e43dbb081018f74c243b6ef2d01c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Svaay Rieng [Svay Riĕng]",
+      "Code": "20",
+      "ISO3166_2": "KH-20",
+      "Latitude": 11.0416,
+      "Longitude": 105.888,
+      "BoundaryGeoJSON": "@file:by-country/KH/boundaries/KH-20.geojson",
+      "CommonAliases": [
+        "Svaay Rieng [Svay Riĕng]"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KH"
+    },
+    "primaryKey": {
+      "ID": "111D543B-95F0-4B3E-9C33-57338DE57789"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:09.533Z",
+      "checksum": "9843bd28789d4e8a3d35e1a332f38afc20c26891c4b05cd708bcc3414414d61a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Taakaev [Takêv]",
+      "Code": "21",
+      "ISO3166_2": "KH-21",
+      "Latitude": 10.9346,
+      "Longitude": 104.751,
+      "BoundaryGeoJSON": "@file:by-country/KH/boundaries/KH-21.geojson",
+      "CommonAliases": [
+        "Taakaev [Takêv]"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KH"
+    },
+    "primaryKey": {
+      "ID": "4CA7693D-866A-4B11-9B9C-6AC50D8F15AB"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:09.547Z",
+      "checksum": "ae41707df0563f9f01dd481d14f426f680dc881b7679a9ce2bad3521f74e970a"
+    }
+  }
+]

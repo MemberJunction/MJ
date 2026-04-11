@@ -1,0 +1,506 @@
+[
+  {
+    "fields": {
+      "Name": "Amazonas",
+      "Code": "Z",
+      "ISO3166_2": "VE-Z",
+      "Latitude": 3.3619,
+      "Longitude": -65.6187,
+      "BoundaryGeoJSON": "@file:by-country/VE/boundaries/VE-Z.geojson",
+      "CommonAliases": [
+        "Amazonas"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VE"
+    },
+    "primaryKey": {
+      "ID": "EEFB0AA9-091A-4C41-A669-5E03EAC331E8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:42.573Z",
+      "checksum": "801f369d8969b43dd806b747983d286f4d8c1bac333e77912ab2a318da41a899"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Anzoátegui",
+      "Code": "B",
+      "ISO3166_2": "VE-B",
+      "Latitude": 9.0559,
+      "Longitude": -64.1949,
+      "BoundaryGeoJSON": "@file:by-country/VE/boundaries/VE-B.geojson",
+      "CommonAliases": [
+        "Anzoátegui"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VE"
+    },
+    "primaryKey": {
+      "ID": "4C06BFDA-BC4B-4781-AB94-BAAD3B126677"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:42.589Z",
+      "checksum": "6801e3641563edf79f520fea9128321d3904e098b07ea4afb4af4f72c8878d5d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Apure",
+      "Code": "C",
+      "ISO3166_2": "VE-C",
+      "Latitude": 7.0405,
+      "Longitude": -68.55,
+      "BoundaryGeoJSON": "@file:by-country/VE/boundaries/VE-C.geojson",
+      "CommonAliases": [
+        "Apure"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VE"
+    },
+    "primaryKey": {
+      "ID": "FFE805E8-15CB-4F0D-B495-A59B4E6F4D75"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:42.607Z",
+      "checksum": "6d174736265b7bed5513b4548375d81139fbd54f0e641d77de824064cdd791ca"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Aragua",
+      "Code": "D",
+      "ISO3166_2": "VE-D",
+      "Latitude": 10.1618,
+      "Longitude": -67.3252,
+      "BoundaryGeoJSON": "@file:by-country/VE/boundaries/VE-D.geojson",
+      "CommonAliases": [
+        "Aragua"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VE"
+    },
+    "primaryKey": {
+      "ID": "9C7F34E0-302C-4DD9-9D5B-68C155ABA3DB"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:42.623Z",
+      "checksum": "5b5853b057bd9b6e29571b08ce1f614af009aee16f3beb1d2609f30c7e92408b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Barinas",
+      "Code": "E",
+      "ISO3166_2": "VE-E",
+      "Latitude": 8.2238,
+      "Longitude": -69.9798,
+      "BoundaryGeoJSON": "@file:by-country/VE/boundaries/VE-E.geojson",
+      "CommonAliases": [
+        "Barinas"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VE"
+    },
+    "primaryKey": {
+      "ID": "D831C42E-E117-42B3-B56F-DDE16AA2F7AC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:42.639Z",
+      "checksum": "46e69c16489f2ff4df2df37a96154348519d80d0de3dfee16096d3cd0667caf2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bolívar",
+      "Code": "F",
+      "ISO3166_2": "VE-F",
+      "Latitude": 6.0061,
+      "Longitude": -63.8628,
+      "BoundaryGeoJSON": "@file:by-country/VE/boundaries/VE-F.geojson",
+      "CommonAliases": [
+        "Bolívar"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VE"
+    },
+    "primaryKey": {
+      "ID": "BE7452BA-94AC-474F-9ED6-412FDD9F6C8C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:42.656Z",
+      "checksum": "def1605f8e3674a77a62f1faee4893c196da1ee070c9a01252031aca2e5d30ea"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Carabobo",
+      "Code": "G",
+      "ISO3166_2": "VE-G",
+      "Latitude": 10.1548,
+      "Longitude": -67.9745,
+      "BoundaryGeoJSON": "@file:by-country/VE/boundaries/VE-G.geojson",
+      "CommonAliases": [
+        "Carabobo"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VE"
+    },
+    "primaryKey": {
+      "ID": "C554B802-7BA3-4402-A86B-536D8835BEB8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:42.671Z",
+      "checksum": "8d521b445bc4e60cdeb325e5f9499345dfdc9d09cbd0d357e2e9915693003fde"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Cojedes",
+      "Code": "H",
+      "ISO3166_2": "VE-H",
+      "Latitude": 9.3018,
+      "Longitude": -68.3738,
+      "BoundaryGeoJSON": "@file:by-country/VE/boundaries/VE-H.geojson",
+      "CommonAliases": [
+        "Cojedes"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VE"
+    },
+    "primaryKey": {
+      "ID": "5F71D493-DBAB-4F0D-BDEE-4C5A477A8FD7"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:42.687Z",
+      "checksum": "90f114f82f7d34a9978ee36a9d56a874b237de12b5f3d7e1fad7056af5097ebf"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Delta Amacuro",
+      "Code": "Y",
+      "ISO3166_2": "VE-Y",
+      "Latitude": 8.7892,
+      "Longitude": -61.5863,
+      "BoundaryGeoJSON": "@file:by-country/VE/boundaries/VE-Y.geojson",
+      "CommonAliases": [
+        "Delta Amacuro"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VE"
+    },
+    "primaryKey": {
+      "ID": "6F948AA1-5923-4B6B-B8CD-EDD2C2527231"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:42.703Z",
+      "checksum": "d275be6d0c933746b6a5ec5f1dbba1a338384fef5683f436cc0df8fa56bb9f59"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Dependencias Federales",
+      "Code": "W",
+      "ISO3166_2": "VE-W",
+      "Latitude": 10.9337,
+      "Longitude": -65.3067,
+      "BoundaryGeoJSON": "@file:by-country/VE/boundaries/VE-W.geojson",
+      "CommonAliases": [
+        "Dependencias Federales"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VE"
+    },
+    "primaryKey": {
+      "ID": "5D586C29-042B-488E-87CE-21FFF6388D97"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:42.719Z",
+      "checksum": "bf3b71d3de1077615bed2500f6d657ab9510cfb212a321b74b2b677d5e0418d1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Distrito Federal",
+      "Code": "A",
+      "ISO3166_2": "VE-A",
+      "Latitude": 10.4857,
+      "Longitude": -66.964,
+      "BoundaryGeoJSON": "@file:by-country/VE/boundaries/VE-A.geojson",
+      "CommonAliases": [
+        "Distrito Federal"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VE"
+    },
+    "primaryKey": {
+      "ID": "69441868-9C1E-45FB-A495-5C31BE833D60"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:42.774Z",
+      "checksum": "93e02bf0ab6e1c0e56622b09024997dbfd36d8b516b83da41897a337dac3cfde"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Falcón",
+      "Code": "I",
+      "ISO3166_2": "VE-I",
+      "Latitude": 11.0897,
+      "Longitude": -69.7604,
+      "BoundaryGeoJSON": "@file:by-country/VE/boundaries/VE-I.geojson",
+      "CommonAliases": [
+        "Falcón"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VE"
+    },
+    "primaryKey": {
+      "ID": "B8E4CD93-F1D1-4A44-A031-1F6920E7DA9C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:42.791Z",
+      "checksum": "baf707da412dffc092dbd0a573d83734d7a76aa056126cf297590b210346295d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Guárico",
+      "Code": "J",
+      "ISO3166_2": "VE-J",
+      "Latitude": 8.7237,
+      "Longitude": -66.4794,
+      "BoundaryGeoJSON": "@file:by-country/VE/boundaries/VE-J.geojson",
+      "CommonAliases": [
+        "Guárico"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VE"
+    },
+    "primaryKey": {
+      "ID": "A3EC9F82-AC51-43BD-B4F6-55F08FBC522F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:42.806Z",
+      "checksum": "69e3db3f97e55f7ac621eef9e936928c6959d3b3d4a3924a7a42e67774837f22"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Lara",
+      "Code": "K",
+      "ISO3166_2": "VE-K",
+      "Latitude": 10.1552,
+      "Longitude": -69.8053,
+      "BoundaryGeoJSON": "@file:by-country/VE/boundaries/VE-K.geojson",
+      "CommonAliases": [
+        "Lara"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VE"
+    },
+    "primaryKey": {
+      "ID": "E3046AFC-12E7-4042-980E-532DB11ECEB9"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:42.823Z",
+      "checksum": "c82aa0578634fde4b2cb4fb4a3715ebdf671924a9d3f252b19d5d6aa1da11877"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mérida",
+      "Code": "L",
+      "ISO3166_2": "VE-L",
+      "Latitude": 8.491,
+      "Longitude": -71.2398,
+      "BoundaryGeoJSON": "@file:by-country/VE/boundaries/VE-L.geojson",
+      "CommonAliases": [
+        "Mérida"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VE"
+    },
+    "primaryKey": {
+      "ID": "7AC73B6D-9DEF-4A9B-BFD6-488FEF4E13AF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:42.839Z",
+      "checksum": "365060d6dd2e28cd1d64fe86bc0dd1dbf18c6d2639af466018fc77253c883e64"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Miranda",
+      "Code": "M",
+      "ISO3166_2": "VE-M",
+      "Latitude": 10.2616,
+      "Longitude": -66.3229,
+      "BoundaryGeoJSON": "@file:by-country/VE/boundaries/VE-M.geojson",
+      "CommonAliases": [
+        "Miranda"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VE"
+    },
+    "primaryKey": {
+      "ID": "020D46F4-2966-4CD7-BE04-4E7D3C79FA02"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:42.854Z",
+      "checksum": "9f944c25e6705ed0eccc8f9cb3b0549dea465fa25634fc51bf452640361f972c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Monagas",
+      "Code": "N",
+      "ISO3166_2": "VE-N",
+      "Latitude": 9.504,
+      "Longitude": -63.0869,
+      "BoundaryGeoJSON": "@file:by-country/VE/boundaries/VE-N.geojson",
+      "CommonAliases": [
+        "Monagas"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VE"
+    },
+    "primaryKey": {
+      "ID": "0FA4E03D-64F8-4904-B8A0-65F1772BA144"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:42.868Z",
+      "checksum": "5c3c62d2346f2239379cd4dd68d7eb5f88de6bf1628f7f0fd12d0dc1ad5e64f8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nueva Esparta",
+      "Code": "O",
+      "ISO3166_2": "VE-O",
+      "Latitude": 10.9719,
+      "Longitude": -63.9689,
+      "BoundaryGeoJSON": "@file:by-country/VE/boundaries/VE-O.geojson",
+      "CommonAliases": [
+        "Nueva Esparta"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VE"
+    },
+    "primaryKey": {
+      "ID": "97A64D46-55AB-41EC-A66A-8E3C2CB4368D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:42.882Z",
+      "checksum": "c002f6f90a64e293c03c6297b0bf2248474ceaf670b79735f0e3dcca15a09137"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Portuguesa",
+      "Code": "P",
+      "ISO3166_2": "VE-P",
+      "Latitude": 9.1563,
+      "Longitude": -69.3776,
+      "BoundaryGeoJSON": "@file:by-country/VE/boundaries/VE-P.geojson",
+      "CommonAliases": [
+        "Portuguesa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VE"
+    },
+    "primaryKey": {
+      "ID": "C007BC11-CB77-4FF6-AF1D-99973F7A36A9"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:42.896Z",
+      "checksum": "02e99ec70b94c6b42d95df2925c74d70975636144303994a67197cf24080e547"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sucre",
+      "Code": "R",
+      "ISO3166_2": "VE-R",
+      "Latitude": 10.4729,
+      "Longitude": -63.3542,
+      "BoundaryGeoJSON": "@file:by-country/VE/boundaries/VE-R.geojson",
+      "CommonAliases": [
+        "Sucre"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VE"
+    },
+    "primaryKey": {
+      "ID": "E9E32D81-8D25-4C8D-BEA7-3645108C0874"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:42.911Z",
+      "checksum": "394953f7353614a0c42818583e2404083de850f2187d913c77bbd6d78b42e7ad"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Táchira",
+      "Code": "S",
+      "ISO3166_2": "VE-S",
+      "Latitude": 7.8573,
+      "Longitude": -72.0039,
+      "BoundaryGeoJSON": "@file:by-country/VE/boundaries/VE-S.geojson",
+      "CommonAliases": [
+        "Táchira"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VE"
+    },
+    "primaryKey": {
+      "ID": "3BBEB22A-CB66-4922-9D5B-17F1CF5C3FA0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:42.941Z",
+      "checksum": "501cfb3ce7ea84bcc58d39d9aedb87f51cd7370da050b43825d1eeeef99b9535"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Trujillo",
+      "Code": "T",
+      "ISO3166_2": "VE-T",
+      "Latitude": 9.4951,
+      "Longitude": -70.5519,
+      "BoundaryGeoJSON": "@file:by-country/VE/boundaries/VE-T.geojson",
+      "CommonAliases": [
+        "Trujillo"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VE"
+    },
+    "primaryKey": {
+      "ID": "34BB7B98-36BB-4A98-B445-9E5C43B27713"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:42.956Z",
+      "checksum": "c136bb8be329364c3e32e6b91ba836410bc49dee947fabe3a220420a1c44fff9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Yaracuy",
+      "Code": "U",
+      "ISO3166_2": "VE-U",
+      "Latitude": 10.3466,
+      "Longitude": -68.7447,
+      "BoundaryGeoJSON": "@file:by-country/VE/boundaries/VE-U.geojson",
+      "CommonAliases": [
+        "Yaracuy"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VE"
+    },
+    "primaryKey": {
+      "ID": "723FE9A3-EDBF-4249-8711-B26F5A855E2D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:42.969Z",
+      "checksum": "3a059389b5902d4d3bdf473846d86e91dae055f6219a1508775a3a2ed4ecb42c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Zulia",
+      "Code": "V",
+      "ISO3166_2": "VE-V",
+      "Latitude": 9.5847,
+      "Longitude": -72.5482,
+      "BoundaryGeoJSON": "@file:by-country/VE/boundaries/VE-V.geojson",
+      "CommonAliases": [
+        "Zulia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VE"
+    },
+    "primaryKey": {
+      "ID": "D4F75D77-0688-4B92-96EE-01E5847CEEA4"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:42.982Z",
+      "checksum": "d8dd15845ac6f2f7a3116128fccc1b3be12e3b50a118133d28ea9d5f1ce33377"
+    }
+  }
+]

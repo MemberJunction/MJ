@@ -8,11 +8,11 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Details Section -->
+    <!-- Country Identification Section -->
     <mj-collapsible-panel
-        SectionKey="details"
-        SectionName="Details"
-        Icon="fa fa-align-left"
+        SectionKey="countryIdentification"
+        SectionName="Country Identification"
+        Icon="fa fa-id-card"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -50,6 +50,24 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
+            FieldName="CommonAliases"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Geographic Data Section -->
+    <mj-collapsible-panel
+        SectionKey="geographicData"
+        SectionName="Geographic Data"
+        Icon="fa fa-map-marked-alt"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
             FieldName="Latitude"
             Type="number"
             [EditMode]="EditMode"
@@ -67,18 +85,20 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="BoundaryGeoJSON"
-            Type="textarea"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="CommonAliases"
-            Type="textarea"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- System Metadata Section -->
+    <mj-collapsible-panel
+        SectionKey="systemMetadata"
+        SectionName="System Metadata"
+        Icon="fa fa-cog"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -106,7 +126,7 @@
     <mj-collapsible-panel
         SectionKey="mJStateProvinces"
         SectionName="State Provinces"
-        Icon="fa fa-table"
+        Icon="fa fa-map"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
@@ -131,7 +151,7 @@
     <mj-collapsible-panel
         SectionKey="mJRecordGeoCodes"
         SectionName="Record Geo Codes"
-        Icon="fa fa-table"
+        Icon="fa fa-map-marked-alt"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"

@@ -1,0 +1,233 @@
+[
+  {
+    "fields": {
+      "Name": "Bouenza",
+      "Code": "11",
+      "ISO3166_2": "CG-11",
+      "Latitude": -4.3633,
+      "Longitude": 13.491,
+      "BoundaryGeoJSON": "@file:by-country/CG/boundaries/CG-11.geojson",
+      "CommonAliases": [
+        "Bouenza"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CG"
+    },
+    "primaryKey": {
+      "ID": "5D0012F3-4FEB-41A9-A8FF-F4EBAAB09C32"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:36.717Z",
+      "checksum": "e62fd931f4a10e2150707600c7c8e14f2c0e1fdb2ff7b15a574b0424373f920a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Brazzaville",
+      "Code": "BZV",
+      "ISO3166_2": "CG-BZV",
+      "Latitude": -4.0688,
+      "Longitude": 15.3319,
+      "BoundaryGeoJSON": "@file:by-country/CG/boundaries/CG-BZV.geojson",
+      "CommonAliases": [
+        "Brazzaville"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CG"
+    },
+    "primaryKey": {
+      "ID": "A143673D-FE43-4AA0-A91F-8E012FBE4372"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:36.734Z",
+      "checksum": "c3dd59ee4a3cab78bbd227df4e673cc2b82d22bedce67c364a50cd8edf578516"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Cuvette",
+      "Code": "8",
+      "ISO3166_2": "CG-8",
+      "Latitude": -0.3931,
+      "Longitude": 15.9548,
+      "BoundaryGeoJSON": "@file:by-country/CG/boundaries/CG-8.geojson",
+      "CommonAliases": [
+        "Cuvette"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CG"
+    },
+    "primaryKey": {
+      "ID": "B76788A3-1F4C-4131-B373-A431E0EA8FF8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:36.752Z",
+      "checksum": "6cfa43ab8b310d59ad1445302f1a84a193356b64bf785d694607c5c5053a0cb9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Cuvette-Ouest",
+      "Code": "15",
+      "ISO3166_2": "CG-15",
+      "Latitude": 0.0349,
+      "Longitude": 14.558,
+      "BoundaryGeoJSON": "@file:by-country/CG/boundaries/CG-15.geojson",
+      "CommonAliases": [
+        "Cuvette-Ouest"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CG"
+    },
+    "primaryKey": {
+      "ID": "B47D629F-315B-4CE1-8DEE-F5B5DCC7A6A9"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:36.768Z",
+      "checksum": "6cfdcf3d8f8eb883916b8655a7df44514da1a2a43757e3f0ed60a9884b1f1069"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kouilou",
+      "Code": "5",
+      "ISO3166_2": "CG-5",
+      "Latitude": -4.3684,
+      "Longitude": 11.9549,
+      "BoundaryGeoJSON": "@file:by-country/CG/boundaries/CG-5.geojson",
+      "CommonAliases": [
+        "Kouilou"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CG"
+    },
+    "primaryKey": {
+      "ID": "069B4AB4-9662-41D3-ACE5-4B0B74EA1852"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:36.784Z",
+      "checksum": "adbc05914f7f09586f068c6399a7f126ab75c56aac499f2315b61a9548df88b7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Lékoumou",
+      "Code": "2",
+      "ISO3166_2": "CG-2",
+      "Latitude": -3.2378,
+      "Longitude": 13.4727,
+      "BoundaryGeoJSON": "@file:by-country/CG/boundaries/CG-2.geojson",
+      "CommonAliases": [
+        "Lékoumou"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CG"
+    },
+    "primaryKey": {
+      "ID": "1099E6FD-5D4A-4E3C-B8E5-64774D69F28E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:36.801Z",
+      "checksum": "5c600056a141818b27aecb197529766096c958ea81eb090295cfd2373454a632"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Likouala",
+      "Code": "7",
+      "ISO3166_2": "CG-7",
+      "Latitude": 1.4549,
+      "Longitude": 17.5344,
+      "BoundaryGeoJSON": "@file:by-country/CG/boundaries/CG-7.geojson",
+      "CommonAliases": [
+        "Likouala"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CG"
+    },
+    "primaryKey": {
+      "ID": "71DCFCCF-1A02-4105-BCFC-DEA5F0C3BDAA"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:36.817Z",
+      "checksum": "ea51d74e8c8514f718f6ca311ac4ce795c0defeddadb4d05e25ae06bdc05294f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Niari",
+      "Code": "9",
+      "ISO3166_2": "CG-9",
+      "Latitude": -2.9791,
+      "Longitude": 12.3646,
+      "BoundaryGeoJSON": "@file:by-country/CG/boundaries/CG-9.geojson",
+      "CommonAliases": [
+        "Niari"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CG"
+    },
+    "primaryKey": {
+      "ID": "BA1C881D-F425-4946-A44A-0892573E897A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:36.833Z",
+      "checksum": "cca7a953be64701872893ef9dce7c4ddf4e707befaa9cfa8629cbd28d9bf14b3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Plateaux",
+      "Code": "14",
+      "ISO3166_2": "CG-14",
+      "Latitude": -2.0422,
+      "Longitude": 15.3777,
+      "BoundaryGeoJSON": "@file:by-country/CG/boundaries/CG-14.geojson",
+      "CommonAliases": [
+        "Plateaux"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CG"
+    },
+    "primaryKey": {
+      "ID": "C3706D2E-BB1F-40D7-886E-96313A46B85C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:36.849Z",
+      "checksum": "53a861c4664c9df6844f881edc57cdf32edd9eb7e309846cbece567e6e9244fb"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Pool",
+      "Code": "12",
+      "ISO3166_2": "CG-12",
+      "Latitude": -3.7111,
+      "Longitude": 15.0436,
+      "BoundaryGeoJSON": "@file:by-country/CG/boundaries/CG-12.geojson",
+      "CommonAliases": [
+        "Pool"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CG"
+    },
+    "primaryKey": {
+      "ID": "D387FEE2-DE12-48BB-926C-B867198EE12A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:36.862Z",
+      "checksum": "154430842dec569a39f1078d293b0a41110ac9788632eb8031fa88b1a2dc11c5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sangha",
+      "Code": "13",
+      "ISO3166_2": "CG-13",
+      "Latitude": 1.1268,
+      "Longitude": 15.7466,
+      "BoundaryGeoJSON": "@file:by-country/CG/boundaries/CG-13.geojson",
+      "CommonAliases": [
+        "Sangha"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CG"
+    },
+    "primaryKey": {
+      "ID": "AD449E6C-8EAE-4C5C-B5E1-6BCE4D3FA001"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:36.886Z",
+      "checksum": "e7e3f5db967bf145d87354ba2d8573fef47b63f974ac88a88c7fef40f2f8f43f"
+    }
+  }
+]

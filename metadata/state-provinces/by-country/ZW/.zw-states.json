@@ -1,0 +1,212 @@
+[
+  {
+    "fields": {
+      "Name": "Bulawayo",
+      "Code": "BU",
+      "ISO3166_2": "ZW-BU",
+      "Latitude": -20.1393,
+      "Longitude": 28.5463,
+      "BoundaryGeoJSON": "@file:by-country/ZW/boundaries/ZW-BU.geojson",
+      "CommonAliases": [
+        "Bulawayo"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ZW"
+    },
+    "primaryKey": {
+      "ID": "3F870061-A371-4942-B114-DD45DCC71F65"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:45.602Z",
+      "checksum": "8678d5bdda978b8d39813f7e1e54476fc942d6134f0956b78243973b5d7ae36e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Harare",
+      "Code": "HA",
+      "ISO3166_2": "ZW-HA",
+      "Latitude": -17.8928,
+      "Longitude": 31.0506,
+      "BoundaryGeoJSON": "@file:by-country/ZW/boundaries/ZW-HA.geojson",
+      "CommonAliases": [
+        "Harare"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ZW"
+    },
+    "primaryKey": {
+      "ID": "2EF72082-CF38-4831-8DDA-23FE2938AAE5"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:45.616Z",
+      "checksum": "cd0637bbce02ca048f9241db54d29e52e8ffb1b397c0c4eed974e1b4ee420590"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Manicaland",
+      "Code": "MA",
+      "ISO3166_2": "ZW-MA",
+      "Latitude": -18.9399,
+      "Longitude": 32.1206,
+      "BoundaryGeoJSON": "@file:by-country/ZW/boundaries/ZW-MA.geojson",
+      "CommonAliases": [
+        "Manicaland"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ZW"
+    },
+    "primaryKey": {
+      "ID": "3D375C39-E1C6-45B9-BE85-122D52938041"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:45.630Z",
+      "checksum": "5f63eabf63b449eaf2da9ed99b42a2d7f42eb9ff22f81b21d0cba58a1a25216a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mashonaland Central",
+      "Code": "MC",
+      "ISO3166_2": "ZW-MC",
+      "Latitude": -16.8822,
+      "Longitude": 31.3922,
+      "BoundaryGeoJSON": "@file:by-country/ZW/boundaries/ZW-MC.geojson",
+      "CommonAliases": [
+        "Mashonaland Central"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ZW"
+    },
+    "primaryKey": {
+      "ID": "1106F348-F54B-4D71-B7D7-D9D4EB03459B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:45.645Z",
+      "checksum": "924c6c0adb8860d38883ff73d065b3b74f525a6accafdd4d5afbb0bc86b4a148"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mashonaland East",
+      "Code": "ME",
+      "ISO3166_2": "ZW-ME",
+      "Latitude": -18.2141,
+      "Longitude": 31.666,
+      "BoundaryGeoJSON": "@file:by-country/ZW/boundaries/ZW-ME.geojson",
+      "CommonAliases": [
+        "Mashonaland East"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ZW"
+    },
+    "primaryKey": {
+      "ID": "386062ED-84E5-4C98-83EF-9FA5D53EB55B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:45.660Z",
+      "checksum": "5c777c719175c1ade4eeab3fc217403a413280257b10b6e3031df4cc87b53928"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mashonaland West",
+      "Code": "MW",
+      "ISO3166_2": "ZW-MW",
+      "Latitude": -17.0176,
+      "Longitude": 29.5025,
+      "BoundaryGeoJSON": "@file:by-country/ZW/boundaries/ZW-MW.geojson",
+      "CommonAliases": [
+        "Mashonaland West"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ZW"
+    },
+    "primaryKey": {
+      "ID": "F362A2E9-DAEE-4CA9-BB74-5FA0138A59E1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:45.674Z",
+      "checksum": "53aa33df9bd5c20a5b858ad1974ae8a892516e0105805b8847b267f3021fcd73"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Masvingo",
+      "Code": "MV",
+      "ISO3166_2": "ZW-MV",
+      "Latitude": -20.7844,
+      "Longitude": 31.0875,
+      "BoundaryGeoJSON": "@file:by-country/ZW/boundaries/ZW-MV.geojson",
+      "CommonAliases": [
+        "Masvingo"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ZW"
+    },
+    "primaryKey": {
+      "ID": "6C85D3F1-0D8D-466F-B3E9-8A67E1E981DF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:45.690Z",
+      "checksum": "b20f5d78cfc1928777621761cc348567ba1c0e04122ec9edd1b9efbd0890f875"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Matabeleland North",
+      "Code": "MN",
+      "ISO3166_2": "ZW-MN",
+      "Latitude": -18.7582,
+      "Longitude": 27.2215,
+      "BoundaryGeoJSON": "@file:by-country/ZW/boundaries/ZW-MN.geojson",
+      "CommonAliases": [
+        "Matabeleland North"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ZW"
+    },
+    "primaryKey": {
+      "ID": "E7D95BD6-0788-400C-A124-D690FC9C4B18"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:45.704Z",
+      "checksum": "b6a4edc755035f934be0a20f2ecccd8aebd41d9a561875dcb401ffffce69ed26"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Matabeleland South",
+      "Code": "MS",
+      "ISO3166_2": "ZW-MS",
+      "Latitude": -20.8913,
+      "Longitude": 28.8871,
+      "BoundaryGeoJSON": "@file:by-country/ZW/boundaries/ZW-MS.geojson",
+      "CommonAliases": [
+        "Matabeleland South"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ZW"
+    },
+    "primaryKey": {
+      "ID": "84DEC82A-569D-4E38-A9FB-3A874C544EA2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:45.718Z",
+      "checksum": "c57cbfd4dac84c685de1853cf78e91c0005c059da32cd6e1bbad5ae195b01a88"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Midlands",
+      "Code": "MI",
+      "ISO3166_2": "ZW-MI",
+      "Latitude": -19.0828,
+      "Longitude": 29.4323,
+      "BoundaryGeoJSON": "@file:by-country/ZW/boundaries/ZW-MI.geojson",
+      "CommonAliases": [
+        "Midlands"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ZW"
+    },
+    "primaryKey": {
+      "ID": "D57A2822-A40C-4581-A850-9C229B6C844E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:45.731Z",
+      "checksum": "4a770fa2127ef41db8421bf498208a33af091abdcb226d2983c09dc06780ebcc"
+    }
+  }
+]

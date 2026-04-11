@@ -29,6 +29,7 @@ import {
     ILocalStorageProvider,
     InMemoryLocalStorageProvider,
     Metadata,
+    RunView,
     RunViewParams,
     RunViewResult,
     RunViewWithCacheCheckParams,
@@ -59,6 +60,9 @@ import {
     QueryCacheManager,
     DatabasePlatform,
     QueryExecutionSpec,
+    SaveContext,
+    SaveContextField,
+    SaveSQLResult,
 } from '@memberjunction/core';
 
 import { MJGlobal, SQLExpressionValidator, UUIDsEqual } from '@memberjunction/global';
@@ -83,6 +87,7 @@ import { QueueManager } from '@memberjunction/queue';
 import { EntityActionEngineServer } from '@memberjunction/actions';
 import { ActionResult } from '@memberjunction/actions-base';
 import { EncryptionEngine } from '@memberjunction/encryption';
+import { GeoCodeSyncService, GeocodeResult } from '@memberjunction/geo-core';
 
 /**
  * Configuration options for batch SQL execution.
@@ -104,6 +109,12 @@ export interface ExecuteSQLBatchOptions {
  * Platform-specific providers should extend this class instead of DatabaseProviderBase
  * to inherit these shared behaviors.
  */
+/** ExtendedType values that indicate a geo-relevant field */
+const GEO_EXTENDED_TYPES = new Set([
+    'Geo', 'GeoAddress', 'GeoCity', 'GeoStateProvince',
+    'GeoCountry', 'GeoPostalCode', 'GeoLatitude', 'GeoLongitude'
+]);
+
 export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     private _compositionEngine = new QueryCompositionEngine();
 
@@ -528,18 +539,88 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         return null;
     }
 
-    protected override async OnBeforeSaveExecute(entity: BaseEntity, user: UserInfo, options: EntitySaveOptions): Promise<void> {
+    protected override async OnBeforeSaveExecute(entity: BaseEntity, user: UserInfo, options: EntitySaveOptions, context: SaveContext): Promise<void> {
         if (options.SkipEntityActions !== true)
             await this.HandleEntityActions(entity, 'save', true, user);
         if (options.SkipEntityAIActions !== true)
             await this.HandleEntityAIActions(entity, 'save', true, user);
+
+        // Flag geo sync needed in the SaveContext state bag.
+        // Check: entity supports geocoding AND (new record OR any geo field was dirty)
+        if (entity.EntityInfo.SupportsGeoCoding) {
+            const needsGeoSync = context.IsNew || context.Fields.some(
+                (f: SaveContextField) => f.WasDirty && f.FieldInfo.ExtendedType != null && GEO_EXTENDED_TYPES.has(f.FieldInfo.ExtendedType)
+            );
+            if (needsGeoSync) {
+                context.State['geoSyncNeeded'] = true;
+            }
+        }
     }
 
-    protected override OnAfterSaveExecute(entity: BaseEntity, user: UserInfo, options: EntitySaveOptions): void {
+    protected override OnAfterSaveExecute(entity: BaseEntity, user: UserInfo, options: EntitySaveOptions, _context: SaveContext): void {
         if (options.SkipEntityAIActions !== true)
             this.HandleEntityAIActions(entity, 'save', false, user); // NO AWAIT INTENTIONALLY
         if (options.SkipEntityActions !== true)
             this.HandleEntityActions(entity, 'save', false, user); // NO AWAIT INTENTIONALLY
+    }
+
+    protected override async OnSaveCompleted(entity: BaseEntity, saveSQLResult: SaveSQLResult, user: UserInfo, options: EntitySaveOptions, context: SaveContext): Promise<Record<string, unknown> | null> {
+        const superPatches = await super.OnSaveCompleted(entity, saveSQLResult, user, options, context);
+
+        // Build parallel post-save tasks — geocoding and ISA sibling propagation
+        // are independent (write to RecordGeoCode and RecordChange respectively).
+        let geoResult: GeocodeResult | null = null;
+
+        // Geocoding: awaited so the SP result can be patched with fresh lat/lng
+        const geoPromise = context.State['geoSyncNeeded']
+            ? GeoCodeSyncService.Instance.SyncIfChanged(entity, user).catch(e => {
+                const msg = e instanceof Error ? e.message : String(e);
+                LogError(`GenericDatabaseProvider: Geo sync failed for ${entity.EntityInfo.Name}: ${msg}`);
+                return null;
+            })
+            : null;
+
+        // ISA sibling record-change propagation — when saving an overlapping-subtype entity,
+        // propagate the record change to sibling branches so their change history stays in sync.
+        const overlappingChangeData = saveSQLResult.extraData?.overlappingChangeData as
+            | { changesJSON: string; changesDescription: string }
+            | undefined;
+        const siblingPromise = (
+            overlappingChangeData &&
+            entity.EntityInfo.AllowMultipleSubtypes &&
+            entity.EntityInfo.TrackRecordChanges
+        )
+            ? this.PropagateRecordChangesToSiblings(
+                entity.EntityInfo,
+                overlappingChangeData,
+                entity.PrimaryKey.Values(),
+                user?.ID ?? '',
+                options.ISAActiveChildEntityName,
+                entity.ProviderTransaction ? { connectionSource: entity.ProviderTransaction } : undefined,
+            )
+            : null;
+
+        // Await both in parallel
+        if (geoPromise && siblingPromise) {
+            [geoResult] = await Promise.all([geoPromise, siblingPromise]);
+        } else if (geoPromise) {
+            geoResult = await geoPromise;
+        } else if (siblingPromise) {
+            await siblingPromise;
+        }
+
+        // Build patches: merge super's patches with geocoding lat/lng if available.
+        // These patch the SP result row before finalizeSave() loads it into the entity,
+        // ensuring the entity object has fresh coordinates without a re-query.
+        if (geoResult) {
+            const geoPatches: Record<string, unknown> = {
+                __mj_Latitude: geoResult.Latitude,
+                __mj_Longitude: geoResult.Longitude,
+            };
+            return superPatches ? { ...superPatches, ...geoPatches } : geoPatches;
+        }
+
+        return superPatches;
     }
 
     protected override async OnBeforeDeleteExecute(entity: BaseEntity, user: UserInfo, options: EntityDeleteOptions): Promise<void> {
@@ -554,6 +635,41 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             this.HandleEntityActions(entity, 'delete', false, user);
         if (false === options?.SkipEntityAIActions)
             this.HandleEntityAIActions(entity, 'delete', false, user);
+
+        // Fire-and-forget: clean up RecordGeoCode rows for the deleted record
+        if (entity.EntityInfo.SupportsGeoCoding) {
+            this.cleanupGeoCodesForDeletedRecord(entity, user).catch(e => {
+                const msg = e instanceof Error ? e.message : String(e);
+                LogError(`GenericDatabaseProvider: Geo cleanup failed for deleted ${entity.EntityInfo.Name}: ${msg}`);
+            });
+        }
+    }
+
+    /**
+     * Delete RecordGeoCode rows associated with a deleted entity record.
+     */
+    private async cleanupGeoCodesForDeletedRecord(entity: BaseEntity, contextUser: UserInfo): Promise<void> {
+        const pkPairs = entity.PrimaryKey.KeyValuePairs;
+        const recordId = pkPairs.length === 1
+            ? String(pkPairs[0].Value)
+            : pkPairs.map(pk => String(pk.Value)).join('||');
+
+        const rv = new RunView();
+        const result = await rv.RunView({
+            EntityName: 'MJ: Record Geo Codes',
+            ExtraFilter: `EntityID='${entity.EntityInfo.ID}' AND RecordID='${recordId}'`,
+            ResultType: 'entity_object'
+        }, contextUser);
+
+        if (result.Success && result.Results.length > 0) {
+            for (const row of result.Results) {
+                const geoRecord = row as unknown as BaseEntity;
+                const deleted = await geoRecord.Delete();
+                if (!deleted) {
+                    LogError(`GenericDatabaseProvider: Failed to delete orphaned RecordGeoCode: ${geoRecord.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+                }
+            }
+        }
     }
 
     /**************************************************************************/

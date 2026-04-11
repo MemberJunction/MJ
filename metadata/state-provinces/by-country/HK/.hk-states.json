@@ -1,0 +1,23 @@
+[
+  {
+    "fields": {
+      "Name": "Hong Kong",
+      "Code": "HK",
+      "ISO3166_2": "HK-HK",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Hong Kong"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=HK"
+    },
+    "primaryKey": {
+      "ID": "B18F7D1E-08C7-4724-8724-69420437CDCC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:59.489Z",
+      "checksum": "0203390b7f0755a91c9882ff852d74ac43d889495c41ba49c5798df02935a750"
+    }
+  }
+]

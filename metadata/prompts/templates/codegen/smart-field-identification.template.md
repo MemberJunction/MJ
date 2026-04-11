@@ -10,7 +10,9 @@ Analyze the provided entity structure and determine:
 3. Which fields should be **Searchable** (included in user search API) — **ONE OR MORE FIELDS**
 4. Whether this entity should be **searchable by users** (AllowUserSearchAPI)
 5. What **search predicate** each searchable field should use (BeginsWith, Contains, EndsWith, Exact)
+{% if allowFullTextSearch %}
 6. Whether **full-text search** should be enabled, and which fields to include
+{% endif %}
 
 ## Entity Information
 
@@ -159,6 +161,7 @@ Rules:
 - Every field in `searchableFields` MUST have exactly one entry in `searchPredicates`
 - Default to `BeginsWith` when in doubt — it is the most performant
 
+{% if allowFullTextSearch %}
 ### Full-Text Search Configuration (enableFullTextSearch, fullTextSearchFields)
 
 Decide whether full-text search (FTS) should be enabled for this entity. FTS provides advanced linguistic matching (stemming, inflections, proximity) for text-heavy content.
@@ -178,6 +181,7 @@ Decide whether full-text search (FTS) should be enabled for this entity. FTS pro
 - Text fields with MaxLength > 100 that contain searchable natural language content
 - NOT: IDs, codes, short enums, binary fields, foreign key fields
 - NOT: Fields that are already well-served by the standard search predicates (exact email matches, etc.)
+{% endif %}
 
 ## Output Format
 
@@ -199,9 +203,11 @@ Return a JSON object with this exact structure:
     { "field": "FieldName3", "predicate": "Exact" }
   ],
   "searchPredicatesReason": "Brief explanation of predicate choices",
+{% if allowFullTextSearch %}
   "enableFullTextSearch": false,
   "fullTextSearchFields": [],
   "fullTextSearchReason": "Brief explanation of FTS decision",
+{% endif %}
   "confidence": "high|medium|low"
 }
 ```
@@ -211,7 +217,9 @@ Return a JSON object with this exact structure:
 - `defaultInView` is an **array of strings** (one or more fields)
 - `searchableFields` is an **array of strings** (one or more fields)
 - `searchPredicates` must have exactly one entry per field in `searchableFields`
+{% if allowFullTextSearch %}
 - `fullTextSearchFields` should only contain fields with MaxLength > 100 and natural language content
+{% endif %}
 - Return name fields in display order (e.g., FirstName before LastName)
 
 ### Confidence Levels
@@ -254,9 +262,11 @@ For entity "Members" with fields: ID (uniqueidentifier), FirstName (nvarchar, Ma
     { "field": "City", "predicate": "BeginsWith" }
   ],
   "searchPredicatesReason": "Names and titles use BeginsWith for fast prefix matching; Email and Phone use Exact since users type the full value; City uses BeginsWith for prefix lookup",
+{% if allowFullTextSearch %}
   "enableFullTextSearch": true,
   "fullTextSearchFields": ["Bio"],
   "fullTextSearchReason": "Bio is a MAX-length natural language field that benefits from linguistic FTS matching (stemming, proximity). Short fields like names and emails are better served by standard predicates",
+{% endif %}
   "confidence": "high"
 }
 ```
@@ -280,9 +290,11 @@ For entity "Products" with fields: ID (uniqueidentifier), Name (nvarchar, MaxLen
     { "field": "SKU", "predicate": "Exact" }
   ],
   "searchPredicatesReason": "Name uses BeginsWith for fast prefix matching; SKU is an exact code users type in full",
+{% if allowFullTextSearch %}
   "enableFullTextSearch": true,
   "fullTextSearchFields": ["Description"],
   "fullTextSearchReason": "Description is a MAX-length field with natural language product details that benefits from FTS linguistic matching",
+{% endif %}
   "confidence": "high"
 }
 ```
@@ -305,9 +317,11 @@ For entity "Orders" with fields: ID (uniqueidentifier), OrderNumber (nvarchar, M
     { "field": "OrderNumber", "predicate": "Exact" }
   ],
   "searchPredicatesReason": "OrderNumber is a unique identifier that users type in full for exact lookup",
+{% if allowFullTextSearch %}
   "enableFullTextSearch": false,
   "fullTextSearchFields": [],
   "fullTextSearchReason": "Notes is the only text-heavy field but it is rarely searched. Order lookup is best done by exact OrderNumber matching",
+{% endif %}
   "confidence": "high"
 }
 ```
@@ -328,9 +342,11 @@ For entity "User Roles" with fields: ID (uniqueidentifier), UserID (uniqueidenti
   "allowUserSearchReason": "Junction table connecting Users to Roles — no user-facing search content, only foreign key pairs",
   "searchPredicates": [],
   "searchPredicatesReason": "No searchable fields, so no predicates needed",
+{% if allowFullTextSearch %}
   "enableFullTextSearch": false,
   "fullTextSearchFields": [],
   "fullTextSearchReason": "No text content fields in this junction table",
+{% endif %}
   "confidence": "high"
 }
 ```

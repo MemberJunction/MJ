@@ -1,0 +1,569 @@
+[
+  {
+    "fields": {
+      "Name": "Blantyre",
+      "Code": "BL",
+      "ISO3166_2": "MW-BL",
+      "Latitude": -15.6875,
+      "Longitude": 34.9413,
+      "BoundaryGeoJSON": "@file:by-country/MW/boundaries/MW-BL.geojson",
+      "CommonAliases": [
+        "Blantyre"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MW"
+    },
+    "primaryKey": {
+      "ID": "7D51C803-EA31-4AC8-9CD5-3F87924BC4BB"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:19.077Z",
+      "checksum": "1f169109836e6a31451ccca03cdf7a85cf9e15e594208bf8f6db89c9191f7070"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Central",
+      "Code": "C",
+      "ISO3166_2": "MW-C",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Central"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MW"
+    },
+    "primaryKey": {
+      "ID": "F25ACC8D-349E-4092-82C7-11257703DF09"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:19.093Z",
+      "checksum": "1aea47232d10f2b5a5f88ad0d20680f520f2a9c5039ba833c416574bd4864d87"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Chikwawa",
+      "Code": "CK",
+      "ISO3166_2": "MW-CK",
+      "Latitude": -16.1524,
+      "Longitude": 34.6636,
+      "BoundaryGeoJSON": "@file:by-country/MW/boundaries/MW-CK.geojson",
+      "CommonAliases": [
+        "Chikwawa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MW"
+    },
+    "primaryKey": {
+      "ID": "F3827AE8-06CC-4E08-AF21-F55A7C7C9EF6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:19.110Z",
+      "checksum": "2116624dcf5d945156960337f8d33fd285bac22376be3112172714228350e443"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Chiradzulu",
+      "Code": "CR",
+      "ISO3166_2": "MW-CR",
+      "Latitude": -15.7358,
+      "Longitude": 35.2224,
+      "BoundaryGeoJSON": "@file:by-country/MW/boundaries/MW-CR.geojson",
+      "CommonAliases": [
+        "Chiradzulu"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MW"
+    },
+    "primaryKey": {
+      "ID": "51C136BA-3DCE-4A14-BA22-FD724C77ABC3"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:19.126Z",
+      "checksum": "43e2bab94312cb92a4bd055b8a4deb1870300b2b63381e43fe5fbc264b38a22c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Chitipa",
+      "Code": "CT",
+      "ISO3166_2": "MW-CT",
+      "Latitude": -9.8857,
+      "Longitude": 33.4345,
+      "BoundaryGeoJSON": "@file:by-country/MW/boundaries/MW-CT.geojson",
+      "CommonAliases": [
+        "Chitipa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MW"
+    },
+    "primaryKey": {
+      "ID": "24B23E3B-9465-4335-82A0-F335A107C65B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:19.145Z",
+      "checksum": "432b6c7d8ec8ad10c76ec78d763d24540e7aa182fb8820be90c117769b4dca66"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Dedza",
+      "Code": "DE",
+      "ISO3166_2": "MW-DE",
+      "Latitude": -14.2064,
+      "Longitude": 34.1833,
+      "BoundaryGeoJSON": "@file:by-country/MW/boundaries/MW-DE.geojson",
+      "CommonAliases": [
+        "Dedza"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MW"
+    },
+    "primaryKey": {
+      "ID": "7F121389-60A2-4E65-A2C3-FB7C0EE05168"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:19.163Z",
+      "checksum": "496fb63857110f246cb7e2cb6da794098c78ec027a0c5489bcf9a21dbbf89be7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Dowa",
+      "Code": "DO",
+      "ISO3166_2": "MW-DO",
+      "Latitude": -13.625,
+      "Longitude": 33.8651,
+      "BoundaryGeoJSON": "@file:by-country/MW/boundaries/MW-DO.geojson",
+      "CommonAliases": [
+        "Dowa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MW"
+    },
+    "primaryKey": {
+      "ID": "F39E61F9-81AF-4848-A3A0-5CC8D991C4D0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:19.180Z",
+      "checksum": "6755e3fa5f8dc58435e28c12d7a50eb55836d667186d57eebb43642ec8a115ab"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Karonga",
+      "Code": "KR",
+      "ISO3166_2": "MW-KR",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Karonga"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MW"
+    },
+    "primaryKey": {
+      "ID": "E0997870-C381-415F-9B3F-6D6A756E55FC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:19.196Z",
+      "checksum": "e993b50a4b2dd6147d9707a3b50d076836da12120855bcef1224070f8de78d1b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kasungu",
+      "Code": "KS",
+      "ISO3166_2": "MW-KS",
+      "Latitude": -12.9319,
+      "Longitude": 33.4535,
+      "BoundaryGeoJSON": "@file:by-country/MW/boundaries/MW-KS.geojson",
+      "CommonAliases": [
+        "Kasungu"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MW"
+    },
+    "primaryKey": {
+      "ID": "04B125B6-FB1B-4CE9-A2DB-E3A3D2663E28"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:19.214Z",
+      "checksum": "be096ed54627d9fbf07d267bdb2ca05c608428413a988da5d8ec81abae3df3d6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Lilongwe",
+      "Code": "LI",
+      "ISO3166_2": "MW-LI",
+      "Latitude": -14.0415,
+      "Longitude": 33.7683,
+      "BoundaryGeoJSON": "@file:by-country/MW/boundaries/MW-LI.geojson",
+      "CommonAliases": [
+        "Lilongwe"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MW"
+    },
+    "primaryKey": {
+      "ID": "1BE2306A-BD85-4613-9BE3-BFF3F9AD0716"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:19.231Z",
+      "checksum": "ddfb2741ccf8ae9bbd814fa646f6e3d6a81514c80ab3c17f726128f0b366fe92"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Machinga",
+      "Code": "MH",
+      "ISO3166_2": "MW-MH",
+      "Latitude": -14.9533,
+      "Longitude": 35.5384,
+      "BoundaryGeoJSON": "@file:by-country/MW/boundaries/MW-MH.geojson",
+      "CommonAliases": [
+        "Machinga"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MW"
+    },
+    "primaryKey": {
+      "ID": "818E3E85-B2D2-44C2-991E-CFC01BCA6D24"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:19.300Z",
+      "checksum": "364bdd36c33fec0a9ef2136c1c3a7d5ad51915060b44e1f7b0340fcdbe3850a0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mangochi",
+      "Code": "MG",
+      "ISO3166_2": "MW-MG",
+      "Latitude": -14.374,
+      "Longitude": 35.3501,
+      "BoundaryGeoJSON": "@file:by-country/MW/boundaries/MW-MG.geojson",
+      "CommonAliases": [
+        "Mangochi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MW"
+    },
+    "primaryKey": {
+      "ID": "08B03611-0B2E-4C2B-B474-4C7F335DFDD2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:19.318Z",
+      "checksum": "169cbcec967b9e27d77f1284a84e86ba6e47e3b65d81f42dfef227fd81096029"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mchinji",
+      "Code": "MC",
+      "ISO3166_2": "MW-MC",
+      "Latitude": -13.696,
+      "Longitude": 33.0113,
+      "BoundaryGeoJSON": "@file:by-country/MW/boundaries/MW-MC.geojson",
+      "CommonAliases": [
+        "Mchinji"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MW"
+    },
+    "primaryKey": {
+      "ID": "616E11D3-347A-42B0-BE93-F628AB7643D3"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:19.335Z",
+      "checksum": "11ca7fc21ca961db5c9a857b670a91cfafc9351c63c18f2238f5f673a17dac45"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mulanje",
+      "Code": "MU",
+      "ISO3166_2": "MW-MU",
+      "Latitude": -15.9868,
+      "Longitude": 35.5397,
+      "BoundaryGeoJSON": "@file:by-country/MW/boundaries/MW-MU.geojson",
+      "CommonAliases": [
+        "Mulanje"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MW"
+    },
+    "primaryKey": {
+      "ID": "D8C2C4AD-E7ED-425E-89C0-3D2BBC2EFC2B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:19.351Z",
+      "checksum": "2131b47018a9c071180833cce089dd0014107cc0b211f2350fcce84ecdb79847"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mwanza",
+      "Code": "MW",
+      "ISO3166_2": "MW-MW",
+      "Latitude": -15.6394,
+      "Longitude": 34.5126,
+      "BoundaryGeoJSON": "@file:by-country/MW/boundaries/MW-MW.geojson",
+      "CommonAliases": [
+        "Mwanza"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MW"
+    },
+    "primaryKey": {
+      "ID": "9608589F-751C-4E45-B1C3-817EDCF8E404"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:19.367Z",
+      "checksum": "6b8fde6c312411421401710c408244797e39d48edb92f0661aa7f79d50f2f513"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mzimba",
+      "Code": "MZ",
+      "ISO3166_2": "MW-MZ",
+      "Latitude": -11.8792,
+      "Longitude": 33.6587,
+      "BoundaryGeoJSON": "@file:by-country/MW/boundaries/MW-MZ.geojson",
+      "CommonAliases": [
+        "Mzimba"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MW"
+    },
+    "primaryKey": {
+      "ID": "416C73B0-1AA4-4FF5-BDA4-14CBC9F9C00D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:19.384Z",
+      "checksum": "705d1449de4ae3176cf5d3eca3974f16cfac9cd2cff19968f00a5439ca9e9a81"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nkhata Bay",
+      "Code": "NB",
+      "ISO3166_2": "MW-NB",
+      "Latitude": -11.6281,
+      "Longitude": 34.1604,
+      "BoundaryGeoJSON": "@file:by-country/MW/boundaries/MW-NB.geojson",
+      "CommonAliases": [
+        "Nkhata Bay"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MW"
+    },
+    "primaryKey": {
+      "ID": "DB645CD2-9455-46FD-8574-FC468476DDDC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:19.402Z",
+      "checksum": "723c43862cda7cce82313adf5b115a0e7c006bd5a83cdf41e42abb4127711eac"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nkhotakota",
+      "Code": "NK",
+      "ISO3166_2": "MW-NK",
+      "Latitude": -12.8398,
+      "Longitude": 34.1715,
+      "BoundaryGeoJSON": "@file:by-country/MW/boundaries/MW-NK.geojson",
+      "CommonAliases": [
+        "Nkhotakota"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MW"
+    },
+    "primaryKey": {
+      "ID": "361918B0-DCCC-4EAA-A7ED-7653136CD87D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:19.419Z",
+      "checksum": "b771f81a738d22817274afcec87d6702ac3d0753b4cf4d193af7db7872542afd"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Northern",
+      "Code": "N",
+      "ISO3166_2": "MW-N",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Northern"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MW"
+    },
+    "primaryKey": {
+      "ID": "120119F2-60D4-483B-AD72-22FEBA8BF5FC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:19.436Z",
+      "checksum": "307f3f3ec7ac8f0bca67de2a66ea5f8dc50efbffe45ef557e62ea8980280bbe2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nsanje",
+      "Code": "NS",
+      "ISO3166_2": "MW-NS",
+      "Latitude": -17.0479,
+      "Longitude": 35.1003,
+      "BoundaryGeoJSON": "@file:by-country/MW/boundaries/MW-NS.geojson",
+      "CommonAliases": [
+        "Nsanje"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MW"
+    },
+    "primaryKey": {
+      "ID": "24E00FEA-BE1D-4719-9407-3506CC21E75E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:19.450Z",
+      "checksum": "e80795bae9ff7162a302f4547754acad91e0fe330f0787141c853185728cfa71"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ntcheu",
+      "Code": "NU",
+      "ISO3166_2": "MW-NU",
+      "Latitude": -14.7843,
+      "Longitude": 34.6861,
+      "BoundaryGeoJSON": "@file:by-country/MW/boundaries/MW-NU.geojson",
+      "CommonAliases": [
+        "Ntcheu"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MW"
+    },
+    "primaryKey": {
+      "ID": "339F6ECA-903A-4CA8-8F92-509E3D6F6636"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:19.496Z",
+      "checksum": "cf701066cd6db14d8b427116c817700096d1be4e2244d867ce58e0c2f2aafeb5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ntchisi",
+      "Code": "NI",
+      "ISO3166_2": "MW-NI",
+      "Latitude": -13.2659,
+      "Longitude": 33.8763,
+      "BoundaryGeoJSON": "@file:by-country/MW/boundaries/MW-NI.geojson",
+      "CommonAliases": [
+        "Ntchisi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MW"
+    },
+    "primaryKey": {
+      "ID": "4621224B-5434-48E7-B4AE-B77828E06916"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:19.512Z",
+      "checksum": "bcabb973e42a2ea9be0c1c8b26b537dcfd9e3572b8144a47c5301ae316e2d20d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rumphi",
+      "Code": "RU",
+      "ISO3166_2": "MW-RU",
+      "Latitude": -10.7114,
+      "Longitude": 33.953,
+      "BoundaryGeoJSON": "@file:by-country/MW/boundaries/MW-RU.geojson",
+      "CommonAliases": [
+        "Rumphi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MW"
+    },
+    "primaryKey": {
+      "ID": "42383532-F3B5-4086-AD91-C883FB84F035"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:19.529Z",
+      "checksum": "181c0d514e9eee0f4c0500b7c4be9b99cd18a761e0e733733279fab8051dc93f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Salima",
+      "Code": "SA",
+      "ISO3166_2": "MW-SA",
+      "Latitude": -13.7572,
+      "Longitude": 34.4903,
+      "BoundaryGeoJSON": "@file:by-country/MW/boundaries/MW-SA.geojson",
+      "CommonAliases": [
+        "Salima"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MW"
+    },
+    "primaryKey": {
+      "ID": "FA35F21E-BB9A-4176-839C-30E0A11E9592"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:19.545Z",
+      "checksum": "da56b9e4cf28296524e0e18f79a39ac1070d7842b8820f6569257db181961330"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Southern",
+      "Code": "S",
+      "ISO3166_2": "MW-S",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Southern"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MW"
+    },
+    "primaryKey": {
+      "ID": "82FAE4FD-5DA2-4A34-91BD-165AA0E45681"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:19.561Z",
+      "checksum": "f1691c08f3b0c08ea406e380de0c51a667163d6c4d1d29864a1010cd26ca01ba"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Thyolo",
+      "Code": "TH",
+      "ISO3166_2": "MW-TH",
+      "Latitude": -16.1135,
+      "Longitude": 35.1071,
+      "BoundaryGeoJSON": "@file:by-country/MW/boundaries/MW-TH.geojson",
+      "CommonAliases": [
+        "Thyolo"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MW"
+    },
+    "primaryKey": {
+      "ID": "DF636082-9FE2-40C9-9A25-C6FE3D3BC720"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:19.578Z",
+      "checksum": "0a85c0aa8ffdc77f4910f76f7ab0e1682400474340cb26f8154070444fc3a451"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Zomba",
+      "Code": "ZO",
+      "ISO3166_2": "MW-ZO",
+      "Latitude": -15.4526,
+      "Longitude": 35.4256,
+      "BoundaryGeoJSON": "@file:by-country/MW/boundaries/MW-ZO.geojson",
+      "CommonAliases": [
+        "Zomba"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MW"
+    },
+    "primaryKey": {
+      "ID": "89BC68FA-AD65-45A8-8823-07640363C814"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:19.591Z",
+      "checksum": "3ecd97e616a8bd2260218806572e58634a779fd1b5f1617697319568af4007cf"
+    }
+  }
+]

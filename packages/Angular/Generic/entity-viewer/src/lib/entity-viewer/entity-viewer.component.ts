@@ -78,6 +78,13 @@ import { EntityDataGridComponent } from '../entity-data-grid/entity-data-grid.co
   }
 })
 export class EntityViewerComponent implements OnInit, OnDestroy {
+  /**
+   * Maximum records to load in map mode. Map view needs all records for
+   * geographic visualization — paging doesn't make sense for maps. This cap
+   * prevents unbounded queries on very large entities.
+   */
+  private static readonly MAP_MAX_RECORDS = 10000;
+
   // ========================================
   // INPUTS (using getter/setter pattern)
   // ========================================
@@ -1078,8 +1085,12 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
           .join(', ');
       }
 
-      // Calculate StartRow for pagination
-      const startRow = this.pagination.currentPage * config.pageSize;
+      // Map mode loads all records (up to MAP_MAX_RECORDS) since paging
+      // doesn't make sense for geographic visualization. Other modes use
+      // standard page-based pagination.
+      const isMapMode = this.effectiveViewMode === 'map';
+      const maxRows = isMapMode ? EntityViewerComponent.MAP_MAX_RECORDS : config.pageSize;
+      const startRow = isMapMode ? 0 : this.pagination.currentPage * config.pageSize;
 
       // Build ExtraFilter from view's WhereClause if available
       // The view's WhereClause is the "business filter" - UserSearchString is additive
@@ -1089,7 +1100,7 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
         EntityName: entity.Name,
         ResultType: 'simple',
         Fields: computeFieldsList(entity, this.gridState),
-        MaxRows: config.pageSize,
+        MaxRows: maxRows,
         StartRow: startRow,
         OrderBy: orderBy,
         ExtraFilter: extraFilter,
@@ -1196,10 +1207,21 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
    * Set the view mode and emit change event
    */
   setViewMode(mode: EntityViewMode): void {
-    if (this.effectiveViewMode !== mode) {
+    const previousMode = this.effectiveViewMode;
+    if (previousMode !== mode) {
       this.internalViewMode = mode;
       this.viewModeChange.emit(mode);
-      this.cdr.detectChanges();
+
+      // Reload data when switching to/from map mode because map loads all
+      // records (up to MAP_MAX_RECORDS) while other modes use page-based pagination.
+      const switchingToMap = mode === 'map' && previousMode !== 'map';
+      const switchingFromMap = mode !== 'map' && previousMode === 'map';
+      if (switchingToMap || switchingFromMap) {
+        this.resetPaginationState();
+        this.loadData();
+      } else {
+        this.cdr.detectChanges();
+      }
     }
   }
 
@@ -1462,6 +1484,7 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
     const newValue = !!(entity && entity.SupportsGeoCoding);
     if (newValue !== this.HasGeoCoding) {
       this.HasGeoCoding = newValue;
+      this.fallbackFromMapIfNeeded();
       this.cdr.detectChanges();
     }
   }
@@ -1590,6 +1613,16 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
    */
   private fallbackFromTimelineIfNeeded(): void {
     if (this.effectiveViewMode === 'timeline' && !this.hasDateFields) {
+      this.setViewMode('grid');
+    }
+  }
+
+  /**
+   * If currently on map view but geocoding is no longer available,
+   * fall back to grid view
+   */
+  private fallbackFromMapIfNeeded(): void {
+    if (this.effectiveViewMode === 'map' && !this.HasGeoCoding) {
       this.setViewMode('grid');
     }
   }
