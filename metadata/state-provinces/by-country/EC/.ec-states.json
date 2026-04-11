@@ -1,0 +1,443 @@
+[
+  {
+    "fields": {
+      "Name": "Azuay",
+      "Code": "A",
+      "ISO3166_2": "EC-A",
+      "Latitude": -3.1528,
+      "Longitude": -79.0909,
+      "BoundaryGeoJSON": "@file:by-country/EC/boundaries/EC-A.geojson",
+      "CommonAliases": [
+        "Azuay"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=EC"
+    },
+    "primaryKey": {
+      "ID": "89816CA1-034C-42DE-B344-8E29BB09E17A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:43.696Z",
+      "checksum": "e5569f247af9513e7d8a4504b89adad5e7dfbf95425e2a4f3ba5a5c0434b514b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bolívar",
+      "Code": "B",
+      "ISO3166_2": "EC-B",
+      "Latitude": -1.6762,
+      "Longitude": -79.1205,
+      "BoundaryGeoJSON": "@file:by-country/EC/boundaries/EC-B.geojson",
+      "CommonAliases": [
+        "Bolívar"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=EC"
+    },
+    "primaryKey": {
+      "ID": "E3AFE159-54C7-459A-B639-447F5509BB97"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:43.712Z",
+      "checksum": "b2e1e53b9e9505deb98b5f345282adf77e5ad6407e8fcd58d63187d0bb39e49f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Cañar",
+      "Code": "F",
+      "ISO3166_2": "EC-F",
+      "Latitude": -2.5441,
+      "Longitude": -78.9978,
+      "BoundaryGeoJSON": "@file:by-country/EC/boundaries/EC-F.geojson",
+      "CommonAliases": [
+        "Cañar"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=EC"
+    },
+    "primaryKey": {
+      "ID": "2DB98AD3-F08C-4544-8410-29C48975A256"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:43.729Z",
+      "checksum": "23ba745b6f3d86874eefdc8be7165d8a92e72b7215a2274134f3f0078ffe896b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Carchi",
+      "Code": "C",
+      "ISO3166_2": "EC-C",
+      "Latitude": 0.6866,
+      "Longitude": -78.0243,
+      "BoundaryGeoJSON": "@file:by-country/EC/boundaries/EC-C.geojson",
+      "CommonAliases": [
+        "Carchi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=EC"
+    },
+    "primaryKey": {
+      "ID": "EF277980-C847-4F37-B2C8-DE8EF2EC6325"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:43.746Z",
+      "checksum": "0ee54d92c490c4210c973dbc168728bba5c99df35ed0c71cb10e67eb2d66c9d6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Chimborazo",
+      "Code": "H",
+      "ISO3166_2": "EC-H",
+      "Latitude": -1.8891,
+      "Longitude": -78.7417,
+      "BoundaryGeoJSON": "@file:by-country/EC/boundaries/EC-H.geojson",
+      "CommonAliases": [
+        "Chimborazo"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=EC"
+    },
+    "primaryKey": {
+      "ID": "F7B5C349-F4E8-4C74-B265-1FB5C6474CDE"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:43.762Z",
+      "checksum": "15bd8f02c0db9ba33469d766b5f94943f63ce0c4c246e1aa999fcf84dca1526b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Cotopaxi",
+      "Code": "X",
+      "ISO3166_2": "EC-X",
+      "Latitude": -0.8133,
+      "Longitude": -78.8554,
+      "BoundaryGeoJSON": "@file:by-country/EC/boundaries/EC-X.geojson",
+      "CommonAliases": [
+        "Cotopaxi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=EC"
+    },
+    "primaryKey": {
+      "ID": "86055572-3CBF-43AD-8387-83FCA9CCEEEB"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:43.778Z",
+      "checksum": "2842b0a761f7f1634fefee3b512899e8411e7bbe033e3eb66a81cceaeca4339c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "El Oro",
+      "Code": "O",
+      "ISO3166_2": "EC-O",
+      "Latitude": -3.4366,
+      "Longitude": -79.8552,
+      "BoundaryGeoJSON": "@file:by-country/EC/boundaries/EC-O.geojson",
+      "CommonAliases": [
+        "El Oro"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=EC"
+    },
+    "primaryKey": {
+      "ID": "46FC2911-C09C-4BD0-9B6C-E50A3DCEA823"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:43.795Z",
+      "checksum": "6ededcb2f4b786e9412b38a83a4bbb928cc17654e84402b0c3923f8c372c6c38"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Esmeraldas",
+      "Code": "E",
+      "ISO3166_2": "EC-E",
+      "Latitude": 1.2925,
+      "Longitude": -78.9448,
+      "BoundaryGeoJSON": "@file:by-country/EC/boundaries/EC-E.geojson",
+      "CommonAliases": [
+        "Esmeraldas"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=EC"
+    },
+    "primaryKey": {
+      "ID": "FD5B8080-1854-4451-B301-D34AC1C6BC91"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:43.811Z",
+      "checksum": "6b7132752ecf5fd7e27106dcb5765f9ac6a7c5157b3ca132f0aaaea91f7eb13f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Galápagos",
+      "Code": "W",
+      "ISO3166_2": "EC-W",
+      "Latitude": -1.368,
+      "Longitude": -89.685,
+      "BoundaryGeoJSON": "@file:by-country/EC/boundaries/EC-W.geojson",
+      "CommonAliases": [
+        "Galápagos"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=EC"
+    },
+    "primaryKey": {
+      "ID": "E06FF21C-8B60-4341-AA40-B022F55E6B5D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:43.827Z",
+      "checksum": "a2cbc1fe68080ef5aef5333383f14dd396c86d652ef4f66bc8ce08164b03d909"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Guayas",
+      "Code": "G",
+      "ISO3166_2": "EC-G",
+      "Latitude": -1.9838,
+      "Longitude": -79.8608,
+      "BoundaryGeoJSON": "@file:by-country/EC/boundaries/EC-G.geojson",
+      "CommonAliases": [
+        "Guayas"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=EC"
+    },
+    "primaryKey": {
+      "ID": "336BDD41-4336-4E30-91FF-7501107B6572"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:43.841Z",
+      "checksum": "bea88e92988ff1a35d36818b813176f712a409b4a7d9c16468da4e5f41b23c80"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Imbabura",
+      "Code": "I",
+      "ISO3166_2": "EC-I",
+      "Latitude": 0.5527,
+      "Longitude": -78.4124,
+      "BoundaryGeoJSON": "@file:by-country/EC/boundaries/EC-I.geojson",
+      "CommonAliases": [
+        "Imbabura"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=EC"
+    },
+    "primaryKey": {
+      "ID": "6B541390-3649-4F97-A15E-DC54A6363244"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:43.896Z",
+      "checksum": "bee76c3c7768d21720e25663a16292b9ce20c52c5e14721dd55b74239f03cf49"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Loja",
+      "Code": "L",
+      "ISO3166_2": "EC-L",
+      "Latitude": -4.1595,
+      "Longitude": -79.8079,
+      "BoundaryGeoJSON": "@file:by-country/EC/boundaries/EC-L.geojson",
+      "CommonAliases": [
+        "Loja"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=EC"
+    },
+    "primaryKey": {
+      "ID": "F3E84D1A-072C-4DAF-9A03-7E8C8E4CCD79"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:43.912Z",
+      "checksum": "d3d9644b1d209684f056b9b06c2c075124ae3a481503ec2b469e096eb6219a1c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Los Ríos",
+      "Code": "R",
+      "ISO3166_2": "EC-R",
+      "Latitude": -1.2219,
+      "Longitude": -79.4787,
+      "BoundaryGeoJSON": "@file:by-country/EC/boundaries/EC-R.geojson",
+      "CommonAliases": [
+        "Los Ríos"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=EC"
+    },
+    "primaryKey": {
+      "ID": "C1BBC83A-A1A2-428B-94F5-2BE7905A5B1A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:43.928Z",
+      "checksum": "6cc227838288f43d70fe755ffe092660ca2c33c4c928ad849d3f0752ae309f9f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Manabí",
+      "Code": "M",
+      "ISO3166_2": "EC-M",
+      "Latitude": -0.7272,
+      "Longitude": -80.1619,
+      "BoundaryGeoJSON": "@file:by-country/EC/boundaries/EC-M.geojson",
+      "CommonAliases": [
+        "Manabí"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=EC"
+    },
+    "primaryKey": {
+      "ID": "F7F0B298-5258-471E-9415-58D6AB2C8320"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:43.945Z",
+      "checksum": "602bde64de9c9da1da8389814cba1c1807caf952513fa15099b52460689f8c6d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Morona-Santiago",
+      "Code": "S",
+      "ISO3166_2": "EC-S",
+      "Latitude": -2.4505,
+      "Longitude": -77.8071,
+      "BoundaryGeoJSON": "@file:by-country/EC/boundaries/EC-S.geojson",
+      "CommonAliases": [
+        "Morona-Santiago"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=EC"
+    },
+    "primaryKey": {
+      "ID": "4E2AB19B-BCCA-46CF-ABEF-94F5E5DC88F6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:43.962Z",
+      "checksum": "a58af8f7b38a073ed0ee8f95fb6ce84e8edc7c21855e66a28fdb14ae3bb7a482"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Napo",
+      "Code": "N",
+      "ISO3166_2": "EC-N",
+      "Latitude": -1.2733,
+      "Longitude": -78.5209,
+      "BoundaryGeoJSON": "@file:by-country/EC/boundaries/EC-N.geojson",
+      "CommonAliases": [
+        "Napo"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=EC"
+    },
+    "primaryKey": {
+      "ID": "D757A0F2-8530-41C4-BB41-47FC4EC4B3F8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:43.977Z",
+      "checksum": "0b1a0111bce1a14c2016292ff02a4a694f40a2f4387efa7095fa49b06cf8b299"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Pastaza",
+      "Code": "Y",
+      "ISO3166_2": "EC-Y",
+      "Latitude": -1.8465,
+      "Longitude": -76.8768,
+      "BoundaryGeoJSON": "@file:by-country/EC/boundaries/EC-Y.geojson",
+      "CommonAliases": [
+        "Pastaza"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=EC"
+    },
+    "primaryKey": {
+      "ID": "69F335F4-2E0E-4F5F-BFB4-BD31132F1384"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:43.994Z",
+      "checksum": "815ffef0d2c0b91459eb9c31645c01e17ee55aeb217a59e2b3c022f41ae140de"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Pichincha",
+      "Code": "P",
+      "ISO3166_2": "EC-P",
+      "Latitude": -0.0871,
+      "Longitude": -78.5045,
+      "BoundaryGeoJSON": "@file:by-country/EC/boundaries/EC-P.geojson",
+      "CommonAliases": [
+        "Pichincha"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=EC"
+    },
+    "primaryKey": {
+      "ID": "87824286-8539-4124-AF6B-966790F8ECF1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:44.012Z",
+      "checksum": "3ee62a538038b65919750ac9726bb75f405f9e6346d08031f274a94551b65a29"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sucumbíos",
+      "Code": "U",
+      "ISO3166_2": "EC-U",
+      "Latitude": -0.0855,
+      "Longitude": -76.6135,
+      "BoundaryGeoJSON": "@file:by-country/EC/boundaries/EC-U.geojson",
+      "CommonAliases": [
+        "Sucumbíos"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=EC"
+    },
+    "primaryKey": {
+      "ID": "D0E66AC6-4BA8-4992-B9DB-A679FD7825A8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:44.028Z",
+      "checksum": "404bef1e2ee483e62ed15229f55c08b34e6fbdf680e7610a0b6ed39fba9cbe84"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tungurahua",
+      "Code": "T",
+      "ISO3166_2": "EC-T",
+      "Latitude": -0.6245,
+      "Longitude": -77.7382,
+      "BoundaryGeoJSON": "@file:by-country/EC/boundaries/EC-T.geojson",
+      "CommonAliases": [
+        "Tungurahua"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=EC"
+    },
+    "primaryKey": {
+      "ID": "B9D9CAB4-503A-409C-B441-D420C9E92750"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:44.042Z",
+      "checksum": "77e13f826f297192a8d162f5ea0f27c0fdc1edcfb12a83508eb1763801193e79"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Zarnora-Chinchipe",
+      "Code": "Z",
+      "ISO3166_2": "EC-Z",
+      "Latitude": -3.9368,
+      "Longitude": -78.8595,
+      "BoundaryGeoJSON": "@file:by-country/EC/boundaries/EC-Z.geojson",
+      "CommonAliases": [
+        "Zarnora-Chinchipe"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=EC"
+    },
+    "primaryKey": {
+      "ID": "E6C3AB62-4540-4EE3-942A-F7074152EBAB"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:44.065Z",
+      "checksum": "6481ae4ff0cf268bd7a790a800c5f16619cb62a4aa508acb3399af0d34579ade"
+    }
+  }
+]

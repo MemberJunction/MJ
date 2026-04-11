@@ -1,0 +1,275 @@
+[
+  {
+    "fields": {
+      "Name": "Andijon (Andizhan)",
+      "Code": "AN",
+      "ISO3166_2": "UZ-AN",
+      "Latitude": 40.4491,
+      "Longitude": 72.3651,
+      "BoundaryGeoJSON": "@file:by-country/UZ/boundaries/UZ-AN.geojson",
+      "CommonAliases": [
+        "Andijon (Andizhan)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UZ"
+    },
+    "primaryKey": {
+      "ID": "983B91AC-57D2-419A-85BA-0A5C7FEDECA9"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:42.213Z",
+      "checksum": "cea490c957fab84bfae1550e0e5760be3ccf22be6dbac7a3d1d7f89b44ac90ca"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bukhoro (Bukhara)",
+      "Code": "BU",
+      "ISO3166_2": "UZ-BU",
+      "Latitude": 39.946,
+      "Longitude": 63.7729,
+      "BoundaryGeoJSON": "@file:by-country/UZ/boundaries/UZ-BU.geojson",
+      "CommonAliases": [
+        "Bukhoro (Bukhara)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UZ"
+    },
+    "primaryKey": {
+      "ID": "3C2EBE66-E9F0-497B-A68E-2A1045285BF8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:42.232Z",
+      "checksum": "aa5ac724b417fe2dd165519343579e406cc0fdb61864b7a6a5a1ce7261965cba"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Farghona (Fergana)",
+      "Code": "FA",
+      "ISO3166_2": "UZ-FA",
+      "Latitude": 39.9347,
+      "Longitude": 71.7275,
+      "BoundaryGeoJSON": "@file:by-country/UZ/boundaries/UZ-FA.geojson",
+      "CommonAliases": [
+        "Farghona (Fergana)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UZ"
+    },
+    "primaryKey": {
+      "ID": "0FFFDE0B-3AB2-4713-922D-736191EF718A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:42.248Z",
+      "checksum": "f135c827fe7c3fedf6e2e1d7e6b7247add57ee64034cb6b59489e6bcaff63981"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Jizzakh (Dzhizak)",
+      "Code": "JI",
+      "ISO3166_2": "UZ-JI",
+      "Latitude": 40.3905,
+      "Longitude": 67.6556,
+      "BoundaryGeoJSON": "@file:by-country/UZ/boundaries/UZ-JI.geojson",
+      "CommonAliases": [
+        "Jizzakh (Dzhizak)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UZ"
+    },
+    "primaryKey": {
+      "ID": "7D22D8A7-7B06-452A-BF31-27EF81856F41"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:42.265Z",
+      "checksum": "e655788b9b66b6e2f24cd1f9ad7011984b2cadae3e84590f51fe4bc35cf6c756"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Khorazm (Khorezm)",
+      "Code": "KH",
+      "ISO3166_2": "UZ-KH",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Khorazm (Khorezm)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UZ"
+    },
+    "primaryKey": {
+      "ID": "D7A060BE-7F34-4502-877A-F16B6ABF4526"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:42.281Z",
+      "checksum": "438e68dd1cc00cdf887ac9bc7936c96b37acb2db9c6dd961353673d80490ceef"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Namangan",
+      "Code": "NG",
+      "ISO3166_2": "UZ-NG",
+      "Latitude": 40.8746,
+      "Longitude": 71.2964,
+      "BoundaryGeoJSON": "@file:by-country/UZ/boundaries/UZ-NG.geojson",
+      "CommonAliases": [
+        "Namangan"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UZ"
+    },
+    "primaryKey": {
+      "ID": "CCE853AE-59E1-4A5B-9BBA-3C0155C100A2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:42.297Z",
+      "checksum": "917e623a7b856b14aca7d86bb5c5aabb1e9f10a2e6a5465e99e7639fb35be869"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nawoiy (Navoi)",
+      "Code": "NW",
+      "ISO3166_2": "UZ-NW",
+      "Latitude": 42.1726,
+      "Longitude": 64.2722,
+      "BoundaryGeoJSON": "@file:by-country/UZ/boundaries/UZ-NW.geojson",
+      "CommonAliases": [
+        "Nawoiy (Navoi)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UZ"
+    },
+    "primaryKey": {
+      "ID": "BD212DF1-B3F4-40FD-832B-0C8C7D8736C2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:42.322Z",
+      "checksum": "9371f353dee7e652c0729af3cf047e24b13702300ea5e8814aed52ca21119af3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Qashqadaryo (Kashkadar'ya)",
+      "Code": "QA",
+      "ISO3166_2": "UZ-QA",
+      "Latitude": 38.7774,
+      "Longitude": 66.0231,
+      "BoundaryGeoJSON": "@file:by-country/UZ/boundaries/UZ-QA.geojson",
+      "CommonAliases": [
+        "Qashqadaryo (Kashkadar'ya)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UZ"
+    },
+    "primaryKey": {
+      "ID": "7765775B-0314-4350-9C32-88674D88C804"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:42.343Z",
+      "checksum": "b6468705852fb6e4aa0a4d2ae4f83c510edd8cff4e9249e0ce98b63f42fe2e32"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Qoraqalpoghiston Respublikasi (Karakalpakstan, Respublika)",
+      "Code": "QR",
+      "ISO3166_2": "UZ-QR",
+      "Latitude": 43.8529,
+      "Longitude": 59.2233,
+      "BoundaryGeoJSON": "@file:by-country/UZ/boundaries/UZ-QR.geojson",
+      "CommonAliases": [
+        "Qoraqalpoghiston Respublikasi (Karakalpakstan, Respublika)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UZ"
+    },
+    "primaryKey": {
+      "ID": "987573BA-E511-4157-A42A-1156CF297EC6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:42.364Z",
+      "checksum": "b5eaa45d800616e9a31d59ffb93c87b95cca2b2d44c1690fb8d5f792c8468f17"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Samarqand (Samarkand)",
+      "Code": "SA",
+      "ISO3166_2": "UZ-SA",
+      "Latitude": 39.9926,
+      "Longitude": 66.3126,
+      "BoundaryGeoJSON": "@file:by-country/UZ/boundaries/UZ-SA.geojson",
+      "CommonAliases": [
+        "Samarqand (Samarkand)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UZ"
+    },
+    "primaryKey": {
+      "ID": "F24B7A1E-C770-40C7-9DE5-36F845206B08"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:42.379Z",
+      "checksum": "47b2ef6f0b19adc95d83080379002baa135bdd3242deedeb5241ba3674706010"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sirdaryo (Syrdar'ya)",
+      "Code": "SI",
+      "ISO3166_2": "UZ-SI",
+      "Latitude": 39.9519,
+      "Longitude": 68.8037,
+      "BoundaryGeoJSON": "@file:by-country/UZ/boundaries/UZ-SI.geojson",
+      "CommonAliases": [
+        "Sirdaryo (Syrdar'ya)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UZ"
+    },
+    "primaryKey": {
+      "ID": "7DF57243-0A9D-436E-9D70-3600960100E2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:42.416Z",
+      "checksum": "659ffe8ee9f6f4458a61c6aaec71697d81541f36505920405aaad19372d73189"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Surkhondaryo (Surkhandar'ya)",
+      "Code": "SU",
+      "ISO3166_2": "UZ-SU",
+      "Latitude": 37.9835,
+      "Longitude": 67.4269,
+      "BoundaryGeoJSON": "@file:by-country/UZ/boundaries/UZ-SU.geojson",
+      "CommonAliases": [
+        "Surkhondaryo (Surkhandar'ya)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UZ"
+    },
+    "primaryKey": {
+      "ID": "E7F91C18-6B04-4D53-9BF5-DB1A42FD25CE"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:42.432Z",
+      "checksum": "40c3ffc01e95fce1bb9be4c41e600670500212c6ef813b9089c0e660097e1c97"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Toshkent (Tashkent)",
+      "Code": "TO",
+      "ISO3166_2": "UZ-TO",
+      "Latitude": 41.247,
+      "Longitude": 69.9511,
+      "BoundaryGeoJSON": "@file:by-country/UZ/boundaries/UZ-TO.geojson",
+      "CommonAliases": [
+        "Toshkent (Tashkent)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UZ"
+    },
+    "primaryKey": {
+      "ID": "DBBC51E9-5FA9-4506-B371-9A5E298FDCAD"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:42.446Z",
+      "checksum": "3bde92f472cd05a15f5952d527e3201c2b673d954c6211bdc40af49e21f4c7f4"
+    }
+  }
+]

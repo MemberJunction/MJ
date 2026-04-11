@@ -1,0 +1,1052 @@
+[
+  {
+    "fields": {
+      "Name": "Anenii Noi",
+      "Code": "ANE",
+      "ISO3166_2": "MD-ANE",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Anenii Noi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MD"
+    },
+    "primaryKey": {
+      "ID": "ACAF2E25-8253-4749-B54F-ADC34FB6CBB6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:15.152Z",
+      "checksum": "69ac89d2594578d809c6742f498253c149b3c8b945549edef3311c068398d4e7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bălţi",
+      "Code": "BAL",
+      "ISO3166_2": "MD-BAL",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Bălţi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MD"
+    },
+    "primaryKey": {
+      "ID": "7C3F3B3C-2CA5-4397-9EA0-A7E046534707"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:15.166Z",
+      "checksum": "07ded62c744693bcccf97c6b067453ee340ddc1930b42c1fe725bdb269be6c25"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Basarabeasca",
+      "Code": "BAS",
+      "ISO3166_2": "MD-BAS",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Basarabeasca"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MD"
+    },
+    "primaryKey": {
+      "ID": "9BC981D9-BD6E-44CD-8BC5-BE4923646F40"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:15.181Z",
+      "checksum": "5912d08983c16537dd01327000ac0c12c99fedf4c5f1cdb94bf3cd3037143043"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Brinceni",
+      "Code": "BRI",
+      "ISO3166_2": "MD-BRI",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Brinceni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MD"
+    },
+    "primaryKey": {
+      "ID": "8E951FC6-0D3E-450A-A36B-118B6EC525E9"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:15.196Z",
+      "checksum": "bc63c23a4f1b72553a6cd15eb91482e3b637516a00d42f229b78988cff68d9b4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Cahul",
+      "Code": "CAH",
+      "ISO3166_2": "MD-CAH",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Cahul"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MD"
+    },
+    "primaryKey": {
+      "ID": "3C0ABD48-C0E3-484A-8577-7B42CC166D50"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:15.215Z",
+      "checksum": "3d096efc3e9092a2122fbdf748c13ac1f2b0f0813f4917c5673b171da417155a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Cahul",
+      "Code": "CHL",
+      "ISO3166_2": "MD-CHL",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Cahul"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MD"
+    },
+    "primaryKey": {
+      "ID": "2E42300D-7A88-4826-A41F-A0AA2D592B98"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:15.233Z",
+      "checksum": "68ba31c77286fd1e5367fad22eb4398b502e375b211b03c1d8834295a4f5263c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Căinari",
+      "Code": "CAI",
+      "ISO3166_2": "MD-CAI",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Căinari"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MD"
+    },
+    "primaryKey": {
+      "ID": "318271CA-66BF-4BFE-980B-1DE310413B1B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:15.250Z",
+      "checksum": "f7c4ddee53bfe9c482e8716a4d3978e9c29cc5110b7d5768bb7510162acea9e8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Călăraşi",
+      "Code": "CAL",
+      "ISO3166_2": "MD-CAL",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Călăraşi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MD"
+    },
+    "primaryKey": {
+      "ID": "38D2734F-0C22-4E61-BB2A-B101C557FEE5"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:15.268Z",
+      "checksum": "0b59995d6c917fcba6389b105a14e22bdfc7298e1676b4ca82e22eda029ebbf9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Camenca",
+      "Code": "CAM",
+      "ISO3166_2": "MD-CAM",
+      "Latitude": 48.0369,
+      "Longitude": 28.7044,
+      "BoundaryGeoJSON": "@file:by-country/MD/boundaries/MD-CAM.geojson",
+      "CommonAliases": [
+        "Camenca"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MD"
+    },
+    "primaryKey": {
+      "ID": "DF549083-AD34-4768-90CD-5E0FC495AF78"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:15.284Z",
+      "checksum": "5ceb1c88f3df44be4797a61ce535d316e30243a417858f4a1c3501caa3b4dc61"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Cantemir",
+      "Code": "CAN",
+      "ISO3166_2": "MD-CAN",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Cantemir"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MD"
+    },
+    "primaryKey": {
+      "ID": "62C74621-76E5-42E6-A520-2A5BA1918E25"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:15.298Z",
+      "checksum": "9024be4d3b51a20b6615d77ba9bef03546335fed5ec417c06a51880841edc465"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Căuşeni",
+      "Code": "CAS",
+      "ISO3166_2": "MD-CAS",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Căuşeni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MD"
+    },
+    "primaryKey": {
+      "ID": "2D0E9E7C-D715-4F38-A84A-ED3D049D36C4"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:15.356Z",
+      "checksum": "2878f87ddfaa930255cde53ff0d6011b64d1152eb14ea709dff118cac3c8f725"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Chişinău",
+      "Code": "CHI",
+      "ISO3166_2": "MD-CHI",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Chişinău"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MD"
+    },
+    "primaryKey": {
+      "ID": "1CC9E0B9-EF04-49C1-805A-97262B62DCB8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:15.371Z",
+      "checksum": "bcebe689067ec4875865fbed7aa87bc07883404ca7c78f48d5d74a7cb643f118"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ciadîr-Lunga",
+      "Code": "CIA",
+      "ISO3166_2": "MD-CIA",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Ciadîr-Lunga"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MD"
+    },
+    "primaryKey": {
+      "ID": "631EB0F0-5C42-40AA-963B-1296B3A2637C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:15.385Z",
+      "checksum": "48ff1d6a3cfec8d0ad7cca989f191705312b11463db3ea2c2b4fbea147de875e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Cimişlia",
+      "Code": "CIM",
+      "ISO3166_2": "MD-CIM",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Cimişlia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MD"
+    },
+    "primaryKey": {
+      "ID": "0C0BC00A-B4B9-44D2-862D-B91155DF4A59"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:15.400Z",
+      "checksum": "5f87a0040b4126adfeb5bd4efb42f5fa63ec300e414523cfd437ebbb130b51b7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Comrat",
+      "Code": "COM",
+      "ISO3166_2": "MD-COM",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Comrat"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MD"
+    },
+    "primaryKey": {
+      "ID": "65B1B0E9-4E34-4148-B5D2-4BC4BE3606B8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:15.417Z",
+      "checksum": "c97da4d5e03d63cac98a44bf96087419cc3631281968306f75a235946b9e22f5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Criuleni",
+      "Code": "CRI",
+      "ISO3166_2": "MD-CRI",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Criuleni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MD"
+    },
+    "primaryKey": {
+      "ID": "62B7C2DF-5352-4D16-8889-3F9FE9A51F81"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:15.435Z",
+      "checksum": "51ab6aa7b50ec9b95e21c794f2179fea42ebb15a2c5de42242bb42e7b891f87e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Donduşeni",
+      "Code": "DON",
+      "ISO3166_2": "MD-DON",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Donduşeni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MD"
+    },
+    "primaryKey": {
+      "ID": "DD2694FE-4C3B-4EFF-AE17-5E271CCA6681"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:15.450Z",
+      "checksum": "8dc0d85dff72e8cb029a37b8a9c48aa4a3fba2a02a2acea5e86e5030cb749682"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Drochia",
+      "Code": "DRO",
+      "ISO3166_2": "MD-DRO",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Drochia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MD"
+    },
+    "primaryKey": {
+      "ID": "C667C0C8-05E4-401C-B780-4C355EAA303E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:15.466Z",
+      "checksum": "85acb5d9640cf5cac6efbc405d4ef0294477f1b758653654f87529f227a0fb8e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Dubăsari",
+      "Code": "DUB",
+      "ISO3166_2": "MD-DUB",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Dubăsari"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MD"
+    },
+    "primaryKey": {
+      "ID": "5011BF19-E3CD-4390-AF9B-FE07B03B2D88"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:15.483Z",
+      "checksum": "d6b452cb34dec34efb5f532cb3d151b12273589d7ea9e2849cb20d4c175d14d7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Dubăsari",
+      "Code": "DBI",
+      "ISO3166_2": "MD-DBI",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Dubăsari"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MD"
+    },
+    "primaryKey": {
+      "ID": "4E517602-0D6A-43FD-9EB9-E0FCAC1C931F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:15.497Z",
+      "checksum": "3638851250f44502ce82f6a3e53eb4c5aa7c5b5718cc928cfb27eb16543cb90d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Edineţ",
+      "Code": "EDI",
+      "ISO3166_2": "MD-EDI",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Edineţ"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MD"
+    },
+    "primaryKey": {
+      "ID": "D2A82BAE-8A66-45A0-95A1-7FA1F7E5B064"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:15.557Z",
+      "checksum": "7b0fbe7199fe5fc95fa7b986659b59528d85cf88742efd9985a910a651447daf"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Făleşti",
+      "Code": "FAL",
+      "ISO3166_2": "MD-FAL",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Făleşti"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MD"
+    },
+    "primaryKey": {
+      "ID": "DD21B123-F7CE-4C45-AC07-A59A0B1F5B33"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:15.573Z",
+      "checksum": "dbd5927368f7d2a51318e13d6156d7edbcf45d613b0ba3c5476c9adad7ca3bd4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Floreşti",
+      "Code": "FLO",
+      "ISO3166_2": "MD-FLO",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Floreşti"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MD"
+    },
+    "primaryKey": {
+      "ID": "7D2118B2-D43E-4AA0-B2A4-9CC5FF63CD47"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:15.589Z",
+      "checksum": "6314ede3670c4f5b97bee167ac915bfb4c07d7db8fca03e6fa22341bcc846aef"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Glodeni",
+      "Code": "GLO",
+      "ISO3166_2": "MD-GLO",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Glodeni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MD"
+    },
+    "primaryKey": {
+      "ID": "42EF7991-D2D0-4D77-9F50-9FD81B75ED6A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:15.606Z",
+      "checksum": "5f78f2badcf6d4334a82cd557b148bae9c1f9b70117d0c3f108a241d8796d940"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Grigoriopol",
+      "Code": "GRI",
+      "ISO3166_2": "MD-GRI",
+      "Latitude": 47.1194,
+      "Longitude": 29.4396,
+      "BoundaryGeoJSON": "@file:by-country/MD/boundaries/MD-GRI.geojson",
+      "CommonAliases": [
+        "Grigoriopol"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MD"
+    },
+    "primaryKey": {
+      "ID": "B2277C1D-E48A-46A6-AB8B-CE1473D9E4F6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:15.625Z",
+      "checksum": "38cd91e4df3be4a752b128556588a4cc556f882ec94aba298d40116356a44558"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Hînceşti",
+      "Code": "HIN",
+      "ISO3166_2": "MD-HIN",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Hînceşti"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MD"
+    },
+    "primaryKey": {
+      "ID": "EAF29E1F-A101-42BF-9E83-CCC05480AA1D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:15.644Z",
+      "checksum": "2c4675134c808b2c72bb57d536f07108ebaf00c299c1251fc8077d970d3e6bd8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ialoveni",
+      "Code": "IAL",
+      "ISO3166_2": "MD-IAL",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Ialoveni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MD"
+    },
+    "primaryKey": {
+      "ID": "22AF5348-7B61-4CAE-BC4A-EF1F9DAD65CC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:15.663Z",
+      "checksum": "f754a7d4bbee5f885ca786bd9344c0c1a9ad0c610d44dfe2f1a146670fd35565"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Leova",
+      "Code": "LEO",
+      "ISO3166_2": "MD-LEO",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Leova"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MD"
+    },
+    "primaryKey": {
+      "ID": "183675D6-943E-444B-AD6B-C254B36227A9"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:15.682Z",
+      "checksum": "8f3414c67bfd2b4029286571f30a909b868958dbc1c3b08dbc19159e72a5ac06"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nisporeni",
+      "Code": "NIS",
+      "ISO3166_2": "MD-NIS",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Nisporeni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MD"
+    },
+    "primaryKey": {
+      "ID": "E307F31E-7E4B-4A94-82F7-F21710982058"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:15.700Z",
+      "checksum": "c7b35eac3085102e3426fc3248778b13a71be56446aee5ef616cd0b42b7e61d4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ocniţa",
+      "Code": "OCN",
+      "ISO3166_2": "MD-OCN",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Ocniţa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MD"
+    },
+    "primaryKey": {
+      "ID": "D5E5556E-4E38-4F37-A68A-48EC6C28098F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:15.714Z",
+      "checksum": "fd411dd87843b596285e67de609aeab2dd2ba690cea3d1c5bf8125e10f67cd93"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Orhei",
+      "Code": "ORH",
+      "ISO3166_2": "MD-ORH",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Orhei"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MD"
+    },
+    "primaryKey": {
+      "ID": "23698D40-4795-48D2-ABCF-6C7134F21B01"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:15.775Z",
+      "checksum": "23f1c3a1d74fd5550b28b5b4f053bd4c99a3d95cd5dee0e3f4d60750561f1b10"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Orhei",
+      "Code": "OHI",
+      "ISO3166_2": "MD-OHI",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Orhei"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MD"
+    },
+    "primaryKey": {
+      "ID": "0FEF41C7-8D28-459E-BE17-3A05D151499E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:15.792Z",
+      "checksum": "44507cbd578a38ca08d20fbf27960b0b3c08bbbf49c027acfbd481f9c176ad65"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rezina",
+      "Code": "REZ",
+      "ISO3166_2": "MD-REZ",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Rezina"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MD"
+    },
+    "primaryKey": {
+      "ID": "B65E1671-095D-47DA-ACDE-CD66A95CFEA8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:15.808Z",
+      "checksum": "20bb95c1f348d1cea5bf4fa87e0eb1ad901a14055a80cd17913fb8185089425c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rîbniţa",
+      "Code": "RIB",
+      "ISO3166_2": "MD-RIB",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Rîbniţa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MD"
+    },
+    "primaryKey": {
+      "ID": "F420C14C-1D47-4189-8396-B355D5E46285"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:15.825Z",
+      "checksum": "5e3a9f1544ce291f10bad099f5710e5d7cd4aa715eb24c655b4244bf8acb57d9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rîbniţa",
+      "Code": "RIT",
+      "ISO3166_2": "MD-RIT",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Rîbniţa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MD"
+    },
+    "primaryKey": {
+      "ID": "0A37BD59-A2AE-478F-9C80-6389690DFDB9"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:15.841Z",
+      "checksum": "fcc00f11fac65490661e979018d867472cf0455906b6247cda0d3ef0a2295efa"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rîşcani",
+      "Code": "RIS",
+      "ISO3166_2": "MD-RIS",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Rîşcani"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MD"
+    },
+    "primaryKey": {
+      "ID": "0FC92022-EA01-4F78-8101-D1008F6CD421"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:15.858Z",
+      "checksum": "c55d2244d459fd8b61bde3c9995f699a511b02ded3024380886138264e5545c9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sîngerei",
+      "Code": "SIN",
+      "ISO3166_2": "MD-SIN",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Sîngerei"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MD"
+    },
+    "primaryKey": {
+      "ID": "0CB8DE9A-D528-479D-9069-E5182A9240B2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:15.876Z",
+      "checksum": "3ba8978f2f8438116a1ad13177bb0edfc1b70f41a7aa6223efd2518429da7b14"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Slobozia",
+      "Code": "SLO",
+      "ISO3166_2": "MD-SLO",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Slobozia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MD"
+    },
+    "primaryKey": {
+      "ID": "5EC97566-6F10-412C-A7EC-75C541214013"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:15.892Z",
+      "checksum": "c2d52cbbe9b540750eb8db21c3ee784cdb777a14ccfb4bf2900c4cc425da77b0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Şoldăneşti",
+      "Code": "SOL",
+      "ISO3166_2": "MD-SOL",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Şoldăneşti"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MD"
+    },
+    "primaryKey": {
+      "ID": "E79DFC3F-947B-406E-859D-88B6984007A0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:15.908Z",
+      "checksum": "27e62c8bff87bc2869354b837f6e49f28613d4febf6849b2477d3488289c330e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Soroca",
+      "Code": "SOC",
+      "ISO3166_2": "MD-SOC",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Soroca"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MD"
+    },
+    "primaryKey": {
+      "ID": "4C823A0F-41A5-418B-A13A-E2E8E7E59FE1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:15.922Z",
+      "checksum": "75c63db28c97b826e6692614426d46305ec2b0d78a7e5b7d7892a4795bfe3172"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Soroca",
+      "Code": "SOA",
+      "ISO3166_2": "MD-SOA",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Soroca"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MD"
+    },
+    "primaryKey": {
+      "ID": "8A9CFC8D-27EE-4509-8B4A-20E0B4A11951"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:15.979Z",
+      "checksum": "5bc0a89f01f3eb6490ba52a3be70e3e5a80d320c2b47afffc74b0e20a7dc3f94"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ştefan Vodă",
+      "Code": "STE",
+      "ISO3166_2": "MD-STE",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Ştefan Vodă"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MD"
+    },
+    "primaryKey": {
+      "ID": "B5F7F0F9-8095-4C58-97AB-A004EDB7D39D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:15.995Z",
+      "checksum": "af736c8abcd0d8cedbfe8ca437efac8588942d03629ac4427fb830e82c28ec79"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Străşeni",
+      "Code": "STR",
+      "ISO3166_2": "MD-STR",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Străşeni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MD"
+    },
+    "primaryKey": {
+      "ID": "9489AD50-190C-4F3F-B66C-D7B495679510"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:16.012Z",
+      "checksum": "f638010ad778ad896e0cd79168f7b741e12d787c2ede3fbae59e49f0699a879b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Taraclia",
+      "Code": "TAR",
+      "ISO3166_2": "MD-TAR",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Taraclia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MD"
+    },
+    "primaryKey": {
+      "ID": "A18095BD-EA88-4FAF-80DA-A8BC99EF8264"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:16.027Z",
+      "checksum": "ad3344cfebec4f55e86e65ad7a574c77858f12d8fbfb08ee22dfa369b0c031a6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Teleneşti",
+      "Code": "TEL",
+      "ISO3166_2": "MD-TEL",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Teleneşti"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MD"
+    },
+    "primaryKey": {
+      "ID": "34062EB3-7F5A-460E-8DE5-9CACC8C05DD2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:16.043Z",
+      "checksum": "c51ff10e239acc21e4b0056ace8ac2a30e8733ea0172aa52272d0636208fe7f1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tighina",
+      "Code": "TIG",
+      "ISO3166_2": "MD-TIG",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Tighina"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MD"
+    },
+    "primaryKey": {
+      "ID": "B7CF53D0-DFEE-41DB-99BC-0CB3CAA30413"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:16.059Z",
+      "checksum": "3e3e9aa787c8aea4843720fc14dc3bdf77b544eb13b8f7c7df4ffff73ad32e33"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tiraspol",
+      "Code": "TIR",
+      "ISO3166_2": "MD-TIR",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Tiraspol"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MD"
+    },
+    "primaryKey": {
+      "ID": "3C533961-47C2-4042-A200-19FD1F122EE2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:16.076Z",
+      "checksum": "90929eb1271b04e249d994fc0ed49ba6a1ec6be4ce07413fa5d220c0e93aaed3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ungheni",
+      "Code": "UNG",
+      "ISO3166_2": "MD-UNG",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Ungheni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MD"
+    },
+    "primaryKey": {
+      "ID": "2B05D618-B05A-4314-AB9B-8ED6A44F3B25"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:16.092Z",
+      "checksum": "795a9690ea57f94f1dc337ad36ec5415ccd56a1676a9c351ae89b004f77e0e0d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ungheni",
+      "Code": "UGI",
+      "ISO3166_2": "MD-UGI",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Ungheni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MD"
+    },
+    "primaryKey": {
+      "ID": "39C7E536-050D-42F4-8030-434423C3F438"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:16.108Z",
+      "checksum": "30d6f969168f697aa7e47b1397a323ec57b44143748a9ca43cb072f9605b4ebc"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Vulcăneşti",
+      "Code": "VUL",
+      "ISO3166_2": "MD-VUL",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Vulcăneşti"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MD"
+    },
+    "primaryKey": {
+      "ID": "4C65ADE7-81FE-41B6-AA82-EB54803C4D92"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:16.125Z",
+      "checksum": "dec63cc91941dae0ed0b05169892b60c7e4eee35bf10e5f2063281341fb5c29e"
+    }
+  }
+]

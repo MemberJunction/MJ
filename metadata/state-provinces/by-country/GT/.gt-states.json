@@ -1,0 +1,464 @@
+[
+  {
+    "fields": {
+      "Name": "Alta Verapaz",
+      "Code": "AV",
+      "ISO3166_2": "GT-AV",
+      "Latitude": 15.6455,
+      "Longitude": -90.1072,
+      "BoundaryGeoJSON": "@file:by-country/GT/boundaries/GT-AV.geojson",
+      "CommonAliases": [
+        "Alta Verapaz"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GT"
+    },
+    "primaryKey": {
+      "ID": "8B1D633F-0E2B-4C03-A16B-3647CD4F81D1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:58.629Z",
+      "checksum": "7853b049d7420c8c4444e4b9292ea3daf0243e3e97787012beac18d5992935ec"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Baja Verapaz",
+      "Code": "BV",
+      "ISO3166_2": "GT-BV",
+      "Latitude": 15.0766,
+      "Longitude": -90.3946,
+      "BoundaryGeoJSON": "@file:by-country/GT/boundaries/GT-BV.geojson",
+      "CommonAliases": [
+        "Baja Verapaz"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GT"
+    },
+    "primaryKey": {
+      "ID": "1BEA5983-1070-43D6-AB38-579CE86DEAB3"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:58.644Z",
+      "checksum": "b240444a4543ed00eac9200364434d326c1554fbcd6a086ec7214e5ddb2b7aaf"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Chimaltenango",
+      "Code": "CM",
+      "ISO3166_2": "GT-CM",
+      "Latitude": 14.7313,
+      "Longitude": -90.8859,
+      "BoundaryGeoJSON": "@file:by-country/GT/boundaries/GT-CM.geojson",
+      "CommonAliases": [
+        "Chimaltenango"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GT"
+    },
+    "primaryKey": {
+      "ID": "8C8081B7-2EF4-4CC2-8DE0-FF9A8C75BF3A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:58.660Z",
+      "checksum": "e7c9aa1bffbc424a2f1caaefe8acd69657e7842ea30116fba4e9b71b97ef24a0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Chiquimula",
+      "Code": "CQ",
+      "ISO3166_2": "GT-CQ",
+      "Latitude": 14.6668,
+      "Longitude": -89.4399,
+      "BoundaryGeoJSON": "@file:by-country/GT/boundaries/GT-CQ.geojson",
+      "CommonAliases": [
+        "Chiquimula"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GT"
+    },
+    "primaryKey": {
+      "ID": "FA8BB3C4-79BC-42D4-961B-2FBAEFA3ED27"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:58.677Z",
+      "checksum": "5a6962ea8fe167674dff3614e5e9f054c4d16bdd6a930ff67106272d8a16789a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "El Progreso",
+      "Code": "PR",
+      "ISO3166_2": "GT-PR",
+      "Latitude": 14.9038,
+      "Longitude": -90.0911,
+      "BoundaryGeoJSON": "@file:by-country/GT/boundaries/GT-PR.geojson",
+      "CommonAliases": [
+        "El Progreso"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GT"
+    },
+    "primaryKey": {
+      "ID": "6039CA13-FED7-4732-BECD-2EC8A844157D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:58.693Z",
+      "checksum": "a768c2f77c3b9d52f01ba9adeeeb6ed565f48cc720a10cd522220617af4ea00e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Escuintla",
+      "Code": "ES",
+      "ISO3166_2": "GT-ES",
+      "Latitude": 14.1674,
+      "Longitude": -91.0243,
+      "BoundaryGeoJSON": "@file:by-country/GT/boundaries/GT-ES.geojson",
+      "CommonAliases": [
+        "Escuintla"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GT"
+    },
+    "primaryKey": {
+      "ID": "F64CB90D-50D9-4299-AFD6-3176064A035B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:58.711Z",
+      "checksum": "b7a9516b87662bfb0888f1c81380859ec6841700b5b80b6e7a4cef6aed050d77"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Guatemala",
+      "Code": "GU",
+      "ISO3166_2": "GT-GU",
+      "Latitude": 14.6006,
+      "Longitude": -90.4872,
+      "BoundaryGeoJSON": "@file:by-country/GT/boundaries/GT-GU.geojson",
+      "CommonAliases": [
+        "Guatemala"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GT"
+    },
+    "primaryKey": {
+      "ID": "3DA90D92-4767-4B9A-BAE7-6C28BF4D5A2C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:58.728Z",
+      "checksum": "42d2e245009825da680dd61b3e000dafd539d7a878b37e2e8d13764a393a6292"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Huehuetenango",
+      "Code": "HU",
+      "ISO3166_2": "GT-HU",
+      "Latitude": 15.6369,
+      "Longitude": -91.5504,
+      "BoundaryGeoJSON": "@file:by-country/GT/boundaries/GT-HU.geojson",
+      "CommonAliases": [
+        "Huehuetenango"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GT"
+    },
+    "primaryKey": {
+      "ID": "68C856BC-3024-47F2-BB0F-9B2E74289F87"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:58.744Z",
+      "checksum": "e0e975bab0bf6e4fc53a50248ac1a46cb6de1cae7056a38f3c923b43951bc895"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Izabal",
+      "Code": "IZ",
+      "ISO3166_2": "GT-IZ",
+      "Latitude": 15.5246,
+      "Longitude": -88.9414,
+      "BoundaryGeoJSON": "@file:by-country/GT/boundaries/GT-IZ.geojson",
+      "CommonAliases": [
+        "Izabal"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GT"
+    },
+    "primaryKey": {
+      "ID": "6054A9A8-FEA4-4801-B42D-0A945050DDAF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:58.761Z",
+      "checksum": "1195f60b9c4a1c71723bdfb8d3565c5fa3b59dd1babaa08f582402303e8aa873"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Jalapa",
+      "Code": "JA",
+      "ISO3166_2": "GT-JA",
+      "Latitude": 14.6255,
+      "Longitude": -89.9727,
+      "BoundaryGeoJSON": "@file:by-country/GT/boundaries/GT-JA.geojson",
+      "CommonAliases": [
+        "Jalapa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GT"
+    },
+    "primaryKey": {
+      "ID": "049098DA-F4BF-494C-A598-3DE5FEAF0C17"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:58.775Z",
+      "checksum": "d5006c1c3a27f930e7027181444f1a52466be9aa7386e19f92de077d6dbac699"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Jutiapa",
+      "Code": "JU",
+      "ISO3166_2": "GT-JU",
+      "Latitude": 14.2384,
+      "Longitude": -89.8946,
+      "BoundaryGeoJSON": "@file:by-country/GT/boundaries/GT-JU.geojson",
+      "CommonAliases": [
+        "Jutiapa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GT"
+    },
+    "primaryKey": {
+      "ID": "362F9462-5EC6-4B30-B9A4-0A743D803A4C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:58.828Z",
+      "checksum": "4363c72bbc999138f2fe7d554c8c059e2501f1619ca42b0eab28cffe43b764a4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Petén",
+      "Code": "PE",
+      "ISO3166_2": "GT-PE",
+      "Latitude": 16.888,
+      "Longitude": -90.0321,
+      "BoundaryGeoJSON": "@file:by-country/GT/boundaries/GT-PE.geojson",
+      "CommonAliases": [
+        "Petén"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GT"
+    },
+    "primaryKey": {
+      "ID": "2CD4C486-DD0C-4B42-8E41-F02539698476"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:58.845Z",
+      "checksum": "1dd68eb49bc7c2382058d58df9b392744de7334b93750f275c26a3bdaf9edc8a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Quezaltenango",
+      "Code": "QZ",
+      "ISO3166_2": "GT-QZ",
+      "Latitude": 14.7269,
+      "Longitude": -91.7831,
+      "BoundaryGeoJSON": "@file:by-country/GT/boundaries/GT-QZ.geojson",
+      "CommonAliases": [
+        "Quezaltenango"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GT"
+    },
+    "primaryKey": {
+      "ID": "E08063D7-F08A-4F31-A293-9A0B9D909055"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:58.860Z",
+      "checksum": "3461790ab56b722d9cda578da18301d1c5bf80c2ae645342ba33720a60f62df2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Quiché",
+      "Code": "QC",
+      "ISO3166_2": "GT-QC",
+      "Latitude": 15.5049,
+      "Longitude": -90.8819,
+      "BoundaryGeoJSON": "@file:by-country/GT/boundaries/GT-QC.geojson",
+      "CommonAliases": [
+        "Quiché"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GT"
+    },
+    "primaryKey": {
+      "ID": "BCAF8FD8-9D1C-4616-A221-4CD7077C73CD"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:58.877Z",
+      "checksum": "bdaf3dc9cfc4f0d5cf92d5c1820c4ff16db0a1b0037967b6c802a3fb7c91582d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Retalhuleu",
+      "Code": "RE",
+      "ISO3166_2": "GT-RE",
+      "Latitude": 14.3957,
+      "Longitude": -91.8364,
+      "BoundaryGeoJSON": "@file:by-country/GT/boundaries/GT-RE.geojson",
+      "CommonAliases": [
+        "Retalhuleu"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GT"
+    },
+    "primaryKey": {
+      "ID": "D6C7867F-00C9-48C4-80A0-F410A3C069CB"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:58.893Z",
+      "checksum": "60a573bc7f1eab42c8f3142a5d0aa48e41275a96bcf4e91f6351da268ec52d4e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sacatepéquez",
+      "Code": "SA",
+      "ISO3166_2": "GT-SA",
+      "Latitude": 14.6139,
+      "Longitude": -90.7545,
+      "BoundaryGeoJSON": "@file:by-country/GT/boundaries/GT-SA.geojson",
+      "CommonAliases": [
+        "Sacatepéquez"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GT"
+    },
+    "primaryKey": {
+      "ID": "DE476FB2-A316-45B5-850F-0E2D000ACF5D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:58.909Z",
+      "checksum": "771d2672543c393db29d047f62efe8c24a11911f547524c9d2073556f2ab2942"
+    }
+  },
+  {
+    "fields": {
+      "Name": "San Marcos",
+      "Code": "SM",
+      "ISO3166_2": "GT-SM",
+      "Latitude": 15.0311,
+      "Longitude": -91.9311,
+      "BoundaryGeoJSON": "@file:by-country/GT/boundaries/GT-SM.geojson",
+      "CommonAliases": [
+        "San Marcos"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GT"
+    },
+    "primaryKey": {
+      "ID": "D673F618-8CF5-4522-A953-A970BB8981C6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:58.928Z",
+      "checksum": "e659591cf184792aa3fe7d12784c1b65beacfde0a0346a775fe66ef9539b128d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Santa Rosa",
+      "Code": "SR",
+      "ISO3166_2": "GT-SR",
+      "Latitude": 14.1651,
+      "Longitude": -90.3389,
+      "BoundaryGeoJSON": "@file:by-country/GT/boundaries/GT-SR.geojson",
+      "CommonAliases": [
+        "Santa Rosa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GT"
+    },
+    "primaryKey": {
+      "ID": "9D054A5A-5FEC-47DC-B824-32220C9101F4"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:58.944Z",
+      "checksum": "7472de7e84db417ae8be9cc382d801f63e3accd0b43dbbebc1377752bb7d5b93"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sololá",
+      "Code": "SO",
+      "ISO3166_2": "GT-SO",
+      "Latitude": 14.7372,
+      "Longitude": -91.2727,
+      "BoundaryGeoJSON": "@file:by-country/GT/boundaries/GT-SO.geojson",
+      "CommonAliases": [
+        "Sololá"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GT"
+    },
+    "primaryKey": {
+      "ID": "C8334338-6EC5-496D-B793-561243B08C9E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:58.960Z",
+      "checksum": "a4c93ab17b9c5388cfc35022adc19cbe8e6cc17c135385ded53914a625193158"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Suchitepéquez",
+      "Code": "SU",
+      "ISO3166_2": "GT-SU",
+      "Latitude": 14.5182,
+      "Longitude": -91.3803,
+      "BoundaryGeoJSON": "@file:by-country/GT/boundaries/GT-SU.geojson",
+      "CommonAliases": [
+        "Suchitepéquez"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GT"
+    },
+    "primaryKey": {
+      "ID": "B88CFDB8-4314-4A7B-9716-D31DCFBAFE2D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:58.973Z",
+      "checksum": "ba2b881dcfd4e6b18ed60f7ec22de36c4658d98354c7b2e77236e03ee3c67017"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Totonicapán",
+      "Code": "TO",
+      "ISO3166_2": "GT-TO",
+      "Latitude": 15.0474,
+      "Longitude": -91.3884,
+      "BoundaryGeoJSON": "@file:by-country/GT/boundaries/GT-TO.geojson",
+      "CommonAliases": [
+        "Totonicapán"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GT"
+    },
+    "primaryKey": {
+      "ID": "D325313D-321C-4E4E-8530-E94F56A50221"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:58.998Z",
+      "checksum": "c13b1d79430e36690f5dfa0ff44a0da5d8adf10afaaf90882c1fde38415e7f8d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Zacapa",
+      "Code": "ZA",
+      "ISO3166_2": "GT-ZA",
+      "Latitude": 15.0329,
+      "Longitude": -89.5127,
+      "BoundaryGeoJSON": "@file:by-country/GT/boundaries/GT-ZA.geojson",
+      "CommonAliases": [
+        "Zacapa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GT"
+    },
+    "primaryKey": {
+      "ID": "F0DDFD30-3DA6-4DF0-8071-1264FE52810D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:59.011Z",
+      "checksum": "6d68359e1534392444f3599ef9a2c8c82dcced951cce473ad214d5f76b443126"
+    }
+  }
+]

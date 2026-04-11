@@ -1,0 +1,107 @@
+[
+  {
+    "fields": {
+      "Name": "Centre",
+      "Code": "C",
+      "ISO3166_2": "TG-C",
+      "Latitude": 8.5878,
+      "Longitude": 1.0046,
+      "BoundaryGeoJSON": "@file:by-country/TG/boundaries/TG-C.geojson",
+      "CommonAliases": [
+        "Centre"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TG"
+    },
+    "primaryKey": {
+      "ID": "DD535EB1-6780-43FB-BA0C-77DF3D483035"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:33.894Z",
+      "checksum": "b037f37b40ea0541695c0bd1068f204ec5a51e15f679f828c1238588017bede3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kara",
+      "Code": "K",
+      "ISO3166_2": "TG-K",
+      "Latitude": 9.5888,
+      "Longitude": 0.8214,
+      "BoundaryGeoJSON": "@file:by-country/TG/boundaries/TG-K.geojson",
+      "CommonAliases": [
+        "Kara"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TG"
+    },
+    "primaryKey": {
+      "ID": "4ED58783-A0B5-47A3-915C-E9DCAB253096"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:33.910Z",
+      "checksum": "edb66cefa68486e60890c32ed195702aade4bfb1060ab6e3076a9c39e9485bfc"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Maritime (Région)",
+      "Code": "M",
+      "ISO3166_2": "TG-M",
+      "Latitude": 6.4252,
+      "Longitude": 1.2467,
+      "BoundaryGeoJSON": "@file:by-country/TG/boundaries/TG-M.geojson",
+      "CommonAliases": [
+        "Maritime (Région)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TG"
+    },
+    "primaryKey": {
+      "ID": "341087A7-B1BE-4966-B4AF-069AF4723144"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:33.927Z",
+      "checksum": "b68037ee300d792d998bc09f5ae06eede37beac07c7931798e8704d173135002"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Plateaux",
+      "Code": "P",
+      "ISO3166_2": "TG-P",
+      "Latitude": 7.3829,
+      "Longitude": 1.0597,
+      "BoundaryGeoJSON": "@file:by-country/TG/boundaries/TG-P.geojson",
+      "CommonAliases": [
+        "Plateaux"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TG"
+    },
+    "primaryKey": {
+      "ID": "B85092C7-6157-433C-9A5F-282C60924C6D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:33.944Z",
+      "checksum": "a1ab9d05f78e84763662ca2afb4f2737f712ec0a67c96eca7a5370716e782a23"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Savannes",
+      "Code": "S",
+      "ISO3166_2": "TG-S",
+      "Latitude": 10.5136,
+      "Longitude": 0.4153,
+      "BoundaryGeoJSON": "@file:by-country/TG/boundaries/TG-S.geojson",
+      "CommonAliases": [
+        "Savannes"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TG"
+    },
+    "primaryKey": {
+      "ID": "477309F0-811D-4943-8FA5-B1B5460060F9"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:33.957Z",
+      "checksum": "a787cf6e3bbf3d2fd9886824516b484b322809e73f9cbbaa51a38a6c48dcc7f2"
+    }
+  }
+]

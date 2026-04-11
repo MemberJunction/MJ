@@ -1,0 +1,23 @@
+[
+  {
+    "fields": {
+      "Name": "French Guiana",
+      "Code": "GF",
+      "ISO3166_2": "GF-GF",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "French Guiana"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GF"
+    },
+    "primaryKey": {
+      "ID": "9715D1E2-F1A2-4E7F-ABF5-FE45A5C9547A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:55.782Z",
+      "checksum": "24d62a5e2f412a8c4c5ce457b818ec747ac815fa5603a5e20ac6fdc23569409a"
+    }
+  }
+]

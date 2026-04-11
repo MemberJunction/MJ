@@ -1,0 +1,44 @@
+[
+  {
+    "fields": {
+      "Name": "Príncipe",
+      "Code": "P",
+      "ISO3166_2": "ST-P",
+      "Latitude": 1.6077,
+      "Longitude": 7.3937,
+      "BoundaryGeoJSON": "@file:by-country/ST/boundaries/ST-P.geojson",
+      "CommonAliases": [
+        "Príncipe"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ST"
+    },
+    "primaryKey": {
+      "ID": "666B9F67-722A-4B8C-9456-0E8E5E0ADEE3"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:32.794Z",
+      "checksum": "905a0a5094919416d6db81b5e4ec75640ba067b4fe444d58fe4da05730b7c375"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sāo Tomé",
+      "Code": "S",
+      "ISO3166_2": "ST-S",
+      "Latitude": 0.2346,
+      "Longitude": 6.6119,
+      "BoundaryGeoJSON": "@file:by-country/ST/boundaries/ST-S.geojson",
+      "CommonAliases": [
+        "Sāo Tomé"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ST"
+    },
+    "primaryKey": {
+      "ID": "8988EC5F-E39D-4CAB-A0E4-28D1C268937B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:32.811Z",
+      "checksum": "0e34a996fe0e91dfd15f841d50ca134d6f222a1a376acf6da71b98679b0ca415"
+    }
+  }
+]

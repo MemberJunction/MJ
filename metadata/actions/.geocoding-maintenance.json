@@ -1,0 +1,81 @@
+[
+  {
+    "fields": {
+      "Name": "Scheduled Geocoding",
+      "Description": "Maintenance action that finds records missing geocodes, retries failed geocoding attempts, and cleans up orphaned RecordGeoCode rows. Processes all pending records in parallel batches with cache invalidation. Designed to run on a schedule as a safety net for records that bypass BaseEntity.Save() (bulk SQL imports, direct DB operations).",
+      "DriverClass": "Scheduled Geocoding",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-map-location-dot",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Data"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "BatchSize",
+            "DefaultValue": "10",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of records to geocode concurrently in each parallel batch. Controls API rate pressure — Google Geocoding API allows 50 QPS, so 10 is conservative.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "C114AC2A-8887-4058-B5A1-5EFFB47DB46A"
+          },
+          "sync": {
+            "lastModified": "2026-04-11T04:10:18.489Z",
+            "checksum": "ae9b1c52c2e9ec3a41d78a3bd947fcef84c68e9e5ddc4ea05bd620cbde3f03c9"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxTotalRecords",
+            "DefaultValue": null,
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional hard cap on total records processed in a single run. When null (default), processes all pending records until exhausted.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "4BEC5C07-5287-4002-95C2-EB0D934B8383"
+          },
+          "sync": {
+            "lastModified": "2026-04-11T04:10:18.528Z",
+            "checksum": "32b37a82bb0d283d049c4395859af93723106b40542f40b5a65f54cfd5c9f5df"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxRetries",
+            "DefaultValue": "5",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum number of retry attempts for failed geocoding before giving up on a record.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "704F1B8F-6E39-4042-8C93-3BAA6CF90793"
+          },
+          "sync": {
+            "lastModified": "2026-04-11T04:10:18.559Z",
+            "checksum": "113882aebc9aa7a8de8546e0c6d78ae20861fc60fb7a6bc54ad4c08a9304081f"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "F4CB29B2-49F0-46B1-92CA-CB89C1E80652"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:10:18.420Z",
+      "checksum": "ae445545248320d17e43387f0c40edb97f71c4c24458baef77e5f97f388ed97d"
+    }
+  }
+]

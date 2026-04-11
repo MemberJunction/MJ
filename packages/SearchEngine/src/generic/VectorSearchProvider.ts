@@ -14,8 +14,8 @@ import { MJVectorIndexEntity, MJVectorDatabaseEntity } from '@memberjunction/cor
 import { AIEngine } from '@memberjunction/aiengine';
 import { BaseEmbeddings, GetAIAPIKey } from '@memberjunction/ai';
 import { VectorDBBase, BaseResponse } from '@memberjunction/ai-vectordb';
-import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
-import { ISearchProvider } from './ISearchProvider';
+import { MJGlobal, RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { BaseSearchProvider } from './ISearchProvider';
 import { SearchSource, SearchFilters, SearchResultItem, SearchResultType } from './search.types';
 
 /**
@@ -28,7 +28,8 @@ interface EmbeddingCacheEntry {
     timestamp: number;
 }
 
-export class VectorSearchProvider implements ISearchProvider {
+@RegisterClass(BaseSearchProvider, 'VectorSearchProvider')
+export class VectorSearchProvider extends BaseSearchProvider {
     public readonly SourceType: SearchSource = 'vector';
 
     private available = false;
@@ -281,7 +282,7 @@ export class VectorSearchProvider implements ISearchProvider {
             const rawScore = match.score ?? 0;
 
             return {
-                ID: match.id,
+                ID: recordID,
                 EntityName: entityName,
                 RecordID: recordID,
                 SourceType: 'vector',

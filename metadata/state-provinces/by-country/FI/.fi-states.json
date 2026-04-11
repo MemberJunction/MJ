@@ -1,0 +1,128 @@
+[
+  {
+    "fields": {
+      "Name": "Ahvenanmaan lääni",
+      "Code": "AL",
+      "ISO3166_2": "FI-AL",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Ahvenanmaan lääni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=FI"
+    },
+    "primaryKey": {
+      "ID": "22D47CFD-A5DE-49DE-83B7-8F58BC336204"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:46.561Z",
+      "checksum": "a9482e355ff16223c31b76c471ec437e20ec3011a782cbc079003866527111cc"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Etelä-Suomen lääni",
+      "Code": "ES",
+      "ISO3166_2": "FI-ES",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Etelä-Suomen lääni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=FI"
+    },
+    "primaryKey": {
+      "ID": "2127B753-B3EA-4E46-86DE-843E1E2C59EE"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:46.577Z",
+      "checksum": "eb764dc73f89438e5924be1ddb5dc7ac5914b3f11e6d5458b1f829da7e079877"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Itä-Suomen lääni",
+      "Code": "IS",
+      "ISO3166_2": "FI-IS",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Itä-Suomen lääni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=FI"
+    },
+    "primaryKey": {
+      "ID": "F08011C7-88BA-4C50-8C89-055985A68F65"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:46.593Z",
+      "checksum": "fe23f454aa38f1b7e39aaa5701127eb4bb39428e0f26416d2d0534e1d8efb5fb"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Länsi-Suomen lääni",
+      "Code": "LS",
+      "ISO3166_2": "FI-LS",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Länsi-Suomen lääni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=FI"
+    },
+    "primaryKey": {
+      "ID": "1F7CEBC0-7202-4E71-96CF-C6723736DCE3"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:46.609Z",
+      "checksum": "9a7fa28195648b19590d15096dc54a8b64aede2876f0b86a8731c6aae1818859"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Lapin lääni",
+      "Code": "LL",
+      "ISO3166_2": "FI-LL",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Lapin lääni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=FI"
+    },
+    "primaryKey": {
+      "ID": "582BCFE1-B4CF-48FA-B0E0-E64A60EF5454"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:46.625Z",
+      "checksum": "7190ec21efa4d2540a9814fc1923b0931b7ede10369db26b29dc04d1fffbebeb"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Oulun lääni",
+      "Code": "OL",
+      "ISO3166_2": "FI-OL",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Oulun lääni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=FI"
+    },
+    "primaryKey": {
+      "ID": "F63465AA-809D-4DC3-B664-BA4AC6F9B847"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:46.637Z",
+      "checksum": "d7c33c47e3a778924264077d48712112c690f933d79823cedb2581697a53fa64"
+    }
+  }
+]

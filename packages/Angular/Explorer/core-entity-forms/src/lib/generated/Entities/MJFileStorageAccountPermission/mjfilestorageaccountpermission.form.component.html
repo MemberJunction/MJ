@@ -8,10 +8,10 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Access Rights Section -->
+    <!-- Account Permissions Section -->
     <mj-collapsible-panel
-        SectionKey="accessRights"
-        SectionName="Access Rights"
+        SectionKey="accountPermissions"
+        SectionName="Account Permissions"
         Icon="fa fa-key"
         [Form]="this"
         [FormContext]="formContext">
@@ -43,11 +43,11 @@
 
     </mj-collapsible-panel>
 
-    <!-- Grantee Details Section -->
+    <!-- Grantee Information Section -->
     <mj-collapsible-panel
-        SectionKey="granteeDetails"
-        SectionName="Grantee Details"
-        Icon="fa fa-user-shield"
+        SectionKey="granteeInformation"
+        SectionName="Grantee Information"
+        Icon="fa fa-user-lock"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -83,7 +83,7 @@
     <mj-collapsible-panel
         SectionKey="systemMetadata"
         SectionName="System Metadata"
-        Icon="fa fa-database"
+        Icon="fa fa-cog"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 

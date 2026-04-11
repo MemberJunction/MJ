@@ -1,0 +1,23 @@
+[
+  {
+    "fields": {
+      "Name": "Monaco",
+      "Code": "MC",
+      "ISO3166_2": "MC-MC",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Monaco"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MC"
+    },
+    "primaryKey": {
+      "ID": "B8AF4734-6F58-452C-BD79-00B504844A79"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:15.087Z",
+      "checksum": "6f1f67ad2e27b92bbc2437112b949ea7fdee61636bc8bbcb19f9ab96848ec216"
+    }
+  }
+]
