@@ -170,7 +170,7 @@ export class EntitySearchProvider extends BaseSearchProvider {
             const score = Math.min(baseScore + nameBoost, 0.95);
 
             return {
-                ID: `ent-${entityName}-${recordID}`,
+                ID: recordID,
                 EntityName: entityName,
                 RecordID: recordID,
                 SourceType: 'entity',

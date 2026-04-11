@@ -200,6 +200,7 @@
         [hidden]="effectiveViewMode !== 'map'"
         [Entity]="effectiveEntity!"
         [Records]="filteredRecords"
+        [TotalRecordCount]="totalRecordCount"
         [DisplayState]="mapDisplayState"
         (MarkerClick)="onMapMarkerClick($event)"
         (DisplayStateChange)="onMapDisplayStateChange($event)">

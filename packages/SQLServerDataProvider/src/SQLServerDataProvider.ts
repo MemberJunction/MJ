@@ -33,7 +33,6 @@ import {
   TransactionGroupBase,
   TransactionItem,
   EntityPermissionType,
-  EntitySaveOptions,
   LogError,
   EntityRecordNameInput,
   EntityRecordNameResult,
@@ -1279,32 +1278,6 @@ export class SQLServerDataProvider
       fullSQL: sqlDetails.fullSQL,
       simpleSQL: sqlDetails.simpleSQL,
     };
-  }
-
-  protected override async OnSaveCompleted(
-    entity: BaseEntity,
-    saveSQLResult: SaveSQLResult,
-    user: UserInfo,
-    options: EntitySaveOptions,
-  ): Promise<void> {
-    const overlappingChangeData = saveSQLResult.extraData?.overlappingChangeData as
-      | { changesJSON: string; changesDescription: string }
-      | undefined;
-    if (
-      overlappingChangeData &&
-      entity.EntityInfo.AllowMultipleSubtypes &&
-      entity.EntityInfo.TrackRecordChanges
-    ) {
-      const transaction = (entity.ProviderTransaction as sql.Transaction) ?? undefined;
-      await this.PropagateRecordChangesToSiblings(
-        entity.EntityInfo,
-        overlappingChangeData,
-        entity.PrimaryKey.Values(),
-        user?.ID ?? '',
-        options.ISAActiveChildEntityName,
-        transaction ? { connectionSource: transaction } : undefined,
-      );
-    }
   }
 
   protected override OnSuspendRefresh(): void {
