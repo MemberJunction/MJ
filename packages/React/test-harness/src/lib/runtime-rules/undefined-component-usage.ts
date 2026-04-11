@@ -1,6 +1,7 @@
 import traverse, { NodePath } from '@babel/traverse';
 import * as t from '@babel/types';
 import { LintRule } from '../lint-rule';
+import { RuleRegistry } from '../rule-registry';
 import { Violation } from '../component-linter';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 
@@ -103,6 +104,33 @@ export const undefinedComponentUsageRule: LintRule = {
           line: 1,
           column: 0,
           message: `Component destructures ${unusedComponents.join(', ')} from components prop but never uses them. These may be missing from the component spec's dependencies array.`,
+          suggestion: {
+            text: 'Ensure all components destructured from the components prop are defined in the component spec dependencies',
+            example: `// Component spec should include all referenced components:
+{
+  "name": "MyComponent",
+  "code": "...",
+  "dependencies": [
+    {
+      "name": "ModelTreeView",
+      "code": "function ModelTreeView({ ... }) { ... }"
+    },
+    {
+      "name": "PromptTable",
+      "code": "function PromptTable({ ... }) { ... }"
+    },
+    {
+      "name": "FilterPanel",
+      "code": "function FilterPanel({ ... }) { ... }"
+    }
+    // Add ALL components referenced in the root component
+  ]
+}
+
+// Then in your component:
+const { ModelTreeView, PromptTable, FilterPanel } = components;
+// All these will be available`,
+          },
         });
       }
     }
@@ -110,3 +138,6 @@ export const undefinedComponentUsageRule: LintRule = {
     return violations;
   },
 };
+
+// Self-register when this module is imported
+RuleRegistry.getInstance().registerRuntimeRule(undefinedComponentUsageRule);

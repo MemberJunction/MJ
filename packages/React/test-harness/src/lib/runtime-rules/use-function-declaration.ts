@@ -1,6 +1,7 @@
 import traverse, { NodePath } from '@babel/traverse';
 import * as t from '@babel/types';
 import { LintRule } from '../lint-rule';
+import { RuleRegistry } from '../rule-registry';
 import { Violation } from '../component-linter';
 import { createViolation, truncateCode } from '../lint-utils';
 
@@ -41,7 +42,42 @@ export const useFunctionDeclarationRule: LintRule = {
                 'critical',
                 path.node,
                 `Component "${componentName}" must be defined using function declaration syntax, not arrow function.`,
-                truncateCode(path.toString(), 150)
+                truncateCode(path.toString(), 150),
+                {
+                  text: 'Use function declaration syntax for TOP-LEVEL component definitions. Arrow functions are fine inside components.',
+                  example: `// ❌ WRONG - Top-level arrow function component:
+const MyComponent = ({ utilities, styles, components }) => {
+  const [state, setState] = useState('');
+
+  return <div>{state}</div>;
+};
+
+// ✅ CORRECT - Function declaration for top-level:
+function MyComponent({ utilities, styles, components }) {
+  const [state, setState] = useState('');
+
+  // Arrow functions are FINE inside the component:
+  const handleClick = () => {
+    setState('clicked');
+  };
+
+  const ChildComponent = () => <div>This is OK inside the component</div>;
+
+  return <div onClick={handleClick}>{state}</div>;
+}
+
+// Child components also use function declaration:
+function ChildComponent() {
+  return <div>Child</div>;
+}
+
+// Why function declarations?
+// 1. Clearer component identification
+// 2. Better debugging experience (named functions)
+// 3. Hoisting allows flexible code organization
+// 4. Consistent with React documentation patterns
+// 5. Easier to distinguish from regular variables`,
+                }
               )
             );
           }
@@ -59,7 +95,42 @@ export const useFunctionDeclarationRule: LintRule = {
                 'high',
                 path.node,
                 `Top-level component "${path.node.id.name}" should use function declaration syntax.`,
-                truncateCode(path.toString(), 150)
+                truncateCode(path.toString(), 150),
+                {
+                  text: 'Use function declaration syntax for TOP-LEVEL component definitions. Arrow functions are fine inside components.',
+                  example: `// ❌ WRONG - Top-level arrow function component:
+const MyComponent = ({ utilities, styles, components }) => {
+  const [state, setState] = useState('');
+
+  return <div>{state}</div>;
+};
+
+// ✅ CORRECT - Function declaration for top-level:
+function MyComponent({ utilities, styles, components }) {
+  const [state, setState] = useState('');
+
+  // Arrow functions are FINE inside the component:
+  const handleClick = () => {
+    setState('clicked');
+  };
+
+  const ChildComponent = () => <div>This is OK inside the component</div>;
+
+  return <div onClick={handleClick}>{state}</div>;
+}
+
+// Child components also use function declaration:
+function ChildComponent() {
+  return <div>Child</div>;
+}
+
+// Why function declarations?
+// 1. Clearer component identification
+// 2. Better debugging experience (named functions)
+// 3. Hoisting allows flexible code organization
+// 4. Consistent with React documentation patterns
+// 5. Easier to distinguish from regular variables`,
+                }
               )
             );
           }
@@ -70,3 +141,6 @@ export const useFunctionDeclarationRule: LintRule = {
     return violations;
   },
 };
+
+// Self-register when this module is imported
+RuleRegistry.getInstance().registerRuntimeRule(useFunctionDeclarationRule);

@@ -1,0 +1,56 @@
+import traverse, { NodePath } from '@babel/traverse';
+import * as t from '@babel/types';
+import { LintRule } from '../lint-rule';
+import { RuleRegistry } from '../rule-registry';
+import { Violation } from '../component-linter';
+
+/**
+ * Rule: no-child-implementation
+ *
+ * Ensures that root component files do not contain child component implementations.
+ * Root components should only reference child components, not implement them.
+ *
+ * Severity: critical
+ * Applies to: root components only
+ */
+export const noChildImplementationRule: LintRule = {
+  name: 'no-child-implementation',
+  appliesTo: 'root',
+  test: (ast, componentName) => {
+    const violations: Violation[] = [];
+    const rootFunctionName = componentName;
+    const declaredFunctions: string[] = [];
+
+    // First pass: collect all function declarations
+    traverse(ast, {
+      FunctionDeclaration(path: NodePath<t.FunctionDeclaration>) {
+        if (path.node.id) {
+          declaredFunctions.push(path.node.id.name);
+        }
+      },
+    });
+
+    // If there are multiple function declarations and they look like components
+    // (start with capital letter), it's likely implementing children
+    const componentFunctions = declaredFunctions.filter((name) => name !== rootFunctionName && /^[A-Z]/.test(name));
+
+    if (componentFunctions.length > 0) {
+      violations.push({
+        rule: 'no-child-implementation',
+        severity: 'critical',
+        line: 1,
+        column: 0,
+        message: `Root component file contains child component implementations: ${componentFunctions.join(', ')}. Root should only reference child components, not implement them.`,
+        suggestion: {
+          text: 'Remove child component implementations. Only the root component function should be in this file',
+          example: 'Move child component functions to separate generation requests',
+        },
+      });
+    }
+
+    return violations;
+  },
+};
+
+// Self-register when this module is imported
+RuleRegistry.getInstance().registerRuntimeRule(noChildImplementationRule);

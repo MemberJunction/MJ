@@ -1,6 +1,7 @@
 import traverse, { NodePath } from '@babel/traverse';
 import * as t from '@babel/types';
 import { LintRule } from '../lint-rule';
+import { RuleRegistry } from '../rule-registry';
 import { Violation } from '../component-linter';
 
 /**
@@ -38,6 +39,31 @@ export const noUseReducerRule: LintRule = {
             column: path.node.loc?.start.column || 0,
             message: `Component "${componentName}" uses useReducer at line ${path.node.loc?.start.line}. Components should manage state with useState and persist important settings with onSaveUserSettings.`,
             code: path.toString(),
+            suggestion: {
+              text: 'Use useState for state management, not useReducer',
+              example: `// Instead of:
+const [state, dispatch] = useReducer(reducer, initialState);
+
+// Use useState:
+function Component({ savedUserSettings, onSaveUserSettings }) {
+  const [selectedId, setSelectedId] = useState(
+    savedUserSettings?.selectedId
+  );
+  const [filters, setFilters] = useState(
+    savedUserSettings?.filters || {}
+  );
+
+  // Handle actions directly
+  const handleAction = (action) => {
+    switch(action.type) {
+      case 'SELECT':
+        setSelectedId(action.payload);
+        onSaveUserSettings?.({ ...savedUserSettings, selectedId: action.payload });
+        break;
+    }
+  };
+}`,
+            },
           });
         }
       },
@@ -46,3 +72,6 @@ export const noUseReducerRule: LintRule = {
     return violations;
   },
 };
+
+// Self-register when this module is imported
+RuleRegistry.getInstance().registerRuntimeRule(noUseReducerRule);

@@ -1,5 +1,6 @@
 import * as t from '@babel/types';
 import { LintRule } from '../lint-rule';
+import { RuleRegistry } from '../rule-registry';
 import { Violation } from '../component-linter';
 import { createViolation } from '../lint-utils';
 
@@ -39,7 +40,43 @@ export const noIifeWrapperRule: LintRule = {
                     'critical',
                     statement,
                     `Component code must not be wrapped in an IIFE (Immediately Invoked Function Expression). Define the component function directly.`,
-                    statement.toString().substring(0, 50) + '...'
+                    statement.toString().substring(0, 50) + '...',
+                    {
+                      text: 'Remove the IIFE wrapper. Component code should be plain functions, not wrapped in immediately invoked functions.',
+                      example: `// ❌ WRONG - IIFE wrapper patterns:
+(function() {
+  function MyComponent({ utilities, styles, components }) {
+    return <div>Hello</div>;
+  }
+  return MyComponent;
+})();
+
+// Also wrong:
+(function() {
+  const MyComponent = ({ utilities }) => {
+    return <div>Hello</div>;
+  };
+})();
+
+// Also wrong - arrow function IIFE:
+(() => {
+  function MyComponent({ utilities }) {
+    return <div>Hello</div>;
+  }
+})();
+
+// ✅ CORRECT - Direct function declaration:
+function MyComponent({ utilities, styles, components }) {
+  return <div>Hello</div>;
+}
+
+// Why no IIFE?
+// 1. Components run in their own scope already
+// 2. The runtime handles isolation
+// 3. IIFEs prevent proper component discovery
+// 4. Makes debugging harder
+// 5. Unnecessary complexity`,
+                    }
                   )
                 );
               }
@@ -53,7 +90,43 @@ export const noIifeWrapperRule: LintRule = {
                   'critical',
                   statement,
                   `Component code must not be wrapped in an IIFE. Define the component function directly.`,
-                  statement.toString().substring(0, 50) + '...'
+                  statement.toString().substring(0, 50) + '...',
+                  {
+                    text: 'Remove the IIFE wrapper. Component code should be plain functions, not wrapped in immediately invoked functions.',
+                    example: `// ❌ WRONG - IIFE wrapper patterns:
+(function() {
+  function MyComponent({ utilities, styles, components }) {
+    return <div>Hello</div>;
+  }
+  return MyComponent;
+})();
+
+// Also wrong:
+(function() {
+  const MyComponent = ({ utilities }) => {
+    return <div>Hello</div>;
+  };
+})();
+
+// Also wrong - arrow function IIFE:
+(() => {
+  function MyComponent({ utilities }) {
+    return <div>Hello</div>;
+  }
+})();
+
+// ✅ CORRECT - Direct function declaration:
+function MyComponent({ utilities, styles, components }) {
+  return <div>Hello</div>;
+}
+
+// Why no IIFE?
+// 1. Components run in their own scope already
+// 2. The runtime handles isolation
+// 3. IIFEs prevent proper component discovery
+// 4. Makes debugging harder
+// 5. Unnecessary complexity`,
+                  }
                 )
               );
             }
@@ -71,7 +144,43 @@ export const noIifeWrapperRule: LintRule = {
                     'critical',
                     statement,
                     `Component code must not be wrapped in an IIFE. Define the component function directly.`,
-                    statement.toString().substring(0, 50) + '...'
+                    statement.toString().substring(0, 50) + '...',
+                    {
+                      text: 'Remove the IIFE wrapper. Component code should be plain functions, not wrapped in immediately invoked functions.',
+                      example: `// ❌ WRONG - IIFE wrapper patterns:
+(function() {
+  function MyComponent({ utilities, styles, components }) {
+    return <div>Hello</div>;
+  }
+  return MyComponent;
+})();
+
+// Also wrong:
+(function() {
+  const MyComponent = ({ utilities }) => {
+    return <div>Hello</div>;
+  };
+})();
+
+// Also wrong - arrow function IIFE:
+(() => {
+  function MyComponent({ utilities }) {
+    return <div>Hello</div>;
+  }
+})();
+
+// ✅ CORRECT - Direct function declaration:
+function MyComponent({ utilities, styles, components }) {
+  return <div>Hello</div>;
+}
+
+// Why no IIFE?
+// 1. Components run in their own scope already
+// 2. The runtime handles isolation
+// 3. IIFEs prevent proper component discovery
+// 4. Makes debugging harder
+// 5. Unnecessary complexity`,
+                    }
                   )
                 );
               }
@@ -91,7 +200,43 @@ export const noIifeWrapperRule: LintRule = {
                     'critical',
                     decl,
                     `Do not use IIFE pattern for component initialization. Define components as plain functions.`,
-                    decl.toString().substring(0, 50) + '...'
+                    decl.toString().substring(0, 50) + '...',
+                    {
+                      text: 'Remove the IIFE wrapper. Component code should be plain functions, not wrapped in immediately invoked functions.',
+                      example: `// ❌ WRONG - IIFE wrapper patterns:
+(function() {
+  function MyComponent({ utilities, styles, components }) {
+    return <div>Hello</div>;
+  }
+  return MyComponent;
+})();
+
+// Also wrong:
+(function() {
+  const MyComponent = ({ utilities }) => {
+    return <div>Hello</div>;
+  };
+})();
+
+// Also wrong - arrow function IIFE:
+(() => {
+  function MyComponent({ utilities }) {
+    return <div>Hello</div>;
+  }
+})();
+
+// ✅ CORRECT - Direct function declaration:
+function MyComponent({ utilities, styles, components }) {
+  return <div>Hello</div>;
+}
+
+// Why no IIFE?
+// 1. Components run in their own scope already
+// 2. The runtime handles isolation
+// 3. IIFEs prevent proper component discovery
+// 4. Makes debugging harder
+// 5. Unnecessary complexity`,
+                    }
                   )
                 );
               }
@@ -104,3 +249,6 @@ export const noIifeWrapperRule: LintRule = {
     return violations;
   },
 };
+
+// Self-register when this module is imported
+RuleRegistry.getInstance().registerRuntimeRule(noIifeWrapperRule);

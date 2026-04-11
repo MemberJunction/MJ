@@ -1,6 +1,7 @@
 import traverse, { NodePath } from '@babel/traverse';
 import * as t from '@babel/types';
 import { LintRule } from '../lint-rule';
+import { RuleRegistry } from '../rule-registry';
 import { Violation } from '../component-linter';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 
@@ -100,3 +101,6 @@ export const runqueryMissingCategorypathRule: LintRule = {
     return violations;
   },
 };
+
+// Self-register when this module is imported
+RuleRegistry.getInstance().registerRuntimeRule(runqueryMissingCategorypathRule);

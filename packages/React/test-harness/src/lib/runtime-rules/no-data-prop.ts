@@ -1,6 +1,7 @@
 import traverse, { NodePath } from '@babel/traverse';
 import * as t from '@babel/types';
 import { LintRule } from '../lint-rule';
+import { RuleRegistry } from '../rule-registry';
 import { Violation } from '../component-linter';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 
@@ -51,6 +52,26 @@ export const noDataPropRule: LintRule = {
                   column: prop.loc?.start.column || 0,
                   message: `Component "${componentName}" accepts generic 'data' prop. Consider using more specific prop names like 'items', 'customers', etc. for clarity.`,
                   code: 'data prop in component signature',
+                  suggestion: {
+                    text: 'Replace generic data prop with specific named props',
+                    example: `// Instead of:
+function Component({ data, savedUserSettings, onSaveUserSettings }) {
+  return <div>{data.items.map(...)}</div>;
+}
+
+// Use specific props:
+function Component({ items, customers, savedUserSettings, onSaveUserSettings }) {
+  // Component owns its state
+  const [selectedItemId, setSelectedItemId] = useState(
+    savedUserSettings?.selectedItemId
+  );
+
+  return <div>{items.map(...)}</div>;
+}
+
+// Load data using utilities:
+const result = await utilities.rv.RunView({ entityName: 'Items' });`,
+                  },
                 });
               }
             }
@@ -86,3 +107,6 @@ export const noDataPropRule: LintRule = {
     return violations;
   },
 };
+
+// Self-register when this module is imported
+RuleRegistry.getInstance().registerRuntimeRule(noDataPropRule);

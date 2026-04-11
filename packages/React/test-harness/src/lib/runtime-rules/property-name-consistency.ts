@@ -1,6 +1,7 @@
 import traverse, { NodePath } from '@babel/traverse';
 import * as t from '@babel/types';
 import { LintRule } from '../lint-rule';
+import { RuleRegistry } from '../rule-registry';
 import { Violation } from '../component-linter';
 
 /**
@@ -137,6 +138,35 @@ export const propertyNameConsistencyRule: LintRule = {
                 column: transformation.location.column,
                 message: `Property name mismatch: data transformed with different casing. Accessing '${accessedProp}' but property was transformed to '${transformedName || 'different name'}'`,
                 code: `Transform uses '${Array.from(transformation.transformedProps).join(', ')}' but code accesses '${accessedProp}'`,
+                suggestion: {
+                  text: 'Maintain consistent property names when transforming data',
+                  example: `// ❌ WRONG - Transform to camelCase but access as PascalCase:
+setAccountData(results.map(item => ({
+  accountName: item.AccountName,      // camelCase
+  annualRevenue: item.AnnualRevenue   // camelCase
+})));
+// Later in render...
+<td>{account.AccountName}</td>        // PascalCase - UNDEFINED!
+<td>{formatCurrency(account.AnnualRevenue)}</td> // Returns $NaN
+
+// ✅ CORRECT Option 1 - Keep original casing:
+setAccountData(results.map(item => ({
+  AccountName: item.AccountName,       // Keep PascalCase
+  AnnualRevenue: item.AnnualRevenue    // Keep PascalCase
+})));
+// Later in render...
+<td>{account.AccountName}</td>        // Matches!
+<td>{formatCurrency(account.AnnualRevenue)}</td> // Works!
+
+// ✅ CORRECT Option 2 - Transform and use consistently:
+setAccountData(results.map(item => ({
+  accountName: item.AccountName,       // Transform to camelCase
+  annualRevenue: item.AnnualRevenue    // Transform to camelCase
+})));
+// Later in render...
+<td>{account.accountName}</td>        // Use camelCase consistently
+<td>{formatCurrency(account.annualRevenue)}</td> // Works!`,
+                },
               });
             }
           }
@@ -147,3 +177,6 @@ export const propertyNameConsistencyRule: LintRule = {
     return violations;
   },
 };
+
+// Self-register when this module is imported
+RuleRegistry.getInstance().registerRuntimeRule(propertyNameConsistencyRule);

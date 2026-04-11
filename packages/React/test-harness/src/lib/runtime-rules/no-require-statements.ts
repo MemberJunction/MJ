@@ -1,6 +1,7 @@
 import traverse, { NodePath } from '@babel/traverse';
 import * as t from '@babel/types';
 import { LintRule } from '../lint-rule';
+import { RuleRegistry } from '../rule-registry';
 import { Violation } from '../component-linter';
 import { createViolation, truncateCode } from '../lint-utils';
 
@@ -31,7 +32,40 @@ export const noRequireStatementsRule: LintRule = {
               'critical',
               path.node,
               `Component "${componentName}" contains a require() statement. Interactive components cannot use require - all dependencies must be passed as props.`,
-              truncateCode(path.toString())
+              truncateCode(path.toString()),
+              {
+                text: 'Remove all require() and dynamic import() statements. Use props instead.',
+                example: `// ❌ WRONG - Using require or dynamic import:
+function MyComponent({ utilities }) {
+  const lodash = require('lodash');
+  const module = await import('./module');
+
+  return <div>...</div>;
+}
+
+// ✅ CORRECT - Use utilities and components props:
+function MyComponent({ utilities, styles, components }) {
+  // Use utilities for helper functions
+  const result = utilities.debounce(() => {
+    // ...
+  }, 300);
+
+  // Use components prop for child components
+  const { DataTable, FilterPanel } = components;
+
+  return (
+    <div>
+      <DataTable {...props} />
+      <FilterPanel {...props} />
+    </div>
+  );
+}
+
+// Everything the component needs must be:
+// - Passed via props (utilities, components, styles)
+// - Available globally (React hooks)
+// No module loading allowed!`,
+              }
             )
           );
         }
@@ -44,7 +78,40 @@ export const noRequireStatementsRule: LintRule = {
               'critical',
               path.node,
               `Component "${componentName}" contains a dynamic import() statement. Interactive components cannot use dynamic imports - all dependencies must be passed as props.`,
-              truncateCode(path.toString())
+              truncateCode(path.toString()),
+              {
+                text: 'Remove all require() and dynamic import() statements. Use props instead.',
+                example: `// ❌ WRONG - Using require or dynamic import:
+function MyComponent({ utilities }) {
+  const lodash = require('lodash');
+  const module = await import('./module');
+
+  return <div>...</div>;
+}
+
+// ✅ CORRECT - Use utilities and components props:
+function MyComponent({ utilities, styles, components }) {
+  // Use utilities for helper functions
+  const result = utilities.debounce(() => {
+    // ...
+  }, 300);
+
+  // Use components prop for child components
+  const { DataTable, FilterPanel } = components;
+
+  return (
+    <div>
+      <DataTable {...props} />
+      <FilterPanel {...props} />
+    </div>
+  );
+}
+
+// Everything the component needs must be:
+// - Passed via props (utilities, components, styles)
+// - Available globally (React hooks)
+// No module loading allowed!`,
+              }
             )
           );
         }
@@ -54,3 +121,6 @@ export const noRequireStatementsRule: LintRule = {
     return violations;
   },
 };
+
+// Self-register when this module is imported
+RuleRegistry.getInstance().registerRuntimeRule(noRequireStatementsRule);

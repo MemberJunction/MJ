@@ -1,6 +1,7 @@
 import traverse, { NodePath } from '@babel/traverse';
 import * as t from '@babel/types';
 import { LintRule } from '../lint-rule';
+import { RuleRegistry } from '../rule-registry';
 import { Violation } from '../component-linter';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 
@@ -18,6 +19,38 @@ export const runviewRunqueryValidPropertiesRule: LintRule = {
   appliesTo: 'all',
   test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
     const violations: Violation[] = [];
+
+    const defaultSuggestion = {
+      text: 'Use only valid properties for RunView/RunViews and RunQuery',
+      example: `// ❌ WRONG - Invalid properties on RunView:
+await utilities.rv.RunView({
+  EntityName: 'MJ: AI Prompt Runs',
+  Parameters: { startDate, endDate },  // INVALID!
+  GroupBy: 'Status'                    // INVALID!
+});
+
+// ✅ CORRECT - Use ExtraFilter for WHERE clauses:
+await utilities.rv.RunView({
+  EntityName: 'MJ: AI Prompt Runs',
+  ExtraFilter: \`RunAt >= '\${startDate.toISOString()}' AND RunAt <= '\${endDate.toISOString()}'\`,
+  OrderBy: 'RunAt DESC',
+  Fields: ['RunAt', 'Status', 'Success']
+});
+
+// ✅ For aggregations, use RunQuery with a pre-defined query:
+await utilities.rq.RunQuery({
+  QueryName: 'Prompt Run Summary',
+  Parameters: { startDate, endDate }  // Parameters ARE valid for RunQuery
+});
+
+// Valid RunView properties:
+// - EntityName (required)
+// - ExtraFilter, OrderBy, Fields, MaxRows, StartRow, ResultType (optional)
+
+// Valid RunQuery properties:
+// - QueryName (required)
+// - CategoryPath, CategoryID, Parameters (optional)`,
+    };
 
     // Valid properties for RunView/RunViews
     const validRunViewProps = new Set(['EntityName', 'ExtraFilter', 'OrderBy', 'Fields', 'MaxRows', 'StartRow', 'ResultType']);
@@ -61,6 +94,7 @@ export const runviewRunqueryValidPropertiesRule: LintRule = {
                 column: path.node.loc?.start.column || 0,
                 message: `${methodName} requires a ${methodName === 'RunViews' ? 'array of RunViewParams objects' : 'RunViewParams object'} as the first parameter.`,
                 code: `${methodName}()`,
+                suggestion: defaultSuggestion,
               });
               return;
             }
@@ -98,6 +132,7 @@ Use: RunViews([
 ])
 Each object supports: EntityName, ExtraFilter, Fields, OrderBy, MaxRows, StartRow, ResultType`,
                   code: path.toString().substring(0, 100),
+                  suggestion: defaultSuggestion,
                 });
               }
             } else if (methodName === 'RunView') {
@@ -129,6 +164,7 @@ Use: RunView({
 })
 Valid properties: EntityName, ExtraFilter, Fields, OrderBy, MaxRows, StartRow, ResultType`,
                   code: path.toString().substring(0, 100),
+                  suggestion: defaultSuggestion,
                 });
               }
             }
@@ -180,6 +216,7 @@ Valid properties: EntityName, ExtraFilter, Fields, OrderBy, MaxRows, StartRow, R
                       column: prop.loc?.start.column || 0,
                       message,
                       code: `${propName}: ...`,
+                      suggestion: defaultSuggestion,
                     });
                   } else {
                     // Property name is valid, now check its type
@@ -275,6 +312,7 @@ Valid properties: EntityName, ExtraFilter, Fields, OrderBy, MaxRows, StartRow, R
                           column: prop.loc?.start.column || 0,
                           message: `${methodName} property '${propName}' must be a string, not ${t.isObjectExpression(value) ? 'an object' : t.isArrayExpression(value) ? 'an array' : 'a non-string value'}. Example: ${propName}: ${exampleValue}`,
                           code: `${propName}: ${prop.value.type === 'ObjectExpression' ? '{...}' : prop.value.type === 'ArrayExpression' ? '[...]' : '...'}`,
+                          suggestion: defaultSuggestion,
                         });
                       }
                     } else if (propName === 'Fields') {
@@ -287,6 +325,7 @@ Valid properties: EntityName, ExtraFilter, Fields, OrderBy, MaxRows, StartRow, R
                           column: prop.loc?.start.column || 0,
                           message: `${methodName} property 'Fields' must be an array of field names or a comma-separated string. Example: Fields: ['ID', 'Name', 'Status'] or Fields: 'ID, Name, Status'`,
                           code: `Fields: ${prop.value.type === 'ObjectExpression' ? '{...}' : '...'}`,
+                          suggestion: defaultSuggestion,
                         });
                       }
                     } else if (propName === 'MaxRows' || propName === 'StartRow') {
@@ -299,6 +338,7 @@ Valid properties: EntityName, ExtraFilter, Fields, OrderBy, MaxRows, StartRow, R
                           column: prop.loc?.start.column || 0,
                           message: `${methodName} property '${propName}' must be a number. Example: ${propName}: ${propName === 'MaxRows' ? '100' : '0'}`,
                           code: `${propName}: ${prop.value.type === 'StringLiteral' ? '"..."' : prop.value.type === 'ObjectExpression' ? '{...}' : '...'}`,
+                          suggestion: defaultSuggestion,
                         });
                       }
                     }
@@ -315,6 +355,7 @@ Valid properties: EntityName, ExtraFilter, Fields, OrderBy, MaxRows, StartRow, R
                   column: config.loc?.start.column || 0,
                   message: `${methodName} requires 'EntityName' property. Add EntityName to identify what data to retrieve.`,
                   code: `${methodName}({ ... })`,
+                  suggestion: defaultSuggestion,
                 });
               }
             }
@@ -350,6 +391,7 @@ Use: RunQuery({
   MaxRows: 100                        // Optional limit
 })`,
               code: `RunQuery()`,
+              suggestion: defaultSuggestion,
             });
           } else if (!t.isObjectExpression(path.node.arguments[0])) {
             // First parameter is not an object
@@ -372,6 +414,7 @@ Use: RunQuery({
 })
 Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxRows, StartRow, ForceAuditLog, AuditLogDescription`,
               code: path.toString().substring(0, 100),
+              suggestion: defaultSuggestion,
             });
           } else {
             const config = path.node.arguments[0];
@@ -413,6 +456,7 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                     column: prop.loc?.start.column || 0,
                     message,
                     code: `${propName}: ...`,
+                    suggestion: defaultSuggestion,
                   });
                 } else {
                   // Property name is valid, now check its type
@@ -498,6 +542,7 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                         column: prop.loc?.start.column || 0,
                         message: `RunQuery property '${propName}' must be a string. Example: ${propName}: ${exampleValue}`,
                         code: `${propName}: ${prop.value.type === 'ObjectExpression' ? '{...}' : prop.value.type === 'ArrayExpression' ? '[...]' : '...'}`,
+                        suggestion: defaultSuggestion,
                       });
                     }
                   } else if (propName === 'Parameters') {
@@ -510,6 +555,7 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                         column: prop.loc?.start.column || 0,
                         message: `RunQuery property 'Parameters' must be an object containing key-value pairs. Example: Parameters: { startDate: '2024-01-01', status: 'Active' }`,
                         code: `Parameters: ${t.isArrayExpression(value) ? '[...]' : t.isStringLiteral(value) ? '"..."' : '...'}`,
+                        suggestion: defaultSuggestion,
                       });
                     }
                   } else if (propName === 'MaxRows' || propName === 'StartRow') {
@@ -522,6 +568,7 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                         column: prop.loc?.start.column || 0,
                         message: `RunQuery property '${propName}' must be a number. Example: ${propName}: ${propName === 'MaxRows' ? '100' : '0'}`,
                         code: `${propName}: ${prop.value.type === 'StringLiteral' ? '"..."' : prop.value.type === 'ObjectExpression' ? '{...}' : '...'}`,
+                        suggestion: defaultSuggestion,
                       });
                     }
                   }
@@ -585,3 +632,6 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
     return violations;
   },
 };
+
+// Self-register when this module is imported
+RuleRegistry.getInstance().registerRuntimeRule(runviewRunqueryValidPropertiesRule);

@@ -1,6 +1,7 @@
 import traverse, { NodePath } from '@babel/traverse';
 import * as t from '@babel/types';
 import { LintRule } from '../lint-rule';
+import { RuleRegistry } from '../rule-registry';
 import { Violation } from '../component-linter';
 
 /**
@@ -71,6 +72,29 @@ export const noisySettingsUpdatesRule: LintRule = {
                     line: path.node.loc?.start.line || 0,
                     column: path.node.loc?.start.column || 0,
                     message: `Saving settings on every change/keystroke. Save on blur, submit, or after debouncing.`,
+                    suggestion: {
+                      text: 'Save settings sparingly - only on meaningful user actions',
+                      example: `// ❌ WRONG - Saving on every keystroke:
+const handleSearchChange = (e) => {
+  setSearchTerm(e.target.value);
+  onSaveUserSettings?.({ searchTerm: e.target.value }); // TOO NOISY!
+};
+
+// ✅ CORRECT - Save on blur or debounced:
+const handleSearchBlur = () => {
+  if (searchTerm !== savedUserSettings?.searchTerm) {
+    onSaveUserSettings?.({ ...savedUserSettings, searchTerm });
+  }
+};
+
+// ✅ CORRECT - Debounced save:
+const saveSearchTerm = useMemo(() =>
+  debounce((term) => {
+    onSaveUserSettings?.({ ...savedUserSettings, searchTerm: term });
+  }, 500),
+  [savedUserSettings]
+);`,
+                    },
                   });
                 }
               }
@@ -83,3 +107,6 @@ export const noisySettingsUpdatesRule: LintRule = {
     return violations;
   },
 };
+
+// Self-register when this module is imported
+RuleRegistry.getInstance().registerRuntimeRule(noisySettingsUpdatesRule);

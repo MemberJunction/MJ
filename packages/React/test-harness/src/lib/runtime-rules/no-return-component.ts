@@ -1,5 +1,6 @@
 import * as t from '@babel/types';
 import { LintRule } from '../lint-rule';
+import { RuleRegistry } from '../rule-registry';
 import { Violation } from '../component-linter';
 import { createViolation } from '../lint-utils';
 
@@ -34,7 +35,36 @@ export const noReturnComponentRule: LintRule = {
                 'critical',
                 statement,
                 `Do not return the component at the end of the file. The component function should stand alone.`,
-                `return ${argument.name};`
+                `return ${argument.name};`,
+                {
+                  text: 'Remove the return statement at the end of the file. The component function should stand alone.',
+                  example: `// ❌ WRONG - Returning the component:
+function MyComponent({ utilities, styles, components }) {
+  const [state, setState] = useState('');
+
+  return <div>{state}</div>;
+}
+
+return MyComponent; // <-- Remove this!
+
+// ❌ ALSO WRONG - Component reference at end:
+function MyComponent({ utilities, styles, components }) {
+  return <div>Hello</div>;
+}
+
+MyComponent; // <-- Remove this!
+
+// ✅ CORRECT - Just the function declaration:
+function MyComponent({ utilities, styles, components }) {
+  const [state, setState] = useState('');
+
+  return <div>{state}</div>;
+}
+// Nothing after the function - file ends here
+
+// The runtime will find and execute your component
+// by its function name. No need to return or reference it!`,
+                }
               )
             );
           }
@@ -48,7 +78,36 @@ export const noReturnComponentRule: LintRule = {
               'critical',
               statement,
               `Do not reference the component "${componentName}" at the end of the file. The component function should stand alone.`,
-              statement.expression.name
+              statement.expression.name,
+              {
+                text: 'Remove the return statement at the end of the file. The component function should stand alone.',
+                example: `// ❌ WRONG - Returning the component:
+function MyComponent({ utilities, styles, components }) {
+  const [state, setState] = useState('');
+
+  return <div>{state}</div>;
+}
+
+return MyComponent; // <-- Remove this!
+
+// ❌ ALSO WRONG - Component reference at end:
+function MyComponent({ utilities, styles, components }) {
+  return <div>Hello</div>;
+}
+
+MyComponent; // <-- Remove this!
+
+// ✅ CORRECT - Just the function declaration:
+function MyComponent({ utilities, styles, components }) {
+  const [state, setState] = useState('');
+
+  return <div>{state}</div>;
+}
+// Nothing after the function - file ends here
+
+// The runtime will find and execute your component
+// by its function name. No need to return or reference it!`,
+              }
             )
           );
         }
@@ -58,3 +117,6 @@ export const noReturnComponentRule: LintRule = {
     return violations;
   },
 };
+
+// Self-register when this module is imported
+RuleRegistry.getInstance().registerRuntimeRule(noReturnComponentRule);

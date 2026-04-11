@@ -1,6 +1,7 @@
 import traverse, { NodePath } from '@babel/traverse';
 import * as t from '@babel/types';
 import { LintRule } from '../lint-rule';
+import { RuleRegistry } from '../rule-registry';
 import { Violation } from '../component-linter';
 
 /**
@@ -42,6 +43,33 @@ export const savedUserSettingsPatternRule: LintRule = {
                       line: prop.loc?.start.line || 0,
                       column: prop.loc?.start.column || 0,
                       message: `Saving ephemeral UI state "${key}" to savedUserSettings. Only save important user preferences.`,
+                      suggestion: {
+                        text: 'Only save important user preferences, not ephemeral UI state',
+                        example: `// ✅ SAVE these (important preferences):
+- Selected items/tabs: selectedCustomerId, activeTab
+- Sort preferences: sortBy, sortDirection
+- Filter selections: activeFilters
+- View preferences: viewMode, pageSize
+
+// ❌ DON'T SAVE these (ephemeral UI):
+- Hover states: hoveredItemId
+- Dropdown states: isDropdownOpen
+- Text being typed: searchDraft (save on submit)
+- Loading states: isLoading
+
+// Example:
+const handleHover = (id) => {
+  setHoveredId(id); // Just local state
+};
+
+const handleSelect = (id) => {
+  setSelectedId(id);
+  onSaveUserSettings?.({ // Save important preference
+    ...savedUserSettings,
+    selectedId: id
+  });
+};`,
+                      },
                     });
                   }
                 }
@@ -55,3 +83,6 @@ export const savedUserSettingsPatternRule: LintRule = {
     return violations;
   },
 };
+
+// Self-register when this module is imported
+RuleRegistry.getInstance().registerRuntimeRule(savedUserSettingsPatternRule);

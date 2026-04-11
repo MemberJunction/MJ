@@ -1,6 +1,7 @@
 import traverse, { NodePath } from '@babel/traverse';
 import * as t from '@babel/types';
 import { LintRule } from '../lint-rule';
+import { RuleRegistry } from '../rule-registry';
 import { Violation } from '../component-linter';
 
 /**
@@ -44,6 +45,22 @@ export const propStateSyncRule: LintRule = {
                 column: path.node.loc?.start.column || 0,
                 message: 'Syncing props to internal state with useEffect creates dual state management',
                 code: path.toString().substring(0, 100),
+                suggestion: {
+                  text: "Initialize state once, don't sync from props",
+                  example: `// ❌ WRONG - Syncing prop to state:
+const [value, setValue] = useState(propValue);
+useEffect(() => {
+  setValue(propValue); // Creates dual state management!
+}, [propValue]);
+
+// ✅ CORRECT - Initialize once:
+const [value, setValue] = useState(
+  savedUserSettings?.value || defaultValue
+);
+
+// ✅ CORRECT - If you need prop changes, use derived state:
+const displayValue = propOverride || value;`,
+                },
               });
             }
           }
@@ -54,3 +71,6 @@ export const propStateSyncRule: LintRule = {
     return violations;
   },
 };
+
+// Self-register when this module is imported
+RuleRegistry.getInstance().registerRuntimeRule(propStateSyncRule);

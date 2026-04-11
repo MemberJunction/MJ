@@ -1,6 +1,7 @@
 import traverse, { NodePath } from '@babel/traverse';
 import * as t from '@babel/types';
 import { LintRule } from '../lint-rule';
+import { RuleRegistry } from '../rule-registry';
 import { Violation } from '../component-linter';
 import { createViolation, truncateCode } from '../lint-utils';
 
@@ -58,7 +59,31 @@ export const noExportStatementsRule: LintRule = {
             'critical',
             path.node,
             `Component "${componentName}" contains an export statement${mainFunctionEnd > 0 && line > mainFunctionEnd ? ' after the component function' : ''}. Interactive components are self-contained and cannot export values.`,
-            truncateCode(path.toString())
+            truncateCode(path.toString()),
+            {
+              text: 'Remove all export statements. The component function should be the only code, not exported.',
+              example: `// ❌ WRONG - Using export:
+export function MyComponent({ utilities }) {
+  return <div>Hello</div>;
+}
+
+export const helper = () => {};
+export default MyComponent;
+
+// ✅ CORRECT - Just the function, no exports:
+function MyComponent({ utilities, styles, components }) {
+  // Helper functions defined inside if needed
+  const helper = () => {
+    // ...
+  };
+
+  return <div>Hello</div>;
+}
+
+// The component is self-contained.
+// No exports needed - the host environment
+// will execute the function directly.`,
+            }
           )
         );
       },
@@ -70,7 +95,31 @@ export const noExportStatementsRule: LintRule = {
             'critical',
             path.node,
             `Component "${componentName}" contains an export default statement${mainFunctionEnd > 0 && line > mainFunctionEnd ? ' after the component function' : ''}. Interactive components are self-contained and cannot export values.`,
-            truncateCode(path.toString())
+            truncateCode(path.toString()),
+            {
+              text: 'Remove all export statements. The component function should be the only code, not exported.',
+              example: `// ❌ WRONG - Using export:
+export function MyComponent({ utilities }) {
+  return <div>Hello</div>;
+}
+
+export const helper = () => {};
+export default MyComponent;
+
+// ✅ CORRECT - Just the function, no exports:
+function MyComponent({ utilities, styles, components }) {
+  // Helper functions defined inside if needed
+  const helper = () => {
+    // ...
+  };
+
+  return <div>Hello</div>;
+}
+
+// The component is self-contained.
+// No exports needed - the host environment
+// will execute the function directly.`,
+            }
           )
         );
       },
@@ -82,7 +131,31 @@ export const noExportStatementsRule: LintRule = {
             'critical',
             path.node,
             `Component "${componentName}" contains an export * statement${mainFunctionEnd > 0 && line > mainFunctionEnd ? ' after the component function' : ''}. Interactive components are self-contained and cannot export values.`,
-            truncateCode(path.toString())
+            truncateCode(path.toString()),
+            {
+              text: 'Remove all export statements. The component function should be the only code, not exported.',
+              example: `// ❌ WRONG - Using export:
+export function MyComponent({ utilities }) {
+  return <div>Hello</div>;
+}
+
+export const helper = () => {};
+export default MyComponent;
+
+// ✅ CORRECT - Just the function, no exports:
+function MyComponent({ utilities, styles, components }) {
+  // Helper functions defined inside if needed
+  const helper = () => {
+    // ...
+  };
+
+  return <div>Hello</div>;
+}
+
+// The component is self-contained.
+// No exports needed - the host environment
+// will execute the function directly.`,
+            }
           )
         );
       },
@@ -91,3 +164,6 @@ export const noExportStatementsRule: LintRule = {
     return violations;
   },
 };
+
+// Self-register when this module is imported
+RuleRegistry.getInstance().registerRuntimeRule(noExportStatementsRule);

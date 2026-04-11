@@ -1,6 +1,7 @@
 import traverse, { NodePath } from '@babel/traverse';
 import * as t from '@babel/types';
 import { LintRule } from '../lint-rule';
+import { RuleRegistry } from '../rule-registry';
 import { Violation } from '../component-linter';
 
 /**
@@ -69,6 +70,32 @@ export const serverReloadOnClientOperationRule: LintRule = {
                 column: path.node.loc?.start.column || 0,
                 message: 'Reloading data from server on sort/filter. Use useMemo for client-side operations.',
                 code: `${funcName} calls ${callee.name}`,
+                suggestion: {
+                  text: 'Use client-side operations for sorting and filtering',
+                  example: `// ❌ WRONG - Reload from server:
+const handleSort = (field) => {
+  setSortBy(field);
+  loadData(); // Unnecessary server call!
+};
+
+// ✅ CORRECT - Client-side sort:
+const handleSort = (field) => {
+  setSortBy(field);
+  setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+};
+
+// Use memoized sorted data:
+const sortedData = useMemo(() => {
+  const sorted = [...data];
+  sorted.sort((a, b) => {
+    const aVal = a[sortBy];
+    const bVal = b[sortBy];
+    const result = aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
+    return sortDirection === 'asc' ? result : -result;
+  });
+  return sorted;
+}, [data, sortBy, sortDirection]);`,
+                },
               });
             }
           }
@@ -79,3 +106,6 @@ export const serverReloadOnClientOperationRule: LintRule = {
     return violations;
   },
 };
+
+// Self-register when this module is imported
+RuleRegistry.getInstance().registerRuntimeRule(serverReloadOnClientOperationRule);

@@ -1,6 +1,7 @@
 import traverse, { NodePath } from '@babel/traverse';
 import * as t from '@babel/types';
 import { LintRule } from '../lint-rule';
+import { RuleRegistry } from '../rule-registry';
 import { Violation } from '../component-linter';
 import { createViolation, getJSXElementName, hasJSXAttribute } from '../lint-utils';
 
@@ -61,7 +62,24 @@ export const passStandardPropsRule: LintRule = {
                 'critical',
                 openingElement,
                 `Dependency component "${elementName}" is missing required props: ${missingProps.join(', ')}. Components from dependencies must receive styles, utilities, and components props.`,
-                `<${elementName} ... />`
+                `<${elementName} ... />`,
+                {
+                  text: 'Always pass standard props to all components',
+                  example: `// Always include these props when calling components:
+<ChildComponent
+  items={items}  // Data props
+
+  // Settings persistence
+  savedUserSettings={savedUserSettings?.childComponent}
+  onSaveUserSettings={handleChildSettings}
+
+  // Standard props
+  styles={styles}
+  utilities={utilities}
+  components={components}
+  callbacks={callbacks}
+/>`,
+                }
               )
             );
           }
@@ -72,3 +90,6 @@ export const passStandardPropsRule: LintRule = {
     return violations;
   },
 };
+
+// Self-register when this module is imported
+RuleRegistry.getInstance().registerRuntimeRule(passStandardPropsRule);

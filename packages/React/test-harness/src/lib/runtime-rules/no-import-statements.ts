@@ -28,7 +28,37 @@ export const noImportStatementsRule: LintRule = {
             'critical',
             path.node,
             `Component "${componentName}" contains an import statement. Interactive components cannot use import statements - all dependencies must be passed as props.`,
-            truncateCode(path.toString())
+            truncateCode(path.toString()),
+            {
+              text: 'Remove all import statements. Interactive components receive everything through props.',
+              example: `// ❌ WRONG - Using import statements:
+import React from 'react';
+import { useState } from 'react';
+import { format } from 'date-fns';
+import './styles.css';
+
+function MyComponent({ utilities, styles }) {
+  // ...
+}
+
+// ✅ CORRECT - Everything passed as props:
+function MyComponent({ utilities, styles, components }) {
+  // React hooks are available globally (useState, useEffect, etc.)
+  const [value, setValue] = useState('');
+
+  // Utilities include formatting functions
+  const formatted = utilities.formatDate(new Date());
+
+  // Styles are passed as props
+  return <div style={styles.container}>...</div>;
+}
+
+// All dependencies must be:
+// 1. Passed through the 'utilities' prop (formatting, helpers)
+// 2. Passed through the 'components' prop (child components)
+// 3. Passed through the 'styles' prop (styling)
+// 4. Available globally (React hooks)`,
+            }
           )
         );
       },

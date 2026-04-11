@@ -36,7 +36,10 @@ export class RuleRegistry {
    * @param rule - The lint rule to register
    */
   public registerRuntimeRule(rule: LintRule): void {
-    this.runtimeRules.push(rule);
+    // Prevent duplicate registration
+    if (!this.runtimeRules.some(r => r.name === rule.name)) {
+      this.runtimeRules.push(rule);
+    }
   }
 
   /**

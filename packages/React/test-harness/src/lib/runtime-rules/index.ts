@@ -57,4 +57,38 @@ import './runquery-missing-categorypath';
 import './runquery-parameters-validation';
 import './query-parameter-type-validation';
 
-// Total: 32 runtime rules registered automatically
+// Phase 4A - Batch 3: 15 additional runtime rules
+import './utilities-no-direct-instantiation';
+import './unsafe-formatting-methods';
+import './validate-component-references';
+import './unused-libraries';
+import './unused-component-dependencies';
+import './component-usage-without-destructuring';
+import './prefer-jsx-syntax';
+import './prefer-async-await';
+import './styles-invalid-path';
+import './styles-unsafe-access';
+import './runquery-runview-spread-operator';
+import './event-invocation-pattern';
+import './callback-parameter-validation';
+import './required-queries-not-called';
+import './validate-component-props';
+
+// Phase 4A - Batch 4: 15 rules extracted from universalComponentRules in component-linter.ts
+import './no-child-implementation';
+import './type-inference-errors';
+import './type-mismatch-operation';
+import './runview-entity-validation';
+import './string-template-validation';
+import './string-replace-all-occurrences';
+import './component-props-validation';
+import './unsafe-array-operations';
+import './undefined-jsx-component';
+import './runquery-runview-validation';
+import './runview-runquery-result-validation';
+import './entity-field-validation';
+import './query-field-validation';
+import './dependency-prop-validation';
+import './utilities-api-validation';
+
+// Total: 62 runtime rules registered automatically
