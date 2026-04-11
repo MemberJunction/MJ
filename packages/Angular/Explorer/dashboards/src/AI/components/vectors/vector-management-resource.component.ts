@@ -478,6 +478,9 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
     public SelectedEntityIndex = -1;
     @ViewChild('entitySearchInput') entitySearchInput?: ElementRef<HTMLInputElement>;
 
+    /** Reference to the entity search input for programmatic focus */
+    @ViewChild('entitySearchInput') entitySearchInput?: ElementRef<HTMLInputElement>;
+
     // --- Raw entity data (private) ---
     private entityDocuments: MJEntityDocumentEntity[] = [];
     protected vectorDatabases: MJVectorDatabaseEntity[] = [];
