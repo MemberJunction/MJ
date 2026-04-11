@@ -50,9 +50,9 @@ export class ScheduledGeocodingAction extends BaseAction {
 
         const maxRetries = this.getNumericParam(params, 'MaxRetries', ScheduledGeocodingAction.DEFAULT_MAX_RETRIES);
         const batchSize = this.getNumericParam(params, 'BatchSize', ScheduledGeocodingAction.DEFAULT_BATCH_SIZE);
-        const maxTotal = this.getNumericParam(params, 'MaxTotalRecords', 0); // 0 = unlimited
+        const maxTotal = this.getNullableNumericParam(params, 'MaxTotalRecords');
 
-        LogStatus(`ScheduledGeocodingAction: Starting maintenance run (BatchSize=${batchSize}, MaxTotal=${maxTotal || 'unlimited'})`);
+        LogStatus(`ScheduledGeocodingAction: Starting maintenance run (BatchSize=${batchSize}, MaxTotal=${maxTotal ?? 'unlimited'})`);
 
         const stats = { MissingProcessed: 0, MissingSuccess: 0, RetriesProcessed: 0, RetriesSuccess: 0, OrphansRemoved: 0 };
 
@@ -62,7 +62,7 @@ export class ScheduledGeocodingAction extends BaseAction {
         stats.MissingSuccess = missingStats.Success;
 
         // Step 2: Retry failed geocoding attempts
-        const retryMaxTotal = maxTotal > 0 ? Math.max(0, maxTotal - stats.MissingProcessed) : 0;
+        const retryMaxTotal = maxTotal != null ? Math.max(0, maxTotal - stats.MissingProcessed) : null;
         const retryStats = await this.processFailedRetries(contextUser, maxRetries, batchSize, retryMaxTotal);
         stats.RetriesProcessed = retryStats.Processed;
         stats.RetriesSuccess = retryStats.Success;
@@ -91,7 +91,7 @@ export class ScheduledGeocodingAction extends BaseAction {
     private async processMissingRecords(
         contextUser: UserInfo,
         batchSize: number,
-        maxTotal: number
+        maxTotal: number | null
     ): Promise<{ Processed: number; Success: number }> {
         const md = new Metadata();
         const geoEntities = md.Entities.filter(e => e.SupportsGeoCoding);
@@ -99,9 +99,9 @@ export class ScheduledGeocodingAction extends BaseAction {
         let totalSuccess = 0;
 
         for (const entityInfo of geoEntities) {
-            if (maxTotal > 0 && totalProcessed >= maxTotal) break;
+            if (maxTotal != null && totalProcessed >= maxTotal) break;
 
-            const remaining = maxTotal > 0 ? maxTotal - totalProcessed : 0; // 0 = unlimited
+            const remaining = maxTotal != null ? maxTotal - totalProcessed : null;
             const entityStats = await this.processMissingForEntity(entityInfo, contextUser, batchSize, remaining);
             totalProcessed += entityStats.Processed;
             totalSuccess += entityStats.Success;
@@ -129,7 +129,7 @@ export class ScheduledGeocodingAction extends BaseAction {
         entityInfo: EntityInfo,
         contextUser: UserInfo,
         batchSize: number,
-        maxRows: number
+        maxRows: number | null
     ): Promise<{ Processed: number; Success: number }> {
         const rv = new RunView();
         const pkField = entityInfo.FirstPrimaryKey;
@@ -162,7 +162,7 @@ export class ScheduledGeocodingAction extends BaseAction {
                     return !existingRecordIds.has(recordId);
                 });
 
-            if (maxRows > 0) {
+            if (maxRows != null) {
                 missingRecords = missingRecords.slice(0, maxRows);
             }
 
@@ -190,7 +190,7 @@ export class ScheduledGeocodingAction extends BaseAction {
         contextUser: UserInfo,
         maxRetries: number,
         batchSize: number,
-        maxTotal: number
+        maxTotal: number | null
     ): Promise<{ Processed: number; Success: number }> {
         const rv = new RunView();
 
@@ -207,7 +207,7 @@ export class ScheduledGeocodingAction extends BaseAction {
         }
 
         let records = failedResult.Results;
-        if (maxTotal > 0) {
+        if (maxTotal != null) {
             records = records.slice(0, maxTotal);
         }
 
@@ -492,5 +492,15 @@ export class ScheduledGeocodingAction extends BaseAction {
         if (!param || param.Value === undefined || param.Value === null) return defaultValue;
         const parsed = Number(param.Value);
         return isNaN(parsed) ? defaultValue : parsed;
+    }
+
+    /**
+     * Extract an optional numeric parameter. Returns null if not provided.
+     */
+    private getNullableNumericParam(params: RunActionParams, name: string): number | null {
+        const param = params.Params.find(p => p.Name.trim().toLowerCase() === name.toLowerCase());
+        if (!param || param.Value === undefined || param.Value === null) return null;
+        const parsed = Number(param.Value);
+        return isNaN(parsed) ? null : parsed;
     }
 }

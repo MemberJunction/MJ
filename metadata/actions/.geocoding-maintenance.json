@@ -34,19 +34,19 @@
           "fields": {
             "ActionID": "@parent:ID",
             "Name": "MaxTotalRecords",
-            "DefaultValue": "0",
+            "DefaultValue": null,
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Optional hard cap on total records processed in a single run. When 0 (default), processes all pending records until exhausted.",
+            "Description": "Optional hard cap on total records processed in a single run. When null (default), processes all pending records until exhausted.",
             "IsRequired": false
           },
           "primaryKey": {
             "ID": "4BEC5C07-5287-4002-95C2-EB0D934B8383"
           },
           "sync": {
-            "lastModified": "2026-04-11T03:55:38.659Z",
-            "checksum": "5595151940fb88d8970843daa4d205b050169b092a9ea597fbedf03cdcc67c3c"
+            "lastModified": "2026-04-11T04:01:59.055Z",
+            "checksum": "32b37a82bb0d283d049c4395859af93723106b40542f40b5a65f54cfd5c9f5df"
           }
         },
         {
