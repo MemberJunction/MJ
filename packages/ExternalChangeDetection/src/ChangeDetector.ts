@@ -92,11 +92,16 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
             {
                 EntityName: "MJ: Entities",
                 PropertyName: "_EligibleEntities",
-                Filter: `ID IN (SELECT ID FROM ${p.MJCoreSchemaName}.vwEntitiesWithExternalChangeTracking)`, // limit to entities that are in this view. This view has the logic which basically is TrackRecordChanges=1 and also has an UpdatedAt field
+                Filter: `ID IN (SELECT ID FROM ${p.MJCoreSchemaName}.vwEntitiesWithExternalChangeTracking)`, // limit to entities that are in this view: TrackRecordChanges=1, DetectExternalChanges=1, and has __mj_UpdatedAt/__mj_CreatedAt fields
                 CacheLocal: true
             }
         ];
         await this.Load(c, provider, forceRefresh, contextUser);
+
+        // Log enrollment summary so administrators can verify the opt-in filter is working
+        const md = new Metadata();
+        const totalWithTracking = md.Entities.filter(e => e.TrackRecordChanges).length;
+        LogStatus(`External Change Detection: ${this._EligibleEntities?.length ?? 0} of ${totalWithTracking} entities with TrackRecordChanges=1 have DetectExternalChanges=1`);
     }
 
     public static get Instance(): ExternalChangeDetectorEngine {
@@ -122,11 +127,12 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
 
     private _EligibleEntities: EntityInfo[];
     /**
-     * A list of the entities that are eligible for external change detection. This is determined by using the underlying 
+     * A list of the entities that are eligible for external change detection. This is determined by using the underlying
      * database view vwEntitiesWithExternalChangeTracking which is a view that is maintained by the MJ system and is used to
      * find a list of entities that have the required characteristics that support external change detection. These characteristics
      * include:
      *  * The entity has the TrackRecordChanges property set to 1
+     *  * The entity has DetectExternalChanges set to 1 (opt-in flag, defaults to 0)
      *  * The entity has the special UpdatedAt/CreatedAt fields (which are called __mj_UpdatedAt and __mj_CreatedAt in the database). These fields are AUTOMATICALLY added to an entity that has TrackRecordChanges set to 1 by the MJ CodeGen tool.
      *  * The entity is not in the IneligibleEntities list. See info on the IneligibleEntities property for more information on excluded entities.
      */

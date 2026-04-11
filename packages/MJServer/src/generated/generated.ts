@@ -37412,6 +37412,9 @@ export class MJEntity_ {
     @Field(() => Boolean, {description: `Controls whether this entity participates in server-side and client-side caching. When false, all cache operations (PreRunView checks, auto-cache storage, BaseEntity event fingerprint scans, client-side IndexedDB cache) are skipped entirely for zero overhead on the hot save/query paths. __mj metadata entities default to true; all others default to false.`}) 
     AllowCaching: boolean;
         
+    @Field(() => Boolean, {description: `When set to 1 AND TrackRecordChanges is also 1, the external change detection system will scan this entity for changes made outside the MJ framework (direct SQL, third-party tools, etc.) and replay them through Save() to create proper RecordChange audit entries. Default is 0 (opt-out) because most entities, especially __mj schema metadata tables, are managed by migrations/CodeGen and should not be scanned.`}) 
+    DetectExternalChanges: boolean;
+        
     @Field({nullable: true, description: `Schema-based programmatic code name derived from the entity Name. Uses GetClassNameSchemaPrefix(SchemaName) as the prefix, then strips EntityNamePrefix from the Name and removes spaces. For "__mj" schema with entity "MJ: AI Models", this produces "MJAIModels". For entities in other schemas, the sanitized schema name is prepended. Used in GraphQL type generation and internal code references.`}) 
     CodeName?: string;
         
@@ -37784,6 +37787,9 @@ export class CreateMJEntityInput {
 
     @Field(() => Boolean, { nullable: true })
     AllowCaching?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    DetectExternalChanges?: boolean;
 }
     
 
@@ -37971,6 +37977,9 @@ export class UpdateMJEntityInput {
 
     @Field(() => Boolean, { nullable: true })
     AllowCaching?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    DetectExternalChanges?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
