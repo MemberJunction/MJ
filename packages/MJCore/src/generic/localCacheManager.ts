@@ -2054,7 +2054,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         if (cap <= 0 || !this._storageProvider) return; // 0 = unlimited
 
         const fingerprints = this._entityFingerprintIndex.get(entityName);
-        if (!fingerprints || fingerprints.size <= cap) return;
+        if (!fingerprints || fingerprints.size < cap) return;
 
         // Sort entries for this entity by lastAccessedAt ascending (LRU)
         const entries = [...fingerprints]
@@ -2062,7 +2062,9 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             .filter((e): e is CacheEntryInfo => !!e)
             .sort((a, b) => a.lastAccessedAt - b.lastAccessedAt);
 
-        const toEvict = entries.length - cap;
+        // Evict enough to leave room for the incoming entry:
+        // after eviction we want (cap - 1) entries, so the new one lands at exactly cap.
+        const toEvict = entries.length - cap + 1;
         if (toEvict <= 0) return;
 
         if (this._config.verboseLogging) {

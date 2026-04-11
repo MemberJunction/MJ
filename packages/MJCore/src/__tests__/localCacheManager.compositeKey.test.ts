@@ -472,7 +472,7 @@ describe('LocalCacheManager CompositeKey Support', () => {
             );
 
             // Mock entity metadata lookup
-            const md = { Entities: [{ Name: 'Users', PrimaryKeys: [{ Name: 'ID' }] }] };
+            const md = { Entities: [{ Name: 'Users', AllowCaching: true, PrimaryKeys: [{ Name: 'ID' }] }] };
             const originalMetadata = (await import('../generic/metadata')).Metadata;
             const metaProto = originalMetadata.prototype;
             const origEntities = Object.getOwnPropertyDescriptor(metaProto, 'Entities');
@@ -514,7 +514,7 @@ describe('LocalCacheManager CompositeKey Support', () => {
                 '2024-01-01T00:00:00Z'
             );
 
-            const md = { Entities: [{ Name: 'Users', PrimaryKeys: [{ Name: 'ID' }] }] };
+            const md = { Entities: [{ Name: 'Users', AllowCaching: true, PrimaryKeys: [{ Name: 'ID' }] }] };
             const originalMetadata = (await import('../generic/metadata')).Metadata;
             const metaProto = originalMetadata.prototype;
             const origEntities = Object.getOwnPropertyDescriptor(metaProto, 'Entities');
@@ -561,6 +561,7 @@ describe('LocalCacheManager CompositeKey Support', () => {
             const md = {
                 Entities: [{
                     Name: 'UserRoles',
+                    AllowCaching: true,
                     PrimaryKeys: [{ Name: 'UserID' }, { Name: 'RoleID' }],
                 }],
             };
@@ -641,7 +642,7 @@ describe('LocalCacheManager CompositeKey Support', () => {
                 '2024-01-01T00:00:00Z'
             );
 
-            const md = { Entities: [{ Name: 'Users', PrimaryKeys: [{ Name: 'ID' }] }] };
+            const md = { Entities: [{ Name: 'Users', AllowCaching: true, PrimaryKeys: [{ Name: 'ID' }] }] };
             const originalMetadata = (await import('../generic/metadata')).Metadata;
             const metaProto = originalMetadata.prototype;
             const origEntities = Object.getOwnPropertyDescriptor(metaProto, 'Entities');
@@ -673,7 +674,7 @@ describe('LocalCacheManager CompositeKey Support', () => {
         });
 
         it('should do nothing when entityName has no cached fingerprints', async () => {
-            const md = { Entities: [{ Name: 'Users', PrimaryKeys: [{ Name: 'ID' }] }] };
+            const md = { Entities: [{ Name: 'Users', AllowCaching: true, PrimaryKeys: [{ Name: 'ID' }] }] };
             const originalMetadata = (await import('../generic/metadata')).Metadata;
             const metaProto = originalMetadata.prototype;
             const origEntities = Object.getOwnPropertyDescriptor(metaProto, 'Entities');
