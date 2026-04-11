@@ -148,6 +148,7 @@ export class ScheduledGeocodingAction extends BaseAction {
                 EntityName: entityInfo.Name,
                 ExtraFilter: `(${nonNullConditions})`,
                 IgnoreMaxRows: true,
+                BypassCache: true,
                 ResultType: 'entity_object'
             }, contextUser);
 

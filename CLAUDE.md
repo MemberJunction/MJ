@@ -722,6 +722,7 @@ Key principles:
 - **Auto-cache**: Small (≤250 rows), unfiltered, unsorted results are automatically cached on the server because they can be safely maintained in-place via upsert/remove
 - **Filtered/sorted caches are invalidated (not updated)** on entity changes — we can't evaluate SQL predicates in JS, so the safe approach is to blow away the cache entry and let it repopulate on next request
 - **ResultType is excluded from cache fingerprints** — cache stores plain JSON regardless; transformation to BaseEntity objects happens post-cache
+- **`BypassCache: true`** — per-query escape hatch that skips all server-side caching (both read and write). Use for maintenance actions, scheduled jobs, or any query that needs true DB state after direct SQL operations that bypassed `BaseEntity.Save()`
 
 ### Batch Database Operations
 - Use `RunViews` (plural) instead of multiple `RunView` calls
