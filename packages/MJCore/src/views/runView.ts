@@ -163,6 +163,19 @@ export class RunViewParams {
     CacheLocal?: boolean;
 
     /**
+     * When set to true, bypasses ALL server-side caching — both the PreRunView cache
+     * check and the post-query auto-cache storage. The query always hits the database
+     * and the result is NOT stored in the cache.
+     *
+     * Use this for maintenance/audit operations that need to see the true database state,
+     * especially when querying for records that were inserted via direct SQL (bypassing
+     * BaseEntity.Save() and its cache invalidation events).
+     *
+     * @default false
+     */
+    BypassCache?: boolean;
+
+    /**
      * Optional TTL (time-to-live) in milliseconds for cached results when CacheLocal is true.
      * After this time, cached results will be considered stale and fresh data will be fetched.
      * If not specified, the LocalCacheManager's default TTL will be used (typically 5 minutes).
