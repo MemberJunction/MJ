@@ -1344,7 +1344,7 @@ export const MJAIAgentExampleSchema = z.object({
         * * Display Name: Comments
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Internal comments about this example, not included in agent context injection.`),
-    Status: z.union([z.literal('Active'), z.literal('Pending'), z.literal('Revoked')]).describe(`
+    Status: z.union([z.literal('Active'), z.literal('Archived'), z.literal('Pending'), z.literal('Revoked')]).describe(`
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nvarchar(20)
@@ -1352,6 +1352,7 @@ export const MJAIAgentExampleSchema = z.object({
     * * Value List Type: List
     * * Possible Values 
     *   * Active
+    *   * Archived
     *   * Pending
     *   * Revoked
         * * Description: Status of the example: Pending (awaiting review), Active (in use), or Revoked (disabled).`),
@@ -1736,7 +1737,7 @@ export const MJAIAgentNoteSchema = z.object({
         * * Display Name: Comments
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Internal comments about this note, not included in agent context injection.`),
-    Status: z.union([z.literal('Active'), z.literal('Pending'), z.literal('Revoked')]).describe(`
+    Status: z.union([z.literal('Active'), z.literal('Archived'), z.literal('Pending'), z.literal('Revoked')]).describe(`
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nvarchar(20)
@@ -1744,6 +1745,7 @@ export const MJAIAgentNoteSchema = z.object({
     * * Value List Type: List
     * * Possible Values 
     *   * Active
+    *   * Archived
     *   * Pending
     *   * Revoked
         * * Description: Status of the note: Pending (awaiting review), Active (in use), or Revoked (disabled).`),
@@ -1814,6 +1816,40 @@ export const MJAIAgentNoteSchema = z.object({
         * * Display Name: Expires At
         * * SQL Data Type: datetimeoffset
         * * Description: Optional expiration timestamp. Notes past this date are candidates for archival. NULL means no expiration.`),
+    ConsolidatedIntoNoteID: z.string().nullable().describe(`
+        * * Field Name: ConsolidatedIntoNoteID
+        * * Display Name: Consolidated Into Note ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Notes (vwAIAgentNotes.ID)
+        * * Description: Self-referential FK. Points to the consolidated note that replaced this one.`),
+    ConsolidationCount: z.number().describe(`
+        * * Field Name: ConsolidationCount
+        * * Display Name: Consolidation Count
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Re-summarization depth. 0=raw, 1=first consolidation. Capped at 3.`),
+    DerivedFromNoteIDs: z.string().nullable().describe(`
+        * * Field Name: DerivedFromNoteIDs
+        * * Display Name: Derived From Note I Ds
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of source note IDs consolidated into this note.`),
+    ProtectionTier: z.union([z.literal('Ephemeral'), z.literal('Immutable'), z.literal('Protected'), z.literal('Standard')]).describe(`
+        * * Field Name: ProtectionTier
+        * * Display Name: Protection Tier
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Standard
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Ephemeral
+    *   * Immutable
+    *   * Protected
+    *   * Standard
+        * * Description: Protection level: Immutable, Protected, Standard, Ephemeral.`),
+    ImportanceScore: z.number().nullable().describe(`
+        * * Field Name: ImportanceScore
+        * * Display Name: Importance Score
+        * * SQL Data Type: decimal(5, 2)
+        * * Description: Composite importance score (0-10) from 7 signals.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent
@@ -1850,6 +1886,14 @@ export const MJAIAgentNoteSchema = z.object({
         * * Field Name: PrimaryScopeEntity
         * * Display Name: Primary Scope Entity
         * * SQL Data Type: nvarchar(255)`),
+    ConsolidatedIntoNote: z.string().nullable().describe(`
+        * * Field Name: ConsolidatedIntoNote
+        * * Display Name: Consolidated Into Note
+        * * SQL Data Type: nvarchar(MAX)`),
+    RootConsolidatedIntoNoteID: z.string().nullable().describe(`
+        * * Field Name: RootConsolidatedIntoNoteID
+        * * Display Name: Root Consolidated Into Note ID
+        * * SQL Data Type: uniqueidentifier`),
 });
 
 export type MJAIAgentNoteEntityType = z.infer<typeof MJAIAgentNoteSchema>;
@@ -5809,7 +5853,7 @@ export const MJAIPromptSchema = z.object({
         * * Description: When true, the agent context must match for a cache hit. When false, agent-specific and non-agent results can be used interchangeably.`),
     CacheMustMatchConfig: z.boolean().describe(`
         * * Field Name: CacheMustMatchConfig
-        * * Display Name: Cache Must Match Configuration
+        * * Display Name: Cache Must Match Config
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: When true, the configuration must match for a cache hit. When false, results from any configuration can be used.`),
@@ -5910,7 +5954,7 @@ export const MJAIPromptSchema = z.object({
         * * Description: Maximum number of failover attempts before giving up`),
     FailoverDelaySeconds: z.number().nullable().describe(`
         * * Field Name: FailoverDelaySeconds
-        * * Display Name: Failover Delay (seconds)
+        * * Display Name: Failover Delay (Seconds)
         * * SQL Data Type: int
         * * Default Value: 5
         * * Description: Initial delay in seconds between failover attempts`),
@@ -5965,6 +6009,12 @@ export const MJAIPromptSchema = z.object({
     *   * None
     *   * SystemInstruction
         * * Description: Controls behavior when the selected provider does not support native assistant prefill. Ignore = silently skip prefill, SystemInstruction = inject a system message instructing the model to start its response with the prefill text (uses fallback text from AI Model Vendor or AI Model Type), None = no fallback (prefill only works with supported providers).`),
+    RequireSpecificModels: z.boolean().describe(`
+        * * Field Name: RequireSpecificModels
+        * * Display Name: Require Specific Models
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Only applies when SelectionStrategy is Specific. When 0 (default), if none of the explicitly configured AIPromptModel entries have valid API credentials the system automatically falls back to Default/ByPower model selection across all active models matching the prompt AIModelTypeID. When 1, the system will hard-fail with an error instead of falling back, ensuring only the explicitly configured models are ever used.`),
     Template: z.string().describe(`
         * * Field Name: Template
         * * Display Name: Template Text
@@ -27120,14 +27170,15 @@ export class MJAIAgentExampleEntity extends BaseEntity<MJAIAgentExampleEntityTyp
     * * Value List Type: List
     * * Possible Values 
     *   * Active
+    *   * Archived
     *   * Pending
     *   * Revoked
     * * Description: Status of the example: Pending (awaiting review), Active (in use), or Revoked (disabled).
     */
-    get Status(): 'Active' | 'Pending' | 'Revoked' {
+    get Status(): 'Active' | 'Archived' | 'Pending' | 'Revoked' {
         return this.Get('Status');
     }
-    set Status(value: 'Active' | 'Pending' | 'Revoked') {
+    set Status(value: 'Active' | 'Archived' | 'Pending' | 'Revoked') {
         this.Set('Status', value);
     }
 
@@ -28078,14 +28129,15 @@ export class MJAIAgentNoteEntity extends BaseEntity<MJAIAgentNoteEntityType> {
     * * Value List Type: List
     * * Possible Values 
     *   * Active
+    *   * Archived
     *   * Pending
     *   * Revoked
     * * Description: Status of the note: Pending (awaiting review), Active (in use), or Revoked (disabled).
     */
-    get Status(): 'Active' | 'Pending' | 'Revoked' {
+    get Status(): 'Active' | 'Archived' | 'Pending' | 'Revoked' {
         return this.Get('Status');
     }
-    set Status(value: 'Active' | 'Pending' | 'Revoked') {
+    set Status(value: 'Active' | 'Archived' | 'Pending' | 'Revoked') {
         this.Set('Status', value);
     }
 
@@ -28253,6 +28305,80 @@ export class MJAIAgentNoteEntity extends BaseEntity<MJAIAgentNoteEntityType> {
     }
 
     /**
+    * * Field Name: ConsolidatedIntoNoteID
+    * * Display Name: Consolidated Into Note ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Notes (vwAIAgentNotes.ID)
+    * * Description: Self-referential FK. Points to the consolidated note that replaced this one.
+    */
+    get ConsolidatedIntoNoteID(): string | null {
+        return this.Get('ConsolidatedIntoNoteID');
+    }
+    set ConsolidatedIntoNoteID(value: string | null) {
+        this.Set('ConsolidatedIntoNoteID', value);
+    }
+
+    /**
+    * * Field Name: ConsolidationCount
+    * * Display Name: Consolidation Count
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Re-summarization depth. 0=raw, 1=first consolidation. Capped at 3.
+    */
+    get ConsolidationCount(): number {
+        return this.Get('ConsolidationCount');
+    }
+    set ConsolidationCount(value: number) {
+        this.Set('ConsolidationCount', value);
+    }
+
+    /**
+    * * Field Name: DerivedFromNoteIDs
+    * * Display Name: Derived From Note I Ds
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of source note IDs consolidated into this note.
+    */
+    get DerivedFromNoteIDs(): string | null {
+        return this.Get('DerivedFromNoteIDs');
+    }
+    set DerivedFromNoteIDs(value: string | null) {
+        this.Set('DerivedFromNoteIDs', value);
+    }
+
+    /**
+    * * Field Name: ProtectionTier
+    * * Display Name: Protection Tier
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Standard
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Ephemeral
+    *   * Immutable
+    *   * Protected
+    *   * Standard
+    * * Description: Protection level: Immutable, Protected, Standard, Ephemeral.
+    */
+    get ProtectionTier(): 'Ephemeral' | 'Immutable' | 'Protected' | 'Standard' {
+        return this.Get('ProtectionTier');
+    }
+    set ProtectionTier(value: 'Ephemeral' | 'Immutable' | 'Protected' | 'Standard') {
+        this.Set('ProtectionTier', value);
+    }
+
+    /**
+    * * Field Name: ImportanceScore
+    * * Display Name: Importance Score
+    * * SQL Data Type: decimal(5, 2)
+    * * Description: Composite importance score (0-10) from 7 signals.
+    */
+    get ImportanceScore(): number | null {
+        return this.Get('ImportanceScore');
+    }
+    set ImportanceScore(value: number | null) {
+        this.Set('ImportanceScore', value);
+    }
+
+    /**
     * * Field Name: Agent
     * * Display Name: Agent
     * * SQL Data Type: nvarchar(255)
@@ -28331,6 +28457,24 @@ export class MJAIAgentNoteEntity extends BaseEntity<MJAIAgentNoteEntityType> {
     */
     get PrimaryScopeEntity(): string | null {
         return this.Get('PrimaryScopeEntity');
+    }
+
+    /**
+    * * Field Name: ConsolidatedIntoNote
+    * * Display Name: Consolidated Into Note
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get ConsolidatedIntoNote(): string | null {
+        return this.Get('ConsolidatedIntoNote');
+    }
+
+    /**
+    * * Field Name: RootConsolidatedIntoNoteID
+    * * Display Name: Root Consolidated Into Note ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get RootConsolidatedIntoNoteID(): string | null {
+        return this.Get('RootConsolidatedIntoNoteID');
     }
 }
 
@@ -39297,7 +39441,7 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
 
     /**
     * * Field Name: CacheMustMatchConfig
-    * * Display Name: Cache Must Match Configuration
+    * * Display Name: Cache Must Match Config
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: When true, the configuration must match for a cache hit. When false, results from any configuration can be used.
@@ -39518,7 +39662,7 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
 
     /**
     * * Field Name: FailoverDelaySeconds
-    * * Display Name: Failover Delay (seconds)
+    * * Display Name: Failover Delay (Seconds)
     * * SQL Data Type: int
     * * Default Value: 5
     * * Description: Initial delay in seconds between failover attempts
@@ -39619,6 +39763,20 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
     }
     set PrefillFallbackMode(value: 'Ignore' | 'None' | 'SystemInstruction') {
         this.Set('PrefillFallbackMode', value);
+    }
+
+    /**
+    * * Field Name: RequireSpecificModels
+    * * Display Name: Require Specific Models
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Only applies when SelectionStrategy is Specific. When 0 (default), if none of the explicitly configured AIPromptModel entries have valid API credentials the system automatically falls back to Default/ByPower model selection across all active models matching the prompt AIModelTypeID. When 1, the system will hard-fail with an error instead of falling back, ensuring only the explicitly configured models are ever used.
+    */
+    get RequireSpecificModels(): boolean {
+        return this.Get('RequireSpecificModels');
+    }
+    set RequireSpecificModels(value: boolean) {
+        this.Set('RequireSpecificModels', value);
     }
 
     /**

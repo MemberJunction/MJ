@@ -4895,6 +4895,23 @@ export class MJAIAgentNote_ {
     @Field({nullable: true, description: `Optional expiration timestamp. Notes past this date are candidates for archival. NULL means no expiration.`}) 
     ExpiresAt?: Date;
         
+    @Field({nullable: true, description: `Self-referential FK. Points to the consolidated note that replaced this one.`}) 
+    @MaxLength(36)
+    ConsolidatedIntoNoteID?: string;
+        
+    @Field(() => Int, {description: `Re-summarization depth. 0=raw, 1=first consolidation. Capped at 3.`}) 
+    ConsolidationCount: number;
+        
+    @Field({nullable: true, description: `JSON array of source note IDs consolidated into this note.`}) 
+    DerivedFromNoteIDs?: string;
+        
+    @Field({description: `Protection level: Immutable, Protected, Standard, Ephemeral.`}) 
+    @MaxLength(20)
+    ProtectionTier: string;
+        
+    @Field(() => Float, {nullable: true, description: `Composite importance score (0-10) from 7 signals.`}) 
+    ImportanceScore?: number;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Agent?: string;
@@ -4930,6 +4947,16 @@ export class MJAIAgentNote_ {
     @MaxLength(255)
     PrimaryScopeEntity?: string;
         
+    @Field({nullable: true}) 
+    ConsolidatedIntoNote?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    RootConsolidatedIntoNoteID?: string;
+        
+    @Field(() => [MJAIAgentNote_])
+    MJAIAgentNotes_ConsolidatedIntoNoteIDArray: MJAIAgentNote_[]; // Link to MJAIAgentNotes
+    
 }
 
 //****************************************************************************
@@ -4999,6 +5026,21 @@ export class CreateMJAIAgentNoteInput {
 
     @Field({ nullable: true })
     ExpiresAt: Date | null;
+
+    @Field({ nullable: true })
+    ConsolidatedIntoNoteID: string | null;
+
+    @Field(() => Int, { nullable: true })
+    ConsolidationCount?: number;
+
+    @Field({ nullable: true })
+    DerivedFromNoteIDs: string | null;
+
+    @Field({ nullable: true })
+    ProtectionTier?: string;
+
+    @Field(() => Float, { nullable: true })
+    ImportanceScore: number | null;
 }
     
 
@@ -5070,6 +5112,21 @@ export class UpdateMJAIAgentNoteInput {
     @Field({ nullable: true })
     ExpiresAt?: Date | null;
 
+    @Field({ nullable: true })
+    ConsolidatedIntoNoteID?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    ConsolidationCount?: number;
+
+    @Field({ nullable: true })
+    DerivedFromNoteIDs?: string | null;
+
+    @Field({ nullable: true })
+    ProtectionTier?: string;
+
+    @Field(() => Float, { nullable: true })
+    ImportanceScore?: number | null;
+
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
@@ -5131,6 +5188,16 @@ export class MJAIAgentNoteResolver extends ResolverBase {
         return result;
     }
     
+    @FieldResolver(() => [MJAIAgentNote_])
+    async MJAIAgentNotes_ConsolidatedIntoNoteIDArray(@Root() mjaiagentnote_: MJAIAgentNote_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Agent Notes', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIAgentNotes')} WHERE ${provider.QuoteIdentifier('ConsolidatedIntoNoteID')}='${mjaiagentnote_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Notes', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Notes', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
     @Mutation(() => MJAIAgentNote_)
     async CreateMJAIAgentNote(
         @Arg('input', () => CreateMJAIAgentNoteInput) input: CreateMJAIAgentNoteInput,
@@ -15040,6 +15107,9 @@ export class MJAIPrompt_ {
     @MaxLength(20)
     PrefillFallbackMode: string;
         
+    @Field(() => Boolean, {description: `Only applies when SelectionStrategy is Specific. When 0 (default), if none of the explicitly configured AIPromptModel entries have valid API credentials the system automatically falls back to Default/ByPower model selection across all active models matching the prompt AIModelTypeID. When 1, the system will hard-fail with an error instead of falling back, ensuring only the explicitly configured models are ever used.`}) 
+    RequireSpecificModels: boolean;
+        
     @Field() 
     @MaxLength(255)
     Template: string;
@@ -15265,6 +15335,9 @@ export class CreateMJAIPromptInput {
 
     @Field({ nullable: true })
     PrefillFallbackMode?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    RequireSpecificModels?: boolean;
 }
     
 
@@ -15425,6 +15498,9 @@ export class UpdateMJAIPromptInput {
 
     @Field({ nullable: true })
     PrefillFallbackMode?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    RequireSpecificModels?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
