@@ -1,6 +1,7 @@
 import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, UserInfo } from "@memberjunction/core";
 import { RegisterForStartup } from "@memberjunction/core";
 import { MJSearchProviderEntity } from "../generated/entity_subclasses";
+import { UUIDsEqual } from "@memberjunction/global";
 
 /**
  * SearchEngineBase provides cached access to SearchProvider metadata.
@@ -107,7 +108,7 @@ export class SearchEngineBase extends BaseEngine<SearchEngineBase> {
      */
     public GetProviderById(id: string): MJSearchProviderEntity | undefined {
         if (!id) return undefined;
-        return this._providers.find(p => p.ID === id);
+        return this._providers.find(p => UUIDsEqual(p.ID, id));
     }
 
     /**
