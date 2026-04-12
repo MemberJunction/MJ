@@ -58,9 +58,7 @@ export class DataExplorerResourceComponent extends BaseResourceComponent impleme
     // ========================================
 
     constructor(
-        private cdr: ChangeDetectorRef,
-        private navigationService: NavigationService
-    ) {
+        private cdr: ChangeDetectorRef) {
         super();
     }
 
@@ -90,10 +88,12 @@ export class DataExplorerResourceComponent extends BaseResourceComponent impleme
     // ========================================
 
     ngOnInit(): void {
+        super.ngOnInit();
         // Configuration loaded via Data setter
     }
 
     ngOnDestroy(): void {
+        super.ngOnDestroy();
         this._destroy$.next();
         this._destroy$.complete();
     }

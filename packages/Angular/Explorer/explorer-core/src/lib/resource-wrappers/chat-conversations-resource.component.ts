@@ -184,7 +184,6 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   @ViewChild('chatArea') chatArea?: ConversationChatAreaComponent;
 
   public currentUser: any = null;
-  private destroy$ = new Subject<void>();
   private skipUrlUpdate = true; // Skip URL updates during initialization
 
   // Ready flag - blocks child rendering until AIEngine is initialized
@@ -223,7 +222,6 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   private engine = ConversationEngine.Instance;
 
   constructor(
-    private navigationService: NavigationService,
     private mentionAutocompleteService: MentionAutocompleteService,
     private cdr: ChangeDetectorRef,
     private streamingService: ConversationStreamingService,
@@ -235,6 +233,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   }
 
   async ngOnInit() {
+    super.ngOnInit();
     const md = new Metadata();
     this.currentUser = md.CurrentUser;
 
@@ -302,9 +301,8 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   }
 
   ngOnDestroy() {
+    super.ngOnDestroy();
     this.bridge.NotifyWorkspaceActive(false);
-    this.destroy$.next();
-    this.destroy$.complete();
 
     // Clear any pending save timeout
     if (this.saveSettingsTimeout) {

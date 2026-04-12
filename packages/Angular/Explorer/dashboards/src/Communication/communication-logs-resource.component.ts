@@ -294,11 +294,14 @@ export class CommunicationLogsResourceComponent extends BaseResourceComponent im
     }
 
     async ngOnInit(): Promise<void> {
+        super.ngOnInit();
         await this.loadData();
         this.NotifyLoadComplete();
     }
 
-    ngOnDestroy(): void { }
+    ngOnDestroy(): void {
+        super.ngOnDestroy();
+    }
 
     public async loadData(): Promise<void> {
         try {

@@ -1,6 +1,28 @@
 *Created: 2026-04-11 08:17 CDT*
+*Implementation started: 2026-04-11*
 
 # Framework-Level Back/Forward Navigation for Query Params Within Nav Items
+
+## Implementation Progress
+
+- [x] **Phase 1 Prereq**: tabId added to ResourceData config in tab-container.component.ts
+- [x] **Phase 1 Prereq**: destroy$, ngOnInit, ngOnDestroy + query param lifecycle added to BaseResourceComponent
+- [x] **Phase 1 Prereq**: BaseDashboard updated with super.ngOnInit()/super.ngOnDestroy()
+- [x] **Phase 1 Prereq**: ~60+ subclasses audited and fixed with super calls (3 parallel agents)
+- [x] **Phase 1 Layer 0**: shouldReuseRoute fixed — query params excluded
+- [x] **Phase 1 Layer 1**: Shell syncWorkspaceWithUrl — query param detection added
+- [x] **Phase 1 Layer 2**: NavigationService — QueryParamChanged$ + NotifyQueryParamsChanged added
+- [x] **Phase 1 Layer 3**: BaseResourceComponent — OnQueryParamsChanged, UpdateQueryParams, GetQueryParams added
+- [x] **Phase 1 Layer 4**: buildResourceUrl — appendQP helper applied to all resource types + legacy routes
+- [x] **Phase 2**: CLAUDE.md added for Generic, Explorer CLAUDE.md updated, Dashboard Best Practices updated, Generic README updated
+- [x] **Phase 1**: Build verification — shared, explorer-core, dashboards, ai-test-harness, simple-record-list all compile clean
+- [x] **Phase 3**: All 9 component migrations complete (E1-E9, G1) + build verification
+- [x] **Phase 4**: Integration verification — Auth0 login, entity click produces `?entity=` params, back/forward restores correct entities, reload preserves URL, no console errors
+- [x] **Phase 5**: Comprehensive Navigation Guide written at `guides/NAVIGATION_AND_ROUTING_GUIDE.md`, Explorer CLAUDE.md and README updated with links
+
+- [x] **Post-audit fixes**: Legacy route `reports` case added to buildResourceUrl, guide links added to Generic CLAUDE.md + Explorer README.md, stale Known Violations removed, 34 unit tests written and passing
+
+**Implementation complete: 2026-04-11**
 
 ## Problem Statement
 

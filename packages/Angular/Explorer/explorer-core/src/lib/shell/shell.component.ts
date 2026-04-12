@@ -603,11 +603,60 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     if (matchingTab && matchingTab.id !== config.activeTabId) {
       // Activate the matching tab
       this.workspaceManager.SetActiveTab(matchingTab.id);
+    } else if (matchingTab && matchingTab.id === config.activeTabId) {
+      // Same tab is already active, but query params may have changed (back/forward within nav item)
+      const urlParams = this.extractQueryParamsFromUrl(url);
+      const tabParams = (matchingTab.configuration?.['queryParams'] || {}) as Record<string, string>;
+      if (!this.queryParamsEqual(urlParams, tabParams)) {
+        // URL is source of truth during back/forward — update tab config to match.
+        // NOTE: urlBasedNavigation flag works here because UpdateTabConfiguration triggers
+        // configuration$.next() which is a BehaviorSubject — synchronous emission.
+        // The shell's syncUrlWithWorkspace subscription fires synchronously in the same
+        // call stack, sees urlBasedNavigation=true, and returns early. The finally block
+        // then clears the flag.
+        this.urlBasedNavigation = true;
+        try {
+          this.workspaceManager.UpdateTabConfiguration(matchingTab.id, {
+            queryParams: Object.keys(urlParams).length > 0 ? urlParams : undefined
+          });
+          this.navigationService.NotifyQueryParamsChanged(matchingTab.id, urlParams);
+        } finally {
+          this.urlBasedNavigation = false;
+        }
+      }
     } else if (!matchingTab) {
       // No matching tab found - check if this is an app-only URL for an app with zero nav items
       // If so, we need to create a new tab for it (the old one was replaced when navigating away)
       await this.handleMissingTabForUrl(url);
     }
+  }
+
+  /**
+   * Extract query params from a URL string, stripping any fragment (#hash).
+   */
+  private extractQueryParamsFromUrl(url: string): Record<string, string> {
+    const fragmentIndex = url.indexOf('#');
+    const cleanUrl = fragmentIndex !== -1 ? url.substring(0, fragmentIndex) : url;
+    const queryIndex = cleanUrl.indexOf('?');
+    if (queryIndex === -1) return {};
+    const params = new URLSearchParams(cleanUrl.substring(queryIndex + 1));
+    const result: Record<string, string> = {};
+    params.forEach((value, key) => { result[key] = value; });
+    return result;
+  }
+
+  /**
+   * Compare two query param records for equality, normalizing encoding differences
+   * (URLSearchParams encodes spaces as +, Angular Router uses %20).
+   */
+  private queryParamsEqual(a: Record<string, string>, b: Record<string, string>): boolean {
+    const keysA = Object.keys(a);
+    const keysB = Object.keys(b);
+    if (keysA.length !== keysB.length) return false;
+    return keysA.every(key =>
+      decodeURIComponent(a[key]?.replace(/\+/g, ' ') || '') ===
+      decodeURIComponent(b[key]?.replace(/\+/g, ' ') || '')
+    );
   }
 
   /**
@@ -1017,6 +1066,14 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     const isAppDefault = config['isAppDefault'] as boolean | undefined;
     const tabAppId = tab.applicationId;
 
+    // Helper to append query params to a URL, preserving any existing params
+    const appendQP = (url: string): string => {
+      if (!queryParams || Object.keys(queryParams).length === 0) return url;
+      const separator = url.includes('?') ? '&' : '?';
+      const params = new URLSearchParams(queryParams);
+      return `${url}${separator}${params.toString()}`;
+    };
+
     // Helper function to get app path for URL
     const getAppPath = (appIdOrName: string): string | null => {
       // First try by ID
@@ -1133,7 +1190,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         case 'records':
           // /app/:appName/record/:entityName/:recordId
           if (entityName && recordId) {
-            return `/app/${encodeURIComponent(appPath)}/record/${encodeURIComponent(entityName)}/${recordId}`;
+            return appendQP(`/app/${encodeURIComponent(appPath)}/record/${encodeURIComponent(entityName)}/${recordId}`);
           }
           break;
 
@@ -1146,39 +1203,39 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
               if (extraFilter) {
                 url += `?ExtraFilter=${encodeURIComponent(extraFilter)}`;
               }
-              return url;
+              return appendQP(url);
             }
           } else if (recordId) {
             // /app/:appName/view/:viewId (saved view)
-            return `/app/${encodeURIComponent(appPath)}/view/${recordId}`;
+            return appendQP(`/app/${encodeURIComponent(appPath)}/view/${recordId}`);
           }
           break;
 
         case 'dashboards':
           // /app/:appName/dashboard/:dashboardId
           if (recordId) {
-            return `/app/${encodeURIComponent(appPath)}/dashboard/${recordId}`;
+            return appendQP(`/app/${encodeURIComponent(appPath)}/dashboard/${recordId}`);
           }
           break;
 
         case 'artifacts':
           // /app/:appName/artifact/:artifactId
           if (recordId) {
-            return `/app/${encodeURIComponent(appPath)}/artifact/${recordId}`;
+            return appendQP(`/app/${encodeURIComponent(appPath)}/artifact/${recordId}`);
           }
           break;
 
         case 'queries':
           // /app/:appName/query/:queryId
           if (recordId) {
-            return `/app/${encodeURIComponent(appPath)}/query/${recordId}`;
+            return appendQP(`/app/${encodeURIComponent(appPath)}/query/${recordId}`);
           }
           break;
 
         case 'reports':
           // /app/:appName/report/:reportId
           if (recordId) {
-            return `/app/${encodeURIComponent(appPath)}/report/${recordId}`;
+            return appendQP(`/app/${encodeURIComponent(appPath)}/report/${recordId}`);
           }
           break;
 
@@ -1210,7 +1267,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     switch (resourceType) {
       case 'records':
         if (entityName && recordId) {
-          return `/resource/record/${encodeURIComponent(entityName)}/${recordId}`;
+          return appendQP(`/resource/record/${encodeURIComponent(entityName)}/${recordId}`);
         }
         break;
 
@@ -1221,30 +1278,31 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
             if (extraFilter) {
               url += `?ExtraFilter=${encodeURIComponent(extraFilter)}`;
             }
-            return url;
+            return appendQP(url);
           }
         } else if (recordId) {
-          return `/resource/view/${recordId}`;
+          return appendQP(`/resource/view/${recordId}`);
         }
         break;
 
       case 'dashboards':
         if (recordId) {
-          return `/resource/dashboard/${recordId}`;
+          return appendQP(`/resource/dashboard/${recordId}`);
         }
         break;
 
       case 'artifacts':
         if (recordId) {
-          return `/resource/artifact/${recordId}`;
+          return appendQP(`/resource/artifact/${recordId}`);
         }
         break;
 
       case 'queries':
         if (recordId) {
-          return `/resource/query/${recordId}`;
+          return appendQP(`/resource/query/${recordId}`);
         }
         break;
+
     }
 
     return null;
