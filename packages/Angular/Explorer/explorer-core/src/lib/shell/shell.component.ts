@@ -48,7 +48,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   private subscriptions: Subscription[] = [];
   private urlBasedNavigation = false; // Track if we're loading from a URL
   private initialNavigationComplete = false; // Track if initial navigation has completed
-  private firstUrlSync = true; // Track if this is the first URL sync (for replaceUrl behavior)
 
   activeApp: BaseApplication | null = null;
   loading = true;
@@ -423,12 +422,21 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     this.initialized = true;
     this.waitingForFirstResource = true;
 
-    // Trigger initial URL sync: the Configuration BehaviorSubject already emitted
-    // its value when the shell subscribed (line above), but this.initialized was false
-    // at that point so syncUrlWithWorkspace() was skipped. Now that we're initialized,
-    // manually trigger the first URL sync to set the browser URL from workspace state.
+    // Decide whether to restore workspace state or honor the current URL.
+    // If the user navigated to a specific path (deep link, bookmark, typed URL),
+    // that URL takes priority — the ResourceResolver will handle tab creation.
+    // Only restore workspace state when the URL is bare root (/) or empty.
+    const initialUrl = this.router.url.split('?')[0]; // ignore query params for this check
+    const isDeepLink = initialUrl.length > 1 && initialUrl !== '/';
+
     const initConfig = this.workspaceManager.GetConfiguration();
-    if (initConfig && initConfig.activeTabId) {
+    if (isDeepLink) {
+      // User navigated to a specific URL — sync workspace to match the URL,
+      // not the other way around. The ResourceResolver will have created a tab
+      // for this URL; we just need to activate it.
+      await this.syncWorkspaceWithUrl(this.router.url);
+    } else if (initConfig && initConfig.activeTabId) {
+      // Bare root URL — restore last workspace state
       await this.syncActiveAppWithTab(initConfig);
       this.syncUrlWithWorkspace(initConfig);
     }
@@ -579,10 +587,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         // to reflect the current active tab, not requesting a new tab to be opened
         this.tabService.SuppressNextResolve();
 
-        // Replace URL on first sync (initialization), push new history entries after that
-        const replaceUrl = this.firstUrlSync;
-        this.firstUrlSync = false;
-        this.router.navigateByUrl(resourceUrl, { replaceUrl });
+        this.router.navigateByUrl(resourceUrl);
       }
     }
   }
@@ -594,26 +599,38 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   private async syncWorkspaceWithUrl(url: string): Promise<void> {
     const config = this.workspaceManager.GetConfiguration();
     if (!config?.tabs?.length) {
+      console.log('[NAV-DEBUG] syncWorkspaceWithUrl: no tabs, skipping. URL:', url);
       return;
     }
 
     // Find the tab that matches this URL
     const matchingTab = await this.findTabForUrl(url, config.tabs);
 
+    console.log('[NAV-DEBUG] syncWorkspaceWithUrl:', {
+      url,
+      matchingTabId: matchingTab?.id || 'NONE',
+      activeTabId: config.activeTabId,
+      isSameTab: matchingTab?.id === config.activeTabId,
+      tabQueryParams: matchingTab?.configuration?.['queryParams'] || '(none)',
+    });
+
     if (matchingTab && matchingTab.id !== config.activeTabId) {
       // Activate the matching tab
+      console.log('[NAV-DEBUG]   → BRANCH: different tab, activating', matchingTab.id);
       this.workspaceManager.SetActiveTab(matchingTab.id);
     } else if (matchingTab && matchingTab.id === config.activeTabId) {
       // Same tab is already active, but query params may have changed (back/forward within nav item)
       const urlParams = this.extractQueryParamsFromUrl(url);
       const tabParams = (matchingTab.configuration?.['queryParams'] || {}) as Record<string, string>;
-      if (!this.queryParamsEqual(urlParams, tabParams)) {
+      const paramsEqual = this.queryParamsEqual(urlParams, tabParams);
+      console.log('[NAV-DEBUG]   → BRANCH: same tab, checking query params', {
+        urlParams,
+        tabParams,
+        paramsEqual,
+      });
+      if (!paramsEqual) {
+        console.log('[NAV-DEBUG]   → PARAMS DIFFER: updating tab config + notifying component');
         // URL is source of truth during back/forward — update tab config to match.
-        // NOTE: urlBasedNavigation flag works here because UpdateTabConfiguration triggers
-        // configuration$.next() which is a BehaviorSubject — synchronous emission.
-        // The shell's syncUrlWithWorkspace subscription fires synchronously in the same
-        // call stack, sees urlBasedNavigation=true, and returns early. The finally block
-        // then clears the flag.
         this.urlBasedNavigation = true;
         try {
           this.workspaceManager.UpdateTabConfiguration(matchingTab.id, {
@@ -623,10 +640,11 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         } finally {
           this.urlBasedNavigation = false;
         }
+      } else {
+        console.log('[NAV-DEBUG]   → PARAMS EQUAL: no action needed');
       }
     } else if (!matchingTab) {
-      // No matching tab found - check if this is an app-only URL for an app with zero nav items
-      // If so, we need to create a new tab for it (the old one was replaced when navigating away)
+      console.log('[NAV-DEBUG]   → BRANCH: no matching tab, handling missing tab for URL');
       await this.handleMissingTabForUrl(url);
     }
   }
@@ -739,6 +757,37 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         return;
       }
 
+      // Check for app nav item URL: /app/:appName/:navItemName
+      const appNavItemMatch = urlPath.match(/^\/app\/([^\/]+)\/([^\/]+)$/);
+      if (appNavItemMatch) {
+        const appPath = decodeURIComponent(appNavItemMatch[1]);
+        const navItemName = decodeURIComponent(appNavItemMatch[2]);
+        const app = this.appManager.GetAppByPath(appPath) || this.appManager.GetAppByName(appPath);
+
+        if (app) {
+          console.log('[NAV-DEBUG] handleMissingTabForUrl: nav item URL', { appPath, navItemName, appId: app.ID });
+          // Activate the app and open the nav item
+          await this.appManager.SetActiveApp(app.ID);
+          const navItems = await app.GetNavItems();
+          const navItem = navItems.find(item => item.Label === navItemName);
+
+          if (navItem) {
+            // Parse query params to pass as configuration
+            const qpObj: Record<string, string> = {};
+            queryParams.forEach((value, key) => { qpObj[key] = value; });
+            this.navigationService.OpenNavItem(
+              app.ID,
+              navItem,
+              app.GetColor(),
+              Object.keys(qpObj).length > 0 ? { queryParams: qpObj } : undefined
+            );
+          } else {
+            console.warn('[NAV-DEBUG] handleMissingTabForUrl: nav item not found:', navItemName, 'in app:', appPath);
+          }
+        }
+        return;
+      }
+
       // Check for app-only URL: /app/:appName
       const appOnlyMatch = urlPath.match(/^\/app\/([^\/]+)$/);
       if (appOnlyMatch) {
@@ -755,6 +804,13 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
             const defaultTab = await app.CreateDefaultTab();
             if (defaultTab) {
               this.workspaceManager.OpenTab(defaultTab, app.GetColor());
+            }
+          } else {
+            // App has nav items — activate the app and its default nav item
+            await this.appManager.SetActiveApp(app.ID);
+            const defaultNavItem = navItems.find(item => (item as { isDefault?: boolean }).isDefault) || navItems[0];
+            if (defaultNavItem) {
+              this.navigationService.OpenNavItem(app.ID, defaultNavItem, app.GetColor());
             }
           }
         }
@@ -1700,7 +1756,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           this.workspaceManager.SetActiveTab(defaultNavItemTab.id);
           const resourceUrl = await this.buildResourceUrl(defaultNavItemTab);
           if (resourceUrl) {
-            this.router.navigateByUrl(resourceUrl, { replaceUrl: true });
+            this.router.navigateByUrl(resourceUrl);
           }
         } else {
           // No tab for default nav item - create one via NavigationService
@@ -1715,7 +1771,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         // but we can also manually trigger it here to ensure immediate update
         const resourceUrl = await this.buildResourceUrl(firstTab);
         if (resourceUrl) {
-          this.router.navigateByUrl(resourceUrl, { replaceUrl: true });
+          this.router.navigateByUrl(resourceUrl);
         }
       }
     } finally {
@@ -2772,7 +2828,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
 
     // Update URL to reflect the new app
     const appPath = app.Path || app.Name;
-    this.router.navigateByUrl(`/app/${encodeURIComponent(appPath)}`, { replaceUrl: true });
+    this.router.navigateByUrl(`/app/${encodeURIComponent(appPath)}`);
   }
 
   /**

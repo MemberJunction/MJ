@@ -1,4 +1,4 @@
-import { Directive, OnInit, OnDestroy, inject } from "@angular/core";
+import { Directive, OnInit, OnDestroy, Input, inject } from "@angular/core";
 import { Subject } from "rxjs";
 import { filter, takeUntil } from "rxjs/operators";
 import { BaseEntity } from "@memberjunction/core";
@@ -12,6 +12,13 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
     private _suppressQueryParamSync = false;
     protected destroy$ = new Subject<void>();
     protected navigationService = inject(NavigationService);
+
+    /**
+     * Tab ID for query param notification scoping. Set by resource wrappers
+     * that render child dashboards, so the child knows which tab it belongs to.
+     * If not set, falls back to Data.Configuration.tabId.
+     */
+    @Input() ParentTabId: string | null = null;
 
     public get Data(): ResourceData {
         return this._data;
@@ -64,6 +71,7 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
     }
 
     ngOnInit(): void {
+        console.log('[NAV-DEBUG] BaseResourceComponent.ngOnInit called for', this.constructor.name, '| tabId:', this.getTabId());
         this.setupQueryParamSubscription();
     }
 
@@ -88,7 +96,11 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
      * Safe to call during OnQueryParamsChanged — auto-suppressed to prevent loops.
      */
     protected UpdateQueryParams(params: Record<string, string | null>): void {
-        if (this._suppressQueryParamSync) return;
+        if (this._suppressQueryParamSync) {
+            console.log('[NAV-DEBUG] UpdateQueryParams SUPPRESSED (inside OnQueryParamsChanged)', params);
+            return;
+        }
+        console.log('[NAV-DEBUG] UpdateQueryParams:', params, '| from:', this.constructor.name);
         this.navigationService.UpdateActiveTabQueryParams(params);
     }
 
@@ -107,10 +119,22 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
     private setupQueryParamSubscription(): void {
         this.navigationService.QueryParamChanged$
             .pipe(
-                filter(event => event.TabId === this.getTabId()),
+                filter(event => {
+                    const myTabId = this.getTabId();
+                    const match = !myTabId || event.TabId === myTabId;
+                    console.log('[NAV-DEBUG] QueryParamChanged$ filter:', {
+                        component: this.constructor.name,
+                        eventTabId: event.TabId,
+                        myTabId: myTabId || '(empty - accepting all)',
+                        match,
+                        params: event.Params,
+                    });
+                    return match;
+                }),
                 takeUntil(this.destroy$)
             )
             .subscribe(event => {
+                console.log('[NAV-DEBUG] QueryParamChanged$ DELIVERED to', this.constructor.name, '| params:', event.Params);
                 // try/finally ensures suppression flag is always cleared,
                 // even if OnQueryParamsChanged throws
                 this._suppressQueryParamSync = true;
@@ -123,11 +147,11 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
     }
 
     /**
-     * Get this component's tab ID from its ResourceData Configuration.
-     * Used to filter query param notifications to only this tab.
+     * Get this component's tab ID. Checks ParentTabId input first (set by resource
+     * wrappers for child dashboards), then falls back to Data.Configuration.tabId.
      */
-    private getTabId(): string {
-        return this.Data?.Configuration?.['tabId'] as string || '';
+    public getTabId(): string {
+        return this.ParentTabId || this.Data?.Configuration?.['tabId'] as string || '';
     }
 
     protected NotifyLoadComplete() {

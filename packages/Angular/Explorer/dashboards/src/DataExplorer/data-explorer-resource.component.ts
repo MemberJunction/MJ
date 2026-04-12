@@ -18,6 +18,7 @@ import { DataExplorerFilter } from './models/explorer-state.interface';
     template: `
         <div class="data-explorer-resource-container">
             <mj-data-explorer-dashboard
+                [ParentTabId]="getTabId()"
                 [entityFilter]="entityFilter"
                 [contextName]="contextName"
                 [contextIcon]="contextIcon"

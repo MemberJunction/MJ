@@ -831,6 +831,7 @@ export class NavigationService implements OnDestroy {
    * The notification includes the tab ID so only the component in that tab reacts.
    */
   NotifyQueryParamsChanged(tabId: string, params: Record<string, string>): void {
+    console.log('[NAV-DEBUG] NavigationService.NotifyQueryParamsChanged:', { tabId, params });
     this.queryParamChanged$.next({ TabId: tabId, Params: params });
   }
 
