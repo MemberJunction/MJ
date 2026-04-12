@@ -35,6 +35,7 @@ import { RegisterClass } from '@memberjunction/global';
 export class MCPResourceComponent extends BaseResourceComponent implements OnInit {
 
     ngOnInit(): void {
+        super.ngOnInit();
         // Signal that the resource has finished loading
         // This is required for the shell's loading screen to dismiss
         this.NotifyLoadComplete();

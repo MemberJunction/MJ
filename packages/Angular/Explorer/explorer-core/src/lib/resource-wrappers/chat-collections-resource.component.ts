@@ -1,7 +1,7 @@
-import { Component, ViewEncapsulation, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
+import { Component, ViewEncapsulation, OnInit, OnDestroy, ChangeDetectorRef, inject } from '@angular/core';
 import { Metadata, CompositeKey, RunView } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
+import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData, MJEnvironmentEntityExtended } from '@memberjunction/core-entities';
 import { ArtifactStateService, ArtifactPermissionService, CollectionStateService } from '@memberjunction/ng-conversations';
 import { Subject, takeUntil, distinctUntilChanged, combineLatest } from 'rxjs';
@@ -137,20 +137,15 @@ export class ChatCollectionsResource extends BaseResourceComponent implements On
   private resizeStartX: number = 0;
   private resizeStartWidth: number = 0;
 
-  private destroy$ = new Subject<void>();
-  private skipUrlUpdate = true; // Skip URL updates during initialization
+  private initializing = true; // Prevents URL updates during initialization
 
-  constructor(
-    private artifactState: ArtifactStateService,
-    private artifactPermissionService: ArtifactPermissionService,
-    public collectionState: CollectionStateService,
-    private navigationService: NavigationService,
-    private cdr: ChangeDetectorRef
-  ) {
-    super();
-  }
+  private artifactState = inject(ArtifactStateService);
+  private artifactPermissionService = inject(ArtifactPermissionService);
+  public collectionState = inject(CollectionStateService);
+  private cdr = inject(ChangeDetectorRef);
 
   ngOnInit() {
+    super.ngOnInit();
     const md = new Metadata();
     this.currentUser = md.CurrentUser;
 
@@ -160,10 +155,10 @@ export class ChatCollectionsResource extends BaseResourceComponent implements On
     // Setup resize listeners
     this.setupResizeListeners();
 
-    // Apply initial state from tab configuration (populated by shell from URL or nav params)
-    this.applyNavigationParams();
+    // Apply initial state from query params or tab config
+    this.applyInitialParams();
 
-    // Subscribe to state changes to update URL
+    // Subscribe to state changes to push URL updates
     this.subscribeToUrlStateChanges();
 
     // Subscribe to collection and artifact changes to update tab title
@@ -190,10 +185,10 @@ export class ChatCollectionsResource extends BaseResourceComponent implements On
       });
 
     // Enable URL updates after initialization
-    this.skipUrlUpdate = false;
+    this.initializing = false;
 
-    // Update URL to reflect current state
-    this.updateUrl();
+    // Push initial state to URL
+    this.pushStateToUrl();
 
     // Notify load complete after user is set
     setTimeout(() => {
@@ -203,26 +198,43 @@ export class ChatCollectionsResource extends BaseResourceComponent implements On
 
 
   /**
-   * Apply initial state from tab configuration.
-   * The shell populates queryParams from the URL, and nav params come from cross-resource linking.
+   * Apply initial state from query params or tab configuration.
    */
-  private applyNavigationParams(): void {
+  private applyInitialParams(): void {
+    const params = this.GetQueryParams();
     const config = this.Data?.Configuration;
-    if (!config) return;
 
-    // Check queryParams first (shell populates these from the URL for deep-linking)
-    const qp = config['queryParams'] as Record<string, string> | undefined;
-    const collectionId = (qp?.['collectionId'] as string) || (config.collectionId as string);
-    const artifactId = (qp?.['artifactId'] as string) || (config.artifactId as string);
-    const versionNumber = qp?.['versionNumber'] ? parseInt(qp['versionNumber'], 10)
-      : config.versionNumber ? (config.versionNumber as number) : undefined;
+    const collectionId = params['collectionId'] || (config?.collectionId as string);
+    const artifactId = params['artifactId'] || (config?.artifactId as string);
+    const versionNumber = params['versionNumber'] ? parseInt(params['versionNumber'], 10)
+      : config?.versionNumber ? (config.versionNumber as number) : undefined;
 
     if (collectionId) {
       this.collectionState.setActiveCollection(collectionId);
     }
+    if (artifactId) {
+      this.artifactState.openArtifact(artifactId, versionNumber);
+    }
+  }
+
+  /**
+   * React to browser back/forward query param changes.
+   */
+  protected override OnQueryParamsChanged(params: Record<string, string>, source: 'popstate' | 'deeplink'): void {
+    const collectionId = params['collectionId'];
+    const artifactId = params['artifactId'];
+    const versionNumber = params['versionNumber'] ? parseInt(params['versionNumber'], 10) : undefined;
+
+    if (collectionId) {
+      this.collectionState.setActiveCollection(collectionId);
+    } else {
+      this.collectionState.setActiveCollection(null);
+    }
 
     if (artifactId) {
       this.artifactState.openArtifact(artifactId, versionNumber);
+    } else {
+      this.artifactState.closeArtifact();
     }
   }
 
@@ -230,7 +242,6 @@ export class ChatCollectionsResource extends BaseResourceComponent implements On
    * Subscribe to state changes for URL updates.
    */
   private subscribeToUrlStateChanges(): void {
-    // Combine collection and artifact state changes
     combineLatest([
       this.collectionState.activeCollectionId$.pipe(distinctUntilChanged()),
       this.artifactState.activeArtifactId$.pipe(distinctUntilChanged()),
@@ -238,40 +249,30 @@ export class ChatCollectionsResource extends BaseResourceComponent implements On
     ])
       .pipe(takeUntil(this.destroy$))
       .subscribe(() => {
-        if (!this.skipUrlUpdate) {
-          this.updateUrl();
+        if (!this.initializing) {
+          this.pushStateToUrl();
         }
       });
   }
 
   /**
-   * Update URL query string to reflect current state.
-   * Uses NavigationService for proper URL management that respects app-scoped routes.
+   * Push current state to URL via framework query params.
    */
-  private updateUrl(): void {
+  private pushStateToUrl(): void {
     const queryParams: Record<string, string | null> = {};
 
-    // Add collection ID
     const collectionId = this.collectionState.activeCollectionId;
-    if (collectionId) {
-      queryParams['collectionId'] = collectionId;
-    } else {
-      queryParams['collectionId'] = null;
-    }
+    queryParams['collectionId'] = collectionId || null;
 
-    // Add artifact ID if panel is open
     if (this.activeArtifactId) {
       queryParams['artifactId'] = this.activeArtifactId;
-      if (this.activeVersionNumber) {
-        queryParams['versionNumber'] = this.activeVersionNumber.toString();
-      }
+      queryParams['versionNumber'] = this.activeVersionNumber ? this.activeVersionNumber.toString() : null;
     } else {
       queryParams['artifactId'] = null;
       queryParams['versionNumber'] = null;
     }
 
-    // Use NavigationService to update query params properly
-    this.navigationService.UpdateActiveTabQueryParams(queryParams);
+    this.UpdateQueryParams(queryParams);
   }
 
 
@@ -301,8 +302,7 @@ export class ChatCollectionsResource extends BaseResourceComponent implements On
   }
 
   ngOnDestroy() {
-    this.destroy$.next();
-    this.destroy$.complete();
+    super.ngOnDestroy();
     this.removeResizeListeners();
   }
 

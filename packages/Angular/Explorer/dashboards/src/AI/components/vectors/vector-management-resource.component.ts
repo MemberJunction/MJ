@@ -71,8 +71,8 @@ interface DocumentSuggestionResult {
 })
 export class VectorManagementResourceComponent extends BaseResourceComponent implements AfterViewInit, OnDestroy {
     private cdr = inject(ChangeDetectorRef);
-    private navigationService = inject(NavigationService);
-    private destroy$ = new Subject<void>();
+    protected override navigationService = inject(NavigationService);
+    protected override destroy$ = new Subject<void>();
 
     /** View mode: 'index' = Option A (shared index as hero, entity docs as children),
      *  'operations' = Option C (operations monitoring with real-time sync status) */
@@ -497,6 +497,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
     }
 
     ngOnDestroy(): void {
+        super.ngOnDestroy();
         this.destroy$.next();
         this.destroy$.complete();
     }

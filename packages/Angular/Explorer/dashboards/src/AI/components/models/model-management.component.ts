@@ -105,11 +105,10 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
   private loadingMessageIndex = 0;
   private loadingMessageInterval: any;
 
-  private destroy$ = new Subject<void>();
+  protected override destroy$ = new Subject<void>();
 
   constructor(
     private sharedService: SharedService,
-    private navigationService: NavigationService,
     private cdr: ChangeDetectorRef
   ) {
     super();
@@ -124,6 +123,7 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
   }
 
   ngOnInit(): void {
+    super.ngOnInit();
     // Load saved user preferences first
     this.loadUserPreferences();
 
@@ -141,6 +141,7 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
   }
 
   ngOnDestroy(): void {
+    super.ngOnDestroy();
     this.destroy$.next();
     this.destroy$.complete();
     if (this.loadingMessageInterval) {

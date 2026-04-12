@@ -150,7 +150,6 @@ export class UserViewResource extends BaseResourceComponent {
     private metadata = new Metadata();
 
     constructor(
-        private navigationService: NavigationService,
         private cdr: ChangeDetectorRef,
         private exportService: ExportService
     ) {
