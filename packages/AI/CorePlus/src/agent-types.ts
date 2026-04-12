@@ -253,7 +253,7 @@ export interface FileOutputRef {
  *
  * @since 5.22.0
  */
-export function parseFileOutputRef(raw: unknown): FileOutputRef | null {
+export function ParseFileOutputRef(raw: unknown): FileOutputRef | null {
     let fo: Record<string, unknown> | null = null;
     if (typeof raw === 'string') {
         try { fo = JSON.parse(raw) as Record<string, unknown>; } catch { return null; }

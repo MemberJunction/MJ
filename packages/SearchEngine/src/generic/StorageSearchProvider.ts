@@ -19,7 +19,7 @@ import {
 import {
     FileSearchResult,
     FileSearchOptions,
-    initializeDriverWithAccountCredentials
+    FileStorageEngine
 } from '@memberjunction/storage';
 import { ISearchProvider } from './ISearchProvider';
 import { SearchSource, SearchFilters, SearchResultItem, SearchResultType } from './search.types';
@@ -234,11 +234,7 @@ export class StorageSearchProvider implements ISearchProvider {
         contextUser: UserInfo
     ): Promise<SearchResultItem[]> {
         try {
-            const driver = await initializeDriverWithAccountCredentials({
-                accountEntity: entry.Account,
-                providerEntity: entry.Provider,
-                contextUser
-            });
+            const driver = await FileStorageEngine.Instance.GetDriver(entry.Account.ID, contextUser);
 
             if (!driver.IsConfigured) {
                 LogError(

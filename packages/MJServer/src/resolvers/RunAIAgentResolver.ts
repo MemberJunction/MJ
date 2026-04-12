@@ -1,6 +1,6 @@
 import { Resolver, Mutation, Query, Arg, Ctx, ObjectType, Field, PubSub, PubSubEngine, Subscription, Root, ResolverFilterData, ID, Int } from 'type-graphql';
 import { AppContext, UserPayload } from '../types.js';
-import { DatabaseProviderBase, LogError, LogStatus, Metadata, RunView, UserInfo, IMetadataProvider, IRunViewProvider } from '@memberjunction/core';
+import { DatabaseProviderBase, LogError, LogStatus, Metadata, RunView, UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { MJConversationDetailEntity, MJConversationDetailAttachmentEntity, MJConversationDetailArtifactEntity, MJArtifactVersionEntity, MJAIAgentRequestEntity } from '@memberjunction/core-entities';
 import { AgentRunner } from '@memberjunction/ai-agents';
 import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, ExecuteAgentResult, ConversationUtility, AttachmentData } from '@memberjunction/ai-core-plus';
@@ -801,7 +801,7 @@ export class RunAIAgentResolver extends ResolverBase {
         provider: IMetadataProvider
     ): Promise<void> {
         try {
-            const rv = new RunView(<IRunViewProvider><any>provider);
+            const rv = RunView.FromMetadataProvider(provider);
             const result = await rv.RunView<MJAIAgentRequestEntity>({
                 EntityName: 'MJ: AI Agent Requests',
                 ExtraFilter: `OriginatingAgentRunID='${lastRunId}' AND Status='Requested'`,
@@ -1266,7 +1266,7 @@ export class RunAIAgentResolver extends ResolverBase {
         maxMessages: number,
         provider: IMetadataProvider
     ): Promise<ChatMessage[]> {
-        const rv = new RunView(<IRunViewProvider><any>provider);
+        const rv = RunView.FromMetadataProvider(provider);
         const attachmentService = GetAttachmentService();
 
         // Load recent conversation details (messages) for this conversation.
@@ -1395,7 +1395,7 @@ export class RunAIAgentResolver extends ResolverBase {
         const map = new Map<string, MJArtifactVersionEntity[]>();
         if (conversationDetailIds.length === 0) return map;
 
-        const rv = new RunView(<IRunViewProvider><any>provider);
+        const rv = RunView.FromMetadataProvider(provider);
         const idList = conversationDetailIds.map(id => `'${id}'`).join(',');
 
         // Load ConversationDetailArtifact links with Direction='Input'

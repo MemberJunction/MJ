@@ -11,9 +11,9 @@
  * @since 2.49.0
  */
 
-import { MJAIAgentTypeEntity,  MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, FileStorageEngine } from '@memberjunction/core-entities';
+import { MJAIAgentTypeEntity,  MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, FileStorageEngineBase } from '@memberjunction/core-entities';
 import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptEntityExtended, MJAIAgentEntityExtended } from "@memberjunction/ai-core-plus";
-import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider, IRunViewProvider } from '@memberjunction/core';
+import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider } from '@memberjunction/core';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
@@ -45,7 +45,7 @@ import {
     ActionChangeScope,
     MediaOutput,
     FileOutputRef,
-    parseFileOutputRef,
+    ParseFileOutputRef,
     SecondaryScopeConfig,
     SecondaryScopeValue,
     AgentResponseForm,
@@ -265,13 +265,18 @@ export class BaseAgent {
      */
     private _feedbackRequestId: string | null = null;
 
-    /**
-     * Resolved FileStorageAccount ID for this agent run. Set during Execute()
-     * via the hierarchical resolution chain and included in the ExecuteAgentResult
-     * so AgentRunner can route file artifact uploads.
-     * @private
-     */
     private _resolvedStorageAccountId: string | null = null;
+
+    /**
+     * The resolved FileStorageAccount ID for this agent run. Set during Execute()
+     * via the hierarchical resolution chain (Runtime → Agent → Category → Type → fallback).
+     * Included in the ExecuteAgentResult so AgentRunner can route file artifact uploads.
+     *
+     * Subclasses can read this to customize storage behavior based on the resolved account.
+     */
+    protected get ResolvedStorageAccountId(): string | null {
+        return this._resolvedStorageAccountId;
+    }
 
     /**
      * Access the current run for the agent
@@ -386,7 +391,7 @@ export class BaseAgent {
         const results: FileOutputRef[] = [];
         for (const param of outputParams) {
             if (param.Value == null) continue;
-            const ref = parseFileOutputRef(param.Value);
+            const ref = ParseFileOutputRef(param.Value);
             if (ref) results.push(ref);
         }
         return results;
@@ -7652,11 +7657,8 @@ The context is now within limits. Please retry your request with the recovered c
 
     /**
      * Walks up the agent's category hierarchy looking for an AssignmentStrategy.
-     * Loads categories via RunView and caches them for the duration of this run.
-     * @private
+     * Uses AIEngine.Instance.AgentCategories (cached during engine Config).
      */
-    private _categoryCache: Array<{ ID: string; Name: string; ParentID: string | null; AssignmentStrategy: string | null; DefaultStorageAccountID: string | null }> | null = null;
-
     private async resolveCategoryAssignmentStrategy(
         params: ExecuteAgentParams
     ): Promise<AgentRequestAssignmentStrategy | null> {
@@ -7664,14 +7666,14 @@ The context is now within limits. Please retry your request with the recovered c
         if (!categoryId) return null;
 
         try {
-            await this.ensureCategoryCacheLoaded(params);
+            const categories = AIEngine.Instance.AgentCategories;
 
             // Walk up the tree from the agent's category to the root
             let currentId: string | null = categoryId;
             const visited = new Set<string>(); // prevent infinite loops
             while (currentId && !visited.has(currentId)) {
                 visited.add(currentId);
-                const cat = this._categoryCache!.find(c => UUIDsEqual(c.ID, currentId));
+                const cat = categories.find(c => UUIDsEqual(c.ID, currentId));
                 if (!cat) break;
 
                 const strategy = parseAssignmentStrategy(cat.AssignmentStrategy);
@@ -7686,21 +7688,6 @@ The context is now within limits. Please retry your request with the recovered c
         return null;
     }
 
-    /**
-     * Loads all agent categories into the cache if not already loaded.
-     * Shared by both assignment strategy and storage account resolution.
-     */
-    private async ensureCategoryCacheLoaded(params: ExecuteAgentParams): Promise<void> {
-        if (!this._categoryCache) {
-            const rv = new RunView(<IRunViewProvider><any>(params.provider || this._activeProvider));
-            const result = await rv.RunView<{ ID: string; Name: string; ParentID: string | null; AssignmentStrategy: string | null; DefaultStorageAccountID: string | null }>({
-                EntityName: 'MJ: AI Agent Categories',
-                Fields: ['ID', 'Name', 'ParentID', 'AssignmentStrategy', 'DefaultStorageAccountID'],
-                ResultType: 'simple'
-            }, params.contextUser);
-            this._categoryCache = result.Success ? result.Results : [];
-        }
-    }
 
     /**
      * Resolves the file storage account ID for this agent's file artifacts.
@@ -7733,13 +7720,13 @@ The context is now within limits. Please retry your request with the recovered c
         const categoryId = params.agent.CategoryID;
         if (categoryId) {
             try {
-                await this.ensureCategoryCacheLoaded(params);
+                const categories = AIEngine.Instance.AgentCategories;
 
                 let currentId: string | null = categoryId;
                 const visited = new Set<string>();
                 while (currentId && !visited.has(currentId)) {
                     visited.add(currentId);
-                    const cat = this._categoryCache!.find(c => UUIDsEqual(c.ID, currentId));
+                    const cat = categories.find(c => UUIDsEqual(c.ID, currentId));
                     if (!cat) break;
                     if (cat.DefaultStorageAccountID) return cat.DefaultStorageAccountID;
                     currentId = cat.ParentID;
@@ -7761,8 +7748,8 @@ The context is now within limits. Please retry your request with the recovered c
         }
 
         // 5. System fallback
-        await FileStorageEngine.Instance.Config(false, params.contextUser);
-        const activeAccounts = FileStorageEngine.Instance.AccountsWithProviders
+        await FileStorageEngineBase.Instance.Config(false, params.contextUser);
+        const activeAccounts = FileStorageEngineBase.Instance.AccountsWithProviders
             .filter(a => a.provider.IsActive);
 
         if (activeAccounts.length === 0) {
@@ -7780,7 +7767,7 @@ The context is now within limits. Please retry your request with the recovered c
             ? AIEngine.Instance.AgentTypes.find(at => UUIDsEqual(at.ID, params.agent.TypeID))?.Name || params.agent.TypeID
             : 'unknown';
         const categoryName = params.agent.CategoryID
-            ? this._categoryCache?.find(c => UUIDsEqual(c.ID, params.agent.CategoryID))?.Name || params.agent.CategoryID
+            ? AIEngine.Instance.AgentCategories.find(c => UUIDsEqual(c.ID, params.agent.CategoryID))?.Name || params.agent.CategoryID
             : 'none';
         const accountNames = activeAccounts.map(a => `'${a.account.Name}' (${a.provider.Name})`).join(', ');
 

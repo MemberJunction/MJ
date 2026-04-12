@@ -11,13 +11,13 @@
  */
 
 import { createHash } from 'crypto';
-import { LogError, LogStatusEx, IsVerboseLoggingEnabled, LogStatus, Metadata, RunView, UserInfo, IMetadataProvider, IRunViewProvider, DatabaseProviderBase, ProviderType } from '@memberjunction/core';
+import { LogError, LogStatusEx, IsVerboseLoggingEnabled, LogStatus, Metadata, RunView, UserInfo, IMetadataProvider, DatabaseProviderBase, ProviderType } from '@memberjunction/core';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
-import { ExecuteAgentResult, ExecuteAgentParams, MediaOutput, FileOutputRef, ActionStepOutputData, ActionStepSummary, parseFileOutputRef } from '@memberjunction/ai-core-plus';
+import { ExecuteAgentResult, ExecuteAgentParams, MediaOutput, FileOutputRef, ActionStepOutputData, ActionStepSummary, ParseFileOutputRef } from '@memberjunction/ai-core-plus';
 import { BaseAgent } from './base-agent';
-import { MJConversationEntity, MJConversationDetailEntity, MJArtifactEntity, MJArtifactVersionEntity, MJConversationDetailArtifactEntity, MJAIAgentRunMediaEntity, MJConversationDetailAttachmentEntity, MJFileEntity, ArtifactMetadataEngine, FileStorageEngine, StorageAccountWithProvider } from '@memberjunction/core-entities';
-import { initializeDriverWithAccountCredentials } from '@memberjunction/storage';
+import { MJConversationEntity, MJConversationDetailEntity, MJArtifactEntity, MJArtifactVersionEntity, MJConversationDetailArtifactEntity, MJAIAgentRunMediaEntity, MJConversationDetailAttachmentEntity, ArtifactMetadataEngine } from '@memberjunction/core-entities';
+import { FileStorageEngine } from '@memberjunction/storage';
 
 
 /**
@@ -46,11 +46,6 @@ export class AgentRunner {
         this._provider = provider || Metadata.Provider;
     }
 
-    /** Casts the resolved IMetadataProvider to IRunViewProvider for RunView construction.
-     *  Safe because the runtime object is always a ProviderBase which implements both interfaces. */
-    private asRunViewProvider(provider?: IMetadataProvider): IRunViewProvider {
-        return <IRunViewProvider><any>(provider || this._provider); // eslint-disable-line @typescript-eslint/no-explicit-any
-    }
 
     /**
      * Runs an AI agent with the specified parameters.
@@ -537,7 +532,7 @@ export class AgentRunner {
      */
     public async GetMaxVersionForArtifact(artifactId: string, contextUser: UserInfo, provider?: IMetadataProvider): Promise<number> {
         try {
-            const rv = new RunView(this.asRunViewProvider(provider));
+            const rv = RunView.FromMetadataProvider(provider || this._provider);
             const result = await rv.RunView<MJArtifactVersionEntity>({
                 EntityName: 'MJ: Artifact Versions',
                 ExtraFilter: `ArtifactID='${artifactId}'`,
@@ -581,7 +576,7 @@ export class AgentRunner {
     ): Promise<string | null> {
         const candidateHash = createHash('sha256').update(candidateContent, 'utf8').digest('hex');
 
-        const rv = new RunView(this.asRunViewProvider(provider));
+        const rv = RunView.FromMetadataProvider(provider || this._provider);
         const result = await rv.RunView<{ ID: string; ContentHash: string }>({
             EntityName: 'MJ: Artifact Versions',
             ExtraFilter: `ArtifactID='${artifactId}' AND VersionNumber=${latestVersionNumber}`,
@@ -660,7 +655,7 @@ export class AgentRunner {
         provider?: IMetadataProvider
     ): Promise<{ artifactId: string; versionNumber: number } | null> {
         try {
-            const rv = new RunView(this.asRunViewProvider(provider));
+            const rv = RunView.FromMetadataProvider(provider || this._provider);
             const result = await rv.RunView<MJConversationDetailArtifactEntity>({
                 EntityName: 'MJ: Conversation Detail Artifacts',
                 ExtraFilter: `ConversationDetailID='${conversationDetailId}' AND Direction='Output'`,
@@ -1260,7 +1255,7 @@ export class AgentRunner {
 
     /** Loads all completed action steps for a given agent run (read-only, narrow fields). */
     private async loadActionStepsForRun(agentRunId: string, contextUser: UserInfo, provider?: IMetadataProvider): Promise<ActionStepSummary[]> {
-        const rv = new RunView(this.asRunViewProvider(provider));
+        const rv = RunView.FromMetadataProvider(provider || this._provider);
         const result = await rv.RunView<ActionStepSummary>({
             EntityName: 'MJ: AI Agent Run Steps',
             ExtraFilter: `AgentRunID='${agentRunId}' AND StepType='Actions' AND Status='Completed'`,
@@ -1293,7 +1288,7 @@ export class AgentRunner {
         const results: FileOutputRef[] = [];
         for (const param of params) {
             if (param.Value == null) continue;
-            const ref = parseFileOutputRef(param.Value);
+            const ref = ParseFileOutputRef(param.Value);
             if (ref) results.push(ref);
         }
         return results;
@@ -1316,7 +1311,7 @@ export class AgentRunner {
             }
 
             // Check if any storage accounts are configured
-            const hasStorage = FileStorageEngine.Instance.AccountsWithProviders.length > 0;
+            const hasStorage = FileStorageEngine.Instance.HasStorageAccounts;
 
             if (!hasStorage) {
                 // No storage configured — go straight to inline artifact
@@ -1361,42 +1356,15 @@ export class AgentRunner {
         resolvedStorageAccountId: string | undefined,
         provider: IMetadataProvider
     ): Promise<string> {
-        const accounts = FileStorageEngine.Instance.AccountsWithProviders;
-        if (accounts.length === 0) {
-            throw new Error('No file storage accounts configured. Cannot upload file artifact.');
-        }
-
-        // Use the resolved account if provided, otherwise fall back to first active
-        let resolved: StorageAccountWithProvider | undefined;
-        if (resolvedStorageAccountId) {
-            resolved = FileStorageEngine.Instance.GetAccountWithProvider(resolvedStorageAccountId) ?? undefined;
-        }
-        const { account, provider: storageProvider } = resolved ?? accounts.find(a => a.provider.IsActive !== false) ?? accounts[0];
-        const driver = await initializeDriverWithAccountCredentials({
-            accountEntity: account,
-            providerEntity: storageProvider,
-            contextUser
+        const result = await FileStorageEngine.Instance.UploadFile({
+            content: Buffer.from(base64Data, 'base64'),
+            fileName,
+            mimeType,
+            contextUser,
+            storageAccountId: resolvedStorageAccountId,
+            provider
         });
-
-        const buffer = Buffer.from(base64Data, 'base64');
-        const storagePath = `artifacts/${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}/${fileName}`;
-        const uploaded = await driver.PutObject(storagePath, buffer, mimeType);
-        if (!uploaded) {
-            throw new Error(`PutObject returned false for path: ${storagePath}`);
-        }
-
-        const fileEntity = await provider.GetEntityObject<MJFileEntity>('MJ: Files', contextUser);
-        fileEntity.Name = fileName;
-        fileEntity.ContentType = mimeType;
-        fileEntity.ProviderID = storageProvider.ID;
-        fileEntity.ProviderKey = storagePath;
-        fileEntity.Status = 'Uploaded';
-
-        if (!(await fileEntity.Save())) {
-            throw new Error('Failed to save MJ: Files record after upload');
-        }
-
-        return fileEntity.ID;
+        return result.FileID;
     }
 
     /**

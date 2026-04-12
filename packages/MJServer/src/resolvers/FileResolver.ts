@@ -32,7 +32,7 @@ import {
   FileSearchResult,
   UserContextOptions,
   ExtendedUserContextOptions,
-  initializeDriverWithAccountCredentials,
+  FileStorageEngine,
 } from '@memberjunction/storage';
 import { CreateMJFileInput, MJFileResolver as FileResolverBase, MJFile_, UpdateMJFileInput } from '../generated/generated.js';
 import { FieldMapper } from '@memberjunction/graphql-dataprovider';
@@ -648,12 +648,9 @@ export class FileResolver extends FileResolverBase {
     const fileEntity = await md.GetEntityObject<MJFileEntity>('MJ: Files', user);
     fileEntity.CheckPermissions(EntityPermissionType.Create, true);
 
-    // Initialize driver with account-based credentials from Credential Engine
-    const driver = await initializeDriverWithAccountCredentials({
-      accountEntity,
-      providerEntity,
-      contextUser: user,
-    });
+    // Initialize driver via FileStorageEngine (handles credential decryption + token refresh)
+    await FileStorageEngine.Instance.Config(false, user);
+    const driver = await FileStorageEngine.Instance.GetDriver(accountEntity.ID, user);
 
     const success = await driver.CreateDirectory(input.Path);
     return success;

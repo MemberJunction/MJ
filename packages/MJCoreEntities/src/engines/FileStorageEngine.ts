@@ -11,25 +11,29 @@ export interface StorageAccountWithProvider {
 }
 
 /**
- * FileStorageEngine provides centralized, cached access to file storage accounts and providers.
+ * FileStorageEngineBase provides centralized, cached access to file storage accounts and providers.
  * This engine eliminates redundant database calls by caching the data and making it available
- * across the application.
+ * across the application. It is safe to use on both client and server — it only deals with
+ * cached metadata, not file I/O.
+ *
+ * For server-side file operations (upload, download, driver initialization), use the
+ * `FileStorageEngine` class from `@memberjunction/storage` which wraps this base via containment.
  *
  * Usage:
  * ```typescript
- * const engine = FileStorageEngine.Instance;
+ * const engine = FileStorageEngineBase.Instance;
  * await engine.Config(false);  // Use cached data if available
  * const accounts = engine.AccountsWithProviders;
  * ```
  */
-export class FileStorageEngine extends BaseEngine<FileStorageEngine> {
+export class FileStorageEngineBase extends BaseEngine<FileStorageEngineBase> {
     /**
      * Returns the global instance of the class. This is a singleton class, so there is only
      * one instance of it in the application. Do not directly create new instances of it,
      * always use this method to get the instance.
      */
-    public static get Instance(): FileStorageEngine {
-        return super.getInstance<FileStorageEngine>();
+    public static get Instance(): FileStorageEngineBase {
+        return super.getInstance<FileStorageEngineBase>();
     }
 
     private _accounts: MJFileStorageAccountEntity[] = [];
