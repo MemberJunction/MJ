@@ -158,6 +158,16 @@ export class FileStorageEngine extends BaseSingleton<FileStorageEngine> {
         return this.Base.GetProviderById(providerId);
     }
 
+    /** Gets a file storage account by its name (case-insensitive). */
+    public GetAccountByName(name: string): MJFileStorageAccountEntity | undefined {
+        return this.Base.GetAccountByName(name);
+    }
+
+    /** Gets file storage accounts linked to a given provider ID. */
+    public GetAccountsByProviderID(providerId: string): MJFileStorageAccountEntity[] {
+        return this.Base.GetAccountsByProviderID(providerId);
+    }
+
     /** Gets a storage account with its provider details by account ID. */
     public GetAccountWithProvider(accountId: string): StorageAccountWithProvider | null {
         return this.Base.GetAccountWithProvider(accountId);

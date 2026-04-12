@@ -15,7 +15,6 @@
 import { Metadata, RunView, UserInfo, IMetadataProvider } from '@memberjunction/core';
 import {
     MJFileStorageProviderEntity,
-    MJFileStorageAccountEntity,
     MJFileEntity,
     MJAIAgentEntity,
     MJAIModelEntity,
@@ -335,19 +334,13 @@ export class ConversationAttachmentService {
                 return null;
             }
 
-            // Find the FileStorageAccount that links to this provider
-            const rv = RunView.FromMetadataProvider(provider ?? this._defaultProvider);
-            const accountResult = await rv.RunView<MJFileStorageAccountEntity>({
-                EntityName: 'MJ: File Storage Accounts',
-                ExtraFilter: `ProviderID = '${file.ProviderID}'`,
-                MaxRows: 1,
-                ResultType: 'entity_object'
-            }, contextUser);
+            // Find the FileStorageAccount that links to this provider using cached metadata
+            const matchingAccounts = FileStorageEngine.Instance.GetAccountsByProviderID(file.ProviderID);
 
             let driver: FileStorageBase;
-            if (accountResult.Success && accountResult.Results.length > 0) {
+            if (matchingAccounts.length > 0) {
                 // Initialize driver with account credentials via FileStorageEngine
-                driver = await FileStorageEngine.Instance.GetDriver(accountResult.Results[0].ID, contextUser);
+                driver = await FileStorageEngine.Instance.GetDriver(matchingAccounts[0].ID, contextUser);
             } else {
                 // Fallback: create driver without account credentials (env vars only)
                 driver = MJGlobal.Instance.ClassFactory.CreateInstance<FileStorageBase>(

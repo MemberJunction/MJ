@@ -122,6 +122,24 @@ export class FileStorageEngineBase extends BaseEngine<FileStorageEngineBase> {
     }
 
     /**
+     * Gets a file storage account by its name (case-insensitive).
+     * @param name - The name of the account to find
+     * @returns The account entity or undefined if not found
+     */
+    public GetAccountByName(name: string): MJFileStorageAccountEntity | undefined {
+        return this.Accounts.find(a => a.Name?.trim().toLowerCase() === name.trim().toLowerCase());
+    }
+
+    /**
+     * Gets file storage accounts linked to a given provider ID.
+     * @param providerId - The provider ID to match against account.ProviderID
+     * @returns Array of matching accounts (may be empty)
+     */
+    public GetAccountsByProviderID(providerId: string): MJFileStorageAccountEntity[] {
+        return this.Accounts.filter(a => UUIDsEqual(a.ProviderID, providerId));
+    }
+
+    /**
      * Gets a storage account with its provider details by account ID
      * @param accountId - The ID of the account to find
      * @returns The account with provider or null if not found or provider is inactive
