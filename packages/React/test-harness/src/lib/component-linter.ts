@@ -180,7 +180,7 @@ export class ComponentLinter {
       // Run each rule with error handling to prevent crashes
       for (const rule of rules) {
         try {
-          const ruleViolations = rule.test(ast, componentName, componentSpec, options);
+          const ruleViolations = rule.test(ast, componentName, componentSpec, options, typeContext);
           violations.push(...ruleViolations);
         } catch (error) {
           // Log rule execution errors but don't crash the entire linting process

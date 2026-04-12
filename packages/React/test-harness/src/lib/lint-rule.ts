@@ -2,6 +2,7 @@ import * as t from '@babel/types';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 import { ComponentExecutionOptions } from './component-runner';
 import { Violation } from './component-linter';
+import { TypeContext } from './type-context';
 
 /**
  * Interface for lint rules in the component linter system.
@@ -34,12 +35,17 @@ export interface LintRule {
    * @param componentName - Name of the component being linted
    * @param componentSpec - Optional component specification with metadata
    * @param options - Optional execution options for the component
+   * @param typeContext - Optional shared type context with inferred variable types,
+   *   entity/query field metadata, and callback parameter types. Populated by the
+   *   orchestrator's TypeInferenceEngine before rule execution. Rules that need type
+   *   awareness should use this instead of creating their own TypeContext.
    * @returns Array of violations found by this rule
    */
   test: (
     ast: t.File,
     componentName: string,
     componentSpec?: ComponentSpec,
-    options?: ComponentExecutionOptions
+    options?: ComponentExecutionOptions,
+    typeContext?: TypeContext
   ) => Violation[];
 }
