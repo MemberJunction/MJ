@@ -1,7 +1,6 @@
 import { BaseEntity, Metadata, RunView, IMetadataProvider } from "@memberjunction/core";
 import { RegisterClass, SafeJSONParse } from "@memberjunction/global";
 import { MJReportEntity, MJReportSnapshotEntity, MJReportVersionEntity } from "@memberjunction/core-entities";
-import { SkipAPIAnalysisCompleteResponse } from "@memberjunction/skip-types";
 
 @RegisterClass(BaseEntity, 'MJ: Reports')
 export class MJReportEntityServer extends MJReportEntity  {
@@ -23,8 +22,8 @@ export class MJReportEntityServer extends MJReportEntity  {
                 if (this.IsSaved) {
                     // existing record
                     // we nave a configuration and an old configuration, so we can compare them, cast them to their strong types first
-                    const castedConfig = config as SkipAPIAnalysisCompleteResponse;
-                    const castedOldConfig = oldConfig as SkipAPIAnalysisCompleteResponse;
+                    const castedConfig = config as Record<string, unknown>;
+                    const castedOldConfig = oldConfig as Record<string, unknown>;
 
                     // Next, we need to see if the data context has changed at all. We do this by comparing the # of items in the data context. a Data context's items are immutable and we only add new Data Context Items
                     // so we can simply check to see if we have new data context items or not

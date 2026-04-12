@@ -122,6 +122,27 @@ export class EntityRelationshipInfo extends BaseInfo  {
         super();
         this.copyInitData(initData);
     }
+
+    /**
+     * Returns a plain object suitable for JSON serialization.
+     * Called automatically by JSON.stringify().
+     */
+    toJSON(): Record<string, unknown> {
+        return {
+            EntityID: this.EntityID,
+            RelatedEntityID: this.RelatedEntityID,
+            Type: this.Type,
+            EntityKeyField: this.EntityKeyField,
+            RelatedEntityJoinField: this.RelatedEntityJoinField,
+            JoinView: this.JoinView,
+            JoinEntityJoinField: this.JoinEntityJoinField,
+            JoinEntityInverseJoinField: this.JoinEntityInverseJoinField,
+            Entity: this.Entity,
+            EntityBaseView: this.EntityBaseView,
+            RelatedEntity: this.RelatedEntity,
+            RelatedEntityBaseView: this.RelatedEntityBaseView,
+        };
+    }
 }
 
 /**
@@ -430,6 +451,17 @@ export class EntityFieldValueInfo extends BaseInfo {
     constructor (initData: any) {
         super();
         this.copyInitData(initData);
+    }
+
+    /**
+     * Returns a plain object suitable for JSON serialization.
+     * Called automatically by JSON.stringify().
+     */
+    toJSON(): { Value: string; Code: string } {
+        return {
+            Value: this.Value,
+            Code: this.Code,
+        };
     }
 }
 
@@ -1078,6 +1110,44 @@ export class EntityFieldInfo extends BaseInfo {
                 this._entityFieldValuesConstructed = true;
             }
         }
+    }
+
+    /**
+     * Returns a plain object suitable for JSON serialization.
+     * Called automatically by JSON.stringify().
+     * Produces PascalCase property names matching the MJ convention.
+     */
+    toJSON(): Record<string, unknown> {
+        return {
+            EntityID: this.EntityID,
+            Sequence: this.Sequence,
+            Name: this.Name,
+            DisplayName: this.DisplayName,
+            Description: this.Description,
+            IsPrimaryKey: this.IsPrimaryKey,
+            IsUnique: this.IsUnique,
+            Category: this.Category,
+            Type: this.Type,
+            Length: this.Length,
+            Precision: this.Precision,
+            Scale: this.Scale,
+            SQLFullType: this.SQLFullType,
+            AllowsNull: this.AllowsNull,
+            DefaultValue: this.DefaultValue,
+            AutoIncrement: this.AutoIncrement,
+            ValueListType: this.ValueListType,
+            ExtendedType: this.ExtendedType,
+            DefaultInView: this.DefaultInView,
+            DefaultColumnWidth: this.DefaultColumnWidth,
+            IsVirtual: this.IsVirtual,
+            IsNameField: this.IsNameField,
+            RelatedEntityID: this.RelatedEntityID,
+            RelatedEntityFieldName: this.RelatedEntityFieldName,
+            RelatedEntity: this.RelatedEntity,
+            RelatedEntitySchemaName: this.RelatedEntitySchemaName,
+            RelatedEntityBaseView: this.RelatedEntityBaseView,
+            EntityFieldValues: this.EntityFieldValues?.map(v => v.toJSON()),
+        };
     }
 
 
@@ -2185,9 +2255,9 @@ export class EntityInfo extends BaseInfo {
             this.copyInitData(initData);
 
             // do some special handling to create class instances instead of just data objects
-            // copy the Entity Fields
+            // copy the Entity Fields (accept EntityFields, _Fields, or Fields as input names)
             this._Fields = [];
-            const ef = initData.EntityFields || initData._Fields;
+            const ef = initData.EntityFields || initData._Fields || initData.Fields;
             if (ef) {
                 for (let j = 0; j < ef.length; j++) {
                     this._Fields.push(new EntityFieldInfo(ef[j]));
@@ -2213,9 +2283,9 @@ export class EntityInfo extends BaseInfo {
             // auto-populate FieldCategories from the FieldCategoryInfo setting
             this._FieldCategories = this.parseFieldCategoriesFromSettings();
 
-            // copy the Related Entities
+            // copy the Related Entities (accept EntityRelationships, _RelatedEntities, or RelatedEntities as input names)
             this._RelatedEntities = [];
-            const er = initData.EntityRelationships || initData._RelatedEntities;
+            const er = initData.EntityRelationships || initData._RelatedEntities || initData.RelatedEntities;
             if (er) {
                 // check to see if ANY of the records in the er array have a non-null or non-zero sequence value. The reason is 
                 // if we have any sequence values populated we want to sort by that sequence, and we want to consider null to be a high number
@@ -2253,6 +2323,26 @@ export class EntityInfo extends BaseInfo {
 
             this.prepareSpecialFields();
         }
+    }
+
+    /**
+     * Returns a plain object suitable for JSON serialization.
+     * Called automatically by JSON.stringify().
+     * Produces PascalCase property names matching the MJ convention.
+     * The output can be reconstructed via `new EntityInfo(jsonData)`.
+     */
+    toJSON(): Record<string, unknown> {
+        return {
+            ID: this.ID,
+            Name: this.Name,
+            Description: this.Description,
+            SchemaName: this.SchemaName,
+            BaseView: this.BaseView,
+            Fields: this.Fields.map(f => f.toJSON()),
+            RelatedEntities: this.RelatedEntities.map(r => r.toJSON()),
+            RowsToPackWithSchema: this.RowsToPackWithSchema,
+            RowsToPackSampleMethod: this.RowsToPackSampleMethod,
+        };
     }
 
     private prepareSpecialFields() {
