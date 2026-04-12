@@ -5,6 +5,7 @@ import { RuleRegistry } from '../rule-registry';
 import { Violation } from '../component-linter';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 import { ComponentProperty, ComponentEvent } from '@memberjunction/interactive-component-types';
+import { ComponentMetadataEngine } from '@memberjunction/core-entities';
 
 /**
  * Rule: child-component-prop-validation
@@ -139,7 +140,11 @@ function normalizeSpecType(specType: string): string | null {
  */
 function typesAreCompatible(actualType: string, expectedType: string): boolean {
   if (actualType === expectedType) return true;
-  // number and boolean are loosely compatible in JS but we still flag them
+  // Arrays are objects in JavaScript — allow object where array is expected and vice versa
+  if ((actualType === 'object' && expectedType === 'array') ||
+      (actualType === 'array' && expectedType === 'object')) return true;
+  // JSX string attributes are common for numeric props (e.g., height="300")
+  if (actualType === 'string' && expectedType === 'number') return true;
   return false;
 }
 
@@ -169,17 +174,82 @@ interface ChildComponentInfo {
 }
 
 /**
+ * Try to load component properties and events from the ComponentMetadataEngine registry.
+ * Returns the resolved properties and events, or undefined if the registry is not
+ * available or the component was not found.
+ */
+function tryRegistryLookup(
+  dep: ComponentSpec,
+): { properties: ComponentProperty[]; events: ComponentEvent[] | undefined } | undefined {
+  try {
+    const engine = ComponentMetadataEngine.Instance;
+    // Only attempt lookup if the engine has been initialized (Config() was called)
+    if (!engine.Components || engine.Components.length === 0) {
+      return undefined;
+    }
+
+    const registryComponent = engine.FindComponent(
+      dep.name,
+      dep.namespace,
+      dep.registry,
+    );
+    if (registryComponent?.spec?.properties?.length) {
+      return {
+        properties: registryComponent.spec.properties,
+        events: registryComponent.spec.events,
+      };
+    }
+  } catch {
+    // DB not available or engine not initialized — fall through
+  }
+
+  return undefined;
+}
+
+/**
  * Build a lookup map from dependency component name to its prop info.
+ * Uses a 3-tier fallback:
+ *   1. Primary: dep.properties/events from the spec's dependencies array
+ *   2. Fallback 1: Registry lookup via ComponentMetadataEngine
+ *   3. Fallback 2: Skip with a low-severity warning
  */
 function buildDependencyMap(
   dependencies: ComponentSpec[] | undefined,
+  warnings: Violation[],
 ): Map<string, ChildComponentInfo> {
   const result = new Map<string, ChildComponentInfo>();
   if (!dependencies) return result;
 
   for (const dep of dependencies) {
     if (!dep.name) continue;
-    const properties = dep.properties ?? [];
+
+    let properties = dep.properties ?? [];
+    let events: ComponentEvent[] | undefined = dep.events;
+
+    // Fallback 1: If no properties from spec, try the registry
+    if (properties.length === 0) {
+      const registryResult = tryRegistryLookup(dep);
+      if (registryResult) {
+        properties = registryResult.properties;
+        events = registryResult.events;
+      }
+    }
+
+    // Fallback 2: Still no properties — emit a warning and skip this dependency
+    if (properties.length === 0) {
+      warnings.push({
+        rule: 'child-component-prop-validation',
+        severity: 'low',
+        line: 0,
+        column: 0,
+        message:
+          `Unable to validate props for <${dep.name}> — no property metadata available ` +
+          `from spec or registry. Ensure the component spec includes property definitions ` +
+          `for accurate validation.`,
+      });
+      continue;
+    }
+
     const propertyNames = new Set<string>();
     const propertyByNameLower = new Map<string, ComponentProperty>();
 
@@ -188,15 +258,11 @@ function buildDependencyMap(
       propertyByNameLower.set(prop.name.toLowerCase(), prop);
     }
 
-    // Only register for validation if the dependency has declared properties.
-    // Many embedded specs omit property definitions — skip those to avoid false positives.
-    if (properties.length === 0) continue;
-
     result.set(dep.name, {
       properties,
-      events: dep.events,
+      events,
       propertyNames,
-      eventPropNames: buildEventPropNames(dep.events),
+      eventPropNames: buildEventPropNames(events),
       propertyByNameLower,
     });
   }
@@ -249,7 +315,7 @@ export const childComponentPropValidationRule: LintRule = {
       return violations;
     }
 
-    const depMap = buildDependencyMap(componentSpec.dependencies);
+    const depMap = buildDependencyMap(componentSpec.dependencies, violations);
     if (depMap.size === 0) return violations;
 
     // Collect variable types from useState calls for type-checking

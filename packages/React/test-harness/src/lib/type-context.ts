@@ -226,7 +226,20 @@ export class TypeContext {
    */
   getQueryFieldTypes(queryName: string, categoryPath?: string): Map<string, FieldTypeInfo> | undefined {
     const queryKey = categoryPath ? `${categoryPath}/${queryName}` : queryName;
-    return this.queryFieldCache.get(queryKey);
+    const result = this.queryFieldCache.get(queryKey);
+    if (result) return result;
+
+    // Fallback: when no categoryPath given, search for any cache entry ending with the query name.
+    // This supports inline chain access (e.g., result.Results?.[0]?.Field) where the TypeInfo
+    // only stores the queryName without the categoryPath.
+    if (!categoryPath) {
+      for (const [key, fields] of this.queryFieldCache) {
+        if (key === queryName || key.endsWith(`/${queryName}`)) {
+          return fields;
+        }
+      }
+    }
+    return undefined;
   }
 
   /**

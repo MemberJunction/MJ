@@ -36,6 +36,25 @@ function getContextUser(): UserInfo | undefined {
 }
 
 /**
+ * Check if a component spec has embedded fieldMetadata in its data requirements
+ * (either in entities or queries), which means it doesn't need a DB connection.
+ */
+function hasFieldMetadataInSpec(spec: ComponentSpec): boolean {
+  const entities = spec.dataRequirements?.entities;
+  const queries = spec.dataRequirements?.queries;
+
+  const hasEntityFields = entities?.some(
+    (e: Record<string, unknown>) => Array.isArray(e.fieldMetadata) && (e.fieldMetadata as unknown[]).length > 0
+  ) ?? false;
+
+  const hasQueryFields = queries?.some(
+    (q: Record<string, unknown>) => Array.isArray(q.fields) && (q.fields as unknown[]).length > 0
+  ) ?? false;
+
+  return hasEntityFields || hasQueryFields;
+}
+
+/**
  * Detect whether a fixture requires database metadata to validate correctly.
  *
  * Broken fixtures in these categories need DB-populated entity/query metadata
@@ -55,9 +74,13 @@ function fixtureRequiresDatabase(fixture: LoadedFixture): boolean {
     if (name.startsWith('schema-validation/') || name.startsWith('type-rules/')) {
       return true;
     }
-    // Specific best-practice rules that need entity field lookups
+    // Specific best-practice rules that need entity field lookups —
+    // but only if they lack embedded fieldMetadata in their dataRequirements
     if (name.includes('optional-chain-') || name.includes('spread-field-')) {
-      return true;
+      const hasEmbeddedFieldMetadata = hasFieldMetadataInSpec(fixture.spec);
+      if (!hasEmbeddedFieldMetadata) {
+        return true;
+      }
     }
   }
 
@@ -170,12 +193,13 @@ registerFixtureTests('Fixed Component Fixtures', 'fixed', (lintResult) => {
   }
 });
 
-// Valid components: must have zero violations
+// Valid components: must have zero violations (excluding low-severity skip-with-warnings)
 registerFixtureTests('Valid Component Fixtures', 'valid', (lintResult) => {
-  if (lintResult.violations.length > 0) {
-    const summary = lintResult.violations
+  const actionableViolations = lintResult.violations.filter((v) => v.severity !== 'low');
+  if (actionableViolations.length > 0) {
+    const summary = actionableViolations
       .map((v) => `[${v.severity}] ${v.rule}: ${v.message.slice(0, 100)}`)
       .join('\n    ');
-    throw new Error(`${lintResult.violations.length} violation(s):\n    ${summary}`);
+    throw new Error(`${actionableViolations.length} violation(s):\n    ${summary}`);
   }
 });

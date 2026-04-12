@@ -17,5 +17,22 @@
         {"name": "pageSize", "type": "number", "isRequired": false}
       ]
     }]
-  }
+  },
+  "dependencies": [
+    {
+      "name": "DataTable",
+      "location": "registry",
+      "type": "table",
+      "title": "Data Table",
+      "description": "Displays data in a configurable table with pagination and sorting",
+      "code": "",
+      "functionalRequirements": "",
+      "technicalDesign": "",
+      "exampleUsage": "<DataTable data={employees} pageSize={25} />",
+      "properties": [
+        {"name": "data", "type": "array", "required": true, "description": "Array of records to display in the table"},
+        {"name": "pageSize", "type": "number", "required": false, "description": "Number of rows to display per page"}
+      ]
+    }
+  ]
 }

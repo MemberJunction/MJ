@@ -17,5 +17,22 @@
         {"name": "selectedId", "type": "string", "isRequired": false}
       ]
     }]
-  }
+  },
+  "dependencies": [
+    {
+      "name": "RecordSelector",
+      "location": "registry",
+      "type": "form",
+      "title": "Record Selector",
+      "description": "Dropdown or search component for selecting a single entity record",
+      "code": "",
+      "functionalRequirements": "",
+      "technicalDesign": "",
+      "exampleUsage": "<RecordSelector entityName=\"MJ: Employees\" selectedId={selectedId} />",
+      "properties": [
+        {"name": "entityName", "type": "string", "required": true, "description": "The entity name to select records from"},
+        {"name": "selectedId", "type": "string", "required": false, "description": "The ID of the currently selected record"}
+      ]
+    }
+  ]
 }

@@ -78,19 +78,13 @@ const NON_ENTITY_PROPERTIES = new Set([
 ]);
 
 /**
- * Resolves the variable name from a MemberExpression or OptionalMemberExpression.
- * Handles scoped names by checking if any scope prefix matches.
+ * Looks up a variable's TypeInfo from the TypeContext, including scoped lookups.
  */
-function resolveVariableType(
-  objectNode: t.Node,
+function lookupVariableTypeInfo(
+  varName: string,
   typeContext: TypeContext,
   path: NodePath
-): { entityName: string; queryName?: string; fields: Map<string, FieldTypeInfo> } | null {
-  if (!t.isIdentifier(objectNode)) return null;
-
-  const varName = objectNode.name;
-
-  // Try direct lookup first, then scoped lookup
+): { type: string; entityName?: string; queryName?: string; fields?: Map<string, FieldTypeInfo>; arrayElementType?: { type: string; entityName?: string; queryName?: string; fields?: Map<string, FieldTypeInfo> } } | null {
   let varType = typeContext.getVariableType(varName);
 
   if (!varType || varType.type === 'unknown') {
@@ -117,13 +111,60 @@ function resolveVariableType(
     }
   }
 
-  if (!varType) return null;
+  return varType ?? null;
+}
 
-  if (varType.type === 'entity-row' && varType.entityName && varType.fields) {
-    return { entityName: varType.entityName, fields: varType.fields };
+/**
+ * Resolves the variable name from a MemberExpression or OptionalMemberExpression.
+ * Handles:
+ * - Simple identifiers: `variable.Field`
+ * - Scoped names: callback params in `.map()`, etc.
+ * - Inline indexed access: `result.Results?.[0]?.Field` where [0] yields an entity/query row
+ */
+function resolveVariableType(
+  objectNode: t.Node,
+  typeContext: TypeContext,
+  path: NodePath
+): { entityName: string; queryName?: string; fields: Map<string, FieldTypeInfo> } | null {
+  // Case 1: Simple identifier — `variable.Field`
+  if (t.isIdentifier(objectNode)) {
+    const varType = lookupVariableTypeInfo(objectNode.name, typeContext, path);
+    if (!varType) return null;
+
+    if (varType.type === 'entity-row' && varType.entityName && varType.fields) {
+      return { entityName: varType.entityName, fields: varType.fields };
+    }
+    if (varType.type === 'query-row' && varType.queryName && varType.fields) {
+      return { queryName: varType.queryName, entityName: varType.queryName, fields: varType.fields };
+    }
+    return null;
   }
-  if (varType.type === 'query-row' && varType.queryName && varType.fields) {
-    return { queryName: varType.queryName, entityName: varType.queryName, fields: varType.fields };
+
+  // Case 2: Indexed access on .Results — `result.Results?.[0]?.Field` or `result.Results[0].Field`
+  // The object is a computed member/optional-member expression like `result.Results?.[0]`
+  if ((t.isMemberExpression(objectNode) || t.isOptionalMemberExpression(objectNode)) && objectNode.computed) {
+    const arrayExpr = objectNode.object;
+    // arrayExpr should be `result.Results` or `result.Results?`
+    if ((t.isMemberExpression(arrayExpr) || t.isOptionalMemberExpression(arrayExpr)) &&
+        t.isIdentifier(arrayExpr.property) && arrayExpr.property.name === 'Results' &&
+        t.isIdentifier(arrayExpr.object)) {
+      const resultVarType = lookupVariableTypeInfo(arrayExpr.object.name, typeContext, path);
+      if (resultVarType?.type === 'object') {
+        // The .Results array's element type carries the entity/query row info
+        if (resultVarType.entityName) {
+          const entityFields = typeContext.getEntityFieldTypesSync(resultVarType.entityName);
+          if (entityFields.size > 0) {
+            return { entityName: resultVarType.entityName, fields: entityFields };
+          }
+        }
+        if (resultVarType.queryName) {
+          const queryFields = typeContext.getQueryFieldTypes(resultVarType.queryName);
+          if (queryFields && queryFields.size > 0) {
+            return { queryName: resultVarType.queryName, entityName: resultVarType.queryName, fields: queryFields };
+          }
+        }
+      }
+    }
   }
 
   return null;
@@ -142,6 +183,8 @@ export const entityFieldAccessValidationRule: LintRule = {
     // Sources: 1) componentSpec.dataRequirements.entities, 2) entity names discovered
     // by the TypeInferenceEngine from RunView({ EntityName: '...' }) calls in code.
     const entityFieldSets = new Map<string, string[]>();
+    // Track entity names discovered in RunView calls for skip-with-warning
+    const discoveredEntityNames = new Set<string>();
 
     function ensureEntityFields(entityName: string): void {
       if (entityFieldSets.has(entityName)) return;
@@ -149,6 +192,14 @@ export const entityFieldAccessValidationRule: LintRule = {
       if (fields.size > 0) {
         entityFieldSets.set(entityName, Array.from(fields.keys()));
       }
+    }
+
+    // Check if spec has fieldMetadata for a given entity
+    function specHasFieldMetadata(entityName: string): boolean {
+      if (!componentSpec?.dataRequirements?.entities) return false;
+      return componentSpec.dataRequirements.entities.some(
+        e => e.name === entityName && e.fieldMetadata && e.fieldMetadata.length > 0
+      );
     }
 
     // Load from spec if available
@@ -170,6 +221,7 @@ export const entityFieldAccessValidationRule: LintRule = {
           if (p.node.arguments.length > 0 && t.isObjectExpression(p.node.arguments[0])) {
             for (const prop of p.node.arguments[0].properties) {
               if (t.isObjectProperty(prop) && t.isIdentifier(prop.key) && prop.key.name === 'EntityName' && t.isStringLiteral(prop.value)) {
+                discoveredEntityNames.add(prop.value.value);
                 ensureEntityFields(prop.value.value);
               }
             }
@@ -179,7 +231,23 @@ export const entityFieldAccessValidationRule: LintRule = {
       noScope: true,
     } as Parameters<typeof traverse>[1]);
 
-    if (entityFieldSets.size === 0) return violations;
+    // Emit skip-with-warning for entities discovered in RunView calls but lacking metadata
+    for (const entityName of discoveredEntityNames) {
+      if (!entityFieldSets.has(entityName) && !specHasFieldMetadata(entityName)) {
+        violations.push(createViolation(
+          'entity-field-access-validation', 'low', null,
+          `Unable to validate field access on entity '${entityName}' — entity metadata not available. Ensure database connection or add fieldMetadata to dataRequirements for accurate validation.`,
+          entityName
+        ));
+      }
+    }
+
+    // Skip traversal only if there are no entity fields loaded AND no query fields
+    // in the spec that could be resolved through inline expression type resolution
+    const hasQueryFields = componentSpec?.dataRequirements?.queries?.some(
+      q => (q.fields && q.fields.length > 0)
+    ) ?? false;
+    if (entityFieldSets.size === 0 && !hasQueryFields) return violations;
 
     function validateFieldAccess(
       node: t.MemberExpression | t.OptionalMemberExpression,
@@ -222,6 +290,21 @@ export const entityFieldAccessValidationRule: LintRule = {
       ));
     }
 
+    /**
+     * Gets the valid fields for a resolved entity/query, populating entityFieldSets
+     * on-demand from resolved.fields when not already loaded (e.g., for query-row types
+     * discovered via inline expressions).
+     */
+    function getValidFields(resolved: { entityName: string; fields: Map<string, FieldTypeInfo> }): string[] | undefined {
+      let validFields = entityFieldSets.get(resolved.entityName);
+      if (!validFields && resolved.fields.size > 0) {
+        const fieldNames = Array.from(resolved.fields.keys());
+        entityFieldSets.set(resolved.entityName, fieldNames);
+        validFields = fieldNames;
+      }
+      return validFields;
+    }
+
     // Traverse all member expressions and check entity-row typed variables
     traverse(ast, {
       MemberExpression(path: NodePath<t.MemberExpression>) {
@@ -231,7 +314,7 @@ export const entityFieldAccessValidationRule: LintRule = {
         const resolved = resolveVariableType(path.node.object, typeContext, path);
         if (!resolved) return;
 
-        const validFields = entityFieldSets.get(resolved.entityName);
+        const validFields = getValidFields(resolved);
         if (!validFields) return;
 
         const objectName = t.isIdentifier(path.node.object) ? path.node.object.name : '(expr)';
@@ -245,7 +328,7 @@ export const entityFieldAccessValidationRule: LintRule = {
         const resolved = resolveVariableType(path.node.object, typeContext, path);
         if (!resolved) return;
 
-        const validFields = entityFieldSets.get(resolved.entityName);
+        const validFields = getValidFields(resolved);
         if (!validFields) return;
 
         const objectName = t.isIdentifier(path.node.object) ? path.node.object.name : '(expr)';

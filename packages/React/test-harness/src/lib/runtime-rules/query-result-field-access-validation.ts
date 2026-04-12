@@ -188,7 +188,22 @@ export const queryResultFieldAccessValidationRule: LintRule = {
       }
     }
 
-    // If we couldn't load any query field metadata, skip
+    // Emit skip-with-warning for queries that were declared but have no field metadata
+    for (const queryReq of componentSpec.dataRequirements.queries) {
+      if (!queryFieldsMap.has(queryReq.name)) {
+        violations.push(
+          createViolation(
+            'query-result-field-access-validation',
+            'low',
+            null,
+            `Unable to validate field access on query '${queryReq.name}' results — query field metadata not available. Add fields to dataRequirements.queries for accurate validation.`,
+            queryReq.name
+          )
+        );
+      }
+    }
+
+    // If we couldn't load any query field metadata, skip further validation
     if (queryFieldsMap.size === 0) {
       return violations;
     }

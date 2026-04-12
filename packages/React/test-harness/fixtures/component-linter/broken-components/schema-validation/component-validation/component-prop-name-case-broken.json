@@ -17,5 +17,22 @@
         {"name": "data", "type": "array", "isRequired": false}
       ]
     }]
-  }
+  },
+  "dependencies": [
+    {
+      "name": "EntityGrid",
+      "location": "registry",
+      "type": "table",
+      "title": "Entity Grid",
+      "description": "Displays entity records in a tabular grid format",
+      "code": "",
+      "functionalRequirements": "",
+      "technicalDesign": "",
+      "exampleUsage": "<EntityGrid entityName=\"MJ: AI Models\" data={models} />",
+      "properties": [
+        {"name": "entityName", "type": "string", "required": true, "description": "The entity name to display in the grid"},
+        {"name": "data", "type": "array", "required": false, "description": "Array of records to display"}
+      ]
+    }
+  ]
 }

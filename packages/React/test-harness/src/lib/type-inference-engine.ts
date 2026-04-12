@@ -257,12 +257,12 @@ export class TypeInferenceEngine {
     const parent = path.parent;
 
     // Check if this arrow function is the first argument to a method call
-    // Pattern: someArray.method(callback)
-    if (!t.isCallExpression(parent)) return false;
+    // Pattern: someArray.method(callback) or someArray?.method(callback)
+    if (!t.isCallExpression(parent) && !t.isOptionalCallExpression(parent)) return false;
     if (parent.arguments[0] !== path.node && parent.arguments[1] !== path.node) return false;
 
     const callee = parent.callee;
-    if (!t.isMemberExpression(callee) || !t.isIdentifier(callee.property)) return false;
+    if ((!t.isMemberExpression(callee) && !t.isOptionalMemberExpression(callee)) || !t.isIdentifier(callee.property)) return false;
 
     const methodName = callee.property.name;
     const arrayIterMethods = ['map', 'filter', 'forEach', 'find', 'some', 'every', 'flatMap', 'sort'];
@@ -629,8 +629,8 @@ export class TypeInferenceEngine {
       return StandardTypes.function;
     }
 
-    // Call expressions
-    if (t.isCallExpression(node)) {
+    // Call expressions (including optional: a?.b())
+    if (t.isCallExpression(node) || t.isOptionalCallExpression(node)) {
       return this.inferCallExpressionType(node, path);
     }
 
@@ -639,8 +639,8 @@ export class TypeInferenceEngine {
       return this.inferNewExpressionType(node, path);
     }
 
-    // Member expressions
-    if (t.isMemberExpression(node)) {
+    // Member expressions (including optional chaining: a?.b, a?.[0])
+    if (t.isMemberExpression(node) || t.isOptionalMemberExpression(node)) {
       return this.inferMemberExpressionType(node, path);
     }
 
@@ -739,7 +739,7 @@ export class TypeInferenceEngine {
   /**
    * Infer type for call expressions
    */
-  private inferCallExpressionType(node: t.CallExpression, path?: NodePath): TypeInfo {
+  private inferCallExpressionType(node: t.CallExpression | t.OptionalCallExpression, path?: NodePath): TypeInfo {
     // Check for user-defined function calls
     if (t.isIdentifier(node.callee)) {
       const functionName = node.callee.name;
@@ -799,12 +799,12 @@ export class TypeInferenceEngine {
     }
 
     // Check for RunView/RunQuery calls
-    if (t.isMemberExpression(node.callee)) {
+    if (t.isMemberExpression(node.callee) || t.isOptionalMemberExpression(node.callee)) {
       const calleeObj = node.callee.object;
       const calleeProp = node.callee.property;
 
       // utilities.rv.RunView or utilities.rv.RunViews
-      if (t.isMemberExpression(calleeObj) &&
+      if ((t.isMemberExpression(calleeObj) || t.isOptionalMemberExpression(calleeObj)) &&
           t.isIdentifier(calleeObj.property) &&
           t.isIdentifier(calleeProp)) {
 
@@ -822,7 +822,7 @@ export class TypeInferenceEngine {
     }
 
     // Object.values() - returns array of object's values
-    if (t.isMemberExpression(node.callee) &&
+    if ((t.isMemberExpression(node.callee) || t.isOptionalMemberExpression(node.callee)) &&
         t.isIdentifier(node.callee.object) &&
         node.callee.object.name === 'Object' &&
         t.isIdentifier(node.callee.property) &&
@@ -842,7 +842,7 @@ export class TypeInferenceEngine {
     }
 
     // Array methods that return arrays
-    if (t.isMemberExpression(node.callee) && t.isIdentifier(node.callee.property)) {
+    if ((t.isMemberExpression(node.callee) || t.isOptionalMemberExpression(node.callee)) && t.isIdentifier(node.callee.property)) {
       const methodName = node.callee.property.name;
       const arrayMethods = ['filter', 'map', 'slice', 'concat', 'flat', 'flatMap', 'sort', 'reverse'];
 
@@ -929,7 +929,7 @@ export class TypeInferenceEngine {
   /**
    * Infer type for RunView result
    */
-  private inferRunViewResultType(node: t.CallExpression): TypeInfo {
+  private inferRunViewResultType(node: t.CallExpression | t.OptionalCallExpression): TypeInfo {
     // Try to extract EntityName from the arguments
     let entityName: string | undefined;
 
@@ -951,7 +951,7 @@ export class TypeInferenceEngine {
   /**
    * Infer type for RunQuery result
    */
-  private inferRunQueryResultType(node: t.CallExpression): TypeInfo {
+  private inferRunQueryResultType(node: t.CallExpression | t.OptionalCallExpression): TypeInfo {
     // Try to extract QueryName and Parameters from the arguments
     let queryName: string | undefined;
     let parametersNode: t.ObjectExpression | undefined;
@@ -1185,7 +1185,7 @@ export class TypeInferenceEngine {
   /**
    * Infer type for member expressions
    */
-  private inferMemberExpressionType(node: t.MemberExpression, path?: NodePath): TypeInfo {
+  private inferMemberExpressionType(node: t.MemberExpression | t.OptionalMemberExpression, path?: NodePath): TypeInfo {
     const objectType = this.inferExpressionType(node.object, path);
 
     // Array index access

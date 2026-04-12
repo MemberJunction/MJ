@@ -18,5 +18,23 @@
         {"name": "valueField", "type": "string", "isRequired": true}
       ]
     }]
-  }
+  },
+  "dependencies": [
+    {
+      "name": "SimpleChart",
+      "location": "registry",
+      "type": "chart",
+      "title": "Simple Chart",
+      "description": "Renders a simple chart visualization from data",
+      "code": "",
+      "functionalRequirements": "",
+      "technicalDesign": "",
+      "exampleUsage": "<SimpleChart data={chartData} groupBy=\"Category\" valueField=\"Amount\" />",
+      "properties": [
+        {"name": "data", "type": "array", "required": true, "description": "Array of data records to chart"},
+        {"name": "groupBy", "type": "string", "required": true, "description": "Field name to group data by"},
+        {"name": "valueField", "type": "string", "required": true, "description": "Field name for the numeric value axis"}
+      ]
+    }
+  ]
 }
