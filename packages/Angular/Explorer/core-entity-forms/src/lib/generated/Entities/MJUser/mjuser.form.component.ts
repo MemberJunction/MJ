@@ -85,6 +85,7 @@ export class MJUserFormComponent extends BaseFormComponent {
             { sectionKey: 'mJContentItemDuplicates', sectionName: 'Content Item Duplicates', isExpanded: false },
             { sectionKey: 'mJContentProcessRuns', sectionName: 'Content Process Runs', isExpanded: false },
             { sectionKey: 'mJKnowledgeHubSavedSearches', sectionName: 'Knowledge Hub Saved Searches', isExpanded: false },
+            { sectionKey: 'mJTagAuditLogs', sectionName: 'Tag Audit Logs', isExpanded: false },
             { sectionKey: 'mJResourcePermissions', sectionName: 'Resource Permissions', isExpanded: false },
             { sectionKey: 'mJAIAgentRequestsResponseByUserID', sectionName: 'AI Agent Requests', isExpanded: false },
             { sectionKey: 'mJConversationDetails', sectionName: 'Conversation Details', isExpanded: false },

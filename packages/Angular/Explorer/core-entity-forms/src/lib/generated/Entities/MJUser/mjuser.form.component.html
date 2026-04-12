@@ -1833,6 +1833,31 @@
         }
     </mj-collapsible-panel>
 
+    <!-- Tag Audit Logs Section -->
+    <mj-collapsible-panel
+        SectionKey="mJTagAuditLogs"
+        SectionName="Tag Audit Logs"
+        Icon="fa fa-history"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJTagAuditLogs')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tag Audit Logs','PerformedByUserID')"
+                [NewRecordValues]="NewRecordValues('MJ: Tag Audit Logs')"
+                [AllowLoad]="IsSectionExpanded('mJTagAuditLogs')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJTagAuditLogs', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <!-- Resource Permissions Section -->
     <mj-collapsible-panel
         SectionKey="mJResourcePermissions"
