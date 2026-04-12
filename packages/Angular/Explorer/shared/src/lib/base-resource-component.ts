@@ -71,7 +71,6 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
     }
 
     ngOnInit(): void {
-        console.log('[NAV-DEBUG] BaseResourceComponent.ngOnInit called for', this.constructor.name, '| tabId:', this.getTabId());
         this.setupQueryParamSubscription();
     }
 
@@ -96,11 +95,7 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
      * Safe to call during OnQueryParamsChanged — auto-suppressed to prevent loops.
      */
     protected UpdateQueryParams(params: Record<string, string | null>): void {
-        if (this._suppressQueryParamSync) {
-            console.log('[NAV-DEBUG] UpdateQueryParams SUPPRESSED (inside OnQueryParamsChanged)', params);
-            return;
-        }
-        console.log('[NAV-DEBUG] UpdateQueryParams:', params, '| from:', this.constructor.name);
+        if (this._suppressQueryParamSync) return;
         this.navigationService.UpdateActiveTabQueryParams(params);
     }
 
@@ -121,20 +116,11 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
             .pipe(
                 filter(event => {
                     const myTabId = this.getTabId();
-                    const match = !myTabId || event.TabId === myTabId;
-                    console.log('[NAV-DEBUG] QueryParamChanged$ filter:', {
-                        component: this.constructor.name,
-                        eventTabId: event.TabId,
-                        myTabId: myTabId || '(empty - accepting all)',
-                        match,
-                        params: event.Params,
-                    });
-                    return match;
+                    return !myTabId || event.TabId === myTabId;
                 }),
                 takeUntil(this.destroy$)
             )
             .subscribe(event => {
-                console.log('[NAV-DEBUG] QueryParamChanged$ DELIVERED to', this.constructor.name, '| params:', event.Params);
                 // try/finally ensures suppression flag is always cleared,
                 // even if OnQueryParamsChanged throws
                 this._suppressQueryParamSync = true;

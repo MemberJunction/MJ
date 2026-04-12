@@ -599,37 +599,20 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   private async syncWorkspaceWithUrl(url: string): Promise<void> {
     const config = this.workspaceManager.GetConfiguration();
     if (!config?.tabs?.length) {
-      console.log('[NAV-DEBUG] syncWorkspaceWithUrl: no tabs, skipping. URL:', url);
       return;
     }
 
     // Find the tab that matches this URL
     const matchingTab = await this.findTabForUrl(url, config.tabs);
 
-    console.log('[NAV-DEBUG] syncWorkspaceWithUrl:', {
-      url,
-      matchingTabId: matchingTab?.id || 'NONE',
-      activeTabId: config.activeTabId,
-      isSameTab: matchingTab?.id === config.activeTabId,
-      tabQueryParams: matchingTab?.configuration?.['queryParams'] || '(none)',
-    });
-
     if (matchingTab && matchingTab.id !== config.activeTabId) {
       // Activate the matching tab
-      console.log('[NAV-DEBUG]   → BRANCH: different tab, activating', matchingTab.id);
       this.workspaceManager.SetActiveTab(matchingTab.id);
     } else if (matchingTab && matchingTab.id === config.activeTabId) {
       // Same tab is already active, but query params may have changed (back/forward within nav item)
       const urlParams = this.extractQueryParamsFromUrl(url);
       const tabParams = (matchingTab.configuration?.['queryParams'] || {}) as Record<string, string>;
-      const paramsEqual = this.queryParamsEqual(urlParams, tabParams);
-      console.log('[NAV-DEBUG]   → BRANCH: same tab, checking query params', {
-        urlParams,
-        tabParams,
-        paramsEqual,
-      });
-      if (!paramsEqual) {
-        console.log('[NAV-DEBUG]   → PARAMS DIFFER: updating tab config + notifying component');
+      if (!this.queryParamsEqual(urlParams, tabParams)) {
         // URL is source of truth during back/forward — update tab config to match.
         this.urlBasedNavigation = true;
         try {
@@ -640,11 +623,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         } finally {
           this.urlBasedNavigation = false;
         }
-      } else {
-        console.log('[NAV-DEBUG]   → PARAMS EQUAL: no action needed');
       }
     } else if (!matchingTab) {
-      console.log('[NAV-DEBUG]   → BRANCH: no matching tab, handling missing tab for URL');
       await this.handleMissingTabForUrl(url);
     }
   }
@@ -765,7 +745,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         const app = this.appManager.GetAppByPath(appPath) || this.appManager.GetAppByName(appPath);
 
         if (app) {
-          console.log('[NAV-DEBUG] handleMissingTabForUrl: nav item URL', { appPath, navItemName, appId: app.ID });
           // Activate the app and open the nav item
           await this.appManager.SetActiveApp(app.ID);
           const navItems = await app.GetNavItems();
@@ -782,7 +761,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
               Object.keys(qpObj).length > 0 ? { queryParams: qpObj } : undefined
             );
           } else {
-            console.warn('[NAV-DEBUG] handleMissingTabForUrl: nav item not found:', navItemName, 'in app:', appPath);
+            console.warn('handleMissingTabForUrl: nav item not found:', navItemName, 'in app:', appPath);
           }
         }
         return;
