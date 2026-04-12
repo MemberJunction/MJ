@@ -7747,8 +7747,7 @@ The context is now within limits. Please retry your request with the recovered c
             }
         }
 
-        // 5. System fallback
-        await FileStorageEngineBase.Instance.Config(false, params.contextUser);
+        // 5. System fallback — use cached metadata (already loaded during engine Config)
         const activeAccounts = FileStorageEngineBase.Instance.AccountsWithProviders
             .filter(a => a.provider.IsActive);
 

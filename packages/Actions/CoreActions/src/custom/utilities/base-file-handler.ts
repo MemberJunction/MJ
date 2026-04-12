@@ -1,7 +1,7 @@
 import { BaseAction } from "@memberjunction/actions";
 import { RunActionParams } from "@memberjunction/actions-base";
-import { Metadata, RunView } from "@memberjunction/core";
-import { MJFileEntity, MJFileStorageAccountEntity, MJFileStorageProviderEntity } from "@memberjunction/core-entities";
+import { RunView } from "@memberjunction/core";
+import { MJFileEntity, MJFileStorageAccountEntity } from "@memberjunction/core-entities";
 import { FileStorageEngine } from "@memberjunction/storage";
 
 /**
@@ -171,8 +171,8 @@ export abstract class BaseFileHandlerAction extends BaseAction {
             // Resolve storage account ID
             let storageAccountId: string | undefined;
             if (storageAccountName) {
-                const { accountEntity } = await this.loadStorageAccountByName(storageAccountName, params);
-                storageAccountId = accountEntity.ID;
+                const account = this.loadStorageAccountByName(storageAccountName);
+                storageAccountId = account.ID;
             } else {
                 storageAccountId = await this.resolveStorageAccountId(params);
             }
@@ -198,35 +198,14 @@ export abstract class BaseFileHandlerAction extends BaseAction {
     }
 
     /**
-     * Loads a FileStorageAccount by name along with its provider entity.
+     * Finds a FileStorageAccount by name using the engine's cached metadata.
      */
-    private async loadStorageAccountByName(accountName: string, params: RunActionParams): Promise<{
-        accountEntity: MJFileStorageAccountEntity;
-        providerEntity: MJFileStorageProviderEntity;
-    }> {
-        const rv = new RunView();
-        const accountResult = await rv.RunView<MJFileStorageAccountEntity>({
-            EntityName: 'MJ: File Storage Accounts',
-            ExtraFilter: `Name = '${accountName.replace(/'/g, "''")}'`,
-            MaxRows: 1,
-            ResultType: 'entity_object'
-        }, params.ContextUser);
-
-        if (!accountResult.Success || accountResult.Results.length === 0) {
+    private loadStorageAccountByName(accountName: string): MJFileStorageAccountEntity {
+        const account = FileStorageEngine.Instance.GetAccountByName(accountName);
+        if (!account) {
             throw new Error(`FileStorageAccount "${accountName}" not found. Check account name or use default.`);
         }
-
-        const accountEntity = accountResult.Results[0];
-        const md = new Metadata();
-        const providerEntity = await md.GetEntityObject<MJFileStorageProviderEntity>(
-            'MJ: File Storage Providers', params.ContextUser
-        );
-        const providerLoaded = await providerEntity.Load(accountEntity.ProviderID);
-        if (!providerLoaded) {
-            throw new Error(`FileStorageProvider ${accountEntity.ProviderID} not found for account "${accountName}"`);
-        }
-
-        return { accountEntity, providerEntity };
+        return account;
     }
 
     /**
@@ -247,22 +226,15 @@ export abstract class BaseFileHandlerAction extends BaseAction {
     }
 
     /**
-     * Initializes a storage driver for the given file by looking up its storage account.
+     * Initializes a storage driver for the given file using the engine's cached metadata.
      */
     private async initializeDriverForFile(file: MJFileEntity, params: RunActionParams) {
-        const rv = new RunView();
-        const accountResult = await rv.RunView<MJFileStorageAccountEntity>({
-            EntityName: 'MJ: File Storage Accounts',
-            ExtraFilter: `ProviderID = '${file.ProviderID}'`,
-            MaxRows: 1,
-            ResultType: 'entity_object'
-        }, params.ContextUser);
-
-        if (!accountResult.Success || accountResult.Results.length === 0) {
+        const accounts = FileStorageEngine.Instance.GetAccountsByProviderID(file.ProviderID);
+        if (accounts.length === 0) {
             throw new Error(`No FileStorageAccount found for ProviderID ${file.ProviderID}`);
         }
 
-        return FileStorageEngine.Instance.GetDriver(accountResult.Results[0].ID, params.ContextUser);
+        return FileStorageEngine.Instance.GetDriver(accounts[0].ID, params.ContextUser);
     }
 
     /**

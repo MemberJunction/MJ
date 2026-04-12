@@ -1,6 +1,6 @@
 import { Resolver, Query, Arg, Ctx } from 'type-graphql';
-import { Metadata, RunView, IMetadataProvider } from '@memberjunction/core';
-import { MJArtifactVersionEntity, MJFileEntity, MJFileStorageAccountEntity } from '@memberjunction/core-entities';
+import { Metadata, IMetadataProvider } from '@memberjunction/core';
+import { MJArtifactVersionEntity, MJFileEntity } from '@memberjunction/core-entities';
 import { FileStorageEngine } from '@memberjunction/storage';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { AppContext } from '../types.js';
@@ -58,21 +58,14 @@ export class ArtifactFileResolver extends ResolverBase {
             throw new Error(`File record ${fileId} not found`);
         }
 
-        // Find the storage account for this file's provider
-        const rv = RunView.FromMetadataProvider(provider);
-        const accountResult = await rv.RunView<MJFileStorageAccountEntity>({
-            EntityName: 'MJ: File Storage Accounts',
-            ExtraFilter: `ProviderID = '${fileEntity.ProviderID}'`,
-            MaxRows: 1,
-            ResultType: 'entity_object',
-        }, user);
-
-        if (!accountResult.Success || accountResult.Results.length === 0) {
+        // Find the storage account for this file's provider using cached metadata
+        await FileStorageEngine.Instance.Config(false, user!);
+        const matchingAccounts = FileStorageEngine.Instance.GetAccountsByProviderID(fileEntity.ProviderID);
+        if (matchingAccounts.length === 0) {
             throw new Error(`No FileStorageAccount found for ProviderID ${fileEntity.ProviderID}. Cannot generate download URL.`);
         }
 
-        await FileStorageEngine.Instance.Config(false, user!);
-        const driver = await FileStorageEngine.Instance.GetDriver(accountResult.Results[0].ID, user!);
+        const driver = await FileStorageEngine.Instance.GetDriver(matchingAccounts[0].ID, user!);
         return driver.CreatePreAuthDownloadUrl(fileEntity.ProviderKey ?? fileEntity.Name);
     }
 }
