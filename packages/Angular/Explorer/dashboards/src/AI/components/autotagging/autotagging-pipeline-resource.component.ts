@@ -889,6 +889,15 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             BranchForeignKey: 'VendorID',
         },
     };
+    /** Branch config filtered to only vendors that have at least one embedding model */
+    public EmbeddingVendorBranch: TreeBranchConfig = {
+        EntityName: 'MJ: AI Vendors',
+        DisplayField: 'Name',
+        IDField: 'ID',
+        DefaultIcon: 'fa-solid fa-building',
+        OrderBy: 'Name ASC',
+        ExtraFilter: `ID IN (SELECT mv.VendorID FROM [__mj].vwAIModelVendors mv JOIN [__mj].vwAIModels m ON mv.ModelID = m.ID WHERE m.AIModelType = 'Embeddings')`,
+    };
     public EmbeddingModelsLeaf: TreeLeafConfig = {
         EntityName: 'MJ: AI Models',
         ParentField: '',
