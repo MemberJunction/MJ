@@ -119,6 +119,29 @@ Lines ~377-3371 in monolith. These 32 rules have files in runtime-rules/ already
 - File: 7,294 -> 2,810 lines
 - Tests: 92/92 passing
 
+## Gap Implementation (New Rules)
+
+### Gap 1+2+8: Entity/Query Field Validation with Optional Chaining
+- Shared infrastructure: trace RunView/RunQuery result variables through array ops
+- Validate field access against entity metadata or query fieldMetadata from spec
+- Status: PENDING
+
+### Gap 3: Child Component Prop Validation
+- Validate JSX props on child components against their spec definitions
+- Status: PENDING
+
+### Gap 4+5: Chart/DataGrid Field Validation  
+- Validate string field references in chart/grid props against data source fields
+- Status: PENDING
+
+### Gap 6: Enhanced Query Parameter Validation
+- Null checks on required params, type inference from useState
+- Status: PENDING
+
+### Gap 9-12: Additional Rules
+- RunView null safety, AI availability, callback signatures, useEffect deps
+- Status: PENDING
+
 ## Final Results
 - **component-linter.ts**: 10,879 -> 2,810 lines (74% reduction)
 - **Rule files**: 62 individual files in runtime-rules/

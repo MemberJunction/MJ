@@ -91,4 +91,18 @@ import './query-field-validation';
 import './dependency-prop-validation';
 import './utilities-api-validation';
 
-// Total: 62 runtime rules registered automatically
+// Phase 4A - Batch 5: Child component prop validation
+import './child-component-prop-validation';
+
+// Phase 4A - Batch 6: Enhanced field access validation with Levenshtein suggestions
+import './entity-field-access-validation';
+import './query-result-field-access-validation';
+
+// Phase 4A - Batch 7: Data-aware validation rules
+import './chart-field-validation';
+import './datagrid-field-validation';
+import './query-param-null-check';
+import './runview-result-null-safety';
+import './ai-tools-availability-check';
+
+// Total: 70 runtime rules registered automatically
