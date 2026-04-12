@@ -359,6 +359,7 @@ export class TypeContext {
 
     return {
       type: 'object',
+      entityName, // Preserve entity name so .Results access can create typed entity-row arrays
       fields: resultFields,
       fromMetadata: true
     };
@@ -385,6 +386,7 @@ export class TypeContext {
 
     return {
       type: 'object',
+      queryName, // Preserve query name so .Results access can create typed query-row arrays
       fields: resultFields,
       fromMetadata: true
     };

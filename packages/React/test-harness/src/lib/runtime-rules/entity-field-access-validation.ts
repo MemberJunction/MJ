@@ -61,6 +61,22 @@ function findCaseMismatch(fieldName: string, validFields: string[]): string | nu
 
 const NUMERIC_COERCION_FUNCTIONS = new Set(['parseInt', 'parseFloat', 'Number']);
 
+/** Common DOM/React/JS properties that should never be validated as entity fields */
+const NON_ENTITY_PROPERTIES = new Set([
+  // DOM event properties
+  'target', 'currentTarget', 'preventDefault', 'stopPropagation', 'nativeEvent',
+  'type', 'bubbles', 'cancelable', 'defaultPrevented', 'eventPhase', 'isTrusted',
+  // DOM element properties
+  'value', 'checked', 'selectedIndex', 'innerHTML', 'textContent', 'className',
+  'style', 'classList', 'dataset', 'children', 'parentNode', 'parentElement',
+  'offsetWidth', 'offsetHeight', 'scrollTop', 'scrollLeft', 'clientWidth', 'clientHeight',
+  // React/JS common
+  'current', 'then', 'catch', 'finally', 'prototype', 'constructor', 'length',
+  'map', 'filter', 'reduce', 'forEach', 'find', 'some', 'every', 'includes',
+  'push', 'pop', 'shift', 'unshift', 'splice', 'slice', 'concat', 'join',
+  'keys', 'values', 'entries', 'toString', 'valueOf', 'hasOwnProperty',
+]);
+
 /**
  * Resolves the variable name from a MemberExpression or OptionalMemberExpression.
  * Handles scoped names by checking if any scope prefix matches.
@@ -173,6 +189,10 @@ export const entityFieldAccessValidationRule: LintRule = {
       propertyName: string
     ): void {
       if (validFields.includes(propertyName)) return;
+
+      // Skip common DOM/React/JS properties — these are never entity fields
+      // and would indicate a scope mismatch (variable shadowed by a different context)
+      if (NON_ENTITY_PROPERTIES.has(propertyName)) return;
 
       const caseFix = findCaseMismatch(propertyName, validFields);
       if (caseFix) {

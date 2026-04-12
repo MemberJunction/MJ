@@ -1199,33 +1199,39 @@ export class TypeInferenceEngine {
     if (t.isIdentifier(node.property)) {
       const propName = node.property.name;
 
-      // Check if the object has known fields
-      if (objectType.fields?.has(propName)) {
-        const field = objectType.fields.get(propName)!;
-        return { type: field.type, nullable: field.nullable };
-      }
-
-      // Special case: Results property on RunView/RunQuery result
+      // Special case: .Results property on RunView/RunQuery result
+      // Must be checked BEFORE generic field lookup, because FieldTypeInfo
+      // can't carry arrayElementType (it's a simplified type), so the generic
+      // lookup would return bare { type: 'array' } without entity-row info.
       if (propName === 'Results' && objectType.type === 'object') {
-        // This should be an array of entity/query rows
         if (objectType.entityName) {
+          const entityFields = this.typeContext.getEntityFieldTypesSync(objectType.entityName);
           return {
             type: 'array',
             arrayElementType: {
               type: 'entity-row',
-              entityName: objectType.entityName
+              entityName: objectType.entityName,
+              fields: entityFields.size > 0 ? entityFields : undefined
             }
           };
         }
         if (objectType.queryName) {
+          const queryFields = this.typeContext.getQueryFieldTypes(objectType.queryName);
           return {
             type: 'array',
             arrayElementType: {
               type: 'query-row',
-              queryName: objectType.queryName
+              queryName: objectType.queryName,
+              fields: queryFields ?? undefined
             }
           };
         }
+      }
+
+      // Check if the object has known fields
+      if (objectType.fields?.has(propName)) {
+        const field = objectType.fields.get(propName)!;
+        return { type: field.type, nullable: field.nullable };
       }
 
       // Array length
