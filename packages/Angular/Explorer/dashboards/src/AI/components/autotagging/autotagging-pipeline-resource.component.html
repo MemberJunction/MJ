@@ -1719,7 +1719,7 @@
                     <!-- Content Library (D4 status badges, D7 pagination) -->
                     <div class="at-detail-section">
                         <div class="at-detail-section-header-row">
-                            <div class="at-detail-section-label">Content Library ({{ FilteredSourceDetailTotal }} of {{ SelectedSource.ContentItems.length }})</div>
+                            <div class="at-detail-section-label">Content Library ({{ FilteredSourceDetailTotal }} of {{ SelectedSource.ItemCount | number }})</div>
                             <div class="at-detail-section-controls">
                                 <select class="at-detail-filter-select" [(ngModel)]="SourceDetailStatusFilter" (ngModelChange)="OnSourceDetailStatusFilterChange()">
                                     @for (opt of SourceDetailStatusOptions; track opt) {

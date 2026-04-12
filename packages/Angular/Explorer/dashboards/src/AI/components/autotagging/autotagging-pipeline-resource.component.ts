@@ -328,6 +328,10 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     // ── Global state ──
     public IsLoading = true;
 
+    // ── Accurate total counts from TotalRowCount (not capped by MaxRows) ──
+    private totalContentItemCount = 0;
+    private totalContentTagCount = 0;
+
     // ── Tab state ──
     public ActiveTab: TabName = 'pipeline';
     private tabDataLoaded = new Set<TabName>();
@@ -1129,6 +1133,11 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             this.contentSourceTypesRaw = sourceTypesResult.Success ? sourceTypesResult.Results : [];
             this.contentTypesRaw = contentTypesResult.Success ? contentTypesResult.Results : [];
 
+            // Use TotalRowCount for accurate KPI/badge counts (the Results arrays are
+            // capped by MaxRows for feed display, but TotalRowCount reflects the full DB count)
+            this.totalContentItemCount = itemsResult.Success ? itemsResult.TotalRowCount : 0;
+            this.totalContentTagCount = tagsResult.Success ? tagsResult.TotalRowCount : 0;
+
             // Load ScheduledAction entities referenced by sources so cron descriptions are available
             await this.loadScheduledActionsForSources();
 
@@ -1148,15 +1157,15 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             { Tab: 'pipeline', Icon: 'fa-solid fa-gauge-high', Label: 'Pipeline', BadgeText: this.IsRunning ? 'Live' : '', BadgeClass: 'nav-badge-live' },
             { Tab: 'sources', Icon: 'fa-solid fa-database', Label: 'Sources', BadgeText: String(this.contentSourcesRaw.length), BadgeClass: '' },
             { Tab: 'types', Icon: 'fa-solid fa-sliders', Label: 'Content Types', BadgeText: String(this.contentTypesRaw.length), BadgeClass: '' },
-            { Tab: 'tags', Icon: 'fa-solid fa-tag', Label: 'Tag Library', BadgeText: String(this.contentTagsRaw.length), BadgeClass: '' },
+            { Tab: 'tags', Icon: 'fa-solid fa-tag', Label: 'Tag Library', BadgeText: String(this.totalContentTagCount), BadgeClass: '' },
             { Tab: 'taxonomy', Icon: 'fa-solid fa-sitemap', Label: 'Taxonomy', BadgeText: String(this.tagsRaw.length || ''), BadgeClass: '' },
         ];
     }
 
     private buildKPIMetrics(): void {
         const sourceCount = this.contentSourcesRaw.length;
-        const itemCount = this.contentItemsRaw.length;
-        const tagCount = this.contentTagsRaw.length;
+        const itemCount = this.totalContentItemCount;
+        const tagCount = this.totalContentTagCount;
         const errorCount = this.contentRunsRaw.filter(r => (r['Status'] as string)?.toLowerCase() === 'error' || (r['Status'] as string)?.toLowerCase() === 'failed').length;
 
         this.KPIMetrics = [
@@ -1195,10 +1204,13 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     }
 
     private buildSourceMinis(): void {
-        const itemCountBySource = this.countItemsBySource();
+        // When items are capped by MaxRows, countItemsBySource() undercounts.
+        // For a single source, use the accurate totalContentItemCount instead.
+        const singleSource = this.contentSourcesRaw.length === 1;
+        const itemCountBySource = singleSource ? null : this.countItemsBySource();
         this.SourceMinis = this.contentSourcesRaw.map(source => {
             const id = source['ID'] as string;
-            const itemCount = itemCountBySource.get(id) ?? 0;
+            const itemCount = singleSource ? this.totalContentItemCount : (itemCountBySource!.get(id) ?? 0);
             const typeName = (source['ContentSourceType'] as string) ?? 'Unknown';
             return {
                 ID: id,
@@ -1263,14 +1275,17 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     }
 
     private buildSourceCards(): void {
-        const itemCountBySource = this.countItemsBySource();
-        const tagCountBySource = this.countTagsBySource();
+        // When there's a single source, use the accurate total counts from TotalRowCount
+        // instead of counting from the capped contentItemsRaw/contentTagsRaw arrays.
+        const singleSource = this.contentSourcesRaw.length === 1;
+        const itemCountBySource = singleSource ? null : this.countItemsBySource();
+        const tagCountBySource = singleSource ? null : this.countTagsBySource();
         const lastRunBySource = this.getLastRunBySource();
 
         this.SourceCards = this.contentSourcesRaw.map(source => {
             const id = source['ID'] as string;
-            const itemCount = itemCountBySource.get(id) ?? 0;
-            const tagCount = tagCountBySource.get(id) ?? 0;
+            const itemCount = singleSource ? this.totalContentItemCount : (itemCountBySource!.get(id) ?? 0);
+            const tagCount = singleSource ? this.totalContentTagCount : (tagCountBySource!.get(id) ?? 0);
             const avgTags = itemCount > 0 ? (tagCount / itemCount).toFixed(1) : '0';
             const lastRun = lastRunBySource.get(id);
             const typeName = (source['ContentSourceType'] as string) ?? 'Unknown';
@@ -1548,9 +1563,11 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             const endTime = run['EndTime'] as string | null;
             const duration = this.computeDuration(startTime, endTime);
             const processedItems = run['ProcessedItems'] as number | null;
+            const errorCount = run['ErrorCount'] as number | null;
             const statusLower = status.toLowerCase();
             const isFailed = statusLower === 'error' || statusLower === 'failed';
             const isRunning = statusLower === 'running' || statusLower === 'processing';
+            const hasErrors = (errorCount ?? 0) > 0;
 
             return {
                 ID: run['ID'] as string,
@@ -1561,8 +1578,8 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
                 Duration: duration,
                 Items: processedItems != null ? this.formatNumber(processedItems) : '\u2014',
                 Tags: '\u2014',
-                Errors: isFailed ? status : '0',
-                ErrorClass: isFailed ? 'run-error-text' : ''
+                Errors: hasErrors ? this.formatNumber(errorCount!) : (isFailed ? status : '0'),
+                ErrorClass: isFailed || hasErrors ? 'run-error-text' : ''
             };
         });
     }
@@ -2551,7 +2568,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         }
         const result = new Map<string, string>();
         for (const [tag, sourceCounts] of tagSourceCounts) {
-            let maxSource = '';
+            let maxSource = 'Unknown';
             let maxCount = 0;
             for (const [source, count] of sourceCounts) {
                 if (count > maxCount) { maxSource = source; maxCount = count; }
@@ -3141,9 +3158,11 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             const endTime = run['EndTime'] as string | null;
             const duration = this.computeDuration(startTime, endTime);
             const processedItems = run['ProcessedItems'] as number | null;
+            const errorCount = run['ErrorCount'] as number | null;
             const statusLower = status.toLowerCase();
             const isFailed = statusLower === 'error' || statusLower === 'failed';
             const isRunning = statusLower === 'running' || statusLower === 'processing';
+            const hasErrors = (errorCount ?? 0) > 0;
 
             return {
                 ID: run['ID'] as string,
@@ -3154,8 +3173,8 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
                 Duration: duration,
                 Items: processedItems != null ? this.formatNumber(processedItems) : '\u2014',
                 Tags: '\u2014',
-                Errors: isFailed ? status : '0',
-                ErrorClass: isFailed ? 'run-error-text' : ''
+                Errors: hasErrors ? this.formatNumber(errorCount!) : (isFailed ? status : '0'),
+                ErrorClass: isFailed || hasErrors ? 'run-error-text' : ''
             };
         });
     }
