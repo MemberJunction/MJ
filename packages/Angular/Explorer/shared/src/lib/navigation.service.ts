@@ -7,6 +7,16 @@ import { UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from './base-resource-component';
 
 /**
+ * Event emitted when query params change on a tab (e.g., from browser back/forward).
+ * Includes the tab ID so that only the component in the affected tab reacts,
+ * preventing cross-tab leakage in multi-tab scenarios.
+ */
+export interface QueryParamChangeEvent {
+    TabId: string;
+    Params: Record<string, string>;
+}
+
+/**
  * Event emitted when a resource component reports its agent context or tools.
  * The shell (which owns the ComponentCacheManager) subscribes to these events
  * and updates the cache + active AppContextSnapshot accordingly.
@@ -47,6 +57,10 @@ const NEUTRAL_APP_COLOR = '#9E9E9E'; // Material Design Gray 500
 export class NavigationService implements OnDestroy {
   private shiftKeyPressed = false;
   private subscriptions: Subscription[] = [];
+
+  private queryParamChanged$ = new Subject<QueryParamChangeEvent>();
+  /** Observable that emits when query params change on a tab (back/forward navigation). */
+  public QueryParamChanged$ = this.queryParamChanged$.asObservable();
 
   /** Cached Home app ID (null means not found, undefined means not checked) */
   private _homeAppId: string | null | undefined = undefined;
@@ -166,7 +180,6 @@ export class NavigationService implements OnDestroy {
    *   should know about. Each dashboard defines its own shape.
    */
   public SetAgentContext(caller: BaseResourceComponent, context: Record<string, unknown>): void {
-    console.log(`[AgentContext] SetAgentContext from ${caller.constructor.name}:`, Object.keys(context));
     this.AgentContextUpdated$.next({ Caller: caller, AgentContext: context });
   }
 
@@ -186,7 +199,6 @@ export class NavigationService implements OnDestroy {
     ParameterSchema: Record<string, unknown>;
     Handler: (params: Record<string, unknown>) => Promise<unknown>;
   }>): void {
-    console.log(`[AgentContext] SetAgentClientTools from ${caller.constructor.name}: [${tools.map(t => t.Name).join(', ')}]`);
     this.AgentContextUpdated$.next({ Caller: caller, AgentClientTools: tools });
   }
 
@@ -635,6 +647,51 @@ export class NavigationService implements OnDestroy {
   }
 
   /**
+   * Open a universal search results tab for the given query.
+   * This is the primary way to open search results from anywhere in the application.
+   *
+   * @param query The search query text
+   * @param searchOptions Optional search-specific options (e.g., minRelevance)
+   * @param options Navigation options
+   */
+  public OpenSearch(
+    query: string,
+    searchOptions?: { minRelevance?: number },
+    options?: NavigationOptions
+  ): string {
+    const appId = this.getDefaultApplicationId();
+    const appColor = this.getDefaultAppColor();
+    const forceNew = this.shouldForceNewTab(options);
+
+    const config: Record<string, unknown> = {
+      resourceType: 'Search Results',
+      Query: query,
+      SearchInput: query,
+      recordId: `search-${query}`
+    };
+    if (searchOptions?.minRelevance != null) {
+      config['MinRelevance'] = searchOptions.minRelevance;
+    }
+
+    const request: TabRequest = {
+      ApplicationId: appId,
+      Title: `Search: ${query}`,
+      Configuration: config,
+      ResourceRecordId: `search-${query}`,
+      IsPinned: false
+    };
+
+    // Handle transition from single-resource mode
+    this.handleSingleResourceModeTransition(forceNew, request);
+
+    if (forceNew) {
+      return this.workspaceManager.OpenTabForced(request, appColor);
+    } else {
+      return this.workspaceManager.OpenTab(request, appColor);
+    }
+  }
+
+  /**
    * Navigate to a nav item by name within the current or specified application.
    * Allows passing additional configuration parameters to merge with the nav item's config.
    * This is useful for cross-resource navigation where a component needs to navigate
@@ -766,6 +823,15 @@ export class NavigationService implements OnDestroy {
     }
 
     this.applyQueryParamsToTab(activeTabId, queryParams);
+  }
+
+  /**
+   * Notify subscribers that query params changed on a specific tab.
+   * Called by the shell when back/forward navigation changes query params on the active tab.
+   * The notification includes the tab ID so only the component in that tab reacts.
+   */
+  NotifyQueryParamsChanged(tabId: string, params: Record<string, string>): void {
+    this.queryParamChanged$.next({ TabId: tabId, Params: params });
   }
 
   /**

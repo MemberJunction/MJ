@@ -1,0 +1,23 @@
+[
+  {
+    "fields": {
+      "Name": "Tuvalu",
+      "Code": "TV",
+      "ISO3166_2": "TV-TV",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Tuvalu"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TV"
+    },
+    "primaryKey": {
+      "ID": "B643DB7A-1B44-401C-85ED-8CC915A47C1D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:38.244Z",
+      "checksum": "794045d2141c648ce66116023af5a139e94d116448a25c052c489df95459a5cb"
+    }
+  }
+]

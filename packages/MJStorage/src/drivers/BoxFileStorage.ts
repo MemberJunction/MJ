@@ -1829,6 +1829,7 @@ export class BoxFileStorage extends FileStorageBase {
         limit: maxResults,
         fields: ['id', 'name', 'type', 'size', 'content_type', 'modified_at', 'created_at', 'etag', 'path_collection', 'parent'],
         type: 'file', // Only search for files, not folders
+        contentTypes: ['name', 'description', 'file_content', 'comments', 'tag'], // Search across all content types
       };
 
       // Build file extensions filter from fileTypes option
@@ -1917,19 +1918,30 @@ export class BoxFileStorage extends FileStorageBase {
             lastModified = new Date();
           }
 
+          // Extract content excerpt if Box returned it
+          // Box returns content_match as a highlighted HTML string when file_content is searched
+          const contentMatch = fileItem.content_match ?? fileItem.contentMatch;
+          const excerpt = contentMatch ? String(contentMatch) : undefined;
+
+          // Determine if the match was in filename vs content
+          const queryLower = query.toLowerCase();
+          const nameContainsQuery = (fileItem.name || '').toLowerCase().includes(queryLower);
+          const matchInFilename = nameContainsQuery ? true : (excerpt ? false : undefined);
+
+          // Box doesn't provide a direct relevance score, but result order IS by relevance
+          // Use inverse rank as a proxy (first result = most relevant)
+          const rankRelevance = results.length === 0 ? 0.95 : Math.max(0.1, 0.95 - (results.length * 0.05));
+
           results.push({
             path,
             name: fileItem.name || '',
             size: fileItem.size || 0,
             contentType: mime.lookup(fileItem.name || '') || 'application/octet-stream',
             lastModified,
-            objectId: fileItem.id || '', // Box file ID for direct access (bypasses path resolution)
-            // Box search doesn't provide relevance scores in the standard API
-            relevance: undefined,
-            // Box search doesn't provide excerpts in the standard API
-            excerpt: undefined,
-            // Cannot determine if match was in filename vs content from Box API
-            matchInFilename: undefined,
+            objectId: fileItem.id || '',
+            relevance: rankRelevance,
+            excerpt,
+            matchInFilename,
             customMetadata: {
               id: fileItem.id || '',
               etag: fileItem.etag || '',
@@ -1937,6 +1949,7 @@ export class BoxFileStorage extends FileStorageBase {
             providerData: {
               boxItemId: fileItem.id,
               boxItemType: fileItem.type,
+              contentMatch: excerpt,
             },
           });
         }

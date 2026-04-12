@@ -1,0 +1,23 @@
+[
+  {
+    "fields": {
+      "Name": "Pitcairn",
+      "Code": "PN",
+      "ISO3166_2": "PN-PN",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Pitcairn"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PN"
+    },
+    "primaryKey": {
+      "ID": "D05498E1-3B8B-44D8-A2E4-A55901BE26D5"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:25.794Z",
+      "checksum": "c9cff60fcb1657fedbc9fe012bd9e07f1fae26239b9e71e53d6367d1ce64d0e2"
+    }
+  }
+]

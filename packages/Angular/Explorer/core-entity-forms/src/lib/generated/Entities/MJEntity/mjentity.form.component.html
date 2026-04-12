@@ -194,6 +194,22 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="SupportsGeoCoding"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="AutoUpdateSupportsGeoCoding"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
 
     </mj-collapsible-panel>
 
@@ -427,6 +443,30 @@
             [ShowLabel]="true"
             FieldName="RowsToPackSampleOrder"
             Type="code"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="AutoUpdateFullTextSearch"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="AutoUpdateAllowUserSearchAPI"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="TrustServerCacheCompletely"
+            Type="checkbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -1737,25 +1777,25 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Archive Run Details Section -->
+    <!-- Record Geo Codes Section -->
     <mj-collapsible-panel
-        SectionKey="mJArchiveRunDetails"
-        SectionName="Archive Run Details"
-        Icon="fa fa-file-archive"
+        SectionKey="mJRecordGeoCodes"
+        SectionName="Record Geo Codes"
+        Icon="fa fa-map-marked-alt"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJArchiveRunDetails')"
+        [BadgeCount]="GetSectionRowCount('mJRecordGeoCodes')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Archive Run Details','EntityID')"
-                [NewRecordValues]="NewRecordValues('MJ: Archive Run Details')"
-                [AllowLoad]="IsSectionExpanded('mJArchiveRunDetails')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Record Geo Codes','EntityID')"
+                [NewRecordValues]="NewRecordValues('MJ: Record Geo Codes')"
+                [AllowLoad]="IsSectionExpanded('mJRecordGeoCodes')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJArchiveRunDetails', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJRecordGeoCodes', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -1856,31 +1896,6 @@
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJEntityFieldsRelatedEntityID', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
-    <!-- Archive Configuration Entities Section -->
-    <mj-collapsible-panel
-        SectionKey="mJArchiveConfigurationEntities"
-        SectionName="Archive Configuration Entities"
-        Icon="fa fa-archive"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJArchiveConfigurationEntities')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Archive Configuration Entities','EntityID')"
-                [NewRecordValues]="NewRecordValues('MJ: Archive Configuration Entities')"
-                [AllowLoad]="IsSectionExpanded('mJArchiveConfigurationEntities')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJArchiveConfigurationEntities', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

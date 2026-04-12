@@ -196,7 +196,7 @@ export class MjIsaRelatedCardComponent implements OnInit, OnChanges {
 
     // Number formatting
     if (typeof value === 'number') {
-      if (field.ExtendedType === 'money' || field.Type?.toLowerCase().includes('money')) {
+      if (field.Type?.toLowerCase().includes('money')) {
         return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
       }
       return value.toLocaleString();

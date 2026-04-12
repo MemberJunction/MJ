@@ -1,0 +1,170 @@
+[
+  {
+    "fields": {
+      "Name": "Jihočeský kraj",
+      "Code": "CJC",
+      "ISO3166_2": "CZ-CJC",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Jihočeský kraj"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CZ"
+    },
+    "primaryKey": {
+      "ID": "CEDC4A02-DC1B-494A-A08A-F9EFEEE32AD2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:40.643Z",
+      "checksum": "8503d882e5cf569c0a528ec7385dbd85db2442670ccf52608570e7cbc1b41aa3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Jihomoravský kraj",
+      "Code": "CJM",
+      "ISO3166_2": "CZ-CJM",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Jihomoravský kraj"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CZ"
+    },
+    "primaryKey": {
+      "ID": "B30490B8-9751-4518-B2F3-EC3AC4BE0496"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:40.659Z",
+      "checksum": "d16dbdf88a6cb8208974f8f646adb5efc5cc2eddea1cfa9550e38f4a22aaa09c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Praha",
+      "Code": "PRG",
+      "ISO3166_2": "CZ-PRG",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Praha"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CZ"
+    },
+    "primaryKey": {
+      "ID": "B7380303-8D90-48A0-A29A-B49126E60B82"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:40.676Z",
+      "checksum": "f628461803c6c7086ed4337fabfbb2b92a546b7998328d45ea7c5c69b191a3d4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Severočeský kraj",
+      "Code": "CSC",
+      "ISO3166_2": "CZ-CSC",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Severočeský kraj"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CZ"
+    },
+    "primaryKey": {
+      "ID": "BE60505D-9C5E-48A2-9BBF-1F9B0C6F5174"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:40.693Z",
+      "checksum": "faa993137cd6eaa7ab54cca7c2f69541081083d3d279b0c38f091d5b64f89d51"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Severomoravský kraj",
+      "Code": "CSM",
+      "ISO3166_2": "CZ-CSM",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Severomoravský kraj"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CZ"
+    },
+    "primaryKey": {
+      "ID": "37D94D96-0DC6-464F-BECA-902930D7E1AC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:40.709Z",
+      "checksum": "f752cbd7ff3b841f64d13e8221f18a2d8325b2870d160b26e3a2b343ad5d3e9a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Středočeský kraj",
+      "Code": "CST",
+      "ISO3166_2": "CZ-CST",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Středočeský kraj"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CZ"
+    },
+    "primaryKey": {
+      "ID": "6407E99D-2990-4B5E-8AEF-CBB3F662A619"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:40.725Z",
+      "checksum": "c07c49d15059e09ea7be1107c53f0b2a9a9d57d8ade23cb623b8e42d6a67009b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Východočeský kraj",
+      "Code": "CVC",
+      "ISO3166_2": "CZ-CVC",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Východočeský kraj"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CZ"
+    },
+    "primaryKey": {
+      "ID": "B45D2496-BFBF-49A6-B1AE-3255F3C133AA"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:40.740Z",
+      "checksum": "a3a3deacacb2909f3878fd4e8861c158340e32f46836abebf2f51fd95336f641"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Západočeský kraj",
+      "Code": "CZC",
+      "ISO3166_2": "CZ-CZC",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Západočeský kraj"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CZ"
+    },
+    "primaryKey": {
+      "ID": "D65E60FE-0808-4125-84AD-656CEB8AF23D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:40.753Z",
+      "checksum": "de3afd1fb8786bd6cf641709533fe44fe3a817b7b48afbb35d8867cae3bed050"
+    }
+  }
+]

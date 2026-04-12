@@ -62,10 +62,13 @@ export class SearchResultsComponent {
     /** Whether to show source type icons */
     @Input() ShowSourceIcons = true;
 
+    /** Text to highlight within result cards (e.g. from a client-side filter) */
+    @Input() HighlightText = '';
+
     @Output() ResultSelected = new EventEmitter<SearchResultSelectedEvent>();
 
     /** Emitted when user clicks "Open Record" — parent handles navigation */
-    @Output() OpenRecordRequested = new EventEmitter<{ EntityName: string; RecordID: string }>();
+    @Output() OpenRecordRequested = new EventEmitter<SearchResultItem>();
 
     /** Emitted when user clicks "See Similar Items" — parent runs a "more like this" search */
     @Output() MoreLikeThisRequested = new EventEmitter<SearchResultItem>();
@@ -176,16 +179,24 @@ export class SearchResultsComponent {
     /** Handle "Open Record" button click */
     public OnOpenRecord(result: SearchResultItem, event: MouseEvent): void {
         event.stopPropagation();
-        this.OpenRecordRequested.emit({
-            EntityName: result.EntityName,
-            RecordID: result.RecordID
-        });
+        this.OpenRecordRequested.emit(result);
     }
 
     /** Handle "See Similar Items" button click — emits the result for a "more like this" search */
     public OnMoreLikeThis(result: SearchResultItem, event: MouseEvent): void {
         event.stopPropagation();
         this.MoreLikeThisRequested.emit(result);
+    }
+
+    /**
+     * Wrap substrings matching HighlightText in <mark> tags for visual emphasis.
+     * The input is regex-escaped so user text is treated as a literal string.
+     */
+    public HighlightMatch(text: string): string {
+        if (!this.HighlightText || !text) return text;
+        const escaped = this.HighlightText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const regex = new RegExp(`(${escaped})`, 'gi');
+        return text.replace(regex, '<mark class="search-highlight">$1</mark>');
     }
 
     /** Format a score as a percentage */

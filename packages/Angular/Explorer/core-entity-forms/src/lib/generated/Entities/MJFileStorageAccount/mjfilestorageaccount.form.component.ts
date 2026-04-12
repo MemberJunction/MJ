@@ -19,7 +19,7 @@ export class MJFileStorageAccountFormComponent extends BaseFormComponent {
             { sectionKey: 'accountOverview', sectionName: 'Account Overview', isExpanded: true },
             { sectionKey: 'connectionDetails', sectionName: 'Connection Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJArchiveConfigurations', sectionName: 'Archive Configurations', isExpanded: false }
+            { sectionKey: 'mJFileStorageAccountPermissions', sectionName: 'File Storage Account Permissions', isExpanded: false }
         ]);
     }
 }

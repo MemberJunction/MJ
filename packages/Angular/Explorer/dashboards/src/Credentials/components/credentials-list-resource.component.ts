@@ -38,7 +38,7 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
     private _metadata = new Metadata();
     private _permissionCache = new Map<string, boolean>();
 
-    private destroy$ = new Subject<void>();
+    protected override destroy$ = new Subject<void>();
 
     @ViewChild('editPanel') editPanel!: CredentialEditPanelComponent;
 
@@ -49,10 +49,12 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
     }
 
     ngOnInit(): void {
+        super.ngOnInit();
         this.loadData();
     }
 
     ngOnDestroy(): void {
+        super.ngOnDestroy();
         this.destroy$.next();
         this.destroy$.complete();
     }

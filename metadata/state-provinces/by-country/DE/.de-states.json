@@ -1,0 +1,338 @@
+[
+  {
+    "fields": {
+      "Name": "Baden-Württemberg",
+      "Code": "BW",
+      "ISO3166_2": "DE-BW",
+      "Latitude": 48.5378,
+      "Longitude": 9.0412,
+      "BoundaryGeoJSON": "@file:by-country/DE/boundaries/DE-BW.geojson",
+      "CommonAliases": [
+        "Baden-Württemberg"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DE"
+    },
+    "primaryKey": {
+      "ID": "1B819462-27FB-4A2D-A668-3D1B334F079E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:41.067Z",
+      "checksum": "92b8ebab8af1348b899ef2edf3fd007abfd71f7ba03c4edd1f3df922d348209b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bavaria",
+      "Code": "BY",
+      "ISO3166_2": "DE-BY",
+      "Latitude": 48.9468,
+      "Longitude": 11.4039,
+      "BoundaryGeoJSON": "@file:by-country/DE/boundaries/DE-BY.geojson",
+      "CommonAliases": [
+        "Bavaria"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DE"
+    },
+    "primaryKey": {
+      "ID": "7BD9807D-A9F7-48AC-B4F0-3ECA263CA3E3"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:41.083Z",
+      "checksum": "1463200c536b8b4c850f5ad2a4f8e8671efca28f8fbe51e652b0be5eebe61f7a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Berlin",
+      "Code": "BE",
+      "ISO3166_2": "DE-BE",
+      "Latitude": 52.5109,
+      "Longitude": 13.3989,
+      "BoundaryGeoJSON": "@file:by-country/DE/boundaries/DE-BE.geojson",
+      "CommonAliases": [
+        "Berlin"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DE"
+    },
+    "primaryKey": {
+      "ID": "3CDB3DFF-B032-4159-823F-C6BDF565610A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:41.101Z",
+      "checksum": "26abce3f5ab17db80dca26c0b3fc3c93557e079f82551f9551100086f8d1a9b7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Brandenburg",
+      "Code": "BB",
+      "ISO3166_2": "DE-BB",
+      "Latitude": 52.8455,
+      "Longitude": 13.2461,
+      "BoundaryGeoJSON": "@file:by-country/DE/boundaries/DE-BB.geojson",
+      "CommonAliases": [
+        "Brandenburg"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DE"
+    },
+    "primaryKey": {
+      "ID": "2C2D9966-9F50-480D-8266-9491AB3AFD84"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:41.124Z",
+      "checksum": "48c50cee77ad93957e27e4b93cdf0b5d6d60ef25c49ebf541687fe40452726b7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bremen",
+      "Code": "HB",
+      "ISO3166_2": "DE-HB",
+      "Latitude": 53.0793,
+      "Longitude": 8.8017,
+      "BoundaryGeoJSON": "@file:by-country/DE/boundaries/DE-HB.geojson",
+      "CommonAliases": [
+        "Bremen"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DE"
+    },
+    "primaryKey": {
+      "ID": "5A60FDE0-602C-4F75-8B3D-1D676E8188F5"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:41.144Z",
+      "checksum": "9e9fcfe096c65e9d1b0cbedd66a45c9f1d6ecbe9a7058ca8d06172b601f3bc0a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Hamburg",
+      "Code": "HH",
+      "ISO3166_2": "DE-HH",
+      "Latitude": 53.5511,
+      "Longitude": 9.9937,
+      "BoundaryGeoJSON": "@file:by-country/DE/boundaries/DE-HH.geojson",
+      "CommonAliases": [
+        "Hamburg"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DE"
+    },
+    "primaryKey": {
+      "ID": "E3E051F1-1F89-4C21-8B6E-2534203A5111"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:41.169Z",
+      "checksum": "30c99fc5f966984327c802c5cd75ddfe3566eccb0fe2fedd1de4636190a2a92b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Hessen",
+      "Code": "HE",
+      "ISO3166_2": "DE-HE",
+      "Latitude": 50.6081,
+      "Longitude": 9.0285,
+      "BoundaryGeoJSON": "@file:by-country/DE/boundaries/DE-HE.geojson",
+      "CommonAliases": [
+        "Hessen"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DE"
+    },
+    "primaryKey": {
+      "ID": "32854217-1EE2-4523-A01F-B7047C5126AC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:41.198Z",
+      "checksum": "ed8b725b64b8deefe6d050fd48a33282415fcd6d501c8b59dda62159d3a27a9f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Lower Saxony",
+      "Code": "NI",
+      "ISO3166_2": "DE-NI",
+      "Latitude": 52.8399,
+      "Longitude": 9.076,
+      "BoundaryGeoJSON": "@file:by-country/DE/boundaries/DE-NI.geojson",
+      "CommonAliases": [
+        "Lower Saxony"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DE"
+    },
+    "primaryKey": {
+      "ID": "DA820688-47D3-42A5-B2E9-EBB94E0333FD"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:41.217Z",
+      "checksum": "609fa04708db9d827829bd03692c37c626314d6e65eae0ddfc36ca40887b2297"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mecklenburg-Vorpommern",
+      "Code": "MV",
+      "ISO3166_2": "DE-MV",
+      "Latitude": 53.7735,
+      "Longitude": 12.5755,
+      "BoundaryGeoJSON": "@file:by-country/DE/boundaries/DE-MV.geojson",
+      "CommonAliases": [
+        "Mecklenburg-Vorpommern"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DE"
+    },
+    "primaryKey": {
+      "ID": "EE42B878-3989-4AD9-AA91-A539AE2083C7"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:41.234Z",
+      "checksum": "877e761457f16c52e6ac50fd4720d46bfb6bd289b749ce18df4dd98881118deb"
+    }
+  },
+  {
+    "fields": {
+      "Name": "North Rhine-Westphalia",
+      "Code": "NW",
+      "ISO3166_2": "DE-NW",
+      "Latitude": 51.4789,
+      "Longitude": 7.5544,
+      "BoundaryGeoJSON": "@file:by-country/DE/boundaries/DE-NW.geojson",
+      "CommonAliases": [
+        "North Rhine-Westphalia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DE"
+    },
+    "primaryKey": {
+      "ID": "06064D67-B8D3-4C8E-B84E-1FCD86959F6A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:41.249Z",
+      "checksum": "7d39df255c84670a6335867564c366bf29e3c9fca13386594d91699d3b711f39"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rhineland-Palatinate",
+      "Code": "RP",
+      "ISO3166_2": "DE-RP",
+      "Latitude": 49.9532,
+      "Longitude": 7.3106,
+      "BoundaryGeoJSON": "@file:by-country/DE/boundaries/DE-RP.geojson",
+      "CommonAliases": [
+        "Rhineland-Palatinate"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DE"
+    },
+    "primaryKey": {
+      "ID": "11301EB2-3BD3-4B74-A7FD-E19E8D291B31"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:41.289Z",
+      "checksum": "4e0617de512d27f5dd57fc8be1082820b9631809a548563b2b8c8f7fc043bd85"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Saarland",
+      "Code": "SL",
+      "ISO3166_2": "DE-SL",
+      "Latitude": 49.3842,
+      "Longitude": 6.9537,
+      "BoundaryGeoJSON": "@file:by-country/DE/boundaries/DE-SL.geojson",
+      "CommonAliases": [
+        "Saarland"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DE"
+    },
+    "primaryKey": {
+      "ID": "60E9FC9B-EB15-4FE3-A96D-4D0030657339"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:41.304Z",
+      "checksum": "fb45adace44ea42c91f2b982456d397a80748c0a8a5f852467d0abc637adf048"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Saxony",
+      "Code": "SN",
+      "ISO3166_2": "DE-SN",
+      "Latitude": 50.9296,
+      "Longitude": 13.4585,
+      "BoundaryGeoJSON": "@file:by-country/DE/boundaries/DE-SN.geojson",
+      "CommonAliases": [
+        "Saxony"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DE"
+    },
+    "primaryKey": {
+      "ID": "D128B923-AE05-4E86-AD11-3CAC704E73AF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:41.319Z",
+      "checksum": "a9142933a4274cd1cd15a90951521f743187e3f7e0fd792aa792531fbd898e1e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Saxony-Anhalt",
+      "Code": "ST",
+      "ISO3166_2": "DE-ST",
+      "Latitude": 51.9281,
+      "Longitude": 11.6812,
+      "BoundaryGeoJSON": "@file:by-country/DE/boundaries/DE-ST.geojson",
+      "CommonAliases": [
+        "Saxony-Anhalt"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DE"
+    },
+    "primaryKey": {
+      "ID": "D4BCD13B-8428-4A0C-A7A7-414ECA746460"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:41.336Z",
+      "checksum": "1f930d80837cc287f3f48c7550a52486bcbfb8363c4c9cd12bc9b9c7bdb0771a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Schleswig-Holstein",
+      "Code": "SH",
+      "ISO3166_2": "DE-SH",
+      "Latitude": 54.1854,
+      "Longitude": 9.822,
+      "BoundaryGeoJSON": "@file:by-country/DE/boundaries/DE-SH.geojson",
+      "CommonAliases": [
+        "Schleswig-Holstein"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DE"
+    },
+    "primaryKey": {
+      "ID": "D18E26F6-6203-43F5-84D1-5C03794A2C2F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:41.351Z",
+      "checksum": "145364dd64c447c9e8a1ec333896e691c12b73a25d53f9900e9073823ce629f8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Thuringia",
+      "Code": "TH",
+      "ISO3166_2": "DE-TH",
+      "Latitude": 50.9015,
+      "Longitude": 11.0378,
+      "BoundaryGeoJSON": "@file:by-country/DE/boundaries/DE-TH.geojson",
+      "CommonAliases": [
+        "Thuringia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DE"
+    },
+    "primaryKey": {
+      "ID": "55273D68-199B-45A7-A6FC-C74B255A7E7D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:41.364Z",
+      "checksum": "f955ecbc915482176bbfcbab6a3f78b96efbede98630a0847f4a7bc1ba728b22"
+    }
+  }
+]

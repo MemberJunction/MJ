@@ -1,0 +1,632 @@
+[
+  {
+    "fields": {
+      "Name": "Badakhshān",
+      "Code": "BDS",
+      "ISO3166_2": "AF-BDS",
+      "Latitude": 36.781,
+      "Longitude": 70.8036,
+      "BoundaryGeoJSON": "@file:by-country/AF/boundaries/AF-BDS.geojson",
+      "CommonAliases": [
+        "Badakhshān"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AF"
+    },
+    "primaryKey": {
+      "ID": "8881E3E9-4E20-408F-875E-358E5370627E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:26.026Z",
+      "checksum": "06747e3abd9ecd6f0d46387fd51e5a86e0b52a56ab3df2222e4eb299862ad157"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bādghīs",
+      "Code": "BDG",
+      "ISO3166_2": "AF-BDG",
+      "Latitude": 35.2699,
+      "Longitude": 63.8495,
+      "BoundaryGeoJSON": "@file:by-country/AF/boundaries/AF-BDG.geojson",
+      "CommonAliases": [
+        "Bādghīs"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AF"
+    },
+    "primaryKey": {
+      "ID": "E336B23C-25BB-42A6-8F10-47E17668892A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:26.042Z",
+      "checksum": "1193a4c5416711013b0e1f763f297186370830f0629ae0bc37feba4021957c0c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Baghlān",
+      "Code": "BGL",
+      "ISO3166_2": "AF-BGL",
+      "Latitude": 35.8588,
+      "Longitude": 68.9831,
+      "BoundaryGeoJSON": "@file:by-country/AF/boundaries/AF-BGL.geojson",
+      "CommonAliases": [
+        "Baghlān"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AF"
+    },
+    "primaryKey": {
+      "ID": "598289C8-0E80-4800-92A9-7BBA38C1F94B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:26.060Z",
+      "checksum": "c22f9929b16b086de9bc57318380bd7c580236fff73456770957dbe579006d5c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Balkh",
+      "Code": "BAL",
+      "ISO3166_2": "AF-BAL",
+      "Latitude": 36.6851,
+      "Longitude": 67.2185,
+      "BoundaryGeoJSON": "@file:by-country/AF/boundaries/AF-BAL.geojson",
+      "CommonAliases": [
+        "Balkh"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AF"
+    },
+    "primaryKey": {
+      "ID": "08153E05-1E0B-40EC-B56A-7E806A2B831A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:26.086Z",
+      "checksum": "1651b370511ef4678f75e9e80d7764013f129a347cdae209dbdec17c706b7601"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bāmīān",
+      "Code": "BAM",
+      "ISO3166_2": "AF-BAM",
+      "Latitude": 34.9693,
+      "Longitude": 67.2365,
+      "BoundaryGeoJSON": "@file:by-country/AF/boundaries/AF-BAM.geojson",
+      "CommonAliases": [
+        "Bāmīān"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AF"
+    },
+    "primaryKey": {
+      "ID": "760DF5D0-9DBB-40A3-999E-E7F02C0611D1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:26.108Z",
+      "checksum": "bc0dfc486271760c4ee1f3c7b426cfede921120616bb49cfa0b9389433bb3838"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Farāh",
+      "Code": "FRA",
+      "ISO3166_2": "AF-FRA",
+      "Latitude": 32.5314,
+      "Longitude": 62.6498,
+      "BoundaryGeoJSON": "@file:by-country/AF/boundaries/AF-FRA.geojson",
+      "CommonAliases": [
+        "Farāh"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AF"
+    },
+    "primaryKey": {
+      "ID": "38E57E2B-6C8E-43EE-8EB1-0A8DADB1FD11"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:26.127Z",
+      "checksum": "85fe6850cdec0d26fda0938dda4f963219d5a3c188337905cd335f1ced725c04"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Fāryāb",
+      "Code": "FYB",
+      "ISO3166_2": "AF-FYB",
+      "Latitude": 35.8043,
+      "Longitude": 64.7678,
+      "BoundaryGeoJSON": "@file:by-country/AF/boundaries/AF-FYB.geojson",
+      "CommonAliases": [
+        "Fāryāb"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AF"
+    },
+    "primaryKey": {
+      "ID": "6FAAE289-437F-42F2-85D4-386A815910CF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:26.148Z",
+      "checksum": "76fed1ee5c30343848436f5a972fa5e48f9c8d1b5c2460a5d592181dbd68dafd"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ghaznī",
+      "Code": "GHA",
+      "ISO3166_2": "AF-GHA",
+      "Latitude": 33.4079,
+      "Longitude": 67.8006,
+      "BoundaryGeoJSON": "@file:by-country/AF/boundaries/AF-GHA.geojson",
+      "CommonAliases": [
+        "Ghaznī"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AF"
+    },
+    "primaryKey": {
+      "ID": "1AC2DDDA-6EB3-44B2-83F3-D919ACB6F5C3"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:26.169Z",
+      "checksum": "81e89e6d20be67383bb46d6b605f22982dd905c1867676ee44978765ee81ab56"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ghowr",
+      "Code": "GHO",
+      "ISO3166_2": "AF-GHO",
+      "Latitude": 34.002,
+      "Longitude": 64.9224,
+      "BoundaryGeoJSON": "@file:by-country/AF/boundaries/AF-GHO.geojson",
+      "CommonAliases": [
+        "Ghowr"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AF"
+    },
+    "primaryKey": {
+      "ID": "BD20BCD9-3922-4F05-9567-A9A5AB8A23F1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:26.185Z",
+      "checksum": "cdb92d908fb6bfca9014ac4cd29777f3abea8a2b2159e4ab1307b7958b609525"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Helmand",
+      "Code": "HEL",
+      "ISO3166_2": "AF-HEL",
+      "Latitude": 30.9278,
+      "Longitude": 63.9824,
+      "BoundaryGeoJSON": "@file:by-country/AF/boundaries/AF-HEL.geojson",
+      "CommonAliases": [
+        "Helmand"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AF"
+    },
+    "primaryKey": {
+      "ID": "AB1036C1-825F-491B-95AD-982D6AFD15E4"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:26.199Z",
+      "checksum": "607f0e255c2d4107651e9c4483665d98479bb41a511caa72bc317ab7aeeb639c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Herāt",
+      "Code": "HER",
+      "ISO3166_2": "AF-HER",
+      "Latitude": 34.1551,
+      "Longitude": 62.4845,
+      "BoundaryGeoJSON": "@file:by-country/AF/boundaries/AF-HER.geojson",
+      "CommonAliases": [
+        "Herāt"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AF"
+    },
+    "primaryKey": {
+      "ID": "4B1BE68C-E6F5-4BB5-B54D-EBBBB3A8B289"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:26.251Z",
+      "checksum": "19310c36bc0ae10cd790a47dcf5580499c2cfc084b8d7abca86d743346880b6d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Jowzjān",
+      "Code": "JOW",
+      "ISO3166_2": "AF-JOW",
+      "Latitude": 36.8971,
+      "Longitude": 65.9617,
+      "BoundaryGeoJSON": "@file:by-country/AF/boundaries/AF-JOW.geojson",
+      "CommonAliases": [
+        "Jowzjān"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AF"
+    },
+    "primaryKey": {
+      "ID": "C3234C46-FDC9-4DB2-B2D3-CBC7022C6CB8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:26.267Z",
+      "checksum": "b5b279383da192bd9bedb338c6bd7192d41aca2da7aea6eac568f4e0257d039b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kabul (Kābol)",
+      "Code": "KAB",
+      "ISO3166_2": "AF-KAB",
+      "Latitude": 34.4949,
+      "Longitude": 69.3846,
+      "BoundaryGeoJSON": "@file:by-country/AF/boundaries/AF-KAB.geojson",
+      "CommonAliases": [
+        "Kabul (Kābol)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AF"
+    },
+    "primaryKey": {
+      "ID": "3A2542B6-6870-402A-817B-FBE0D4BFFB00"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:26.284Z",
+      "checksum": "f2606ee3f7a32b00d28080dcf30af1cddf7344181cbd981c785a478ebae97f51"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kandahār",
+      "Code": "KAN",
+      "ISO3166_2": "AF-KAN",
+      "Latitude": 31.135,
+      "Longitude": 65.7163,
+      "BoundaryGeoJSON": "@file:by-country/AF/boundaries/AF-KAN.geojson",
+      "CommonAliases": [
+        "Kandahār"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AF"
+    },
+    "primaryKey": {
+      "ID": "9535E878-A050-4E3C-86E6-98F21E3C5055"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:26.302Z",
+      "checksum": "149da7c48a25bc0c8d7adbc2ddf6674f05adb255278a1587044bee758d0a51f8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kāpīsā",
+      "Code": "KAP",
+      "ISO3166_2": "AF-KAP",
+      "Latitude": 34.9748,
+      "Longitude": 69.6626,
+      "BoundaryGeoJSON": "@file:by-country/AF/boundaries/AF-KAP.geojson",
+      "CommonAliases": [
+        "Kāpīsā"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AF"
+    },
+    "primaryKey": {
+      "ID": "3CBB0F90-E2B8-4F79-B88F-E3FE5900791D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:26.317Z",
+      "checksum": "dec12cab218a019ff2070ca5d29424b49a7b299ab7b4333ed7a470619240f867"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Konar (Kunar)",
+      "Code": "KNR",
+      "ISO3166_2": "AF-KNR",
+      "Latitude": 34.9013,
+      "Longitude": 71.1061,
+      "BoundaryGeoJSON": "@file:by-country/AF/boundaries/AF-KNR.geojson",
+      "CommonAliases": [
+        "Konar (Kunar)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AF"
+    },
+    "primaryKey": {
+      "ID": "44B1AA1C-0A0F-4F4D-B5BB-E3BA23C12346"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:26.333Z",
+      "checksum": "302407c051e4b001c8c0cbbfbf630b06da4ee1a40bcad71a20a2e273ca2aa592"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kondoz (Kunduz)",
+      "Code": "KDZ",
+      "ISO3166_2": "AF-KDZ",
+      "Latitude": 36.9043,
+      "Longitude": 68.682,
+      "BoundaryGeoJSON": "@file:by-country/AF/boundaries/AF-KDZ.geojson",
+      "CommonAliases": [
+        "Kondoz (Kunduz)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AF"
+    },
+    "primaryKey": {
+      "ID": "E41A7588-AAB5-41DB-A5EE-24293E6ECCD2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:26.349Z",
+      "checksum": "bf076f83ef48656a962ab4d02f614d4097140b190499a8fe38ededfb03d4350a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Laghmān",
+      "Code": "LAG",
+      "ISO3166_2": "AF-LAG",
+      "Latitude": 34.7273,
+      "Longitude": 70.2085,
+      "BoundaryGeoJSON": "@file:by-country/AF/boundaries/AF-LAG.geojson",
+      "CommonAliases": [
+        "Laghmān"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AF"
+    },
+    "primaryKey": {
+      "ID": "A03CADA7-B23E-4395-B594-D8C787DD2188"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:26.365Z",
+      "checksum": "287bc2fa6683cb40ada250273351c0449d816ce27c50a8673a61595f443c53e8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Lowgar",
+      "Code": "LOW",
+      "ISO3166_2": "AF-LOW",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Lowgar"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AF"
+    },
+    "primaryKey": {
+      "ID": "65C53383-38BE-4C74-BE5F-701E777718A2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:26.380Z",
+      "checksum": "c0bdca9c3123cab11f6a89cdaeadcfde0bd89887683a9af374fc7dcfa6d215c5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nangrahār (Nangarhār)",
+      "Code": "NAN",
+      "ISO3166_2": "AF-NAN",
+      "Latitude": 34.2153,
+      "Longitude": 70.3027,
+      "BoundaryGeoJSON": "@file:by-country/AF/boundaries/AF-NAN.geojson",
+      "CommonAliases": [
+        "Nangrahār (Nangarhār)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AF"
+    },
+    "primaryKey": {
+      "ID": "79F883A1-81DF-4881-897C-585B17ABAA68"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:26.393Z",
+      "checksum": "70160e55f39fd79ea7c55418f575a8afd97d651edd97dca69c14c694b9b5cd83"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nīmrūz",
+      "Code": "NIM",
+      "ISO3166_2": "AF-NIM",
+      "Latitude": 30.7528,
+      "Longitude": 62.2069,
+      "BoundaryGeoJSON": "@file:by-country/AF/boundaries/AF-NIM.geojson",
+      "CommonAliases": [
+        "Nīmrūz"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AF"
+    },
+    "primaryKey": {
+      "ID": "589CD338-14E7-4996-86A6-1D8D54C5F5BA"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:26.450Z",
+      "checksum": "1286d1339074fa6ec67de204ca3cf71b03c85bdf2745e7e972361d2a3f1f0904"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Orūzgān (Urūzgā",
+      "Code": "ORU",
+      "ISO3166_2": "AF-ORU",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Orūzgān (Urūzgā"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AF"
+    },
+    "primaryKey": {
+      "ID": "32618C27-C8B3-4703-9D22-99A14A3E7762"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:26.466Z",
+      "checksum": "1f2a00d2d6cce307f68cf779197e23fb5555b8b05e90a45d7f6a09d9a54131fd"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Paktīā",
+      "Code": "PIA",
+      "ISO3166_2": "AF-PIA",
+      "Latitude": 32.5106,
+      "Longitude": 68.651,
+      "BoundaryGeoJSON": "@file:by-country/AF/boundaries/AF-PIA.geojson",
+      "CommonAliases": [
+        "Paktīā"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AF"
+    },
+    "primaryKey": {
+      "ID": "2B68DD65-E67B-49C7-B7CA-CE619467C19B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:26.484Z",
+      "checksum": "6a962404eecf7d7148b710711159aeb062696706bf19d2c32a5d09477ec199e5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Paktīkā",
+      "Code": "PKA",
+      "ISO3166_2": "AF-PKA",
+      "Latitude": 33.575,
+      "Longitude": 69.3826,
+      "BoundaryGeoJSON": "@file:by-country/AF/boundaries/AF-PKA.geojson",
+      "CommonAliases": [
+        "Paktīkā"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AF"
+    },
+    "primaryKey": {
+      "ID": "96CF3C7C-0DC6-4F40-9197-C455C4A0B77C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:26.501Z",
+      "checksum": "875ab1a4cdf372e980b96011ed382485a71d75931f0c40d6083a0310a4ef4006"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Parwān",
+      "Code": "PAR",
+      "ISO3166_2": "AF-PAR",
+      "Latitude": 34.9984,
+      "Longitude": 68.8995,
+      "BoundaryGeoJSON": "@file:by-country/AF/boundaries/AF-PAR.geojson",
+      "CommonAliases": [
+        "Parwān"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AF"
+    },
+    "primaryKey": {
+      "ID": "67E4F540-9E0E-40D5-B710-B1C5B6C0EA90"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:26.520Z",
+      "checksum": "155e30e5d4cc5d55ad7e1afb5d99b7166b54f82998b5db6bd9086e081817748f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Samangān",
+      "Code": "SAM",
+      "ISO3166_2": "AF-SAM",
+      "Latitude": 36.0506,
+      "Longitude": 67.683,
+      "BoundaryGeoJSON": "@file:by-country/AF/boundaries/AF-SAM.geojson",
+      "CommonAliases": [
+        "Samangān"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AF"
+    },
+    "primaryKey": {
+      "ID": "54B876E6-B4BA-4E18-88A4-3F498724F5A6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:26.536Z",
+      "checksum": "8973b21fda383b475b5aff4a640d015c8ab68c75855fa552158aa77f39c636fe"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sar-e Pol",
+      "Code": "SAR",
+      "ISO3166_2": "AF-SAR",
+      "Latitude": 35.7062,
+      "Longitude": 66.2158,
+      "BoundaryGeoJSON": "@file:by-country/AF/boundaries/AF-SAR.geojson",
+      "CommonAliases": [
+        "Sar-e Pol"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AF"
+    },
+    "primaryKey": {
+      "ID": "A5CF5B14-6741-40E9-AAF7-5E5A629FCAEA"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:26.553Z",
+      "checksum": "cb7666cc13c4498fa6d21bb3a75584c439790dfa67cdde505d7f601b5db5325e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Takhār",
+      "Code": "TAK",
+      "ISO3166_2": "AF-TAK",
+      "Latitude": 36.8335,
+      "Longitude": 69.8124,
+      "BoundaryGeoJSON": "@file:by-country/AF/boundaries/AF-TAK.geojson",
+      "CommonAliases": [
+        "Takhār"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AF"
+    },
+    "primaryKey": {
+      "ID": "DD0B22E5-B7F9-4C74-B1D9-9C17CA9A524B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:26.570Z",
+      "checksum": "14ac396220fe3c816054e3ccceb2bc67ac8576c75114cbf32cae421d9ac3b00a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Wardak (Wardag)",
+      "Code": "WAR",
+      "ISO3166_2": "AF-WAR",
+      "Latitude": 34.4269,
+      "Longitude": 68.1087,
+      "BoundaryGeoJSON": "@file:by-country/AF/boundaries/AF-WAR.geojson",
+      "CommonAliases": [
+        "Wardak (Wardag)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AF"
+    },
+    "primaryKey": {
+      "ID": "637CD682-C454-43E0-9129-DB101A4E0200"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:26.586Z",
+      "checksum": "820345b0b357213dd28af6b1597b7c89a8827cdd6a2488fe1f018c26694f213e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Zābol (Zābul)",
+      "Code": "ZAB",
+      "ISO3166_2": "AF-ZAB",
+      "Latitude": 32.4033,
+      "Longitude": 67.1401,
+      "BoundaryGeoJSON": "@file:by-country/AF/boundaries/AF-ZAB.geojson",
+      "CommonAliases": [
+        "Zābol (Zābul)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AF"
+    },
+    "primaryKey": {
+      "ID": "04D930DD-A44F-4EAF-97E0-AB90EDBDA7DA"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:26.600Z",
+      "checksum": "60f4f6759dcfd4704cb2b284be9cee1237d5c96b52a39620a39a52d65ff35b28"
+    }
+  }
+]

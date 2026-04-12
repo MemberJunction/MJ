@@ -1,0 +1,758 @@
+[
+  {
+    "fields": {
+      "Name": "Berat",
+      "Code": "BR",
+      "ISO3166_2": "AL-BR",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Berat"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AL"
+    },
+    "primaryKey": {
+      "ID": "F4A0618E-5B66-479E-B6D3-B4E0A3188545"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:26.723Z",
+      "checksum": "650b4225fd4dae35c355cd5b0c312b84c1182d27067f8bb9a3b66fe769f3d13c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bulqizë",
+      "Code": "BU",
+      "ISO3166_2": "AL-BU",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Bulqizë"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AL"
+    },
+    "primaryKey": {
+      "ID": "DB0C64C8-FC75-4BCF-8D2D-76624E2A2BA9"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:26.737Z",
+      "checksum": "cc7629d1c04f8c4b8182e028399674eb6d75e48d5f33084dcb7c6550016c060b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Delvinë",
+      "Code": "DL",
+      "ISO3166_2": "AL-DL",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Delvinë"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AL"
+    },
+    "primaryKey": {
+      "ID": "56091AA6-B2A2-46AF-8552-2779AF9DA4FC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:26.754Z",
+      "checksum": "a86c242bd64d5358f83e135182f6496b3b126db82ad9d78134949d4a4198912a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Devoll",
+      "Code": "DV",
+      "ISO3166_2": "AL-DV",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Devoll"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AL"
+    },
+    "primaryKey": {
+      "ID": "E0FEE11E-D380-4E97-83A8-A19E6AA775AA"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:26.772Z",
+      "checksum": "38d8af09eb786127081f396dc864b4f08ba09f52b7818acae4f40ab0e8296af5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Dibër",
+      "Code": "DI",
+      "ISO3166_2": "AL-DI",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Dibër"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AL"
+    },
+    "primaryKey": {
+      "ID": "7307BEDF-6AB8-42BB-A7C4-02C0203330D2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:26.787Z",
+      "checksum": "12595004600609252e9f32aabe172ff099147f42af94101a6a518bd6464d8749"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Durrës",
+      "Code": "DR",
+      "ISO3166_2": "AL-DR",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Durrës"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AL"
+    },
+    "primaryKey": {
+      "ID": "458D5DA3-A8FB-4F62-97DD-C5C7BB79EDF4"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:26.802Z",
+      "checksum": "73709e4512801e990a400443bc7962b91eacc34c08c87a19e3b08d636df5a665"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Elbasan",
+      "Code": "EL",
+      "ISO3166_2": "AL-EL",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Elbasan"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AL"
+    },
+    "primaryKey": {
+      "ID": "33463833-CC55-4254-8445-39FC6862C3BA"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:26.818Z",
+      "checksum": "042fd4aa456310af8b730cb4202114f3d189a3dfbbd1d906c563585a4c0a909f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Fier",
+      "Code": "FR",
+      "ISO3166_2": "AL-FR",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Fier"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AL"
+    },
+    "primaryKey": {
+      "ID": "B5B2DA85-6682-4087-8503-B4EB5AA587FF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:26.834Z",
+      "checksum": "98c8c52f003a1d5328bb325642b886919bf06329b9166c9888b15ff885c9f170"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gjirokastër",
+      "Code": "GJ",
+      "ISO3166_2": "AL-GJ",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Gjirokastër"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AL"
+    },
+    "primaryKey": {
+      "ID": "3342124A-83FC-441B-827A-0BB52B376E8A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:26.850Z",
+      "checksum": "b7b768146d350037b66b14dbc6eb042204a74259eb0535b06770f8e7c48071b0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gramsh",
+      "Code": "GR",
+      "ISO3166_2": "AL-GR",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Gramsh"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AL"
+    },
+    "primaryKey": {
+      "ID": "BB50FF1B-FD8E-404E-B283-00C54B0A3CCB"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:26.863Z",
+      "checksum": "653128e701aa3356b92e30a22e3324a8bffbc41ae7433ab4c80fdd8e81a40021"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Has",
+      "Code": "HA",
+      "ISO3166_2": "AL-HA",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Has"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AL"
+    },
+    "primaryKey": {
+      "ID": "E2198D2F-87A7-44DB-964B-601717544198"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:26.922Z",
+      "checksum": "214a04eb77734ada056f1a74374859b35b270b23b42f5cc0b55d7e5b6c37820c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kavajë",
+      "Code": "KA",
+      "ISO3166_2": "AL-KA",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Kavajë"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AL"
+    },
+    "primaryKey": {
+      "ID": "DCD6A111-EFBA-4584-B14E-940A30459F2A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:26.938Z",
+      "checksum": "8a7504c4d9230eab629af0344a6f284cf16ab93b4c1be5cb9f58cecb02983fa1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kolonjë",
+      "Code": "ER",
+      "ISO3166_2": "AL-ER",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Kolonjë"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AL"
+    },
+    "primaryKey": {
+      "ID": "64E0714E-F10E-4B18-9B32-8D8CF1769D11"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:26.954Z",
+      "checksum": "e236a584a7b58938f3548e233bda3bb44f0b302a0702321fbe695346a8ed4cbf"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Korcë",
+      "Code": "KO",
+      "ISO3166_2": "AL-KO",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Korcë"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AL"
+    },
+    "primaryKey": {
+      "ID": "8D51B721-2474-4123-B3C4-77F46BD613AE"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:26.969Z",
+      "checksum": "1d7f5dfdcd06e871957f66ffa11fa421fa708601fe4ed2dbe48d3ffcd40dc800"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Krujë",
+      "Code": "KR",
+      "ISO3166_2": "AL-KR",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Krujë"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AL"
+    },
+    "primaryKey": {
+      "ID": "5C32211F-E747-4CF7-A714-C29C6076D9D0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:26.986Z",
+      "checksum": "f9d61983cd625614e1c5b957d1455f7bc4a80d524e239124285dd440f60ea4ff"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kucovë",
+      "Code": "KC",
+      "ISO3166_2": "AL-KC",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Kucovë"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AL"
+    },
+    "primaryKey": {
+      "ID": "DA134668-5280-4477-A8F0-F5D6AB0AB186"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:27.003Z",
+      "checksum": "a9b2ef7d04be38fdd1e0bfd60ce5c0ad69d49c7800da319c09e91e634c22c88f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kukës",
+      "Code": "KU",
+      "ISO3166_2": "AL-KU",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Kukës"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AL"
+    },
+    "primaryKey": {
+      "ID": "97D178F4-46F4-4699-B970-3ACB48A0D213"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:27.022Z",
+      "checksum": "cee36ee9d0dd1991776524b4a4231bf1cdc22d19b2c199bd416b063d207580a9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Laç",
+      "Code": "LA",
+      "ISO3166_2": "AL-LA",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Laç"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AL"
+    },
+    "primaryKey": {
+      "ID": "ABC83E3A-813A-4619-BC11-A2E8D74490C1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:27.037Z",
+      "checksum": "819c868c1aa69c98e25c239f848e409f1f6fa394875152f5a889bca5229e17ac"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Lezhë",
+      "Code": "LE",
+      "ISO3166_2": "AL-LE",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Lezhë"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AL"
+    },
+    "primaryKey": {
+      "ID": "8A24B1AC-75C6-4D05-9D84-F08B7C3CA025"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:27.053Z",
+      "checksum": "cba687afe5a0cb8798e392ebfd619965c13388773b242587d6edc4b1097ce0cc"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Librazhd",
+      "Code": "LB",
+      "ISO3166_2": "AL-LB",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Librazhd"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AL"
+    },
+    "primaryKey": {
+      "ID": "0B648BA9-AFDE-43F1-A0DE-4BDAE5746967"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:27.067Z",
+      "checksum": "7216dcf5ba23f7ef1783114b9b7c26210cf6b044e459826bb804142e87bf9a00"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Lushnjë",
+      "Code": "LU",
+      "ISO3166_2": "AL-LU",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Lushnjë"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AL"
+    },
+    "primaryKey": {
+      "ID": "FF319F14-93F8-4F31-992A-8A5E7A3F4EA2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:27.141Z",
+      "checksum": "b01b94b2d465621e37cc47accddd5b1f7fcf612a80dc31f51ad665d304bbc945"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Malësia e Madhe",
+      "Code": "MM",
+      "ISO3166_2": "AL-MM",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Malësia e Madhe"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AL"
+    },
+    "primaryKey": {
+      "ID": "F5BCC7B7-EF59-44A7-8176-EEF8C44FB694"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:27.159Z",
+      "checksum": "ab514a723d1fe5abd5ab6ea8918b63bfbef0a4e33de8250aa9dc8fd64690ed68"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mallakastër",
+      "Code": "MK",
+      "ISO3166_2": "AL-MK",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Mallakastër"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AL"
+    },
+    "primaryKey": {
+      "ID": "35C52699-3047-40CA-9BD7-884F2F1513BE"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:27.177Z",
+      "checksum": "46fe71fe1b2af8dec34ad6358b28dc129566eea6ea0b21960a9b82b8f003b583"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mat",
+      "Code": "MT",
+      "ISO3166_2": "AL-MT",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Mat"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AL"
+    },
+    "primaryKey": {
+      "ID": "DCD1CE4B-0979-4241-AE77-8D927AB6116D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:27.195Z",
+      "checksum": "44f134ddc2ef9a4fdf7885e9f1ba526955da1aba7651628e9ec664ae40b382b7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mirditë",
+      "Code": "MR",
+      "ISO3166_2": "AL-MR",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Mirditë"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AL"
+    },
+    "primaryKey": {
+      "ID": "591DA5E7-B6BE-4674-9822-B1C1B2D4C3ED"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:27.211Z",
+      "checksum": "8ba1ae43f56bc33af91fb544a0dca5d02c323ab714004f7923e646836f878ee4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Peqin",
+      "Code": "PQ",
+      "ISO3166_2": "AL-PQ",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Peqin"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AL"
+    },
+    "primaryKey": {
+      "ID": "76CEED60-09C3-433D-AAB6-A62A56834562"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:27.228Z",
+      "checksum": "c33da4099cbea395664ab0c7abf50e55637921f9d20d789cf85f98fc066571bd"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Përmet",
+      "Code": "PR",
+      "ISO3166_2": "AL-PR",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Përmet"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AL"
+    },
+    "primaryKey": {
+      "ID": "D9EA1102-E9C3-480E-AAC9-7F1880D9566C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:27.245Z",
+      "checksum": "a42b720c55ce6a667c76afe9f85d5ceceb3791aa6a7f9ea7b02af475a779d562"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Pogradec",
+      "Code": "PG",
+      "ISO3166_2": "AL-PG",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Pogradec"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AL"
+    },
+    "primaryKey": {
+      "ID": "13E2DD5E-144D-418F-BD7C-723E5CA30E10"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:27.262Z",
+      "checksum": "b9b832606e97fa393ed767dc11a4ad264907693c21bce3a80c09b82112077561"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Pukë",
+      "Code": "PU",
+      "ISO3166_2": "AL-PU",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Pukë"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AL"
+    },
+    "primaryKey": {
+      "ID": "54FBBFEA-C2A0-4893-BCC5-B217F1223802"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:27.278Z",
+      "checksum": "3d2015b52958a9962ff70cd85bf116c0e4d69235eb2b140473c34f761ca919b4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sarandë",
+      "Code": "SR",
+      "ISO3166_2": "AL-SR",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Sarandë"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AL"
+    },
+    "primaryKey": {
+      "ID": "4E10D945-E718-430B-8920-4F7F1295B096"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:27.294Z",
+      "checksum": "a8ad1798d44791631543e83d1239376cb106e0529eb0b260032e42e4f785121c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Shkodër",
+      "Code": "SH",
+      "ISO3166_2": "AL-SH",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Shkodër"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AL"
+    },
+    "primaryKey": {
+      "ID": "DBC085BA-FBFA-4DEB-9421-2F75ECFD4102"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:27.336Z",
+      "checksum": "f34b2c460d3c9847c801e78772e45a2a69e495e6d18c41fbebe643f7f03e4407"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Skrapar",
+      "Code": "SK",
+      "ISO3166_2": "AL-SK",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Skrapar"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AL"
+    },
+    "primaryKey": {
+      "ID": "721BEBA9-500D-421E-BCD0-8BC63808CDDA"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:27.352Z",
+      "checksum": "fa204303f99f4ab9773e3f5c21a4c447491ea18d5303e5cf008e6140233f641a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tepelenë",
+      "Code": "TE",
+      "ISO3166_2": "AL-TE",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Tepelenë"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AL"
+    },
+    "primaryKey": {
+      "ID": "E48099BA-BBD7-49F3-82DD-DF979C83D6A4"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:27.368Z",
+      "checksum": "d5c26fb577ce2e06782412d0dbf33183f5fea650d0dc2e47affb274835e79faf"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tiranë",
+      "Code": "TR",
+      "ISO3166_2": "AL-TR",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Tiranë"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AL"
+    },
+    "primaryKey": {
+      "ID": "FE97E58B-C931-41B3-B472-91F52A62DFAD"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:27.384Z",
+      "checksum": "87a050c9d4298f9339782407060a025e097da08fe67565f11c35412f474746ba"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tropojë",
+      "Code": "TP",
+      "ISO3166_2": "AL-TP",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Tropojë"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AL"
+    },
+    "primaryKey": {
+      "ID": "979E87CB-E17B-4F73-8D47-9E8DDE1F8EF6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:27.400Z",
+      "checksum": "d06677e59cc13daa68bc46933670e97acf3dd10055515ed5ccd40556aafc4384"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Vlorë",
+      "Code": "VL",
+      "ISO3166_2": "AL-VL",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Vlorë"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AL"
+    },
+    "primaryKey": {
+      "ID": "229C7B71-F840-4461-8AE6-22717875061F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:27.414Z",
+      "checksum": "2ae82f0f86bf4cb3e2aa18b90d3edff3ce67019671f76709d10f29a5bc419257"
+    }
+  }
+]

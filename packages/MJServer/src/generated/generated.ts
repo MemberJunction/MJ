@@ -18,7 +18,7 @@ import { mj_core_schema } from '../config.js';
 
 
 
-import { MJAccessControlRuleEntity, MJActionAuthorizationEntity, MJActionCategoryEntity, MJActionContextTypeEntity, MJActionContextEntity, MJActionExecutionLogEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity, MJActionEntity, MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentArtifactTypeEntity, MJAIAgentCategoryEntity, MJAIAgentClientToolEntity, MJAIAgentConfigurationEntity, MJAIAgentDataSourceEntity, MJAIAgentExampleEntity, MJAIAgentLearningCycleEntity, MJAIAgentModalityEntity, MJAIAgentModelEntity, MJAIAgentNoteTypeEntity, MJAIAgentNoteEntity, MJAIAgentPermissionEntity, MJAIAgentPromptEntity, MJAIAgentRelationshipEntity, MJAIAgentRequestTypeEntity, MJAIAgentRequestEntity, MJAIAgentRunMediaEntity, MJAIAgentRunStepEntity, MJAIAgentRunEntity, MJAIAgentStepPathEntity, MJAIAgentStepEntity, MJAIAgentTypeEntity, MJAIAgentEntity, MJAIArchitectureEntity, MJAIClientToolDefinitionEntity, MJAIConfigurationParamEntity, MJAIConfigurationEntity, MJAICredentialBindingEntity, MJAIModalityEntity, MJAIModelActionEntity, MJAIModelArchitectureEntity, MJAIModelCostEntity, MJAIModelModalityEntity, MJAIModelPriceTypeEntity, MJAIModelPriceUnitTypeEntity, MJAIModelTypeEntity, MJAIModelVendorEntity, MJAIModelEntity, MJAIPromptCategoryEntity, MJAIPromptModelEntity, MJAIPromptRunMediaEntity, MJAIPromptRunEntity, MJAIPromptTypeEntity, MJAIPromptEntity, MJAIResultCacheEntity, MJAIVendorTypeDefinitionEntity, MJAIVendorTypeEntity, MJAIVendorEntity, MJAPIApplicationScopeEntity, MJAPIApplicationEntity, MJAPIKeyApplicationEntity, MJAPIKeyScopeEntity, MJAPIKeyUsageLogEntity, MJAPIKeyEntity, MJAPIScopeEntity, MJApplicationEntityEntity, MJApplicationSettingEntity, MJApplicationEntity, MJArtifactPermissionEntity, MJArtifactTypeEntity, MJArtifactUseEntity, MJArtifactVersionAttributeEntity, MJArtifactVersionEntity, MJArtifactEntity, MJAuditLogTypeEntity, MJAuditLogEntity, MJAuthorizationRoleEntity, MJAuthorizationEntity, MJCollectionArtifactEntity, MJCollectionPermissionEntity, MJCollectionEntity, MJCommunicationBaseMessageTypeEntity, MJCommunicationLogEntity, MJCommunicationProviderMessageTypeEntity, MJCommunicationProviderEntity, MJCommunicationRunEntity, MJCompanyEntity, MJCompanyIntegrationEntityMapEntity, MJCompanyIntegrationFieldMapEntity, MJCompanyIntegrationRecordMapEntity, MJCompanyIntegrationRunAPILogEntity, MJCompanyIntegrationRunDetailEntity, MJCompanyIntegrationRunEntity, MJCompanyIntegrationSyncWatermarkEntity, MJCompanyIntegrationEntity, MJComponentDependencyEntity, MJComponentLibraryEntity, MJComponentLibraryLinkEntity, MJComponentRegistryEntity, MJComponentEntity, MJContentFileTypeEntity, MJContentItemAttributeEntity, MJContentItemDuplicateEntity, MJContentItemTagEntity, MJContentItemEntity, MJContentProcessRunDetailEntity, MJContentProcessRunPromptRunEntity, MJContentProcessRunEntity, MJContentSourceParamEntity, MJContentSourceTypeParamEntity, MJContentSourceTypeEntity, MJContentSourceEntity, MJContentTypeAttributeEntity, MJContentTypeEntity, MJConversationArtifactPermissionEntity, MJConversationArtifactVersionEntity, MJConversationArtifactEntity, MJConversationDetailArtifactEntity, MJConversationDetailAttachmentEntity, MJConversationDetailRatingEntity, MJConversationDetailEntity, MJConversationEntity, MJCredentialCategoryEntity, MJCredentialTypeEntity, MJCredentialEntity, MJDashboardCategoryEntity, MJDashboardCategoryLinkEntity, MJDashboardCategoryPermissionEntity, MJDashboardPartTypeEntity, MJDashboardPermissionEntity, MJDashboardUserPreferenceEntity, MJDashboardUserStateEntity, MJDashboardEntity, MJDataContextItemEntity, MJDataContextEntity, MJDatasetItemEntity, MJDatasetEntity, MJDuplicateRunDetailMatchEntity, MJDuplicateRunDetailEntity, MJDuplicateRunEntity, MJEmployeeCompanyIntegrationEntity, MJEmployeeRoleEntity, MJEmployeeSkillEntity, MJEmployeeEntity, MJEncryptionAlgorithmEntity, MJEncryptionKeySourceEntity, MJEncryptionKeyEntity, MJEntityEntity, MJEntityActionFilterEntity, MJEntityActionInvocationTypeEntity, MJEntityActionInvocationEntity, MJEntityActionParamEntity, MJEntityActionEntity, MJEntityAIActionEntity, MJEntityCommunicationFieldEntity, MJEntityCommunicationMessageTypeEntity, MJEntityDocumentRunEntity, MJEntityDocumentSettingEntity, MJEntityDocumentTypeEntity, MJEntityDocumentEntity, MJEntityFieldValueEntity, MJEntityFieldEntity, MJEntityOrganicKeyRelatedEntityEntity, MJEntityOrganicKeyEntity, MJEntityPermissionEntity, MJEntityRecordDocumentEntity, MJEntityRelationshipDisplayComponentEntity, MJEntityRelationshipEntity, MJEntitySettingEntity, MJEnvironmentEntity, MJErrorLogEntity, MJExplorerNavigationItemEntity, MJFileCategoryEntity, MJFileEntityRecordLinkEntity, MJFileStorageAccountEntity, MJFileStorageProviderEntity, MJFileEntity, MJGeneratedCodeCategoryEntity, MJGeneratedCodeEntity, MJIntegrationObjectFieldEntity, MJIntegrationObjectEntity, MJIntegrationSourceTypeEntity, MJIntegrationURLFormatEntity, MJIntegrationEntity, MJKnowledgeHubSavedSearchEntity, MJLibraryEntity, MJLibraryItemEntity, MJListCategoryEntity, MJListDetailEntity, MJListInvitationEntity, MJListShareEntity, MJListEntity, MJMCPServerConnectionPermissionEntity, MJMCPServerConnectionToolEntity, MJMCPServerConnectionEntity, MJMCPServerToolEntity, MJMCPServerEntity, MJMCPToolExecutionLogEntity, MJOAuthAuthServerMetadataCacheEntity, MJOAuthAuthorizationStateEntity, MJOAuthClientRegistrationEntity, MJOAuthTokenEntity, MJOpenAppDependencyEntity, MJOpenAppInstallHistoryEntity, MJOpenAppEntity, MJOutputDeliveryTypeEntity, MJOutputFormatTypeEntity, MJOutputTriggerTypeEntity, MJProjectEntity, MJPublicLinkEntity, MJQueryEntity, MJQueryCategoryEntity, MJQueryDependencyEntity, MJQueryEntityEntity, MJQueryFieldEntity, MJQueryParameterEntity, MJQueryPermissionEntity, MJQuerySQLEntity, MJQueueTaskEntity, MJQueueTypeEntity, MJQueueEntity, MJRecommendationItemEntity, MJRecommendationProviderEntity, MJRecommendationRunEntity, MJRecommendationEntity, MJRecordChangeReplayRunEntity, MJRecordChangeEntity, MJRecordLinkEntity, MJRecordMergeDeletionLogEntity, MJRecordMergeLogEntity, MJReportCategoryEntity, MJReportSnapshotEntity, MJReportUserStateEntity, MJReportVersionEntity, MJReportEntity, MJResourceLinkEntity, MJResourcePermissionEntity, MJResourceTypeEntity, MJRoleEntity, MJRowLevelSecurityFilterEntity, MJScheduledActionParamEntity, MJScheduledActionEntity, MJScheduledJobRunEntity, MJScheduledJobTypeEntity, MJScheduledJobEntity, MJSchemaInfoEntity, MJSkillEntity, MJSQLDialectEntity, MJTagAuditLogEntity, MJTagCoOccurrenceEntity, MJTaggedItemEntity, MJTagEntity, MJTaskDependencyEntity, MJTaskTypeEntity, MJTaskEntity, MJTemplateCategoryEntity, MJTemplateContentTypeEntity, MJTemplateContentEntity, MJTemplateParamEntity, MJTemplateEntity, MJTestRubricEntity, MJTestRunFeedbackEntity, MJTestRunOutputTypeEntity, MJTestRunOutputEntity, MJTestRunEntity, MJTestSuiteRunEntity, MJTestSuiteTestEntity, MJTestSuiteEntity, MJTestTypeEntity, MJTestEntity, MJUserApplicationEntityEntity, MJUserApplicationEntity, MJUserFavoriteEntity, MJUserNotificationPreferenceEntity, MJUserNotificationTypeEntity, MJUserNotificationEntity, MJUserRecordLogEntity, MJUserRoleEntity, MJUserSettingEntity, MJUserViewCategoryEntity, MJUserViewRunDetailEntity, MJUserViewRunEntity, MJUserViewEntity, MJUserEntity, MJVectorDatabaseEntity, MJVectorIndexEntity, MJVersionInstallationEntity, MJVersionLabelItemEntity, MJVersionLabelRestoreEntity, MJVersionLabelEntity, MJWorkflowEngineEntity, MJWorkflowRunEntity, MJWorkflowEntity, MJWorkspaceItemEntity, MJWorkspaceEntity } from '@memberjunction/core-entities';
+import { MJAccessControlRuleEntity, MJActionAuthorizationEntity, MJActionCategoryEntity, MJActionContextTypeEntity, MJActionContextEntity, MJActionExecutionLogEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity, MJActionEntity, MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentArtifactTypeEntity, MJAIAgentCategoryEntity, MJAIAgentClientToolEntity, MJAIAgentConfigurationEntity, MJAIAgentDataSourceEntity, MJAIAgentExampleEntity, MJAIAgentLearningCycleEntity, MJAIAgentModalityEntity, MJAIAgentModelEntity, MJAIAgentNoteTypeEntity, MJAIAgentNoteEntity, MJAIAgentPermissionEntity, MJAIAgentPromptEntity, MJAIAgentRelationshipEntity, MJAIAgentRequestTypeEntity, MJAIAgentRequestEntity, MJAIAgentRunMediaEntity, MJAIAgentRunStepEntity, MJAIAgentRunEntity, MJAIAgentStepPathEntity, MJAIAgentStepEntity, MJAIAgentTypeEntity, MJAIAgentEntity, MJAIArchitectureEntity, MJAIClientToolDefinitionEntity, MJAIConfigurationParamEntity, MJAIConfigurationEntity, MJAICredentialBindingEntity, MJAIModalityEntity, MJAIModelActionEntity, MJAIModelArchitectureEntity, MJAIModelCostEntity, MJAIModelModalityEntity, MJAIModelPriceTypeEntity, MJAIModelPriceUnitTypeEntity, MJAIModelTypeEntity, MJAIModelVendorEntity, MJAIModelEntity, MJAIPromptCategoryEntity, MJAIPromptModelEntity, MJAIPromptRunMediaEntity, MJAIPromptRunEntity, MJAIPromptTypeEntity, MJAIPromptEntity, MJAIResultCacheEntity, MJAIVendorTypeDefinitionEntity, MJAIVendorTypeEntity, MJAIVendorEntity, MJAPIApplicationScopeEntity, MJAPIApplicationEntity, MJAPIKeyApplicationEntity, MJAPIKeyScopeEntity, MJAPIKeyUsageLogEntity, MJAPIKeyEntity, MJAPIScopeEntity, MJApplicationEntityEntity, MJApplicationSettingEntity, MJApplicationEntity, MJArtifactPermissionEntity, MJArtifactTypeEntity, MJArtifactUseEntity, MJArtifactVersionAttributeEntity, MJArtifactVersionEntity, MJArtifactEntity, MJAuditLogTypeEntity, MJAuditLogEntity, MJAuthorizationRoleEntity, MJAuthorizationEntity, MJCollectionArtifactEntity, MJCollectionPermissionEntity, MJCollectionEntity, MJCommunicationBaseMessageTypeEntity, MJCommunicationLogEntity, MJCommunicationProviderMessageTypeEntity, MJCommunicationProviderEntity, MJCommunicationRunEntity, MJCompanyEntity, MJCompanyIntegrationEntityMapEntity, MJCompanyIntegrationFieldMapEntity, MJCompanyIntegrationRecordMapEntity, MJCompanyIntegrationRunAPILogEntity, MJCompanyIntegrationRunDetailEntity, MJCompanyIntegrationRunEntity, MJCompanyIntegrationSyncWatermarkEntity, MJCompanyIntegrationEntity, MJComponentDependencyEntity, MJComponentLibraryEntity, MJComponentLibraryLinkEntity, MJComponentRegistryEntity, MJComponentEntity, MJContentFileTypeEntity, MJContentItemAttributeEntity, MJContentItemDuplicateEntity, MJContentItemTagEntity, MJContentItemEntity, MJContentProcessRunDetailEntity, MJContentProcessRunPromptRunEntity, MJContentProcessRunEntity, MJContentSourceParamEntity, MJContentSourceTypeParamEntity, MJContentSourceTypeEntity, MJContentSourceEntity, MJContentTypeAttributeEntity, MJContentTypeEntity, MJConversationArtifactPermissionEntity, MJConversationArtifactVersionEntity, MJConversationArtifactEntity, MJConversationDetailArtifactEntity, MJConversationDetailAttachmentEntity, MJConversationDetailRatingEntity, MJConversationDetailEntity, MJConversationEntity, MJCountryEntity, MJCredentialCategoryEntity, MJCredentialTypeEntity, MJCredentialEntity, MJDashboardCategoryEntity, MJDashboardCategoryLinkEntity, MJDashboardCategoryPermissionEntity, MJDashboardPartTypeEntity, MJDashboardPermissionEntity, MJDashboardUserPreferenceEntity, MJDashboardUserStateEntity, MJDashboardEntity, MJDataContextItemEntity, MJDataContextEntity, MJDatasetItemEntity, MJDatasetEntity, MJDuplicateRunDetailMatchEntity, MJDuplicateRunDetailEntity, MJDuplicateRunEntity, MJEmployeeCompanyIntegrationEntity, MJEmployeeRoleEntity, MJEmployeeSkillEntity, MJEmployeeEntity, MJEncryptionAlgorithmEntity, MJEncryptionKeySourceEntity, MJEncryptionKeyEntity, MJEntityEntity, MJEntityActionFilterEntity, MJEntityActionInvocationTypeEntity, MJEntityActionInvocationEntity, MJEntityActionParamEntity, MJEntityActionEntity, MJEntityAIActionEntity, MJEntityCommunicationFieldEntity, MJEntityCommunicationMessageTypeEntity, MJEntityDocumentRunEntity, MJEntityDocumentSettingEntity, MJEntityDocumentTypeEntity, MJEntityDocumentEntity, MJEntityFieldValueEntity, MJEntityFieldEntity, MJEntityOrganicKeyRelatedEntityEntity, MJEntityOrganicKeyEntity, MJEntityPermissionEntity, MJEntityRecordDocumentEntity, MJEntityRelationshipDisplayComponentEntity, MJEntityRelationshipEntity, MJEntitySettingEntity, MJEnvironmentEntity, MJErrorLogEntity, MJExplorerNavigationItemEntity, MJFileCategoryEntity, MJFileEntityRecordLinkEntity, MJFileStorageAccountPermissionEntity, MJFileStorageAccountEntity, MJFileStorageProviderEntity, MJFileEntity, MJGeneratedCodeCategoryEntity, MJGeneratedCodeEntity, MJInstanceConfigurationEntity, MJIntegrationObjectFieldEntity, MJIntegrationObjectEntity, MJIntegrationSourceTypeEntity, MJIntegrationURLFormatEntity, MJIntegrationEntity, MJKnowledgeHubSavedSearchEntity, MJLibraryEntity, MJLibraryItemEntity, MJListCategoryEntity, MJListDetailEntity, MJListInvitationEntity, MJListShareEntity, MJListEntity, MJMCPServerConnectionPermissionEntity, MJMCPServerConnectionToolEntity, MJMCPServerConnectionEntity, MJMCPServerToolEntity, MJMCPServerEntity, MJMCPToolExecutionLogEntity, MJOAuthAuthServerMetadataCacheEntity, MJOAuthAuthorizationStateEntity, MJOAuthClientRegistrationEntity, MJOAuthTokenEntity, MJOpenAppDependencyEntity, MJOpenAppInstallHistoryEntity, MJOpenAppEntity, MJOutputDeliveryTypeEntity, MJOutputFormatTypeEntity, MJOutputTriggerTypeEntity, MJProjectEntity, MJPublicLinkEntity, MJQueryEntity, MJQueryCategoryEntity, MJQueryDependencyEntity, MJQueryEntityEntity, MJQueryFieldEntity, MJQueryParameterEntity, MJQueryPermissionEntity, MJQuerySQLEntity, MJQueueTaskEntity, MJQueueTypeEntity, MJQueueEntity, MJRecommendationItemEntity, MJRecommendationProviderEntity, MJRecommendationRunEntity, MJRecommendationEntity, MJRecordChangeReplayRunEntity, MJRecordChangeEntity, MJRecordGeoCodeEntity, MJRecordLinkEntity, MJRecordMergeDeletionLogEntity, MJRecordMergeLogEntity, MJReportCategoryEntity, MJReportSnapshotEntity, MJReportUserStateEntity, MJReportVersionEntity, MJReportEntity, MJResourceLinkEntity, MJResourcePermissionEntity, MJResourceTypeEntity, MJRoleEntity, MJRowLevelSecurityFilterEntity, MJScheduledActionParamEntity, MJScheduledActionEntity, MJScheduledJobRunEntity, MJScheduledJobTypeEntity, MJScheduledJobEntity, MJSchemaInfoEntity, MJSearchProviderEntity, MJSkillEntity, MJSQLDialectEntity, MJStateProvinceEntity, MJTagAuditLogEntity, MJTagCoOccurrenceEntity, MJTaggedItemEntity, MJTagEntity, MJTaskDependencyEntity, MJTaskTypeEntity, MJTaskEntity, MJTemplateCategoryEntity, MJTemplateContentTypeEntity, MJTemplateContentEntity, MJTemplateParamEntity, MJTemplateEntity, MJTestRubricEntity, MJTestRunFeedbackEntity, MJTestRunOutputTypeEntity, MJTestRunOutputEntity, MJTestRunEntity, MJTestSuiteRunEntity, MJTestSuiteTestEntity, MJTestSuiteEntity, MJTestTypeEntity, MJTestEntity, MJUserApplicationEntityEntity, MJUserApplicationEntity, MJUserFavoriteEntity, MJUserNotificationPreferenceEntity, MJUserNotificationTypeEntity, MJUserNotificationEntity, MJUserRecordLogEntity, MJUserRoleEntity, MJUserSettingEntity, MJUserViewCategoryEntity, MJUserViewRunDetailEntity, MJUserViewRunEntity, MJUserViewEntity, MJUserEntity, MJVectorDatabaseEntity, MJVectorIndexEntity, MJVersionInstallationEntity, MJVersionLabelItemEntity, MJVersionLabelRestoreEntity, MJVersionLabelEntity, MJWorkflowEngineEntity, MJWorkflowRunEntity, MJWorkflowEntity, MJWorkspaceItemEntity, MJWorkspaceEntity } from '@memberjunction/core-entities';
     
 
 //****************************************************************************
@@ -31509,6 +31509,232 @@ export class MJConversationResolver extends ResolverBase {
 }
 
 //****************************************************************************
+// ENTITY CLASS for MJ: Countries
+//****************************************************************************
+@ObjectType({ description: `Reference table for countries with ISO 3166-1 codes, geographic centroids, and optional medium-resolution boundary GeoJSON for choropleth rendering. Seeded with ~250 countries.` })
+export class MJCountry_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({description: `Full country name (e.g., "United States", "Canada").`}) 
+    @MaxLength(200)
+    Name: string;
+        
+    @Field({description: `ISO 3166-1 alpha-2 code (e.g., "US", "CA"). Unique business key for lookups.`}) 
+    @MaxLength(2)
+    ISO2: string;
+        
+    @Field({description: `ISO 3166-1 alpha-3 code (e.g., "USA", "CAN"). Unique business key for lookups.`}) 
+    @MaxLength(3)
+    ISO3: string;
+        
+    @Field(() => Int, {nullable: true, description: `ISO 3166-1 numeric code (e.g., 840 for US, 124 for Canada).`}) 
+    NumericCode?: number;
+        
+    @Field(() => Float, {nullable: true, description: `Geographic centroid latitude. Used as fallback point for country-level geocoding.`}) 
+    Latitude?: number;
+        
+    @Field(() => Float, {nullable: true, description: `Geographic centroid longitude. Used as fallback point for country-level geocoding.`}) 
+    Longitude?: number;
+        
+    @Field({nullable: true, description: `Medium-resolution (~50m) GeoJSON boundary polygon for choropleth map rendering. Nullable — point map falls back to centroid if absent. Total ~3MB for all countries.`}) 
+    BoundaryGeoJSON?: string;
+        
+    @Field({nullable: true, description: `JSON array of common aliases and alternate names (e.g., ["United States","USA","U.S.","America"]). Used by GeoResolver for fuzzy text-to-country matching.`}) 
+    CommonAliases?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field(() => [MJStateProvince_])
+    MJStateProvinces_CountryIDArray: MJStateProvince_[]; // Link to MJStateProvinces
+    
+    @Field(() => [MJRecordGeoCode_])
+    MJRecordGeoCodes_CountryIDArray: MJRecordGeoCode_[]; // Link to MJRecordGeoCodes
+    
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Countries
+//****************************************************************************
+@InputType()
+export class CreateMJCountryInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    ISO2?: string;
+
+    @Field({ nullable: true })
+    ISO3?: string;
+
+    @Field(() => Int, { nullable: true })
+    NumericCode: number | null;
+
+    @Field(() => Float, { nullable: true })
+    Latitude: number | null;
+
+    @Field(() => Float, { nullable: true })
+    Longitude: number | null;
+
+    @Field({ nullable: true })
+    BoundaryGeoJSON: string | null;
+
+    @Field({ nullable: true })
+    CommonAliases: string | null;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Countries
+//****************************************************************************
+@InputType()
+export class UpdateMJCountryInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    ISO2?: string;
+
+    @Field({ nullable: true })
+    ISO3?: string;
+
+    @Field(() => Int, { nullable: true })
+    NumericCode?: number | null;
+
+    @Field(() => Float, { nullable: true })
+    Latitude?: number | null;
+
+    @Field(() => Float, { nullable: true })
+    Longitude?: number | null;
+
+    @Field({ nullable: true })
+    BoundaryGeoJSON?: string | null;
+
+    @Field({ nullable: true })
+    CommonAliases?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Countries
+//****************************************************************************
+@ObjectType()
+export class RunMJCountryViewResult {
+    @Field(() => [MJCountry_])
+    Results: MJCountry_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJCountry_)
+export class MJCountryResolver extends ResolverBase {
+    @Query(() => RunMJCountryViewResult)
+    async RunMJCountryViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJCountryViewResult)
+    async RunMJCountryViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJCountryViewResult)
+    async RunMJCountryDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Countries';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJCountry_, { nullable: true })
+    async MJCountry(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJCountry_ | null> {
+        this.CheckUserReadPermissions('MJ: Countries', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwCountries')} WHERE ${provider.QuoteIdentifier('ID')}='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Countries', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Countries', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @FieldResolver(() => [MJStateProvince_])
+    async MJStateProvinces_CountryIDArray(@Root() mjcountry_: MJCountry_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: State Provinces', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwStateProvinces')} WHERE ${provider.QuoteIdentifier('CountryID')}='${mjcountry_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: State Provinces', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: State Provinces', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJRecordGeoCode_])
+    async MJRecordGeoCodes_CountryIDArray(@Root() mjcountry_: MJCountry_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Record Geo Codes', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwRecordGeoCodes')} WHERE ${provider.QuoteIdentifier('CountryID')}='${mjcountry_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Record Geo Codes', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Record Geo Codes', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @Mutation(() => MJCountry_)
+    async CreateMJCountry(
+        @Arg('input', () => CreateMJCountryInput) input: CreateMJCountryInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Countries', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJCountry_)
+    async UpdateMJCountry(
+        @Arg('input', () => UpdateMJCountryInput) input: UpdateMJCountryInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Countries', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJCountry_)
+    async DeleteMJCountry(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Countries', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
 // ENTITY CLASS for MJ: Credential Categories
 //****************************************************************************
 @ObjectType({ description: `Hierarchical organization for credentials. Allows grouping credentials by service type, department, or any organizational structure.` })
@@ -32004,6 +32230,9 @@ export class MJCredential_ {
     @Field(() => [MJOAuthToken_])
     MJOAuthTokens_CredentialIDArray: MJOAuthToken_[]; // Link to MJOAuthTokens
     
+    @Field(() => [MJSearchProvider_])
+    MJSearchProviders_CredentialIDArray: MJSearchProvider_[]; // Link to MJSearchProviders
+    
     @Field(() => [MJFileStorageAccount_])
     MJFileStorageAccounts_CredentialIDArray: MJFileStorageAccount_[]; // Link to MJFileStorageAccounts
     
@@ -32170,6 +32399,16 @@ export class MJCredentialResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwOAuthTokens')} WHERE ${provider.QuoteIdentifier('CredentialID')}='${mjcredential_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: O Auth Tokens', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: O Auth Tokens', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJSearchProvider_])
+    async MJSearchProviders_CredentialIDArray(@Root() mjcredential_: MJCredential_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Search Providers', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwSearchProviders')} WHERE ${provider.QuoteIdentifier('CredentialID')}='${mjcredential_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Search Providers', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Search Providers', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -37155,6 +37394,21 @@ export class MJEntity_ {
     @Field(() => Boolean, {description: `When false (default), child types are disjoint - a record can only be one child type at a time. When true, a record can simultaneously exist as multiple child types (e.g., a Person can be both a Member and a Volunteer).`}) 
     AllowMultipleSubtypes: boolean;
         
+    @Field(() => Boolean, {description: `When true, CodeGen LLM can auto-configure full-text search settings (FullTextSearchEnabled, catalog, index, function) during code generation runs.`}) 
+    AutoUpdateFullTextSearch: boolean;
+        
+    @Field(() => Boolean, {description: `When true, CodeGen LLM can auto-set AllowUserSearchAPI during code generation runs.`}) 
+    AutoUpdateAllowUserSearchAPI: boolean;
+        
+    @Field(() => Boolean, {description: `When true (default), the server-side RunView cache will store and return cached results for this entity, trusting that all mutations flow through BaseEntity.Save() which fires cache invalidation events. Set to false for entities whose rows are created as side-effects of other operations via raw SQL (e.g., Record Changes created by spCreateRecordChange_Internal), since those inserts bypass BaseEntity and never trigger cache invalidation.`}) 
+    TrustServerCacheCompletely: boolean;
+        
+    @Field(() => Boolean, {description: `When true, CodeGen generates geo-aware subclass code, adds __mj_Latitude/__mj_Longitude virtual fields to the base view, and the UI shows a map view toggle. Auto-set by CodeGen when LLM detects geo-capable fields (address, lat/lng, etc.).`}) 
+    SupportsGeoCoding: boolean;
+        
+    @Field(() => Boolean, {description: `When true (default), CodeGen can automatically set SupportsGeoCoding based on LLM analysis of entity fields. Set to 0 to lock the value and prevent CodeGen from changing it.`}) 
+    AutoUpdateSupportsGeoCoding: boolean;
+        
     @Field({nullable: true, description: `Schema-based programmatic code name derived from the entity Name. Uses GetClassNameSchemaPrefix(SchemaName) as the prefix, then strips EntityNamePrefix from the Name and removes spaces. For "__mj" schema with entity "MJ: AI Models", this produces "MJAIModels". For entities in other schemas, the sanitized schema name is prepended. Used in GraphQL type generation and internal code references.`}) 
     CodeName?: string;
         
@@ -37313,6 +37567,9 @@ export class MJEntity_ {
     
     @Field(() => [MJEntityOrganicKey_])
     MJEntityOrganicKeys_EntityIDArray: MJEntityOrganicKey_[]; // Link to MJEntityOrganicKeys
+    
+    @Field(() => [MJRecordGeoCode_])
+    MJRecordGeoCodes_EntityIDArray: MJRecordGeoCode_[]; // Link to MJRecordGeoCodes
     
     @Field(() => [MJGeneratedCode_])
     MJGeneratedCodes_LinkedEntityIDArray: MJGeneratedCode_[]; // Link to MJGeneratedCodes
@@ -37506,6 +37763,21 @@ export class CreateMJEntityInput {
 
     @Field(() => Boolean, { nullable: true })
     AllowMultipleSubtypes?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    AutoUpdateFullTextSearch?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    AutoUpdateAllowUserSearchAPI?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    TrustServerCacheCompletely?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    SupportsGeoCoding?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    AutoUpdateSupportsGeoCoding?: boolean;
 }
     
 
@@ -37675,6 +37947,21 @@ export class UpdateMJEntityInput {
 
     @Field(() => Boolean, { nullable: true })
     AllowMultipleSubtypes?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    AutoUpdateFullTextSearch?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    AutoUpdateAllowUserSearchAPI?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    TrustServerCacheCompletely?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    SupportsGeoCoding?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    AutoUpdateSupportsGeoCoding?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -38204,6 +38491,16 @@ export class MJEntityResolverBase extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwEntityOrganicKeys')} WHERE ${provider.QuoteIdentifier('EntityID')}='${mjentity_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Entity Organic Keys', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Entity Organic Keys', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJRecordGeoCode_])
+    async MJRecordGeoCodes_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Record Geo Codes', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwRecordGeoCodes')} WHERE ${provider.QuoteIdentifier('EntityID')}='${mjentity_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Record Geo Codes', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Record Geo Codes', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -40997,6 +41294,19 @@ export class MJEntityField_ {
     @Field({nullable: true, description: `Raw TypeScript code emitted by CodeGen above the entity class definition. Typically contains the interface/type definition referenced by JSONType. Can include imports, multiple types, or any valid TypeScript.`}) 
     JSONTypeDefinition?: string;
         
+    @Field({description: `Search predicate controlling how user search queries match against this field. Valid values: BeginsWith, Contains, EndsWith, Exact.`}) 
+    @MaxLength(20)
+    UserSearchPredicateAPI: string;
+        
+    @Field(() => Boolean, {description: `When true, CodeGen LLM can auto-set the UserSearchPredicateAPI value during code generation runs.`}) 
+    AutoUpdateUserSearchPredicate: boolean;
+        
+    @Field(() => Boolean, {description: `When true, CodeGen LLM can auto-set the FullTextSearchEnabled value during code generation runs.`}) 
+    AutoUpdateFullTextSearch: boolean;
+        
+    @Field(() => Boolean, {description: `When true (default), CodeGen can automatically suggest and apply ExtendedType values (GeoLatitude, GeoLongitude, GeoAddress, etc.) during LLM field categorization. Set to 0 to lock admin-specified ExtendedType.`}) 
+    AutoUpdateExtendedType: boolean;
+        
     @Field({nullable: true}) 
     FieldCodeName?: string;
         
@@ -41191,6 +41501,18 @@ export class CreateMJEntityFieldInput {
 
     @Field({ nullable: true })
     JSONTypeDefinition: string | null;
+
+    @Field({ nullable: true })
+    UserSearchPredicateAPI?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    AutoUpdateUserSearchPredicate?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    AutoUpdateFullTextSearch?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    AutoUpdateExtendedType?: boolean;
 }
     
 
@@ -41336,6 +41658,18 @@ export class UpdateMJEntityFieldInput {
 
     @Field({ nullable: true })
     JSONTypeDefinition?: string | null;
+
+    @Field({ nullable: true })
+    UserSearchPredicateAPI?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    AutoUpdateUserSearchPredicate?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    AutoUpdateFullTextSearch?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    AutoUpdateExtendedType?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -44149,6 +44483,201 @@ export class MJFileEntityRecordLinkResolver extends ResolverBase {
 }
 
 //****************************************************************************
+// ENTITY CLASS for MJ: File Storage Account Permissions
+//****************************************************************************
+@ObjectType({ description: `Controls which users and roles can access specific file storage accounts. If no permission records exist for an account, it is accessible to everyone (backwards compatible).` })
+export class MJFileStorageAccountPermission_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({description: `The storage account this permission applies to.`}) 
+    @MaxLength(36)
+    FileStorageAccountID: string;
+        
+    @Field({description: `Permission type: User (requires UserID), Role (requires RoleID), or Everyone (both NULL).`}) 
+    @MaxLength(20)
+    Type: string;
+        
+    @Field({nullable: true, description: `Required when Type is User. The specific user granted access to this storage account.`}) 
+    @MaxLength(36)
+    UserID?: string;
+        
+    @Field({nullable: true, description: `Required when Type is Role. The role granted access to this storage account.`}) 
+    @MaxLength(36)
+    RoleID?: string;
+        
+    @Field(() => Boolean, {description: `Whether the grantee can read/search files in this storage account.`}) 
+    CanRead: boolean;
+        
+    @Field(() => Boolean, {description: `Whether the grantee can upload/modify files in this storage account.`}) 
+    CanWrite: boolean;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(200)
+    FileStorageAccount: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    User?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(50)
+    Role?: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: File Storage Account Permissions
+//****************************************************************************
+@InputType()
+export class CreateMJFileStorageAccountPermissionInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    FileStorageAccountID?: string;
+
+    @Field({ nullable: true })
+    Type?: string;
+
+    @Field({ nullable: true })
+    UserID: string | null;
+
+    @Field({ nullable: true })
+    RoleID: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    CanRead?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    CanWrite?: boolean;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: File Storage Account Permissions
+//****************************************************************************
+@InputType()
+export class UpdateMJFileStorageAccountPermissionInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    FileStorageAccountID?: string;
+
+    @Field({ nullable: true })
+    Type?: string;
+
+    @Field({ nullable: true })
+    UserID?: string | null;
+
+    @Field({ nullable: true })
+    RoleID?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    CanRead?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    CanWrite?: boolean;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: File Storage Account Permissions
+//****************************************************************************
+@ObjectType()
+export class RunMJFileStorageAccountPermissionViewResult {
+    @Field(() => [MJFileStorageAccountPermission_])
+    Results: MJFileStorageAccountPermission_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJFileStorageAccountPermission_)
+export class MJFileStorageAccountPermissionResolver extends ResolverBase {
+    @Query(() => RunMJFileStorageAccountPermissionViewResult)
+    async RunMJFileStorageAccountPermissionViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJFileStorageAccountPermissionViewResult)
+    async RunMJFileStorageAccountPermissionViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJFileStorageAccountPermissionViewResult)
+    async RunMJFileStorageAccountPermissionDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: File Storage Account Permissions';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJFileStorageAccountPermission_, { nullable: true })
+    async MJFileStorageAccountPermission(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJFileStorageAccountPermission_ | null> {
+        this.CheckUserReadPermissions('MJ: File Storage Account Permissions', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwFileStorageAccountPermissions')} WHERE ${provider.QuoteIdentifier('ID')}='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: File Storage Account Permissions', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: File Storage Account Permissions', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJFileStorageAccountPermission_)
+    async CreateMJFileStorageAccountPermission(
+        @Arg('input', () => CreateMJFileStorageAccountPermissionInput) input: CreateMJFileStorageAccountPermissionInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: File Storage Account Permissions', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJFileStorageAccountPermission_)
+    async UpdateMJFileStorageAccountPermission(
+        @Arg('input', () => UpdateMJFileStorageAccountPermissionInput) input: UpdateMJFileStorageAccountPermissionInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: File Storage Account Permissions', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJFileStorageAccountPermission_)
+    async DeleteMJFileStorageAccountPermission(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: File Storage Account Permissions', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
 // ENTITY CLASS for MJ: File Storage Accounts
 //****************************************************************************
 @ObjectType({ description: `Enterprise-level file storage accounts. Each account represents a configured connection to a storage provider (e.g., Marketing Dropbox, Engineering Google Drive) with credentials managed centrally.` })
@@ -44178,6 +44707,9 @@ export class MJFileStorageAccount_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field(() => Boolean, {description: `When true, this storage account is included in universal/global search results. Only effective if the associated provider supports search (SupportsSearch = 1).`}) 
+    IncludeInGlobalSearch: boolean;
+        
     @Field() 
     @MaxLength(50)
     Provider: string;
@@ -44186,6 +44718,9 @@ export class MJFileStorageAccount_ {
     @MaxLength(200)
     Credential: string;
         
+    @Field(() => [MJFileStorageAccountPermission_])
+    MJFileStorageAccountPermissions_FileStorageAccountIDArray: MJFileStorageAccountPermission_[]; // Link to MJFileStorageAccountPermissions
+    
 }
 
 //****************************************************************************
@@ -44207,6 +44742,9 @@ export class CreateMJFileStorageAccountInput {
 
     @Field({ nullable: true })
     CredentialID?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    IncludeInGlobalSearch?: boolean;
 }
     
 
@@ -44229,6 +44767,9 @@ export class UpdateMJFileStorageAccountInput {
 
     @Field({ nullable: true })
     CredentialID?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    IncludeInGlobalSearch?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -44291,6 +44832,16 @@ export class MJFileStorageAccountResolver extends ResolverBase {
         return result;
     }
     
+    @FieldResolver(() => [MJFileStorageAccountPermission_])
+    async MJFileStorageAccountPermissions_FileStorageAccountIDArray(@Root() mjfilestorageaccount_: MJFileStorageAccount_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: File Storage Account Permissions', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwFileStorageAccountPermissions')} WHERE ${provider.QuoteIdentifier('FileStorageAccountID')}='${mjfilestorageaccount_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: File Storage Account Permissions', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: File Storage Account Permissions', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
     @Mutation(() => MJFileStorageAccount_)
     async CreateMJFileStorageAccount(
         @Arg('input', () => CreateMJFileStorageAccountInput) input: CreateMJFileStorageAccountInput,
@@ -45261,6 +45812,198 @@ export class MJGeneratedCodeResolver extends ResolverBase {
         const provider = GetReadWriteProvider(providers);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('MJ: Generated Codes', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Instance Configurations
+//****************************************************************************
+@ObjectType({ description: `Instance-level feature toggles and configuration. Controls which features are enabled per MJ Explorer deployment.` })
+export class MJInstanceConfiguration_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({description: `Unique dot-notation key identifying the feature, e.g. Shell.SearchBar.Enabled.`}) 
+    @MaxLength(200)
+    FeatureKey: string;
+        
+    @Field({description: `Current value for this feature setting.`}) 
+    Value: string;
+        
+    @Field({description: `Data type of the value: boolean, string, number, or json.`}) 
+    @MaxLength(20)
+    ValueType: string;
+        
+    @Field({description: `Grouping category for admin UI display.`}) 
+    @MaxLength(100)
+    Category: string;
+        
+    @Field({description: `Human-readable display name for the setting.`}) 
+    @MaxLength(200)
+    DisplayName: string;
+        
+    @Field({nullable: true, description: `Optional extended description or help text for the setting.`}) 
+    Description?: string;
+        
+    @Field({description: `Factory default value. Used when resetting to defaults.`}) 
+    DefaultValue: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Instance Configurations
+//****************************************************************************
+@InputType()
+export class CreateMJInstanceConfigurationInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    FeatureKey?: string;
+
+    @Field({ nullable: true })
+    Value?: string;
+
+    @Field({ nullable: true })
+    ValueType?: string;
+
+    @Field({ nullable: true })
+    Category?: string;
+
+    @Field({ nullable: true })
+    DisplayName?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    DefaultValue?: string;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Instance Configurations
+//****************************************************************************
+@InputType()
+export class UpdateMJInstanceConfigurationInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    FeatureKey?: string;
+
+    @Field({ nullable: true })
+    Value?: string;
+
+    @Field({ nullable: true })
+    ValueType?: string;
+
+    @Field({ nullable: true })
+    Category?: string;
+
+    @Field({ nullable: true })
+    DisplayName?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    DefaultValue?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Instance Configurations
+//****************************************************************************
+@ObjectType()
+export class RunMJInstanceConfigurationViewResult {
+    @Field(() => [MJInstanceConfiguration_])
+    Results: MJInstanceConfiguration_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJInstanceConfiguration_)
+export class MJInstanceConfigurationResolver extends ResolverBase {
+    @Query(() => RunMJInstanceConfigurationViewResult)
+    async RunMJInstanceConfigurationViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJInstanceConfigurationViewResult)
+    async RunMJInstanceConfigurationViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJInstanceConfigurationViewResult)
+    async RunMJInstanceConfigurationDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Instance Configurations';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJInstanceConfiguration_, { nullable: true })
+    async MJInstanceConfiguration(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJInstanceConfiguration_ | null> {
+        this.CheckUserReadPermissions('MJ: Instance Configurations', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwInstanceConfigurations')} WHERE ${provider.QuoteIdentifier('ID')}='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Instance Configurations', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Instance Configurations', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJInstanceConfiguration_)
+    async CreateMJInstanceConfiguration(
+        @Arg('input', () => CreateMJInstanceConfigurationInput) input: CreateMJInstanceConfigurationInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Instance Configurations', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJInstanceConfiguration_)
+    async UpdateMJInstanceConfiguration(
+        @Arg('input', () => UpdateMJInstanceConfigurationInput) input: UpdateMJInstanceConfigurationInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Instance Configurations', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJInstanceConfiguration_)
+    async DeleteMJInstanceConfiguration(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Instance Configurations', key, options, provider, userPayload, pubSub);
     }
     
 }
@@ -56241,6 +56984,278 @@ export class MJRecordChangeResolver extends ResolverBase {
 }
 
 //****************************************************************************
+// ENTITY CLASS for MJ: Record Geo Codes
+//****************************************************************************
+@ObjectType({ description: `Polymorphic table storing persisted geocoding results for any MJ entity record. Each row maps an entity record + location type to a lat/lng coordinate, with optional country/state references for choropleth grouping. Supports multi-location entities via LocationType discriminator.` })
+export class MJRecordGeoCode_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({description: `Foreign key to Entity. Identifies which entity this geocode belongs to.`}) 
+    @MaxLength(36)
+    EntityID: string;
+        
+    @Field({description: `MJ composite primary key format string identifying the source record (e.g., "ID|<uuid>"). Max 450 chars for SQL Server index support.`}) 
+    @MaxLength(450)
+    RecordID: string;
+        
+    @Field({description: `Discriminator for multi-location entities. Default "Primary" for single-address entities. Multi-address examples: "Home", "Business", "Mailing", "PO Box".`}) 
+    @MaxLength(50)
+    LocationType: string;
+        
+    @Field(() => Float, {nullable: true, description: `Geocoded latitude coordinate. NULL when Status is "pending" or "failed".`}) 
+    Latitude?: number;
+        
+    @Field(() => Float, {nullable: true, description: `Geocoded longitude coordinate. NULL when Status is "pending" or "failed".`}) 
+    Longitude?: number;
+        
+    @Field({nullable: true, description: `Precision level of the geocoded result: exact (street address), postal_code, city, county, state_province, or country.`}) 
+    @MaxLength(20)
+    Precision?: string;
+        
+    @Field({nullable: true, description: `Optional FK to Country reference table. Populated alongside lat/lng to enable choropleth grouping without reverse-geocoding at render time.`}) 
+    @MaxLength(36)
+    CountryID?: string;
+        
+    @Field({nullable: true, description: `Optional FK to StateProvince reference table. Populated alongside lat/lng to enable state-level choropleth grouping.`}) 
+    @MaxLength(36)
+    StateProvinceID?: string;
+        
+    @Field({description: `Current geocoding status: "pending" (awaiting geocode), "success" (geocoded), or "failed" (geocoding error). Used by scheduled job for retry logic.`}) 
+    @MaxLength(20)
+    Status: string;
+        
+    @Field({nullable: true, description: `Error details when Status is "failed". Captures API error messages, rate limit info, etc. for debugging.`}) 
+    ErrorMessage?: string;
+        
+    @Field(() => Int, {description: `Number of geocoding attempts. Used for exponential backoff in the scheduled retry job. Stops retrying at configurable maxRetries (default 3).`}) 
+    RetryCount: number;
+        
+    @Field({nullable: true, description: `SHA-256 hash of the source field values that produced this geocode. When source fields change on save, the hash won't match and re-geocoding is triggered. Format: SHA-256(concat(field1, "|", field2, ...)).`}) 
+    @MaxLength(64)
+    SourceFieldHash?: string;
+        
+    @Field({nullable: true, description: `Timestamp of when geocoding was last attempted (success or failure).`}) 
+    GeocodedAt?: Date;
+        
+    @Field({nullable: true, description: `How this geocode was produced: google (Google Geocoding API), reference_data (resolved via Country/StateProvince tables), manual (user-entered), ip_geolocation (IP lookup), native (copied from entity lat/lng fields), reverse (reverse geocode from coordinates).`}) 
+    @MaxLength(30)
+    GeocodingSource?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(255)
+    Entity: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    Country?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    StateProvince?: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Record Geo Codes
+//****************************************************************************
+@InputType()
+export class CreateMJRecordGeoCodeInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    EntityID?: string;
+
+    @Field({ nullable: true })
+    RecordID?: string;
+
+    @Field({ nullable: true })
+    LocationType?: string;
+
+    @Field(() => Float, { nullable: true })
+    Latitude: number | null;
+
+    @Field(() => Float, { nullable: true })
+    Longitude: number | null;
+
+    @Field({ nullable: true })
+    Precision: string | null;
+
+    @Field({ nullable: true })
+    CountryID: string | null;
+
+    @Field({ nullable: true })
+    StateProvinceID: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    ErrorMessage: string | null;
+
+    @Field(() => Int, { nullable: true })
+    RetryCount?: number;
+
+    @Field({ nullable: true })
+    SourceFieldHash: string | null;
+
+    @Field({ nullable: true })
+    GeocodedAt: Date | null;
+
+    @Field({ nullable: true })
+    GeocodingSource: string | null;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Record Geo Codes
+//****************************************************************************
+@InputType()
+export class UpdateMJRecordGeoCodeInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    EntityID?: string;
+
+    @Field({ nullable: true })
+    RecordID?: string;
+
+    @Field({ nullable: true })
+    LocationType?: string;
+
+    @Field(() => Float, { nullable: true })
+    Latitude?: number | null;
+
+    @Field(() => Float, { nullable: true })
+    Longitude?: number | null;
+
+    @Field({ nullable: true })
+    Precision?: string | null;
+
+    @Field({ nullable: true })
+    CountryID?: string | null;
+
+    @Field({ nullable: true })
+    StateProvinceID?: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    ErrorMessage?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    RetryCount?: number;
+
+    @Field({ nullable: true })
+    SourceFieldHash?: string | null;
+
+    @Field({ nullable: true })
+    GeocodedAt?: Date | null;
+
+    @Field({ nullable: true })
+    GeocodingSource?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Record Geo Codes
+//****************************************************************************
+@ObjectType()
+export class RunMJRecordGeoCodeViewResult {
+    @Field(() => [MJRecordGeoCode_])
+    Results: MJRecordGeoCode_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJRecordGeoCode_)
+export class MJRecordGeoCodeResolver extends ResolverBase {
+    @Query(() => RunMJRecordGeoCodeViewResult)
+    async RunMJRecordGeoCodeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJRecordGeoCodeViewResult)
+    async RunMJRecordGeoCodeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJRecordGeoCodeViewResult)
+    async RunMJRecordGeoCodeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Record Geo Codes';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJRecordGeoCode_, { nullable: true })
+    async MJRecordGeoCode(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJRecordGeoCode_ | null> {
+        this.CheckUserReadPermissions('MJ: Record Geo Codes', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwRecordGeoCodes')} WHERE ${provider.QuoteIdentifier('ID')}='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Record Geo Codes', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Record Geo Codes', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJRecordGeoCode_)
+    async CreateMJRecordGeoCode(
+        @Arg('input', () => CreateMJRecordGeoCodeInput) input: CreateMJRecordGeoCodeInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Record Geo Codes', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJRecordGeoCode_)
+    async UpdateMJRecordGeoCode(
+        @Arg('input', () => UpdateMJRecordGeoCodeInput) input: UpdateMJRecordGeoCodeInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Record Geo Codes', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJRecordGeoCode_)
+    async DeleteMJRecordGeoCode(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Record Geo Codes', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
 // ENTITY CLASS for MJ: Record Links
 //****************************************************************************
 @ObjectType({ description: `Generic linking table that can connect any two records in the system, providing a flexible relationship management system.` })
@@ -58652,6 +59667,9 @@ export class MJRole_ {
     @Field(() => [MJMCPServerConnectionPermission_])
     MJMCPServerConnectionPermissions_RoleIDArray: MJMCPServerConnectionPermission_[]; // Link to MJMCPServerConnectionPermissions
     
+    @Field(() => [MJFileStorageAccountPermission_])
+    MJFileStorageAccountPermissions_RoleIDArray: MJFileStorageAccountPermission_[]; // Link to MJFileStorageAccountPermissions
+    
     @Field(() => [MJAIAgentPermission_])
     MJAIAgentPermissions_RoleIDArray: MJAIAgentPermission_[]; // Link to MJAIAgentPermissions
     
@@ -58837,6 +59855,16 @@ export class MJRoleResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMCPServerConnectionPermissions')} WHERE ${provider.QuoteIdentifier('RoleID')}='${mjrole_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: MCP Server Connection Permissions', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: MCP Server Connection Permissions', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJFileStorageAccountPermission_])
+    async MJFileStorageAccountPermissions_RoleIDArray(@Root() mjrole_: MJRole_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: File Storage Account Permissions', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwFileStorageAccountPermissions')} WHERE ${provider.QuoteIdentifier('RoleID')}='${mjrole_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: File Storage Account Permissions', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: File Storage Account Permissions', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -60590,6 +61618,249 @@ export class MJSchemaInfoResolver extends ResolverBase {
 }
 
 //****************************************************************************
+// ENTITY CLASS for MJ: Search Providers
+//****************************************************************************
+@ObjectType()
+export class MJSearchProvider_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({description: `Display name for this search provider (e.g., "Vector Search", "Algolia")`}) 
+    @MaxLength(200)
+    Name: string;
+        
+    @Field({nullable: true, description: `Human-readable description of what this provider searches and how it works`}) 
+    Description?: string;
+        
+    @Field({description: `ClassFactory key used with @RegisterClass(ISearchProvider, DriverClass) to instantiate the provider at runtime`}) 
+    @MaxLength(500)
+    DriverClass: string;
+        
+    @Field({description: `Provider lifecycle status: Pending (not yet activated), Active (in use), Terminated (disabled)`}) 
+    @MaxLength(20)
+    Status: string;
+        
+    @Field(() => Int, {description: `Execution priority (lower = higher priority). Controls provider ordering and can influence RRF weighting. Must be >= 0.`}) 
+    Priority: number;
+        
+    @Field(() => Boolean, {description: `Whether this provider should run during fast preview/autocomplete searches. Expensive providers (external APIs) may set this to 0.`}) 
+    SupportsPreview: boolean;
+        
+    @Field(() => Int, {nullable: true, description: `Optional per-provider cap on the number of results to return. Useful for rate-limited or pay-per-query external APIs. When NULL, uses the SearchEngine default.`}) 
+    MaxResultsOverride?: number;
+        
+    @Field({nullable: true, description: `Optional JSON configuration blob for provider-specific settings (e.g., API endpoints, index names, tuning parameters). Schema is provider-defined.`}) 
+    ProviderConfig?: string;
+        
+    @Field({nullable: true, description: `Optional FK to the Credential entity for providers that require authentication (e.g., Algolia API key, external service credentials)`}) 
+    @MaxLength(36)
+    CredentialID?: string;
+        
+    @Field({nullable: true, description: `UI display name for this provider shown in filter facets and result grouping (e.g., "Database", "Semantic Search"). When NULL, falls back to the Name column.`}) 
+    @MaxLength(200)
+    DisplayName?: string;
+        
+    @Field({nullable: true, description: `CSS icon class for UI display in filter facets and result badges (e.g., "fa-solid fa-database", "fa-solid fa-brain"). Supports any CSS-based icon library. When NULL, a default icon is used.`}) 
+    @MaxLength(200)
+    Icon?: string;
+        
+    @Field({nullable: true, description: `Free-form notes about this provider configuration`}) 
+    Comments?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    Credential?: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Search Providers
+//****************************************************************************
+@InputType()
+export class CreateMJSearchProviderInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    DriverClass?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => Int, { nullable: true })
+    Priority?: number;
+
+    @Field(() => Boolean, { nullable: true })
+    SupportsPreview?: boolean;
+
+    @Field(() => Int, { nullable: true })
+    MaxResultsOverride: number | null;
+
+    @Field({ nullable: true })
+    ProviderConfig: string | null;
+
+    @Field({ nullable: true })
+    CredentialID: string | null;
+
+    @Field({ nullable: true })
+    DisplayName: string | null;
+
+    @Field({ nullable: true })
+    Icon: string | null;
+
+    @Field({ nullable: true })
+    Comments: string | null;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Search Providers
+//****************************************************************************
+@InputType()
+export class UpdateMJSearchProviderInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    DriverClass?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => Int, { nullable: true })
+    Priority?: number;
+
+    @Field(() => Boolean, { nullable: true })
+    SupportsPreview?: boolean;
+
+    @Field(() => Int, { nullable: true })
+    MaxResultsOverride?: number | null;
+
+    @Field({ nullable: true })
+    ProviderConfig?: string | null;
+
+    @Field({ nullable: true })
+    CredentialID?: string | null;
+
+    @Field({ nullable: true })
+    DisplayName?: string | null;
+
+    @Field({ nullable: true })
+    Icon?: string | null;
+
+    @Field({ nullable: true })
+    Comments?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Search Providers
+//****************************************************************************
+@ObjectType()
+export class RunMJSearchProviderViewResult {
+    @Field(() => [MJSearchProvider_])
+    Results: MJSearchProvider_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJSearchProvider_)
+export class MJSearchProviderResolver extends ResolverBase {
+    @Query(() => RunMJSearchProviderViewResult)
+    async RunMJSearchProviderViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJSearchProviderViewResult)
+    async RunMJSearchProviderViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJSearchProviderViewResult)
+    async RunMJSearchProviderDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Search Providers';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJSearchProvider_, { nullable: true })
+    async MJSearchProvider(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJSearchProvider_ | null> {
+        this.CheckUserReadPermissions('MJ: Search Providers', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwSearchProviders')} WHERE ${provider.QuoteIdentifier('ID')}='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Search Providers', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Search Providers', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJSearchProvider_)
+    async CreateMJSearchProvider(
+        @Arg('input', () => CreateMJSearchProviderInput) input: CreateMJSearchProviderInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Search Providers', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJSearchProvider_)
+    async UpdateMJSearchProvider(
+        @Arg('input', () => UpdateMJSearchProviderInput) input: UpdateMJSearchProviderInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Search Providers', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJSearchProvider_)
+    async DeleteMJSearchProvider(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Search Providers', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
 // ENTITY CLASS for MJ: Skills
 //****************************************************************************
 @ObjectType({ description: `A hierarchical list of possible skills that are linked to Employees and can also be linked to any other entity` })
@@ -61004,6 +62275,224 @@ export class MJSQLDialectResolver extends ResolverBase {
         const provider = GetReadWriteProvider(providers);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('MJ: SQL Dialects', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: State Provinces
+//****************************************************************************
+@ObjectType({ description: `Reference table for states, provinces, and first-level administrative divisions. Linked to Country via FK. Seeded with ~5,000 records with ISO 3166-2 codes, centroids, and optional boundary GeoJSON.` })
+export class MJStateProvince_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({description: `Foreign key to Country. Establishes the parent country for this state/province.`}) 
+    @MaxLength(36)
+    CountryID: string;
+        
+    @Field({description: `Full state/province name (e.g., "California", "Ontario").`}) 
+    @MaxLength(200)
+    Name: string;
+        
+    @Field({description: `Short code within the country (e.g., "CA", "ON"). Unique per country via compound constraint.`}) 
+    @MaxLength(10)
+    Code: string;
+        
+    @Field({description: `ISO 3166-2 subdivision code (e.g., "US-CA", "CA-ON"). Globally unique.`}) 
+    @MaxLength(10)
+    ISO3166_2: string;
+        
+    @Field(() => Float, {nullable: true, description: `Geographic centroid latitude. Used as fallback point for state-level geocoding.`}) 
+    Latitude?: number;
+        
+    @Field(() => Float, {nullable: true, description: `Geographic centroid longitude. Used as fallback point for state-level geocoding.`}) 
+    Longitude?: number;
+        
+    @Field({nullable: true, description: `Medium-resolution (~50m) GeoJSON boundary polygon for choropleth map rendering. Nullable. Total ~15-20MB for all states/provinces worldwide.`}) 
+    BoundaryGeoJSON?: string;
+        
+    @Field({nullable: true, description: `JSON array of common aliases (e.g., ["Calif.","California","Cal"]). Used by GeoResolver for fuzzy text-to-state matching.`}) 
+    CommonAliases?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(200)
+    Country: string;
+        
+    @Field(() => [MJRecordGeoCode_])
+    MJRecordGeoCodes_StateProvinceIDArray: MJRecordGeoCode_[]; // Link to MJRecordGeoCodes
+    
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: State Provinces
+//****************************************************************************
+@InputType()
+export class CreateMJStateProvinceInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    CountryID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Code?: string;
+
+    @Field({ nullable: true })
+    ISO3166_2?: string;
+
+    @Field(() => Float, { nullable: true })
+    Latitude: number | null;
+
+    @Field(() => Float, { nullable: true })
+    Longitude: number | null;
+
+    @Field({ nullable: true })
+    BoundaryGeoJSON: string | null;
+
+    @Field({ nullable: true })
+    CommonAliases: string | null;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: State Provinces
+//****************************************************************************
+@InputType()
+export class UpdateMJStateProvinceInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    CountryID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Code?: string;
+
+    @Field({ nullable: true })
+    ISO3166_2?: string;
+
+    @Field(() => Float, { nullable: true })
+    Latitude?: number | null;
+
+    @Field(() => Float, { nullable: true })
+    Longitude?: number | null;
+
+    @Field({ nullable: true })
+    BoundaryGeoJSON?: string | null;
+
+    @Field({ nullable: true })
+    CommonAliases?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: State Provinces
+//****************************************************************************
+@ObjectType()
+export class RunMJStateProvinceViewResult {
+    @Field(() => [MJStateProvince_])
+    Results: MJStateProvince_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJStateProvince_)
+export class MJStateProvinceResolver extends ResolverBase {
+    @Query(() => RunMJStateProvinceViewResult)
+    async RunMJStateProvinceViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJStateProvinceViewResult)
+    async RunMJStateProvinceViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJStateProvinceViewResult)
+    async RunMJStateProvinceDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: State Provinces';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJStateProvince_, { nullable: true })
+    async MJStateProvince(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJStateProvince_ | null> {
+        this.CheckUserReadPermissions('MJ: State Provinces', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwStateProvinces')} WHERE ${provider.QuoteIdentifier('ID')}='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: State Provinces', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: State Provinces', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @FieldResolver(() => [MJRecordGeoCode_])
+    async MJRecordGeoCodes_StateProvinceIDArray(@Root() mjstateprovince_: MJStateProvince_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Record Geo Codes', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwRecordGeoCodes')} WHERE ${provider.QuoteIdentifier('StateProvinceID')}='${mjstateprovince_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Record Geo Codes', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Record Geo Codes', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @Mutation(() => MJStateProvince_)
+    async CreateMJStateProvince(
+        @Arg('input', () => CreateMJStateProvinceInput) input: CreateMJStateProvinceInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: State Provinces', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJStateProvince_)
+    async UpdateMJStateProvince(
+        @Arg('input', () => UpdateMJStateProvinceInput) input: UpdateMJStateProvinceInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: State Provinces', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJStateProvince_)
+    async DeleteMJStateProvince(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: State Provinces', key, options, provider, userPayload, pubSub);
     }
     
 }
@@ -69129,11 +70618,11 @@ export class MJUser_ {
     @Field(() => [MJContentProcessRun_])
     MJContentProcessRuns_StartedByUserIDArray: MJContentProcessRun_[]; // Link to MJContentProcessRuns
     
-    @Field(() => [MJKnowledgeHubSavedSearch_])
-    MJKnowledgeHubSavedSearches_UserIDArray: MJKnowledgeHubSavedSearch_[]; // Link to MJKnowledgeHubSavedSearches
-    
     @Field(() => [MJTagAuditLog_])
     MJTagAuditLogs_PerformedByUserIDArray: MJTagAuditLog_[]; // Link to MJTagAuditLogs
+    
+    @Field(() => [MJKnowledgeHubSavedSearch_])
+    MJKnowledgeHubSavedSearches_UserIDArray: MJKnowledgeHubSavedSearch_[]; // Link to MJKnowledgeHubSavedSearches
     
     @Field(() => [MJResourcePermission_])
     MJResourcePermissions_UserIDArray: MJResourcePermission_[]; // Link to MJResourcePermissions
@@ -69179,6 +70668,9 @@ export class MJUser_ {
     
     @Field(() => [MJDuplicateRun_])
     MJDuplicateRuns_ApprovedByUserIDArray: MJDuplicateRun_[]; // Link to MJDuplicateRuns
+    
+    @Field(() => [MJFileStorageAccountPermission_])
+    MJFileStorageAccountPermissions_UserIDArray: MJFileStorageAccountPermission_[]; // Link to MJFileStorageAccountPermissions
     
     @Field(() => [MJAIAgentRun_])
     MJAIAgentRuns_UserIDArray: MJAIAgentRun_[]; // Link to MJAIAgentRuns
@@ -69993,16 +71485,6 @@ export class MJUserResolverBase extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [MJKnowledgeHubSavedSearch_])
-    async MJKnowledgeHubSavedSearches_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Knowledge Hub Saved Searches', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwKnowledgeHubSavedSearches')} WHERE ${provider.QuoteIdentifier('UserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Knowledge Hub Saved Searches', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Knowledge Hub Saved Searches', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
     @FieldResolver(() => [MJTagAuditLog_])
     async MJTagAuditLogs_PerformedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Tag Audit Logs', userPayload);
@@ -70010,6 +71492,16 @@ export class MJUserResolverBase extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwTagAuditLogs')} WHERE ${provider.QuoteIdentifier('PerformedByUserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Tag Audit Logs', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Tag Audit Logs', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJKnowledgeHubSavedSearch_])
+    async MJKnowledgeHubSavedSearches_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Knowledge Hub Saved Searches', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwKnowledgeHubSavedSearches')} WHERE ${provider.QuoteIdentifier('UserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Knowledge Hub Saved Searches', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Knowledge Hub Saved Searches', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -70160,6 +71652,16 @@ export class MJUserResolverBase extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwDuplicateRuns')} WHERE ${provider.QuoteIdentifier('ApprovedByUserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Duplicate Runs', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Duplicate Runs', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJFileStorageAccountPermission_])
+    async MJFileStorageAccountPermissions_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: File Storage Account Permissions', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwFileStorageAccountPermissions')} WHERE ${provider.QuoteIdentifier('UserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: File Storage Account Permissions', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: File Storage Account Permissions', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         

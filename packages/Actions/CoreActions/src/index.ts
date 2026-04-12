@@ -28,6 +28,9 @@ export * from './custom/utilities/external-change-detection.action';
 export * from './custom/utilities/qr-code.action';
 export * from './custom/utilities/address-services.action';
 
+// Geo Actions
+export * from './custom/geo/scheduled-geocoding.action';
+
 // Web Actions
 export * from './custom/web/web-search.action';
 export * from './custom/web/web-page-content.action';
@@ -117,5 +120,7 @@ export * from './custom/visualization/shared/mermaid-types';
 
 // MCP Actions
 export * from './custom/mcp';
+
+export * from './custom/search/search.action';
 
 

@@ -1,0 +1,7 @@
+/* Search Composite Component */
+
+.search-composite-wrap {
+    position: relative;
+    display: inline-block;
+    width: 100%;
+}

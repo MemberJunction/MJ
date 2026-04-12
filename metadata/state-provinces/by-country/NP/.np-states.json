@@ -1,0 +1,401 @@
+[
+  {
+    "fields": {
+      "Name": "Bagmati",
+      "Code": "BA",
+      "ISO3166_2": "NP-BA",
+      "Latitude": 27.8491,
+      "Longitude": 85.3494,
+      "BoundaryGeoJSON": "@file:by-country/NP/boundaries/NP-BA.geojson",
+      "CommonAliases": [
+        "Bagmati"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NP"
+    },
+    "primaryKey": {
+      "ID": "E40EC4F5-A3BC-4CD5-96A7-15992A894730"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:23.053Z",
+      "checksum": "40038b3b944a788bdca2c3739f8d62d37ba45437394fd0f42f9b020a8605ff08"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bheri",
+      "Code": "BH",
+      "ISO3166_2": "NP-BH",
+      "Latitude": 28.4501,
+      "Longitude": 81.7802,
+      "BoundaryGeoJSON": "@file:by-country/NP/boundaries/NP-BH.geojson",
+      "CommonAliases": [
+        "Bheri"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NP"
+    },
+    "primaryKey": {
+      "ID": "963E0196-1F82-4818-B4D7-A4144C561F2A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:23.069Z",
+      "checksum": "63fa06262129b122cafbb9089aaffef6ab3894c160cba5ffaef1af1f20cf9128"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Dhawalagiri",
+      "Code": "DH",
+      "ISO3166_2": "NP-DH",
+      "Latitude": 28.4801,
+      "Longitude": 83.5602,
+      "BoundaryGeoJSON": "@file:by-country/NP/boundaries/NP-DH.geojson",
+      "CommonAliases": [
+        "Dhawalagiri"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NP"
+    },
+    "primaryKey": {
+      "ID": "E8AA3C6A-CC5A-48FB-B886-CFB4C3FA4356"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:23.086Z",
+      "checksum": "4d5b54f99e80c16c9d52b9019b0e17ebc0aa143c03c9ef6857a0da2bbecab114"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gandaki",
+      "Code": "GA",
+      "ISO3166_2": "NP-GA",
+      "Latitude": 28.3293,
+      "Longitude": 84.3034,
+      "BoundaryGeoJSON": "@file:by-country/NP/boundaries/NP-GA.geojson",
+      "CommonAliases": [
+        "Gandaki"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NP"
+    },
+    "primaryKey": {
+      "ID": "6DA52D9D-9A8E-49CB-85D6-F80999F1A30C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:23.101Z",
+      "checksum": "0f13310f214c7da23dc2b58b5e98d606f15d43e7f1de9c8678678b83f70c29ae"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Janakpur",
+      "Code": "JA",
+      "ISO3166_2": "NP-JA",
+      "Latitude": 27.179,
+      "Longitude": 85.9718,
+      "BoundaryGeoJSON": "@file:by-country/NP/boundaries/NP-JA.geojson",
+      "CommonAliases": [
+        "Janakpur"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NP"
+    },
+    "primaryKey": {
+      "ID": "E0A24467-7F58-4EF6-82A4-2B91E74F3498"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:23.118Z",
+      "checksum": "61eae77146963047a4ee1d97e6a29731b06e1180e26ce5b2a862f479e5001c39"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Karnali",
+      "Code": "KA",
+      "ISO3166_2": "NP-KA",
+      "Latitude": 29.474,
+      "Longitude": 82.4637,
+      "BoundaryGeoJSON": "@file:by-country/NP/boundaries/NP-KA.geojson",
+      "CommonAliases": [
+        "Karnali"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NP"
+    },
+    "primaryKey": {
+      "ID": "DD69C43C-BE53-4218-8B84-55126124CEE4"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:23.137Z",
+      "checksum": "7718725ebb1631f32894c8d3c9b3785c3516b839db3469f69757962ddb463588"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kosi [Koshi]",
+      "Code": "KO",
+      "ISO3166_2": "NP-KO",
+      "Latitude": 27.0937,
+      "Longitude": 87.3229,
+      "BoundaryGeoJSON": "@file:by-country/NP/boundaries/NP-KO.geojson",
+      "CommonAliases": [
+        "Kosi [Koshi]"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NP"
+    },
+    "primaryKey": {
+      "ID": "283C961A-3E50-4A18-B2C6-CF4D04F820DD"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:23.155Z",
+      "checksum": "954ba054f710f6f95053c1f77f29219273d0b3728a60d3685f6c668351cdbc5b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Lumbini",
+      "Code": "LU",
+      "ISO3166_2": "NP-LU",
+      "Latitude": 27.695,
+      "Longitude": 83.55,
+      "BoundaryGeoJSON": "@file:by-country/NP/boundaries/NP-LU.geojson",
+      "CommonAliases": [
+        "Lumbini"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NP"
+    },
+    "primaryKey": {
+      "ID": "F3118F95-DA51-4666-8EF7-28F683EEEDC8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:23.172Z",
+      "checksum": "43f684251bbdb1272199202bbf986d183375b4d79002398d8f53c0456436c8f2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Madhya Pashchimanchal",
+      "Code": "2",
+      "ISO3166_2": "NP-2",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Madhya Pashchimanchal"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NP"
+    },
+    "primaryKey": {
+      "ID": "15A31BFA-FE94-4863-A852-F0965D0473A7"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:23.188Z",
+      "checksum": "7dc613a75539edd0207dbca1654112fbb43e1c490105467bce98d5d9a7c56efa"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Madhyamanchal",
+      "Code": "1",
+      "ISO3166_2": "NP-1",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Madhyamanchal"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NP"
+    },
+    "primaryKey": {
+      "ID": "CF685BEB-DE2A-452B-8668-6155DCDD3B75"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:23.202Z",
+      "checksum": "f9772d74dc60e8d9427518ef8984668ba7c30f33c167be23aa6fda5fac4521a9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mahakali",
+      "Code": "MA",
+      "ISO3166_2": "NP-MA",
+      "Latitude": 29.5205,
+      "Longitude": 80.5573,
+      "BoundaryGeoJSON": "@file:by-country/NP/boundaries/NP-MA.geojson",
+      "CommonAliases": [
+        "Mahakali"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NP"
+    },
+    "primaryKey": {
+      "ID": "D82C89B1-0112-4333-A2B0-FE4BA45ACD94"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:23.253Z",
+      "checksum": "cda39be2e9f61d9944c0a47be3533767c4be955b3eedb1bff8630561ff4d78bf"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mechi",
+      "Code": "ME",
+      "ISO3166_2": "NP-ME",
+      "Latitude": 27.1587,
+      "Longitude": 87.8075,
+      "BoundaryGeoJSON": "@file:by-country/NP/boundaries/NP-ME.geojson",
+      "CommonAliases": [
+        "Mechi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NP"
+    },
+    "primaryKey": {
+      "ID": "726EB1D9-B4C9-49A8-953B-426700067EA1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:23.270Z",
+      "checksum": "e6169070b16a701bd1b29d741d3838fb87279eda3d9e9cd6fac67ec206c9c754"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Narayani",
+      "Code": "NA",
+      "ISO3166_2": "NP-NA",
+      "Latitude": 27.3731,
+      "Longitude": 84.7202,
+      "BoundaryGeoJSON": "@file:by-country/NP/boundaries/NP-NA.geojson",
+      "CommonAliases": [
+        "Narayani"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NP"
+    },
+    "primaryKey": {
+      "ID": "4CD51DC2-50BF-43FC-8814-01EB98F1D04C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:23.291Z",
+      "checksum": "d0dfc7539dcb1062ddc34674c633a063149c68c782e35bb16daeb1c9d3293883"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Pashchimanchal",
+      "Code": "3",
+      "ISO3166_2": "NP-3",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Pashchimanchal"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NP"
+    },
+    "primaryKey": {
+      "ID": "0E53205B-FB6F-4335-B2FA-64ABD61F52F4"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:23.312Z",
+      "checksum": "aafa70b6cb3cefa314bb83df8b4c28ac981209d55f2e3b6d6aaea4f9f8e1270c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Purwanchal",
+      "Code": "4",
+      "ISO3166_2": "NP-4",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Purwanchal"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NP"
+    },
+    "primaryKey": {
+      "ID": "EA2B59C3-5B59-4993-957F-EF2BF3FB57AB"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:23.333Z",
+      "checksum": "dd5c07c9c2c1e0e8a60389c2ff86bf605aaba185e8ee717331d84df02858511a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rapti",
+      "Code": "RA",
+      "ISO3166_2": "NP-RA",
+      "Latitude": 28.3268,
+      "Longitude": 82.5518,
+      "BoundaryGeoJSON": "@file:by-country/NP/boundaries/NP-RA.geojson",
+      "CommonAliases": [
+        "Rapti"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NP"
+    },
+    "primaryKey": {
+      "ID": "8C296BD4-761F-4F26-B1CF-8CA2FFEB0164"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:23.352Z",
+      "checksum": "7d867b21e73b343ceb9095fd02d14435b56386157d936344a09492059032d3db"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sagarmatha",
+      "Code": "SA",
+      "ISO3166_2": "NP-SA",
+      "Latitude": 27.2719,
+      "Longitude": 86.6607,
+      "BoundaryGeoJSON": "@file:by-country/NP/boundaries/NP-SA.geojson",
+      "CommonAliases": [
+        "Sagarmatha"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NP"
+    },
+    "primaryKey": {
+      "ID": "2AC462C2-28EB-4019-A518-4FE148695A3B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:23.370Z",
+      "checksum": "0becd640529c002662538ed244c5d6e054a2d5c620b169bcbac7fb5cf29f362e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Seti",
+      "Code": "SE",
+      "ISO3166_2": "NP-SE",
+      "Latitude": 29.312,
+      "Longitude": 81.163,
+      "BoundaryGeoJSON": "@file:by-country/NP/boundaries/NP-SE.geojson",
+      "CommonAliases": [
+        "Seti"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NP"
+    },
+    "primaryKey": {
+      "ID": "6B9C920E-D48C-4614-9FA0-31EA948E90D8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:23.387Z",
+      "checksum": "eadae35ee1dca7e2e413608fb7e98cb3fd93b4f4055c7fadface89f86454f119"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sudur Pashchimanchal",
+      "Code": "5",
+      "ISO3166_2": "NP-5",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Sudur Pashchimanchal"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NP"
+    },
+    "primaryKey": {
+      "ID": "70258AD4-C436-4F3A-99C3-6864DD0CABDC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:23.402Z",
+      "checksum": "bc1374e3f9c4bf04d17a448e718af3282a754f47877bc698c3da3b845a9b3689"
+    }
+  }
+]

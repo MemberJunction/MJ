@@ -1,0 +1,191 @@
+[
+  {
+    "fields": {
+      "Name": "Estuaire",
+      "Code": "1",
+      "ISO3166_2": "GA-1",
+      "Latitude": 0.322,
+      "Longitude": 10.1365,
+      "BoundaryGeoJSON": "@file:by-country/GA/boundaries/GA-1.geojson",
+      "CommonAliases": [
+        "Estuaire"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GA"
+    },
+    "primaryKey": {
+      "ID": "78E55C23-5FCC-4A3E-A779-741552E8F88F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:49.533Z",
+      "checksum": "bcf906710152da1e6bc99766715cefbcccd90ba376eac183a667a903036e4fd7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Haut-Ogooué",
+      "Code": "2",
+      "ISO3166_2": "GA-2",
+      "Latitude": -1.1319,
+      "Longitude": 13.6198,
+      "BoundaryGeoJSON": "@file:by-country/GA/boundaries/GA-2.geojson",
+      "CommonAliases": [
+        "Haut-Ogooué"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GA"
+    },
+    "primaryKey": {
+      "ID": "877B7C19-F547-4BA7-9B62-1D2AEF05A174"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:49.550Z",
+      "checksum": "0c124996190d4c4f6bb9291d634868f550f10fe20ff151a3a666f056b25b1e5e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Moyen-Ogooué",
+      "Code": "3",
+      "ISO3166_2": "GA-3",
+      "Latitude": -0.3742,
+      "Longitude": 10.5724,
+      "BoundaryGeoJSON": "@file:by-country/GA/boundaries/GA-3.geojson",
+      "CommonAliases": [
+        "Moyen-Ogooué"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GA"
+    },
+    "primaryKey": {
+      "ID": "3679870F-036A-427A-9E5F-F79DC92062F5"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:49.566Z",
+      "checksum": "43650605fa8a790dc53008a4ef07cc2b5ad3af15bd5cac15b265a1f32b81bb85"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ngounié",
+      "Code": "4",
+      "ISO3166_2": "GA-4",
+      "Latitude": -1.4865,
+      "Longitude": 11.1859,
+      "BoundaryGeoJSON": "@file:by-country/GA/boundaries/GA-4.geojson",
+      "CommonAliases": [
+        "Ngounié"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GA"
+    },
+    "primaryKey": {
+      "ID": "9BCB5196-CD2E-4F66-A53F-C606AEE894A6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:49.583Z",
+      "checksum": "7a0bd4499ff57d1574c4c316aa7c9e3d0f20940e0f9aad7b44c0c748a8f5ae94"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nyanga",
+      "Code": "5",
+      "ISO3166_2": "GA-5",
+      "Latitude": -2.9771,
+      "Longitude": 10.9768,
+      "BoundaryGeoJSON": "@file:by-country/GA/boundaries/GA-5.geojson",
+      "CommonAliases": [
+        "Nyanga"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GA"
+    },
+    "primaryKey": {
+      "ID": "5FB98BED-7291-44F5-AEAC-F57EAC1C97C4"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:49.600Z",
+      "checksum": "c6120b6e9716991c9d65bca199f2428c3f618f1393ee1f550486b89f3c5c8655"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ogooué-Ivindo",
+      "Code": "6",
+      "ISO3166_2": "GA-6",
+      "Latitude": 0.7234,
+      "Longitude": 12.8739,
+      "BoundaryGeoJSON": "@file:by-country/GA/boundaries/GA-6.geojson",
+      "CommonAliases": [
+        "Ogooué-Ivindo"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GA"
+    },
+    "primaryKey": {
+      "ID": "4CF9E650-ACA5-4F7D-9AE6-820127E91668"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:49.616Z",
+      "checksum": "35268496545b6b006dc191cec1d5a87354f3141e90e3282b9de74f5cea14f3fa"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ogooué-Lolo",
+      "Code": "7",
+      "ISO3166_2": "GA-7",
+      "Latitude": -0.9727,
+      "Longitude": 12.5284,
+      "BoundaryGeoJSON": "@file:by-country/GA/boundaries/GA-7.geojson",
+      "CommonAliases": [
+        "Ogooué-Lolo"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GA"
+    },
+    "primaryKey": {
+      "ID": "C01B8E44-65C2-4348-ABC4-1A8D82679C21"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:49.636Z",
+      "checksum": "c508bf3a0570e31e899709b675184b8c294966b75bf2cb24adddd66c7ecfe209"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ogooué-Maritime",
+      "Code": "8",
+      "ISO3166_2": "GA-8",
+      "Latitude": -0.6825,
+      "Longitude": 8.9957,
+      "BoundaryGeoJSON": "@file:by-country/GA/boundaries/GA-8.geojson",
+      "CommonAliases": [
+        "Ogooué-Maritime"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GA"
+    },
+    "primaryKey": {
+      "ID": "B8E100B8-ABEE-46A3-AA09-53DDF4862B5E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:49.653Z",
+      "checksum": "3ec0d643f9093d29169c672d85268f1f87bab788b7885c0f0f3a8ec1c4d166c0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Woleu-Ntem",
+      "Code": "9",
+      "ISO3166_2": "GA-9",
+      "Latitude": 1.4395,
+      "Longitude": 11.8313,
+      "BoundaryGeoJSON": "@file:by-country/GA/boundaries/GA-9.geojson",
+      "CommonAliases": [
+        "Woleu-Ntem"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GA"
+    },
+    "primaryKey": {
+      "ID": "4283256B-D51A-49F5-99F8-45C077228B6A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:49.667Z",
+      "checksum": "94d2b7701536bb0c57a6d61ed5f6fc8cfdf0d8fc53f3866d0de447c58f0916c2"
+    }
+  }
+]

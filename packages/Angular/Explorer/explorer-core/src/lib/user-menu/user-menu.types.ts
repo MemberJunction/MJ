@@ -176,6 +176,26 @@ export interface UserMenuActionResult {
 }
 
 /**
+ * User display information for the menu header
+ */
+export interface UserDisplayInfo {
+    /** User's display name */
+    name: string;
+
+    /** User's email address */
+    email: string;
+
+    /** URL to user's avatar image, or null */
+    avatarUrl: string | null;
+
+    /** Two-character initials derived from name */
+    initials: string;
+
+    /** Optional subtitle shown below email (e.g., organization name) */
+    subtitle?: string;
+}
+
+/**
  * Options for menu configuration
  */
 export interface UserMenuOptions {

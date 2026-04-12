@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Metadata } from '@memberjunction/core';
+import { GraphQLDataProvider, GraphQLSearchClient } from '@memberjunction/graphql-dataprovider';
 import { SearchService, RecentSearch } from '../lib/search.service';
 import {
     SearchRequest,
@@ -9,19 +10,28 @@ import {
     SearchFilter
 } from '../lib/search-types';
 
-/** Installs a fake Metadata.Provider with a mock ExecuteGQL that returns empty success */
+/**
+ * Installs a fake Metadata.Provider that passes the `instanceof GraphQLDataProvider` check
+ * and stubs GraphQLSearchClient.ExecuteSearch to return empty success.
+ */
 function installMockProvider(): ReturnType<typeof vi.fn> {
-    const mockExecuteGQL = vi.fn().mockResolvedValue({
-        SearchKnowledge: {
-            Success: true,
-            Results: [],
-            TotalCount: 0,
-            ElapsedMs: 1,
-            SourceCounts: { Vector: 0, FullText: 0, Entity: 0 },
-        }
+    const mockExecuteSearch = vi.fn().mockResolvedValue({
+        Success: true,
+        Results: [],
+        TotalCount: 0,
+        ElapsedMs: 1,
+        SourceCounts: { Vector: 0, FullText: 0, Entity: 0, Storage: 0 },
     });
-    (Metadata as unknown as Record<string, unknown>)['Provider'] = { ExecuteGQL: mockExecuteGQL };
-    return mockExecuteGQL;
+
+    // Create a mock that passes `instanceof GraphQLDataProvider`
+    const mockProvider = Object.create(GraphQLDataProvider.prototype);
+    (Metadata as unknown as Record<string, unknown>)['Provider'] = mockProvider;
+
+    // Stub GraphQLSearchClient.prototype so the service's `new GraphQLSearchClient(provider)` works
+    vi.spyOn(GraphQLSearchClient.prototype, 'ExecuteSearch').mockImplementation(mockExecuteSearch);
+    vi.spyOn(GraphQLSearchClient.prototype, 'PreviewSearch').mockImplementation(mockExecuteSearch);
+
+    return mockExecuteSearch;
 }
 
 describe('SearchService', () => {
@@ -159,7 +169,7 @@ describe('SearchService', () => {
             expect(groups).toHaveLength(3);
             const entityGroup = groups.find(g => g.SourceType === 'entity');
             expect(entityGroup?.Results).toHaveLength(2);
-            expect(entityGroup?.Label).toBe('Entity Records');
+            expect(entityGroup?.Label).toBe('Database');
         });
 
         it('should return empty array for empty input', () => {
@@ -178,7 +188,7 @@ describe('SearchService', () => {
             const filters = service.BuildFilters(results);
 
             expect(filters).toHaveLength(3);
-            const sourceFilter = filters.find(f => f.Category === 'Source Type');
+            const sourceFilter = filters.find(f => f.Category === 'Source');
             expect(sourceFilter?.Options).toHaveLength(2);
         });
 
@@ -219,7 +229,7 @@ describe('SearchService', () => {
             expect(internalOption!.Count).toBe(1);
         });
 
-        it('should produce an empty Tags filter when no results have tags', () => {
+        it('should omit Tags filter when no results have tags', () => {
             const results: SearchResultItem[] = [
                 createMockResult('1', 'entity', 'Contacts'),
                 createMockResult('2', 'entity', 'Companies'),
@@ -227,8 +237,7 @@ describe('SearchService', () => {
 
             const filters = service.BuildFilters(results);
             const tagFilter = filters.find(f => f.Category === 'Tags');
-            expect(tagFilter).toBeDefined();
-            expect(tagFilter!.Options).toHaveLength(0);
+            expect(tagFilter).toBeUndefined(); // Empty categories are filtered out
         });
 
         it('should sort tags by count descending', () => {
@@ -335,7 +344,7 @@ describe('SearchService', () => {
             expect(groups).toHaveLength(2);
 
             const entityGroup = groups.find(g => g.SourceType === 'entity');
-            expect(entityGroup?.Label).toBe('Entity Records');
+            expect(entityGroup?.Label).toBe('Database');
             expect(entityGroup?.TotalCount).toBe(2);
 
             const contentGroup = groups.find(g => g.SourceType === 'content-item');
@@ -375,7 +384,7 @@ describe('SearchService', () => {
             expect(groups).toHaveLength(2);
 
             const entityGroup = groups.find(g => g.SourceType === 'entity');
-            expect(entityGroup?.Label).toBe('Entity Records');
+            expect(entityGroup?.Label).toBe('Database');
 
             const customGroup = groups.find(g => g.SourceType === 'custom-plugin');
             expect(customGroup?.Label).toBe('custom-plugin');
@@ -397,6 +406,7 @@ function createMockResult(
         EntityName: entityName,
         RecordID: `rec-${id}`,
         SourceType: sourceType,
+        ResultType: sourceType === 'file' ? 'storage-file' : 'entity-record',
         Score: 0.85,
         ScoreBreakdown: { Vector: 0.8, FullText: 0.9 },
         Tags: tags,

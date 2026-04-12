@@ -1,0 +1,359 @@
+[
+  {
+    "fields": {
+      "Name": "Changhua",
+      "Code": "CHA",
+      "ISO3166_2": "TW-CHA",
+      "Latitude": 24.0016,
+      "Longitude": 120.464,
+      "BoundaryGeoJSON": "@file:by-country/TW/boundaries/TW-CHA.geojson",
+      "CommonAliases": [
+        "Changhua"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TW"
+    },
+    "primaryKey": {
+      "ID": "A2DD71E6-2998-4ACE-96E1-FEE26C821091"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:38.311Z",
+      "checksum": "65fb5643d81064587d4343ca2a6a1c4f7a75367fc6e820e2c631b390415f1b6c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Chiayi",
+      "Code": "CYI",
+      "ISO3166_2": "TW-CYI",
+      "Latitude": 23.4822,
+      "Longitude": 120.441,
+      "BoundaryGeoJSON": "@file:by-country/TW/boundaries/TW-CYI.geojson",
+      "CommonAliases": [
+        "Chiayi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TW"
+    },
+    "primaryKey": {
+      "ID": "5A15CD10-A2CB-44AB-AEB0-B2F6C95F1E66"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:38.333Z",
+      "checksum": "f4e8ce6c65b3a5ef4f64898d346327142761e2efe2013735ee4b3313608e39f6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Hsinchu",
+      "Code": "HSZ",
+      "ISO3166_2": "TW-HSZ",
+      "Latitude": 24.7757,
+      "Longitude": 120.959,
+      "BoundaryGeoJSON": "@file:by-country/TW/boundaries/TW-HSZ.geojson",
+      "CommonAliases": [
+        "Hsinchu"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TW"
+    },
+    "primaryKey": {
+      "ID": "AB7AC2E0-2529-44A5-A280-E2D742438AC2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:38.357Z",
+      "checksum": "2b30b9693ac2c85fa9e9a0b48bc07a1b481e25a60210ab265841e0d09159565e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Hualien",
+      "Code": "HUA",
+      "ISO3166_2": "TW-HUA",
+      "Latitude": 23.7743,
+      "Longitude": 121.381,
+      "BoundaryGeoJSON": "@file:by-country/TW/boundaries/TW-HUA.geojson",
+      "CommonAliases": [
+        "Hualien"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TW"
+    },
+    "primaryKey": {
+      "ID": "3BA204B9-7BBD-4A22-B152-1A0AB6FAB7CD"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:38.378Z",
+      "checksum": "5dd441fa6ab95ea1606babcad41b5c68db54e4de48926eff1b021d11a79dbd4d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ilan",
+      "Code": "ILA",
+      "ISO3166_2": "TW-ILA",
+      "Latitude": 24.5913,
+      "Longitude": 121.644,
+      "BoundaryGeoJSON": "@file:by-country/TW/boundaries/TW-ILA.geojson",
+      "CommonAliases": [
+        "Ilan"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TW"
+    },
+    "primaryKey": {
+      "ID": "07A00926-B63D-4577-85D6-DB6F50D1CE9A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:38.396Z",
+      "checksum": "09970d15ba47eb9d2edb440d846e434d82e8f99e62e57863aa1b3243db9fb962"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kaohsiung",
+      "Code": "KHH",
+      "ISO3166_2": "TW-KHH",
+      "Latitude": 23.0157,
+      "Longitude": 120.609,
+      "BoundaryGeoJSON": "@file:by-country/TW/boundaries/TW-KHH.geojson",
+      "CommonAliases": [
+        "Kaohsiung"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TW"
+    },
+    "primaryKey": {
+      "ID": "A0F1B8C3-592C-4A9B-9BAE-613DD5E1038A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:38.413Z",
+      "checksum": "ee42966028fddbbd88d2965e5585378cdbe8121633c126a41986d36bdde79640"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Keelung",
+      "Code": "KEE",
+      "ISO3166_2": "TW-KEE",
+      "Latitude": 25.1131,
+      "Longitude": 121.704,
+      "BoundaryGeoJSON": "@file:by-country/TW/boundaries/TW-KEE.geojson",
+      "CommonAliases": [
+        "Keelung"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TW"
+    },
+    "primaryKey": {
+      "ID": "C519FCC1-DC3D-44F6-82A0-1CFD9F98D678"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:38.430Z",
+      "checksum": "e1724e4c84a7fbe484825e5ea38280a333c2210400ed070fa053cce1842d1a1f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Miaoli",
+      "Code": "MIA",
+      "ISO3166_2": "TW-MIA",
+      "Latitude": 24.5253,
+      "Longitude": 120.942,
+      "BoundaryGeoJSON": "@file:by-country/TW/boundaries/TW-MIA.geojson",
+      "CommonAliases": [
+        "Miaoli"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TW"
+    },
+    "primaryKey": {
+      "ID": "9BED7720-620B-4C84-8A43-03D5EA485C48"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:38.447Z",
+      "checksum": "6b6a54bc7a5bf802128ec82e82c8c170ce0ec248fd01de07a75c2baedbc99931"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nantou",
+      "Code": "NAN",
+      "ISO3166_2": "TW-NAN",
+      "Latitude": 23.7977,
+      "Longitude": 120.988,
+      "BoundaryGeoJSON": "@file:by-country/TW/boundaries/TW-NAN.geojson",
+      "CommonAliases": [
+        "Nantou"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TW"
+    },
+    "primaryKey": {
+      "ID": "62D3EF76-F8D4-4848-8B62-24757C6B3A98"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:38.464Z",
+      "checksum": "2b8a9860c7a2848bbe338af8ece8f5e64a9a95ac38528ef16db437e522fa9b24"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Penghu",
+      "Code": "PEN",
+      "ISO3166_2": "TW-PEN",
+      "Latitude": 23.5724,
+      "Longitude": 119.597,
+      "BoundaryGeoJSON": "@file:by-country/TW/boundaries/TW-PEN.geojson",
+      "CommonAliases": [
+        "Penghu"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TW"
+    },
+    "primaryKey": {
+      "ID": "10FB378D-F71B-4E23-9006-4A619C720297"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:38.478Z",
+      "checksum": "c271025b0e710c2eb4c409889441a903d01b17f64873400ee868fd157477afe1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Pingtung",
+      "Code": "PIF",
+      "ISO3166_2": "TW-PIF",
+      "Latitude": 22.5344,
+      "Longitude": 120.661,
+      "BoundaryGeoJSON": "@file:by-country/TW/boundaries/TW-PIF.geojson",
+      "CommonAliases": [
+        "Pingtung"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TW"
+    },
+    "primaryKey": {
+      "ID": "CAA5B84D-A0CC-4B01-909B-DCAB4D67DDD8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:38.529Z",
+      "checksum": "edd3cfe982ad25b1c20d179f0572953bee40e6f88ab6e28a3a9fcee2a90ed2d0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Taichung",
+      "Code": "TXG",
+      "ISO3166_2": "TW-TXG",
+      "Latitude": 24.238,
+      "Longitude": 120.966,
+      "BoundaryGeoJSON": "@file:by-country/TW/boundaries/TW-TXG.geojson",
+      "CommonAliases": [
+        "Taichung"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TW"
+    },
+    "primaryKey": {
+      "ID": "47AB208F-45D4-4C40-803D-CA45F0D9C73C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:38.545Z",
+      "checksum": "1cb5eb01d73072538424c61ad34c803b57689d46c8e796f2f963d143fca3a05b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tainan",
+      "Code": "TNN",
+      "ISO3166_2": "TW-TNN",
+      "Latitude": 23.0464,
+      "Longitude": 120.182,
+      "BoundaryGeoJSON": "@file:by-country/TW/boundaries/TW-TNN.geojson",
+      "CommonAliases": [
+        "Tainan"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TW"
+    },
+    "primaryKey": {
+      "ID": "667A8317-3DDC-4D23-BC03-3A4AAFA18A02"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:38.561Z",
+      "checksum": "7531cad23a20b6827c28f0a4d3cf4f2af72a493b5e84519c7814dbb672d527af"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Taipei",
+      "Code": "TPE",
+      "ISO3166_2": "TW-TPE",
+      "Latitude": 25.0904,
+      "Longitude": 121.559,
+      "BoundaryGeoJSON": "@file:by-country/TW/boundaries/TW-TPE.geojson",
+      "CommonAliases": [
+        "Taipei"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TW"
+    },
+    "primaryKey": {
+      "ID": "0A5EFD44-A4CE-4988-A24E-6E59CBD5B0D8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:38.576Z",
+      "checksum": "9d724c1f047401769349e599dd5174689b02d6618c451f7e97c61b43a181d282"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Taitung",
+      "Code": "TTT",
+      "ISO3166_2": "TW-TTT",
+      "Latitude": 22.0499,
+      "Longitude": 121.54,
+      "BoundaryGeoJSON": "@file:by-country/TW/boundaries/TW-TTT.geojson",
+      "CommonAliases": [
+        "Taitung"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TW"
+    },
+    "primaryKey": {
+      "ID": "15DDC9B0-C534-41A9-8A38-514B8C1092A4"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:38.595Z",
+      "checksum": "c816e4d54bab92ee934a382762785afeb0e7038875fc08d72be04efb24e02ddb"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Taoyuan",
+      "Code": "TAO",
+      "ISO3166_2": "TW-TAO",
+      "Latitude": 24.961,
+      "Longitude": 121.227,
+      "BoundaryGeoJSON": "@file:by-country/TW/boundaries/TW-TAO.geojson",
+      "CommonAliases": [
+        "Taoyuan"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TW"
+    },
+    "primaryKey": {
+      "ID": "BDDF659C-D2CF-4EA8-970A-7F41CF25F0E1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:38.610Z",
+      "checksum": "10b62bd5e30d185adf398a10f16453869c5671678b555769df0b604915497b21"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Yunlin",
+      "Code": "YUN",
+      "ISO3166_2": "TW-YUN",
+      "Latitude": 23.7253,
+      "Longitude": 120.427,
+      "BoundaryGeoJSON": "@file:by-country/TW/boundaries/TW-YUN.geojson",
+      "CommonAliases": [
+        "Yunlin"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TW"
+    },
+    "primaryKey": {
+      "ID": "2868E470-F39B-4C8E-957E-804C517CE9F4"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:38.624Z",
+      "checksum": "166969adc46d19d94e8415335e90c2a18ed3a4823701343b3c5d2e3cc651ea3c"
+    }
+  }
+]

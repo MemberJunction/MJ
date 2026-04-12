@@ -134,6 +134,20 @@ describe('MigratePhase', () => {
       expect(args).toContain('--verbose');
     });
 
+    it('should fall back to npx with version-pinned CLI when no local binary exists', async () => {
+      mockFs.FileExists.mockResolvedValue(false);
+      const ctx = makeContext({ Dir: '/some/dir', VersionTag: 'v5.9.0' });
+
+      await phase.Run(ctx);
+
+      expect(mockRunner.Run).toHaveBeenCalledTimes(1);
+      const [cmd, args] = mockRunner.Run.mock.calls[0];
+      expect(cmd).toBe('npx');
+      expect(args[0]).toBe('@memberjunction/cli@5.9.0');
+      expect(args).toContain('migrate');
+      expect(args).toContain('--verbose');
+    });
+
     it('should pass correct Cwd from context.Dir', async () => {
       const ctx = makeContext({ Dir: '/custom/path' });
 

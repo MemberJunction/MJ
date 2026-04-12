@@ -35,10 +35,6 @@ import { AIInstrumentationService } from './AI/services/ai-instrumentation.servi
 
 // Knowledge Hub components
 import {
-  KnowledgeSearchResourceComponent,
-  LoadKnowledgeSearchResource
-} from './KnowledgeHub/components/search/knowledge-search-resource.component';
-import {
   KnowledgeConfigResourceComponent,
   LoadKnowledgeConfigResource
 } from './KnowledgeHub/components/config/knowledge-config-resource.component';
@@ -82,7 +78,6 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     AutotaggingPipelineResourceComponent,
     DuplicateDetectionResourceComponent,
     VectorManagementResourceComponent,
-    KnowledgeSearchResourceComponent,
     KnowledgeConfigResourceComponent,
     SearchResultDetailComponent,
     ClusterVisualizationResourceComponent,
@@ -122,7 +117,6 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     AutotaggingPipelineResourceComponent,
     DuplicateDetectionResourceComponent,
     VectorManagementResourceComponent,
-    KnowledgeSearchResourceComponent,
     KnowledgeConfigResourceComponent,
     SearchResultDetailComponent,
     ClusterVisualizationResourceComponent,

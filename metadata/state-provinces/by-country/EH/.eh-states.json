@@ -1,0 +1,23 @@
+[
+  {
+    "fields": {
+      "Name": "Western Sahara",
+      "Code": "EH",
+      "ISO3166_2": "EH-EH",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Western Sahara"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=EH"
+    },
+    "primaryKey": {
+      "ID": "DD190AF7-78B7-4E6B-949E-9319A7025B10"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:44.649Z",
+      "checksum": "5fd1f3ccea815ebfb80ee3f8f9c4bcd824e06b40c4315548f5dbb84f14037c28"
+    }
+  }
+]

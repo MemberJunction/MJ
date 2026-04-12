@@ -1,0 +1,989 @@
+[
+  {
+    "fields": {
+      "Name": "Adrar",
+      "Code": "01",
+      "ISO3166_2": "DZ-01",
+      "Latitude": 25.7004,
+      "Longitude": -0.9356,
+      "BoundaryGeoJSON": "@file:by-country/DZ/boundaries/DZ-01.geojson",
+      "CommonAliases": [
+        "Adrar"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DZ"
+    },
+    "primaryKey": {
+      "ID": "1076DCDE-AD18-44EC-9BA7-CC7CF670E635"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:42.115Z",
+      "checksum": "373e40ac88870be077a3e22d6d0c50f71448e08650dbb2fac290258c0205c28a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Aïn Defla",
+      "Code": "44",
+      "ISO3166_2": "DZ-44",
+      "Latitude": 36.1735,
+      "Longitude": 2.1071,
+      "BoundaryGeoJSON": "@file:by-country/DZ/boundaries/DZ-44.geojson",
+      "CommonAliases": [
+        "Aïn Defla"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DZ"
+    },
+    "primaryKey": {
+      "ID": "C7C6B9C7-7E28-4B2E-9E71-13D2030C10DF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:42.135Z",
+      "checksum": "d967c882a08e04f06bc409216c7e0471dcdf95d8c68fc144f611ce989618ed80"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Aïn Témouchent",
+      "Code": "46",
+      "ISO3166_2": "DZ-46",
+      "Latitude": 35.2708,
+      "Longitude": -0.9957,
+      "BoundaryGeoJSON": "@file:by-country/DZ/boundaries/DZ-46.geojson",
+      "CommonAliases": [
+        "Aïn Témouchent"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DZ"
+    },
+    "primaryKey": {
+      "ID": "EB14B1DB-7E81-4D37-835E-47861B8E04BF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:42.152Z",
+      "checksum": "7d7db84dfa48f00be4e2be943e6c63f3ff5df2d000c956689a9c4c6d7390adf0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Alger",
+      "Code": "16",
+      "ISO3166_2": "DZ-16",
+      "Latitude": 36.7024,
+      "Longitude": 3.0981,
+      "BoundaryGeoJSON": "@file:by-country/DZ/boundaries/DZ-16.geojson",
+      "CommonAliases": [
+        "Alger"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DZ"
+    },
+    "primaryKey": {
+      "ID": "7292F0AD-F138-4A13-BC61-E0A80C040C98"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:42.170Z",
+      "checksum": "0ba2a2231b38bf2d3d47cbb61502a904a308a54cbbd353943cac0620fc38382b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Batna",
+      "Code": "05",
+      "ISO3166_2": "DZ-05",
+      "Latitude": 35.5923,
+      "Longitude": 5.7821,
+      "BoundaryGeoJSON": "@file:by-country/DZ/boundaries/DZ-05.geojson",
+      "CommonAliases": [
+        "Batna"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DZ"
+    },
+    "primaryKey": {
+      "ID": "450D4828-FC7C-43C6-A8F7-85166B258BE1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:42.187Z",
+      "checksum": "9746a02d4f0d72a9e480dab50c2c7127260d9f7cce5c73f02b37aa8af8a70004"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Béchar",
+      "Code": "08",
+      "ISO3166_2": "DZ-08",
+      "Latitude": 30.1882,
+      "Longitude": -2.8184,
+      "BoundaryGeoJSON": "@file:by-country/DZ/boundaries/DZ-08.geojson",
+      "CommonAliases": [
+        "Béchar"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DZ"
+    },
+    "primaryKey": {
+      "ID": "5ADB3888-000D-4BB1-AEF8-BBD215BDD7E3"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:42.205Z",
+      "checksum": "0fca86707fe328021997c0f11348b68b18fc271eb8a74849694079c6048a03c7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Béjaïa",
+      "Code": "06",
+      "ISO3166_2": "DZ-06",
+      "Latitude": 36.6189,
+      "Longitude": 4.9159,
+      "BoundaryGeoJSON": "@file:by-country/DZ/boundaries/DZ-06.geojson",
+      "CommonAliases": [
+        "Béjaïa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DZ"
+    },
+    "primaryKey": {
+      "ID": "933FED22-FDE6-4E12-AD99-52AA555471E1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:42.224Z",
+      "checksum": "f8838888be122b5e215be86ec10a678305b08f2ab94da4170f05bb5e5597a0f4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Biskra",
+      "Code": "07",
+      "ISO3166_2": "DZ-07",
+      "Latitude": 34.7569,
+      "Longitude": 5.467,
+      "BoundaryGeoJSON": "@file:by-country/DZ/boundaries/DZ-07.geojson",
+      "CommonAliases": [
+        "Biskra"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DZ"
+    },
+    "primaryKey": {
+      "ID": "6DE4FB46-BEF1-4B52-A07A-1CDAAC457B05"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:42.244Z",
+      "checksum": "6afe3da131b1663f1054c1c382136ab9eddff947abbf1655d1c53a7eeb545827"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Blida",
+      "Code": "09",
+      "ISO3166_2": "DZ-09",
+      "Latitude": 36.503,
+      "Longitude": 2.9933,
+      "BoundaryGeoJSON": "@file:by-country/DZ/boundaries/DZ-09.geojson",
+      "CommonAliases": [
+        "Blida"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DZ"
+    },
+    "primaryKey": {
+      "ID": "19E82C1D-D8BC-441E-9B72-84E9C1EAB1A2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:42.262Z",
+      "checksum": "3c27d38b2d885087404b9cef24adf1740c6165b22c742b210fd993c2d50501c8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bordj Bou Arréridj",
+      "Code": "34",
+      "ISO3166_2": "DZ-34",
+      "Latitude": 36.0966,
+      "Longitude": 4.6693,
+      "BoundaryGeoJSON": "@file:by-country/DZ/boundaries/DZ-34.geojson",
+      "CommonAliases": [
+        "Bordj Bou Arréridj"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DZ"
+    },
+    "primaryKey": {
+      "ID": "93DCA466-2308-4812-9AB0-B7EC8169F25A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:42.276Z",
+      "checksum": "75482b9c4c6bdae5591dff0d6b329f9835c29f72e4eeb69b56c1189b850dfe1b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bouira",
+      "Code": "10",
+      "ISO3166_2": "DZ-10",
+      "Latitude": 36.1884,
+      "Longitude": 3.8438,
+      "BoundaryGeoJSON": "@file:by-country/DZ/boundaries/DZ-10.geojson",
+      "CommonAliases": [
+        "Bouira"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DZ"
+    },
+    "primaryKey": {
+      "ID": "3C9BF9EB-52C8-41C6-86BB-0AC24DD20A5A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:42.337Z",
+      "checksum": "b42b68f5bfece68289dcfe7cf4859e266a0063fcd17a3b3cc8262b289165514f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Boumerdès",
+      "Code": "35",
+      "ISO3166_2": "DZ-35",
+      "Latitude": 36.7503,
+      "Longitude": 3.6063,
+      "BoundaryGeoJSON": "@file:by-country/DZ/boundaries/DZ-35.geojson",
+      "CommonAliases": [
+        "Boumerdès"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DZ"
+    },
+    "primaryKey": {
+      "ID": "24A425EC-74AC-41DC-B187-F51FC8F4F78C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:42.354Z",
+      "checksum": "1a221bc1a23bd79311450421cbeb8d2dbf1c749db9aee67411839065223d4efe"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Chlef",
+      "Code": "02",
+      "ISO3166_2": "DZ-02",
+      "Latitude": 36.2337,
+      "Longitude": 1.2108,
+      "BoundaryGeoJSON": "@file:by-country/DZ/boundaries/DZ-02.geojson",
+      "CommonAliases": [
+        "Chlef"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DZ"
+    },
+    "primaryKey": {
+      "ID": "F7EA7D07-662D-42CF-A892-9F36C9D26E72"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:42.370Z",
+      "checksum": "ab0524310592f9ce4c6209a794e27bd77b5f06281485a543e26aef45f30bd0da"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Constantine",
+      "Code": "25",
+      "ISO3166_2": "DZ-25",
+      "Latitude": 36.3731,
+      "Longitude": 6.683,
+      "BoundaryGeoJSON": "@file:by-country/DZ/boundaries/DZ-25.geojson",
+      "CommonAliases": [
+        "Constantine"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DZ"
+    },
+    "primaryKey": {
+      "ID": "9D07E910-984B-4982-BDE9-496DCDC0EEC5"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:42.388Z",
+      "checksum": "5ab47c9a4af78a827ae337a839f78d7392e6d4f9203d9473685c0b1f765061e2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Djelfa",
+      "Code": "17",
+      "ISO3166_2": "DZ-17",
+      "Latitude": 34.1508,
+      "Longitude": 3.7038,
+      "BoundaryGeoJSON": "@file:by-country/DZ/boundaries/DZ-17.geojson",
+      "CommonAliases": [
+        "Djelfa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DZ"
+    },
+    "primaryKey": {
+      "ID": "0C387F24-403F-4572-A0F8-37A667822614"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:42.404Z",
+      "checksum": "5d9d70f06fa61b41d31170b2265d9f8642195cc6d9cc2a479c1d3af1f076751b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "El Bayadh",
+      "Code": "32",
+      "ISO3166_2": "DZ-32",
+      "Latitude": 32.7753,
+      "Longitude": 0.9719,
+      "BoundaryGeoJSON": "@file:by-country/DZ/boundaries/DZ-32.geojson",
+      "CommonAliases": [
+        "El Bayadh"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DZ"
+    },
+    "primaryKey": {
+      "ID": "40E70EC0-B3E8-48AA-A458-87DEC2CE2587"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:42.420Z",
+      "checksum": "a3b983dfdd753ddb58da9f889629b43baeb4e3eeeff3e397b6ce653b841c6d02"
+    }
+  },
+  {
+    "fields": {
+      "Name": "El Oued",
+      "Code": "39",
+      "ISO3166_2": "DZ-39",
+      "Latitude": 33.1137,
+      "Longitude": 7.0356,
+      "BoundaryGeoJSON": "@file:by-country/DZ/boundaries/DZ-39.geojson",
+      "CommonAliases": [
+        "El Oued"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DZ"
+    },
+    "primaryKey": {
+      "ID": "4EF4421E-657F-42FD-B4A1-4434F3E2497F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:42.436Z",
+      "checksum": "f424e3bc15a339f59bdb7c3e58f8847703db39f6dd40bbf390e7e7841c6fe7e8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "El Tarf",
+      "Code": "36",
+      "ISO3166_2": "DZ-36",
+      "Latitude": 36.7012,
+      "Longitude": 8.146,
+      "BoundaryGeoJSON": "@file:by-country/DZ/boundaries/DZ-36.geojson",
+      "CommonAliases": [
+        "El Tarf"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DZ"
+    },
+    "primaryKey": {
+      "ID": "24234219-246B-43A6-8618-A30853CD6D8F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:42.453Z",
+      "checksum": "914c44c981ec1d07f0d49b8017d28d03379f93f5003fa4c55f8f007e8d5e3860"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ghardaïa",
+      "Code": "47",
+      "ISO3166_2": "DZ-47",
+      "Latitude": 31.1547,
+      "Longitude": 3.114,
+      "BoundaryGeoJSON": "@file:by-country/DZ/boundaries/DZ-47.geojson",
+      "CommonAliases": [
+        "Ghardaïa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DZ"
+    },
+    "primaryKey": {
+      "ID": "83889A6D-E576-4673-9D96-FEDB32EF2D8F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:42.472Z",
+      "checksum": "b651cb2d4ed4c4b4a774135d95885d7e07d1c1ee0f9cb201c2f670acc18ada58"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Guelma",
+      "Code": "24",
+      "ISO3166_2": "DZ-24",
+      "Latitude": 36.4381,
+      "Longitude": 7.4629,
+      "BoundaryGeoJSON": "@file:by-country/DZ/boundaries/DZ-24.geojson",
+      "CommonAliases": [
+        "Guelma"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DZ"
+    },
+    "primaryKey": {
+      "ID": "437B3DE7-F545-46EE-8318-D5D4148C9A5A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:42.485Z",
+      "checksum": "9bfda6336cde59da63470f28ce886b5edd2a3c0368991f6645718f5b30a85ba3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Illizi",
+      "Code": "33",
+      "ISO3166_2": "DZ-33",
+      "Latitude": 26.8506,
+      "Longitude": 8.7628,
+      "BoundaryGeoJSON": "@file:by-country/DZ/boundaries/DZ-33.geojson",
+      "CommonAliases": [
+        "Illizi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DZ"
+    },
+    "primaryKey": {
+      "ID": "4444FE4B-736F-4F63-AB95-7DFB990E29A0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:42.543Z",
+      "checksum": "03571045693d0349ffbda5c4fd176cad3614bb35efae2b154c9e3d64c1a6809b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Jijel",
+      "Code": "18",
+      "ISO3166_2": "DZ-18",
+      "Latitude": 36.7106,
+      "Longitude": 5.9529,
+      "BoundaryGeoJSON": "@file:by-country/DZ/boundaries/DZ-18.geojson",
+      "CommonAliases": [
+        "Jijel"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DZ"
+    },
+    "primaryKey": {
+      "ID": "EB3FDD57-7417-4603-BAF4-AE77B3CC6286"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:42.559Z",
+      "checksum": "fcb77c86b54aa45af6dca1b36f9607042f1642dfede42c0198cf1104c626531d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Khenchela",
+      "Code": "40",
+      "ISO3166_2": "DZ-40",
+      "Latitude": 34.8896,
+      "Longitude": 7.0279,
+      "BoundaryGeoJSON": "@file:by-country/DZ/boundaries/DZ-40.geojson",
+      "CommonAliases": [
+        "Khenchela"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DZ"
+    },
+    "primaryKey": {
+      "ID": "3D894B29-A211-408B-AFE7-8924D97A0C29"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:42.576Z",
+      "checksum": "7ee2bc61068cb82d6c9c4f594b8b6f5cf3bb66762f70969ed733ed58b59979f0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Laghouat",
+      "Code": "03",
+      "ISO3166_2": "DZ-03",
+      "Latitude": 33.4521,
+      "Longitude": 2.7562,
+      "BoundaryGeoJSON": "@file:by-country/DZ/boundaries/DZ-03.geojson",
+      "CommonAliases": [
+        "Laghouat"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DZ"
+    },
+    "primaryKey": {
+      "ID": "58110B50-5AD4-4CDA-B070-1D30C30C3C64"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:42.592Z",
+      "checksum": "67d2a2e7d809f1e51aa3a9946d9f85e5c8a33c296a3e4710b61eae632a95dbc1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mascara",
+      "Code": "29",
+      "ISO3166_2": "DZ-29",
+      "Latitude": 35.3625,
+      "Longitude": 0.1676,
+      "BoundaryGeoJSON": "@file:by-country/DZ/boundaries/DZ-29.geojson",
+      "CommonAliases": [
+        "Mascara"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DZ"
+    },
+    "primaryKey": {
+      "ID": "B7524FC2-CCA9-4A9E-9F06-75148D727FF5"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:42.607Z",
+      "checksum": "8ed2e5baacd9c291429a78b5ba065dd198ebef0db1ad5d61abd6aba97c9473c2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Médéa",
+      "Code": "26",
+      "ISO3166_2": "DZ-26",
+      "Latitude": 35.8958,
+      "Longitude": 2.7641,
+      "BoundaryGeoJSON": "@file:by-country/DZ/boundaries/DZ-26.geojson",
+      "CommonAliases": [
+        "Médéa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DZ"
+    },
+    "primaryKey": {
+      "ID": "9D2FD71A-EABD-4BB8-A24E-A4503FBCDA91"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:42.624Z",
+      "checksum": "fb89975f027fa40aeb5f035b051f1233f36842f7b5c570cfedbe90d328295cf7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mila",
+      "Code": "43",
+      "ISO3166_2": "DZ-43",
+      "Latitude": 36.2449,
+      "Longitude": 6.1311,
+      "BoundaryGeoJSON": "@file:by-country/DZ/boundaries/DZ-43.geojson",
+      "CommonAliases": [
+        "Mila"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DZ"
+    },
+    "primaryKey": {
+      "ID": "ED30E998-6D9A-43F2-90BD-F7176D783442"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:42.641Z",
+      "checksum": "2f35fe1631b7cf97814aa566d03d11a66947611f76026e6481ff2075f754ac4f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mostaganem",
+      "Code": "27",
+      "ISO3166_2": "DZ-27",
+      "Latitude": 35.9631,
+      "Longitude": 0.3134,
+      "BoundaryGeoJSON": "@file:by-country/DZ/boundaries/DZ-27.geojson",
+      "CommonAliases": [
+        "Mostaganem"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DZ"
+    },
+    "primaryKey": {
+      "ID": "58B43E13-A3E7-40F6-A3FB-27D88157D3DE"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:42.656Z",
+      "checksum": "da77a2e551b8cafb6aec5306868da1a9ea1032a207839c46bff661bd900e99d1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Msila",
+      "Code": "28",
+      "ISO3166_2": "DZ-28",
+      "Latitude": 35.3592,
+      "Longitude": 4.3796,
+      "BoundaryGeoJSON": "@file:by-country/DZ/boundaries/DZ-28.geojson",
+      "CommonAliases": [
+        "Msila"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DZ"
+    },
+    "primaryKey": {
+      "ID": "C9B60940-415B-4506-BE2A-C112EE583091"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:42.672Z",
+      "checksum": "4b9382fbdb3cd720e43bba0e98bf5031c83a542196e43c9ff276bdf7c1304006"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Naama",
+      "Code": "45",
+      "ISO3166_2": "DZ-45",
+      "Latitude": 33.1649,
+      "Longitude": -0.8306,
+      "BoundaryGeoJSON": "@file:by-country/DZ/boundaries/DZ-45.geojson",
+      "CommonAliases": [
+        "Naama"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DZ"
+    },
+    "primaryKey": {
+      "ID": "92AD157C-7314-4C6E-BFF3-98538FD420A7"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:42.687Z",
+      "checksum": "2cbf595d25b6d4ccdf24cee5e99bd1130d3ce245f03fb5d04c49914a1fd40ea7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Oran",
+      "Code": "31",
+      "ISO3166_2": "DZ-31",
+      "Latitude": 35.5208,
+      "Longitude": -0.61,
+      "BoundaryGeoJSON": "@file:by-country/DZ/boundaries/DZ-31.geojson",
+      "CommonAliases": [
+        "Oran"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DZ"
+    },
+    "primaryKey": {
+      "ID": "7598A834-7728-4FD8-B073-8DCB7CFC3CD2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:42.743Z",
+      "checksum": "9886b80106aaf8248a533a57a11f469a72f58ab8f2490a506246f2a2e4dbadc5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ouargla",
+      "Code": "30",
+      "ISO3166_2": "DZ-30",
+      "Latitude": 31.0014,
+      "Longitude": 6.2527,
+      "BoundaryGeoJSON": "@file:by-country/DZ/boundaries/DZ-30.geojson",
+      "CommonAliases": [
+        "Ouargla"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DZ"
+    },
+    "primaryKey": {
+      "ID": "5DFB3DB9-518C-4871-8D91-BF7CA82C5376"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:42.759Z",
+      "checksum": "aa2dd3a7d398aa4854dc946115c13ae88e060cf0a7fb1854ebedcc1201c8ca37"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Oum el Bouaghi",
+      "Code": "04",
+      "ISO3166_2": "DZ-04",
+      "Latitude": 35.891,
+      "Longitude": 7.0072,
+      "BoundaryGeoJSON": "@file:by-country/DZ/boundaries/DZ-04.geojson",
+      "CommonAliases": [
+        "Oum el Bouaghi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DZ"
+    },
+    "primaryKey": {
+      "ID": "C33E961B-5F76-456B-822B-A1C1A12D8A95"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:42.775Z",
+      "checksum": "ce48fe7feb59ebef082b23cff68f10795be3528819a753f13f49191042df47d6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Relizane",
+      "Code": "48",
+      "ISO3166_2": "DZ-48",
+      "Latitude": 35.8174,
+      "Longitude": 0.8205,
+      "BoundaryGeoJSON": "@file:by-country/DZ/boundaries/DZ-48.geojson",
+      "CommonAliases": [
+        "Relizane"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DZ"
+    },
+    "primaryKey": {
+      "ID": "AEABBE64-038B-4114-8377-64767B303D41"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:42.792Z",
+      "checksum": "e958f72759aafd548e8f73f8e8a72feb3429bf85c7ec1924af73cd943c864f8c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Saïda",
+      "Code": "20",
+      "ISO3166_2": "DZ-20",
+      "Latitude": 34.5917,
+      "Longitude": 0.1786,
+      "BoundaryGeoJSON": "@file:by-country/DZ/boundaries/DZ-20.geojson",
+      "CommonAliases": [
+        "Saïda"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DZ"
+    },
+    "primaryKey": {
+      "ID": "1ECF2966-B7F5-48B4-ABEC-8B1F983C7062"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:42.807Z",
+      "checksum": "3dae17d07b4c42b9f65d10f98ab3c46880769350d671bce12a8a20f86c590f5f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sétif",
+      "Code": "19",
+      "ISO3166_2": "DZ-19",
+      "Latitude": 36.0513,
+      "Longitude": 5.3843,
+      "BoundaryGeoJSON": "@file:by-country/DZ/boundaries/DZ-19.geojson",
+      "CommonAliases": [
+        "Sétif"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DZ"
+    },
+    "primaryKey": {
+      "ID": "EC7316F8-54C5-4B97-B1C1-21DD07FA5426"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:42.821Z",
+      "checksum": "45351c80163d3e70f7f1f9a75cbafd9f410e043ea96ab2f591f7065fb07a459c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sidi Bel Abbès",
+      "Code": "22",
+      "ISO3166_2": "DZ-22",
+      "Latitude": 34.8335,
+      "Longitude": -0.5865,
+      "BoundaryGeoJSON": "@file:by-country/DZ/boundaries/DZ-22.geojson",
+      "CommonAliases": [
+        "Sidi Bel Abbès"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DZ"
+    },
+    "primaryKey": {
+      "ID": "C6929478-93BA-4FC4-A94C-3E87AF6AB301"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:42.835Z",
+      "checksum": "8c26d1ecf4cd1d1f451c19ec14b7dbdeb5aa4fec7730f3d0b687d6c9c07d0684"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Skikda",
+      "Code": "21",
+      "ISO3166_2": "DZ-21",
+      "Latitude": 36.7555,
+      "Longitude": 6.8161,
+      "BoundaryGeoJSON": "@file:by-country/DZ/boundaries/DZ-21.geojson",
+      "CommonAliases": [
+        "Skikda"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DZ"
+    },
+    "primaryKey": {
+      "ID": "84BC7154-BC78-4D98-BB6A-282E9767DF33"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:42.849Z",
+      "checksum": "d2c1ddb42b3ff154238daf1195bbf5d01ef9cb28834be147b1acaef8e75500a4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Souk Ahras",
+      "Code": "41",
+      "ISO3166_2": "DZ-41",
+      "Latitude": 36.1547,
+      "Longitude": 7.8421,
+      "BoundaryGeoJSON": "@file:by-country/DZ/boundaries/DZ-41.geojson",
+      "CommonAliases": [
+        "Souk Ahras"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DZ"
+    },
+    "primaryKey": {
+      "ID": "62C0E779-8A1B-4856-BAC6-1B2DC5E93CF7"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:42.864Z",
+      "checksum": "e1c8ccc92a681254d89c8f3f430df4b220500440625d5484f5d882ad22083362"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tamanghasset",
+      "Code": "11",
+      "ISO3166_2": "DZ-11",
+      "Latitude": 23.0089,
+      "Longitude": 6.397,
+      "BoundaryGeoJSON": "@file:by-country/DZ/boundaries/DZ-11.geojson",
+      "CommonAliases": [
+        "Tamanghasset"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DZ"
+    },
+    "primaryKey": {
+      "ID": "5BB38629-594F-43E4-90F0-4C699835B359"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:42.877Z",
+      "checksum": "d43f8fc16e9f485e799b8122c8e2122b2b865b764339113856aa99b79c077f87"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tébessa",
+      "Code": "12",
+      "ISO3166_2": "DZ-12",
+      "Latitude": 34.9437,
+      "Longitude": 7.7834,
+      "BoundaryGeoJSON": "@file:by-country/DZ/boundaries/DZ-12.geojson",
+      "CommonAliases": [
+        "Tébessa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DZ"
+    },
+    "primaryKey": {
+      "ID": "B21E13FD-2211-49D9-A321-976A5D102431"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:42.916Z",
+      "checksum": "9b93ba647a36f746659fd9c6c7c5e725e09be4a3d54f6f979aa9f037764575d9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tiaret",
+      "Code": "14",
+      "ISO3166_2": "DZ-14",
+      "Latitude": 34.9048,
+      "Longitude": 1.5563,
+      "BoundaryGeoJSON": "@file:by-country/DZ/boundaries/DZ-14.geojson",
+      "CommonAliases": [
+        "Tiaret"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DZ"
+    },
+    "primaryKey": {
+      "ID": "9AFD716E-D2BC-48E8-A955-BAC923B568B9"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:42.931Z",
+      "checksum": "1e3200a5572f7e4759f3a04215552bb19e9870806ac32ad39b934dacc07d56d6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tindouf",
+      "Code": "37",
+      "ISO3166_2": "DZ-37",
+      "Latitude": 27.4985,
+      "Longitude": -5.8285,
+      "BoundaryGeoJSON": "@file:by-country/DZ/boundaries/DZ-37.geojson",
+      "CommonAliases": [
+        "Tindouf"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DZ"
+    },
+    "primaryKey": {
+      "ID": "FE3E083A-3340-484A-B934-A808ADA7684D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:42.945Z",
+      "checksum": "22fb4d2a279d5ce0c866d976e4c1e3291ae439c4a1cf9ed3b4d47c9d02b704db"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tipaza",
+      "Code": "42",
+      "ISO3166_2": "DZ-42",
+      "Latitude": 36.527,
+      "Longitude": 2.3414,
+      "BoundaryGeoJSON": "@file:by-country/DZ/boundaries/DZ-42.geojson",
+      "CommonAliases": [
+        "Tipaza"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DZ"
+    },
+    "primaryKey": {
+      "ID": "D8259942-3D15-4DEB-8A2D-16E0232780CE"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:42.959Z",
+      "checksum": "7e464d3ba4ab43c9fd2a740a3688235ac96320504599110dea02c0e702c1622a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tissemsilt",
+      "Code": "38",
+      "ISO3166_2": "DZ-38",
+      "Latitude": 35.7302,
+      "Longitude": 1.7787,
+      "BoundaryGeoJSON": "@file:by-country/DZ/boundaries/DZ-38.geojson",
+      "CommonAliases": [
+        "Tissemsilt"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DZ"
+    },
+    "primaryKey": {
+      "ID": "A67C5D2B-03FD-4F71-BD2B-3B2F3A25FF2B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:42.973Z",
+      "checksum": "74ad7da9f511716c64f8c99ccc77494a2d9c8e4cff82cf5eee6f67fe18d3f3bd"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tizi Ouzou",
+      "Code": "15",
+      "ISO3166_2": "DZ-15",
+      "Latitude": 36.6814,
+      "Longitude": 4.1909,
+      "BoundaryGeoJSON": "@file:by-country/DZ/boundaries/DZ-15.geojson",
+      "CommonAliases": [
+        "Tizi Ouzou"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DZ"
+    },
+    "primaryKey": {
+      "ID": "4F7B73D1-2572-4E7E-AC1C-9265FDA84B98"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:42.988Z",
+      "checksum": "d9fa58c6de576787dd221cdccc4acfc773ac19adf741a2edb69e50c548e3d842"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tlemcen",
+      "Code": "13",
+      "ISO3166_2": "DZ-13",
+      "Latitude": 34.7431,
+      "Longitude": -1.4904,
+      "BoundaryGeoJSON": "@file:by-country/DZ/boundaries/DZ-13.geojson",
+      "CommonAliases": [
+        "Tlemcen"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DZ"
+    },
+    "primaryKey": {
+      "ID": "B237BBC4-4004-46EB-8F20-F657B0565D9B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:43.002Z",
+      "checksum": "6d76c901ba31b583fde095c9d55b6e39ae94569377a56d74d1fc779569aac4d3"
+    }
+  }
+]
