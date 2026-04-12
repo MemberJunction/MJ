@@ -61,6 +61,7 @@ export class CredentialsDashboardComponent extends BaseDashboard implements Afte
     }
 
     ngOnDestroy(): void {
+        super.ngOnDestroy();
         this.stateChangeSubject.complete();
     }
 

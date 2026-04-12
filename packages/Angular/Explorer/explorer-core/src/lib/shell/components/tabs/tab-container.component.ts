@@ -949,11 +949,12 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
       // If no DriverClass in metadata, fall back to resourceType (backward compatibility)
     }
 
-    // Include applicationId and driverClass in configuration
+    // Include applicationId, driverClass, and tabId in configuration
     const resourceConfig = {
       ...config,
       applicationId: tab.applicationId,
-      resourceTypeDriverClass: driverClass  // Store resolved driver class for component lookup
+      resourceTypeDriverClass: driverClass,  // Store resolved driver class for component lookup
+      tabId: tab.id  // Needed for query param notification scoping in BaseResourceComponent
     };
 
     // Get ResourceRecordID from config or fall back to tab.resourceRecordId

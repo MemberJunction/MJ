@@ -2,7 +2,7 @@ import {
   Component, Input, Output, EventEmitter,
   ChangeDetectionStrategy, ChangeDetectorRef, inject, NgZone,
   ContentChildren, QueryList, AfterContentInit, OnDestroy,
-  ViewEncapsulation
+  ViewChild, ViewEncapsulation
 } from '@angular/core';
 import { BaseEntity, CompositeKey, EntityInfo, Metadata, RunView } from '@memberjunction/core';
 import { UserInfoEngine } from '@memberjunction/core-entities';
@@ -22,7 +22,7 @@ import {
   CustomToolbarButtonClickEventArgs
 } from '../types/form-events';
 import { BaseFormComponent } from '../base-form-component';
-import { RestoreVersionEvent } from '@memberjunction/ng-record-changes';
+import { RestoreVersionEvent, RecordChangesComponent } from '@memberjunction/ng-record-changes';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 /**
@@ -71,6 +71,9 @@ export class MjRecordFormContainerComponent implements AfterContentInit, OnDestr
   private panelNavReset$ = new Subject<void>();
 
   // ---- Internal State ----
+
+  /** Reference to the record changes drawer (when visible) for triggering refresh after save */
+  @ViewChild(RecordChangesComponent) private recordChangesDrawer?: RecordChangesComponent;
 
   /** Controls visibility of record changes drawer */
   ShowRecordChanges = false;
@@ -488,6 +491,9 @@ export class MjRecordFormContainerComponent implements AfterContentInit, OnDestr
 
       try {
         await this.fc.SaveRecord(true);
+
+        // After successful save, refresh version count badge and record changes drawer
+        this.RefreshAfterSave();
       } finally {
         // Use microtask timing to avoid ExpressionChangedAfterItHasBeenCheckedError
         await Promise.resolve();
@@ -498,6 +504,24 @@ export class MjRecordFormContainerComponent implements AfterContentInit, OnDestr
       }
     } else {
       this.SaveRequested.emit();
+    }
+  }
+
+  /**
+   * Refreshes the version count badge and record changes drawer after a save.
+   * The save operation creates a new RecordChange entry server-side, so we need
+   * to update the UI to reflect the new version.
+   */
+  private RefreshAfterSave(): void {
+    const record = this.EffectiveRecord;
+    if (!record?.EntityInfo?.TrackRecordChanges) return;
+
+    // Refresh version count badge
+    this.LoadVersionCount(record);
+
+    // If the record changes drawer is open, refresh it too
+    if (this.ShowRecordChanges && this.recordChangesDrawer) {
+      this.recordChangesDrawer.Refresh();
     }
   }
 

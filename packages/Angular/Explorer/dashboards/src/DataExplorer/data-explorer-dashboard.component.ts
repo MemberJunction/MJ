@@ -1,8 +1,8 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef, Input, Output, EventEmitter, OnChanges, SimpleChanges, HostListener, ElementRef, ViewChild, NgZone } from '@angular/core';
-import { Router, NavigationEnd } from '@angular/router';
+
 import { trigger, transition, style, animate } from '@angular/animations';
 import { Subject } from 'rxjs';
-import { takeUntil, debounceTime, distinctUntilChanged, filter } from 'rxjs/operators';
+import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { BaseDashboard, NavigationService } from '@memberjunction/ng-shared';
 import { RecentAccessService } from '@memberjunction/ng-shared-generic';
 import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
@@ -34,7 +34,8 @@ import { ViewSelectedEvent, SaveViewRequestedEvent, ViewSelectorComponent } from
 import { CompositeFilterDescriptor, FilterFieldInfo, createEmptyFilter } from '@memberjunction/ng-filter-builder';
 import { MJUserViewEntityExtended } from '@memberjunction/core-entities';
 import { ExplorerStateService } from './services/explorer-state.service';
-import { DataExplorerState, DataExplorerFilter, BreadcrumbItem, DataExplorerDeepLink, RecentRecordAccess, FavoriteRecord, AppEntityGroup } from './models/explorer-state.interface';
+import { DataExplorerState, DataExplorerFilter, BreadcrumbItem, DataExplorerDeepLink, DataExplorerViewMode, RecentRecordAccess, FavoriteRecord, AppEntityGroup } from './models/explorer-state.interface';
+import { MapRenderMode } from '@memberjunction/ng-map-view';
 import { OpenRecordEvent, SelectRecordEvent } from './components/navigation-panel/navigation-panel.component';
 import { DisplaySimpleNotificationRequestData, MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';
 import { ListManagementDialogConfig, ListManagementResult } from '@memberjunction/ng-list-management';
@@ -74,7 +75,7 @@ import {
 })
 @RegisterClass(BaseDashboard, 'DataExplorer')
 export class DataExplorerDashboardComponent extends BaseDashboard implements OnInit, OnDestroy, OnChanges {
-  private destroy$ = new Subject<void>();
+  protected override destroy$ = new Subject<void>();
   private metadata = new Metadata();
 
   /** Reference to the filter input for keyboard shortcuts */
@@ -162,12 +163,6 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
   // Date field dropdown state
   public isDateFieldDropdownOpen: boolean = false;
-
-  // Flag to skip URL updates during initialization (when applying deep link)
-  private skipUrlUpdates: boolean = true;
-
-  // Track the last URL we navigated to, to avoid reacting to our own navigation
-  private lastNavigatedUrl: string = '';
 
   // Recent records from User Record Logs
   public recentRecords: RecentRecordAccess[] = [];
@@ -570,9 +565,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   constructor(
     public stateService: ExplorerStateService,
     private cdr: ChangeDetectorRef,
-    private router: Router,
     private recentAccessService: RecentAccessService,
-    private navigationService: NavigationService,
     private exportService: ExportService,
     private ngZone: NgZone
   ) {
@@ -581,14 +574,16 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   }
 
   async ngOnInit(): Promise<void> {
+    super.ngOnInit();
     // Ensure UserInfoEngine is configured before we try to access user settings
     // This prevents race conditions where we try to load default view settings
     // before the user settings have been loaded from the server
     await UserInfoEngine.Instance.Config(false);
 
-    // Parse URL state FIRST - URL wins over persisted state
+    // Read initial query params from the framework - URL wins over persisted state
     // This must happen before loading entities to prevent race conditions
-    const urlState = this.parseUrlState();
+    const rawParams = this.GetQueryParams();
+    const urlState = this.buildDeepLinkFromParams(rawParams);
 
     // Set context for state service (enables context-specific settings)
     await this.stateService.setContext(this.entityFilter);
@@ -628,10 +623,8 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
         this.onStateChanged();
 
-        // Update URL to reflect current state (for deep linking)
-        if (!this.skipUrlUpdates) {
-          this.updateUrl();
-        }
+        // Update URL query params to reflect current state (for deep linking)
+        this.pushCurrentStateToUrl();
 
         this.cdr.detectChanges();
       });
@@ -646,9 +639,9 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
     // Setup debounced filter - 500ms delay allows comfortable typing before triggering search
     // IMPORTANT: Do NOT call setSmartFilterPrompt here. Updating the state service triggers
-    // URL updates via the shell's workspace sync, which fires NavigationEnd, which triggers
-    // applyUrlState, which clears the filter text. The debouncedFilterText flows directly
-    // to the entity-viewer via [filterText] binding — no state service involvement needed.
+    // URL updates (via pushCurrentStateToUrl → UpdateQueryParams), which in turn can trigger
+    // OnQueryParamsChanged, which would clear the filter text. The debouncedFilterText flows
+    // directly to the entity-viewer via [filterText] binding — no state service involvement needed.
     this.filterInput$
       .pipe(
         debounceTime(500),
@@ -677,30 +670,8 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
         this.cdr.detectChanges();
       });
 
-    // Subscribe to router NavigationEnd events for back/forward button support
-    this.router.events
-      .pipe(
-        filter((event): event is NavigationEnd => event instanceof NavigationEnd),
-        takeUntil(this.destroy$)
-      )
-      .subscribe(event => {
-        // Only react to navigation events that weren't triggered by us
-        // Normalize URLs by decoding to handle + vs %20 encoding differences
-        // Note: decodeURIComponent doesn't decode +, so we also replace + with space
-        const currentUrl = event.urlAfterRedirects || event.url;
-        const normalizedCurrentUrl = decodeURIComponent(currentUrl).replace(/\+/g, ' ');
-        const normalizedLastUrl = decodeURIComponent(this.lastNavigatedUrl).replace(/\+/g, ' ');
-        const isExternal = normalizedCurrentUrl !== normalizedLastUrl;
-        if (isExternal) {
-          this.onExternalNavigation(currentUrl);
-        }
-      });
-
-    // Enable URL updates now that initialization is complete
-    this.skipUrlUpdates = false;
-
-    // Update URL to reflect current state (whether from URL, deepLink, or persisted)
-    this.updateUrl();
+    // Push initial state to URL (covers deepLink and persisted state)
+    this.pushCurrentStateToUrl();
 
     // Notify that loading is complete (for resource wrapper integration)
     this.NotifyLoadComplete();
@@ -1468,7 +1439,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     if (event.sortItems && event.sortItems.length > 0) {
       return event.sortItems.map(item => ({
         field: item.field,
-        direction: item.direction as 'asc' | 'desc'
+        direction: item.direction
       }));
     }
 
@@ -1476,7 +1447,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     if (event.sortField) {
       return [{
         field: event.sortField,
-        direction: event.sortDirection as 'asc' | 'desc'
+        direction: event.sortDirection
       }];
     }
 
@@ -1814,6 +1785,32 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     if (this.state.selectedViewId) {
       this.stateService.setViewModified(true);
     }
+  }
+
+  /**
+   * Get the current map display state for passing to the EntityViewer/MapView.
+   */
+  get mapDisplayState(): { RenderMode: MapRenderMode; ZoomLevel: number; CenterLat: number; CenterLng: number } | null {
+    if (this.state.mapZoom == null) return null;
+    return {
+      RenderMode: this.state.mapRenderMode || 'point',
+      ZoomLevel: this.state.mapZoom,
+      CenterLat: this.state.mapCenterLat ?? 20,
+      CenterLng: this.state.mapCenterLng ?? 0
+    };
+  }
+
+  /**
+   * Handle map display state changes from the map component.
+   * Persists zoom, center, and render mode across page reloads.
+   */
+  public onMapDisplayStateChange(state: { RenderMode?: MapRenderMode; ZoomLevel?: number; CenterLat?: number; CenterLng?: number }): void {
+    this.stateService.updateState({
+      mapRenderMode: state.RenderMode || 'point',
+      mapZoom: state.ZoomLevel ?? null,
+      mapCenterLat: state.CenterLat ?? null,
+      mapCenterLng: state.CenterLng ?? null
+    });
   }
 
   /**
@@ -2476,44 +2473,70 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   }
 
   // ========================================
-  // URL DEEP LINKING
+  // URL DEEP LINKING (Framework Query Param Lifecycle)
   // ========================================
 
   /**
-   * Parse URL query string and return a deep link object.
+   * Build a DataExplorerDeepLink from framework query params.
    * Returns null if no relevant params found.
-   *
-   * Query params:
-   * - entity: Selected entity name
-   * - record: Selected record ID (URL segment format via CompositeKey)
-   * - filter: Current filter text
-   * - view: View mode (grid or cards)
    */
-  private parseUrlState(): DataExplorerDeepLink | null {
-    const url = this.router.url;
-    const queryIndex = url.indexOf('?');
-    if (queryIndex === -1) {
-      return null;
-    }
+  private buildDeepLinkFromParams(params: Record<string, string>): DataExplorerDeepLink | null {
+    const entity = params['entity'] || null;
+    const record = params['record'] || null;
+    const filterParam = params['filter'] || null;
+    const view = (params['view'] as DataExplorerViewMode) || null;
 
-    const queryString = url.substring(queryIndex + 1);
-    const params = new URLSearchParams(queryString);
-    const entity = params.get('entity');
-    const record = params.get('record');
-    const filter = params.get('filter');
-    const view = params.get('view') as 'grid' | 'cards' | null;
-
-    // If no params, return null
-    if (!entity && !record && !filter && !view) {
+    if (!entity && !record && !filterParam && !view) {
       return null;
     }
 
     return {
       entity: entity || undefined,
       record: record || undefined,
-      filter: filter || undefined,
+      filter: filterParam || undefined,
       viewMode: view || undefined
     };
+  }
+
+  /**
+   * React to back/forward navigation or deep-link entry.
+   * The base class calls this when query params change via popstate or deeplink.
+   */
+  protected override OnQueryParamsChanged(params: Record<string, string>, _source: 'popstate' | 'deeplink'): void {
+    this.applyParams(params);
+  }
+
+  /**
+   * Apply a params map (from framework query params) to the component state.
+   */
+  private applyParams(params: Record<string, string>): void {
+    const deepLink = this.buildDeepLinkFromParams(params);
+    if (deepLink) {
+      this.applyUrlState(deepLink);
+    } else {
+      // No params — go to home view
+      this.selectedEntity = null;
+      this.selectedRecord = null;
+      this.detailPanelEntity = null;
+      this.stateService.selectEntity(null);
+      this.stateService.closeDetailPanel();
+      this.cdr.detectChanges();
+    }
+  }
+
+  /**
+   * Push current navigation state to the URL via the framework.
+   * Called whenever state changes so users can bookmark/share URLs.
+   */
+  private pushCurrentStateToUrl(): void {
+    const queryParams: Record<string, string | null> = {
+      entity: this.state.selectedEntityName || null,
+      record: (this.state.selectedRecordId && this.state.selectedEntityName) ? this.state.selectedRecordId : null,
+      filter: (this.state.smartFilterPrompt && this.state.selectedEntityName) ? this.state.smartFilterPrompt : null,
+      view: (this.state.viewMode && this.state.viewMode !== 'grid') ? this.state.viewMode : null
+    };
+
+    this.UpdateQueryParams(queryParams);
   }
 
   /**
@@ -2589,7 +2612,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       this.selectedEntity = null;
       this.selectedRecord = null;
       this.detailPanelEntity = null;
-      this.stateService.selectEntity(null as unknown as string);
+      this.stateService.selectEntity(null);
       this.stateService.closeDetailPanel();
     }
 
@@ -2605,113 +2628,6 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     } else {
       this.DisplayNameChanged.emit('Data');
     }
-  }
-
-  /**
-   * Update the URL query string to reflect current navigation state.
-   * This enables deep linking - users can bookmark or share URLs to specific views.
-   * Called immediately on state changes (not debounced).
-   * Uses NavigationService for proper URL management that respects app-scoped routes.
-   */
-  private updateUrl(): void {
-    const queryParams: Record<string, string | null> = {};
-
-    // Add entity if selected
-    if (this.state.selectedEntityName) {
-      queryParams['entity'] = this.state.selectedEntityName;
-    } else {
-      queryParams['entity'] = null;
-    }
-
-    // Add record if selected (only if entity is also selected)
-    if (this.state.selectedRecordId && this.state.selectedEntityName) {
-      queryParams['record'] = this.state.selectedRecordId;
-    } else {
-      queryParams['record'] = null;
-    }
-
-    // Add filter if present (only if entity is also selected)
-    if (this.state.smartFilterPrompt && this.state.selectedEntityName) {
-      queryParams['filter'] = this.state.smartFilterPrompt;
-    } else {
-      queryParams['filter'] = null;
-    }
-
-    // Add view mode if not default (grid is default)
-    if (this.state.viewMode && this.state.viewMode !== 'grid') {
-      queryParams['view'] = this.state.viewMode;
-    } else {
-      queryParams['view'] = null;
-    }
-
-    // Use NavigationService to update query params properly
-    this.navigationService.UpdateActiveTabQueryParams(queryParams);
-  }
-
-  /**
-   * Handle external navigation (back/forward buttons).
-   * Parses the URL and applies the state without triggering a new navigation.
-   */
-  private onExternalNavigation(url: string): void {
-    // Check if this URL is for our component (contains our base path)
-    const currentPath = this.router.url.split('?')[0];
-    const newPath = url.split('?')[0];
-
-    // Only handle if we're still on the same base path (same dashboard instance)
-    if (currentPath !== newPath) {
-      return; // Different route entirely, shell will handle it
-    }
-
-    // Parse the new URL state
-    const urlState = this.parseUrlFromString(url);
-
-    // Apply the state without triggering URL updates
-    this.skipUrlUpdates = true;
-    if (urlState) {
-      this.applyUrlState(urlState);
-    } else {
-      // No params means go to home view
-      this.selectedEntity = null;
-      this.selectedRecord = null;
-      this.detailPanelEntity = null;
-      this.stateService.selectEntity(null as unknown as string);
-      this.stateService.closeDetailPanel();
-    }
-    this.skipUrlUpdates = false;
-
-    // Update the tracked URL
-    this.lastNavigatedUrl = url;
-
-    this.cdr.detectChanges();
-  }
-
-  /**
-   * Parse URL state from a URL string (used for external navigation).
-   */
-  private parseUrlFromString(url: string): DataExplorerDeepLink | null {
-    const queryIndex = url.indexOf('?');
-    if (queryIndex === -1) {
-      return null;
-    }
-
-    const queryString = url.substring(queryIndex + 1);
-    const params = new URLSearchParams(queryString);
-    const entity = params.get('entity');
-    const record = params.get('record');
-    const filterParam = params.get('filter');
-    const view = params.get('view') as 'grid' | 'cards' | null;
-
-    // If no params, return null
-    if (!entity && !record && !filterParam && !view) {
-      return null;
-    }
-
-    return {
-      entity: entity || undefined,
-      record: record || undefined,
-      filter: filterParam || undefined,
-      viewMode: view || undefined
-    };
   }
 
   // ========================================

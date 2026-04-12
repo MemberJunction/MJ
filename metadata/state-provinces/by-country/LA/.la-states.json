@@ -1,0 +1,359 @@
+[
+  {
+    "fields": {
+      "Name": "Attapu [Attopeu]",
+      "Code": "AT",
+      "ISO3166_2": "LA-AT",
+      "Latitude": 14.7848,
+      "Longitude": 106.866,
+      "BoundaryGeoJSON": "@file:by-country/LA/boundaries/LA-AT.geojson",
+      "CommonAliases": [
+        "Attapu [Attopeu]"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LA"
+    },
+    "primaryKey": {
+      "ID": "1C49C2EB-17CE-44A6-BBE2-02FDAD08D6AA"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:11.037Z",
+      "checksum": "251b0f335c009febdb65c7317d6d0683c7830b6f5fb3e6f06970fe3f63cdaf56"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bokèo",
+      "Code": "BK",
+      "ISO3166_2": "LA-BK",
+      "Latitude": 20.3044,
+      "Longitude": 100.672,
+      "BoundaryGeoJSON": "@file:by-country/LA/boundaries/LA-BK.geojson",
+      "CommonAliases": [
+        "Bokèo"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LA"
+    },
+    "primaryKey": {
+      "ID": "A62CB8CC-D49C-468D-9103-79B6F3E79F51"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:11.054Z",
+      "checksum": "321b518172b4851371880e042d596ab0e7a782b607c6b34f473435ad494c3519"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bolikhamxai [Borikhane]",
+      "Code": "BL",
+      "ISO3166_2": "LA-BL",
+      "Latitude": 18.538,
+      "Longitude": 104.039,
+      "BoundaryGeoJSON": "@file:by-country/LA/boundaries/LA-BL.geojson",
+      "CommonAliases": [
+        "Bolikhamxai [Borikhane]"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LA"
+    },
+    "primaryKey": {
+      "ID": "627D9EF0-40C4-4034-9B9C-CC2814ED162C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:11.071Z",
+      "checksum": "27bb3bee136069c084c1e4dc9f1d185c24c8c34bc3a264c740cee34d369eb965"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Champasak [Champassak]",
+      "Code": "CH",
+      "ISO3166_2": "LA-CH",
+      "Latitude": 14.1093,
+      "Longitude": 106.003,
+      "BoundaryGeoJSON": "@file:by-country/LA/boundaries/LA-CH.geojson",
+      "CommonAliases": [
+        "Champasak [Champassak]"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LA"
+    },
+    "primaryKey": {
+      "ID": "4D9B2F05-3277-432A-ABB4-D355A9778832"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:11.089Z",
+      "checksum": "5cf049022ce80506c00635456b24b1a402d21e5494b3895c6c57cb62e9887f62"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Houaphan",
+      "Code": "HO",
+      "ISO3166_2": "LA-HO",
+      "Latitude": 20.3729,
+      "Longitude": 104.039,
+      "BoundaryGeoJSON": "@file:by-country/LA/boundaries/LA-HO.geojson",
+      "CommonAliases": [
+        "Houaphan"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LA"
+    },
+    "primaryKey": {
+      "ID": "EFDD830D-FAB6-4015-BF49-5ACDB6A52F90"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:11.104Z",
+      "checksum": "84c8f48f65c63d46557f8b5cb1ee9c5c1e797ca07a1c5218b3cad9fb01251c3f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Khammouan",
+      "Code": "KH",
+      "ISO3166_2": "LA-KH",
+      "Latitude": 17.6151,
+      "Longitude": 105.343,
+      "BoundaryGeoJSON": "@file:by-country/LA/boundaries/LA-KH.geojson",
+      "CommonAliases": [
+        "Khammouan"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LA"
+    },
+    "primaryKey": {
+      "ID": "1B8F2911-5504-4EEE-8F49-4679EB7F688C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:11.121Z",
+      "checksum": "3f95bd0e688b89f5f409a66a2c70e128133b90c35efa07281a294dc0d5b5073b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Louang Namtha",
+      "Code": "LM",
+      "ISO3166_2": "LA-LM",
+      "Latitude": 20.9099,
+      "Longitude": 101.148,
+      "BoundaryGeoJSON": "@file:by-country/LA/boundaries/LA-LM.geojson",
+      "CommonAliases": [
+        "Louang Namtha"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LA"
+    },
+    "primaryKey": {
+      "ID": "06CDFBED-931B-4687-9FB3-57CCCEC62DF2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:11.139Z",
+      "checksum": "e00ff33bad29f953fb216235dbfa2ecc3bf3b394f65550b9830d69ea704d3585"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Louangphabang [Louang Prabang]",
+      "Code": "LP",
+      "ISO3166_2": "LA-LP",
+      "Latitude": 20.0788,
+      "Longitude": 102.549,
+      "BoundaryGeoJSON": "@file:by-country/LA/boundaries/LA-LP.geojson",
+      "CommonAliases": [
+        "Louangphabang [Louang Prabang]"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LA"
+    },
+    "primaryKey": {
+      "ID": "599DB4A5-E99E-4C23-B9EA-986C5FF9D608"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:11.158Z",
+      "checksum": "2111990953141d36952a1b507ca13ef61394a73410c1b3075c3272dd3d751b84"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Oudômxai [Oudomsai]",
+      "Code": "OU",
+      "ISO3166_2": "LA-OU",
+      "Latitude": 20.161,
+      "Longitude": 101.548,
+      "BoundaryGeoJSON": "@file:by-country/LA/boundaries/LA-OU.geojson",
+      "CommonAliases": [
+        "Oudômxai [Oudomsai]"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LA"
+    },
+    "primaryKey": {
+      "ID": "CE47F0CA-D56F-4429-BD76-A6B81B222DFD"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:11.175Z",
+      "checksum": "46649adae59ac2ef5eafc37f87a0abca18c483f425e2e8ef0f744056f33190a2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Phôngsali [Phong Saly]",
+      "Code": "PH",
+      "ISO3166_2": "LA-PH",
+      "Latitude": 21.6153,
+      "Longitude": 102.245,
+      "BoundaryGeoJSON": "@file:by-country/LA/boundaries/LA-PH.geojson",
+      "CommonAliases": [
+        "Phôngsali [Phong Saly]"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LA"
+    },
+    "primaryKey": {
+      "ID": "D71CA842-3432-4E4C-AC7E-00D273318747"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:11.189Z",
+      "checksum": "39b05fa14c0f1bea59eac3ffcb87c1ffb7fa37c7c023dee0883f4fb72d4afeb5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Salavan [Saravane]",
+      "Code": "SL",
+      "ISO3166_2": "LA-SL",
+      "Latitude": 15.7614,
+      "Longitude": 106.248,
+      "BoundaryGeoJSON": "@file:by-country/LA/boundaries/LA-SL.geojson",
+      "CommonAliases": [
+        "Salavan [Saravane]"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LA"
+    },
+    "primaryKey": {
+      "ID": "B74140BD-3339-4B70-AD8B-087B1837BDBC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:11.245Z",
+      "checksum": "a81e96178b1c7f6165a98e52a1e55eafee0816086578e784b953ec0428c40262"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Savannakhét",
+      "Code": "SV",
+      "ISO3166_2": "LA-SV",
+      "Latitude": 16.4937,
+      "Longitude": 105.771,
+      "BoundaryGeoJSON": "@file:by-country/LA/boundaries/LA-SV.geojson",
+      "CommonAliases": [
+        "Savannakhét"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LA"
+    },
+    "primaryKey": {
+      "ID": "077A2B45-AD4B-4396-9E5B-88668FB3A4EC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:11.264Z",
+      "checksum": "f7d630f00a52085233df07b03783a51b8a3811e5e873642d67992e52d3ed4762"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Vientiane",
+      "Code": "VT",
+      "ISO3166_2": "LA-VT",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Vientiane"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LA"
+    },
+    "primaryKey": {
+      "ID": "0621EC61-B930-4559-B003-E4C6E725D661"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:11.280Z",
+      "checksum": "97a5826907eae9c6d6a2f3a1b58a8953fe836b96539a06247d7223928ed6efa1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Vientiane",
+      "Code": "VI",
+      "ISO3166_2": "LA-VI",
+      "Latitude": 18.9186,
+      "Longitude": 102.156,
+      "BoundaryGeoJSON": "@file:by-country/LA/boundaries/LA-VI.geojson",
+      "CommonAliases": [
+        "Vientiane"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LA"
+    },
+    "primaryKey": {
+      "ID": "4F99E280-568D-4862-91A1-498ECEB0870B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:11.298Z",
+      "checksum": "f88823e8db385b513ddfac9ac45ff31a6e4f53b5c8b629333d69e76ec58b90a2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Xaignabouli [Sayaboury]",
+      "Code": "XA",
+      "ISO3166_2": "LA-XA",
+      "Latitude": 17.7502,
+      "Longitude": 101.143,
+      "BoundaryGeoJSON": "@file:by-country/LA/boundaries/LA-XA.geojson",
+      "CommonAliases": [
+        "Xaignabouli [Sayaboury]"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LA"
+    },
+    "primaryKey": {
+      "ID": "87511C6F-66EF-469C-AC2E-EC69D42D1203"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:11.315Z",
+      "checksum": "bd00900981a0b649d42d026c51671ce09b2dd8846ef32433c48254c6e043122d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Xékong [Sékong]",
+      "Code": "XE",
+      "ISO3166_2": "LA-XE",
+      "Latitude": 15.6414,
+      "Longitude": 106.982,
+      "BoundaryGeoJSON": "@file:by-country/LA/boundaries/LA-XE.geojson",
+      "CommonAliases": [
+        "Xékong [Sékong]"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LA"
+    },
+    "primaryKey": {
+      "ID": "7434008B-F67A-43DC-8910-1A9C9AAA4296"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:11.331Z",
+      "checksum": "7bcda1975329ae6bf10de8c581c6b448939d5b9b8e1835c2eb3a5910bd552f83"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Xiangkhoang [Xieng Khouang]",
+      "Code": "XI",
+      "ISO3166_2": "LA-XI",
+      "Latitude": 19.5113,
+      "Longitude": 103.46,
+      "BoundaryGeoJSON": "@file:by-country/LA/boundaries/LA-XI.geojson",
+      "CommonAliases": [
+        "Xiangkhoang [Xieng Khouang]"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LA"
+    },
+    "primaryKey": {
+      "ID": "8E922525-0682-4F05-B8F7-4C392FF33A06"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:11.345Z",
+      "checksum": "4fb79edae79b2c34e682c772ae188388250bd581ac950e8d0f0ec3aeb8e41cdf"
+    }
+  }
+]

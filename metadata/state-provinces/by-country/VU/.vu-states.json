@@ -1,0 +1,128 @@
+[
+  {
+    "fields": {
+      "Name": "Malampa",
+      "Code": "MAP",
+      "ISO3166_2": "VU-MAP",
+      "Latitude": -16.3765,
+      "Longitude": 167.494,
+      "BoundaryGeoJSON": "@file:by-country/VU/boundaries/VU-MAP.geojson",
+      "CommonAliases": [
+        "Malampa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VU"
+    },
+    "primaryKey": {
+      "ID": "14500DF3-334F-4B9B-B543-C1EB7669528C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:44.330Z",
+      "checksum": "61044f1719bb9693868f8adbb2196b799245c7b6387e73ee1cbf3b2a3f7d52b4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Pénama",
+      "Code": "PAM",
+      "ISO3166_2": "VU-PAM",
+      "Latitude": -15.7575,
+      "Longitude": 168.195,
+      "BoundaryGeoJSON": "@file:by-country/VU/boundaries/VU-PAM.geojson",
+      "CommonAliases": [
+        "Pénama"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VU"
+    },
+    "primaryKey": {
+      "ID": "F0C007D5-174D-4C35-AD9B-CE32D657DA5F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:44.352Z",
+      "checksum": "f444f0785b842001b14923ae37ab654601f38c433dc5392345960b9c32ee2964"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sanma",
+      "Code": "SAM",
+      "ISO3166_2": "VU-SAM",
+      "Latitude": -15.6781,
+      "Longitude": 167.155,
+      "BoundaryGeoJSON": "@file:by-country/VU/boundaries/VU-SAM.geojson",
+      "CommonAliases": [
+        "Sanma"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VU"
+    },
+    "primaryKey": {
+      "ID": "9DDCBF7F-ABC4-4796-BCB0-E4C700D45448"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:44.373Z",
+      "checksum": "007f96dd34937b61d6f4922ebfe0823c1a4151f1edffac3362a2b0ac7187b60f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Shéfa",
+      "Code": "SEE",
+      "ISO3166_2": "VU-SEE",
+      "Latitude": -16.7385,
+      "Longitude": 168.301,
+      "BoundaryGeoJSON": "@file:by-country/VU/boundaries/VU-SEE.geojson",
+      "CommonAliases": [
+        "Shéfa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VU"
+    },
+    "primaryKey": {
+      "ID": "B0C7E723-EB27-426B-A37F-389C3209819E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:44.392Z",
+      "checksum": "c7aef1a3cf43d9ff19a39bab13e6d851b8d12063439afb6c595371d915dbd3d3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Taféa",
+      "Code": "TAE",
+      "ISO3166_2": "VU-TAE",
+      "Latitude": -20.1892,
+      "Longitude": 169.818,
+      "BoundaryGeoJSON": "@file:by-country/VU/boundaries/VU-TAE.geojson",
+      "CommonAliases": [
+        "Taféa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VU"
+    },
+    "primaryKey": {
+      "ID": "17C9900D-B73F-4672-B016-A4405754D567"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:44.411Z",
+      "checksum": "3f636d914684eb533ea6364d7f0e46a9b088a3a7910629c1237f6900c9281804"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Torba",
+      "Code": "TOB",
+      "ISO3166_2": "VU-TOB",
+      "Latitude": -14.2328,
+      "Longitude": 167.5,
+      "BoundaryGeoJSON": "@file:by-country/VU/boundaries/VU-TOB.geojson",
+      "CommonAliases": [
+        "Torba"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VU"
+    },
+    "primaryKey": {
+      "ID": "A6C9717A-7747-4E0E-A25D-0078C4592789"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:44.425Z",
+      "checksum": "019980bebbf0483c85d1de5a823ad370dd5adb9ab2aa285d23cbb197a09807e7"
+    }
+  }
+]

@@ -11,7 +11,7 @@ import { CompositeKey, Metadata } from '@memberjunction/core';
 })
 export class QueryResource extends BaseResourceComponent implements OnInit {
     ngOnInit(): void {
-
+        super.ngOnInit();
     }
     async GetResourceDisplayName(data: ResourceData): Promise<string> {
         const md = new Metadata();

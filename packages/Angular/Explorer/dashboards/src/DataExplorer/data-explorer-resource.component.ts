@@ -18,6 +18,7 @@ import { DataExplorerFilter } from './models/explorer-state.interface';
     template: `
         <div class="data-explorer-resource-container">
             <mj-data-explorer-dashboard
+                [ParentTabId]="getTabId()"
                 [entityFilter]="entityFilter"
                 [contextName]="contextName"
                 [contextIcon]="contextIcon"
@@ -58,9 +59,7 @@ export class DataExplorerResourceComponent extends BaseResourceComponent impleme
     // ========================================
 
     constructor(
-        private cdr: ChangeDetectorRef,
-        private navigationService: NavigationService
-    ) {
+        private cdr: ChangeDetectorRef) {
         super();
     }
 
@@ -90,10 +89,12 @@ export class DataExplorerResourceComponent extends BaseResourceComponent impleme
     // ========================================
 
     ngOnInit(): void {
+        super.ngOnInit();
         // Configuration loaded via Data setter
     }
 
     ngOnDestroy(): void {
+        super.ngOnDestroy();
         this._destroy$.next();
         this._destroy$.complete();
     }

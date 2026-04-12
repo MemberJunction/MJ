@@ -1,0 +1,23 @@
+[
+  {
+    "fields": {
+      "Name": "Virgin Islands (British)",
+      "Code": "VG",
+      "ISO3166_2": "VG-VG",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Virgin Islands (British)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VG"
+    },
+    "primaryKey": {
+      "ID": "C801B82A-5B17-4099-A320-51281A8A82BF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:43.006Z",
+      "checksum": "d22d969d961ef09957c9722acf8498d1175403a7a55195d19db742b914fbc565"
+    }
+  }
+]

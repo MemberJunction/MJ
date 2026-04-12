@@ -1,0 +1,233 @@
+[
+  {
+    "fields": {
+      "Name": "A'ana",
+      "Code": "AA",
+      "ISO3166_2": "WS-AA",
+      "Latitude": -13.9005,
+      "Longitude": -171.919,
+      "BoundaryGeoJSON": "@file:by-country/WS/boundaries/WS-AA.geojson",
+      "CommonAliases": [
+        "A'ana"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=WS"
+    },
+    "primaryKey": {
+      "ID": "50785D22-7976-4F5B-9140-092735DB1605"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:44.522Z",
+      "checksum": "e4736a5bad380bf979aa09254cef6cc636921ca510bfab5a3da4221fdc2704ab"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Aiga-i-le-Tai",
+      "Code": "AL",
+      "ISO3166_2": "WS-AL",
+      "Latitude": -13.8904,
+      "Longitude": -172.039,
+      "BoundaryGeoJSON": "@file:by-country/WS/boundaries/WS-AL.geojson",
+      "CommonAliases": [
+        "Aiga-i-le-Tai"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=WS"
+    },
+    "primaryKey": {
+      "ID": "0338D34E-9496-4223-B14A-CEA15AE002C6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:44.539Z",
+      "checksum": "5d63e800ef436f54968511e7d4ea09bb6d8e13f37aabcbcfd0ee2f1ba625f02f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Atua",
+      "Code": "AT",
+      "ISO3166_2": "WS-AT",
+      "Latitude": -14.0212,
+      "Longitude": -171.592,
+      "BoundaryGeoJSON": "@file:by-country/WS/boundaries/WS-AT.geojson",
+      "CommonAliases": [
+        "Atua"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=WS"
+    },
+    "primaryKey": {
+      "ID": "81E4836D-65DC-4E1C-A424-379A97807F43"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:44.556Z",
+      "checksum": "df8791624b214d5dd1802bb3567fa563188b1de40ded1bf843f1fd3afd3b43e6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Fa'asaleleaga",
+      "Code": "FA",
+      "ISO3166_2": "WS-FA",
+      "Latitude": -13.6516,
+      "Longitude": -172.243,
+      "BoundaryGeoJSON": "@file:by-country/WS/boundaries/WS-FA.geojson",
+      "CommonAliases": [
+        "Fa'asaleleaga"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=WS"
+    },
+    "primaryKey": {
+      "ID": "FFF38CA2-788F-45CB-AB38-111C4CABFA5A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:44.573Z",
+      "checksum": "0614b405a906e586ffe28e8a35d4f1cf869a0de7f1ca54aad6177e244f42923a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gaga'emauga",
+      "Code": "GE",
+      "ISO3166_2": "WS-GE",
+      "Latitude": -13.9658,
+      "Longitude": -171.861,
+      "BoundaryGeoJSON": "@file:by-country/WS/boundaries/WS-GE.geojson",
+      "CommonAliases": [
+        "Gaga'emauga"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=WS"
+    },
+    "primaryKey": {
+      "ID": "BC86BB0A-E136-4E12-8A17-BCE7316F04BD"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:44.589Z",
+      "checksum": "a158102da978212a2f298feeaf99a169f9c63d940b6fdbfdd16aff8d8b0eadd4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gagaifomauga",
+      "Code": "GI",
+      "ISO3166_2": "WS-GI",
+      "Latitude": -13.5461,
+      "Longitude": -172.467,
+      "BoundaryGeoJSON": "@file:by-country/WS/boundaries/WS-GI.geojson",
+      "CommonAliases": [
+        "Gagaifomauga"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=WS"
+    },
+    "primaryKey": {
+      "ID": "0E6DCDFA-2C2A-4299-9980-89412EF407A2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:44.609Z",
+      "checksum": "fd0a2aecba6843cb623f3c03997c6ba4eaa7854428e9720b8924d8b703a2bb79"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Palauli",
+      "Code": "PA",
+      "ISO3166_2": "WS-PA",
+      "Latitude": -13.7195,
+      "Longitude": -172.454,
+      "BoundaryGeoJSON": "@file:by-country/WS/boundaries/WS-PA.geojson",
+      "CommonAliases": [
+        "Palauli"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=WS"
+    },
+    "primaryKey": {
+      "ID": "C07720B3-D7EE-4711-8D3F-4528FF231AE9"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:44.625Z",
+      "checksum": "e98dda46f93a2cbc0f26e648cb26c8cc7f4e280b01013a532483cf598e470175"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Satupa'itea",
+      "Code": "SA",
+      "ISO3166_2": "WS-SA",
+      "Latitude": -13.6365,
+      "Longitude": -172.635,
+      "BoundaryGeoJSON": "@file:by-country/WS/boundaries/WS-SA.geojson",
+      "CommonAliases": [
+        "Satupa'itea"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=WS"
+    },
+    "primaryKey": {
+      "ID": "B18C9F94-CDDC-4C9B-B276-394FF9F19730"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:44.642Z",
+      "checksum": "18c8d8b4c76197bba1efabac4d05d3228309c51ac2488d65978b4c19e6c38d61"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tuamasaga",
+      "Code": "TU",
+      "ISO3166_2": "WS-TU",
+      "Latitude": -13.9415,
+      "Longitude": -171.752,
+      "BoundaryGeoJSON": "@file:by-country/WS/boundaries/WS-TU.geojson",
+      "CommonAliases": [
+        "Tuamasaga"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=WS"
+    },
+    "primaryKey": {
+      "ID": "5D1F0FBF-8A7C-4118-A8E6-DCC624651EAF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:44.658Z",
+      "checksum": "8b8b9b10d6227d14457fe8064c5a9e9fc2a309c7afd4a2a392b2e4454791c653"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Va'a-o-Fonoti",
+      "Code": "VF",
+      "ISO3166_2": "WS-VF",
+      "Latitude": -13.9633,
+      "Longitude": -171.549,
+      "BoundaryGeoJSON": "@file:by-country/WS/boundaries/WS-VF.geojson",
+      "CommonAliases": [
+        "Va'a-o-Fonoti"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=WS"
+    },
+    "primaryKey": {
+      "ID": "6E91E1E8-B2E2-40B0-A4C4-4F876EAF0C71"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:44.672Z",
+      "checksum": "a09a49b283698808a70e065de0f9e954a4293178ac13e49c711fc7d8ea42bc49"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Vaisigano",
+      "Code": "VS",
+      "ISO3166_2": "WS-VS",
+      "Latitude": -13.5561,
+      "Longitude": -172.701,
+      "BoundaryGeoJSON": "@file:by-country/WS/boundaries/WS-VS.geojson",
+      "CommonAliases": [
+        "Vaisigano"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=WS"
+    },
+    "primaryKey": {
+      "ID": "1C0501B1-1F6B-4061-A0EB-A88C0ACA250E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:44.697Z",
+      "checksum": "70623168761497b5ee4a660c6b0c5ac226be188eb6b7abf051ba1a867d9132cd"
+    }
+  }
+]

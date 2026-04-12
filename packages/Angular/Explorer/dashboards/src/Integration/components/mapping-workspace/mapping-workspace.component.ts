@@ -194,6 +194,7 @@ export class MappingWorkspaceComponent extends BaseResourceComponent implements 
   private pendingCounter = 0;
 
   async ngOnInit(): Promise<void> {
+    super.ngOnInit();
     await this.LoadIntegrations();
     this.NotifyLoadComplete();
   }

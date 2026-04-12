@@ -15,8 +15,8 @@ export class MJInstanceConfigurationFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'configurationDefinition', sectionName: 'Configuration Definition', isExpanded: true },
-            { sectionKey: 'valueManagement', sectionName: 'Value Management', isExpanded: true },
+            { sectionKey: 'featureDefinition', sectionName: 'Feature Definition', isExpanded: true },
+            { sectionKey: 'configurationSettings', sectionName: 'Configuration Settings', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

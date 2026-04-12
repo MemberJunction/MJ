@@ -8,11 +8,11 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Configuration Definition Section -->
+    <!-- Feature Definition Section -->
     <mj-collapsible-panel
-        SectionKey="configurationDefinition"
-        SectionName="Configuration Definition"
-        Icon="fa fa-info-circle"
+        SectionKey="featureDefinition"
+        SectionName="Feature Definition"
+        Icon="fa fa-tag"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -50,11 +50,11 @@
 
     </mj-collapsible-panel>
 
-    <!-- Value Management Section -->
+    <!-- Configuration Settings Section -->
     <mj-collapsible-panel
-        SectionKey="valueManagement"
-        SectionName="Value Management"
-        Icon="fa fa-sliders-h"
+        SectionKey="configurationSettings"
+        SectionName="Configuration Settings"
+        Icon="fa fa-toggle-on"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -88,7 +88,7 @@
     <mj-collapsible-panel
         SectionKey="systemMetadata"
         SectionName="System Metadata"
-        Icon="fa fa-cog"
+        Icon="fa fa-database"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 

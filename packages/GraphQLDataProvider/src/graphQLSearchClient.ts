@@ -46,8 +46,28 @@ export interface SearchClientResponse {
     ElapsedMs: number;
     /** Breakdown of results by source type */
     SourceCounts: SearchSourceCounts;
+    /** Metadata for all active search providers (for UI filter facets and labels) */
+    Providers: SearchClientProviderInfo[];
     /** Error message if Success is false */
     ErrorMessage?: string;
+}
+
+/**
+ * Metadata about an active search provider, returned from the server.
+ */
+export interface SearchClientProviderInfo {
+    /** SearchProvider record ID */
+    ID: string;
+    /** Provider name */
+    Name: string;
+    /** UI display label (e.g., "Database", "Semantic Search") */
+    DisplayName: string;
+    /** Font Awesome icon class */
+    Icon: string;
+    /** The SourceType key this provider uses */
+    SourceType: string;
+    /** Priority (lower = higher) */
+    Priority: number;
 }
 
 /**
@@ -96,6 +116,12 @@ export interface SearchClientResultItem {
     ResultType: string;
     /** Raw metadata JSON from the search provider (e.g., storage account ID, file path) */
     RawMetadata?: string;
+    /** ID of the SearchProvider metadata record that produced this result */
+    ProviderId?: string;
+    /** Display label from the SearchProvider metadata (e.g., "Database", "Semantic Search") */
+    ProviderLabel?: string;
+    /** Font Awesome icon class from the SearchProvider metadata */
+    ProviderIcon?: string;
 }
 
 /**
@@ -153,6 +179,9 @@ interface SearchResultItemResponse {
     RecordName?: string;
     MatchedAt: string;
     RawMetadata?: string;
+    ProviderId?: string;
+    ProviderLabel?: string;
+    ProviderIcon?: string;
 }
 
 /**
@@ -165,6 +194,7 @@ interface SearchKnowledgeResponse {
     TotalCount: number;
     ElapsedMs: number;
     SourceCounts: SourceCountsResponse;
+    Providers: ProviderInfoResponse[];
     ErrorMessage?: string;
 }
 
@@ -178,7 +208,21 @@ interface PreviewSearchResponse {
     TotalCount: number;
     ElapsedMs: number;
     SourceCounts: SourceCountsResponse;
+    Providers: ProviderInfoResponse[];
     ErrorMessage?: string;
+}
+
+/**
+ * Internal response type for provider info from GraphQL.
+ * @internal
+ */
+interface ProviderInfoResponse {
+    ID: string;
+    Name: string;
+    DisplayName: string;
+    Icon: string;
+    SourceType: string;
+    Priority: number;
 }
 
 // =========================================================================
@@ -337,6 +381,9 @@ export class GraphQLSearchClient {
                         RecordName
                         MatchedAt
                         RawMetadata
+                        ProviderId
+                        ProviderLabel
+                        ProviderIcon
                     }
                     TotalCount
                     ElapsedMs
@@ -345,6 +392,14 @@ export class GraphQLSearchClient {
                         FullText
                         Entity
                         Storage
+                    }
+                    Providers {
+                        ID
+                        Name
+                        DisplayName
+                        Icon
+                        SourceType
+                        Priority
                     }
                     ErrorMessage
                 }
@@ -383,6 +438,9 @@ export class GraphQLSearchClient {
                         RecordName
                         MatchedAt
                         RawMetadata
+                        ProviderId
+                        ProviderLabel
+                        ProviderIcon
                     }
                     TotalCount
                     ElapsedMs
@@ -391,6 +449,14 @@ export class GraphQLSearchClient {
                         FullText
                         Entity
                         Storage
+                    }
+                    Providers {
+                        ID
+                        Name
+                        DisplayName
+                        Icon
+                        SourceType
+                        Priority
                     }
                     ErrorMessage
                 }
@@ -515,6 +581,14 @@ export class GraphQLSearchClient {
             TotalCount: data.TotalCount,
             ElapsedMs: data.ElapsedMs,
             SourceCounts: this.mapSourceCounts(data.SourceCounts),
+            Providers: (data.Providers || []).map(p => ({
+                ID: p.ID,
+                Name: p.Name,
+                DisplayName: p.DisplayName,
+                Icon: p.Icon,
+                SourceType: p.SourceType,
+                Priority: p.Priority,
+            })),
             ErrorMessage: data.ErrorMessage
         };
     }
@@ -540,7 +614,10 @@ export class GraphQLSearchClient {
             EntityIcon: item.EntityIcon,
             RecordName: item.RecordName,
             MatchedAt: item.MatchedAt,
-            RawMetadata: item.RawMetadata
+            RawMetadata: item.RawMetadata,
+            ProviderId: item.ProviderId,
+            ProviderLabel: item.ProviderLabel,
+            ProviderIcon: item.ProviderIcon,
         };
     }
 
@@ -601,6 +678,7 @@ export class GraphQLSearchClient {
             TotalCount: 0,
             ElapsedMs: 0,
             SourceCounts: { Vector: 0, FullText: 0, Entity: 0, Storage: 0 },
+            Providers: [],
             ErrorMessage: `Error: ${error.message}`
         };
     }

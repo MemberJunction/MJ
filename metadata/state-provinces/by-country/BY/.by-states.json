@@ -1,0 +1,128 @@
+[
+  {
+    "fields": {
+      "Name": "Brestskaya voblasts'",
+      "Code": "BR",
+      "ISO3166_2": "BY-BR",
+      "Latitude": 52.4289,
+      "Longitude": 25.3826,
+      "BoundaryGeoJSON": "@file:by-country/BY/boundaries/BY-BR.geojson",
+      "CommonAliases": [
+        "Brestskaya voblasts'"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BY"
+    },
+    "primaryKey": {
+      "ID": "1EB74B7E-FE2F-450E-BBFF-300A2E905AC7"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:35.464Z",
+      "checksum": "b97a5ea815b7e7899b4dfbd199d803fc23fb35cfdfe4c6c8eee1b6e105d77cd6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Homyel'skaya voblasts’",
+      "Code": "HO",
+      "ISO3166_2": "BY-HO",
+      "Latitude": 52.1969,
+      "Longitude": 29.5189,
+      "BoundaryGeoJSON": "@file:by-country/BY/boundaries/BY-HO.geojson",
+      "CommonAliases": [
+        "Homyel'skaya voblasts’"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BY"
+    },
+    "primaryKey": {
+      "ID": "66D82213-99A8-4B98-B2D9-4454AFB1F1AC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:35.481Z",
+      "checksum": "45254f99c1053ee40163fb62ce0f1fe8c3c541f6d0992268bdd6875df5843df5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Hrodnenskaya voblasts'",
+      "Code": "HR",
+      "ISO3166_2": "BY-HR",
+      "Latitude": 53.4855,
+      "Longitude": 25.0839,
+      "BoundaryGeoJSON": "@file:by-country/BY/boundaries/BY-HR.geojson",
+      "CommonAliases": [
+        "Hrodnenskaya voblasts'"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BY"
+    },
+    "primaryKey": {
+      "ID": "662C66FB-025D-4BB9-8ECF-D62AD9555412"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:35.497Z",
+      "checksum": "8cb6c4a43acacd844f57840cd2e935729b06aa087dcf99d185026f31a158f443"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mahilyowskaya voblasts'",
+      "Code": "MA",
+      "ISO3166_2": "BY-MA",
+      "Latitude": 53.8241,
+      "Longitude": 30.4041,
+      "BoundaryGeoJSON": "@file:by-country/BY/boundaries/BY-MA.geojson",
+      "CommonAliases": [
+        "Mahilyowskaya voblasts'"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BY"
+    },
+    "primaryKey": {
+      "ID": "7C9AF869-21A4-4165-A401-4F554E700AB0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:35.515Z",
+      "checksum": "ea2e83788c789c9e133b7d4f87743e3302b0cbe0aa33f561323551a2b4a53b55"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Minskaya voblasts'",
+      "Code": "MI",
+      "ISO3166_2": "BY-MI",
+      "Latitude": 53.1945,
+      "Longitude": 27.4703,
+      "BoundaryGeoJSON": "@file:by-country/BY/boundaries/BY-MI.geojson",
+      "CommonAliases": [
+        "Minskaya voblasts'"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BY"
+    },
+    "primaryKey": {
+      "ID": "B0040B7C-56D1-4CD1-8BAE-F614B426FB8B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:35.534Z",
+      "checksum": "58396ca35e3a60187fe769172e82db8a0283ae1c851a2e556a2357cae7500a37"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Vitsyebskaya voblasts'",
+      "Code": "VI",
+      "ISO3166_2": "BY-VI",
+      "Latitude": 55.3073,
+      "Longitude": 28.6747,
+      "BoundaryGeoJSON": "@file:by-country/BY/boundaries/BY-VI.geojson",
+      "CommonAliases": [
+        "Vitsyebskaya voblasts'"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BY"
+    },
+    "primaryKey": {
+      "ID": "ADA5AE90-0B66-4C2A-A6A1-FA70435B8219"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:35.548Z",
+      "checksum": "2cd0791b983d07fd985d0da8ef3f88163c757a8e8bf6b4ff73889c5365759bd9"
+    }
+  }
+]

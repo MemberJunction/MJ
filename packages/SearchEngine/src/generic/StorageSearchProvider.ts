@@ -10,7 +10,7 @@
  */
 
 import { LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
-import { NormalizeUUID } from '@memberjunction/global';
+import { NormalizeUUID, RegisterClass } from '@memberjunction/global';
 import {
     MJFileStorageAccountEntity,
     MJFileStorageAccountPermissionEntity,
@@ -21,7 +21,7 @@ import {
     FileSearchOptions,
     FileStorageEngine
 } from '@memberjunction/storage';
-import { ISearchProvider } from './ISearchProvider';
+import { BaseSearchProvider } from './ISearchProvider';
 import { SearchSource, SearchFilters, SearchResultItem, SearchResultType } from './search.types';
 
 /**
@@ -43,7 +43,8 @@ interface SearchableAccount {
  * (backwards compatible). Otherwise, the user must have CanRead=true via a
  * direct User permission, a Role permission, or an Everyone permission.
  */
-export class StorageSearchProvider implements ISearchProvider {
+@RegisterClass(BaseSearchProvider, 'StorageSearchProvider')
+export class StorageSearchProvider extends BaseSearchProvider {
     public readonly SourceType: SearchSource = 'storage';
 
     private _available = false;

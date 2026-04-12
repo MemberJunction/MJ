@@ -22,14 +22,15 @@ import {
     SearchResultItem,
     SearchResultGroup,
     SearchFilter,
-    SearchFilterOption
+    SearchFilterOption,
+    SearchProviderInfo
 } from './search-types';
 
 /** Default minimum relevance score threshold (0-1). Results below this are filtered out. */
 const DEFAULT_MIN_SCORE = 0.35;
 
-/** Default icon mapping for source types */
-const SOURCE_TYPE_ICONS: Record<string, string> = {
+/** Fallback icon mapping for source types (used when provider metadata is not available) */
+const FALLBACK_SOURCE_ICONS: Record<string, string> = {
     'entity': 'fa-solid fa-database',
     'vector': 'fa-solid fa-brain',
     'fulltext': 'fa-solid fa-magnifying-glass',
@@ -39,8 +40,8 @@ const SOURCE_TYPE_ICONS: Record<string, string> = {
     'storage': 'fa-solid fa-folder-open',
 };
 
-/** Default labels for source types */
-const SOURCE_TYPE_LABELS: Record<string, string> = {
+/** Fallback labels for source types (used when provider metadata is not available) */
+const FALLBACK_SOURCE_LABELS: Record<string, string> = {
     'entity': 'Database',
     'vector': 'Semantic Search',
     'fulltext': 'Full-Text Search',
@@ -83,6 +84,9 @@ export class SearchService {
 
     private readonly maxRecentSearches = 20;
     private recentSearchesLoaded = false;
+
+    /** Cached provider metadata keyed by SourceType, populated from search responses */
+    private providersBySourceType = new Map<string, SearchProviderInfo>();
 
     /**
      * Execute a search request via the SearchKnowledge GraphQL mutation.
@@ -162,13 +166,17 @@ export class SearchService {
             }
         }
 
-        return Array.from(groupMap.entries()).map(([sourceType, items]) => ({
-            Label: SOURCE_TYPE_LABELS[sourceType] ?? sourceType,
-            Icon: SOURCE_TYPE_ICONS[sourceType] ?? 'fa-solid fa-circle',
-            SourceType: sourceType,
-            Results: items,
-            TotalCount: items.length
-        }));
+        return Array.from(groupMap.entries()).map(([sourceType, items]) => {
+            // Priority: cached provider metadata > per-result metadata > fallback maps
+            const cached = this.providersBySourceType.get(sourceType);
+            return {
+                Label: cached?.DisplayName ?? items[0]?.ProviderLabel ?? FALLBACK_SOURCE_LABELS[sourceType] ?? sourceType,
+                Icon: cached?.Icon ?? items[0]?.ProviderIcon ?? FALLBACK_SOURCE_ICONS[sourceType] ?? 'fa-solid fa-circle',
+                SourceType: sourceType,
+                Results: items,
+                TotalCount: items.length
+            };
+        });
     }
 
     /**
@@ -185,7 +193,7 @@ export class SearchService {
 
     /** Get the icon for a given source type */
     public GetSourceIcon(sourceType: string): string {
-        return SOURCE_TYPE_ICONS[sourceType] ?? 'fa-solid fa-circle';
+        return this.providersBySourceType.get(sourceType)?.Icon ?? FALLBACK_SOURCE_ICONS[sourceType] ?? 'fa-solid fa-circle';
     }
 
     private buildSourceTypeFilter(results: SearchResultItem[]): SearchFilter {
@@ -193,13 +201,16 @@ export class SearchService {
         for (const r of results) {
             counts.set(r.SourceType, (counts.get(r.SourceType) ?? 0) + 1);
         }
-        const options: SearchFilterOption[] = Array.from(counts.entries()).map(([type, count]) => ({
-            Label: SOURCE_TYPE_LABELS[type] ?? type,
-            Value: type,
-            Count: count,
-            IsSelected: false,
-            Icon: SOURCE_TYPE_ICONS[type]
-        }));
+        const options: SearchFilterOption[] = Array.from(counts.entries()).map(([type, count]) => {
+            const cached = this.providersBySourceType.get(type);
+            return {
+                Label: cached?.DisplayName ?? FALLBACK_SOURCE_LABELS[type] ?? type,
+                Value: type,
+                Count: count,
+                IsSelected: false,
+                Icon: cached?.Icon ?? FALLBACK_SOURCE_ICONS[type]
+            };
+        });
         return { Category: 'Source', Options: options, MultiSelect: true };
     }
 
@@ -337,6 +348,13 @@ export class SearchService {
         }
     }
 
+    /** Cache provider metadata by SourceType for use in GroupResults/BuildFilters */
+    private cacheProviders(providers: SearchProviderInfo[]): void {
+        for (const p of providers) {
+            this.providersBySourceType.set(p.SourceType, p);
+        }
+    }
+
     private createEmptyResponse(errorMessage?: string): SearchResponse {
         return {
             Success: !errorMessage,
@@ -346,6 +364,7 @@ export class SearchService {
             TotalCount: 0,
             ElapsedMs: 0,
             SourceCounts: { Vector: 0, FullText: 0, Entity: 0, Storage: 0 },
+            Providers: [],
             ErrorMessage: errorMessage
         };
     }
@@ -383,6 +402,17 @@ export class SearchService {
             return this.createEmptyResponse(clientResponse.ErrorMessage ?? 'Search failed');
         }
 
+        // Cache provider metadata for use in GroupResults/BuildFilters
+        const providers: SearchProviderInfo[] = (clientResponse.Providers ?? []).map(p => ({
+            ID: p.ID,
+            Name: p.Name,
+            DisplayName: p.DisplayName,
+            Icon: p.Icon,
+            SourceType: p.SourceType,
+            Priority: p.Priority,
+        }));
+        this.cacheProviders(providers);
+
         const results: SearchResultItem[] = (clientResponse.Results ?? []).map(r => this.mapClientResultItem(r));
 
         const groups = this.GroupResults(results);
@@ -401,6 +431,7 @@ export class SearchService {
                 Entity: clientResponse.SourceCounts.Entity,
                 Storage: clientResponse.SourceCounts.Storage
             },
+            Providers: providers,
         };
     }
 
@@ -417,11 +448,14 @@ export class SearchService {
             Score: r.Score,
             ScoreBreakdown: r.ScoreBreakdown ?? {},
             Tags: r.Tags ?? [],
-            SourceIcon: r.EntityIcon || SOURCE_TYPE_ICONS[r.SourceType] || 'fa-solid fa-database',
+            SourceIcon: r.EntityIcon || r.ProviderIcon || FALLBACK_SOURCE_ICONS[r.SourceType] || 'fa-solid fa-database',
             EntityIcon: r.EntityIcon,
             RecordName: r.RecordName,
             MatchedAt: new Date(r.MatchedAt),
             RawMetadata: r.RawMetadata,
+            ProviderId: r.ProviderId,
+            ProviderLabel: r.ProviderLabel,
+            ProviderIcon: r.ProviderIcon,
         };
     }
 

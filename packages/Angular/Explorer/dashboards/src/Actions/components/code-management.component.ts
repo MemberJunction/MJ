@@ -50,11 +50,12 @@ import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-sha
   `]
 })
 export class CodeManagementComponent extends BaseResourceComponent implements OnInit {
-  constructor(private navigationService: NavigationService) {
+  constructor() {
     super();
   }
 
   ngOnInit(): void {
+    super.ngOnInit();
     this.NotifyLoadComplete();
   }
 

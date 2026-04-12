@@ -42,6 +42,7 @@ export class ArtifactResource extends BaseResourceComponent {
   public environmentId: string = '';
 
   ngOnInit() {
+    super.ngOnInit();
     const md = new Metadata();
     this.currentUser = md.CurrentUser;
 

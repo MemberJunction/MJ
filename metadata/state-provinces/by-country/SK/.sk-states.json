@@ -1,0 +1,170 @@
+[
+  {
+    "fields": {
+      "Name": "Banskobystrický kraj",
+      "Code": "BC",
+      "ISO3166_2": "SK-BC",
+      "Latitude": 48.5213,
+      "Longitude": 19.477,
+      "BoundaryGeoJSON": "@file:by-country/SK/boundaries/SK-BC.geojson",
+      "CommonAliases": [
+        "Banskobystrický kraj"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SK"
+    },
+    "primaryKey": {
+      "ID": "8079431F-26FA-48BF-B872-7553F0B6690E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:31.696Z",
+      "checksum": "0b529e0b9e4268760dc8573ff2992678c424cce4e0ac4bddd991c1e14862c1cf"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bratislavský kraj",
+      "Code": "BL",
+      "ISO3166_2": "SK-BL",
+      "Latitude": 48.2935,
+      "Longitude": 17.1882,
+      "BoundaryGeoJSON": "@file:by-country/SK/boundaries/SK-BL.geojson",
+      "CommonAliases": [
+        "Bratislavský kraj"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SK"
+    },
+    "primaryKey": {
+      "ID": "000B5285-E820-407B-9634-60CEF0FA45F3"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:31.713Z",
+      "checksum": "676c04bac0cbcd3473f9eeca6105ff0c8a465dc155239445a255a20a01e7f346"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Košický kraj",
+      "Code": "KI",
+      "ISO3166_2": "SK-KI",
+      "Latitude": 48.6623,
+      "Longitude": 21.2753,
+      "BoundaryGeoJSON": "@file:by-country/SK/boundaries/SK-KI.geojson",
+      "CommonAliases": [
+        "Košický kraj"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SK"
+    },
+    "primaryKey": {
+      "ID": "E30FDFB6-8C7F-4A89-AC6B-76BB5DCA8A46"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:31.730Z",
+      "checksum": "deffdd9e2c657bd596bb10e75ba179d65bf10a682bd635db2368ca4118162e6b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nitriansky kraj",
+      "Code": "NI",
+      "ISO3166_2": "SK-NI",
+      "Latitude": 48.1443,
+      "Longitude": 18.3966,
+      "BoundaryGeoJSON": "@file:by-country/SK/boundaries/SK-NI.geojson",
+      "CommonAliases": [
+        "Nitriansky kraj"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SK"
+    },
+    "primaryKey": {
+      "ID": "C7A11C8D-80CD-4A3F-80ED-2B66F6691D73"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:31.745Z",
+      "checksum": "dd76b2db62bdacf9a2cf14d5dad71f717919fa993023589ef156135730756738"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Prešovský kraj",
+      "Code": "PV",
+      "ISO3166_2": "SK-PV",
+      "Latitude": 49.1426,
+      "Longitude": 21.2037,
+      "BoundaryGeoJSON": "@file:by-country/SK/boundaries/SK-PV.geojson",
+      "CommonAliases": [
+        "Prešovský kraj"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SK"
+    },
+    "primaryKey": {
+      "ID": "F388EB29-269B-4BB8-BFD6-BB77698D662D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:31.762Z",
+      "checksum": "2f018807d94d9d2f662e4908cb91a94bf03fe95aa005bb0aa7dfa5daf8ecb6f3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Trenčiansky kraj",
+      "Code": "TC",
+      "ISO3166_2": "SK-TC",
+      "Latitude": 48.8824,
+      "Longitude": 18.0952,
+      "BoundaryGeoJSON": "@file:by-country/SK/boundaries/SK-TC.geojson",
+      "CommonAliases": [
+        "Trenčiansky kraj"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SK"
+    },
+    "primaryKey": {
+      "ID": "15BB14C0-9115-4B92-9CBB-C0D71334E3E7"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:31.778Z",
+      "checksum": "ebc6d969ae5a970c7b02a9462cb471f7f454d509dea096516576e4ef38696a84"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Trnavský kraj",
+      "Code": "TA",
+      "ISO3166_2": "SK-TA",
+      "Latitude": 48.3422,
+      "Longitude": 17.6989,
+      "BoundaryGeoJSON": "@file:by-country/SK/boundaries/SK-TA.geojson",
+      "CommonAliases": [
+        "Trnavský kraj"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SK"
+    },
+    "primaryKey": {
+      "ID": "3038300D-8471-476D-BB0B-5A0CFCB94DB6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:31.794Z",
+      "checksum": "ec40d138ce10c5cf3efecf6160f18c994ea598e34311176287cd8bda89268fa9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Žilinský kraj",
+      "Code": "ZI",
+      "ISO3166_2": "SK-ZI",
+      "Latitude": 49.1656,
+      "Longitude": 19.2076,
+      "BoundaryGeoJSON": "@file:by-country/SK/boundaries/SK-ZI.geojson",
+      "CommonAliases": [
+        "Žilinský kraj"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SK"
+    },
+    "primaryKey": {
+      "ID": "70119C7E-247C-4903-914D-2AB70072F796"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:31.807Z",
+      "checksum": "bfb4ed2e78c4b54716365aa6302753d2d3b3a2f7260da1b7ac1f57877a6ddb5a"
+    }
+  }
+]

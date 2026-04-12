@@ -2,9 +2,9 @@ import { SQLDialect } from '@memberjunction/sql-dialect';
 import { CodeGenConnection, CodeGenTransaction, CodeGenQueryResult, CodeGenDatabaseProvider } from './codeGenDatabaseProvider';
 import { SQLServerCodeGenProvider } from './providers/sqlserver/SQLServerCodeGenProvider';
 import { configInfo, currentWorkingDirectory, dbType, getSettingValue, mj_core_schema, outputDir } from '../Config/config';
-import { ApplicationInfo, CodeNameFromString, EntityFieldInfo, EntityInfo, ExtractActualDefaultValue, FieldCategoryInfo, LogError, LogStatus, Metadata, SeverityType, UserInfo } from "@memberjunction/core";
+import { ApplicationInfo, CodeNameFromString, EntityFieldExtendedType, EntityFieldInfo, EntityInfo, ExtractActualDefaultValue, FieldCategoryInfo, LogError, LogStatus, Metadata, SeverityType, UserInfo } from "@memberjunction/core";
 import { MJApplicationEntity } from "@memberjunction/core-entities";
-import { logError, logMessage, logStatus } from "../Misc/status_logging";
+import { logError, logMessage, logStatus, startSpinner, updateSpinner, succeedSpinner } from "../Misc/status_logging";
 import { SQLUtilityBase } from "./sql";
 import { AdvancedGeneration, EntityDescriptionResult, EntityNameResult, SmartFieldIdentificationResult, FormLayoutResult, VirtualEntityDecorationResult } from "../Misc/advanced_generation";
 import { SQLParser } from "@memberjunction/sql-parser";
@@ -210,6 +210,19 @@ type SchemaInfoRecord = {
    EntityNameSuffix: string | null;
 };
 
+/**
+ * Reason why an entity requires late-phase view regeneration.
+ */
+export type ViewRegenReason = 'Geocoding';
+
+/**
+ * Entry in the late-phase view regeneration list.
+ */
+export interface ViewRegenEntry {
+   EntityName: string;
+   Reason: ViewRegenReason;
+}
+
 export class ManageMetadataBase {
 
    // ─── Database Provider Infrastructure ─────────────────────────────
@@ -387,6 +400,20 @@ export class ManageMetadataBase {
     */
    public static get modifiedEntityList(): string[] {
       return this._modifiedEntityList;
+   }
+   private static _entitiesRequiringViewRegen: ViewRegenEntry[] = [];
+   /**
+    * Entities that had late-phase changes requiring their base views to be
+    * regenerated after the main SQL generation pass. Each entry includes
+    * the reason for regen so downstream logic can apply reason-specific fixups.
+    */
+   public static get EntitiesRequiringViewRegen(): ViewRegenEntry[] {
+      return this._entitiesRequiringViewRegen;
+   }
+   public static AddEntityRequiringViewRegen(entityName: string, reason: ViewRegenReason): void {
+      if (!this._entitiesRequiringViewRegen.some(e => e.EntityName === entityName && e.Reason === reason)) {
+         this._entitiesRequiringViewRegen.push({ EntityName: entityName, Reason: reason });
+      }
    }
    private static _generatedValidators: ValidatorResult[] = [];
    /**
@@ -1699,11 +1726,12 @@ export class ManageMetadataBase {
    /**
     * Valid values for EntityField.ExtendedType, plus common LLM aliases mapped to valid values.
     */
-   private static readonly VALID_EXTENDED_TYPES = new Set([
-      'Code', 'Email', 'FaceTime', 'Geo', 'MSTeams', 'Other', 'SIP', 'SMS', 'Skype', 'Tel', 'URL', 'WhatsApp', 'ZoomMtg'
+   private static readonly VALID_EXTENDED_TYPES = new Set<EntityFieldExtendedType>([
+      'Code', 'Email', 'FaceTime', 'Geo', 'GeoLatitude', 'GeoLongitude', 'GeoCountry', 'GeoStateProvince',
+      'GeoCity', 'GeoPostalCode', 'GeoAddress', 'MSTeams', 'Other', 'SIP', 'SMS', 'Skype', 'Tel', 'URL', 'WhatsApp', 'ZoomMtg'
    ]);
 
-   private static readonly EXTENDED_TYPE_ALIASES: Record<string, string> = {
+   private static readonly EXTENDED_TYPE_ALIASES: Record<string, EntityFieldExtendedType> = {
       'phone': 'Tel',
       'telephone': 'Tel',
       'website': 'URL',
@@ -1714,6 +1742,19 @@ export class ManageMetadataBase {
       'text': 'SMS',
       'location': 'Geo',
       'address': 'Geo',
+      'latitude': 'GeoLatitude',
+      'lat': 'GeoLatitude',
+      'longitude': 'GeoLongitude',
+      'lng': 'GeoLongitude',
+      'lon': 'GeoLongitude',
+      'country': 'GeoCountry',
+      'state': 'GeoStateProvince',
+      'province': 'GeoStateProvince',
+      'city': 'GeoCity',
+      'postalcode': 'GeoPostalCode',
+      'zipcode': 'GeoPostalCode',
+      'zip': 'GeoPostalCode',
+      'streetaddress': 'GeoAddress',
       'teams': 'MSTeams',
       'facetime': 'FaceTime',
       'zoom': 'ZoomMtg',
@@ -1725,7 +1766,7 @@ export class ManageMetadataBase {
     * Validates an LLM-suggested ExtendedType against the allowed values in EntityField.
     * Returns the valid value (case-corrected) or null if invalid.
     */
-   protected validateExtendedType(suggested: string): string | null {
+   protected validateExtendedType(suggested: string): EntityFieldExtendedType | null {
       // Direct match (case-insensitive)
       for (const valid of ManageMetadataBase.VALID_EXTENDED_TYPES) {
          if (valid.toLowerCase() === suggested.toLowerCase()) {
@@ -2397,11 +2438,13 @@ export class ManageMetadataBase {
       // Advanced Generation - Smart field identification and form layout
       if (!skipAdvancedGeneration) {
          const step7StartTime: Date = new Date();
+         startSpinner('Applying AI-powered advanced generation (smart fields, form layout)...');
          if (! await this.applyAdvancedGeneration(pool, excludeSchemas, currentUser)) {
             logError('Error applying advanced generation features');
             // Don't fail the entire process - advanced generation is optional
          }
-         logStatus(`      Applied advanced generation features in ${(new Date().getTime() - step7StartTime.getTime()) / 1000} seconds`);
+         const step7Elapsed = ((new Date().getTime() - step7StartTime.getTime()) / 1000).toFixed(1);
+         succeedSpinner(`Advanced generation completed (${step7Elapsed}s)`);
       }
 
       logStatus(`      Total time to manage entity fields: ${(new Date().getTime() - startTime.getTime()) / 1000} seconds`);
@@ -4247,7 +4290,7 @@ export class ManageMetadataBase {
                ef.AutoUpdateUserSearchPredicate,
                ef.FullTextSearchEnabled,
                ef.AutoUpdateFullTextSearch,
-               ef.MaxLength
+               ef.Length as MaxLength
             FROM
                ${this.qs(mj_core_schema(), 'vwEntityFields')} ef
             WHERE
@@ -4298,27 +4341,23 @@ export class ManageMetadataBase {
    }
 
    /**
-    * Process entities in batches with parallel execution
-    * @param pool Database connection pool
-    * @param entities Entities to process
-    * @param allFields All fields for all entities (will be filtered per entity)
-    * @param ag AdvancedGeneration instance
-    * @param currentUser User context
-    * @param batchSize Number of entities to process in parallel (default 5)
+    * Process entities in batches with parallel execution.
+    * Batch size is configurable via advancedGeneration.batchSize in mj.config.cjs (default: 5).
     */
    protected async processEntitiesBatched(
       pool: CodeGenConnection,
       entities: any[],
       allFields: any[],
       ag: AdvancedGeneration,
-      currentUser: UserInfo,
-      batchSize: number = 5
+      currentUser: UserInfo
    ): Promise<boolean> {
+      const batchSize = configInfo.advancedGeneration?.batchSize ?? 5;
       let processedCount = 0;
       let errorCount = 0;
+      const total = entities.length;
 
       // Process in batches
-      for (let i = 0; i < entities.length; i += batchSize) {
+      for (let i = 0; i < total; i += batchSize) {
          const batch = entities.slice(i, i + batchSize);
 
          // Process batch in parallel
@@ -4336,10 +4375,10 @@ export class ManageMetadataBase {
             }
          }
 
-         logStatus(`      Progress: ${processedCount}/${entities.length} entities processed`);
+         const pct = Math.round((processedCount / total) * 100);
+         updateSpinner(`Advanced generation: ${processedCount}/${total} entities (${pct}%)${errorCount > 0 ? ` — ${errorCount} error(s)` : ''}`);
       }
 
-      logStatus(`      Advanced Generation complete: ${processedCount} entities processed, ${errorCount} errors`);
       return errorCount === 0;
    }
 
@@ -4508,7 +4547,9 @@ export class ManageMetadataBase {
       this.applySearchableFieldUpdates(sqlStatements, fields, result);
       this.applySearchPredicateUpdates(sqlStatements, fields, result);
       this.applyEntitySearchConfig(sqlStatements, entity, result);
-      this.applyFullTextSearchUpdates(sqlStatements, entity, fields, result);
+      if (configInfo.advancedGeneration?.allowFullTextSearchAutoUpdate) {
+         this.applyFullTextSearchUpdates(sqlStatements, entity, fields, result);
+      }
 
       // Execute all updates in one batch
       if (sqlStatements.length > 0) {
@@ -4737,6 +4778,9 @@ export class ManageMetadataBase {
 
       await this.applyFieldCategories(pool, entity, fields, result.fieldCategories, existingCategories);
 
+      // Auto-detect geo-capable entities and set SupportsGeoCoding
+      await this.detectAndSetGeoCodingSupport(pool, entity, result.fieldCategories);
+
       if (result.entityIcon) {
          await this.applyEntityIcon(pool, entity.ID, result.entityIcon);
       }
@@ -4754,6 +4798,64 @@ export class ManageMetadataBase {
 
       if (isNewEntity && result.entityImportance) {
          await this.applyEntityImportance(pool, entity.ID, result.entityImportance);
+      }
+   }
+
+   /**
+    * Detect if an entity has geo-capable fields based on LLM-assigned ExtendedType values.
+    * If any field has a Geo* ExtendedType, set Entity.SupportsGeoCoding = 1.
+    * Respects the AutoUpdateSupportsGeoCoding flag — if 0, the value is locked.
+    */
+   protected async detectAndSetGeoCodingSupport(
+      pool: CodeGenConnection,
+      entity: EntityInfo,
+      fieldCategories: Array<{ fieldName: string; extendedType: EntityFieldExtendedType | null }>
+   ): Promise<void> {
+      const schema = mj_core_schema();
+
+      // Check if the entity's AutoUpdateSupportsGeoCoding flag allows us to modify it
+      const autoUpdateResult = await pool.query(`
+         SELECT ${this.qi('AutoUpdateSupportsGeoCoding')}, ${this.qi('SupportsGeoCoding')}
+         FROM ${this.qs(schema, 'Entity')}
+         WHERE ${this.qi('ID')} = '${entity.ID}'
+      `);
+      const row = autoUpdateResult?.recordset?.[0];
+      if (!row || !row.AutoUpdateSupportsGeoCoding) {
+         return; // Flag is locked, don't modify
+      }
+
+      // Detect geo-capable fields from the LLM results
+      const geoExtendedTypes = new Set<EntityFieldExtendedType>([
+         'Geo', 'GeoLatitude', 'GeoLongitude', 'GeoCountry', 'GeoStateProvince',
+         'GeoCity', 'GeoPostalCode', 'GeoAddress'
+      ]);
+      const hasGeoFields = fieldCategories.some(fc =>
+         fc.extendedType != null && geoExtendedTypes.has(fc.extendedType)
+      );
+
+      // Also check existing fields in the database for Geo* ExtendedTypes
+      // (in case the LLM didn't re-assign them this run but they were previously set)
+      const existingGeoResult = await pool.query(`
+         SELECT COUNT(*) AS ${this.qi('GeoFieldCount')}
+         FROM ${this.qs(schema, 'EntityField')}
+         WHERE ${this.qi('EntityID')} = '${entity.ID}'
+           AND ${this.qi('ExtendedType')} IN ('Geo', 'GeoLatitude', 'GeoLongitude', 'GeoCountry', 'GeoStateProvince', 'GeoCity', 'GeoPostalCode', 'GeoAddress')
+      `);
+      const existingGeoCount = existingGeoResult?.recordset?.[0]?.GeoFieldCount ?? 0;
+
+      const shouldSupportGeo = hasGeoFields || existingGeoCount > 0;
+      const currentValue = row.SupportsGeoCoding ? true : false;
+
+      if (shouldSupportGeo !== currentValue) {
+         await this.LogSQLAndExecute(pool, `
+            UPDATE ${this.qs(schema, 'Entity')}
+            SET ${this.qi('SupportsGeoCoding')} = ${shouldSupportGeo ? 1 : 0}
+            WHERE ${this.qi('ID')} = '${entity.ID}' AND ${this.qi('AutoUpdateSupportsGeoCoding')} = 1
+         `, `Set SupportsGeoCoding = ${shouldSupportGeo ? 1 : 0} for ${entity.Name}`);
+         logStatus(`  Entity ${entity.Name}: SupportsGeoCoding = ${shouldSupportGeo ? 1 : 0} (auto-detected from ${hasGeoFields ? 'LLM' : 'existing'} geo fields)`);
+         // Queue for late-phase view regeneration — the view was already generated
+         // before this flag was set, so it needs to be regenerated with the geo JOIN
+         ManageMetadataBase.AddEntityRequiringViewRegen(entity.Name, 'Geocoding');
       }
    }
 

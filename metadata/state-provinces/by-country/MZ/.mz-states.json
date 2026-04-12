@@ -1,0 +1,233 @@
+[
+  {
+    "fields": {
+      "Name": "Cabo Delgado",
+      "Code": "P",
+      "ISO3166_2": "MZ-P",
+      "Latitude": -12.51,
+      "Longitude": 39.3146,
+      "BoundaryGeoJSON": "@file:by-country/MZ/boundaries/MZ-P.geojson",
+      "CommonAliases": [
+        "Cabo Delgado"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MZ"
+    },
+    "primaryKey": {
+      "ID": "D7918EFC-7D73-4F02-8D4F-A0EFE2F2C760"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:20.657Z",
+      "checksum": "f8fd5758830910e8a0a9c06e7d95f477b692c48c77edcb69b76e7cb6bc21137d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gaza",
+      "Code": "G",
+      "ISO3166_2": "MZ-G",
+      "Latitude": -23.1231,
+      "Longitude": 32.8795,
+      "BoundaryGeoJSON": "@file:by-country/MZ/boundaries/MZ-G.geojson",
+      "CommonAliases": [
+        "Gaza"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MZ"
+    },
+    "primaryKey": {
+      "ID": "37BA6641-F4DB-480A-ABDE-7AB9AE90F481"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:20.672Z",
+      "checksum": "baf5cb55f0665d1174048492967897b8400026803116ccfc9feb1caf53f28ce3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Inhambane",
+      "Code": "I",
+      "ISO3166_2": "MZ-I",
+      "Latitude": -21.6677,
+      "Longitude": 35.4619,
+      "BoundaryGeoJSON": "@file:by-country/MZ/boundaries/MZ-I.geojson",
+      "CommonAliases": [
+        "Inhambane"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MZ"
+    },
+    "primaryKey": {
+      "ID": "FAF7919D-081F-4C05-909C-126885EC551C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:20.689Z",
+      "checksum": "9fe3948b914bb9255472be0560f2c6114c62e0f1d6b6fb230e2ab9b486994bcd"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Manica",
+      "Code": "B",
+      "ISO3166_2": "MZ-B",
+      "Latitude": -20.811,
+      "Longitude": 33.4678,
+      "BoundaryGeoJSON": "@file:by-country/MZ/boundaries/MZ-B.geojson",
+      "CommonAliases": [
+        "Manica"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MZ"
+    },
+    "primaryKey": {
+      "ID": "6C7A1CC7-2DDB-4C8C-8A81-0B4ACC65C78D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:20.708Z",
+      "checksum": "bee25860d67525b1803c75763ddd765a7022b1a011e17092e704e27b36ad919b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Maputo",
+      "Code": "MPM",
+      "ISO3166_2": "MZ-MPM",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Maputo"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MZ"
+    },
+    "primaryKey": {
+      "ID": "5B49DC47-8917-4CE0-9F70-E883E82E52F3"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:20.723Z",
+      "checksum": "ffb899300b81902078f0bb406a0e3bd394b5a0714fc56eb2649a9a94a5e87faf"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Maputo",
+      "Code": "L",
+      "ISO3166_2": "MZ-L",
+      "Latitude": -25.949,
+      "Longitude": 32.5828,
+      "BoundaryGeoJSON": "@file:by-country/MZ/boundaries/MZ-L.geojson",
+      "CommonAliases": [
+        "Maputo"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MZ"
+    },
+    "primaryKey": {
+      "ID": "8FA56EE0-E674-42EF-BFC4-D6B2A3E0C632"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:20.738Z",
+      "checksum": "239ffea9594425f8fcdb4f67a600e82e09147387a2a290c56cd5c50003bdfb91"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nampula",
+      "Code": "N",
+      "ISO3166_2": "MZ-N",
+      "Latitude": -14.9497,
+      "Longitude": 38.7815,
+      "BoundaryGeoJSON": "@file:by-country/MZ/boundaries/MZ-N.geojson",
+      "CommonAliases": [
+        "Nampula"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MZ"
+    },
+    "primaryKey": {
+      "ID": "4624D851-399F-4B2F-8BBB-2E7FCC7F3C35"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:20.753Z",
+      "checksum": "bcc9c66c4da1e56a81b064b672c32281b9769328dedd0ea1e20e8ece635237ec"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Niassa",
+      "Code": "A",
+      "ISO3166_2": "MZ-A",
+      "Latitude": -13.4918,
+      "Longitude": 36.4227,
+      "BoundaryGeoJSON": "@file:by-country/MZ/boundaries/MZ-A.geojson",
+      "CommonAliases": [
+        "Niassa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MZ"
+    },
+    "primaryKey": {
+      "ID": "14F10C21-E94B-4D8A-94EC-42E860CA0570"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:20.771Z",
+      "checksum": "8f2bbe2e2a4666011fdd7119811ddbc6d9736372cc483b34e31d978a5545c98e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sofala",
+      "Code": "S",
+      "ISO3166_2": "MZ-S",
+      "Latitude": -18.7726,
+      "Longitude": 34.8544,
+      "BoundaryGeoJSON": "@file:by-country/MZ/boundaries/MZ-S.geojson",
+      "CommonAliases": [
+        "Sofala"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MZ"
+    },
+    "primaryKey": {
+      "ID": "8CF15F91-796D-4F6D-929C-8A6662984B4E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:20.787Z",
+      "checksum": "dc9d5c0e42172d130917b2e27225a34d8bb8e6401d999fdebdba3f91fb1a22ba"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tete",
+      "Code": "T",
+      "ISO3166_2": "MZ-T",
+      "Latitude": -15.4259,
+      "Longitude": 32.7751,
+      "BoundaryGeoJSON": "@file:by-country/MZ/boundaries/MZ-T.geojson",
+      "CommonAliases": [
+        "Tete"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MZ"
+    },
+    "primaryKey": {
+      "ID": "F6DDE7AF-68B4-4131-B11B-BAD0AB5899B0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:20.801Z",
+      "checksum": "6f9d76469c692d2fdcd022389a5e8e0619c804b8fa53ac16edb819f3828953b1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Zambézia",
+      "Code": "Q",
+      "ISO3166_2": "MZ-Q",
+      "Latitude": -16.4213,
+      "Longitude": 37.1305,
+      "BoundaryGeoJSON": "@file:by-country/MZ/boundaries/MZ-Q.geojson",
+      "CommonAliases": [
+        "Zambézia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MZ"
+    },
+    "primaryKey": {
+      "ID": "99A88744-CCFE-4944-8057-AC6574336D33"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:20.823Z",
+      "checksum": "cd56d58ff011e79cb2831bd70b0fad862c95f54c559f048f5fcf8af3cf9fbcbc"
+    }
+  }
+]
