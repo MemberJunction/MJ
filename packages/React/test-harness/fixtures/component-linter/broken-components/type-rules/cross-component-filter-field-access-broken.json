@@ -1,9 +1,9 @@
 {
-  "name": "OptionalChainArrayAccessBroken",
+  "name": "CrossComponentFilterFieldAccessBroken",
   "type": "generic",
-  "title": "Optional Chain Array Access - Broken Pattern",
-  "description": "Tests optional chaining on array with invalid field access (may fail until linter refactor)",
-  "code": "function OptionalChainArrayAccessBroken({ utilities }) {\n  const [modelNames, setModelNames] = useState([]);\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rv.RunView({ EntityName: 'MJ: AI Models' });\n      if (result?.Success) {\n        // ❌ Mapping with invalid field using optional chaining\n        const names = result.Results?.map(p => p?.DisplayName) || [];\n        setModelNames(names.filter(Boolean));\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>AI Models</h3>\n      {modelNames.map((name, i) => <div key={i}>{name}</div>)}\n    </div>\n  );\n}",
+  "title": "Cross-Component Filter Field Access - Broken Pattern",
+  "description": "Tests filtering data removes field needed by downstream component (may fail until linter refactor)",
+  "code": "function CrossComponentFilterFieldAccessBroken({ utilities, components }) {\n  const [models, setModels] = useState([]);\n  const { DataGrid } = components;\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rv.RunView({ EntityName: 'MJ: AI Models' });\n      if (result?.Success) {\n        // Filter keeps all fields, but grid needs Category\n        const active = result.Results.filter(p => p.IsActive);\n        setModels(active);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Active Models</h3>\n      {/* ❌ Grid references Category but entity has AIModelType */}\n      <DataGrid \n        data={models} \n        columns={[\n          {field: 'Name', title: 'Model'},\n          {field: 'Category', title: 'Category'}\n        ]} \n      />\n    </div>\n  );\n}",
   "location": "embedded",
   "namespace": "test/fixtures/type-rules",
   "version": "1.0.0",

@@ -1,9 +1,9 @@
 {
-  "name": "OptionalChainInvalidFieldBroken",
+  "name": "EntityArrayMapInvalidBroken",
   "type": "generic",
-  "title": "Optional Chain Invalid Field - Broken Pattern",
-  "description": "Tests optional chaining on invalid field (may fail until linter refactor)",
-  "code": "function OptionalChainInvalidFieldBroken({ utilities }) {\n  const [employeeName, setEmployeeName] = useState('');\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rv.RunView({ EntityName: 'MJ: Employees' });\n      if (result?.Success) {\n        // ❌ FullName field doesn't exist, optional chaining hides the error\n        const first = result.Results?.[0];\n        setEmployeeName(first?.FullName || 'Unknown');\n      }\n    }\n    loadData();\n  }, []);\n\n  return <div>Employee: {employeeName}</div>;\n}",
+  "title": "Entity Array Map Invalid Field - Broken Pattern",
+  "description": "Tests linter detection of mapping to non-existent entity field",
+  "code": "function EntityArrayMapInvalidBroken({ utilities }) {\n  const [fullNames, setFullNames] = useState([]);\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rv.RunView({ EntityName: 'MJ: Employees' });\n      if (result?.Success) {\n        // ❌ Mapping to non-existent field: Employees has no FullName field\n        const names = result.Results.map(m => m.FullName);\n        setFullNames(names);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Employee Names</h3>\n      {fullNames.map((name, i) => <div key={i}>{name}</div>)}\n    </div>\n  );\n}",
   "location": "embedded",
   "namespace": "test/fixtures/type-rules",
   "version": "1.0.0",

@@ -1,9 +1,9 @@
 {
-  "name": "OptionalChainInvalidFieldBroken",
+  "name": "EntityFieldTypeCoercionBroken",
   "type": "generic",
-  "title": "Optional Chain Invalid Field - Broken Pattern",
-  "description": "Tests optional chaining on invalid field (may fail until linter refactor)",
-  "code": "function OptionalChainInvalidFieldBroken({ utilities }) {\n  const [employeeName, setEmployeeName] = useState('');\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rv.RunView({ EntityName: 'MJ: Employees' });\n      if (result?.Success) {\n        // ❌ FullName field doesn't exist, optional chaining hides the error\n        const first = result.Results?.[0];\n        setEmployeeName(first?.FullName || 'Unknown');\n      }\n    }\n    loadData();\n  }, []);\n\n  return <div>Employee: {employeeName}</div>;\n}",
+  "title": "Entity Field Type Coercion - Broken Pattern",
+  "description": "Tests linter detection of incorrect type conversion on entity ID field",
+  "code": "function EntityFieldTypeCoercionBroken({ utilities }) {\n  const [employeeIds, setEmployeeIds] = useState([]);\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rv.RunView({ EntityName: 'MJ: Employees' });\n      if (result?.Success) {\n        // ❌ Wrong type conversion: ID is uniqueidentifier (GUID), not int\n        const ids = result.Results.map(m => parseInt(m.ID));\n        setEmployeeIds(ids);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Employee IDs</h3>\n      {employeeIds.map((id, i) => <div key={i}>ID: {id}</div>)}\n    </div>\n  );\n}",
   "location": "embedded",
   "namespace": "test/fixtures/type-rules",
   "version": "1.0.0",
