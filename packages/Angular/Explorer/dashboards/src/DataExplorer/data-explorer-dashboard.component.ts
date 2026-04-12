@@ -2503,7 +2503,6 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * The base class calls this when query params change via popstate or deeplink.
    */
   protected override OnQueryParamsChanged(params: Record<string, string>, _source: 'popstate' | 'deeplink'): void {
-    console.log('[NAV-DEBUG] DataExplorer.OnQueryParamsChanged:', { params, source: _source, currentEntity: this.state.selectedEntityName });
     this.applyParams(params);
   }
 
@@ -2512,12 +2511,10 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    */
   private applyParams(params: Record<string, string>): void {
     const deepLink = this.buildDeepLinkFromParams(params);
-    console.log('[NAV-DEBUG] DataExplorer.applyParams:', { params, deepLink, hasDeepLink: !!deepLink });
     if (deepLink) {
       this.applyUrlState(deepLink);
     } else {
       // No params — go to home view
-      console.log('[NAV-DEBUG] DataExplorer.applyParams: no deep link, going to home view');
       this.selectedEntity = null;
       this.selectedRecord = null;
       this.detailPanelEntity = null;
@@ -2539,7 +2536,6 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       view: (this.state.viewMode && this.state.viewMode !== 'grid') ? this.state.viewMode : null
     };
 
-    console.log('[NAV-DEBUG] DataExplorer.pushCurrentStateToUrl:', queryParams);
     this.UpdateQueryParams(queryParams);
   }
 
@@ -2548,14 +2544,6 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * Used both during init and for popstate handling.
    */
   private applyUrlState(urlState: DataExplorerDeepLink): void {
-    console.log('[NAV-DEBUG] DataExplorer.applyUrlState:', {
-      entity: urlState.entity,
-      record: urlState.record,
-      filter: urlState.filter,
-      viewMode: urlState.viewMode,
-      currentSelectedEntity: this.selectedEntity?.Name,
-      entitiesLoaded: this.entities?.length || 0,
-    });
     // Apply view mode if specified
     if (urlState.viewMode) {
       this.stateService.setViewMode(urlState.viewMode);
