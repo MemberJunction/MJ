@@ -865,6 +865,7 @@
                                             <button class="at-tax-action-btn" (click)="OpenCreateChildTag()"><i class="fa-solid fa-plus"></i> Add Child</button>
                                             <button class="at-tax-action-btn" (click)="StartEditTag()"><i class="fa-solid fa-pen"></i> Rename</button>
                                             <button class="at-tax-action-btn" (click)="OpenMoveDialog(TaxSelectedNode)"><i class="fa-solid fa-arrows-up-down"></i> Move</button>
+                                            <button class="at-tax-action-btn" (click)="OpenMergeIntoDialog(TaxSelectedNode)"><i class="fa-solid fa-compress"></i> Merge Into...</button>
                                             <button class="at-tax-action-btn" (click)="OpenSplitDialog(TaxSelectedNode)"><i class="fa-solid fa-code-branch"></i> Split</button>
                                             <button class="at-tax-action-btn at-tax-action-danger" (click)="DeleteTag(TaxSelectedNode)"><i class="fa-solid fa-trash"></i> Delete</button>
                                         </div>
@@ -1962,6 +1963,42 @@
                         <i class="fa-solid fa-check"></i> Move
                     </button>
                     <button class="at-action-btn at-secondary-btn" (click)="CloseMoveDialog()">Cancel</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (ShowMergeIntoDialog) {
+        <div class="at-schedule-overlay" (click)="CloseMergeIntoDialog()">
+            <div class="at-schedule-dialog" (click)="$event.stopPropagation()">
+                <div class="at-schedule-dialog-header">
+                    <h3><i class="fa-solid fa-compress"></i> Merge "{{ MergeSourceTag?.Name }}" Into...</h3>
+                    <button class="at-schedule-dialog-close" (click)="CloseMergeIntoDialog()">
+                        <i class="fa-solid fa-times"></i>
+                    </button>
+                </div>
+                <div class="at-schedule-dialog-body">
+                    <p style="font-size: 0.85rem; color: var(--mj-text-secondary); margin: 0 0 12px;">
+                        All tagged items will be moved to the target tag, then "{{ MergeSourceTag?.Name }}" will be deleted.
+                    </p>
+                    <div class="at-schedule-field">
+                        <label>Merge into</label>
+                        <mj-combobox
+                            [Data]="MergeTargetData"
+                            TextField="Label"
+                            ValueField="ID"
+                            [Filterable]="true"
+                            [ValuePrimitive]="true"
+                            Placeholder="Search and select a tag..."
+                            (ValueChange)="OnMergeTargetSelected($event)">
+                        </mj-combobox>
+                    </div>
+                </div>
+                <div class="at-schedule-dialog-footer">
+                    <button class="at-action-btn at-primary-btn" (click)="ExecuteMergeInto()" [disabled]="!MergeTargetID || IsMerging">
+                        @if (IsMerging) { <i class="fa-solid fa-spinner fa-spin"></i> Merging... } @else { <i class="fa-solid fa-compress"></i> Merge }
+                    </button>
+                    <button class="at-action-btn at-secondary-btn" (click)="CloseMergeIntoDialog()">Cancel</button>
                 </div>
             </div>
         </div>

@@ -623,6 +623,12 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     /** The node currently being moved */
     private moveTargetNode: TaxTreeNode | null = null;
 
+    // ── Merge Into dialog state ──
+    public ShowMergeIntoDialog = false;
+    public MergeSourceTag: TaxTreeNode | null = null;
+    public MergeTargetID: string | null = null;
+    public MergeTargetData: { ID: string; Label: string }[] = [];
+
     // ── Treemap drill-in state ──
     /** Whether the treemap drill-in panel is visible */
     public ShowTreemapDrillIn = false;
@@ -4570,6 +4576,54 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         this.moveTargetNode = null;
         this.MoveNewParentID = null;
         this.cdr.detectChanges();
+    }
+
+    // ── Merge Into Dialog ──
+
+    public OpenMergeIntoDialog(node: TaxTreeNode): void {
+        this.MergeSourceTag = node;
+        this.MergeTargetID = null;
+        this.MergeTargetData = this.GetMergeTargetOptions().map(o => ({
+            ID: o.ID,
+            Label: `${'  '.repeat(o.Depth)}${o.Name} (${o.ItemCount})`
+        }));
+        this.ShowMergeIntoDialog = true;
+        this.cdr.detectChanges();
+    }
+
+    public OnMergeTargetSelected(value: unknown): void {
+        this.MergeTargetID = value != null ? String(value) : null;
+    }
+
+    public CloseMergeIntoDialog(): void {
+        this.ShowMergeIntoDialog = false;
+        this.MergeSourceTag = null;
+        this.MergeTargetID = null;
+        this.cdr.detectChanges();
+    }
+
+    /** Returns flat list of tags eligible as merge targets (excludes the source tag) */
+    public GetMergeTargetOptions(): { ID: string; Name: string; Depth: number; ItemCount: number }[] {
+        if (!this.MergeSourceTag) return [];
+        const sourceNormalized = NormalizeUUID(this.MergeSourceTag.ID);
+
+        return this.TaxFlatNodes
+            .filter(n => NormalizeUUID(n.ID) !== sourceNormalized)
+            .map(n => ({ ID: n.ID, Name: n.Name, Depth: n.Depth, ItemCount: n.ItemCount }));
+    }
+
+    public async ExecuteMergeInto(): Promise<void> {
+        if (!this.MergeSourceTag || !this.MergeTargetID) return;
+        const targetNode = this.TaxFlatNodes.find(n => UUIDsEqual(n.ID, this.MergeTargetID!));
+        const targetName = targetNode?.Name ?? 'Unknown';
+        const sourceName = this.MergeSourceTag.Name;
+        const sourceId = this.MergeSourceTag.ID;
+        const targetId = this.MergeTargetID;
+
+        this.ShowMergeIntoDialog = false;
+        await this.MergeTags(sourceId, targetId, sourceName, targetName);
+        this.MergeSourceTag = null;
+        this.MergeTargetID = null;
     }
 
     // ── Treemap Drill-In ──
