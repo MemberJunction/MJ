@@ -112,8 +112,8 @@ import {
     BufferCreatePostAction,
     BufferDeletePostAction,
     BufferGetAnalyticsAction,
-    BufferGetPendingPostsAction,
     BufferGetChannelsAction,
+    BufferGetPendingPostsAction,
     BufferGetSentPostsAction,
     BufferReorderQueueAction,
     BufferSearchPostsAction,
@@ -508,7 +508,7 @@ import {
     XMLParserAction,
 } from '@memberjunction/core-actions';
 
-// @memberjunction/core-entities (314 classes)
+// @memberjunction/core-entities (315 classes)
 import {
     MJAIActionEntity,
     MJAIAgentActionEntity,
@@ -580,6 +580,7 @@ import {
     MJActionResultCodeEntity,
     MJApplicationEntity,
     MJApplicationEntityEntity,
+    MJApplicationRoleEntity,
     MJApplicationSettingEntity,
     MJArtifactEntity,
     MJArtifactPermissionEntity,
@@ -1034,8 +1035,8 @@ export const CLASS_REGISTRATIONS: any[] = [
     BufferCreatePostAction,
     BufferDeletePostAction,
     BufferGetAnalyticsAction,
-    BufferGetPendingPostsAction,
     BufferGetChannelsAction,
+    BufferGetPendingPostsAction,
     BufferGetSentPostsAction,
     BufferReorderQueueAction,
     BufferSearchPostsAction,
@@ -1342,6 +1343,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJActionResultCodeEntity,
     MJApplicationEntity,
     MJApplicationEntityEntity,
+    MJApplicationRoleEntity,
     MJApplicationSettingEntity,
     MJArtifactEntity,
     MJArtifactPermissionEntity,
@@ -1655,7 +1657,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 686;
+export const CLASS_REGISTRATIONS_COUNT = 687;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

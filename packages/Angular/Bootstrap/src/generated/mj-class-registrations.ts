@@ -41,7 +41,7 @@ import {
     MJCommunicationProviderEntityExtended,
 } from '@memberjunction/communication-types';
 
-// @memberjunction/core-entities (314 classes)
+// @memberjunction/core-entities (315 classes)
 import {
     MJAIActionEntity,
     MJAIAgentActionEntity,
@@ -113,6 +113,7 @@ import {
     MJActionResultCodeEntity,
     MJApplicationEntity,
     MJApplicationEntityEntity,
+    MJApplicationRoleEntity,
     MJApplicationSettingEntity,
     MJArtifactEntity,
     MJArtifactPermissionEntity,
@@ -417,7 +418,7 @@ import {
     WebURLPartComponent,
 } from '@memberjunction/ng-dashboard-viewer';
 
-// @memberjunction/ng-dashboards (65 classes)
+// @memberjunction/ng-dashboards (66 classes)
 import {
     APIKeysResourceComponent,
     ActionExplorerComponent,
@@ -426,6 +427,7 @@ import {
     AgentConfigurationComponent,
     AgentRequestsResourceComponent,
     AnalyticsResourceComponent,
+    ApplicationRolesResourceComponent,
     AutotaggingPipelineResourceComponent,
     ClusterVisualizationResourceComponent,
     CodeManagementComponent,
@@ -603,6 +605,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJActionResultCodeEntity,
     MJApplicationEntity,
     MJApplicationEntityEntity,
+    MJApplicationRoleEntity,
     MJApplicationSettingEntity,
     MJArtifactEntity,
     MJArtifactPermissionEntity,
@@ -892,6 +895,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     AgentConfigurationComponent,
     AgentRequestsResourceComponent,
     AnalyticsResourceComponent,
+    ApplicationRolesResourceComponent,
     AutotaggingPipelineResourceComponent,
     ClusterVisualizationResourceComponent,
     CodeManagementComponent,
@@ -971,7 +975,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 446;
+export const CLASS_REGISTRATIONS_COUNT = 448;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

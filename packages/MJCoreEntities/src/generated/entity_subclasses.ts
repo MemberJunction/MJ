@@ -6905,6 +6905,61 @@ export const MJApplicationEntitySchema = z.object({
 export type MJApplicationEntityEntityType = z.infer<typeof MJApplicationEntitySchema>;
 
 /**
+ * zod schema definition for the entity MJ: Application Roles
+ */
+export const MJApplicationRoleSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ApplicationID: z.string().describe(`
+        * * Field Name: ApplicationID
+        * * Display Name: Application
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Applications (vwApplications.ID)
+        * * Description: Foreign key to the Application this role grant applies to`),
+    RoleID: z.string().describe(`
+        * * Field Name: RoleID
+        * * Display Name: Role
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Roles (vwRoles.ID)
+        * * Description: Foreign key to the Role being granted or denied access`),
+    CanAccess: z.boolean().describe(`
+        * * Field Name: CanAccess
+        * * Display Name: Can Access
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When true, users in this role can access the application. When false, this record acts as an explicit deny for the role.`),
+    CanAdmin: z.boolean().describe(`
+        * * Field Name: CanAdmin
+        * * Display Name: Can Admin
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When true, users in this role can modify application settings, manage nav items, and configure the application.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Application: z.string().describe(`
+        * * Field Name: Application
+        * * Display Name: Application Name
+        * * SQL Data Type: nvarchar(100)`),
+    Role: z.string().describe(`
+        * * Field Name: Role
+        * * Display Name: Role Name
+        * * SQL Data Type: nvarchar(50)`),
+});
+
+export type MJApplicationRoleEntityType = z.infer<typeof MJApplicationRoleSchema>;
+
+/**
  * zod schema definition for the entity MJ: Application Settings
  */
 export const MJApplicationSettingSchema = z.object({
@@ -43510,6 +43565,145 @@ export class MJApplicationEntityEntity extends BaseEntity<MJApplicationEntityEnt
 
 
 /**
+ * MJ: Application Roles - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ApplicationRole
+ * * Base View: vwApplicationRoles
+ * * @description Controls which roles can access and administer specific applications. When no ApplicationRole records exist for an application, all roles can access it (open access). When at least one record exists, only roles with CanAccess=1 are permitted.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Application Roles')
+export class MJApplicationRoleEntity extends BaseEntity<MJApplicationRoleEntityType> {
+    /**
+    * Loads the MJ: Application Roles record from the database
+    * @param ID: string - primary key value to load the MJ: Application Roles record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJApplicationRoleEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ApplicationID
+    * * Display Name: Application
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Applications (vwApplications.ID)
+    * * Description: Foreign key to the Application this role grant applies to
+    */
+    get ApplicationID(): string {
+        return this.Get('ApplicationID');
+    }
+    set ApplicationID(value: string) {
+        this.Set('ApplicationID', value);
+    }
+
+    /**
+    * * Field Name: RoleID
+    * * Display Name: Role
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Roles (vwRoles.ID)
+    * * Description: Foreign key to the Role being granted or denied access
+    */
+    get RoleID(): string {
+        return this.Get('RoleID');
+    }
+    set RoleID(value: string) {
+        this.Set('RoleID', value);
+    }
+
+    /**
+    * * Field Name: CanAccess
+    * * Display Name: Can Access
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When true, users in this role can access the application. When false, this record acts as an explicit deny for the role.
+    */
+    get CanAccess(): boolean {
+        return this.Get('CanAccess');
+    }
+    set CanAccess(value: boolean) {
+        this.Set('CanAccess', value);
+    }
+
+    /**
+    * * Field Name: CanAdmin
+    * * Display Name: Can Admin
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When true, users in this role can modify application settings, manage nav items, and configure the application.
+    */
+    get CanAdmin(): boolean {
+        return this.Get('CanAdmin');
+    }
+    set CanAdmin(value: boolean) {
+        this.Set('CanAdmin', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Application
+    * * Display Name: Application Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Application(): string {
+        return this.Get('Application');
+    }
+
+    /**
+    * * Field Name: Role
+    * * Display Name: Role Name
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Role(): string {
+        return this.Get('Role');
+    }
+}
+
+
+/**
  * MJ: Application Settings - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: ApplicationSetting
@@ -43823,7 +44017,7 @@ export class MJApplicationEntity extends BaseEntity<MJApplicationEntityType> {
     * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get DefaultNavItemsObject(): Array<MJApplicationEntity_IDefaultNavItem> | null {
-        const raw = this.DefaultNavItems;
+        const raw = this.Get('DefaultNavItems');
         if (raw !== this._DefaultNavItemsObject_lastRaw) {
             this._DefaultNavItemsObject_cached = raw ? JSON.parse(raw) : null;
             this._DefaultNavItemsObject_lastRaw = raw;
@@ -43832,7 +44026,7 @@ export class MJApplicationEntity extends BaseEntity<MJApplicationEntityType> {
     }
     set DefaultNavItemsObject(value: Array<MJApplicationEntity_IDefaultNavItem> | null) {
         const raw = value ? JSON.stringify(value) : null;
-        this.DefaultNavItems = raw;
+        this.Set('DefaultNavItems', raw);
         this._DefaultNavItemsObject_cached = value;
         this._DefaultNavItemsObject_lastRaw = raw;
     }
@@ -51659,7 +51853,7 @@ export class MJContentProcessRunEntity extends BaseEntity<MJContentProcessRunEnt
     * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get ConfigurationObject(): MJContentProcessRunEntity_IContentProcessRunConfiguration | null {
-        const raw = this.Configuration;
+        const raw = this.Get('Configuration');
         if (raw !== this._ConfigurationObject_lastRaw) {
             this._ConfigurationObject_cached = raw ? JSON.parse(raw) : null;
             this._ConfigurationObject_lastRaw = raw;
@@ -51668,7 +51862,7 @@ export class MJContentProcessRunEntity extends BaseEntity<MJContentProcessRunEnt
     }
     set ConfigurationObject(value: MJContentProcessRunEntity_IContentProcessRunConfiguration | null) {
         const raw = value ? JSON.stringify(value) : null;
-        this.Configuration = raw;
+        this.Set('Configuration', raw);
         this._ConfigurationObject_cached = value;
         this._ConfigurationObject_lastRaw = raw;
     }
@@ -52121,7 +52315,7 @@ export class MJContentSourceTypeEntity extends BaseEntity<MJContentSourceTypeEnt
     * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get ConfigurationObject(): MJContentSourceTypeEntity_IContentSourceTypeConfiguration | null {
-        const raw = this.Configuration;
+        const raw = this.Get('Configuration');
         if (raw !== this._ConfigurationObject_lastRaw) {
             this._ConfigurationObject_cached = raw ? JSON.parse(raw) : null;
             this._ConfigurationObject_lastRaw = raw;
@@ -52130,7 +52324,7 @@ export class MJContentSourceTypeEntity extends BaseEntity<MJContentSourceTypeEnt
     }
     set ConfigurationObject(value: MJContentSourceTypeEntity_IContentSourceTypeConfiguration | null) {
         const raw = value ? JSON.stringify(value) : null;
-        this.Configuration = raw;
+        this.Set('Configuration', raw);
         this._ConfigurationObject_cached = value;
         this._ConfigurationObject_lastRaw = raw;
     }
@@ -52349,7 +52543,7 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
     * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get ConfigurationObject(): MJContentSourceEntity_IContentSourceConfiguration | null {
-        const raw = this.Configuration;
+        const raw = this.Get('Configuration');
         if (raw !== this._ConfigurationObject_lastRaw) {
             this._ConfigurationObject_cached = raw ? JSON.parse(raw) : null;
             this._ConfigurationObject_lastRaw = raw;
@@ -52358,7 +52552,7 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
     }
     set ConfigurationObject(value: MJContentSourceEntity_IContentSourceConfiguration | null) {
         const raw = value ? JSON.stringify(value) : null;
-        this.Configuration = raw;
+        this.Set('Configuration', raw);
         this._ConfigurationObject_cached = value;
         this._ConfigurationObject_lastRaw = raw;
     }
@@ -52784,7 +52978,7 @@ export class MJContentTypeEntity extends BaseEntity<MJContentTypeEntityType> {
     * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get ConfigurationObject(): MJContentTypeEntity_IContentTypeConfiguration | null {
-        const raw = this.Configuration;
+        const raw = this.Get('Configuration');
         if (raw !== this._ConfigurationObject_lastRaw) {
             this._ConfigurationObject_cached = raw ? JSON.parse(raw) : null;
             this._ConfigurationObject_lastRaw = raw;
@@ -52793,7 +52987,7 @@ export class MJContentTypeEntity extends BaseEntity<MJContentTypeEntityType> {
     }
     set ConfigurationObject(value: MJContentTypeEntity_IContentTypeConfiguration | null) {
         const raw = value ? JSON.stringify(value) : null;
-        this.Configuration = raw;
+        this.Set('Configuration', raw);
         this._ConfigurationObject_cached = value;
         this._ConfigurationObject_lastRaw = raw;
     }
@@ -88439,7 +88633,7 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
     * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get GridStateObject(): MJUserViewEntity_IGridState | null {
-        const raw = this.GridState;
+        const raw = this.Get('GridState');
         if (raw !== this._GridStateObject_lastRaw) {
             this._GridStateObject_cached = raw ? JSON.parse(raw) : null;
             this._GridStateObject_lastRaw = raw;
@@ -88448,7 +88642,7 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
     }
     set GridStateObject(value: MJUserViewEntity_IGridState | null) {
         const raw = value ? JSON.stringify(value) : null;
-        this.GridState = raw;
+        this.Set('GridState', raw);
         this._GridStateObject_cached = value;
         this._GridStateObject_lastRaw = raw;
     }
@@ -88474,7 +88668,7 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
     * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get FilterStateObject(): MJUserViewEntity_IFilterState | null {
-        const raw = this.FilterState;
+        const raw = this.Get('FilterState');
         if (raw !== this._FilterStateObject_lastRaw) {
             this._FilterStateObject_cached = raw ? JSON.parse(raw) : null;
             this._FilterStateObject_lastRaw = raw;
@@ -88483,7 +88677,7 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
     }
     set FilterStateObject(value: MJUserViewEntity_IFilterState | null) {
         const raw = value ? JSON.stringify(value) : null;
-        this.FilterState = raw;
+        this.Set('FilterState', raw);
         this._FilterStateObject_cached = value;
         this._FilterStateObject_lastRaw = raw;
     }
@@ -88603,7 +88797,7 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
     * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get SortStateObject(): Array<MJUserViewEntity_ISortStateItem> | null {
-        const raw = this.SortState;
+        const raw = this.Get('SortState');
         if (raw !== this._SortStateObject_lastRaw) {
             this._SortStateObject_cached = raw ? JSON.parse(raw) : null;
             this._SortStateObject_lastRaw = raw;
@@ -88612,7 +88806,7 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
     }
     set SortStateObject(value: Array<MJUserViewEntity_ISortStateItem> | null) {
         const raw = value ? JSON.stringify(value) : null;
-        this.SortState = raw;
+        this.Set('SortState', raw);
         this._SortStateObject_cached = value;
         this._SortStateObject_lastRaw = raw;
     }
@@ -88671,7 +88865,7 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
     * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get CardStateObject(): MJUserViewEntity_ICardState | null {
-        const raw = this.CardState;
+        const raw = this.Get('CardState');
         if (raw !== this._CardStateObject_lastRaw) {
             this._CardStateObject_cached = raw ? JSON.parse(raw) : null;
             this._CardStateObject_lastRaw = raw;
@@ -88680,7 +88874,7 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
     }
     set CardStateObject(value: MJUserViewEntity_ICardState | null) {
         const raw = value ? JSON.stringify(value) : null;
-        this.CardState = raw;
+        this.Set('CardState', raw);
         this._CardStateObject_cached = value;
         this._CardStateObject_lastRaw = raw;
     }
@@ -88706,7 +88900,7 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
     * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get DisplayStateObject(): MJUserViewEntity_IDisplayState | null {
-        const raw = this.DisplayState;
+        const raw = this.Get('DisplayState');
         if (raw !== this._DisplayStateObject_lastRaw) {
             this._DisplayStateObject_cached = raw ? JSON.parse(raw) : null;
             this._DisplayStateObject_lastRaw = raw;
@@ -88715,7 +88909,7 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
     }
     set DisplayStateObject(value: MJUserViewEntity_IDisplayState | null) {
         const raw = value ? JSON.stringify(value) : null;
-        this.DisplayState = raw;
+        this.Set('DisplayState', raw);
         this._DisplayStateObject_cached = value;
         this._DisplayStateObject_lastRaw = raw;
     }

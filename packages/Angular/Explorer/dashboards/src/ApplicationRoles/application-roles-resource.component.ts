@@ -1,6 +1,5 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
-import { Subject } from 'rxjs';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { CompositeKey, Metadata, RunView } from '@memberjunction/core';
 import { ResourceData } from '@memberjunction/core-entities';
@@ -42,8 +41,6 @@ interface ApplicationGroup {
   styleUrls: ['./application-roles-resource.component.css']
 })
 export class ApplicationRolesResourceComponent extends BaseResourceComponent implements OnInit, OnDestroy {
-  private destroy$ = new Subject<void>();
-
   ApplicationGroups: ApplicationGroup[] = [];
   AvailableRoles: { ID: string; Name: string }[] = [];
   IsLoading = true;
@@ -67,14 +64,14 @@ export class ApplicationRolesResourceComponent extends BaseResourceComponent imp
     return 'fa-solid fa-user-shield';
   }
 
-  async ngOnInit(): Promise<void> {
+  override async ngOnInit(): Promise<void> {
+    super.ngOnInit();
     await this.loadData();
     this.NotifyLoadComplete();
   }
 
-  ngOnDestroy(): void {
-    this.destroy$.next();
-    this.destroy$.complete();
+  override ngOnDestroy(): void {
+    super.ngOnDestroy();
   }
 
   /**
@@ -196,7 +193,7 @@ export class ApplicationRolesResourceComponent extends BaseResourceComponent imp
     const roleId = this.SelectedRoleIdToAdd.get(group.ApplicationID);
     if (!roleId) return;
 
-    const role = this.AvailableRoles.find(r => r.ID === roleId);
+    const role = this.AvailableRoles.find(r => UUIDsEqual(r.ID, roleId));
     if (!role) return;
 
     group.Roles.push({
