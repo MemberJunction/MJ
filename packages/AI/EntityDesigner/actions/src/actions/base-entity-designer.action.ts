@@ -9,7 +9,7 @@
 
 import { BaseAction } from '@memberjunction/actions';
 import type { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
-import { Metadata, UserInfo, LogError } from '@memberjunction/core';
+import { AuthorizationEvaluator, Metadata, UserInfo, LogError } from '@memberjunction/core';
 import type { TableDefinition } from '@memberjunction/schema-engine';
 
 import {
@@ -103,7 +103,8 @@ export abstract class BaseEntityDesignerAction extends BaseAction {
             return `Authorization '${authName}' is not configured in this system.`;
         }
 
-        if (!auth.UserCanExecute(contextUser)) {
+        const evaluator = new AuthorizationEvaluator();
+        if (!evaluator.UserCanExecuteWithAncestors(auth, contextUser, md.Authorizations)) {
             return `User does not have the '${authName}' authorization required for this operation.`;
         }
 

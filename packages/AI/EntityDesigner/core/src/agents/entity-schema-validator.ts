@@ -21,7 +21,7 @@
 import { BaseAgent } from '@memberjunction/ai-agents';
 import type { ExecuteAgentParams, AgentConfiguration, BaseAgentNextStep } from '@memberjunction/ai-core-plus';
 import { RegisterClass } from '@memberjunction/global';
-import { Metadata, RunView } from '@memberjunction/core';
+import { AuthorizationEvaluator, Metadata, RunView } from '@memberjunction/core';
 import { SchemaValidator, type TableDefinition } from '@memberjunction/schema-engine';
 
 import {
@@ -108,7 +108,8 @@ export class EntityDesignerSchemaValidator extends BaseAgent {
             );
         }
 
-        const canExecute = auth.UserCanExecute(params.contextUser);
+        const evaluator = new AuthorizationEvaluator();
+        const canExecute = evaluator.UserCanExecuteWithAncestors(auth, params.contextUser, md.Authorizations);
         if (!canExecute) {
             return `User does not have the '${authName}' authorization required for this operation.`;
         }
@@ -244,7 +245,7 @@ export class EntityDesignerSchemaValidator extends BaseAgent {
 
     private buildFailure<P>(reasoning: string): { finalStep: BaseAgentNextStep<P>; stepCount: number } {
         return {
-            finalStep: { terminate: true, step: 'Failed', reasoning },
+            finalStep: { terminate: true, step: 'Failed', reasoning, message: reasoning, errorMessage: reasoning },
             stepCount: 1,
         };
     }
