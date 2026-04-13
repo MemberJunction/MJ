@@ -13427,7 +13427,7 @@ export const MJEntitySchema = z.object({
         * * Display Name: Allow Caching
         * * SQL Data Type: bit
         * * Default Value: 0
-        * * Description: Controls whether this entity participates in server-side and client-side caching. When false, all cache operations (PreRunView checks, auto-cache storage, BaseEntity event fingerprint scans, client-side IndexedDB cache) are skipped entirely. Can also be enabled at the schema level via the cacheSettings.enableForSchemas server config.`),
+        * * Description: Controls whether this entity participates in server-side and client-side caching. When false, all cache operations (PreRunView checks, auto-cache storage, BaseEntity event fingerprint scans, client-side IndexedDB cache) are skipped entirely. This column is the single source of truth at runtime; schema-level defaults are applied at CodeGen time via newEntityDefaults.AllowCachingBySchema.`),
     DetectExternalChanges: z.boolean().describe(`
         * * Field Name: DetectExternalChanges
         * * Display Name: Detect External Changes
@@ -60447,7 +60447,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
     * * Display Name: Allow Caching
     * * SQL Data Type: bit
     * * Default Value: 0
-    * * Description: Controls whether this entity participates in server-side and client-side caching. When false, all cache operations (PreRunView checks, auto-cache storage, BaseEntity event fingerprint scans, client-side IndexedDB cache) are skipped entirely. Can also be enabled at the schema level via the cacheSettings.enableForSchemas server config.
+    * * Description: Controls whether this entity participates in server-side and client-side caching. When false, all cache operations (PreRunView checks, auto-cache storage, BaseEntity event fingerprint scans, client-side IndexedDB cache) are skipped entirely. This column is the single source of truth at runtime; schema-level defaults are applied at CodeGen time via newEntityDefaults.AllowCachingBySchema.
     */
     get AllowCaching(): boolean {
         return this.Get('AllowCaching');

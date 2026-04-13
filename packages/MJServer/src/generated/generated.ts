@@ -37409,7 +37409,7 @@ export class MJEntity_ {
     @Field(() => Boolean, {description: `When true (default), CodeGen can automatically set SupportsGeoCoding based on LLM analysis of entity fields. Set to 0 to lock the value and prevent CodeGen from changing it.`}) 
     AutoUpdateSupportsGeoCoding: boolean;
         
-    @Field(() => Boolean, {description: `Controls whether this entity participates in server-side and client-side caching. When false, all cache operations (PreRunView checks, auto-cache storage, BaseEntity event fingerprint scans, client-side IndexedDB cache) are skipped entirely. Can also be enabled at the schema level via the cacheSettings.enableForSchemas server config.`}) 
+    @Field(() => Boolean, {description: `Controls whether this entity participates in server-side and client-side caching. When false, all cache operations (PreRunView checks, auto-cache storage, BaseEntity event fingerprint scans, client-side IndexedDB cache) are skipped entirely. This column is the single source of truth at runtime; schema-level defaults are applied at CodeGen time via newEntityDefaults.AllowCachingBySchema.`}) 
     AllowCaching: boolean;
         
     @Field(() => Boolean, {description: `When set to 1 AND TrackRecordChanges is also 1, the external change detection system will scan this entity for changes made outside the MJ framework (direct SQL, third-party tools, etc.) and replay them through Save() to create proper RecordChange audit entries. Default is 0 (opt-out) because most entities, especially __mj schema metadata tables, are managed by migrations/CodeGen and should not be scanned.`}) 
