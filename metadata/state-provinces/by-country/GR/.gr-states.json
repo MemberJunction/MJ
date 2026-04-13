@@ -1,0 +1,1346 @@
+[
+  {
+    "fields": {
+      "Name": "Achaïa",
+      "Code": "13",
+      "ISO3166_2": "GR-13",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Achaïa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GR"
+    },
+    "primaryKey": {
+      "ID": "9E41DFF2-24A5-4A59-AE35-BAD965C65F37"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:57.298Z",
+      "checksum": "2bc9cbd88bd71d5897d54337fcf24c8fd52db9008a44131f49cbf725a627dc08"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Aitolia-Akarnania",
+      "Code": "01",
+      "ISO3166_2": "GR-01",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Aitolia-Akarnania"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GR"
+    },
+    "primaryKey": {
+      "ID": "842E1C86-09EA-4CB1-8FBB-975BF0599C13"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:57.314Z",
+      "checksum": "f5a4e0afb55ad358cfd544cd20a068253d886d87708048166f445dbb969a0f32"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Anatoliki Makedonia kai Thraki",
+      "Code": "I",
+      "ISO3166_2": "GR-I",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Anatoliki Makedonia kai Thraki"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GR"
+    },
+    "primaryKey": {
+      "ID": "48703882-DFC5-4071-BD02-C95AFA96DB59"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:57.330Z",
+      "checksum": "0aae61d5fe7ec6c7f184ee3815b04cdd3f8a01463c755609323cb41b97b1d4b1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Argolis",
+      "Code": "11",
+      "ISO3166_2": "GR-11",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Argolis"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GR"
+    },
+    "primaryKey": {
+      "ID": "5B139BC5-301C-4DFB-B7E1-11B66A1DDAC7"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:57.347Z",
+      "checksum": "c7f8351f0c8ce8ec59f98ef5f74f6eab6980fec78730280cf55a029f2260cb42"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Arkadia",
+      "Code": "12",
+      "ISO3166_2": "GR-12",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Arkadia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GR"
+    },
+    "primaryKey": {
+      "ID": "CDEA531D-F4B4-4C8D-B1E8-CDD7605EBA92"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:57.363Z",
+      "checksum": "a69925eea1c6d44788aa5084b71e9ee8acd5b1a2f21d3f234bbab8f2654b48bf"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Arta",
+      "Code": "31",
+      "ISO3166_2": "GR-31",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Arta"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GR"
+    },
+    "primaryKey": {
+      "ID": "3E6E5008-8A25-48A1-9DAB-D6BCA9B8CD3D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:57.380Z",
+      "checksum": "0bcfec6bfcaaf7bf3807c30c33ad85b4b3a50d097312adc41935f22acb7ffc0b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Attiki",
+      "Code": "IX",
+      "ISO3166_2": "GR-IX",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Attiki"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GR"
+    },
+    "primaryKey": {
+      "ID": "D1FCFABF-8CFE-4C03-8B80-7ED7E69B515F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:57.398Z",
+      "checksum": "6afa08231fa942ea938fa4bd545af7683b2b6e75c94c082213ba0c2826712753"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Attiki",
+      "Code": "A1",
+      "ISO3166_2": "GR-A1",
+      "Latitude": 38.0626,
+      "Longitude": 23.7997,
+      "BoundaryGeoJSON": "@file:by-country/GR/boundaries/GR-A1.geojson",
+      "CommonAliases": [
+        "Attiki"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GR"
+    },
+    "primaryKey": {
+      "ID": "E7537A02-C19A-42A7-AB1A-6CB8B0005125"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:57.415Z",
+      "checksum": "a2229fb3404e4f0c2e9d9cf3159e0fb2d4cbd3b233bb967bae25c6b3ca6f6648"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Chalkidiki",
+      "Code": "64",
+      "ISO3166_2": "GR-64",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Chalkidiki"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GR"
+    },
+    "primaryKey": {
+      "ID": "6908AC66-29B1-41A6-8642-DD38E5471092"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:57.432Z",
+      "checksum": "dbf23f1ecd7eaa1222cefd30880dc6def1b4724d87f868d0b6b3d34300bd190f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Chania",
+      "Code": "94",
+      "ISO3166_2": "GR-94",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Chania"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GR"
+    },
+    "primaryKey": {
+      "ID": "F23CF60C-39EC-479B-8E38-DE505DC338A9"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:57.445Z",
+      "checksum": "fc095a14dff835bfde0a6393b8ed42799ae2a7ab6b69e009949eb0b787b091e4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Chios",
+      "Code": "85",
+      "ISO3166_2": "GR-85",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Chios"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GR"
+    },
+    "primaryKey": {
+      "ID": "D34A84BD-8669-4505-AFD0-348532088015"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:57.507Z",
+      "checksum": "6264ce962e27a4b85c6aee25e0b4a83d51b31abeb12c68e4f21ea6faf9da5f83"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Dodekanisos",
+      "Code": "81",
+      "ISO3166_2": "GR-81",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Dodekanisos"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GR"
+    },
+    "primaryKey": {
+      "ID": "D5D24A83-FA82-49DA-B767-4ECFF953D9F8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:57.523Z",
+      "checksum": "dd65be7a8127344a5fc0e197bb611dbae94a7623d547becdee0e2afe0be606c2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Drama",
+      "Code": "52",
+      "ISO3166_2": "GR-52",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Drama"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GR"
+    },
+    "primaryKey": {
+      "ID": "4FEDA653-E66A-40FF-9616-E24E61B69497"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:57.540Z",
+      "checksum": "4382825fcaaf3979ffcc4a83f529ae04fc8fe4723f72c63958fb4ace698cd0df"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Dytiki Ellada",
+      "Code": "VII",
+      "ISO3166_2": "GR-VII",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Dytiki Ellada"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GR"
+    },
+    "primaryKey": {
+      "ID": "AA5D20C3-8E65-4F43-8D27-58FC561B2F47"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:57.556Z",
+      "checksum": "b155bae4f9542ae3fa0041891cb6b7fcc7597d81c4c85ed7e6086dca98ca5179"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Dytiki Makedonia",
+      "Code": "III",
+      "ISO3166_2": "GR-III",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Dytiki Makedonia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GR"
+    },
+    "primaryKey": {
+      "ID": "964FD7A0-32F3-484C-98F2-913B417CE229"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:57.573Z",
+      "checksum": "614ae2853a23599b51359c063640ae3a567bb5e9771be790675afa1a348e2183"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Evros",
+      "Code": "71",
+      "ISO3166_2": "GR-71",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Evros"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GR"
+    },
+    "primaryKey": {
+      "ID": "A12F5297-44D3-43BB-AAB0-274D4BFD2B39"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:57.589Z",
+      "checksum": "6fc33dc856d0d9cf61c0d9d705c1bf2301ceaf8723bfb483dbbbb4bc9eb7a628"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Evrytania",
+      "Code": "05",
+      "ISO3166_2": "GR-05",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Evrytania"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GR"
+    },
+    "primaryKey": {
+      "ID": "048400A2-BEF7-46BE-A0D4-57D07D9CA405"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:57.605Z",
+      "checksum": "a36a8cdbc39a29dfd96f3d3b09458623b79144c13051a34135476ff1ea189f09"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Evvoia",
+      "Code": "04",
+      "ISO3166_2": "GR-04",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Evvoia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GR"
+    },
+    "primaryKey": {
+      "ID": "A9F22F3D-00A2-4A85-A40C-39BE81327508"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:57.622Z",
+      "checksum": "ea994975fd12e7afa294e9291b41032f6caa0f4bfae644ba3df6f4e0e35fa5ea"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Florina",
+      "Code": "63",
+      "ISO3166_2": "GR-63",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Florina"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GR"
+    },
+    "primaryKey": {
+      "ID": "F4C50BE0-55D2-41C6-8EAA-8873864AF92B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:57.638Z",
+      "checksum": "bd097da0c7fab7f0526ca4502d5e654922ca3862d6b95bf6d8cf8101d0bbc0be"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Fokis",
+      "Code": "07",
+      "ISO3166_2": "GR-07",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Fokis"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GR"
+    },
+    "primaryKey": {
+      "ID": "F9FFC69E-8C5B-4CA3-AEC9-743B526EDBF6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:57.651Z",
+      "checksum": "be6879234ab60aa09a600844a68c92434fa00c634986e836cc4adde335f35c82"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Fthiotis",
+      "Code": "06",
+      "ISO3166_2": "GR-06",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Fthiotis"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GR"
+    },
+    "primaryKey": {
+      "ID": "848C8432-6182-4DA0-A1BC-6B7600D4CAE9"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:57.714Z",
+      "checksum": "2f5a256d007500a906ffab6974108e5fec6555f0ae6bae7d6287c77d118ebe3b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Grevena",
+      "Code": "51",
+      "ISO3166_2": "GR-51",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Grevena"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GR"
+    },
+    "primaryKey": {
+      "ID": "68855E11-F7D7-4521-A57B-BDB8B5691AE7"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:57.732Z",
+      "checksum": "14a6716d2d43fd686539ef8ba02bba71fc1a35a63a926dc9c7de425e65c230c0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ileia",
+      "Code": "14",
+      "ISO3166_2": "GR-14",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Ileia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GR"
+    },
+    "primaryKey": {
+      "ID": "D0491A7D-0801-4A16-8F7D-7EFB1C050EC2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:57.748Z",
+      "checksum": "bdb69ebd74bc3ab11fde9c638aa2b8a462701ac400c4fb553dd0b5121443bcdf"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Imathia",
+      "Code": "53",
+      "ISO3166_2": "GR-53",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Imathia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GR"
+    },
+    "primaryKey": {
+      "ID": "6ABF0A02-9BD8-46EE-B529-180FE894BE52"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:57.763Z",
+      "checksum": "29f485914b0b7e7ff76e3b35e36dd8e5ee773ea4823251be0026b7f083dde51e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ioannina",
+      "Code": "33",
+      "ISO3166_2": "GR-33",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Ioannina"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GR"
+    },
+    "primaryKey": {
+      "ID": "DF8AB64F-62BC-42FD-B787-88CE8A25F08A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:57.780Z",
+      "checksum": "441e11e79f2d84ca98dfd670bc58a57f9e8e46863d0b46fbc3a3635cfca8593e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ionioi Nisoi",
+      "Code": "VI",
+      "ISO3166_2": "GR-VI",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Ionioi Nisoi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GR"
+    },
+    "primaryKey": {
+      "ID": "7C2C396B-AFC9-4D93-B1D4-7E88FAC3E064"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:57.796Z",
+      "checksum": "b2c8964334256ebc5d5e5b9f8277152ed1a7202b9e579f02f36a1d48b1929905"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ipeiros",
+      "Code": "IV",
+      "ISO3166_2": "GR-IV",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Ipeiros"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GR"
+    },
+    "primaryKey": {
+      "ID": "3AF7E104-912D-408F-AD8E-0DC59E83A29F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:57.810Z",
+      "checksum": "d45d2fd206b121c391046c93b1611383dcdd5d91d90c7315fb72c69380e6ea0d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Irakleion",
+      "Code": "91",
+      "ISO3166_2": "GR-91",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Irakleion"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GR"
+    },
+    "primaryKey": {
+      "ID": "023A29ED-399F-4CA4-BBDF-D6FAC67FA86D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:57.825Z",
+      "checksum": "9b2af8f61e76a6bb5c2a58b553a943d2b18d20797d40d23366e57fc0775848a4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Karditsa",
+      "Code": "41",
+      "ISO3166_2": "GR-41",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Karditsa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GR"
+    },
+    "primaryKey": {
+      "ID": "1BFDFE44-CB75-43A5-B713-93FA0FD48254"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:57.839Z",
+      "checksum": "9547186535b4b26312192595cd69006ef9da4b03a01e2808a77835c3eed36fa6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kastoria",
+      "Code": "56",
+      "ISO3166_2": "GR-56",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Kastoria"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GR"
+    },
+    "primaryKey": {
+      "ID": "AF5F91AD-462A-4038-AB3B-65ACE7CCADE7"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:57.853Z",
+      "checksum": "63113a90b3b7776d365b9d4c2d13812f043856757ae214887698f3006aab2ece"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kavalla",
+      "Code": "55",
+      "ISO3166_2": "GR-55",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Kavalla"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GR"
+    },
+    "primaryKey": {
+      "ID": "C4532BA3-A349-448C-848C-9EE2312E8278"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:57.903Z",
+      "checksum": "d3466600b2a9c84150e9a0904b8dc632cf7478e904215b5030d89af9d2715078"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kefallinia",
+      "Code": "23",
+      "ISO3166_2": "GR-23",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Kefallinia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GR"
+    },
+    "primaryKey": {
+      "ID": "E40FFE44-4A7F-4703-AD48-EA8093405270"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:57.916Z",
+      "checksum": "0fbcfb3a15cbe4a7cf2dc8a4300bb2324240ef87f75c1694830d67a81f4990d1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kentriki Makedonia",
+      "Code": "II",
+      "ISO3166_2": "GR-II",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Kentriki Makedonia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GR"
+    },
+    "primaryKey": {
+      "ID": "7BBE80DA-4267-4682-879F-57EC9CAA3546"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:57.930Z",
+      "checksum": "f93ce858801105cc862d40b1e3a32aa3a3bf63680c615d55b799b9ae31cbb5a7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kerkyra",
+      "Code": "22",
+      "ISO3166_2": "GR-22",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Kerkyra"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GR"
+    },
+    "primaryKey": {
+      "ID": "5F6DEF1A-5A31-4CD8-A001-16E8DCF0D874"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:57.946Z",
+      "checksum": "2ee03f37779ea11d8e7e54c098423fe6021f0912b1831af7a6b42cd97e98e788"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kilkis",
+      "Code": "57",
+      "ISO3166_2": "GR-57",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Kilkis"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GR"
+    },
+    "primaryKey": {
+      "ID": "BF0106A7-0BA3-4D77-B961-C9A44754A721"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:57.960Z",
+      "checksum": "861f72f53a43425fc103612466f7e08cdbd1db63ffc6627ba08b4d1c228deba5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Korinthia",
+      "Code": "15",
+      "ISO3166_2": "GR-15",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Korinthia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GR"
+    },
+    "primaryKey": {
+      "ID": "F5A36586-E8D5-4A5C-876B-8654FB6B253A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:57.974Z",
+      "checksum": "8ba8606c6aceb6b229abe50876d0466010c2900c4d07b757fa9cbdfe8e1af15e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kozani",
+      "Code": "58",
+      "ISO3166_2": "GR-58",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Kozani"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GR"
+    },
+    "primaryKey": {
+      "ID": "C82C6A6F-C91F-4A20-B48B-F597F65CF832"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:57.988Z",
+      "checksum": "6634c2e5a431dcb837f4ce57093e64ee3d4106783dcf582dfb8abcfcb1143cfd"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kriti",
+      "Code": "XIII",
+      "ISO3166_2": "GR-XIII",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Kriti"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GR"
+    },
+    "primaryKey": {
+      "ID": "2726C794-534A-4C1E-82AE-F421C0E77BCA"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:58.001Z",
+      "checksum": "84f9eb75748162bd215926a060a7198b2cee831fe93e9c5d82c519fa824858f2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kyklades",
+      "Code": "82",
+      "ISO3166_2": "GR-82",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Kyklades"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GR"
+    },
+    "primaryKey": {
+      "ID": "C88A7571-1305-4098-B9CF-2F89C0002C3B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:58.015Z",
+      "checksum": "966021f2112b35af60821d041f41acb9495428e788eca56784376523be863f21"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Lakonia",
+      "Code": "16",
+      "ISO3166_2": "GR-16",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Lakonia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GR"
+    },
+    "primaryKey": {
+      "ID": "601FC9F7-3CDE-47AB-A2BE-86A3E76AAD09"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:58.029Z",
+      "checksum": "23671b0e6d6c5a0c0836e54825c05e3c7c91f2ebd36d04e81613cd5563637882"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Larisa",
+      "Code": "42",
+      "ISO3166_2": "GR-42",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Larisa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GR"
+    },
+    "primaryKey": {
+      "ID": "03A9A046-18C3-41AF-9505-F161EAF10C90"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:58.084Z",
+      "checksum": "f7f084bbb41ce00f1567074b98a2cd1a20100eb96fffd84413eeb476dad38b42"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Lasithion",
+      "Code": "92",
+      "ISO3166_2": "GR-92",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Lasithion"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GR"
+    },
+    "primaryKey": {
+      "ID": "70915577-0365-4ED3-A8E9-6F243753212C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:58.101Z",
+      "checksum": "84a2ad9e6878e091e389033805a63ec849748e630896c618d6ba4966671eecae"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Lefkas",
+      "Code": "24",
+      "ISO3166_2": "GR-24",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Lefkas"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GR"
+    },
+    "primaryKey": {
+      "ID": "C811380A-AE09-4A02-8D49-ABA902567FB6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:58.117Z",
+      "checksum": "9f2ba01c36466b3b6013a280ee93b315682ee641d6c4e83178bef3b4f7b4a628"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Lesvos",
+      "Code": "83",
+      "ISO3166_2": "GR-83",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Lesvos"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GR"
+    },
+    "primaryKey": {
+      "ID": "5BCCD046-BB8D-4051-B452-66B647D7D5F7"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:58.132Z",
+      "checksum": "a824c50f410ecb4cb3acf174eb611a7d84b9d9652170d99ceb0dc1876185d224"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Magnisia",
+      "Code": "43",
+      "ISO3166_2": "GR-43",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Magnisia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GR"
+    },
+    "primaryKey": {
+      "ID": "B9C526D1-D64A-4C26-ACC1-92D5722F9F80"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:58.148Z",
+      "checksum": "786532f74e2e51ae38cf929c8ae3326b6ea19e2ba2577dfa9b44151505237517"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Messinia",
+      "Code": "17",
+      "ISO3166_2": "GR-17",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Messinia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GR"
+    },
+    "primaryKey": {
+      "ID": "150BEE45-15AF-415D-9E88-2EEB4B5BFBA2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:58.165Z",
+      "checksum": "7b3755eb40facce388d43c9bc7d05277a4f52510689c35571d177eb97c567bcf"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Notio Aigaio",
+      "Code": "XII",
+      "ISO3166_2": "GR-XII",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Notio Aigaio"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GR"
+    },
+    "primaryKey": {
+      "ID": "015CDF45-64DF-49DC-AEB3-0DC99E70FF22"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:58.189Z",
+      "checksum": "cfdf14147f51a47c650c2fdae5815a7e1f058bc16361e441f4c59e224f8ee274"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Pella",
+      "Code": "59",
+      "ISO3166_2": "GR-59",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Pella"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GR"
+    },
+    "primaryKey": {
+      "ID": "63C00B3C-6078-443D-AB60-525019C0AA09"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:58.210Z",
+      "checksum": "2dfc559194eb96c36346c77826ce2c36dbeec9714a4ee6288f3ec7a49667957a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Peloponnisos",
+      "Code": "X",
+      "ISO3166_2": "GR-X",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Peloponnisos"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GR"
+    },
+    "primaryKey": {
+      "ID": "55BA58CE-C986-4572-9CE3-4B8242DD8FE5"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:58.230Z",
+      "checksum": "e34d7a7807952e44b5655d00b72080df72689b072ec0f3e6d55df09755e1fb53"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Pieria",
+      "Code": "61",
+      "ISO3166_2": "GR-61",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Pieria"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GR"
+    },
+    "primaryKey": {
+      "ID": "6E140270-A551-49C1-ABEA-3A7C0A9C9833"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:58.244Z",
+      "checksum": "2845a068026cbfeff4c2abf72eb030b61fee8f2af0aafc29563fbac756db1c32"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Preveza",
+      "Code": "34",
+      "ISO3166_2": "GR-34",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Preveza"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GR"
+    },
+    "primaryKey": {
+      "ID": "4A45461C-6BB6-4A13-8760-A9748EC4462D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:58.306Z",
+      "checksum": "c02c94c144644c2a1e3fad823520e35b54eef20832582692c52ce8d76f2a021c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rethymnon",
+      "Code": "93",
+      "ISO3166_2": "GR-93",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Rethymnon"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GR"
+    },
+    "primaryKey": {
+      "ID": "89CE9CB9-E8C7-49DE-B132-08F82FDEF1BD"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:58.322Z",
+      "checksum": "05ba68691a871637ee69746986db7e084587e4be39535913f866d20d294d153c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rodopi",
+      "Code": "73",
+      "ISO3166_2": "GR-73",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Rodopi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GR"
+    },
+    "primaryKey": {
+      "ID": "0809B785-8078-43F1-96A1-14BE036ADE3B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:58.339Z",
+      "checksum": "e502d4dbbd50b8a1cab38813be5d7a238dd5547495fbfd49f0024c7fc9193ba2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Samos",
+      "Code": "84",
+      "ISO3166_2": "GR-84",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Samos"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GR"
+    },
+    "primaryKey": {
+      "ID": "C1B6E42B-7A33-4FBD-828B-98A8E4868FD1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:58.358Z",
+      "checksum": "21eaf60f102dc1b20de4f755c390a88534763486e3ac6ec7597a84b4116c1cd6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Serrai",
+      "Code": "62",
+      "ISO3166_2": "GR-62",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Serrai"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GR"
+    },
+    "primaryKey": {
+      "ID": "08488A7A-5CD1-4F16-A298-F676DAFB6807"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:58.374Z",
+      "checksum": "88e9a76abe24290ece4079a99fb78a210fa02edab259e2936087faec2defa746"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sterea Ellada",
+      "Code": "VIII",
+      "ISO3166_2": "GR-VIII",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Sterea Ellada"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GR"
+    },
+    "primaryKey": {
+      "ID": "BC8C3779-59D9-45CE-9227-44468A5C81F4"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:58.391Z",
+      "checksum": "ac9ad6b035b481d12e517257e7dec4629d5caeba1bc1e4effd1a23ce8af1dfaf"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Thesprotia",
+      "Code": "32",
+      "ISO3166_2": "GR-32",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Thesprotia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GR"
+    },
+    "primaryKey": {
+      "ID": "F94165AE-3E4F-4CAA-897D-9D70A50BA127"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:58.407Z",
+      "checksum": "2ccc13523fb5a48306a26378ad22d387f8e0d0427218cf32d79438b93ab4e6cc"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Thessalia",
+      "Code": "V",
+      "ISO3166_2": "GR-V",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Thessalia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GR"
+    },
+    "primaryKey": {
+      "ID": "DE8E0FE6-88C4-4F7C-9026-530026EEB9A2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:58.423Z",
+      "checksum": "6609d0ec560a664e0aa410cec167419bf3f54ef7042785c0b3d8572ec5ecdd85"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Thessaloniki",
+      "Code": "54",
+      "ISO3166_2": "GR-54",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Thessaloniki"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GR"
+    },
+    "primaryKey": {
+      "ID": "D6F8A949-2474-453A-A249-3B52BE454505"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:58.439Z",
+      "checksum": "0e82a8cca5666a47e70c3bcbecf351637414c3a2b28da66a42648915aa4a38fd"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Trikala",
+      "Code": "44",
+      "ISO3166_2": "GR-44",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Trikala"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GR"
+    },
+    "primaryKey": {
+      "ID": "3198107A-CEC7-4540-B65D-C68DD5706716"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:58.453Z",
+      "checksum": "d4cec78d3d33e013b6d60dfa0bf9fcfabc50b350f4af8dd23940b07151fcec4d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Voiotia",
+      "Code": "03",
+      "ISO3166_2": "GR-03",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Voiotia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GR"
+    },
+    "primaryKey": {
+      "ID": "9C8A3442-14E7-433C-9103-1E2B8B3F5F43"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:58.492Z",
+      "checksum": "fb4c317b5527c2ca6db0f74d49c17d81fca6c1c18c8f1206bd1c46218c59b13b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Voreio Aigaio",
+      "Code": "XI",
+      "ISO3166_2": "GR-XI",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Voreio Aigaio"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GR"
+    },
+    "primaryKey": {
+      "ID": "718787A3-58DA-41C5-9B16-DE8B19888945"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:58.508Z",
+      "checksum": "56262b84fcf5428da71eb3f0a1f1b483cb7ed70cc124263d4699362d08a0f0dc"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Xanthi",
+      "Code": "72",
+      "ISO3166_2": "GR-72",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Xanthi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GR"
+    },
+    "primaryKey": {
+      "ID": "F290B1C5-0ED9-4452-859A-4954609F983D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:58.524Z",
+      "checksum": "61136a19ed789c12c4b59de593240e0188330ce5c9658427b91ccffb01460ab3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Zakynthos",
+      "Code": "21",
+      "ISO3166_2": "GR-21",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Zakynthos"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GR"
+    },
+    "primaryKey": {
+      "ID": "446B977D-0581-434C-A2B7-12888A25C4DB"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:58.538Z",
+      "checksum": "3c04b2267c4c1f108f4de1ab2b249d03ed33f902eae104e228b087a2efb13d07"
+    }
+  }
+]

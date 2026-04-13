@@ -1,0 +1,23 @@
+[
+  {
+    "fields": {
+      "Name": "Guadeloupe",
+      "Code": "GP",
+      "ISO3166_2": "GP-GP",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Guadeloupe"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GP"
+    },
+    "primaryKey": {
+      "ID": "B89114A9-9D67-4E6D-AC3C-32C06602D4E5"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:57.010Z",
+      "checksum": "39c714279ae51c48fa7c904a448742736e030dc4ada446d8f74251ec0040f95b"
+    }
+  }
+]

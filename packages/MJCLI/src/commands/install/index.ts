@@ -67,6 +67,9 @@ export default class Install extends Command {
     'overwrite-config': Flags.boolean({
       description: 'Overwrite existing config files (.env, mj.config.cjs, environment.ts) instead of preserving them',
     }),
+    monorepo: Flags.boolean({
+      description: 'Install the full MemberJunction source repository instead of the lightweight distribution. Use this for MJ framework development.',
+    }),
   };
 
   async run(): Promise<void> {
@@ -96,6 +99,7 @@ export default class Install extends Command {
     'no-resume'?: boolean;
     fast?: boolean;
     'overwrite-config'?: boolean;
+    monorepo?: boolean;
   }): Promise<void> {
     const engine = new InstallerEngine();
     const fast = flags.fast ?? false;
@@ -124,6 +128,7 @@ export default class Install extends Command {
       ConfigFile: flags.config,
       Fast: fast,
       OverwriteConfig: flags['overwrite-config'],
+      Config: flags.monorepo ? { InstallMode: 'monorepo' as const } : undefined,
     });
 
     this.renderResult(result, fast);

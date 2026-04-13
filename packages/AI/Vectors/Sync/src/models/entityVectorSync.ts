@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { BaseEmbeddings, EmbedTextsResult, GetAIAPIKey } from '@memberjunction/ai';
 import { BaseResponse, VectorDBBase, VectorRecord } from '@memberjunction/ai-vectordb';
 import { PageRecordsParams, VectorBase } from '@memberjunction/ai-vectors';
-import { BaseEntity, EntityField, EntityFieldInfo, EntityInfo, LogError, LogStatus, Metadata, RunView, RunViewResult, UserInfo, ValidationResult } from '@memberjunction/core';
+import { BaseEntity, EntityField, EntityFieldInfo, EntityInfo, LogError, LogStatus, Metadata, RunView, RunViewResult, UserInfo } from '@memberjunction/core';
 import { MJAIModelEntity, MJEntityDocumentEntity, MJEntityDocumentTypeEntity, MJEntityRecordDocumentEntity, MJTemplateContentEntity,
   MJTemplateContentTypeEntity, MJTemplateEntity, MJTemplateEntityExtended, MJTemplateParamEntity, MJVectorDatabaseEntity, MJVectorIndexEntity } from '@memberjunction/core-entities';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
@@ -24,6 +24,8 @@ import { KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
 export class EntityVectorSyncer extends VectorBase {
   _startTime: Date;
   _endTime: Date;
+  /** Accumulates render errors across batches so they can be reported through the progress callback */
+  private _renderErrors: { RecordID: string; Message: string }[] = [];
 
   constructor() {
     super();
@@ -49,6 +51,7 @@ export class EntityVectorSyncer extends VectorBase {
 
     const startTime: number = new Date().getTime();
     super.CurrentUser = contextUser;
+    this._renderErrors = []; // reset for each vectorization run
     await TemplateEngineServer.Instance.Config(false, contextUser);
 
     const entityDocument: MJEntityDocumentEntity = await this.GetEntityDocument(params.entityDocumentID);
@@ -124,6 +127,7 @@ export class EntityVectorSyncer extends VectorBase {
     // Throttled to emit only when the percentage changes to avoid flooding PubSub.
     let lastEmittedPct = -1;
     let dataStreamEnded = false;
+    const renderErrors = this._renderErrors; // capture reference for use in Transform closure
     const progressTracker = new Transform({
       objectMode: true,
       transform(chunk: EmbeddingData, _encoding: BufferEncoding, callback: TransformCallback) {
@@ -140,6 +144,7 @@ export class EntityVectorSyncer extends VectorBase {
               Stage: 'complete',
               PercentComplete: 100,
               ElapsedMs: elapsed,
+              Errors: renderErrors.length > 0 ? renderErrors : undefined,
             });
           } else {
             // Throttle: only emit on 5% boundaries to avoid flooding PubSub/WebSocket
@@ -176,7 +181,7 @@ export class EntityVectorSyncer extends VectorBase {
     const elapsedSeconds = elapsedMs / 1000;
     LogStatus(`Finished vectorizing ${entityDocument.Entity} entity in ${elapsedSeconds} seconds (${(elapsedSeconds / 60).toFixed(1)} minutes)`);
 
-    // Emit final 100% completion
+    // Emit final 100% completion with any accumulated render errors
     if (onProgress) {
       onProgress({
         TotalRecords: totalRecordsFed,
@@ -184,10 +189,14 @@ export class EntityVectorSyncer extends VectorBase {
         Stage: 'complete',
         PercentComplete: 100,
         ElapsedMs: elapsedMs,
+        Errors: this._renderErrors.length > 0 ? this._renderErrors : undefined,
       });
     }
 
-    return { success: true, status: 'Complete', errorMessage: '' };
+    const errorSummary = this._renderErrors.length > 0
+      ? `${this._renderErrors.length} record(s) failed template rendering`
+      : '';
+    return { success: true, status: 'Complete', errorMessage: errorSummary };
   }
 
   /**
@@ -234,6 +243,8 @@ export class EntityVectorSyncer extends VectorBase {
 
   /**
    * Renders templates for a batch of entity records and generates embeddings for the rendered text.
+   * Tracks render failures and attaches error info to the returned EmbeddingData array so the
+   * caller can surface them through the progress callback.
    */
   private async renderAndEmbedBatch(
     batch: Record<string, unknown>[],
@@ -246,17 +257,16 @@ export class EntityVectorSyncer extends VectorBase {
     const validEntries: { text: string; record: Record<string, unknown> }[] = [];
 
     for (const entityData of batch) {
-      const validationResult = this.validateTemplateInput(template, entityData);
-      if (!validationResult.Success) {
-        LogError(`Validation error for record`, undefined, validationResult.Errors.map(e => e.Message).join('\n'));
-        continue;
-      }
-
-      const result: TemplateRenderResult = await TemplateEngineServer.Instance.RenderTemplate(template, templateContent, entityData, true);
+      // No pre-validation — entity records commonly have null fields (e.g. Bio, State)
+      // and the Nunjucks templates handle missing data gracefully via {% if Field %} conditionals.
+      // Pass SuppressWarnings=true since entity doc vectorization doesn't need warnings for missing fields.
+      const result: TemplateRenderResult = await TemplateEngineServer.Instance.RenderTemplate(template, templateContent, entityData, true, true);
       if (result.Success) {
         validEntries.push({ text: result.Output, record: entityData });
       } else {
-        LogError(`Error rendering template`, undefined, result.Message);
+        const recordID = String(entityData.__mj_recordID ?? entityData.ID ?? 'unknown');
+        LogError(`Error rendering template for record ${recordID}`, undefined, result.Message);
+        this._renderErrors.push({ RecordID: recordID, Message: result.Message });
       }
     }
 
@@ -428,38 +438,6 @@ export class EntityVectorSyncer extends VectorBase {
 
     await new Promise<void>((resolve) => setTimeout(resolve, delayTimeMS));
     return batch;
-  }
-
-  /**
-   * Validates template input data against template parameter definitions
-   */
-  private validateTemplateInput(template: MJTemplateEntityExtended, data: Record<string, unknown>): ValidationResult {
-    const result = new ValidationResult();
-    const params = template.Params;
-
-    if (!params) {
-      result.Errors.push({ Source: '', Message: 'Params property not found on the template.', Value: '', Type: 'Failure' });
-    }
-
-    params?.forEach((p) => {
-      if (p.IsRequired) {
-        // For Record type params, fields are spread to root level (flat convention)
-        // so check that data has any keys, not a specific key matching the param name
-        if (p.Type === 'Record') {
-          if (Object.keys(data).length === 0) {
-            result.Errors.push({ Source: p.Name, Message: `Parameter ${p.Name} is required.`, Value: undefined, Type: 'Failure' });
-          }
-          return;
-        }
-        const val = data[p.Name];
-        if (val === undefined || val === null || (typeof val === 'string' && val.trim() === '')) {
-          result.Errors.push({ Source: p.Name, Message: `Parameter ${p.Name} is required.`, Value: val, Type: 'Failure' });
-        }
-      }
-    });
-
-    result.Success = !result.Errors.some(e => e.Type === 'Failure');
-    return result;
   }
 
   /**

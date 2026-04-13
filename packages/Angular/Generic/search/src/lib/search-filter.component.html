@@ -42,25 +42,68 @@
             @if (!IsCategoryCollapsed(filter.Category)) {
                 <div class="filter-options">
                     @for (option of filter.Options; track option.Value) {
-                        <label class="filter-option" (click)="ToggleOption(filter.Category, option.Value); $event.preventDefault()">
-                            <span class="filter-checkbox" [class.filter-checkbox-checked]="IsOptionSelected(filter.Category, option.Value)">
-                                @if (IsOptionSelected(filter.Category, option.Value)) {
-                                    <i class="fa-solid fa-check"></i>
+                        @if (filter.Options.length === 1) {
+                            <!-- Single option: read-only label (no checkbox, not interactive) -->
+                            <div class="filter-option filter-option-readonly">
+                                @if (option.Icon) {
+                                    <i [class]="option.Icon + ' filter-option-icon'"></i>
                                 }
-                            </span>
-                            @if (option.Icon) {
-                                <i [class]="option.Icon + ' filter-option-icon'"></i>
-                            }
-                            <span class="filter-option-label">{{ option.Label }}</span>
-                            <span class="filter-option-count">{{ option.Count }}</span>
-                        </label>
+                                <span class="filter-option-label">{{ option.Label }}</span>
+                                <span class="filter-option-count">{{ option.Count }}</span>
+                            </div>
+                        } @else {
+                            <label class="filter-option" (click)="ToggleOption(filter.Category, option.Value); $event.preventDefault()">
+                                <span class="filter-checkbox" [class.filter-checkbox-checked]="IsOptionSelected(filter.Category, option.Value)">
+                                    @if (IsOptionSelected(filter.Category, option.Value)) {
+                                        <i class="fa-solid fa-check"></i>
+                                    }
+                                </span>
+                                @if (option.Icon) {
+                                    <i [class]="option.Icon + ' filter-option-icon'"></i>
+                                }
+                                <span class="filter-option-label">{{ option.Label }}</span>
+                                <span class="filter-option-count">{{ option.Count }}</span>
+                            </label>
+                        }
                     }
                 </div>
             }
         </div>
     }
 
-    @if (Filters.length === 0) {
+    <!-- Relevance Threshold Slider -->
+    @if (ShowRelevanceSlider) {
+        <div class="filter-category">
+            <div class="filter-category-header-row">
+                <div class="filter-category-header">
+                    <span class="filter-category-name">Min Relevance</span>
+                </div>
+            </div>
+            <div class="filter-relevance-slider">
+                <input
+                    type="range"
+                    min="0" max="100" step="5"
+                    [value]="MinScorePercent"
+                    (input)="OnMinScorePreview($any($event.target).value)"
+                    (mouseup)="OnMinScoreCommit()"
+                    (touchend)="OnMinScoreCommit()"
+                    class="relevance-range" />
+                <span class="relevance-value">{{ MinScorePercent }}%</span>
+            </div>
+            @if (ServerMinScorePercent > 0) {
+                <div class="filter-server-threshold">
+                    <span class="server-threshold-label">Server threshold: {{ ServerMinScorePercent }}%</span>
+                    @if (MinScorePercent < ServerMinScorePercent) {
+                        <span class="server-threshold-warning">
+                            <i class="fa-solid fa-arrow-rotate-right"></i> Will re-query
+                        </span>
+                    }
+                </div>
+            }
+        </div>
+    }
+
+    @if (Filters.length === 0 && !ShowRelevanceSlider) {
         <div class="filter-empty">
             <p>No filters available</p>
         </div>

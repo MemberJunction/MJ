@@ -1,0 +1,506 @@
+[
+  {
+    "fields": {
+      "Name": "Carlow (Ceatharlach)",
+      "Code": "CW",
+      "ISO3166_2": "IE-CW",
+      "Latitude": 52.715,
+      "Longitude": -6.7943,
+      "BoundaryGeoJSON": "@file:by-country/IE/boundaries/IE-CW.geojson",
+      "CommonAliases": [
+        "Carlow (Ceatharlach)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IE"
+    },
+    "primaryKey": {
+      "ID": "A520F2C7-0DDF-4C5C-8276-A59FE151C3D1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:02.154Z",
+      "checksum": "28abf8b4d9816ac4bae4c9656283961240e85cb8f1c09f5188bf0324c4b60d1e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Cavan (An Cabhán)",
+      "Code": "CN",
+      "ISO3166_2": "IE-CN",
+      "Latitude": 53.9623,
+      "Longitude": -7.2718,
+      "BoundaryGeoJSON": "@file:by-country/IE/boundaries/IE-CN.geojson",
+      "CommonAliases": [
+        "Cavan (An Cabhán)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IE"
+    },
+    "primaryKey": {
+      "ID": "B31220C5-F73B-4B9A-B9E9-29E1D687D05C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:02.171Z",
+      "checksum": "e26c98cdaaed6fae6782517342e80aed5c4587562673d8f92fbcfe7be4903c0c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Connaught (Connacht)",
+      "Code": "CP",
+      "ISO3166_2": "IE-CP",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Connaught (Connacht)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IE"
+    },
+    "primaryKey": {
+      "ID": "7BC6EA91-59EA-4451-B4D5-144F40CEBF62"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:02.194Z",
+      "checksum": "5f442fe6f76fe4edcb34619ef2441cf7465a6cd9efdc6505eece68a80684bb5d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Donegal (Dún na nGall)",
+      "Code": "DL",
+      "ISO3166_2": "IE-DL",
+      "Latitude": 54.8924,
+      "Longitude": -8.0299,
+      "BoundaryGeoJSON": "@file:by-country/IE/boundaries/IE-DL.geojson",
+      "CommonAliases": [
+        "Donegal (Dún na nGall)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IE"
+    },
+    "primaryKey": {
+      "ID": "7B8B810B-5E29-421B-8D32-1374E6D7CCBD"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:02.215Z",
+      "checksum": "77466d3e77be7acc0be0edc001a2e7170484927784791cc5c24a1171c3aa19c1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Dublin (Baile Átha Cliath)",
+      "Code": "D",
+      "ISO3166_2": "IE-D",
+      "Latitude": 53.2831,
+      "Longitude": -6.4015,
+      "BoundaryGeoJSON": "@file:by-country/IE/boundaries/IE-D.geojson",
+      "CommonAliases": [
+        "Dublin (Baile Átha Cliath)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IE"
+    },
+    "primaryKey": {
+      "ID": "B71006E1-C634-4B0B-8B50-A21E852CB477"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:02.235Z",
+      "checksum": "1e0225a257ea051dca6e7feb1a9d035c7cb870eba8f46e61034e38c9ceee8a6a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Galway (Gaillimh)",
+      "Code": "G",
+      "ISO3166_2": "IE-G",
+      "Latitude": 53.302,
+      "Longitude": -9.0327,
+      "BoundaryGeoJSON": "@file:by-country/IE/boundaries/IE-G.geojson",
+      "CommonAliases": [
+        "Galway (Gaillimh)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IE"
+    },
+    "primaryKey": {
+      "ID": "3FD41BBE-B38C-44ED-98B6-42263BC22BB7"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:02.255Z",
+      "checksum": "83cfb4293106a6bb5b812bbef055095774c13d31b53e820038569c2bb8ae93a2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kildare (Cill Dara)",
+      "Code": "KE",
+      "ISO3166_2": "IE-KE",
+      "Latitude": 53.1364,
+      "Longitude": -6.8,
+      "BoundaryGeoJSON": "@file:by-country/IE/boundaries/IE-KE.geojson",
+      "CommonAliases": [
+        "Kildare (Cill Dara)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IE"
+    },
+    "primaryKey": {
+      "ID": "D5BF5CA9-07D7-4ABF-B766-C8B7904D7609"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:02.272Z",
+      "checksum": "68f180311ba77145e9fd1ab3d64eb8c61381bd2c1161699d3151b59389c7f4d5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kilkenny (Cill Chainnigh)",
+      "Code": "KK",
+      "ISO3166_2": "IE-KK",
+      "Latitude": 52.5758,
+      "Longitude": -7.2941,
+      "BoundaryGeoJSON": "@file:by-country/IE/boundaries/IE-KK.geojson",
+      "CommonAliases": [
+        "Kilkenny (Cill Chainnigh)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IE"
+    },
+    "primaryKey": {
+      "ID": "E1FA2217-9198-45AD-B809-1822FADE3EBE"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:02.289Z",
+      "checksum": "fc58666f6e53fd48467e05f0ee23f203689420942e3b800bf92b4d967c3b2c67"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Laois (Laois)",
+      "Code": "LS",
+      "ISO3166_2": "IE-LS",
+      "Latitude": 53.0116,
+      "Longitude": -7.3296,
+      "BoundaryGeoJSON": "@file:by-country/IE/boundaries/IE-LS.geojson",
+      "CommonAliases": [
+        "Laois (Laois)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IE"
+    },
+    "primaryKey": {
+      "ID": "3E8DB509-2779-4B54-ACE5-17BB173FF8DF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:02.307Z",
+      "checksum": "b2aa15e96a264687754904552318e08a388048eebfed56493b07b656ab00ad3f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Leinster (Laighin)",
+      "Code": "LP",
+      "ISO3166_2": "IE-LP",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Leinster (Laighin)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IE"
+    },
+    "primaryKey": {
+      "ID": "0B8FC792-F25C-40EE-B093-D50CD81F84E8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:02.321Z",
+      "checksum": "b08e83892c9670f5a3de66e5be5dc2261da2c6bb0b579d295c701d368cc2463f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Leitrim (Liatroim)",
+      "Code": "LM",
+      "ISO3166_2": "IE-LM",
+      "Latitude": 54.0513,
+      "Longitude": -7.9946,
+      "BoundaryGeoJSON": "@file:by-country/IE/boundaries/IE-LM.geojson",
+      "CommonAliases": [
+        "Leitrim (Liatroim)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IE"
+    },
+    "primaryKey": {
+      "ID": "72448D76-EE9A-4FD9-B41C-C4628B62254B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:02.378Z",
+      "checksum": "1217cd954383f72bd372bd9f240dcef27b880392828b12ac93394d4c6c70748a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Longford (An Longfort)",
+      "Code": "LD",
+      "ISO3166_2": "IE-LD",
+      "Latitude": 53.7166,
+      "Longitude": -7.7024,
+      "BoundaryGeoJSON": "@file:by-country/IE/boundaries/IE-LD.geojson",
+      "CommonAliases": [
+        "Longford (An Longfort)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IE"
+    },
+    "primaryKey": {
+      "ID": "17454DCC-E575-4245-8850-A17197EA9880"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:02.396Z",
+      "checksum": "312f49999ca78e538abeef7944a7f85532851734f6777a1347aee6ce802cd3e6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Louth (Lú)",
+      "Code": "LH",
+      "ISO3166_2": "IE-LH",
+      "Latitude": 53.9259,
+      "Longitude": -6.4862,
+      "BoundaryGeoJSON": "@file:by-country/IE/boundaries/IE-LH.geojson",
+      "CommonAliases": [
+        "Louth (Lú)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IE"
+    },
+    "primaryKey": {
+      "ID": "76871709-0AEA-4FD2-A58D-A4A118ECADFD"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:02.413Z",
+      "checksum": "760493a5db8ca45e15effaff2aec851f9c87d33389daa68976eb07c74c6d6ba9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mayo (Maigh Eo)",
+      "Code": "MO",
+      "ISO3166_2": "IE-MO",
+      "Latitude": 53.895,
+      "Longitude": -9.2305,
+      "BoundaryGeoJSON": "@file:by-country/IE/boundaries/IE-MO.geojson",
+      "CommonAliases": [
+        "Mayo (Maigh Eo)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IE"
+    },
+    "primaryKey": {
+      "ID": "AE5E24FC-19DB-41A0-90C3-F65E7F06594B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:02.429Z",
+      "checksum": "1af664bc692e27538ccad6990f9e71fea91866c4c4eeb4a1a82f33c283399f66"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Meath (An Mhí)",
+      "Code": "MH",
+      "ISO3166_2": "IE-MH",
+      "Latitude": 53.6324,
+      "Longitude": -6.7139,
+      "BoundaryGeoJSON": "@file:by-country/IE/boundaries/IE-MH.geojson",
+      "CommonAliases": [
+        "Meath (An Mhí)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IE"
+    },
+    "primaryKey": {
+      "ID": "FB98263C-1D3F-4250-9FB1-A9DC8BDB0F53"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:02.446Z",
+      "checksum": "4b732ecabe48a6254a661e10eeb3166f86514b04ac062d9e6cbc96ab934c8ceb"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Monaghan (Muineachán)",
+      "Code": "MN",
+      "ISO3166_2": "IE-MN",
+      "Latitude": 54.2106,
+      "Longitude": -6.9417,
+      "BoundaryGeoJSON": "@file:by-country/IE/boundaries/IE-MN.geojson",
+      "CommonAliases": [
+        "Monaghan (Muineachán)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IE"
+    },
+    "primaryKey": {
+      "ID": "B7F52A9C-B206-49AD-9192-8C3C3CB88C72"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:02.462Z",
+      "checksum": "90075673b7cb6e12b4ac4c906d7f5ed137e1e3541595293459fd52c9b38dcc5e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Munster (An Mhumhain)",
+      "Code": "M",
+      "ISO3166_2": "IE-M",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Munster (An Mhumhain)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IE"
+    },
+    "primaryKey": {
+      "ID": "931A06EA-50D7-4C71-B7E2-67492CB3B08A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:02.479Z",
+      "checksum": "d89aa55485c4b808bf7aa3ce434756d89b6df5e1ec93f0df400a782dd38ea8ca"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Offaly (Uíbh Fhailí)",
+      "Code": "OY",
+      "ISO3166_2": "IE-OY",
+      "Latitude": 53.2565,
+      "Longitude": -7.5321,
+      "BoundaryGeoJSON": "@file:by-country/IE/boundaries/IE-OY.geojson",
+      "CommonAliases": [
+        "Offaly (Uíbh Fhailí)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IE"
+    },
+    "primaryKey": {
+      "ID": "E115AC1F-0543-4B73-9F4C-E849FFA1B984"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:02.496Z",
+      "checksum": "ba23c7e94ed0aef1ce09f0d709de4f4d9d180674ce602900da339537d4fbba6f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Roscommon (Ros Comáin)",
+      "Code": "RN",
+      "ISO3166_2": "IE-RN",
+      "Latitude": 53.7738,
+      "Longitude": -8.2121,
+      "BoundaryGeoJSON": "@file:by-country/IE/boundaries/IE-RN.geojson",
+      "CommonAliases": [
+        "Roscommon (Ros Comáin)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IE"
+    },
+    "primaryKey": {
+      "ID": "B997448C-13C2-4BC4-832E-D7C01A398A16"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:02.512Z",
+      "checksum": "55e825044c7a4f7a4c85db38f6aad1d963ddb40bf6564e758e9194320478ad3f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sligo (Sligeach)",
+      "Code": "SO",
+      "ISO3166_2": "IE-SO",
+      "Latitude": 54.1277,
+      "Longitude": -8.489,
+      "BoundaryGeoJSON": "@file:by-country/IE/boundaries/IE-SO.geojson",
+      "CommonAliases": [
+        "Sligo (Sligeach)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IE"
+    },
+    "primaryKey": {
+      "ID": "12BC4E0C-D33B-4C4F-8BD0-FD10DDDEFE7F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:02.525Z",
+      "checksum": "f76082ebda634ebc1d4f1af98d1130811cc2760082c4b28dea6d3c3fcdbe5ce9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ulster (Ulaidh)",
+      "Code": "UP",
+      "ISO3166_2": "IE-UP",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Ulster (Ulaidh)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IE"
+    },
+    "primaryKey": {
+      "ID": "CD8544D7-DA63-4B23-A206-B6FEACFE3F37"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:02.564Z",
+      "checksum": "c6392935da950ab6e21c3a5d75ae57f7cda6438a2e39f443b645ac2dc09474b8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Westmeath (An Iarmhí)",
+      "Code": "WH",
+      "ISO3166_2": "IE-WH",
+      "Latitude": 53.5252,
+      "Longitude": -7.4553,
+      "BoundaryGeoJSON": "@file:by-country/IE/boundaries/IE-WH.geojson",
+      "CommonAliases": [
+        "Westmeath (An Iarmhí)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IE"
+    },
+    "primaryKey": {
+      "ID": "F43661B4-B13F-44FE-B7CC-AF95D4CE5900"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:02.580Z",
+      "checksum": "7480c2d335af35a509ef039289efad1e2b029094c46c624b1eb1e4103d11741c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Wexford (Loch Garman)",
+      "Code": "WX",
+      "ISO3166_2": "IE-WX",
+      "Latitude": 52.4423,
+      "Longitude": -6.5852,
+      "BoundaryGeoJSON": "@file:by-country/IE/boundaries/IE-WX.geojson",
+      "CommonAliases": [
+        "Wexford (Loch Garman)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IE"
+    },
+    "primaryKey": {
+      "ID": "484E98CF-EDF0-4B9E-BF43-0628070B8322"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:02.596Z",
+      "checksum": "03087016430ed731e537f73b7b4dff65a5d064995f58a2e48caf6e1a820b9da6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Wicklow (Cill Mhantáin)",
+      "Code": "WW",
+      "ISO3166_2": "IE-WW",
+      "Latitude": 52.9947,
+      "Longitude": -6.3885,
+      "BoundaryGeoJSON": "@file:by-country/IE/boundaries/IE-WW.geojson",
+      "CommonAliases": [
+        "Wicklow (Cill Mhantáin)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IE"
+    },
+    "primaryKey": {
+      "ID": "866D8ACB-C060-4088-B64B-55139C9F4CEB"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:02.609Z",
+      "checksum": "1c39c3afdc312c02489e9c32f6b0429e62c7eb63854ce6be5bd0788f9b59f3af"
+    }
+  }
+]

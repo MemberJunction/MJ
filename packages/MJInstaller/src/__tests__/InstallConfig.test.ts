@@ -31,17 +31,17 @@ describe('InstallConfigDefaults', () => {
     expect(InstallConfigDefaults.APIPort).toBe(4000);
   });
 
-  it('should set ExplorerPort to 4201', () => {
-    expect(InstallConfigDefaults.ExplorerPort).toBe(4201);
+  it('should set ExplorerPort to 4200', () => {
+    expect(InstallConfigDefaults.ExplorerPort).toBe(4200);
   });
 
   it('should set AuthProvider to "none"', () => {
     expect(InstallConfigDefaults.AuthProvider).toBe('none');
   });
 
-  it('should have exactly 6 keys', () => {
+  it('should have exactly 7 keys', () => {
     const keys = Object.keys(InstallConfigDefaults);
-    expect(keys).toHaveLength(6);
+    expect(keys).toHaveLength(7);
     expect(keys).toEqual(
       expect.arrayContaining([
         'DatabaseHost',
@@ -50,6 +50,7 @@ describe('InstallConfigDefaults', () => {
         'APIPort',
         'ExplorerPort',
         'AuthProvider',
+        'InstallMode',
       ])
     );
   });
@@ -265,7 +266,7 @@ describe('loadConfigFile', () => {
       APIUser: 'api',
       APIPassword: 'pass2',
       APIPort: 4000,
-      ExplorerPort: 4201,
+      ExplorerPort: 4200,
       AuthProvider: 'entra',
       AuthProviderValues: { TenantID: 't', ClientID: 'c' },
       OpenAIKey: 'ok',

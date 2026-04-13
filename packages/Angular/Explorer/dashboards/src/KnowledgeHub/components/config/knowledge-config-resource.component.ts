@@ -81,8 +81,8 @@ interface FTSEntityRecord {
 })
 export class KnowledgeConfigResourceComponent extends BaseResourceComponent implements AfterViewInit, OnDestroy {
     private cdr = inject(ChangeDetectorRef);
-    private navigationService = inject(NavigationService);
-    private destroy$ = new Subject<void>();
+    protected override navigationService = inject(NavigationService);
+    protected override destroy$ = new Subject<void>();
 
     async GetResourceDisplayName(_data: ResourceData): Promise<string> {
         return 'Configuration';
@@ -182,6 +182,7 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
     }
 
     ngOnDestroy(): void {
+        super.ngOnDestroy();
         this.destroy$.next();
         this.destroy$.complete();
     }

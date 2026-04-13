@@ -17,7 +17,7 @@ export { ViewGridState };
 /**
  * View modes supported by the EntityViewer component
  */
-export type EntityViewMode = 'grid' | 'cards' | 'timeline';
+export type EntityViewMode = 'grid' | 'cards' | 'timeline' | 'map';
 
 /**
  * Behavior when a record is selected

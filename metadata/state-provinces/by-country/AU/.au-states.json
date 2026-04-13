@@ -1,0 +1,170 @@
+[
+  {
+    "fields": {
+      "Name": "Australian Capital Territory",
+      "Code": "ACT",
+      "ISO3166_2": "AU-ACT",
+      "Latitude": -35.4884,
+      "Longitude": 149.0027,
+      "BoundaryGeoJSON": "@file:by-country/AU/boundaries/AU-ACT.geojson",
+      "CommonAliases": [
+        "Australian Capital Territory"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AU"
+    },
+    "primaryKey": {
+      "ID": "425CE6C5-9BB8-4295-ADEB-EB8A6910E8CD"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:28.856Z",
+      "checksum": "a61d5bfebf5fa712d9d68a799bebfef4da80a02a1b80d63a867b5240d8147bd0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "New South Wales",
+      "Code": "NSW",
+      "ISO3166_2": "AU-NSW",
+      "Latitude": -31.876,
+      "Longitude": 147.2869,
+      "BoundaryGeoJSON": "@file:by-country/AU/boundaries/AU-NSW.geojson",
+      "CommonAliases": [
+        "New South Wales"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AU"
+    },
+    "primaryKey": {
+      "ID": "86F159D7-2C45-4B24-A2FA-C9D7CFF6D972"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:28.873Z",
+      "checksum": "b7d4ad909fc853bcbedf5579173a9471335d01028c7255c071f75994f37829fd"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Northern Territory",
+      "Code": "NT",
+      "ISO3166_2": "AU-NT",
+      "Latitude": -19.8516,
+      "Longitude": 133.2303,
+      "BoundaryGeoJSON": "@file:by-country/AU/boundaries/AU-NT.geojson",
+      "CommonAliases": [
+        "Northern Territory"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AU"
+    },
+    "primaryKey": {
+      "ID": "80659170-ECA9-4689-855D-BB4FCB64EC9E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:28.891Z",
+      "checksum": "58c6bde1bd81c03d7a8fb598e073fdea9ef0cad80e7f6e4970566bc2df16d19a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Queensland",
+      "Code": "QLD",
+      "ISO3166_2": "AU-QLD",
+      "Latitude": -22.1647,
+      "Longitude": 144.5845,
+      "BoundaryGeoJSON": "@file:by-country/AU/boundaries/AU-QLD.geojson",
+      "CommonAliases": [
+        "Queensland"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AU"
+    },
+    "primaryKey": {
+      "ID": "6F34D561-DF6D-4B2D-8E25-3EDCB1BA9ED1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:28.909Z",
+      "checksum": "bd23d334e949b49c3ca962da3d672c28b4894e784c17ae5ee7bedc51eaed1069"
+    }
+  },
+  {
+    "fields": {
+      "Name": "South Australia",
+      "Code": "SA",
+      "ISO3166_2": "AU-SA",
+      "Latitude": -30.5344,
+      "Longitude": 135.6301,
+      "BoundaryGeoJSON": "@file:by-country/AU/boundaries/AU-SA.geojson",
+      "CommonAliases": [
+        "South Australia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AU"
+    },
+    "primaryKey": {
+      "ID": "E3949D46-22AA-4909-8B6D-5232A17EA334"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:28.928Z",
+      "checksum": "5266dbdb558ac637e0dfd1de41432409b513b23c1525282f36642cae291df039"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tasmania",
+      "Code": "TAS",
+      "ISO3166_2": "AU-TAS",
+      "Latitude": -42.0351,
+      "Longitude": 146.6367,
+      "BoundaryGeoJSON": "@file:by-country/AU/boundaries/AU-TAS.geojson",
+      "CommonAliases": [
+        "Tasmania"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AU"
+    },
+    "primaryKey": {
+      "ID": "FB6F4B37-C435-4D2C-8E10-F0098E1ED2D3"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:28.945Z",
+      "checksum": "976ce36f9f81fa04df2fbed6d32ea28aca0cb0875d42cb5e6a9912f80ff4a104"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Victoria",
+      "Code": "VIC",
+      "ISO3166_2": "AU-VIC",
+      "Latitude": -36.5986,
+      "Longitude": 144.678,
+      "BoundaryGeoJSON": "@file:by-country/AU/boundaries/AU-VIC.geojson",
+      "CommonAliases": [
+        "Victoria"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AU"
+    },
+    "primaryKey": {
+      "ID": "96B79C72-C689-42A1-954B-5B547027943D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:28.963Z",
+      "checksum": "6b87ed5d27410afa1daf2f1e1c90afbc71f16f6e74167fc60ff54d79398cb922"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Western Australia",
+      "Code": "WA",
+      "ISO3166_2": "AU-WA",
+      "Latitude": -25.2303,
+      "Longitude": 121.0187,
+      "BoundaryGeoJSON": "@file:by-country/AU/boundaries/AU-WA.geojson",
+      "CommonAliases": [
+        "Western Australia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AU"
+    },
+    "primaryKey": {
+      "ID": "1E374756-DFF7-487E-BB61-2AF780D8E460"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:28.978Z",
+      "checksum": "59fc9afe26b96ee815ac41f64d32dff62e6c625d117657bb146ee4970c637dba"
+    }
+  }
+]

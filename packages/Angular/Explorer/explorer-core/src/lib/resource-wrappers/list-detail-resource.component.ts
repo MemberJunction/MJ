@@ -11,6 +11,7 @@ import { CompositeKey, Metadata } from '@memberjunction/core';
 })
 export class ListDetailResource extends BaseResourceComponent implements OnInit {
     ngOnInit(): void {
+        super.ngOnInit();
         this.NotifyLoadComplete();
     }
 

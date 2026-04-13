@@ -1,0 +1,128 @@
+[
+  {
+    "fields": {
+      "Name": "Belize",
+      "Code": "BZ",
+      "ISO3166_2": "BZ-BZ",
+      "Latitude": 17.5367,
+      "Longitude": -88.4189,
+      "BoundaryGeoJSON": "@file:by-country/BZ/boundaries/BZ-BZ.geojson",
+      "CommonAliases": [
+        "Belize"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BZ"
+    },
+    "primaryKey": {
+      "ID": "EE3472A7-D17E-4F37-AA0B-298E04745E3D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:35.599Z",
+      "checksum": "f58a9d459d9587e2e160a4ef20f94ccebc045528270a337d147136cda71991fd"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Cayo",
+      "Code": "CY",
+      "ISO3166_2": "BZ-CY",
+      "Latitude": 16.9902,
+      "Longitude": -88.8833,
+      "BoundaryGeoJSON": "@file:by-country/BZ/boundaries/BZ-CY.geojson",
+      "CommonAliases": [
+        "Cayo"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BZ"
+    },
+    "primaryKey": {
+      "ID": "A7228004-83B6-40D3-A630-B7C3C66ED12F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:35.616Z",
+      "checksum": "e2a52049e3f578966b76d9583033b725ab4d2c75837a78dd96cb14aa7ed8ca0b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Corozal",
+      "Code": "CZL",
+      "ISO3166_2": "BZ-CZL",
+      "Latitude": 18.1667,
+      "Longitude": -88.3492,
+      "BoundaryGeoJSON": "@file:by-country/BZ/boundaries/BZ-CZL.geojson",
+      "CommonAliases": [
+        "Corozal"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BZ"
+    },
+    "primaryKey": {
+      "ID": "310F7246-BCEF-4FB0-9B00-596EA47FC045"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:35.632Z",
+      "checksum": "43dee8a08b6067a617d2daad20eaa53b1f470b1aa9024b1d05bff9af0970364e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Orange Walk",
+      "Code": "OW",
+      "ISO3166_2": "BZ-OW",
+      "Latitude": 17.7122,
+      "Longitude": -88.8552,
+      "BoundaryGeoJSON": "@file:by-country/BZ/boundaries/BZ-OW.geojson",
+      "CommonAliases": [
+        "Orange Walk"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BZ"
+    },
+    "primaryKey": {
+      "ID": "612D2860-DF9C-4BE4-BEAE-1FB9086FB89B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:35.648Z",
+      "checksum": "dfdf233674a25cec03b3f22055df808e26a0e26ec4e09f3925aa28dfff10a057"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Stann Creek",
+      "Code": "SC",
+      "ISO3166_2": "BZ-SC",
+      "Latitude": 16.809,
+      "Longitude": -88.4963,
+      "BoundaryGeoJSON": "@file:by-country/BZ/boundaries/BZ-SC.geojson",
+      "CommonAliases": [
+        "Stann Creek"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BZ"
+    },
+    "primaryKey": {
+      "ID": "93401048-9389-4609-A89A-D1E8A3804EC9"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:35.665Z",
+      "checksum": "6cc54986fdd4d8ed3451fd9930231d6095787cbd6e637577c5f29bf8e7b80bfd"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Toledo",
+      "Code": "TOL",
+      "ISO3166_2": "BZ-TOL",
+      "Latitude": 16.3761,
+      "Longitude": -88.8117,
+      "BoundaryGeoJSON": "@file:by-country/BZ/boundaries/BZ-TOL.geojson",
+      "CommonAliases": [
+        "Toledo"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BZ"
+    },
+    "primaryKey": {
+      "ID": "2C902811-C2A3-477E-B676-104453C077E6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:35.679Z",
+      "checksum": "8fd441710360753ebf6209b3f439ea73b0f8f58b44d8884198c6caa16d2c602b"
+    }
+  }
+]

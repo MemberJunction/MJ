@@ -153,16 +153,17 @@ export class MigratePhase {
   /**
    * Resolve the CLI command and arguments.
    *
-   * Resolves the local CLI binary from the monorepo's `node_modules/`.
+   * Tries the local CLI binary first (monorepo or distribution with hoisted CLI).
+   * Falls back to `npx @memberjunction/cli@<version>` for the distribution layout.
    *
    * @param dir - Repo root directory.
-   * @param _versionTag - Unused (retained for interface compatibility).
+   * @param versionTag - Release tag (e.g., `"v5.9.0"`) for version pinning.
    * @param cliArgs - Arguments to pass to the CLI (e.g., `['migrate', '--verbose']`).
    * @returns Command and args array suitable for `ProcessRunner.Run()`.
    */
   private async resolveCli(
     dir: string,
-    _versionTag: string | undefined,
+    versionTag: string | undefined,
     cliArgs: string[]
   ): Promise<{ cmd: string; args: string[] }> {
     const candidates = [
@@ -176,8 +177,12 @@ export class MigratePhase {
       }
     }
 
-    // Last resort: use npx (shouldn't happen in monorepo layout)
-    return { cmd: 'npx', args: ['@memberjunction/cli', ...cliArgs] };
+    // Fall back to npx with version pinning (distribution layout)
+    const cliPackage = versionTag
+      ? `@memberjunction/cli@${versionTag.replace(/^v/, '')}`
+      : '@memberjunction/cli';
+
+    return { cmd: 'npx', args: [cliPackage, ...cliArgs] };
   }
 
   // ---------------------------------------------------------------------------

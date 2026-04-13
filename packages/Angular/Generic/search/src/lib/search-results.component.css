@@ -392,14 +392,36 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
-    border: 2px solid color-mix(in srgb, var(--mj-brand-primary) 30%, var(--mj-bg-surface));
+    /* Default: neutral gray */
+    background: color-mix(in srgb, var(--mj-text-muted) 10%, var(--mj-bg-surface));
+    border: 2px solid color-mix(in srgb, var(--mj-text-muted) 25%, var(--mj-bg-surface));
+}
+.score-circle.score-high {
+    background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface));
+    border-color: color-mix(in srgb, var(--mj-status-success) 40%, var(--mj-bg-surface));
+}
+.score-circle.score-medium {
+    background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface));
+    border-color: color-mix(in srgb, var(--mj-status-warning) 40%, var(--mj-bg-surface));
+}
+.score-circle.score-low {
+    background: color-mix(in srgb, var(--mj-text-muted) 10%, var(--mj-bg-surface));
+    border-color: color-mix(in srgb, var(--mj-text-muted) 25%, var(--mj-bg-surface));
 }
 
 .score-value {
     font-size: 0.7rem;
     font-weight: 700;
-    color: var(--mj-brand-primary);
+    color: var(--mj-text-secondary);
+}
+.score-high .score-value {
+    color: var(--mj-status-success-text, var(--mj-status-success));
+}
+.score-medium .score-value {
+    color: var(--mj-status-warning-text, var(--mj-status-warning));
+}
+.score-low .score-value {
+    color: var(--mj-text-muted);
 }
 
 /* Show More Button */
@@ -486,4 +508,13 @@
 .pager-prev i,
 .pager-next i {
     font-size: 0.7rem;
+}
+
+/* Search text highlighting */
+:host ::ng-deep .search-highlight,
+.search-highlight {
+    background: color-mix(in srgb, var(--mj-status-warning) 35%, transparent);
+    color: inherit;
+    padding: 1px 2px;
+    border-radius: 2px;
 }

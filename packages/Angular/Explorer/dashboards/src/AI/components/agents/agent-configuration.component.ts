@@ -48,7 +48,7 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
   // Settings persistence
   private readonly USER_SETTINGS_KEY = 'AI.Agents.UserPreferences';
   private settingsPersistSubject = new Subject<void>();
-  private destroy$ = new Subject<void>();
+  protected override destroy$ = new Subject<void>();
   private settingsLoaded = false;
 
   public isLoading = false;
@@ -185,7 +185,6 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
   constructor(
     private testHarnessService: AITestHarnessDialogService,
     private createAgentService: CreateAgentService,
-    private navigationService: NavigationService,
     private cdr: ChangeDetectorRef
   ) {
     super();
@@ -223,6 +222,7 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
   }
 
   ngOnDestroy(): void {
+    super.ngOnDestroy();
     this.destroy$.next();
     this.destroy$.complete();
   }

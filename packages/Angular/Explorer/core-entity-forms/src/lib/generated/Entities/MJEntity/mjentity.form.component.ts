@@ -69,6 +69,7 @@ export class MJEntityFormComponent extends BaseFormComponent {
             { sectionKey: 'mJEntityRelationshipsRelatedEntityID', sectionName: 'Entity Relationships (Related Entity ID)', isExpanded: false },
             { sectionKey: 'mJEntityOrganicKeyRelatedEntities', sectionName: 'Entity Organic Key Related Entities', isExpanded: false },
             { sectionKey: 'mJEntityOrganicKeys', sectionName: 'Entity Organic Keys', isExpanded: false },
+            { sectionKey: 'mJRecordGeoCodes', sectionName: 'Record Geo Codes', isExpanded: false },
             { sectionKey: 'mJGeneratedCodes', sectionName: 'Generated Codes', isExpanded: false },
             { sectionKey: 'mJRecordLinksSourceEntityID', sectionName: 'Record Links (Source Entity ID)', isExpanded: false },
             { sectionKey: 'mJCompanyIntegrationEntityMaps', sectionName: 'Company Integration Entity Maps', isExpanded: false },
