@@ -968,7 +968,7 @@
                                             </span>
                                         </div>
                                         <div class="at-tax-dup-actions">
-                                            <button class="at-tax-dup-btn at-tax-dup-btn-primary" (click)="MergeTags(pair.TagAID, pair.TagBID, pair.TagA, pair.TagB)">Merge</button>
+                                            <button class="at-tax-dup-btn at-tax-dup-btn-primary" (click)="MergeTags(pair.TagAID, pair.TagBID, pair.TagA, pair.TagB)" [disabled]="IsMerging">@if (IsMerging) { <i class="fa-solid fa-spinner fa-spin"></i> Merging... } @else { Merge }</button>
                                             <button class="at-tax-dup-btn" (click)="DismissDuplicate(pair)">Dismiss</button>
                                         </div>
                                     } @else {
@@ -984,7 +984,7 @@
                                         <div class="at-tax-dup-arrow"><i class="fa-solid fa-arrows-left-right"></i></div>
                                         <div class="at-tax-dup-tag">{{ pair.TagB }}</div>
                                         <div class="at-tax-dup-actions">
-                                            <button class="at-tax-dup-btn at-tax-dup-btn-primary" (click)="MergeTags(pair.TagAID, pair.TagBID, pair.TagA, pair.TagB)">Merge</button>
+                                            <button class="at-tax-dup-btn at-tax-dup-btn-primary" (click)="MergeTags(pair.TagAID, pair.TagBID, pair.TagA, pair.TagB)" [disabled]="IsMerging">@if (IsMerging) { <i class="fa-solid fa-spinner fa-spin"></i> Merging... } @else { Merge }</button>
                                             <button class="at-tax-dup-btn" (click)="MakeChildTag(pair.TagAID, pair.TagBID)">Make Child</button>
                                             <button class="at-tax-dup-btn" (click)="DismissDuplicate(pair)">Dismiss</button>
                                         </div>

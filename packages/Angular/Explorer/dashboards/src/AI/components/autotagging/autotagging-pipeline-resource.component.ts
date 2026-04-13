@@ -1373,7 +1373,10 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
 
     private buildContentTypeCards(): void {
         const sourcesUsingByType = this.countSourcesByContentType();
-        const itemsByType = this.countItemsByContentType();
+        // When items are capped by MaxRows, countItemsByContentType undercounts.
+        // For a single content type, use the accurate totalContentItemCount.
+        const singleType = this.contentTypesRaw.length === 1;
+        const itemsByType = singleType ? null : this.countItemsByContentType();
 
         this.ContentTypeCards = this.contentTypesRaw.map(ct => {
             const id = ct['ID'] as string;
@@ -1389,7 +1392,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
                 MinTags: minTags,
                 MaxTags: maxTags,
                 SourcesUsing: sourcesUsingByType.get(id) ?? 0,
-                ItemsTagged: itemsByType.get(id) ?? 0,
+                ItemsTagged: singleType ? this.totalContentItemCount : (itemsByType!.get(id) ?? 0),
                 RangeLeftPct: Math.round((minTags / range) * 100),
                 RangeRightPct: Math.round(100 - (maxTags / range) * 100),
                 EmbeddingModelID: (ct['EmbeddingModelID'] as string) ?? '',
@@ -3244,8 +3247,9 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         const tagItemCounts = this.countItemsByTag();
         const tagAvgWeights = this.computeTagAvgWeights();
 
-        // Create flat node list from raw tags
-        for (const tag of this.tagsRaw) {
+        // Create flat node list from raw tags (exclude merged/soft-deleted tags)
+        const activeTags = this.tagsRaw.filter(t => (t['Status'] as string)?.toLowerCase() !== 'merged');
+        for (const tag of activeTags) {
             const id = tag['ID'] as string;
             const normalizedId = NormalizeUUID(id);
             const name = (tag['Name'] as string) ?? 'Unnamed';
@@ -3765,7 +3769,13 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         this.cdr.detectChanges();
     }
 
+    public IsMerging = false;
+
     public async MergeTags(sourceTagId: string, targetTagId: string, sourceName: string, targetName: string): Promise<void> {
+        if (this.IsMerging) return; // Prevent duplicate calls from button spam
+        this.IsMerging = true;
+        this.cdr.detectChanges();
+
         try {
             // Re-parent tagged items from source to target
             const itemsToMove = this.taggedItemsRaw.filter(ti => (ti['TagID'] as string) === sourceTagId);
@@ -3786,7 +3796,10 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
                 await entity.Save();
             }
 
-            // Delete source tag
+            // Clean up co-occurrence records before delete (FK constraint)
+            await this.cleanupTagReferences(sourceTagId);
+
+            // Delete source tag (original behavior — hard delete)
             const sourceEntity = await md.GetEntityObject<BaseEntity>('MJ: Tags');
             await sourceEntity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: sourceTagId }]));
             await sourceEntity.Delete();
@@ -3797,6 +3810,9 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
             MJNotificationService.Instance.CreateSimpleNotification(`Merge error: ${msg}`, 'error', 4000);
+        } finally {
+            this.IsMerging = false;
+            this.cdr.detectChanges();
         }
     }
 
@@ -3827,10 +3843,12 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     // ── Duplicates ──
 
     private buildTaxDuplicates(): void {
-        const tags = this.tagsRaw.map(t => ({
-            ID: t['ID'] as string,
-            Name: (t['Name'] as string) ?? ''
-        }));
+        const tags = this.tagsRaw
+            .filter(t => (t['Status'] as string)?.toLowerCase() !== 'merged')
+            .map(t => ({
+                ID: t['ID'] as string,
+                Name: (t['Name'] as string) ?? ''
+            }));
 
         const pairs: TaxDuplicatePair[] = [];
 
@@ -4012,7 +4030,10 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             .filter(t => {
                 const normalizedId = NormalizeUUID(t['ID'] as string);
                 const parentId = t['ParentID'] as string | null;
+                const status = (t['Status'] as string)?.toLowerCase();
                 const itemCount = tagItemCounts.get(normalizedId) ?? 0;
+                // Skip merged tags — they're soft-deleted
+                if (status === 'merged') return false;
                 // Orphan: no parent, no children, and zero connections
                 return !parentId && !hasChildren.has(normalizedId) && itemCount === 0;
             })
@@ -4047,12 +4068,31 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         this.cdr.detectChanges();
     }
 
+    /**
+     * Clean up TagCoOccurrence records that reference a tag before deleting it.
+     * Without this, the FK constraint on TagCoOccurrence blocks the delete.
+     */
+    private async cleanupTagReferences(tagId: string): Promise<void> {
+        const rv = new RunView();
+        const coOccResult = await rv.RunView<BaseEntity>({
+            EntityName: 'MJ: Tag Co Occurrences',
+            ExtraFilter: `TagAID='${tagId}' OR TagBID='${tagId}'`,
+            ResultType: 'entity_object'
+        });
+        if (coOccResult.Success) {
+            for (const coOcc of coOccResult.Results) {
+                await coOcc.Delete();
+            }
+        }
+    }
+
     public DeleteOrphan(orphan: TaxOrphanCard): void {
         this.OpenConfirmDialog(
             'Delete Orphan Tag',
             `Delete orphan tag "${orphan.Name}"?`,
             async () => {
                 try {
+                    await this.cleanupTagReferences(orphan.ID);
                     const md = new Metadata();
                     const entity = await md.GetEntityObject<BaseEntity>('MJ: Tags');
                     await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: orphan.ID }]));
@@ -4084,6 +4124,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
                 let deletedCount = 0;
                 for (const orphan of selected) {
                     try {
+                        await this.cleanupTagReferences(orphan.ID);
                         const entity = await md.GetEntityObject<BaseEntity>('MJ: Tags');
                         await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: orphan.ID }]));
                         if (await entity.Delete()) {
