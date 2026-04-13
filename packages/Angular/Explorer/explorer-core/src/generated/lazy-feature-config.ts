@@ -28,7 +28,7 @@ const loadCommunicationDashboardsModule = featureLoader(() => import('@memberjun
 // --- @memberjunction/ng-dashboards → ./component-studio-dashboards.module (1 entries) ---
 const loadComponentStudioDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/component-studio-dashboards.module'));
 
-// --- @memberjunction/ng-dashboards → ./core-dashboards.module (11 entries) ---
+// --- @memberjunction/ng-dashboards → ./core-dashboards.module (12 entries) ---
 const loadCoreDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/core-dashboards.module'));
 
 // --- @memberjunction/ng-dashboards → ./credentials-dashboards.module (6 entries) ---
@@ -105,6 +105,7 @@ export const LAZY_FEATURE_CONFIG: Record<string, () => Promise<void>> = {
   'BaseApplication::HomeApplication': loadCoreDashboardsModule,
   'BaseDashboard::EntityAdmin': loadCoreDashboardsModule,
   'BaseResourceComponent::APIKeysResource': loadCoreDashboardsModule,
+  'BaseResourceComponent::ApplicationRolesResource': loadCoreDashboardsModule,
   'BaseResourceComponent::DashboardBrowserResource': loadCoreDashboardsModule,
   'BaseResourceComponent::HomeDashboard': loadCoreDashboardsModule,
   'BaseResourceComponent::QueryBrowserResource': loadCoreDashboardsModule,
@@ -174,4 +175,4 @@ export const LAZY_FEATURE_CONFIG: Record<string, () => Promise<void>> = {
 
 };
 
-export const LAZY_FEATURE_CONFIG_COUNT = 76;
+export const LAZY_FEATURE_CONFIG_COUNT = 77;

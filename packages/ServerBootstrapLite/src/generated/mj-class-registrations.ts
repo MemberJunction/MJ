@@ -467,7 +467,7 @@ import {
     XMLParserAction,
 } from '@memberjunction/core-actions';
 
-// @memberjunction/core-entities (314 classes)
+// @memberjunction/core-entities (315 classes)
 import {
     MJAIActionEntity,
     MJAIAgentActionEntity,
@@ -539,6 +539,7 @@ import {
     MJActionResultCodeEntity,
     MJApplicationEntity,
     MJApplicationEntityEntity,
+    MJApplicationRoleEntity,
     MJApplicationSettingEntity,
     MJArtifactEntity,
     MJArtifactPermissionEntity,
@@ -1236,6 +1237,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJActionResultCodeEntity,
     MJApplicationEntity,
     MJApplicationEntityEntity,
+    MJApplicationRoleEntity,
     MJApplicationSettingEntity,
     MJArtifactEntity,
     MJArtifactPermissionEntity,
@@ -1525,7 +1527,11 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
+<<<<<<< claude/unified-permissions-architecture-PFdnU
+export const CLASS_REGISTRATIONS_COUNT = 647;
+=======
 export const CLASS_REGISTRATIONS_COUNT = 649;
+>>>>>>> next
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
