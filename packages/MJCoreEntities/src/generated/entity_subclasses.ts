@@ -13422,6 +13422,18 @@ export const MJEntitySchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: When true (default), CodeGen can automatically set SupportsGeoCoding based on LLM analysis of entity fields. Set to 0 to lock the value and prevent CodeGen from changing it.`),
+    AllowCaching: z.boolean().describe(`
+        * * Field Name: AllowCaching
+        * * Display Name: Allow Caching
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Controls whether this entity participates in server-side and client-side caching. When false, all cache operations (PreRunView checks, auto-cache storage, BaseEntity event fingerprint scans, client-side IndexedDB cache) are skipped entirely. Can also be enabled at the schema level via the cacheSettings.enableForSchemas server config.`),
+    DetectExternalChanges: z.boolean().describe(`
+        * * Field Name: DetectExternalChanges
+        * * Display Name: Detect External Changes
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When set to 1 AND TrackRecordChanges is also 1, the external change detection system will scan this entity for changes made outside the MJ framework (direct SQL, third-party tools, etc.) and replay them through Save() to create proper RecordChange audit entries. Default is 0 (opt-out) because most entities, especially __mj schema metadata tables, are managed by migrations/CodeGen and should not be scanned.`),
     CodeName: z.string().nullable().describe(`
         * * Field Name: CodeName
         * * Display Name: Code Name
@@ -60428,6 +60440,34 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
     }
     set AutoUpdateSupportsGeoCoding(value: boolean) {
         this.Set('AutoUpdateSupportsGeoCoding', value);
+    }
+
+    /**
+    * * Field Name: AllowCaching
+    * * Display Name: Allow Caching
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Controls whether this entity participates in server-side and client-side caching. When false, all cache operations (PreRunView checks, auto-cache storage, BaseEntity event fingerprint scans, client-side IndexedDB cache) are skipped entirely. Can also be enabled at the schema level via the cacheSettings.enableForSchemas server config.
+    */
+    get AllowCaching(): boolean {
+        return this.Get('AllowCaching');
+    }
+    set AllowCaching(value: boolean) {
+        this.Set('AllowCaching', value);
+    }
+
+    /**
+    * * Field Name: DetectExternalChanges
+    * * Display Name: Detect External Changes
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When set to 1 AND TrackRecordChanges is also 1, the external change detection system will scan this entity for changes made outside the MJ framework (direct SQL, third-party tools, etc.) and replay them through Save() to create proper RecordChange audit entries. Default is 0 (opt-out) because most entities, especially __mj schema metadata tables, are managed by migrations/CodeGen and should not be scanned.
+    */
+    get DetectExternalChanges(): boolean {
+        return this.Get('DetectExternalChanges');
+    }
+    set DetectExternalChanges(value: boolean) {
+        this.Set('DetectExternalChanges', value);
     }
 
     /**

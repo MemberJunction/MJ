@@ -111,8 +111,6 @@ export interface LocalCacheManagerConfig {
     enabled: boolean;
     /** Maximum cache size in bytes (default: 150MB) */
     maxSizeBytes: number;
-    /** Maximum number of cache entries (default: 5000) */
-    maxEntries: number;
     /** Default TTL in milliseconds (default: 0 = no TTL, rely on event-based invalidation) */
     defaultTTLMs: number;
     /** Eviction policy when cache is full */
@@ -151,7 +149,6 @@ export interface LocalCacheManagerConfig {
 const DEFAULT_CONFIG: LocalCacheManagerConfig = {
     enabled: true,
     maxSizeBytes: 150 * 1024 * 1024, // 150MB
-    maxEntries: 5000,
     defaultTTLMs: 0, // No TTL — event-based invalidation is the primary mechanism
     evictionPolicy: 'lru',
     maxPercentOfCachePerEntity: 50,
@@ -1997,21 +1994,20 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
 
         const stats = this.GetStats();
         const wouldExceedSize = (stats.totalSizeBytes + neededBytes) > this._config.maxSizeBytes;
-        const wouldExceedCount = stats.totalEntries >= this._config.maxEntries;
 
-        if (!wouldExceedSize && !wouldExceedCount) return;
+        if (!wouldExceedSize) return;
 
-        // Calculate how much to free
-        const targetFreeBytes = Math.max(neededBytes, this._config.maxSizeBytes * 0.1); // At least 10% of max
-        const targetFreeCount = Math.max(1, Math.floor(this._config.maxEntries * 0.1)); // At least 10% of max
+        // Calculate how much to free — at least the incoming entry's size, but
+        // free 10% of total budget to avoid thrashing on every store.
+        const targetFreeBytes = Math.max(neededBytes, this._config.maxSizeBytes * 0.1);
 
-        await this.evict(targetFreeBytes, targetFreeCount);
+        await this.evict(targetFreeBytes);
     }
 
     /**
      * Evicts entries based on the configured eviction policy.
      */
-    private async evict(targetBytes: number, targetCount: number): Promise<void> {
+    private async evict(targetBytes: number): Promise<void> {
         if (!this._storageProvider) return;
 
         const entries = this.GetAllEntries();
@@ -2030,14 +2026,12 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         }
 
         let freedBytes = 0;
-        let freedCount = 0;
         const toDelete: string[] = [];
 
         for (const entry of entries) {
-            if (freedBytes >= targetBytes && freedCount >= targetCount) break;
+            if (freedBytes >= targetBytes) break;
             toDelete.push(entry.key);
             freedBytes += entry.sizeBytes;
-            freedCount++;
         }
 
         if (toDelete.length > 0) {

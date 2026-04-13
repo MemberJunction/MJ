@@ -493,8 +493,8 @@ describe('LocalCacheManager Universal Cache Invalidation', () => {
 
     describe('Eviction Entity Index Cleanup', () => {
         it('should remove fingerprints from entity index when entries are evicted', async () => {
-            // Configure a very small cache to force eviction
-            cacheManager.UpdateConfig({ maxEntries: 2, maxSizeBytes: 10_000_000 });
+            // Configure a small cache to force eviction (each entry ~150 bytes; budget holds 2, 3rd triggers eviction)
+            cacheManager.UpdateConfig({ maxSizeBytes: 400 });
 
             const fp1 = 'EntityA|_|_|-1|0|_';
             const fp2 = 'EntityB|_|_|-1|0|_';

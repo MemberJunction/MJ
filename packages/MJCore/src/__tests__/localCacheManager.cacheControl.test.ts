@@ -47,7 +47,6 @@ describe('LocalCacheManager Cache Control', () => {
 
             expect(config.enabled).toBe(true);
             expect(config.maxSizeBytes).toBe(150 * 1024 * 1024);
-            expect(config.maxEntries).toBe(5000);
             expect(config.defaultTTLMs).toBe(0);
             expect(config.evictionPolicy).toBe('lru');
             expect(config.maxPercentOfCachePerEntity).toBe(50);
@@ -65,7 +64,7 @@ describe('LocalCacheManager Cache Control', () => {
             expect(config.maxPercentOfCachePerEntity).toBe(25);
             expect(config.verboseLogging).toBe(true);
             // Defaults preserved
-            expect(config.maxEntries).toBe(5000);
+            expect(config.maxSizeBytes).toBe(150 * 1024 * 1024);
             expect(config.evictionPolicy).toBe('lru');
         });
 
@@ -75,7 +74,7 @@ describe('LocalCacheManager Cache Control', () => {
 
             expect(cacheManager.Config.maxPercentOfCachePerEntity).toBe(30);
             // Other settings unchanged
-            expect(cacheManager.Config.maxEntries).toBe(5000);
+            expect(cacheManager.Config.maxSizeBytes).toBe(150 * 1024 * 1024);
         });
     });
 
@@ -286,7 +285,6 @@ describe('LocalCacheManager Cache Control', () => {
             await cacheManager.Initialize(mockStorage, {
                 maxSizeBytes: 100 * 1024,
                 maxPercentOfCachePerEntity: 50,
-                maxEntries: 100,
             });
 
             // Insert ~20KB entry
@@ -333,7 +331,6 @@ describe('LocalCacheManager Cache Control', () => {
             await cacheManager.Initialize(mockStorage, {
                 maxSizeBytes: 60 * 1024,
                 maxPercentOfCachePerEntity: 50,
-                maxEntries: 100,
             });
 
             // Insert ~10KB at t=0
@@ -383,7 +380,6 @@ describe('LocalCacheManager Cache Control', () => {
             await cacheManager.Initialize(mockStorage, {
                 maxSizeBytes: 100 * 1024,
                 maxPercentOfCachePerEntity: 50,
-                maxEntries: 100,
             });
 
             // Insert ~10KB for entity A
@@ -416,7 +412,6 @@ describe('LocalCacheManager Cache Control', () => {
             await cacheManager.Initialize(mockStorage, {
                 maxSizeBytes: 10_000_000, // 10MB — large enough that global eviction won't interfere
                 maxPercentOfCachePerEntity: 0, // disabled
-                maxEntries: 100,
             });
 
             // Insert several entries — without per-entity limits, all should survive
@@ -445,7 +440,6 @@ describe('LocalCacheManager Cache Control', () => {
             await cacheManager.Initialize(mockStorage, {
                 defaultTTLMs: 5000, // 5 second TTL
                 evictionSweepIntervalMs: 0, // Disable automatic sweep — we'll trigger manually
-                maxEntries: 100,
                 maxSizeBytes: 10_000_000,
             });
 
@@ -481,7 +475,6 @@ describe('LocalCacheManager Cache Control', () => {
             await cacheManager.Initialize(mockStorage, {
                 defaultTTLMs: 10000, // 10 second TTL
                 evictionSweepIntervalMs: 0,
-                maxEntries: 100,
                 maxSizeBytes: 10_000_000,
             });
 
@@ -510,7 +503,6 @@ describe('LocalCacheManager Cache Control', () => {
             await cacheManager.Initialize(mockStorage, {
                 defaultTTLMs: 0, // No global TTL
                 evictionSweepIntervalMs: 0,
-                maxEntries: 100,
                 maxSizeBytes: 10_000_000,
             });
 
@@ -547,7 +539,6 @@ describe('LocalCacheManager Cache Control', () => {
             await cacheManager.Initialize(mockStorage, {
                 defaultTTLMs: 2000,
                 evictionSweepIntervalMs: 0,
-                maxEntries: 100,
                 maxSizeBytes: 10_000_000,
             });
 
