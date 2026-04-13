@@ -1,0 +1,74 @@
+[
+  {
+    "fields": {
+      "Name": "Schema Management",
+      "ParentID": null,
+      "IsActive": true,
+      "UseAuditLog": true,
+      "Description": "Root authorization for all schema management operations via the Entity Designer Agent. Users or roles must have this authorization (or a child) to invoke any Entity Designer functionality."
+    }
+  },
+  {
+    "fields": {
+      "Name": "Create Entities",
+      "ParentID": "@lookup:MJ: Authorizations.Name=Schema Management&ParentID=null",
+      "IsActive": true,
+      "UseAuditLog": true,
+      "Description": "Grants the ability to create new database entities (tables) through the Entity Designer Agent. Child authorizations further restrict which schemas are permitted."
+    }
+  },
+  {
+    "fields": {
+      "Name": "Create in UDT Schema",
+      "ParentID": "@lookup:MJ: Authorizations.Name=Create Entities",
+      "IsActive": true,
+      "UseAuditLog": true,
+      "Description": "Grants the ability to create new entities in the __mj_UDT schema only. This is the most restricted create permission — recommended for most users."
+    }
+  },
+  {
+    "fields": {
+      "Name": "Create in Custom Schema",
+      "ParentID": "@lookup:MJ: Authorizations.Name=Create Entities",
+      "IsActive": true,
+      "UseAuditLog": true,
+      "Description": "Grants the ability to create new entities in any non-protected schema (not __mj, dbo, sys, or INFORMATION_SCHEMA). Intended for advanced users who need to extend application schemas."
+    }
+  },
+  {
+    "fields": {
+      "Name": "Modify Entities",
+      "ParentID": "@lookup:MJ: Authorizations.Name=Schema Management&ParentID=null",
+      "IsActive": true,
+      "UseAuditLog": true,
+      "Description": "Grants the ability to modify existing database entities through the Entity Designer Agent. Child authorizations restrict the scope of what can be modified."
+    }
+  },
+  {
+    "fields": {
+      "Name": "Modify Own Entities",
+      "ParentID": "@lookup:MJ: Authorizations.Name=Modify Entities",
+      "IsActive": true,
+      "UseAuditLog": true,
+      "Description": "Grants the ability to modify only entities that the current user originally created via the Entity Designer Agent. Tracks ownership via MJ: Entity Settings (UDT provenance metadata)."
+    }
+  },
+  {
+    "fields": {
+      "Name": "Modify Any UDT Entities",
+      "ParentID": "@lookup:MJ: Authorizations.Name=Modify Entities",
+      "IsActive": true,
+      "UseAuditLog": true,
+      "Description": "Grants the ability to modify any entity in the __mj_UDT schema, regardless of who created it. Intended for admins who need to maintain user-defined tables."
+    }
+  },
+  {
+    "fields": {
+      "Name": "Delete Entities",
+      "ParentID": "@lookup:MJ: Authorizations.Name=Schema Management&ParentID=null",
+      "IsActive": false,
+      "UseAuditLog": true,
+      "Description": "Reserved for future use — grants the ability to delete (DROP) entities through the Entity Designer Agent. Inactive until delete workflow is implemented in a future phase."
+    }
+  }
+]

@@ -29,6 +29,14 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 12
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
             "ModelID": "@lookup:MJ: AI Models.Name=Qwen 3 32B",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
             "Priority": 11
@@ -93,6 +101,14 @@
     },
     "relatedEntities": {
       "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 12
+          }
+        },
         {
           "fields": {
             "PromptID": "@parent:ID",
@@ -163,16 +179,9 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Qwen 3 32B",
-            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
-            "Priority": 10
-          },
-          "primaryKey": {
-            "ID": "C62C4C5F-3A99-45ED-B4AF-CB2F160EF68E"
-          },
-          "sync": {
-            "lastModified": "2026-02-13T20:48:47.223Z",
-            "checksum": "8b25a03aaba6b40015a1efe6fff192e70b3c9aa3d9cc75993f04696a8f18bfc2"
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 12
           }
         },
         {
@@ -188,6 +197,21 @@
           "sync": {
             "lastModified": "2026-02-13T20:48:47.224Z",
             "checksum": "4819af745b22f03517dd842dd20c1ea6f311569e9134c84aff8ac376205c6588"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Qwen 3 32B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 10
+          },
+          "primaryKey": {
+            "ID": "C62C4C5F-3A99-45ED-B4AF-CB2F160EF68E"
+          },
+          "sync": {
+            "lastModified": "2026-02-13T20:48:47.223Z",
+            "checksum": "8b25a03aaba6b40015a1efe6fff192e70b3c9aa3d9cc75993f04696a8f18bfc2"
           }
         }
       ]
@@ -230,16 +254,9 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Qwen 3 32B",
-            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
-            "Priority": 10
-          },
-          "primaryKey": {
-            "ID": "309F9BE7-E490-4B00-8C82-C4762D40DADE"
-          },
-          "sync": {
-            "lastModified": "2026-02-13T20:48:47.225Z",
-            "checksum": "8b25a03aaba6b40015a1efe6fff192e70b3c9aa3d9cc75993f04696a8f18bfc2"
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 12
           }
         },
         {
@@ -260,16 +277,16 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=GPT-OSS-120B",
+            "ModelID": "@lookup:MJ: AI Models.Name=Qwen 3 32B",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
-            "Priority": 5
+            "Priority": 10
           },
           "primaryKey": {
-            "ID": "6B42CADC-172F-446C-A1A1-C6EBA91783EF"
+            "ID": "309F9BE7-E490-4B00-8C82-C4762D40DADE"
           },
           "sync": {
-            "lastModified": "2026-02-13T20:48:47.228Z",
-            "checksum": "396b6b95a45a5014cbc680ab3c5120a8f874c0e083fa3342f8c62b5ed973e09f"
+            "lastModified": "2026-02-13T20:48:47.225Z",
+            "checksum": "8b25a03aaba6b40015a1efe6fff192e70b3c9aa3d9cc75993f04696a8f18bfc2"
           }
         }
       ]
