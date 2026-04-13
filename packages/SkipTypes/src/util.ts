@@ -1,4 +1,5 @@
 import { EntityFieldExtendedType, EntityFieldInfo, EntityFieldValueInfo, EntityInfo, EntityOrganicKeyInfo, EntityOrganicKeyRelatedEntityInfo, EntityRelationshipInfo, Metadata } from "@memberjunction/core";
+import { UUIDsEqual } from "@memberjunction/global";
 import { SimpleEntityInfo, SimpleEntityFieldInfo } from "@memberjunction/interactive-component-types";
 import { SkipEntityFieldInfo, SkipEntityFieldValueInfo, SkipEntityInfo, SkipEntityOrganicKeyInfo, SkipEntityOrganicKeyRelatedEntityInfo, SkipEntityRelationshipInfo } from "./entity-metadata-types";
 
@@ -67,7 +68,7 @@ export function MapEntityOrganicKeyInfoToSkipEntityOrganicKeyInfo(ok: EntityOrga
 export function MapEntityOrganicKeyRelatedEntityInfoToSkipEntityOrganicKeyRelatedEntityInfo(
     re: EntityOrganicKeyRelatedEntityInfo
 ): SkipEntityOrganicKeyRelatedEntityInfo | null {
-    const relatedEntity = Metadata.Provider?.Entities?.find(ent => ent.ID === re.RelatedEntityID);
+    const relatedEntity = Metadata.Provider?.Entities?.find(ent => UUIDsEqual(ent.ID, re.RelatedEntityID));
     if (!relatedEntity) {
         return null;
     }

@@ -351,7 +351,7 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
             entity.CredentialID = provider.CredentialID || null;
             const saved = await entity.Save();
             if (saved) {
-                provider.CredentialName = this.AvailableCredentials.find(c => c.ID === provider.CredentialID)?.Name ?? null;
+                provider.CredentialName = this.AvailableCredentials.find(c => UUIDsEqual(c.ID, provider.CredentialID))?.Name ?? null;
                 MJNotificationService.Instance.CreateSimpleNotification(
                     provider.CredentialID
                         ? `Credential linked to "${provider.Name}"`
