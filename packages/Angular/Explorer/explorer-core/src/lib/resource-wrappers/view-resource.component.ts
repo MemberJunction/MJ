@@ -3,7 +3,7 @@ import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-sha
 import { ResourceData, MJUserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities';
 import { RegisterClass, MJGlobal, MJEventType , UUIDsEqual } from '@memberjunction/global';
 import { CompositeKey, Metadata, EntityInfo, RunView } from '@memberjunction/core';
-import { RecordOpenedEvent, ViewGridState, EntityViewerComponent } from '@memberjunction/ng-entity-viewer';
+import { RecordOpenedEvent, ViewGridState, EntityViewerComponent, EntityViewMode } from '@memberjunction/ng-entity-viewer';
 import { ExportService } from '@memberjunction/ng-export-service';
 import { ExportColumn } from '@memberjunction/export-engine';
 /**
@@ -143,6 +143,9 @@ export class UserViewResource extends BaseResourceComponent {
     public viewEntity: MJUserViewEntityExtended | null = null;
     public gridState: ViewGridState | null = null;
 
+    /** View mode from dashboard configuration (grid/cards/timeline/map) */
+    public configuredViewMode: EntityViewMode | null = null;
+
     // Export state
     public isExporting: boolean = false;
 
@@ -163,6 +166,14 @@ export class UserViewResource extends BaseResourceComponent {
 
         const newRecordId = value?.ResourceRecordID;
         const newEntity = value?.Configuration?.Entity;
+
+        // Read view mode from configuration if provided
+        const viewMode = value?.Configuration?.['viewMode'] as string | undefined;
+        if (viewMode && ['grid', 'cards', 'timeline', 'map'].includes(viewMode)) {
+            this.configuredViewMode = viewMode as EntityViewMode;
+        } else {
+            this.configuredViewMode = null;
+        }
 
         // Load on first set, or when the view/entity has changed
         if (!this.dataLoaded || newRecordId !== previousRecordId || newEntity !== previousEntity) {

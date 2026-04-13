@@ -69,10 +69,14 @@ export interface DataExplorerDeepLink {
   entity?: string;
   /** Record ID or composite key string to select */
   record?: string;
-  /** Filter text to apply */
+  /** Filter text to apply (omitted when viewId is present — view carries its own filter) */
   filter?: string;
-  /** View mode to use */
+  /** View mode to use (grid/cards/timeline/map) */
   viewMode?: DataExplorerViewMode;
+  /** Saved view ID to load (uses view's filters/sort/grid state) */
+  viewId?: string;
+  /** Map render mode (point/choropleth/heatmap) — only relevant when viewMode is 'map' */
+  mapMode?: string;
 }
 
 /**
@@ -274,7 +278,7 @@ export interface AutoCardTemplate {
  */
 export const DEFAULT_EXPLORER_STATE: DataExplorerState = {
   navigationPanelWidth: 280,
-  navigationPanelCollapsed: false,
+  navigationPanelCollapsed: true,
   selectedEntityName: null,
   selectedViewId: null,
   viewModified: false,
