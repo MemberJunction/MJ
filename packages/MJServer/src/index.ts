@@ -108,7 +108,6 @@ export * from './generic/DeleteOptionsInput.js';
 export * from './agents/skip-agent.js';
 export * from './agents/skip-sdk.js';
 
-export * from './resolvers/GeoResolver.js';
 export * from './resolvers/ColorResolver.js';
 export * from './resolvers/ComponentRegistryResolver.js';
 export * from './resolvers/DatasetResolver.js';
@@ -131,7 +130,6 @@ export * from './resolvers/ActionResolver.js';
 export * from './resolvers/EntityCommunicationsResolver.js';
 export * from './resolvers/EntityResolver.js';
 export * from './resolvers/ISAEntityResolver.js';
-export * from './resolvers/ArtifactFileResolver.js';
 export * from './resolvers/FileCategoryResolver.js';
 export * from './resolvers/FileResolver.js';
 export * from './resolvers/InfoResolver.js';
@@ -852,6 +850,13 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   // Process pending RSU work from pre-restart (entity maps, field maps, sync)
   processRSUPendingWork().catch(err => console.warn(`RSU pending work processing failed: ${err}`));
 
+  // Resume any integration syncs that were orphaned by the previous process restart
+  const resumeUser = UserCache.Instance.GetSystemUser();
+  if (resumeUser) {
+    IntegrationEngine.Instance.ResumeOrphanedSyncs(resumeUser)
+      .catch(err => console.warn(`[IntegrationEngine] Orphaned sync resume failed: ${err}`));
+  }
+
   // Set up graceful shutdown handlers
   const gracefulShutdown = async (signal: string) => {
     console.log(`\n${signal} received, shutting down gracefully...`);
@@ -965,6 +970,11 @@ async function processRSUPendingWork(): Promise<void> {
       const rvPending = new RunView();
       const sourceObjectFields: Record<string, string[] | null> = item.SourceObjectFields ?? {};
 
+      // Introspect schema ONCE for the entire connector, then reuse per object
+      const introspect = connector.IntrospectSchema.bind(connector) as
+        (ci: unknown, u: unknown) => Promise<{ Objects: Array<{ ExternalName: string; Fields: Array<{ Name: string; IsPrimaryKey?: boolean; IsRequired?: boolean }> }> }>;
+      const schema = await introspect(companyIntegration, systemUser);
+
       for (const objName of item.SourceObjectNames) {
         const tableName = objName.replace(/[^A-Za-z0-9_]/g, '_').toLowerCase();
         const entity = md.Entities.find(
@@ -1013,9 +1023,6 @@ async function processRSUPendingWork(): Promise<void> {
 
         // Create field maps — filter by SourceObjectFields (null = all)
         try {
-          const introspect = connector.IntrospectSchema.bind(connector) as
-            (ci: unknown, u: unknown) => Promise<{ Objects: Array<{ ExternalName: string; Fields: Array<{ Name: string }> }> }>;
-          const schema = await introspect(companyIntegration, systemUser);
           const sourceObj = schema.Objects.find(o => o.ExternalName.toLowerCase() === objName.toLowerCase());
 
           const selectedFields = sourceObjectFields[objName]; // null = all, string[] = specific
@@ -1044,6 +1051,9 @@ async function processRSUPendingWork(): Promise<void> {
             fieldMap.EntityMapID = entityMapID;
             fieldMap.SourceFieldName = field.Name;
             fieldMap.DestinationFieldName = field.Name.replace(/[^A-Za-z0-9_]/g, '_');
+            fieldMap.IsKeyField = field.IsPrimaryKey ?? false;
+            fieldMap.IsRequired = field.IsRequired ?? false;
+            fieldMap.Direction = 'SourceToDest';
             fieldMap.Status = 'Active';
             if (await fieldMap.Save()) fieldCount++;
           }
@@ -1060,9 +1070,10 @@ async function processRSUPendingWork(): Promise<void> {
           const syncOptions: IntegrationSyncOptions = {};
           if (item.SyncScope !== 'all' && createdEntityMapIDs.length > 0) syncOptions.EntityMapIDs = createdEntityMapIDs;
           if (item.FullSync) syncOptions.FullSync = true;
+          if (item.SyncDirection) syncOptions.SyncDirection = item.SyncDirection;
           const opts = Object.keys(syncOptions).length > 0 ? syncOptions : undefined;
           IntegrationEngine.Instance.RunSync(item.CompanyIntegrationID, systemUser, 'Manual', undefined, undefined, opts);
-          console.log(`[RSU] Sync started for ${item.CompanyIntegrationID} (EntityMaps: ${createdEntityMapIDs.length}, FullSync: ${!!item.FullSync})`);
+          console.log(`[RSU] Sync started for ${item.CompanyIntegrationID} (EntityMaps: ${createdEntityMapIDs.length}, FullSync: ${!!item.FullSync}, SyncDirection: ${item.SyncDirection ?? 'entity-map default'})`);
         } catch (syncErr) {
           console.warn(`[RSU] Sync start failed: ${syncErr}`);
         }
@@ -1119,7 +1130,9 @@ async function processRSUPendingWork(): Promise<void> {
             job.NewRecord();
             job.JobTypeID = jobTypeResult.Results[0].ID;
             job.OwnerUserID = systemUser.ID;
-            job.Configuration = JSON.stringify({ CompanyIntegrationID: item.CompanyIntegrationID });
+            const schedConfig: Record<string, unknown> = { CompanyIntegrationID: item.CompanyIntegrationID };
+            if (item.ScheduleSyncDirection) schedConfig.SyncDirection = item.ScheduleSyncDirection;
+            job.Configuration = JSON.stringify(schedConfig);
           }
 
           job.Name = `${integrationName} Scheduled Sync`;

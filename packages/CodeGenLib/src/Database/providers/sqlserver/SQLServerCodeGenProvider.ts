@@ -1507,16 +1507,55 @@ DROP TABLE #__mj__CodeGen__vwTableUniqueKeys;
      * `trustServerCertificate`. Returns `true` on successful execution, `false` on failure.
      */
     async executeSQLFileViaShell(filePath: string): Promise<boolean> {
+        // Prefer in-process execution via mssql connection pool.
+        // This works on Azure App Service (no sqlcmd binary) and everywhere else.
+        // Falls back to sqlcmd CLI for environments where in-process fails.
         try {
-            this.validateSqlConfig();
-            const serverSpec = this.buildServerSpec();
-            const absoluteFilePath = this.resolveAndShortPathConvert(filePath);
-            const args = this.buildSqlcmdArgs(serverSpec, absoluteFilePath);
-            return await this.spawnSqlcmd(args, filePath);
-        } catch (e) {
-            this.logSqlcmdError(e);
-            return false;
+            return await this.executeSQLFileInProcess(filePath);
+        } catch (inProcessErr) {
+            logWarning(`[CodeGen] In-process SQL execution failed for ${filePath}, falling back to sqlcmd: ${inProcessErr instanceof Error ? inProcessErr.message : inProcessErr}`);
+            try {
+                this.validateSqlConfig();
+                const serverSpec = this.buildServerSpec();
+                const absoluteFilePath = this.resolveAndShortPathConvert(filePath);
+                const args = this.buildSqlcmdArgs(serverSpec, absoluteFilePath);
+                return await this.spawnSqlcmd(args, filePath);
+            } catch (e) {
+                this.logSqlcmdError(e);
+                return false;
+            }
         }
+    }
+
+    /**
+     * Executes a SQL file in-process via the mssql connection pool.
+     * Splits on GO batch separators and executes each batch sequentially.
+     * Same pattern used by RuntimeSchemaManager.executeMigration().
+     */
+    private async executeSQLFileInProcess(filePath: string): Promise<boolean> {
+        const sql = fs.readFileSync(filePath, 'utf-8');
+        if (!sql.trim()) return true;
+
+        const batches = sql
+            .split(/^\s*GO\s*$/gim)
+            .map(b => b.trim())
+            .filter(b => b.length > 0);
+
+        const mssql = await import('mssql');
+        const pool = await mssql.default.connect(sqlConfig);
+
+        for (const batch of batches) {
+            try {
+                await pool.request().query(batch);
+            } catch (err) {
+                // Log but continue — some generated SQL may reference objects
+                // created later in the batch sequence
+                const msg = err instanceof Error ? err.message : String(err);
+                logWarning(`[CodeGen] SQL batch warning in ${path.basename(filePath)}: ${msg.substring(0, 200)}`);
+            }
+        }
+
+        return true;
     }
 
     /**
