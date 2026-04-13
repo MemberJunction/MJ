@@ -1,5 +1,22 @@
 # @memberjunction/ng-dashboard-viewer
 
+## 5.26.0
+
+### Patch Changes
+
+- 55de456: Fix missing dependencies across 17 packages that accumulated while knip dependency checking was silently broken. Repair knip infrastructure: disable crashing vitest plugin, harden CI workflow to fail-fast on tool crashes instead of silently passing, and fix hardcoded Angular version in auto-fix script.
+- Updated dependencies [55de456]
+- Updated dependencies [a1002f4]
+  - @memberjunction/core-entities@5.26.0
+  - @memberjunction/ng-shared-generic@5.26.0
+  - @memberjunction/core@5.26.0
+  - @memberjunction/ng-artifacts@5.26.0
+  - @memberjunction/ng-entity-viewer@5.26.0
+  - @memberjunction/ng-map-view@5.26.0
+  - @memberjunction/ng-query-viewer@5.26.0
+  - @memberjunction/ng-trees@5.26.0
+  - @memberjunction/global@5.26.0
+
 ## 5.25.0
 
 ### Patch Changes

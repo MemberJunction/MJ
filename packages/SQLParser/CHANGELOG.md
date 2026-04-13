@@ -1,5 +1,7 @@
 # @memberjunction/sql-parser
 
+## 5.26.0
+
 ## 5.25.0
 
 ### Patch Changes

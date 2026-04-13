@@ -1,5 +1,33 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 5.26.0
+
+### Minor Changes
+
+- a1002f4: - Entities now expose AllowCaching as the runtime source of truth for
+
+### Patch Changes
+
+- Updated dependencies [55de456]
+- Updated dependencies [a1002f4]
+  - @memberjunction/core-entities@5.26.0
+  - @memberjunction/server-bootstrap-lite@5.26.0
+  - @memberjunction/core@5.26.0
+  - @memberjunction/ai-core-plus@5.26.0
+  - @memberjunction/aiengine@5.26.0
+  - @memberjunction/ai-prompts@5.26.0
+  - @memberjunction/actions-base@5.26.0
+  - @memberjunction/actions@5.26.0
+  - @memberjunction/core-entities-server@5.26.0
+  - @memberjunction/sqlserver-dataprovider@5.26.0
+  - @memberjunction/postgresql-dataprovider@5.26.0
+  - @memberjunction/ai-provider-bundle@5.26.0
+  - @memberjunction/ai@5.26.0
+  - @memberjunction/config@5.26.0
+  - @memberjunction/global@5.26.0
+  - @memberjunction/sql-dialect@5.26.0
+  - @memberjunction/sql-parser@5.26.0
+
 ## 5.25.0
 
 ### Minor Changes
