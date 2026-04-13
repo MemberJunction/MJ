@@ -6,7 +6,7 @@
       "JobTypeID": "@lookup:MJ: Scheduled Job Types.DriverClass=ActionScheduledJobDriver",
       "CronExpression": "0 0 2 * * *",
       "Timezone": "UTC",
-      "Status": "Disabled",
+      "Status": "Active",
       "Configuration": {
         "ActionID": "@lookup:MJ: Actions.DriverClass=__RunExternalChangeDetection",
         "Params": [
