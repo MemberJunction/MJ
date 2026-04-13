@@ -33,6 +33,7 @@ import {
   TransactionGroupBase,
   TransactionItem,
   EntityPermissionType,
+  EntitySaveOptions,
   LogError,
   EntityRecordNameInput,
   EntityRecordNameResult,
@@ -210,9 +211,18 @@ async function executeSQLCore(
       return executeSQLCore(query, parameters, context, options, true);
     }
 
-    // Build detailed error message with query and parameters
+    // Build detailed error message with query and parameters.
+    // mssql RequestError has a precedingErrors array with the actual root-cause
+    // SQL Server messages (e.g. "object already exists") that precede the
+    // generic "Could not create constraint" wrapper. Always include them.
+    const precedingMsgs: string =
+      Array.isArray(error?.precedingErrors) && error.precedingErrors.length > 0
+        ? `\n    Preceding errors: ${(error.precedingErrors as Array<{ message?: string }>)
+            .map((e) => e?.message ?? String(e))
+            .join(' | ')}`
+        : '';
     const errorMessage = `Error executing SQL
-    Error: ${error?.message ? error.message : error}
+    Error: ${error?.message ? error.message : error}${precedingMsgs}
     Query: ${query}
     Parameters: ${parameters ? JSON.stringify(parameters) : 'None'}`;
 
@@ -1278,6 +1288,32 @@ export class SQLServerDataProvider
       fullSQL: sqlDetails.fullSQL,
       simpleSQL: sqlDetails.simpleSQL,
     };
+  }
+
+  protected override async OnSaveCompleted(
+    entity: BaseEntity,
+    saveSQLResult: SaveSQLResult,
+    user: UserInfo,
+    options: EntitySaveOptions,
+  ): Promise<void> {
+    const overlappingChangeData = saveSQLResult.extraData?.overlappingChangeData as
+      | { changesJSON: string; changesDescription: string }
+      | undefined;
+    if (
+      overlappingChangeData &&
+      entity.EntityInfo.AllowMultipleSubtypes &&
+      entity.EntityInfo.TrackRecordChanges
+    ) {
+      const transaction = (entity.ProviderTransaction as sql.Transaction) ?? undefined;
+      await this.PropagateRecordChangesToSiblings(
+        entity.EntityInfo,
+        overlappingChangeData,
+        entity.PrimaryKey.Values(),
+        user?.ID ?? '',
+        options.ISAActiveChildEntityName,
+        transaction ? { connectionSource: transaction } : undefined,
+      );
+    }
   }
 
   protected override OnSuspendRefresh(): void {
