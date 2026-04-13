@@ -440,7 +440,7 @@
 .radio-option--compact {
     padding: 10px 14px;
     flex: 1;
-    min-width: 100px;
+    min-width: 120px;
 }
 
 .radio-option--compact .radio-label {

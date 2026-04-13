@@ -1,0 +1,23 @@
+[
+  {
+    "fields": {
+      "Name": "Andorra",
+      "Code": "AD",
+      "ISO3166_2": "AD-AD",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Andorra"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AD"
+    },
+    "primaryKey": {
+      "ID": "E5FC3860-FB58-4899-9CDC-7D395E205FB1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:25.960Z",
+      "checksum": "9fe52b3e18f193f916f37b0cf5d5aedfbf273a46c7b88f199084a035095eb9ee"
+    }
+  }
+]

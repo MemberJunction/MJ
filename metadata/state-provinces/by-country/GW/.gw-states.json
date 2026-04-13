@@ -1,0 +1,170 @@
+[
+  {
+    "fields": {
+      "Name": "Bafatá",
+      "Code": "BA",
+      "ISO3166_2": "GW-BA",
+      "Latitude": 12.1429,
+      "Longitude": -14.707,
+      "BoundaryGeoJSON": "@file:by-country/GW/boundaries/GW-BA.geojson",
+      "CommonAliases": [
+        "Bafatá"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GW"
+    },
+    "primaryKey": {
+      "ID": "082740FE-68F3-4BAF-A05F-2089DDC5E1AE"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:59.102Z",
+      "checksum": "e320e7c759de117043f02c93391cbce359305253e715cab58754fd9374c66216"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Biombo",
+      "Code": "BM",
+      "ISO3166_2": "GW-BM",
+      "Latitude": 11.8108,
+      "Longitude": -15.7839,
+      "BoundaryGeoJSON": "@file:by-country/GW/boundaries/GW-BM.geojson",
+      "CommonAliases": [
+        "Biombo"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GW"
+    },
+    "primaryKey": {
+      "ID": "F9ADDF83-FF8D-44D9-A96B-0C75AF36576B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:59.119Z",
+      "checksum": "5c7f9d437f6982e43d5f10e55e7b278ce4f62e56bfe1b413f748b338695c5eaf"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bissau",
+      "Code": "BS",
+      "ISO3166_2": "GW-BS",
+      "Latitude": 11.8919,
+      "Longitude": -15.6119,
+      "BoundaryGeoJSON": "@file:by-country/GW/boundaries/GW-BS.geojson",
+      "CommonAliases": [
+        "Bissau"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GW"
+    },
+    "primaryKey": {
+      "ID": "34B874B3-71C5-4E17-BE44-1177C0576E50"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:59.136Z",
+      "checksum": "aa93ae34c384eacda29ab0923b29c270f257e4388fceb87a64797c0fcb3ec245"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bolama",
+      "Code": "BL",
+      "ISO3166_2": "GW-BL",
+      "Latitude": 11.5187,
+      "Longitude": -15.962,
+      "BoundaryGeoJSON": "@file:by-country/GW/boundaries/GW-BL.geojson",
+      "CommonAliases": [
+        "Bolama"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GW"
+    },
+    "primaryKey": {
+      "ID": "55764A02-0DEF-433A-9C27-C877898500BC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:59.153Z",
+      "checksum": "1ce1f0230b316b8fc968dc416c3642733aacbd13e6faccaadc41c0230b60cdeb"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Cacheu",
+      "Code": "CA",
+      "ISO3166_2": "GW-CA",
+      "Latitude": 12.19,
+      "Longitude": -16.0628,
+      "BoundaryGeoJSON": "@file:by-country/GW/boundaries/GW-CA.geojson",
+      "CommonAliases": [
+        "Cacheu"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GW"
+    },
+    "primaryKey": {
+      "ID": "36F0130A-35B9-49CE-9B34-36EA79038B30"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:59.176Z",
+      "checksum": "d6a78500c7992aaec999de3523a3b079012ced1df452d4e7d16780f51b3f2b62"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gabú",
+      "Code": "GA",
+      "ISO3166_2": "GW-GA",
+      "Latitude": 12.1569,
+      "Longitude": -14.1098,
+      "BoundaryGeoJSON": "@file:by-country/GW/boundaries/GW-GA.geojson",
+      "CommonAliases": [
+        "Gabú"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GW"
+    },
+    "primaryKey": {
+      "ID": "A0C2A795-222E-43C3-92CD-8D5F425D59C3"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:59.197Z",
+      "checksum": "9846ea7938c7d4f9838d1049d580a585769fb79deb635c6217bef67ffd5af3d8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Oio",
+      "Code": "OI",
+      "ISO3166_2": "GW-OI",
+      "Latitude": 12.2794,
+      "Longitude": -15.3013,
+      "BoundaryGeoJSON": "@file:by-country/GW/boundaries/GW-OI.geojson",
+      "CommonAliases": [
+        "Oio"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GW"
+    },
+    "primaryKey": {
+      "ID": "F9B9ECB5-5A64-4218-9727-452CA3230861"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:59.218Z",
+      "checksum": "4615c12ef154ae599da5a1e3fc2a76d8f906b4dd433d40de517ddd2fa110bbc2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Quinara",
+      "Code": "QU",
+      "ISO3166_2": "GW-QU",
+      "Latitude": 11.5576,
+      "Longitude": -15.1905,
+      "BoundaryGeoJSON": "@file:by-country/GW/boundaries/GW-QU.geojson",
+      "CommonAliases": [
+        "Quinara"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GW"
+    },
+    "primaryKey": {
+      "ID": "F8E5B2B2-05D7-4AE0-A3AC-DA0E4F4EF1BF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:59.235Z",
+      "checksum": "5d72d50e6e2deb0c61d423f5b97d0f1dbd5a1d33973156fd7e502a71e97d7988"
+    }
+  }
+]

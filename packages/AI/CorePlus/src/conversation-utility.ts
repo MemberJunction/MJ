@@ -305,12 +305,12 @@ export class ConversationUtility {
    * @param users - Optional users for mention resolution
    * @returns ChatMessageContent ready for AI provider
    */
-  public static BuildChatMessageContent(
+  public static async BuildChatMessageContent(
     messageText: string,
     attachmentData: AttachmentData[],
     agents?: AgentInfo[],
     users?: UserInfo[]
-  ): ChatMessageContent {
+  ): Promise<ChatMessageContent> {
     // If no attachments, return processed text
     if (!attachmentData || attachmentData.length === 0) {
       return this.ToAgentContext(messageText, agents, users);

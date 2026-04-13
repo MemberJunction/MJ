@@ -26,6 +26,12 @@ module.exports = {
   // Default excludes __mj since end-users shouldn't modify core entities
   excludeSchemas: ['sys', 'staging'],
 
+  // Default for CodeGen with larger batches, if this 
+  // isn't in place, hard default of 5 is fallback, much slower
+  advancedGeneration: {
+    batchSize: 15,
+  },
+
   settings: [
     { name: 'mj_core_schema', value: '__mj' },
     { name: 'skip_database_generation', value: false },

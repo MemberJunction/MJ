@@ -1,0 +1,275 @@
+[
+  {
+    "fields": {
+      "Name": "Al Buţnān",
+      "Code": "BU",
+      "ISO3166_2": "LY-BU",
+      "Latitude": 30.069,
+      "Longitude": 24.0559,
+      "BoundaryGeoJSON": "@file:by-country/LY/boundaries/LY-BU.geojson",
+      "CommonAliases": [
+        "Al Buţnān"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LY"
+    },
+    "primaryKey": {
+      "ID": "AD89C966-500D-4A4D-9387-F2A023AF7408"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:13.630Z",
+      "checksum": "2eec9b4c648064468d8ee02355e123fc290a78446be9bdf69d63467591038e73"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Al Jabal al Akhḑar",
+      "Code": "JA",
+      "ISO3166_2": "LY-JA",
+      "Latitude": 32.0068,
+      "Longitude": 21.7222,
+      "BoundaryGeoJSON": "@file:by-country/LY/boundaries/LY-JA.geojson",
+      "CommonAliases": [
+        "Al Jabal al Akhḑar"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LY"
+    },
+    "primaryKey": {
+      "ID": "93C74774-931B-4355-B46B-99AB41C8A30F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:13.647Z",
+      "checksum": "2c6d9339522e80a6c7e9b8f61c84cdc2ecaa383c8b6d1452af830cf8b3c670ad"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Al Jabal al Gharbī",
+      "Code": "JG",
+      "ISO3166_2": "LY-JG",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Al Jabal al Gharbī"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LY"
+    },
+    "primaryKey": {
+      "ID": "05120516-DCE9-484F-9096-6FBD2C28E328"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:13.663Z",
+      "checksum": "10245f9d08cf94cb0048033636e4861ba910a0dd730ab8339520b6c2058c89bf"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Al Jufrah",
+      "Code": "Ju",
+      "ISO3166_2": "LY-Ju",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Al Jufrah"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LY"
+    },
+    "primaryKey": {
+      "ID": "E9A45A65-8372-4C61-9A74-961102B683D1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:13.679Z",
+      "checksum": "b80b475f1887e55dd0c159e5de2ed54329fdd73c210a41bff8cdec438e489e51"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Al Wāḩah",
+      "Code": "WA",
+      "ISO3166_2": "LY-WA",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Al Wāḩah"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LY"
+    },
+    "primaryKey": {
+      "ID": "AA00755B-FE40-4355-AD58-52FF5714E2E6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:13.696Z",
+      "checksum": "883352d48f93e25acfc1db81317504409a74168223786cdfcc6fa619f6182bb4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Al Wusţá",
+      "Code": "Wu",
+      "ISO3166_2": "LY-Wu",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Al Wusţá"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LY"
+    },
+    "primaryKey": {
+      "ID": "436CD78B-C43A-4D59-B547-39390B575AEA"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:13.713Z",
+      "checksum": "f60111c0494a923082cb4f6c50be7d20210a21233e0777f61a5e22b4bb3c5da6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Az Zāwiyah",
+      "Code": "ZA",
+      "ISO3166_2": "LY-ZA",
+      "Latitude": 32.4551,
+      "Longitude": 12.4868,
+      "BoundaryGeoJSON": "@file:by-country/LY/boundaries/LY-ZA.geojson",
+      "CommonAliases": [
+        "Az Zāwiyah"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LY"
+    },
+    "primaryKey": {
+      "ID": "30292E5D-DE0B-4834-818E-A1AB665826F1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:13.729Z",
+      "checksum": "c9afd47076e93a08709537d8c900459c6c5c7a38bbffe600e7aac38e1315bafe"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Banghāzī",
+      "Code": "BA",
+      "ISO3166_2": "LY-BA",
+      "Latitude": 31.2887,
+      "Longitude": 20.6182,
+      "BoundaryGeoJSON": "@file:by-country/LY/boundaries/LY-BA.geojson",
+      "CommonAliases": [
+        "Banghāzī"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LY"
+    },
+    "primaryKey": {
+      "ID": "10A4EF98-4426-4F33-AC86-EB69FA3DCCE3"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:13.745Z",
+      "checksum": "336b3f27f49b681b3ce98df5212b79f4a299ae38f40d3471645b523d8fb1e05f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Fazzān",
+      "Code": "FA",
+      "ISO3166_2": "LY-FA",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Fazzān"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LY"
+    },
+    "primaryKey": {
+      "ID": "5DEF6D7D-BB38-4F07-BD55-E8E4E3F07E8E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:13.761Z",
+      "checksum": "edfa9c6c3ac7759fe47b9b15a284b59e499355345383aab4c985f7b2a4001e77"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mişrātah",
+      "Code": "MI",
+      "ISO3166_2": "LY-MI",
+      "Latitude": 32.2151,
+      "Longitude": 15.0186,
+      "BoundaryGeoJSON": "@file:by-country/LY/boundaries/LY-MI.geojson",
+      "CommonAliases": [
+        "Mişrātah"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LY"
+    },
+    "primaryKey": {
+      "ID": "2BE3D18F-A5EC-4785-8561-B99791447AB7"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:13.775Z",
+      "checksum": "1c056296073f1941fb26f1d7560e3c1c131256452c12cc634a223048157dcdf5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Naggaza",
+      "Code": "NA",
+      "ISO3166_2": "LY-NA",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Naggaza"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LY"
+    },
+    "primaryKey": {
+      "ID": "4B579832-5C53-438A-8557-C8EB8BB6DC0C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:13.812Z",
+      "checksum": "86eff47d1f6f3066de29912bbc22f20883be5492ca458cc8d8aaa7ac2a3b94e1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sawfajjin",
+      "Code": "SF",
+      "ISO3166_2": "LY-SF",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Sawfajjin"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LY"
+    },
+    "primaryKey": {
+      "ID": "C47BB887-9786-4C92-BBEA-BBE5F82D1E5C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:13.828Z",
+      "checksum": "dff414b1e173bde5fb727d396ac6652fbee98f88dc0633a8f1db36cdb662b856"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ţarābulus",
+      "Code": "TB",
+      "ISO3166_2": "LY-TB",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Ţarābulus"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LY"
+    },
+    "primaryKey": {
+      "ID": "0E40116C-8926-4B89-B62B-4937CDE9D665"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:13.842Z",
+      "checksum": "e43e9607ab6a3cb10d7ee88b8c89f6f3028e840a98a577813ade62efc5382dc9"
+    }
+  }
+]

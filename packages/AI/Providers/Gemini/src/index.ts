@@ -227,7 +227,7 @@ export class GeminiLLM extends BaseLLM {
                 modelOptions.top_k = params.topK;
             }
             if (params.stopSequences != null && params.stopSequences.length > 0) {
-                modelOptions.stop_sequences = params.stopSequences;
+                modelOptions.stopSequences = params.stopSequences;
             }
             if (params.seed != null) {
                 modelOptions.seed = params.seed;
@@ -494,7 +494,7 @@ export class GeminiLLM extends BaseLLM {
             modelOptions.top_k = params.topK;
         }
         if (params.stopSequences != null && params.stopSequences.length > 0) {
-            modelOptions.stop_sequences = params.stopSequences;
+            modelOptions.stopSequences = params.stopSequences;
         }
         if (params.seed != null) {
             modelOptions.seed = params.seed;

@@ -1,0 +1,86 @@
+[
+  {
+    "fields": {
+      "Name": "chuuk",
+      "Code": "TRK",
+      "ISO3166_2": "FM-TRK",
+      "Latitude": 7.44,
+      "Longitude": 151.839,
+      "BoundaryGeoJSON": "@file:by-country/FM/boundaries/FM-TRK.geojson",
+      "CommonAliases": [
+        "chuuk"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=FM"
+    },
+    "primaryKey": {
+      "ID": "C9E5B1FC-2AD0-4A85-88D8-0D83FAB02264"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:46.787Z",
+      "checksum": "f97cab249bbf9d65b276c8cff5407d241802d31050f86ef4dcb60c512de8939a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kosrae",
+      "Code": "KSA",
+      "ISO3166_2": "FM-KSA",
+      "Latitude": 5.3564,
+      "Longitude": 162.927,
+      "BoundaryGeoJSON": "@file:by-country/FM/boundaries/FM-KSA.geojson",
+      "CommonAliases": [
+        "Kosrae"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=FM"
+    },
+    "primaryKey": {
+      "ID": "09255B98-5A9A-4A72-BF37-6ED9B556022B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:46.803Z",
+      "checksum": "3cf21e5a7dba0a8983bcfb2f73e76927bcd4e5a8c5356e3d277eb682b82ec693"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Pohnpei",
+      "Code": "PNI",
+      "ISO3166_2": "FM-PNI",
+      "Latitude": 6.8658,
+      "Longitude": 158.163,
+      "BoundaryGeoJSON": "@file:by-country/FM/boundaries/FM-PNI.geojson",
+      "CommonAliases": [
+        "Pohnpei"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=FM"
+    },
+    "primaryKey": {
+      "ID": "0051E163-D545-4A7C-8BF2-950637097532"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:46.820Z",
+      "checksum": "3dc8697ae1c60eaa519e06573e8873246d8b8f27b37117eeb0e6edf276c9e9ff"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Yap",
+      "Code": "YAP",
+      "ISO3166_2": "FM-YAP",
+      "Latitude": 9.581,
+      "Longitude": 138.114,
+      "BoundaryGeoJSON": "@file:by-country/FM/boundaries/FM-YAP.geojson",
+      "CommonAliases": [
+        "Yap"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=FM"
+    },
+    "primaryKey": {
+      "ID": "7AAAB47B-4106-4D2A-855C-8C1E3AE3342B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:46.834Z",
+      "checksum": "e67a1b2c592f56bb9f86087c972a73e3d346736fd1cb1da7b691597be0bca1e4"
+    }
+  }
+]

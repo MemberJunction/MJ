@@ -1,0 +1,296 @@
+[
+  {
+    "fields": {
+      "Name": "Batha",
+      "Code": "BA",
+      "ISO3166_2": "TD-BA",
+      "Latitude": 14.0823,
+      "Longitude": 18.6222,
+      "BoundaryGeoJSON": "@file:by-country/TD/boundaries/TD-BA.geojson",
+      "CommonAliases": [
+        "Batha"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TD"
+    },
+    "primaryKey": {
+      "ID": "759002F3-F830-4101-B072-80D0F078D419"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:33.597Z",
+      "checksum": "7f0fbc8548596f44d85dd09ea5daa4f45174ecbb2105fcf8d59661c3bbf7cc57"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Biltine",
+      "Code": "BI",
+      "ISO3166_2": "TD-BI",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Biltine"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TD"
+    },
+    "primaryKey": {
+      "ID": "4E56DDB3-7654-4568-AD1E-4C20D4488C3C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:33.612Z",
+      "checksum": "d482cfee487d3f882c55de6df3242039a12aa8d32f5b3fda1af8a691672d65d2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Borkou-Ennedi-Tibesti",
+      "Code": "BET",
+      "ISO3166_2": "TD-BET",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Borkou-Ennedi-Tibesti"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TD"
+    },
+    "primaryKey": {
+      "ID": "A4C050A6-5FB4-41B2-B67A-E1DE43B6E013"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:33.628Z",
+      "checksum": "9619c6ee8e5cbd861f2c6d6512e9dc45559c73406f0b67e2ea9e00fea609b6c8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Chari-Baguirmi",
+      "Code": "CB",
+      "ISO3166_2": "TD-CB",
+      "Latitude": 11.468,
+      "Longitude": 16.2095,
+      "BoundaryGeoJSON": "@file:by-country/TD/boundaries/TD-CB.geojson",
+      "CommonAliases": [
+        "Chari-Baguirmi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TD"
+    },
+    "primaryKey": {
+      "ID": "701D1563-3F28-47F9-BE7E-0EE0D5DFC7AC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:33.645Z",
+      "checksum": "24325b40a874e6a209c3eef4a74799ca8f1ca6fd4dcdc306bd5a04f40893e73c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Guéra",
+      "Code": "GR",
+      "ISO3166_2": "TD-GR",
+      "Latitude": 11.3122,
+      "Longitude": 18.0946,
+      "BoundaryGeoJSON": "@file:by-country/TD/boundaries/TD-GR.geojson",
+      "CommonAliases": [
+        "Guéra"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TD"
+    },
+    "primaryKey": {
+      "ID": "3BCEABB3-DA18-4BDE-8EA2-FDCBCCB12CDD"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:33.662Z",
+      "checksum": "0c319874e310efebefd045ccfe45ac9c6077930d9ad0a98fa195984fdc1892e7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kanem",
+      "Code": "KA",
+      "ISO3166_2": "TD-KA",
+      "Latitude": 15.2641,
+      "Longitude": 15.8001,
+      "BoundaryGeoJSON": "@file:by-country/TD/boundaries/TD-KA.geojson",
+      "CommonAliases": [
+        "Kanem"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TD"
+    },
+    "primaryKey": {
+      "ID": "2E3EE99D-69AB-4103-854F-45A1B0008E51"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:33.679Z",
+      "checksum": "eab5bd354a0d6f5484fe53196b1d6251c081e7defa099d7cd3fbb8eb1729e0b1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Lac",
+      "Code": "LC",
+      "ISO3166_2": "TD-LC",
+      "Latitude": 13.431,
+      "Longitude": 14.6744,
+      "BoundaryGeoJSON": "@file:by-country/TD/boundaries/TD-LC.geojson",
+      "CommonAliases": [
+        "Lac"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TD"
+    },
+    "primaryKey": {
+      "ID": "ADB91AB9-11F9-4996-9CA7-1D1F3F6FF5A6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:33.695Z",
+      "checksum": "b0c2e57f83c168cae7a2cf12c0a1b6a612cc9a8d4c000c5cd72a93679f841fbd"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Logone-Occidental",
+      "Code": "LO",
+      "ISO3166_2": "TD-LO",
+      "Latitude": 8.7704,
+      "Longitude": 15.9306,
+      "BoundaryGeoJSON": "@file:by-country/TD/boundaries/TD-LO.geojson",
+      "CommonAliases": [
+        "Logone-Occidental"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TD"
+    },
+    "primaryKey": {
+      "ID": "F07FBED8-2F96-42F2-831A-394C84863B5B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:33.711Z",
+      "checksum": "34acb5ae85de032d9ca6a951bbd2a3626e471585db45326a03228aa55a7db8f8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Logone-Oriental",
+      "Code": "LR",
+      "ISO3166_2": "TD-LR",
+      "Latitude": 8.1256,
+      "Longitude": 16.23,
+      "BoundaryGeoJSON": "@file:by-country/TD/boundaries/TD-LR.geojson",
+      "CommonAliases": [
+        "Logone-Oriental"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TD"
+    },
+    "primaryKey": {
+      "ID": "9700C5A1-11C4-4F89-BAB1-C3037EAD952D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:33.726Z",
+      "checksum": "21d4ac95c6e1e6404eae12c3ecfc9e3b1e52a40556aa927789e34077c6bd3608"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mayo-Kébbi",
+      "Code": "MK",
+      "ISO3166_2": "TD-MK",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Mayo-Kébbi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TD"
+    },
+    "primaryKey": {
+      "ID": "1FCD7247-643E-43F6-8E2F-FFCEF6719F00"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:33.740Z",
+      "checksum": "73a048f965a258dbd0b145d8319233e8b1c127620fd2e121151f08b7dd79d5d2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Moyen-Chari",
+      "Code": "MC",
+      "ISO3166_2": "TD-MC",
+      "Latitude": 9.0852,
+      "Longitude": 18.4827,
+      "BoundaryGeoJSON": "@file:by-country/TD/boundaries/TD-MC.geojson",
+      "CommonAliases": [
+        "Moyen-Chari"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TD"
+    },
+    "primaryKey": {
+      "ID": "543EEAF3-5400-4E32-8474-FBACF5E7E0B3"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:33.776Z",
+      "checksum": "de68a84f5cd52d2da26f635749d6d8274895879dcc6dcd4210e113c94902eab0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ouaddaï",
+      "Code": "OD",
+      "ISO3166_2": "TD-OD",
+      "Latitude": 13.4714,
+      "Longitude": 21.1068,
+      "BoundaryGeoJSON": "@file:by-country/TD/boundaries/TD-OD.geojson",
+      "CommonAliases": [
+        "Ouaddaï"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TD"
+    },
+    "primaryKey": {
+      "ID": "11A60276-70CA-488C-AC7F-6D6AA6A34933"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:33.792Z",
+      "checksum": "41d9a66d214aa40a9f9b0bd3417c410cb9ec7224b3688867ccf164d65dc767ea"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Salamat",
+      "Code": "SA",
+      "ISO3166_2": "TD-SA",
+      "Latitude": 10.5811,
+      "Longitude": 20.6054,
+      "BoundaryGeoJSON": "@file:by-country/TD/boundaries/TD-SA.geojson",
+      "CommonAliases": [
+        "Salamat"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TD"
+    },
+    "primaryKey": {
+      "ID": "57FE8034-786F-4A0B-A2DD-7BF9BA3C7C8D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:33.809Z",
+      "checksum": "965f711c49f07c8b64318575b3428efd7a9e07f5f4f4589930843e2c64e23493"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tandjilé",
+      "Code": "TA",
+      "ISO3166_2": "TD-TA",
+      "Latitude": 9.6705,
+      "Longitude": 16.4994,
+      "BoundaryGeoJSON": "@file:by-country/TD/boundaries/TD-TA.geojson",
+      "CommonAliases": [
+        "Tandjilé"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TD"
+    },
+    "primaryKey": {
+      "ID": "749D2CFD-CD91-454B-9287-AF7C13A1F526"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:33.823Z",
+      "checksum": "bc9b2a6015b2bc216dbcf7a9f3dd094c37ab155158705dbd43969d4285f09ae2"
+    }
+  }
+]

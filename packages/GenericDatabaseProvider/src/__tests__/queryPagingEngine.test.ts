@@ -459,6 +459,188 @@ SELECT * FROM cte`;
             expect(result.DataSQL).toContain('OFFSET 0 ROWS FETCH NEXT 10 ROWS ONLY');
             expect(result.CountSQL).toContain('TotalRowCount');
         });
+
+        it('should not be fooled by "ORDER BY" text inside a SQL comment (FBI net position bug)', () => {
+            // Real-world regression: a header comment mentioned "No ORDER BY / TOP"
+            // and the only true ORDER BY was inside a ROW_NUMBER() OVER(...) window
+            // function. The regex scanner false-positived on the comment text and
+            // skipped appending the synthetic ORDER BY, producing invalid SQL like
+            // `... WHERE fb.rn = 1 OFFSET 0 ROWS FETCH NEXT 100 ROWS ONLY` (no ORDER BY).
+            const sql = `/*
+  Latest FBI net position per pool, scoped to pool MemberTypeCodes.
+
+  No ORDER BY / TOP -- composable.
+*/
+WITH FilteredMembers AS (
+    SELECT [EmployerName], [MemberTypeCode]
+    FROM [ym].[vwMembers]
+    WHERE [MemberTypeCode] IN ('Regular', 'SponPoolSub', 'Affiliate-CAJPAOrg', 'AffiliateOrg')
+),
+MostRecentFBIPoolData AS (
+    SELECT
+        f.[Pool],
+        f.[State],
+        f.[YearEnded],
+        f.[NetPositionCurrent],
+        ROW_NUMBER() OVER (PARTITION BY f.[Pool] ORDER BY f.[YearEnded] DESC) AS rn
+    FROM [document].[vwFinancialBenchmarkingInitiativeDatas] AS f
+    INNER JOIN FilteredMembers AS m ON f.[Pool] = m.[EmployerName]
+)
+SELECT
+    fb.[Pool] AS PoolName,
+    fb.[State],
+    fb.[YearEnded] AS LatestYearEnded,
+    fb.[NetPositionCurrent]
+FROM MostRecentFBIPoolData AS fb
+WHERE fb.rn = 1`;
+
+            const result = QueryPagingEngine.WrapWithPaging(sql, 0, 100, 'sqlserver');
+
+            // The synthetic ORDER BY (SELECT NULL) MUST be present immediately
+            // before OFFSET — otherwise SQL Server rejects FETCH NEXT.
+            expect(result.DataSQL).toContain('ORDER BY (SELECT NULL)');
+            expect(result.DataSQL).toContain('OFFSET 0 ROWS FETCH NEXT 100 ROWS ONLY');
+            expect(result.DataSQL.indexOf('ORDER BY (SELECT NULL)'))
+                .toBeLessThan(result.DataSQL.indexOf('OFFSET 0 ROWS FETCH NEXT'));
+        });
+    });
+
+    describe('Leading block-comment before WITH clause (ExtractCTEs comment-skip bug)', () => {
+        it('should hoist CTEs as siblings when SQL starts with a block comment — QEI Patron Engagement', () => {
+            // Real-world regression: ExtractCTEs tested ^WITH\s on trimStart() and
+            // returned null because the leading /* */ comment was still there. The
+            // count builder then wrapped the ENTIRE SQL (comment + WITH + body) inside
+            // WITH [__count] AS (...), producing illegal nested WITH.
+            const sql = `/*
+  Per-QEI-Patron summary that totals engagement activity across five
+  channels: MEL contacts, event registrations, HL discussion posts, HL
+  logins, and Rasa newsletter actions.
+
+  No ORDER BY / TOP -- composable.
+*/
+
+WITH [TargetOrgs] AS (
+    SELECT [m].[ID] AS [OrganizationID], [m].[EmployerName] AS [OrganizationName]
+    FROM [ym].[vwMembers] AS [m]
+),
+[MEL_Eng] AS (
+    SELECT [m_mel].[EmployerName], COUNT(*) AS [MELCount]
+    FROM [document].[vwMemberEngagementLogs] AS [mel]
+    INNER JOIN [ym].[vwMembers] AS [m_mel]
+        ON [mel].[FirstName] = [m_mel].[FirstName]
+        AND [mel].[LastName] = [m_mel].[LastName]
+    GROUP BY [m_mel].[EmployerName]
+)
+SELECT [t].[OrganizationID], [t].[OrganizationName],
+    ISNULL([mel].[MELCount], 0) AS [TotalEngagementCount]
+FROM [TargetOrgs] AS [t]
+LEFT JOIN [MEL_Eng] AS [mel] ON [t].[OrganizationName] = [mel].[EmployerName]`;
+
+            const result = QueryPagingEngine.WrapWithPaging(sql, 0, 100, 'sqlserver');
+
+            // CountSQL must NOT have nested WITH inside [__count]
+            expect(result.CountSQL).not.toMatch(/\[__count\]\s*AS\s*\([\s\S]*?\bWITH\s/i);
+            // CTEs must be hoisted as siblings of [__count]
+            expect(result.CountSQL).toContain('[__count]');
+            expect(result.CountSQL).toContain('SELECT COUNT(*) AS TotalRowCount');
+            // DataSQL must have paging appended
+            expect(result.DataSQL).toContain('OFFSET 0 ROWS FETCH NEXT 100 ROWS ONLY');
+        });
+
+        it('should hoist CTEs as siblings when SQL starts with a block comment — ExecComp By Pool Service Area', () => {
+            // This query uses TRY_CAST which node-sql-parser cannot parse, so the
+            // AST path fails and the regex fallback must handle the leading comment.
+            const sql = `/*
+  Aggregates executive compensation by service area bucket.
+  Salary gotcha: ExecutiveCompData stores salary as free text in a truncated
+  column name [what_is_your_total_annual_base_salary_in_us_dolla].
+*/
+
+WITH ExecComp AS (
+    SELECT e.Email AS Email,
+        TRY_CAST(REPLACE(REPLACE(LTRIM(RTRIM(e.[what_is_your_total_annual_base_salary_in_us_dolla])), '$', ''), ',', '') AS decimal(18,2)) AS BaseSalary
+    FROM [document].[vwExecutiveCompDatas] AS e
+    WHERE e.[what_is_your_total_annual_base_salary_in_us_dolla] IS NOT NULL
+),
+MemberInfo AS (
+    SELECT m.ID AS MemberID, m.MemberTypeCode, ei.TypeCovered, m.EmailAddress
+    FROM [ym].[vwMembers] AS m
+    LEFT JOIN [ym].[vwMemberExtendedInfo_Virtual] AS ei ON m.ID = ei.MemberID
+    WHERE m.MemberTypeCode IN ('Regular','SponPoolSub','Affiliate-CAJPAOrg','AffiliateOrg')
+)
+SELECT
+    CASE
+        WHEN ISNULL(mi.TypeCovered, '') LIKE '%Count%' THEN 'County-Serving'
+        WHEN ISNULL(mi.TypeCovered, '') LIKE '%School%' THEN 'School-District-Serving'
+        ELSE 'Other'
+    END AS ServiceArea,
+    COUNT(ec.BaseSalary) AS ExecutiveCount,
+    AVG(ec.BaseSalary) AS AvgBaseSalary
+FROM MemberInfo AS mi
+LEFT JOIN ExecComp AS ec ON ec.Email = mi.EmailAddress
+WHERE ec.BaseSalary IS NOT NULL
+GROUP BY CASE
+        WHEN ISNULL(mi.TypeCovered, '') LIKE '%Count%' THEN 'County-Serving'
+        WHEN ISNULL(mi.TypeCovered, '') LIKE '%School%' THEN 'School-District-Serving'
+        ELSE 'Other'
+    END
+HAVING COUNT(ec.BaseSalary) > 0`;
+
+            const result = QueryPagingEngine.WrapWithPaging(sql, 0, 100, 'sqlserver');
+
+            expect(result.CountSQL).not.toMatch(/\[__count\]\s*AS\s*\([\s\S]*?\bWITH\s/i);
+            expect(result.CountSQL).toContain('[__count]');
+            expect(result.CountSQL).toContain('SELECT COUNT(*) AS TotalRowCount');
+            expect(result.DataSQL).toContain('OFFSET 0 ROWS FETCH NEXT 100 ROWS ONLY');
+        });
+
+        it('should hoist CTEs as siblings when SQL starts with a block comment — ExecComp With Member Context', () => {
+            // This query has 3 CTEs, TRY_CAST, ROW_NUMBER with PARTITION BY, and
+            // a leading block comment mentioning "No ORDER BY / TOP".
+            const sql = `/*
+  One row per executive compensation respondent with full pool/member
+  context attached (no grouping, no service-area bucketing).
+
+  No ORDER BY / TOP -- composable.
+*/
+
+WITH ExecComp AS (
+    SELECT e.[ID] AS [ExecCompID], e.[Email],
+        TRY_CAST(REPLACE(REPLACE(LTRIM(RTRIM(e.[what_is_your_total_annual_base_salary_in_us_dolla])), '$', ''), ',', '') AS DECIMAL(18,2)) AS [BaseSalary]
+    FROM [document].[vwExecutiveCompDatas] AS e
+    WHERE e.[Email] IS NOT NULL
+),
+MemberByEmail AS (
+    SELECT LOWER([m].[EmailAddress]) AS [EmailKey], [m].[ID], [m].[EmployerName],
+        ROW_NUMBER() OVER (
+            PARTITION BY LOWER([m].[EmailAddress])
+            ORDER BY CASE WHEN [m].[Membership] IS NOT NULL THEN 0 ELSE 1 END, [m].[ID]
+        ) AS [rn]
+    FROM [ym].[vwMembers] AS [m]
+    WHERE [m].[EmailAddress] IS NOT NULL
+),
+LatestFBI AS (
+    SELECT [fbi].[Pool], [fbi].[TotalAssets],
+        ROW_NUMBER() OVER (PARTITION BY [fbi].[Pool] ORDER BY [fbi].[YearEnded] DESC) AS [rn]
+    FROM [document].[vwFinancialBenchmarkingInitiativeDatas] AS [fbi]
+)
+SELECT [ec].[ExecCompID], [ec].[Email], [ec].[BaseSalary],
+    [m].[EmployerName] AS [PoolName], [lf].[TotalAssets]
+FROM ExecComp AS [ec]
+LEFT JOIN MemberByEmail AS [m] ON [m].[EmailKey] = LOWER([ec].[Email]) AND [m].[rn] = 1
+LEFT JOIN LatestFBI AS [lf] ON [lf].[Pool] = [m].[EmployerName] AND [lf].[rn] = 1
+WHERE 1 = 1`;
+
+            const result = QueryPagingEngine.WrapWithPaging(sql, 0, 100, 'sqlserver');
+
+            expect(result.CountSQL).not.toMatch(/\[__count\]\s*AS\s*\([\s\S]*?\bWITH\s/i);
+            expect(result.CountSQL).toContain('[__count]');
+            expect(result.CountSQL).toContain('SELECT COUNT(*) AS TotalRowCount');
+            // Must have synthetic ORDER BY since the query has none (window
+            // functions' ORDER BYs don't count)
+            expect(result.DataSQL).toContain('ORDER BY (SELECT NULL)');
+            expect(result.DataSQL).toContain('OFFSET 0 ROWS FETCH NEXT 100 ROWS ONLY');
+        });
     });
 
     describe('Multiple CTEs from composition engine', () => {

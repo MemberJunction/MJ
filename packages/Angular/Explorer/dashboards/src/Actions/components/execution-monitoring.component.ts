@@ -74,18 +74,20 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
     { text: 'All Actions', value: 'all' }
   ];
 
-  private destroy$ = new Subject<void>();
+  protected override destroy$ = new Subject<void>();
 
-  constructor(private navigationService: NavigationService, private cdr: ChangeDetectorRef) {
+  constructor(private cdr: ChangeDetectorRef) {
     super();
   }
 
   ngOnInit(): void {
+    super.ngOnInit();
     this.setupFilters();
     this.loadData();
   }
 
   ngOnDestroy(): void {
+    super.ngOnDestroy();
     this.destroy$.next();
     this.destroy$.complete();
   }

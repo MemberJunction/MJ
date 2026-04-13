@@ -1,0 +1,212 @@
+[
+  {
+    "fields": {
+      "Name": "Berea",
+      "Code": "D",
+      "ISO3166_2": "LS-D",
+      "Latitude": -29.1918,
+      "Longitude": 27.8982,
+      "BoundaryGeoJSON": "@file:by-country/LS/boundaries/LS-D.geojson",
+      "CommonAliases": [
+        "Berea"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LS"
+    },
+    "primaryKey": {
+      "ID": "7B497CD6-8518-4069-95C1-07281E9B05DB"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:12.669Z",
+      "checksum": "d4d9c78131b47b924b5ae36bac264122f910aba925c128ed33c6331870a63349"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Butha-Buthe",
+      "Code": "B",
+      "ISO3166_2": "LS-B",
+      "Latitude": -28.8328,
+      "Longitude": 28.5244,
+      "BoundaryGeoJSON": "@file:by-country/LS/boundaries/LS-B.geojson",
+      "CommonAliases": [
+        "Butha-Buthe"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LS"
+    },
+    "primaryKey": {
+      "ID": "23CCF4A7-BAD1-488E-A2D9-3143D55602C4"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:12.686Z",
+      "checksum": "9ed6679d3232876f8b022583b8323fbcaf82985ff9c9820db212b7559e7e8f9a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Leribe",
+      "Code": "C",
+      "ISO3166_2": "LS-C",
+      "Latitude": -28.8926,
+      "Longitude": 28.2108,
+      "BoundaryGeoJSON": "@file:by-country/LS/boundaries/LS-C.geojson",
+      "CommonAliases": [
+        "Leribe"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LS"
+    },
+    "primaryKey": {
+      "ID": "A477DC76-F958-448F-900B-82895BFA1787"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:12.702Z",
+      "checksum": "8fe3d208178bd49e93734d3dbe79ead5cc0e5f035a9397179a104ff1d8b75139"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mafeteng",
+      "Code": "E",
+      "ISO3166_2": "LS-E",
+      "Latitude": -29.8081,
+      "Longitude": 28.1834,
+      "BoundaryGeoJSON": "@file:by-country/LS/boundaries/LS-E.geojson",
+      "CommonAliases": [
+        "Mafeteng"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LS"
+    },
+    "primaryKey": {
+      "ID": "9264B703-1DE7-4FC9-B18A-F701B65285AF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:12.718Z",
+      "checksum": "46edf6bec8129c1a0502290125b974c4361f7ecf34ca741756666e0132d44023"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Maseru",
+      "Code": "A",
+      "ISO3166_2": "LS-A",
+      "Latitude": -29.5571,
+      "Longitude": 27.7516,
+      "BoundaryGeoJSON": "@file:by-country/LS/boundaries/LS-A.geojson",
+      "CommonAliases": [
+        "Maseru"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LS"
+    },
+    "primaryKey": {
+      "ID": "C39B695C-A72B-4666-AFA7-06FB7515F448"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:12.734Z",
+      "checksum": "15455f1ea6ca0563055691125268642cbb4f66c038d67fdbb1e512fe05810d98"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mohale's Hoek",
+      "Code": "F",
+      "ISO3166_2": "LS-F",
+      "Latitude": -30.075,
+      "Longitude": 27.8628,
+      "BoundaryGeoJSON": "@file:by-country/LS/boundaries/LS-F.geojson",
+      "CommonAliases": [
+        "Mohale's Hoek"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LS"
+    },
+    "primaryKey": {
+      "ID": "464CA47E-1CFD-42DD-8F1A-6234DC14A2BC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:12.750Z",
+      "checksum": "0129b8939856b257bc75517869b2df8cfbba300068523edfed8fed6f0de61555"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mokhotlong",
+      "Code": "J",
+      "ISO3166_2": "LS-J",
+      "Latitude": -29.202,
+      "Longitude": 28.9988,
+      "BoundaryGeoJSON": "@file:by-country/LS/boundaries/LS-J.geojson",
+      "CommonAliases": [
+        "Mokhotlong"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LS"
+    },
+    "primaryKey": {
+      "ID": "14B3D5C5-F55B-44A5-9723-C804E5D6F163"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:12.767Z",
+      "checksum": "4f7b015869acf4842c51088db84ce1320286706696b8aaf0046e8c7e85cfe059"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Qacha's Nek",
+      "Code": "H",
+      "ISO3166_2": "LS-H",
+      "Latitude": -29.9679,
+      "Longitude": 28.6768,
+      "BoundaryGeoJSON": "@file:by-country/LS/boundaries/LS-H.geojson",
+      "CommonAliases": [
+        "Qacha's Nek"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LS"
+    },
+    "primaryKey": {
+      "ID": "89B4C1BF-CF0F-4E52-AADE-DAC37D7CC8D2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:12.784Z",
+      "checksum": "6e63717d63eeeb97951aac65a9e4e3e375e45f34512dc96a6047585d0c2018ba"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Quthing",
+      "Code": "G",
+      "ISO3166_2": "LS-G",
+      "Latitude": -30.3539,
+      "Longitude": 27.9441,
+      "BoundaryGeoJSON": "@file:by-country/LS/boundaries/LS-G.geojson",
+      "CommonAliases": [
+        "Quthing"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LS"
+    },
+    "primaryKey": {
+      "ID": "1E27028B-15AC-4E18-B2F8-B0DA0D998B6B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:12.799Z",
+      "checksum": "ef3bd2db6fca41474b4520fa5b922938cf151543abe53bd116a7b7c171ca4c0b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Thaba-Tseka",
+      "Code": "K",
+      "ISO3166_2": "LS-K",
+      "Latitude": -29.6029,
+      "Longitude": 28.6979,
+      "BoundaryGeoJSON": "@file:by-country/LS/boundaries/LS-K.geojson",
+      "CommonAliases": [
+        "Thaba-Tseka"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LS"
+    },
+    "primaryKey": {
+      "ID": "4E8A7FC8-7D94-4B07-9218-4791C4FA0A08"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:12.812Z",
+      "checksum": "879359d7ebb33e0811111eb102df49adcb51586046e2227996d438b20d1e1062"
+    }
+  }
+]

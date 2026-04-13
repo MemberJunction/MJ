@@ -64,7 +64,7 @@ interface SqlLoggingConfig {
 })
 @RegisterClass(BaseDashboard, 'SqlLogging')
 export class SqlLoggingComponent extends BaseDashboard implements OnDestroy {
-  private destroy$ = new Subject<void>();
+  protected override destroy$ = new Subject<void>();
 
   /** Whether the component is currently performing an async operation */
   loading = false;

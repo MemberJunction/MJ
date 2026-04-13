@@ -43,7 +43,7 @@ interface AgentRequestsUserPreferences {
 export class AgentRequestsResourceComponent extends BaseResourceComponent implements AfterViewInit, OnDestroy {
     private readonly USER_SETTINGS_KEY = 'AI.AgentRequests.UserPreferences';
     private settingsPersistSubject = new Subject<void>();
-    private destroy$ = new Subject<void>();
+    protected override destroy$ = new Subject<void>();
     private settingsLoaded = false;
 
     public IsLoading = false;
@@ -87,6 +87,7 @@ export class AgentRequestsResourceComponent extends BaseResourceComponent implem
     }
 
     ngOnDestroy(): void {
+        super.ngOnDestroy();
         this.destroy$.next();
         this.destroy$.complete();
     }

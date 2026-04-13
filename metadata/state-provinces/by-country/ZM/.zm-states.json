@@ -1,0 +1,191 @@
+[
+  {
+    "fields": {
+      "Name": "Central",
+      "Code": "02",
+      "ISO3166_2": "ZM-02",
+      "Latitude": -14.5199,
+      "Longitude": 28.3755,
+      "BoundaryGeoJSON": "@file:by-country/ZM/boundaries/ZM-02.geojson",
+      "CommonAliases": [
+        "Central"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ZM"
+    },
+    "primaryKey": {
+      "ID": "0E8CDA25-EA9C-4E6C-BF60-4867A7D4D868"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:45.404Z",
+      "checksum": "b5cc46f993fc8e4cc3f6680f917a80e4f83620c679e84d7fba01fe7a0fdc08c6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Copperbelt",
+      "Code": "08",
+      "ISO3166_2": "ZM-08",
+      "Latitude": -13.1044,
+      "Longitude": 27.9272,
+      "BoundaryGeoJSON": "@file:by-country/ZM/boundaries/ZM-08.geojson",
+      "CommonAliases": [
+        "Copperbelt"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ZM"
+    },
+    "primaryKey": {
+      "ID": "FB4358FF-D072-4FF2-A445-19DB7DEA63AB"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:45.422Z",
+      "checksum": "19be8059a33279f712e1f20f04b57823ddc1c36e48ce2b2b13477b24278c48fc"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Eastern",
+      "Code": "03",
+      "ISO3166_2": "ZM-03",
+      "Latitude": -13.7617,
+      "Longitude": 31.8341,
+      "BoundaryGeoJSON": "@file:by-country/ZM/boundaries/ZM-03.geojson",
+      "CommonAliases": [
+        "Eastern"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ZM"
+    },
+    "primaryKey": {
+      "ID": "25E3FAD9-3551-46E6-838C-1C8377A7B8EB"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:45.438Z",
+      "checksum": "f1bb3caefe454b71abcb88d754a8bac56f5ddade23a574b6a6e7e3f602077985"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Luapula",
+      "Code": "04",
+      "ISO3166_2": "ZM-04",
+      "Latitude": -11.6471,
+      "Longitude": 29.4045,
+      "BoundaryGeoJSON": "@file:by-country/ZM/boundaries/ZM-04.geojson",
+      "CommonAliases": [
+        "Luapula"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ZM"
+    },
+    "primaryKey": {
+      "ID": "6FDC6DE9-A5C7-4698-AE50-A12A9D35D01B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:45.454Z",
+      "checksum": "689f6d7678a1b888e389d7ca70ad3aec39e62c4daf6baa207159fcff365d0832"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Lusaka",
+      "Code": "09",
+      "ISO3166_2": "ZM-09",
+      "Latitude": -15.4426,
+      "Longitude": 29.0846,
+      "BoundaryGeoJSON": "@file:by-country/ZM/boundaries/ZM-09.geojson",
+      "CommonAliases": [
+        "Lusaka"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ZM"
+    },
+    "primaryKey": {
+      "ID": "FA9F42BD-59B5-45EE-9236-CBDA78113CF2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:45.470Z",
+      "checksum": "1a7afc1a22ed16ef59d46c8e6751fbc5c9fd9058374101cf1f8f00049d9a2f7a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "North-Western",
+      "Code": "06",
+      "ISO3166_2": "ZM-06",
+      "Latitude": -12.7303,
+      "Longitude": 24.7847,
+      "BoundaryGeoJSON": "@file:by-country/ZM/boundaries/ZM-06.geojson",
+      "CommonAliases": [
+        "North-Western"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ZM"
+    },
+    "primaryKey": {
+      "ID": "04DF37D5-F1B7-4896-A556-DB92745AA8B3"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:45.489Z",
+      "checksum": "9274bc405d4ebb1f10e087f2605e44c56d8ad8d4e61180652b0f0120939f6489"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Northern",
+      "Code": "05",
+      "ISO3166_2": "ZM-05",
+      "Latitude": -9.7991,
+      "Longitude": 30.7539,
+      "BoundaryGeoJSON": "@file:by-country/ZM/boundaries/ZM-05.geojson",
+      "CommonAliases": [
+        "Northern"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ZM"
+    },
+    "primaryKey": {
+      "ID": "0EF5554A-7992-4125-9BCB-00F8CA8C190B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:45.506Z",
+      "checksum": "cdbdb826f7abe141ec173ec0b4f8deeea43726fb77fd0758ba6bf4b522741cc4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Southern",
+      "Code": "07",
+      "ISO3166_2": "ZM-07",
+      "Latitude": -16.6906,
+      "Longitude": 26.9583,
+      "BoundaryGeoJSON": "@file:by-country/ZM/boundaries/ZM-07.geojson",
+      "CommonAliases": [
+        "Southern"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ZM"
+    },
+    "primaryKey": {
+      "ID": "8B2D1236-8F71-4C23-B96A-740F5BA89A7E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:45.521Z",
+      "checksum": "3883ee9f955bea665ebf28e690f9f898347a2089701b7f75ef4a015dcbc067c8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Western",
+      "Code": "01",
+      "ISO3166_2": "ZM-01",
+      "Latitude": -15.7815,
+      "Longitude": 23.7642,
+      "BoundaryGeoJSON": "@file:by-country/ZM/boundaries/ZM-01.geojson",
+      "CommonAliases": [
+        "Western"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ZM"
+    },
+    "primaryKey": {
+      "ID": "6620E4B4-EFF3-4B05-A72A-652CD775EFC6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:45.536Z",
+      "checksum": "f74d035fbe34b2215aad923a87369e8c8319a66b91a24f91e883b36e7a691b8f"
+    }
+  }
+]

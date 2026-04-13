@@ -11,6 +11,7 @@ import { NgTreesModule } from '@memberjunction/ng-trees';
 import { SharedDashboardWidgetsModule } from './shared/shared-dashboard-widgets.module';
 import { SharedPipesModule } from './shared/shared-pipes.module';
 import { SearchModule } from '@memberjunction/ng-search';
+import { MJComboboxComponent } from '@memberjunction/ng-ui-components';
 
 // AI Components
 import { ModelManagementComponent } from './AI/components/models/model-management.component';
@@ -34,10 +35,6 @@ import { VectorManagementResourceComponent } from './AI/components/vectors/vecto
 import { AIInstrumentationService } from './AI/services/ai-instrumentation.service';
 
 // Knowledge Hub components
-import {
-  KnowledgeSearchResourceComponent,
-  LoadKnowledgeSearchResource
-} from './KnowledgeHub/components/search/knowledge-search-resource.component';
 import {
   KnowledgeConfigResourceComponent,
   LoadKnowledgeConfigResource
@@ -82,7 +79,6 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     AutotaggingPipelineResourceComponent,
     DuplicateDetectionResourceComponent,
     VectorManagementResourceComponent,
-    KnowledgeSearchResourceComponent,
     KnowledgeConfigResourceComponent,
     SearchResultDetailComponent,
     ClusterVisualizationResourceComponent,
@@ -103,6 +99,7 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     SharedDashboardWidgetsModule,
     SharedPipesModule,
     SearchModule,
+    MJComboboxComponent,
     ClusteringModule,
     SchedulingModule,
     MJWordCloudComponent
@@ -122,7 +119,6 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     AutotaggingPipelineResourceComponent,
     DuplicateDetectionResourceComponent,
     VectorManagementResourceComponent,
-    KnowledgeSearchResourceComponent,
     KnowledgeConfigResourceComponent,
     SearchResultDetailComponent,
     ClusterVisualizationResourceComponent,

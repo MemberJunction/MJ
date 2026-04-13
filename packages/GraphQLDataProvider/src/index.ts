@@ -52,6 +52,17 @@ export * from './graphQLFileStorageClient';
 
 export * from './storage-providers';
 
+export { GraphQLSearchClient } from './graphQLSearchClient';
+export type {
+    SearchClientParams,
+    SearchClientResponse,
+    SearchClientResultItem,
+    SearchClientFilters,
+    SearchClientProviderInfo,
+    SearchSourceCounts,
+    SearchScoreBreakdown
+} from './graphQLSearchClient';
+
 export { GraphQLIntegrationClient } from './graphQLIntegrationClient';
 export type {
     DiscoveredObjectResult,

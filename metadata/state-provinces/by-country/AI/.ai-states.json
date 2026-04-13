@@ -1,0 +1,23 @@
+[
+  {
+    "fields": {
+      "Name": "Anguilla",
+      "Code": "AI",
+      "ISO3166_2": "AI-AI",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Anguilla"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AI"
+    },
+    "primaryKey": {
+      "ID": "0E2C137E-812F-40BC-A9B6-32AE2F3FFF3C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:26.628Z",
+      "checksum": "32ce21603bdc1f1ed9d75d18d6e0189c82d3159270f84356718aa0a010f2156b"
+    }
+  }
+]

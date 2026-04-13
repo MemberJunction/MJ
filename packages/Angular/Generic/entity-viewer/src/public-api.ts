@@ -49,3 +49,5 @@ export * from './lib/shared-view-warning-dialog/shared-view-warning-dialog.compo
 // Utilities
 export * from './lib/utils/highlight.util';
 export * from './lib/utils/record.util';
+// Geo support exports
+export const ENTITY_VIEWER_GEO_VERSION = 1;

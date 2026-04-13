@@ -62,7 +62,7 @@ export class RoleManagementComponent extends BaseDashboard implements OnDestroy 
   // Role permissions (simplified view)
   public rolePermissions: Map<string, string[]> = new Map();
 
-  private destroy$ = new Subject<void>();
+  protected override destroy$ = new Subject<void>();
   private metadata = new Metadata();
 
   constructor(private cdr: ChangeDetectorRef, private ngZone: NgZone) {

@@ -27,6 +27,9 @@ export * from './engines/MCPEngine';
 export * from './engines/QueryEngine';
 export * from './engines/conversations';
 export * from './engines/knowledgeHubMetadata';
+export * from './engines/InstanceConfigEngine';
+export * from './engines/SearchEngineBase';
+export * from './engines/GeoDataEngine';
 
 export * from './artifact-extraction/artifact-extract-rules';
 export * from './artifact-extraction/artifact-extractor';

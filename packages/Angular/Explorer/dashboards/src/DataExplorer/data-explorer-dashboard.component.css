@@ -95,6 +95,8 @@
   flex-shrink: 0;
   gap: 24px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  position: relative;
+  z-index: 1100; /* Above Leaflet map containers (z-index ~400-1000) so dropdowns render on top */
 }
 
 .header-left {
@@ -393,7 +395,38 @@
   font-size: 12px;
 }
 
-/* Timeline Orientation Toggle */
+/* View-specific controls — contextual controls for the active view mode.
+   Positioned LEFT of the view mode toggle with a subtle visual separator. */
+.view-specific-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  background: var(--mj-bg-surface-sunken);
+  border-radius: 8px;
+  border: 1px solid var(--mj-border-subtle);
+}
+
+.view-specific-btn {
+  width: 30px;
+  height: 30px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--mj-text-muted);
+  transition: all 0.15s ease;
+}
+
+.view-specific-btn:hover {
+  color: var(--mj-text-secondary);
+  background: var(--mj-bg-surface-hover);
+}
+
+/* Legacy — keep for backward compat but no longer used in template */
 .timeline-orientation-toggle {
   display: flex;
   background: var(--mj-bg-surface-sunken);

@@ -19,6 +19,9 @@ experiments/**/.angular/
 # Test scripts (local-only, not part of the build)
 test-scripts/
 
+# SchemaEngine RSU test artifacts
+packages/SchemaEngine/migrations/rsu/
+
 # Node artifact files
 node_modules/
 dist/

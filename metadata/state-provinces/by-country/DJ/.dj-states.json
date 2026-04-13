@@ -1,0 +1,107 @@
+[
+  {
+    "fields": {
+      "Name": "Ali Sabieh",
+      "Code": "AS",
+      "ISO3166_2": "DJ-AS",
+      "Latitude": 11.2107,
+      "Longitude": 42.8985,
+      "BoundaryGeoJSON": "@file:by-country/DJ/boundaries/DJ-AS.geojson",
+      "CommonAliases": [
+        "Ali Sabieh"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DJ"
+    },
+    "primaryKey": {
+      "ID": "F4F27AC2-E7F9-414A-9C2F-27E5C714B729"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:40.802Z",
+      "checksum": "2b04f882929fba287fa20beb96b21871eb2bfef78ea3cd084ef0614e5e517eed"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Dikhil",
+      "Code": "DI",
+      "ISO3166_2": "DJ-DI",
+      "Latitude": 11.3884,
+      "Longitude": 42.2277,
+      "BoundaryGeoJSON": "@file:by-country/DJ/boundaries/DJ-DI.geojson",
+      "CommonAliases": [
+        "Dikhil"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DJ"
+    },
+    "primaryKey": {
+      "ID": "0E8CA26C-80D9-4912-AA27-CABAD1A15158"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:40.818Z",
+      "checksum": "a7cbddaafc9636c27d2413d2e59213acd8b2aa20ec58156bb8dc89da8430e3e4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Djibouti",
+      "Code": "DJ",
+      "ISO3166_2": "DJ-DJ",
+      "Latitude": 11.5524,
+      "Longitude": 43.037,
+      "BoundaryGeoJSON": "@file:by-country/DJ/boundaries/DJ-DJ.geojson",
+      "CommonAliases": [
+        "Djibouti"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DJ"
+    },
+    "primaryKey": {
+      "ID": "0DA4DAE9-DE71-4181-A2A7-9910E1921A19"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:40.834Z",
+      "checksum": "889c33a1ab9e8c6e333639ec4a1cfa855a34afa9b78ca2856a795fe4c46fb925"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Obock",
+      "Code": "OB",
+      "ISO3166_2": "DJ-OB",
+      "Latitude": 12.2842,
+      "Longitude": 43.0464,
+      "BoundaryGeoJSON": "@file:by-country/DJ/boundaries/DJ-OB.geojson",
+      "CommonAliases": [
+        "Obock"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DJ"
+    },
+    "primaryKey": {
+      "ID": "56D51287-5719-4E38-8482-839734FACDB8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:40.851Z",
+      "checksum": "e147c7d59a83ad8796ea403e64e5eff71a3d8198271ba3aca1ea9de09b0a4845"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tadjoura",
+      "Code": "TA",
+      "ISO3166_2": "DJ-TA",
+      "Latitude": 11.7972,
+      "Longitude": 42.5043,
+      "BoundaryGeoJSON": "@file:by-country/DJ/boundaries/DJ-TA.geojson",
+      "CommonAliases": [
+        "Tadjoura"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DJ"
+    },
+    "primaryKey": {
+      "ID": "12838BFB-4C84-4E9E-95AA-79EAD29AC769"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:40.864Z",
+      "checksum": "d6b859fa18f9cd63989220bd8fa93de9eb976d3dab07c73927ed46945c93be67"
+    }
+  }
+]

@@ -86,12 +86,12 @@
                 <i [class]="result.EntityIcon || result.SourceIcon || 'fa-solid fa-database'"></i>
             </div>
             <div class="result-card-body">
-                <div class="result-card-title">{{ result.RecordName || result.Title }}</div>
-                <div class="result-card-entity">{{ result.EntityName }}</div>
+                <div class="result-card-title" [innerHTML]="HighlightMatch(result.RecordName || result.Title)"></div>
+                <div class="result-card-entity" [innerHTML]="HighlightMatch(result.EntityName)"></div>
                 @if (result.Tags && result.Tags.length > 0) {
                     <div class="result-card-tags">
                         @for (tag of result.Tags.slice(0, 5); track tag) {
-                            <span class="result-tag-chip">{{ tag }}</span>
+                            <span class="result-tag-chip" [innerHTML]="HighlightMatch(tag)"></span>
                         }
                         @if (result.Tags.length > 5) {
                             <span class="result-tag-more">+{{ result.Tags.length - 5 }}</span>
@@ -101,14 +101,15 @@
             </div>
             @if (ShowScores) {
                 <div class="result-card-score">
-                    <div class="score-circle">
+                    <div class="score-circle" [class.score-high]="result.Score >= 0.40" [class.score-medium]="result.Score >= 0.15 && result.Score < 0.40" [class.score-low]="result.Score < 0.15">
                         <span class="score-value">{{ FormatScore(result.Score) }}</span>
                     </div>
                 </div>
             }
             <div class="result-card-actions">
-                <button class="result-open-btn" (click)="OnOpenRecord(result, $event)" title="Open record">
-                    <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                <button class="result-open-btn" (click)="OnOpenRecord(result, $event)"
+                        [title]="result.ResultType === 'storage-file' ? 'Open file' : 'Open record'">
+                    <i [class]="result.ResultType === 'storage-file' ? 'fa-solid fa-external-link' : 'fa-solid fa-arrow-up-right-from-square'"></i>
                 </button>
                 <button class="result-expand-btn" (click)="ToggleExpand(result, $event)" title="Expand details">
                     <i class="fa-solid" [class.fa-chevron-down]="!IsExpanded(result.ID)"
@@ -123,7 +124,7 @@
                 @if (result.Snippet) {
                     <div class="detail-section">
                         <span class="detail-label">Preview</span>
-                        <p class="detail-snippet">{{ result.Snippet }}</p>
+                        <p class="detail-snippet" [innerHTML]="HighlightMatch(result.Snippet)"></p>
                     </div>
                 }
                 <div class="detail-meta">
@@ -153,7 +154,7 @@
                 @if (ShowTags && result.Tags.length > 0) {
                     <div class="detail-tags">
                         @for (tag of result.Tags; track tag) {
-                            <span class="result-card-tag">{{ tag }}</span>
+                            <span class="result-card-tag" [innerHTML]="HighlightMatch(tag)"></span>
                         }
                     </div>
                 }
@@ -176,7 +177,11 @@
                 }
                 <div class="detail-actions">
                     <button class="detail-open-btn" (click)="OnOpenRecord(result, $event)">
-                        <i class="fa-solid fa-arrow-up-right-from-square"></i> Open Record
+                        @if (result.ResultType === 'storage-file') {
+                            <i class="fa-solid fa-external-link"></i> Open File
+                        } @else {
+                            <i class="fa-solid fa-arrow-up-right-from-square"></i> Open Record
+                        }
                     </button>
                     <button class="detail-similar-btn" (click)="OnMoreLikeThis(result, $event)">
                         <i class="fa-solid fa-shuffle"></i> See Similar Items

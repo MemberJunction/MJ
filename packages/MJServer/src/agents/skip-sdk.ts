@@ -21,6 +21,8 @@ import {
     SkipEntityFieldInfo,
     SkipEntityFieldValueInfo,
     SkipEntityRelationshipInfo,
+    SkipEntityOrganicKeyInfo,
+    SkipEntityOrganicKeyRelatedEntityInfo,
     SkipAPIAgentNote,
     SkipAPIAgentNoteType,
     SkipAPIArtifact,
@@ -28,7 +30,7 @@ import {
     SkipAPIArtifactType
 } from '@memberjunction/skip-types';
 import { DataContext } from '@memberjunction/data-context';
-import { UserInfo, LogStatus, LogError, Metadata, RunQuery, EntityInfo, EntityFieldInfo, EntityRelationshipInfo } from '@memberjunction/core';
+import { UserInfo, LogStatus, LogError, Metadata, RunQuery, EntityInfo, EntityFieldInfo, EntityRelationshipInfo, EntityOrganicKeyInfo, EntityOrganicKeyRelatedEntityInfo } from '@memberjunction/core';
 import { request as httpRequest } from 'http';
 import { request as httpsRequest } from 'https';
 import { gzip as gzipCompress, createGunzip } from 'zlib';
@@ -927,12 +929,91 @@ export class SkipSDK {
 
                 relatedEntities: e.RelatedEntities.map((r) => {
                     return this.packSingleSkipEntityRelationship(r);
-                })
+                }),
+
+                organicKeys: (e.OrganicKeys ?? [])
+                    .filter((ok) => ok.Status === 'Active')
+                    .map((ok) => this.packSingleSkipOrganicKey(ok))
+                    .filter((ok): ok is SkipEntityOrganicKeyInfo => ok !== null)
             };
             return ret;
         }
         catch (e) {
             LogError(`[SkipSDK] packSingleSkipEntityInfo error: ${e}`);
+            return null;
+        }
+    }
+
+    /**
+     * Packs information about a single organic key for Skip.
+     * Organic keys express cross-entity relationships via shared business data
+     * (email, acronym, etc.) rather than database FK constraints.
+     */
+    private packSingleSkipOrganicKey(ok: EntityOrganicKeyInfo): SkipEntityOrganicKeyInfo | null {
+        try {
+            return {
+                id: ok.ID,
+                name: ok.Name,
+                description: ok.Description ?? undefined,
+                matchFieldNames: ok.MatchFieldNamesArray,
+                normalizationStrategy: ok.NormalizationStrategy,
+                customNormalizationExpression: ok.CustomNormalizationExpression ?? undefined,
+                sequence: ok.Sequence,
+                relatedEntities: ok.RelatedEntities
+                    .map((re) => this.packSingleSkipOrganicKeyRelatedEntity(re))
+                    .filter((re): re is SkipEntityOrganicKeyRelatedEntityInfo => re !== null)
+            };
+        }
+        catch (e) {
+            LogError(`[SkipSDK] packSingleSkipOrganicKey error: ${e}`);
+            return null;
+        }
+    }
+
+    /**
+     * Packs information about a single organic key related entity for Skip.
+     * Looks up schema name and base view from metadata since they are not
+     * stored on EntityOrganicKeyRelatedEntityInfo directly.
+     */
+    private packSingleSkipOrganicKeyRelatedEntity(
+        re: EntityOrganicKeyRelatedEntityInfo
+    ): SkipEntityOrganicKeyRelatedEntityInfo | null {
+        try {
+            // Look up the related entity to obtain schema name and base view, which
+            // Skip needs in order to generate schema-qualified SQL.
+            const relatedEntity = Metadata.Provider.Entities.find(
+                (ent) => UUIDsEqual(ent.ID, re.RelatedEntityID)
+            );
+            if (!relatedEntity) {
+                LogError(
+                    `[SkipSDK] packSingleSkipOrganicKeyRelatedEntity: related entity not found for ID ${re.RelatedEntityID}`
+                );
+                return null;
+            }
+
+            return {
+                id: re.ID,
+                relatedEntityID: re.RelatedEntityID,
+                relatedEntityName: relatedEntity.Name,
+                relatedEntitySchemaName: relatedEntity.SchemaName,
+                relatedEntityBaseView: relatedEntity.BaseView,
+                isDirectMatch: re.IsDirectMatch,
+                isTransitiveMatch: re.IsTransitiveMatch,
+                relatedEntityFieldNames: re.IsDirectMatch
+                    ? re.RelatedEntityFieldNamesArray
+                    : undefined,
+                transitiveObjectName: re.TransitiveObjectName ?? undefined,
+                transitiveObjectMatchFieldNames: re.IsTransitiveMatch
+                    ? re.TransitiveObjectMatchFieldNamesArray
+                    : undefined,
+                transitiveObjectOutputFieldName: re.TransitiveObjectOutputFieldName ?? undefined,
+                relatedEntityJoinFieldName: re.RelatedEntityJoinFieldName ?? undefined,
+                displayName: re.DisplayName ?? undefined,
+                sequence: re.Sequence
+            };
+        }
+        catch (e) {
+            LogError(`[SkipSDK] packSingleSkipOrganicKeyRelatedEntity error: ${e}`);
             return null;
         }
     }

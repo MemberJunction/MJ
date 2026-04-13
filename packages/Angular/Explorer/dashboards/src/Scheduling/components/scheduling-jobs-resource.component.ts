@@ -27,6 +27,7 @@ import { BaseResourceComponent } from '@memberjunction/ng-shared';
 export class SchedulingJobsResourceComponent extends BaseResourceComponent implements OnInit {
 
   ngOnInit(): void {
+    super.ngOnInit();
     this.NotifyLoadComplete();
   }
 

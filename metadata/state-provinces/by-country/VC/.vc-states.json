@@ -1,0 +1,23 @@
+[
+  {
+    "fields": {
+      "Name": "St. Vincent & the Grenadines",
+      "Code": "VC",
+      "ISO3166_2": "VC-VC",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "St. Vincent & the Grenadines"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VC"
+    },
+    "primaryKey": {
+      "ID": "3DF766DB-0F6C-4450-A460-90F3098AF608"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:42.502Z",
+      "checksum": "a357dd4cb4720776555ff97fd8356eeaf7c1a8e663fa5cbb120c753887c20840"
+    }
+  }
+]

@@ -39,7 +39,7 @@ interface AppDisplayData {
 })
 @RegisterClass(BaseResourceComponent, 'HomeDashboard')
 export class HomeDashboardComponent extends BaseResourceComponent implements AfterViewInit, OnDestroy {
-  private destroy$ = new Subject<void>();
+  protected override destroy$ = new Subject<void>();
   private metadata = new Metadata();
   private pinService = inject(HomeAppPinService);
 
@@ -136,7 +136,6 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
 
   constructor(
     private appManager: ApplicationManager,
-    private navigationService: NavigationService,
     private recentAccessService: RecentAccessService,
     private cdr: ChangeDetectorRef
   ) {
@@ -230,6 +229,7 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
   }
 
   ngOnDestroy(): void {
+    super.ngOnDestroy();
     this.destroy$.next();
     this.destroy$.complete();
   }
