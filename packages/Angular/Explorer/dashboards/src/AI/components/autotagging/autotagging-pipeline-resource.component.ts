@@ -10,7 +10,7 @@
 import { Component, ChangeDetectorRef, OnDestroy, AfterViewInit, inject, ViewEncapsulation } from '@angular/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
-import { BaseEntity, CompositeKey, Metadata, RunView } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, Metadata, RunQuery, RunView } from '@memberjunction/core';
 import { TreeBranchConfig, TreeLeafConfig } from '@memberjunction/ng-trees';
 import { ResourceData, KnowledgeHubMetadataEngine, MJContentSourceEntity, MJContentSourceTypeEntity_IContentSourceTypeField, MJScheduledActionEntity, MJScheduledActionParamEntity, MJContentItemDuplicateEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { RegisterClass, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
@@ -551,6 +551,9 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     private tagsRaw: Record<string, unknown>[] = [];
     private taggedItemsRaw: Record<string, unknown>[] = [];
     private tagAuditLogsRaw: Record<string, unknown>[] = [];
+    /** Cached per-tag aggregates from server-side SQL (weights + counts) */
+    private tagAggregateWeights = new Map<string, number>();
+    private tagAggregateCounts = new Map<string, number>();
 
     // ── Slide-in form ──
     public FormMode: FormMode = 'none';
@@ -1127,7 +1130,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
                 { EntityName: 'MJ: Content Sources', OrderBy: 'Name', ResultType: 'simple' },
                 { EntityName: 'MJ: Content Items', OrderBy: '__mj_UpdatedAt DESC', MaxRows: 200, ResultType: 'simple', Fields: ['ID', 'Name', 'ContentSourceID', 'ContentSourceTypeID', 'ContentSource', 'ContentSourceType', 'ContentType', 'ContentFileType', 'URL', 'Text', 'Checksum', 'EntityRecordDocumentID', '__mj_CreatedAt', '__mj_UpdatedAt'] },
                 { EntityName: 'MJ: Content Process Runs', OrderBy: 'StartTime DESC', MaxRows: 100, ResultType: 'simple' },
-                { EntityName: 'MJ: Content Item Tags', ResultType: 'simple', Fields: ['ID', 'ItemID', 'Tag', 'Weight', '__mj_CreatedAt'] },
+                { EntityName: 'MJ: Content Item Tags', ResultType: 'simple', Fields: ['ID', 'ItemID', 'Item', 'Tag', 'TagID', 'Weight', '__mj_CreatedAt'] },
                 { EntityName: 'MJ: Content Source Types', ResultType: 'simple' },
                 { EntityName: 'MJ: Content Types', ResultType: 'simple' }
             ]);
@@ -3231,6 +3234,9 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             // Also ensure content item tags are loaded for cross-referencing
             await this.ensureBaseDataLoaded();
 
+            // Load per-tag aggregates (weights + counts) via server-side SQL
+            await this.loadTagAggregates();
+
             this.buildTaxTree();
             this.buildTaxDuplicates();
             this.buildTaxOrphans();
@@ -3250,8 +3256,8 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
      */
     private buildTaxTree(): void {
         const tagMap = new Map<string, TaxTreeNode>();
-        const tagItemCounts = this.countItemsByTag();
-        const tagAvgWeights = this.computeTagAvgWeights();
+        const tagItemCounts = this.tagAggregateCounts;
+        const tagAvgWeights = this.tagAggregateWeights;
 
         // Create flat node list from raw tags (exclude merged/soft-deleted tags)
         const activeTags = this.tagsRaw.filter(t => (t['Status'] as string)?.toLowerCase() !== 'merged');
@@ -3382,26 +3388,35 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     }
 
     /**
-     * Computes the average weight per tag from Content Item Tags.
-     * Uses NormalizeUUID for cross-platform UUID case consistency.
+     * Loads per-tag average weights and item counts via a server-side SQL aggregation.
+     * This avoids loading all 17K+ TaggedItem rows to the browser.
      */
-    private computeTagAvgWeights(): Map<string, number> {
-        const sums = new Map<string, number>();
-        const counts = new Map<string, number>();
-        for (const cit of this.contentTagsRaw) {
-            const tagId = cit['TagID'] as string;
-            const w = Number(cit['Weight'] ?? 0.5);
-            if (tagId) {
-                const key = NormalizeUUID(tagId);
-                sums.set(key, (sums.get(key) ?? 0) + w);
-                counts.set(key, (counts.get(key) ?? 0) + 1);
+    /**
+     * Loads per-tag average weights and item counts via the "Tag Aggregates" saved query.
+     * This runs a SQL GROUP BY on the server, avoiding loading 17K+ TaggedItem rows to the browser.
+     */
+    private async loadTagAggregates(): Promise<void> {
+        this.tagAggregateWeights.clear();
+        this.tagAggregateCounts.clear();
+        try {
+            const rq = new RunQuery();
+            const result = await rq.RunQuery({
+                QueryName: 'Tag Aggregates',
+                CategoryPath: '/MJ/Tags'
+            });
+            if (result.Success) {
+                for (const row of result.Results) {
+                    const tagId = row['TagID'] as string;
+                    if (tagId) {
+                        const key = NormalizeUUID(tagId);
+                        this.tagAggregateWeights.set(key, Number(row['AvgWeight'] ?? 0));
+                        this.tagAggregateCounts.set(key, Number(row['ItemCount'] ?? 0));
+                    }
+                }
             }
+        } catch (error) {
+            console.error('[Autotagging] Error loading tag aggregates:', error);
         }
-        const avgs = new Map<string, number>();
-        for (const [t, sum] of sums) {
-            avgs.set(t, Math.round((sum / (counts.get(t) ?? 1)) * 100) / 100);
-        }
-        return avgs;
     }
 
     public ToggleTaxNode(node: TaxTreeNode): void {
@@ -3466,30 +3481,19 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     }
 
     private loadRecentItemsForTag(node: TaxTreeNode): void {
-        // Find content item tags that reference this tag's ID
-        const recentItems: { Name: string; Weight: number; Date: string; Icon: string }[] = [];
+        // Find content item tags that reference this tag's ID.
+        // Use the 'Item' view field (ContentItem name) directly from the tag record
+        // instead of looking up from the capped contentItemsRaw array.
         const matchingTags = this.contentTagsRaw.filter(cit =>
             UUIDsEqual(cit['TagID'] as string, node.ID)
         ).slice(0, 5);
 
-        for (const cit of matchingTags) {
-            const itemId = cit['ItemID'] as string;
-            const item = this.contentItemsRaw.find(i => (i['ID'] as string) === itemId);
-            const itemName = item ? ((item['Name'] as string) ?? 'Unnamed Item') : 'Unknown Item';
-            const sourceType = item ? ((item['ContentSourceType'] as string) ?? '') : '';
-            const icon = sourceType.toLowerCase().includes('web') ? 'fa-solid fa-globe'
-                : sourceType.toLowerCase().includes('rss') ? 'fa-solid fa-rss'
-                : 'fa-solid fa-file-lines';
-
-            recentItems.push({
-                Name: itemName,
-                Weight: Number(cit['Weight'] ?? 0.5),
-                Date: this.formatShortDate((cit['__mj_CreatedAt'] as string) ?? ''),
-                Icon: icon
-            });
-        }
-
-        this.TaxRecentItems = recentItems;
+        this.TaxRecentItems = matchingTags.map(cit => ({
+            Name: (cit['Item'] as string) ?? 'Unnamed Item',
+            Weight: Number(cit['Weight'] ?? 0.5),
+            Date: this.formatShortDate((cit['__mj_CreatedAt'] as string) ?? ''),
+            Icon: 'fa-solid fa-file-lines'
+        }));
     }
 
     // ── Tag Operations ──
@@ -4024,8 +4028,8 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
      * Uses NormalizeUUID for consistent cross-platform UUID comparisons.
      */
     private buildTaxOrphans(): void {
-        const tagItemCounts = this.countItemsByTag();
-        const tagAvgWeights = this.computeTagAvgWeights();
+        const tagItemCounts = this.tagAggregateCounts;
+        const tagAvgWeights = this.tagAggregateWeights;
         const hasChildren = new Set<string>();
         for (const t of this.tagsRaw) {
             const pid = t['ParentID'] as string;
