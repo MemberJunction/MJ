@@ -32,6 +32,7 @@ import { SharedContextBrowserAdapter } from './SharedContextBrowserAdapter.js';
 interface RecycledEntry {
     Context: BrowserContext;
     Adapter: SharedContextBrowserAdapter;
+    UseCount: number;
 }
 
 export class HeadlessBrowserEngine extends BaseSingleton<HeadlessBrowserEngine> {
@@ -88,9 +89,20 @@ export class HeadlessBrowserEngine extends BaseSingleton<HeadlessBrowserEngine> 
     }
 
     /**
+     * Maximum number of tests a recycled context can serve before being
+     * automatically rotated (closed and recreated). Long-lived contexts
+     * accumulate localStorage entries, dirty SPA state, and memory pressure
+     * which leads to load failures after ~25 reuses.
+     */
+    public RotateAfterUses: number = 20;
+
+    /**
      * Get a recycled adapter for the given key. If no context exists for
      * the key, a new one is created. If one already exists, the same
      * adapter is returned — auth state (localStorage, cookies) persists.
+     *
+     * After RotateAfterUses checkouts, the context is automatically rotated
+     * (closed and a fresh one created) to prevent state accumulation.
      *
      * @param key - Identifies the shared session (e.g. "suite:abc:worker-0")
      * @param config - Browser config used only when creating a new context
@@ -99,12 +111,20 @@ export class HeadlessBrowserEngine extends BaseSingleton<HeadlessBrowserEngine> 
         await this.ensureBrowser();
 
         const existing = this._recycled.get(key);
-        if (existing) return existing.Adapter;
+        if (existing) {
+            if (existing.UseCount >= this.RotateAfterUses) {
+                // Rotate: close stale context, fall through to create a fresh one
+                await this.Release(key);
+            } else {
+                existing.UseCount++;
+                return existing.Adapter;
+            }
+        }
 
         const cfg = config ?? new BrowserConfig();
         const context = await this.createContext(cfg);
         const adapter = new SharedContextBrowserAdapter(context);
-        this._recycled.set(key, { Context: context, Adapter: adapter });
+        this._recycled.set(key, { Context: context, Adapter: adapter, UseCount: 1 });
         return adapter;
     }
 
