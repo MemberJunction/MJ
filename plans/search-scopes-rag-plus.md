@@ -30,10 +30,11 @@ Each subsystem serves a distinct purpose. Documentation must make this distincti
 6. [Search UI — Scope Selector](#6-search-ui--scope-selector)
 7. [Template System Integration](#7-template-system-integration)
 8. [Multi-Scope RRF Fusion](#8-multi-scope-rrf-fusion)
-9. [Search Scope Permissions (Phase 2)](#9-search-scope-permissions-phase-2)
-10. [Existing System Touchpoints](#10-existing-system-touchpoints)
-11. [Documentation Requirements](#11-documentation-requirements)
-12. [Task Breakdown](#12-task-breakdown)
+9. [Multi-Tenant Search Context](#9-multi-tenant-search-context)
+10. [Search Scope Permissions (Phase 2)](#10-search-scope-permissions-phase-2)
+11. [Existing System Touchpoints](#11-existing-system-touchpoints)
+12. [Documentation Requirements](#12-documentation-requirements)
+13. [Task Breakdown](#13-task-breakdown)
 
 ---
 
@@ -107,6 +108,7 @@ The core configuration entity. Each scope defines a named, reusable search bound
 | StartAt | datetimeoffset | YES | NULL | If set, scope is only active after this timestamp. NULL = immediately active. |
 | EndAt | datetimeoffset | YES | NULL | If set, scope auto-deactivates after this timestamp. NULL = no expiry. |
 | ScopeConfig | nvarchar(max) | YES | NULL | JSON for advanced overrides: `{ "rrfK": 60, "fusionWeights": { "vector": 1.5, "fulltext": 1.0 } }` |
+| SearchContextConfig | nvarchar(max) | YES | NULL | JSON defining available multi-tenant context dimensions, inheritance modes, and validation rules. Uses the same `SecondaryScopeConfig` structure from the agent system. NULL = scope is not multi-tenant aware. See [Section 9: Multi-Tenant Search Context](#9-multi-tenant-search-context). |
 
 **Constraints:**
 - `CONSTRAINT UQ_SearchScope_Name UNIQUE (Name)`
@@ -259,7 +261,9 @@ export interface SearchParams {
     MinScore?: number;
     Mode?: SearchMode;
     ScopeIDs?: string[];       // NEW — optional array of scope IDs
+    SearchContext?: SearchContext; // NEW — multi-tenant runtime context
 }
+
 ```
 
 ### 3.2 Scope Resolution in SearchEngine
@@ -307,6 +311,17 @@ export interface ScopeConstraints {
     Entities?: ScopeEntityConstraint[];
     /** For StorageSearchProvider: only search these accounts/folders */
     StorageAccounts?: ScopeStorageConstraint[];
+    /** Multi-tenant runtime context — filters results to a specific tenant/dimension */
+    Context?: SearchContext;
+}
+
+export interface SearchContext {
+    /** Entity type that represents the tenant (e.g., Organization, Company) */
+    PrimaryScopeEntityID?: string;
+    /** Specific tenant record ID. NULL = no tenant filtering. */
+    PrimaryScopeRecordID?: string;
+    /** Additional dimensional scoping (e.g., DepartmentID, ContactID) */
+    SecondaryScopes?: Record<string, SecondaryScopeValue>;
 }
 
 export interface ScopeEntityConstraint {
@@ -677,11 +692,154 @@ This calls `ComputeRRF()` with each scope's results as a separate ranked list, t
 
 ---
 
-## 9. Search Scope Permissions (Phase 2)
+## 9. Multi-Tenant Search Context
+
+### 9.1 The Concept
+
+**Search Scope** = *what* to search (definition — which indexes, entities, storage accounts)
+**Search Context** = *whose perspective* to search from (runtime — which tenant, department, contact)
+
+A Search Scope is like a library catalog — it defines which shelves exist. A Search Context is the library card — it determines which shelves you're allowed to browse based on who you are.
+
+This distinction matters for multi-tenant SaaS platforms built on MJ. A platform might serve hundreds of organizations. They all use the same agent with the same Search Scope ("Knowledge Base"), but each org should only see their own content. Without Search Context, you'd need a separate scope per tenant — which is unmanageable.
+
+### 9.2 How It Works
+
+**Scope definition (created once by the platform):**
+```
+Search Scope: "Customer Knowledge Base"
+├── VectorSearchProvider: enabled
+├── EntitySearchProvider: enabled
+├── Vector Indexes: (dynamically resolved per tenant)
+├── Entities: Knowledge Articles, Documents, FAQs
+└── SearchContextConfig: {
+        "dimensions": [
+            { "name": "OrganizationID", "entityId": "...", "inheritanceMode": "strict" },
+            { "name": "DepartmentID", "entityId": "...", "inheritanceMode": "cascading" }
+        ]
+    }
+```
+
+**Runtime call (per request):**
+```typescript
+SearchEngine.Search({
+    Query: "refund policy",
+    ScopeIDs: ["customer-kb-scope-id"],
+    SearchContext: {
+        PrimaryScopeEntityID: "organization-entity-id",
+        PrimaryScopeRecordID: "org-abc-123",           // THIS tenant
+        SecondaryScopes: { "DepartmentID": "support" }  // THIS department
+    }
+}, contextUser);
+```
+
+**What happens at each provider:**
+
+1. **VectorSearchProvider** — The platform provisions a dedicated vector index per tenant on onboarding. `SearchScopeVectorIndex` rows are resolved dynamically: the scope has a per-tenant index mapping, or the vector metadata filter adds `organizationId = 'org-abc-123'` to the query. Per-tenant indexes are the cleanest approach — smaller indexes mean faster queries and true data isolation at the infrastructure level.
+
+2. **EntitySearchProvider** — The `SearchScopeEntity.ExtraFilter` supports Nunjucks templates. A filter like `OrganizationID='{{ context.PrimaryScopeRecordID }}'` gets rendered at runtime to `OrganizationID='org-abc-123'`, so RunView only returns that tenant's records. Secondary dimensions further narrow: `AND DepartmentID='support'`.
+
+3. **StorageSearchProvider** — `SearchScopeStorageAccount.FolderPath` can be templated: `/tenants/{{ context.PrimaryScopeRecordID }}/documents/`. Each tenant's files live in their own subdirectory within the same storage account. Alternatively, the platform can provision separate storage accounts per tenant and map them via `SearchScopeStorageAccount` rows.
+
+### 9.3 Inheritance Modes
+
+Borrowed from the existing agent notes scoping system (`SecondaryScopeConfig`):
+
+- **Strict**: Content tagged with `DepartmentID='support'` only matches queries where `DepartmentID='support'`. Content without a department tag does NOT match.
+- **Cascading**: Content without a department tag matches ALL department queries (it's org-wide content). Content tagged with a specific department only matches that department.
+
+This lets platform builders create content hierarchies: org-wide knowledge articles are visible to everyone in the org, while department-specific content is only visible within that department.
+
+### 9.4 Agent Integration with Search Context
+
+Agents already receive tenant context via `ExecuteAgentParams`:
+
+```typescript
+await agentRunner.Execute({
+    agent: supportAgent,
+    primaryScopeEntityId: "organization-entity-id",
+    primaryScopeRecordId: "org-abc-123",
+    secondaryScopes: { "DepartmentID": "support", "ContactID": "contact-456" },
+    conversationMessages: [...],
+    contextUser: currentUser
+});
+```
+
+The pre-execution RAG and scoped search Action pass these values through to `SearchEngine.Search()` as the `SearchContext`. No new API surface needed — the existing scoping context that already flows for notes/examples now also flows for search.
+
+### 9.5 Tenant Provisioning Automation
+
+When a new tenant is onboarded, the platform:
+1. Creates a vector index for the tenant (Pinecone namespace, Qdrant collection, etc.)
+2. Creates a storage folder or account for the tenant's files
+3. Creates `SearchScopeVectorIndex` and `SearchScopeStorageAccount` rows linking the scope to the tenant's infrastructure
+4. The scope definition itself doesn't change — just the infrastructure it points to grows
+
+This could be an MJ Action ("Provision Tenant Search Infrastructure") that the onboarding workflow calls automatically.
+
+### 9.6 Entity Model Additions for Search Context
+
+**`SearchScope` — add column** (included in Section 2.1 table above):
+
+| Column | Type | Nullable | Default | Description |
+|--------|------|----------|---------|-------------|
+| SearchContextConfig | nvarchar(max) | YES | NULL | JSON defining available context dimensions using `SecondaryScopeConfig` structure. NULL = scope is not multi-tenant aware. |
+
+**`SearchContextConfig` JSON structure** (reuses existing `SecondaryScopeConfig` from `@memberjunction/ai-core-plus`):
+```json
+{
+    "dimensions": [
+        {
+            "name": "OrganizationID",
+            "entityId": "uuid-for-organizations",
+            "inheritanceMode": "strict",
+            "required": true
+        },
+        {
+            "name": "DepartmentID",
+            "entityId": "uuid-for-departments",
+            "inheritanceMode": "cascading",
+            "required": false
+        }
+    ],
+    "defaultInheritanceMode": "cascading",
+    "allowSecondaryOnly": false,
+    "strictValidation": true
+}
+```
+
+**`SearchContext` type** (included in Section 3.3 above):
+```typescript
+export interface SearchContext {
+    PrimaryScopeEntityID?: string;
+    PrimaryScopeRecordID?: string;
+    SecondaryScopes?: Record<string, SecondaryScopeValue>;
+}
+```
+
+### 9.7 Implementation Phasing
+
+Multi-tenant Search Context is designed as **Phase 1G** — it builds on Phase 1B (scope resolution) and can be implemented after the core scope system is working:
+
+- [ ] **1G.1** Add `SearchContextConfig` column to `SearchScope` migration (or add to Phase 1A migration if done together)
+- [ ] **1G.2** Add `SearchContext` interface to `search.types.ts` and `SearchContext` field to `SearchParams`
+- [ ] **1G.3** Add `Context` field to `ScopeConstraints` interface
+- [ ] **1G.4** Implement Nunjucks template rendering for `SearchScopeEntity.ExtraFilter` with context variables (`context.PrimaryScopeRecordID`, `context.SecondaryScopes.*`)
+- [ ] **1G.5** Implement Nunjucks template rendering for `SearchScopeEntity.UserSearchString` with context variables
+- [ ] **1G.6** Implement Nunjucks template rendering for `SearchScopeStorageAccount.FolderPath` with context variables
+- [ ] **1G.7** Implement vector metadata filtering by context in `VectorSearchProvider` — add `PrimaryScopeRecordID` as metadata filter when `SearchContext` is provided
+- [ ] **1G.8** Pass `ExecuteAgentParams` scope values (primaryScopeRecordId, secondaryScopes) through to `SearchEngine.Search()` as `SearchContext` in both pre-execution RAG and ScopedSearchAction
+- [ ] **1G.9** Add context dimension validation: when `SearchContextConfig.strictValidation=true`, validate that provided `SearchContext` dimensions match the config
+- [ ] **1G.10** Write unit tests for tenant-isolated search results — test: same scope with different contexts returns different results, inheritance modes work correctly, template rendering with context variables
+- [ ] **1G.11** Write unit tests for agent context pass-through — test: agent's primaryScopeRecordId flows to SearchEngine as SearchContext
+
+---
+
+## 10. Search Scope Permissions (Phase 2)
 
 > **This section is designed but NOT implemented in Phase 1.** Phase 1 allows all users to see and use all scopes. Phase 2 adds permission control.
 
-### 9.1 SearchScopePermission (Future Entity)
+### 10.1 SearchScopePermission (Future Entity)
 
 | Column | Type | Description |
 |--------|------|-------------|
@@ -691,14 +849,14 @@ This calls `ComputeRRF()` with each scope's results as a separate ranked list, t
 | CanSearch | bit | Can use this scope for searching |
 | CanManage | bit | Can edit this scope's configuration |
 
-### 9.2 Enforcement Points (Future)
+### 10.2 Enforcement Points (Future)
 
 - **GraphQL resolver**: Filter available scopes by user's roles
 - **SearchEngine**: Validate user has `CanSearch` before executing scoped search
 - **Search UI**: Only show scopes the user has access to
 - **Agent action**: Validate the agent's contextUser has access to the requested scope
 
-### 9.3 UX Considerations (Future)
+### 10.3 UX Considerations (Future)
 
 - Users see only scopes they have permission to use
 - Search results within a scope are STILL filtered by entity/row-level permissions (this already exists)
@@ -707,13 +865,13 @@ This calls `ComputeRRF()` with each scope's results as a separate ranked list, t
 
 ---
 
-## 10. Existing System Touchpoints
+## 11. Existing System Touchpoints
 
-### 10.1 Files That Need Modification
+### 11.1 Files That Need Modification
 
 | File | Change |
 |------|--------|
-| `packages/SearchEngine/src/generic/search.types.ts` | Add `ScopeIDs` to `SearchParams`, add `ScopeConstraints` type |
+| `packages/SearchEngine/src/generic/search.types.ts` | Add `ScopeIDs` and `SearchContext` to `SearchParams`, add `ScopeConstraints` and `SearchContext` types |
 | `packages/SearchEngine/src/generic/SearchEngine.ts` | Add scope resolution logic to `Search()`, pass constraints to providers |
 | `packages/SearchEngine/src/generic/ISearchProvider.ts` | Add optional `scopeConstraints` param to `search()` method |
 | `packages/SearchEngine/src/generic/VectorSearchProvider.ts` | Filter vector indexes by scope constraints |
@@ -728,18 +886,18 @@ This calls `ComputeRRF()` with each scope's results as a separate ranked list, t
 | `packages/Angular/Generic/search/src/lib/` | Add scope selector component, update search service |
 | `packages/MJServer/src/resolvers/` | Update search resolver to accept `scopeIDs` |
 
-### 10.2 Database Migration
+### 11.2 Database Migration
 
 Single migration file creates all new tables and adds the `SearchScopeAccess` column to `AIAgent`.
 
-### 10.3 Metadata Sync
+### 11.3 Metadata Sync
 
 Seed data for:
 - The "Global" SearchScope record
 - The `__Scoped_Search` Action and its parameters
 - Template for default search query generation (optional)
 
-### 10.4 CodeGen
+### 11.4 CodeGen
 
 After migration runs, CodeGen will generate:
 - Entity subclasses for all new entities
@@ -748,9 +906,9 @@ After migration runs, CodeGen will generate:
 
 ---
 
-## 11. Documentation Requirements
+## 12. Documentation Requirements
 
-### 11.1 Architecture Guide
+### 12.1 Architecture Guide
 
 Create a guide at `guides/SEARCH_SCOPES_AND_RAG_GUIDE.md` covering:
 
@@ -775,7 +933,7 @@ Create a guide at `guides/SEARCH_SCOPES_AND_RAG_GUIDE.md` covering:
 
 5. **Permissions** (Phase 2 preview) — What's coming for scope-level access control
 
-### 11.2 Inline Code Documentation
+### 12.2 Inline Code Documentation
 
 All new classes, methods, and interfaces must have TSDoc comments explaining:
 - Purpose and behavior
@@ -785,7 +943,7 @@ All new classes, methods, and interfaces must have TSDoc comments explaining:
 
 ---
 
-## 12. Task Breakdown
+## 13. Task Breakdown
 
 ### Phase 1A: Entity Model & Database (Foundation)
 
@@ -796,15 +954,15 @@ All new classes, methods, and interfaces must have TSDoc comments explaining:
 - [ ] **1A.5** Write SQL migration creating `SearchScopeStorageAccount` table with FK constraints and unique constraint
 - [ ] **1A.6** Write SQL migration creating `AIAgentSearchScope` table with all columns, FK constraints, CHECK constraints
 - [ ] **1A.7** Write SQL migration adding `SearchScopeAccess` column (nvarchar(20), NOT NULL, DEFAULT 'None', CHECK constraint) to `AIAgent` table
-- [ ] **1A.8** Consolidate migrations 1A.1–1A.7 into a single migration file following MJ naming convention: `VYYYYMMDDHHMM__v[VERSION].x_Add_Search_Scopes_And_Agent_Integration.sql`. Remember: do NOT include `__mj_CreatedAt`/`__mj_UpdatedAt` columns or FK indexes — CodeGen handles those.
+- [ ] **1A.8** Consolidate migrations 1A.1–1A.7 into a single migration file following MJ naming convention: `VYYYYMMDDHHMM__v[VERSION].x_Add_Search_Scopes_And_Agent_Integration.sql`. Include the `SearchContextConfig` column on `SearchScope` in this migration. Remember: do NOT include `__mj_CreatedAt`/`__mj_UpdatedAt` columns or FK indexes — CodeGen handles those.
 - [ ] **1A.9** Run migration and CodeGen to generate entity subclasses, GraphQL resolvers, and Angular form components
 - [ ] **1A.10** Create metadata sync seed data for the "Global" SearchScope record (`IsGlobal=1`, `IsDefault=1`, `Status='Active'`)
 - [ ] **1A.11** Verify generated entity classes in `entity_subclasses.ts` have correct types and relationships
 
 ### Phase 1B: SearchEngine Scope Resolution (Core Engine)
 
-- [ ] **1B.1** Add `ScopeIDs?: string[]` to `SearchParams` interface in `search.types.ts`
-- [ ] **1B.2** Add `ScopeConstraints` interface and sub-interfaces (`ScopeEntityConstraint`, `ScopeStorageConstraint`) to `search.types.ts`
+- [ ] **1B.1** Add `ScopeIDs?: string[]` and `SearchContext?: SearchContext` to `SearchParams` interface in `search.types.ts`
+- [ ] **1B.2** Add `ScopeConstraints` interface (including `Context?: SearchContext`), `SearchContext` interface, and sub-interfaces (`ScopeEntityConstraint`, `ScopeStorageConstraint`) to `search.types.ts`
 - [ ] **1B.3** Add optional `scopeConstraints?: ScopeConstraints` parameter to `BaseSearchProvider.search()` in `ISearchProvider.ts`
 - [ ] **1B.4** Add scope metadata loading and caching to `SearchEngineBase.ts` — load `SearchScope` + child tables, cache like provider metadata
 - [ ] **1B.5** Implement scope resolution in `SearchEngine.Search()` — when `ScopeIDs` provided, load scope configs and build `ScopeConstraints` for each provider
@@ -872,6 +1030,20 @@ All new classes, methods, and interfaces must have TSDoc comments explaining:
 - [ ] **1F.6** End-to-end scoped action test: configure an agent with `SearchScopeAccess='Assigned'` and specific scopes, invoke the scoped search action, verify scope enforcement works
 - [ ] **1F.7** Performance test: verify pre-execution RAG does not add latency beyond what's already consumed by Phase 2 parallel tasks (it should be "free" since it runs in parallel)
 
+### Phase 1G: Multi-Tenant Search Context
+
+- [ ] **1G.1** Add `SearchContextConfig` column to `SearchScope` migration (include in Phase 1A migration if done together)
+- [ ] **1G.2** Add `SearchContext` interface to `search.types.ts` and `SearchContext` field to `SearchParams`
+- [ ] **1G.3** Add `Context` field to `ScopeConstraints` interface
+- [ ] **1G.4** Implement Nunjucks template rendering for `SearchScopeEntity.ExtraFilter` with context variables (`context.PrimaryScopeRecordID`, `context.SecondaryScopes.*`)
+- [ ] **1G.5** Implement Nunjucks template rendering for `SearchScopeEntity.UserSearchString` with context variables
+- [ ] **1G.6** Implement Nunjucks template rendering for `SearchScopeStorageAccount.FolderPath` with context variables
+- [ ] **1G.7** Implement vector metadata filtering by context in `VectorSearchProvider` — add `PrimaryScopeRecordID` as metadata filter when `SearchContext` is provided
+- [ ] **1G.8** Pass `ExecuteAgentParams` scope values (primaryScopeRecordId, secondaryScopes) through to `SearchEngine.Search()` as `SearchContext` in both pre-execution RAG and ScopedSearchAction
+- [ ] **1G.9** Add context dimension validation: when `SearchContextConfig.strictValidation=true`, validate that provided `SearchContext` dimensions match the config
+- [ ] **1G.10** Write unit tests for tenant-isolated search results — test: same scope with different contexts returns different results, inheritance modes work correctly, template rendering with context variables
+- [ ] **1G.11** Write unit tests for agent context pass-through — test: agent's primaryScopeRecordId flows to SearchEngine as SearchContext
+
 ### Phase 2 (Future): Permissions
 
 - [ ] **2.1** Create `SearchScopePermission` entity with migration
@@ -899,6 +1071,7 @@ All new classes, methods, and interfaces must have TSDoc comments explaining:
 │ StartAt          │     ┌──────────────────┤
 │ EndAt            │     │                  │
 │ ScopeConfig      │     │  SearchScopeProvider
+│ SearchContextConf│     │
 └──────┬───────────┘     │  ├ SearchScopeID ──FK──→ SearchScope
        │                 │  ├ SearchProviderID ─FK─→ Search Providers
        │                 │  ├ Enabled
