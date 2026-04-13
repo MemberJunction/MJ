@@ -46,6 +46,7 @@ export class MessageInputBoxComponent {
   @Output() attachmentsChanged = new EventEmitter<PendingAttachment[]>();
   @Output() attachmentError = new EventEmitter<string>();
   @Output() attachmentClicked = new EventEmitter<PendingAttachment>();
+  @Output() artifactPickerRequested = new EventEmitter<void>();
 
   get canSend(): boolean {
     const hasText = this.value.trim().length > 0;
@@ -180,5 +181,22 @@ export class MessageInputBoxComponent {
    */
   openFilePicker(): void {
     this.mentionEditor?.openFilePicker();
+  }
+
+  /**
+   * Open artifact picker - emits event for parent to handle
+   */
+  openArtifactPicker(): void {
+    this.artifactPickerRequested.emit();
+  }
+
+  /**
+   * Add an artifact as a pending attachment (called by parent after artifact selection)
+   */
+  AddArtifactAttachment(artifact: {
+    fileID: string; fileName: string; mimeType: string;
+    sizeBytes: number; artifactVersionId?: string;
+  }): void {
+    this.mentionEditor?.AddArtifactAttachment(artifact);
   }
 }
