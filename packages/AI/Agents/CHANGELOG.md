@@ -1,5 +1,32 @@
 # @memberjunction/ai-agents
 
+## 5.25.0
+
+### Minor Changes
+
+- 008a62d: Add file based artifact I/O
+- 62af878: Split Sage prompt into Sage + Workflow Planner sub-agent for reduced token usage and faster responses
+
+### Patch Changes
+
+- Updated dependencies [fc8cd52]
+- Updated dependencies [d6370e8]
+- Updated dependencies [008a62d]
+- Updated dependencies [7ddf732]
+- Updated dependencies [cbcf477]
+  - @memberjunction/core@5.25.0
+  - @memberjunction/core-entities@5.25.0
+  - @memberjunction/actions@5.25.0
+  - @memberjunction/ai-engine-base@5.25.0
+  - @memberjunction/ai-core-plus@5.25.0
+  - @memberjunction/aiengine@5.25.0
+  - @memberjunction/ai-prompts@5.25.0
+  - @memberjunction/ai-reranker@5.25.0
+  - @memberjunction/ai-vector-dupe@5.25.0
+  - @memberjunction/actions-base@5.25.0
+  - @memberjunction/ai@5.25.0
+  - @memberjunction/global@5.25.0
+
 ## 5.24.0
 
 ### Minor Changes

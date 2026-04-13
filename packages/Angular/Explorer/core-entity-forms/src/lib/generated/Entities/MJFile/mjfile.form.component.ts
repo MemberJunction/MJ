@@ -23,7 +23,8 @@ export class MJFileFormComponent extends BaseFormComponent {
             { sectionKey: 'mJFileEntityRecordLinks', sectionName: 'File Entity Record Links', isExpanded: false },
             { sectionKey: 'mJAIPromptRunMedias', sectionName: 'AI Prompt Run Medias', isExpanded: false },
             { sectionKey: 'mJConversationDetailAttachments', sectionName: 'Conversation Detail Attachments', isExpanded: false },
-            { sectionKey: 'mJAIAgentRunMedias', sectionName: 'AI Agent Run Medias', isExpanded: false }
+            { sectionKey: 'mJAIAgentRunMedias', sectionName: 'AI Agent Run Medias', isExpanded: false },
+            { sectionKey: 'mJArtifactVersions', sectionName: 'Artifact Versions', isExpanded: false }
         ]);
     }
 }

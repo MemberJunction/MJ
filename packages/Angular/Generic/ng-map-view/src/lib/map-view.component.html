@@ -19,6 +19,11 @@
         </div>
         <div class="mj-map-info">
             {{ MarkerCount }} location{{ MarkerCount !== 1 ? 's' : '' }} mapped
+            @if (IsTruncated) {
+                <span class="mj-map-truncated" title="Not all records are displayed. Showing {{ Records.length | number }} of {{ TotalRecordCount | number }} total records.">
+                    <i class="fa-solid fa-triangle-exclamation"></i> Showing {{ Records.length | number }} of {{ TotalRecordCount | number }}
+                </span>
+            }
         </div>
     </div>
     @if (IsLoading) {

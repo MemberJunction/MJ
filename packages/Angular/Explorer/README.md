@@ -2,6 +2,11 @@
 
 These packages comprise the **MJExplorer** application, MemberJunction's primary Angular-based UI for browsing, editing, and managing data. They are published individually under the `@memberjunction` npm scope and consumed together by the MJExplorer host application.
 
+## Guides
+
+- **[Navigation & Routing Guide](/guides/NAVIGATION_AND_ROUTING_GUIDE.md)** — How navigation, URL sync, back/forward, and query param sub-navigation work in MJ Explorer
+- **[Dashboard Best Practices](/guides/DASHBOARD_BEST_PRACTICES.md)** — Architecture patterns for building dashboards
+
 ## Packages
 
 ### Core / Shell

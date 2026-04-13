@@ -500,6 +500,11 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
         // queryParams to be lost on the next detach/reattach cycle.
       }
 
+      // Cached component is already loaded — emit load-complete so the shell clears its
+      // loading overlay. Without this, single-tab mode navigation to a cached resource
+      // leaves the overlay blocking all user interaction.
+      this.emitFirstLoadCompleteOnce();
+
       return;
     }
 
@@ -753,10 +758,12 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
         // Keep legacy componentRefs map updated
         this.componentRefs.set(tabId, cached.componentRef);
 
-        // If resource is already loaded, update tab title immediately
+        // If resource is already loaded, update tab title immediately and signal
+        // load-complete so the shell clears any loading overlay.
         const instance = cached.componentRef.instance as BaseResourceComponent;
         if (instance.LoadComplete) {
           this.updateTabTitleFromResource(tabId, instance, resourceData);
+          this.emitFirstLoadCompleteOnce();
         }
 
         return;
@@ -949,11 +956,12 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
       // If no DriverClass in metadata, fall back to resourceType (backward compatibility)
     }
 
-    // Include applicationId and driverClass in configuration
+    // Include applicationId, driverClass, and tabId in configuration
     const resourceConfig = {
       ...config,
       applicationId: tab.applicationId,
-      resourceTypeDriverClass: driverClass  // Store resolved driver class for component lookup
+      resourceTypeDriverClass: driverClass,  // Store resolved driver class for component lookup
+      tabId: tab.id  // Needed for query param notification scoping in BaseResourceComponent
     };
 
     // Get ResourceRecordID from config or fall back to tab.resourceRecordId

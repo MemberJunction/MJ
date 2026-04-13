@@ -84,7 +84,7 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
     sortDirection: 'asc'
   };
   
-  private destroy$ = new Subject<void>();
+  protected override destroy$ = new Subject<void>();
   private metadata = new Metadata();
 
   constructor(private cdr: ChangeDetectorRef, private ngZone: NgZone) {

@@ -1,5 +1,27 @@
 # @memberjunction/ng-dashboard-viewer
 
+## 5.25.0
+
+### Patch Changes
+
+- a24ff53: no metadata/migration
+- 1eb9f6e: no migration/metadata
+- Updated dependencies [fc8cd52]
+- Updated dependencies [d6370e8]
+- Updated dependencies [008a62d]
+- Updated dependencies [7ddf732]
+- Updated dependencies [1eb9f6e]
+- Updated dependencies [cbcf477]
+- Updated dependencies [c5426c5]
+  - @memberjunction/core@5.25.0
+  - @memberjunction/core-entities@5.25.0
+  - @memberjunction/ng-query-viewer@5.25.0
+  - @memberjunction/ng-artifacts@5.25.0
+  - @memberjunction/ng-entity-viewer@5.25.0
+  - @memberjunction/ng-trees@5.25.0
+  - @memberjunction/ng-shared-generic@5.25.0
+  - @memberjunction/global@5.25.0
+
 ## 5.24.0
 
 ### Patch Changes

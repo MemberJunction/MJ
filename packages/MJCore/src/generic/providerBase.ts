@@ -480,10 +480,12 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * @returns The view results
      */
     public async RunView<T = any>(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult<T>> {
-        if (this.TrustLocalCacheCompletely) {
+        if (this.TrustLocalCacheCompletely && !params.BypassCache) {
             // Server-side: use direct Pre → Internal → Post pipeline.
             // Cache is kept in sync via BaseEntity events + Redis pub/sub,
             // so PreRunView cache hits are returned immediately with no DB round-trip.
+            // BypassCache skips this entirely — used by maintenance actions that need
+            // to see the true DB state after direct SQL inserts.
             const preResult = await this.PreRunView(params, contextUser);
 
             if (preResult.cachedResult) {
@@ -1388,7 +1390,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             }
 
             // Check local cache if enabled or if server trusts its cache completely
-            if ((param.CacheLocal || this.TrustLocalCacheCompletely) && LocalCacheManager.Instance.IsInitialized) {
+            // BypassCache skips cache entirely — used by maintenance actions querying for
+            // records that were inserted via direct SQL (bypassing BaseEntity.Save())
+            if (!param.BypassCache && (param.CacheLocal || this.TrustLocalCacheCompletely) && LocalCacheManager.Instance.IsInitialized) {
                 const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(param, this.InstanceConnectionString);
                 const cached = await LocalCacheManager.Instance.GetRunViewResult(fingerprint);
                 if (cached) {
@@ -2082,6 +2086,10 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         const entity = this.EntityByName(params.EntityName);
         if (!entity) return true; // Entity not found — allow caching (will fail later anyway)
 
+        // If caching is disabled for this entity (neither the per-entity flag nor the
+        // schema-level config enables it), skip all cache operations.
+        if (!LocalCacheManager.Instance.IsCachingEnabledForEntity(entity)) return false;
+
         // Always exempt Record Changes — rows are created via spCreateRecordChange_Internal
         // inside save SQL batches, never through BaseEntity.Save(), so the cache is never
         // invalidated by entity events. Even if TrustServerCacheCompletely is accidentally
@@ -2093,6 +2101,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
     protected shouldAutoCache(params: RunViewParams, result: RunViewResult): boolean {
         if (!this.TrustLocalCacheCompletely) return false;
+        if (params.BypassCache) return false; // caller explicitly wants no caching
         if (params.CacheLocal) return false; // already handled
         if (!LocalCacheManager.Instance.IsInitialized) return false;
         if (!result.Success) return false;

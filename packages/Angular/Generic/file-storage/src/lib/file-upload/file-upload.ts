@@ -1,6 +1,6 @@
 import { Component, EventEmitter, Input, OnInit, Output } from '@angular/core';
-import { Metadata, RunView } from '@memberjunction/core';
-import { MJFileEntity, MJFileSchema, MJFileStorageProviderEntity } from '@memberjunction/core-entities';
+import { Metadata } from '@memberjunction/core';
+import { MJFileEntity, MJFileSchema, MJFileStorageProviderEntity, FileStorageEngineBase } from '@memberjunction/core-entities';
 import { GraphQLDataProvider, gql } from '@memberjunction/graphql-dataprovider';
 
 import { z } from 'zod';
@@ -85,9 +85,11 @@ export class FileUploadComponent implements OnInit {
   }
 
   async Refresh() {
-    const rv = new RunView();
-    const viewResults = await rv.RunView({ EntityName: 'MJ: File Storage Providers', ExtraFilter: 'IsActive = 1', OrderBy: 'Priority DESC' });
-    const provider: MJFileStorageProviderEntity | undefined = viewResults.Results[0];
+    await FileStorageEngineBase.Instance.Config(false);
+    const activeProviders = FileStorageEngineBase.Instance.Providers
+      .filter(p => p.IsActive)
+      .sort((a, b) => (b.Priority ?? 0) - (a.Priority ?? 0));
+    const provider: MJFileStorageProviderEntity | undefined = activeProviders[0];
     if (typeof provider?.ID === 'string') {
       this.defaultProviderID = provider.ID;
     }

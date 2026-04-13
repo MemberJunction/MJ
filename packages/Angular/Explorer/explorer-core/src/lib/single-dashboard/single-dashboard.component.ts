@@ -5,7 +5,7 @@ import { Metadata } from '@memberjunction/core';
 import { SharedService, RecentAccessService } from '@memberjunction/ng-shared';
 import { ResourceContainerComponent } from '../generic/resource-container-component';
 import { Subject, debounceTime } from 'rxjs';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute } from '@angular/router';
 import { BaseDashboard } from '@memberjunction/ng-shared';
 
 @Component({
@@ -76,6 +76,7 @@ export class SingleDashboardComponent extends BaseDashboard implements OnInit {
   }
 
   async ngOnInit(): Promise<void> {
+    super.ngOnInit();
     // load up the dashboard
     const d = this.ResourceData;
     const config = this.ResourceData.Configuration;

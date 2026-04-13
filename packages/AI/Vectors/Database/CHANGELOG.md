@@ -1,5 +1,13 @@
 # Change Log - @memberjunction/ai-vectordb
 
+## 5.25.0
+
+### Patch Changes
+
+- Updated dependencies [fc8cd52]
+  - @memberjunction/core@5.25.0
+  - @memberjunction/global@5.25.0
+
 ## 5.24.0
 
 ### Minor Changes

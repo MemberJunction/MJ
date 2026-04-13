@@ -722,6 +722,7 @@ Key principles:
 - **Auto-cache**: Small (≤250 rows), unfiltered, unsorted results are automatically cached on the server because they can be safely maintained in-place via upsert/remove
 - **Filtered/sorted caches are invalidated (not updated)** on entity changes — we can't evaluate SQL predicates in JS, so the safe approach is to blow away the cache entry and let it repopulate on next request
 - **ResultType is excluded from cache fingerprints** — cache stores plain JSON regardless; transformation to BaseEntity objects happens post-cache
+- **`BypassCache: true`** — per-query escape hatch that skips all server-side caching (both read and write). Use for maintenance actions, scheduled jobs, or any query that needs true DB state after direct SQL operations that bypassed `BaseEntity.Save()`
 
 ### Batch Database Operations
 - Use `RunViews` (plural) instead of multiple `RunView` calls
@@ -1245,6 +1246,43 @@ try {
     // This won't catch RunView failures!
 }
 ```
+
+### BaseEntity Save/Delete Error Handling
+**Critical**: `BaseEntity.Save()` and `BaseEntity.Delete()` do NOT throw exceptions on failure. They return `boolean` — `true` on success, `false` on failure. Error details are available via `entity.LatestResult.CompleteMessage` which combines all error info into a single string.
+
+```typescript
+// ✅ CORRECT — Always check the return value
+const saved = await entity.Save();
+if (!saved) {
+    LogError(`Save failed: ${entity.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+    return; // Handle the failure
+}
+
+// ✅ CORRECT — Same pattern for Delete
+const deleted = await entity.Delete();
+if (!deleted) {
+    LogError(`Delete failed: ${entity.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+}
+
+// ❌ WRONG — Don't ignore the return value
+await entity.Save(); // Silent failure — you'll never know it failed
+
+// ❌ WRONG — Don't use try/catch for Save/Delete failures
+try {
+    await entity.Save();
+} catch (error) {
+    // This won't catch Save failures! Save returns false, it doesn't throw.
+}
+
+// ❌ WRONG — Don't use LatestResult.Message, use CompleteMessage
+LogError(`Error: ${entity.LatestResult?.Message}`); // Incomplete info
+```
+
+**Rules:**
+- **Always** check the boolean return value of `Save()` and `Delete()`
+- **Always** use `LatestResult?.CompleteMessage` (not `.Message`) for error details — `CompleteMessage` combines all error info
+- **Never** wrap `Save()`/`Delete()` in try/catch expecting them to throw on business logic failures
+- Save/Delete CAN still throw for infrastructure errors (network, connection), but logical failures (validation, permissions, FK violations) return `false`
 
 ### Key Benefits of This Pattern
 - **Type Safety**: Generic method provides full TypeScript typing

@@ -59,7 +59,7 @@ export class FullTextSearchProvider extends BaseSearchProvider {
             }
 
             const results: SearchResultItem[] = ftsResult.Results.map(r => ({
-                ID: `ft-${r.EntityName}-${r.RecordID}`,
+                ID: r.RecordID,
                 EntityName: r.EntityName,
                 RecordID: r.RecordID,
                 SourceType: 'fulltext',

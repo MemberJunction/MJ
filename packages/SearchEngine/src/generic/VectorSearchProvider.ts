@@ -282,7 +282,7 @@ export class VectorSearchProvider extends BaseSearchProvider {
             const rawScore = match.score ?? 0;
 
             return {
-                ID: match.id,
+                ID: recordID,
                 EntityName: entityName,
                 RecordID: recordID,
                 SourceType: 'vector',

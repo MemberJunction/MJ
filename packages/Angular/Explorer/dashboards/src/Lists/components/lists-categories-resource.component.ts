@@ -911,7 +911,7 @@ interface CategoryViewModel {
   encapsulation: ViewEncapsulation.None
 })
 export class ListsCategoriesResource extends BaseResourceComponent implements OnDestroy {
-  private destroy$ = new Subject<void>();
+  protected override destroy$ = new Subject<void>();
 
   isLoading = true;
   categories: MJListCategoryEntity[] = [];
@@ -946,11 +946,13 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
   }
 
   async ngOnInit() {
+    super.ngOnInit();
     await this.loadData();
     this.NotifyLoadComplete();
   }
 
   ngOnDestroy() {
+    super.ngOnDestroy();
     this.destroy$.next();
     this.destroy$.complete();
   }

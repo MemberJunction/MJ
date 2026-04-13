@@ -1,5 +1,15 @@
 # Change Log - @memberjunction/core
 
+## 5.25.0
+
+### Minor Changes
+
+- fc8cd52: Autotagging pipeline with run tracking, retry, and tag merge/delete; taxonomy server-side SQL aggregates; vector sync credential engine integration; search resolver and organic key support; unit test fixes across geo-core, ai-vector-sync, MJServer, and UUID compliance.
+
+### Patch Changes
+
+- @memberjunction/global@5.25.0
+
 ## 5.24.0
 
 ### Minor Changes

@@ -11,7 +11,7 @@
  * @since 2.49.0
  */
 
-import { MJAIAgentTypeEntity,  MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity } from '@memberjunction/core-entities';
+import { MJAIAgentTypeEntity,  MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, FileStorageEngineBase } from '@memberjunction/core-entities';
 import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptEntityExtended, MJAIAgentEntityExtended } from "@memberjunction/ai-core-plus";
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider } from '@memberjunction/core';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
@@ -44,6 +44,8 @@ import {
     ActionChange,
     ActionChangeScope,
     MediaOutput,
+    FileOutputRef,
+    ParseFileOutputRef,
     SecondaryScopeConfig,
     SecondaryScopeValue,
     AgentResponseForm,
@@ -263,6 +265,19 @@ export class BaseAgent {
      */
     private _feedbackRequestId: string | null = null;
 
+    private _resolvedStorageAccountId: string | null = null;
+
+    /**
+     * The resolved FileStorageAccount ID for this agent run. Set during Execute()
+     * via the hierarchical resolution chain (Runtime → Agent → Category → Type → fallback).
+     * Included in the ExecuteAgentResult so AgentRunner can route file artifact uploads.
+     *
+     * Subclasses can read this to customize storage behavior based on the resolved account.
+     */
+    protected get ResolvedStorageAccountId(): string | null {
+        return this._resolvedStorageAccountId;
+    }
+
     /**
      * Access the current run for the agent
      */
@@ -359,6 +374,28 @@ export class BaseAgent {
      * @private
      */
     private static readonly LARGE_BINARY_THRESHOLD = 10000;
+
+    /**
+     * Inspects a set of action output params for any value matching the FileOutputRef shape
+     * (an object with `fileName`, `mimeType`, and either `fileData` or `fileId`).
+     * Returns all matching FileOutputRef values found across all output params.
+     *
+     * Detection is shape-based, not name-based — actions can name their file output
+     * parameter anything and it will still be detected.
+     *
+     * @param outputParams - The output parameters from an action result
+     * @private
+     * @since 5.22.0
+     */
+    private detectFileOutputs(outputParams: ActionParam[]): FileOutputRef[] {
+        const results: FileOutputRef[] = [];
+        for (const param of outputParams) {
+            if (param.Value == null) continue;
+            const ref = ParseFileOutputRef(param.Value);
+            if (ref) results.push(ref);
+        }
+        return results;
+    }
 
     /**
      * Intercepts large media content in action results and replaces with placeholder references.
@@ -670,6 +707,15 @@ export class BaseAgent {
      * @since 3.1.0
      */
     private _mediaOutputs: MediaOutput[] = [];
+
+    /**
+     * Accumulated file outputs (PDF, Excel, Word, etc.) produced by file-generation actions.
+     * Detected from the FileOutput output param after each action executes.
+     * Returned in ExecuteAgentResult.fileOutputs for processing by AgentRunner into MJ: Artifacts.
+     * @private
+     * @since 5.22.0
+     */
+    private _fileOutputs: FileOutputRef[] = [];
 
 
     /**
@@ -1134,6 +1180,9 @@ export class BaseAgent {
             this._dynamicActionLimits = {};
             this._mediaOutputs = [];
             this._messageLifecycleCallback = params.onMessageLifecycle;
+
+            // Resolve storage account for file artifacts
+            this._resolvedStorageAccountId = await this.getStorageAccountID(wrappedParams);
 
             // Check for cancellation after Phase 1
             if (params.cancellationToken?.aborted) {
@@ -3960,7 +4009,12 @@ The context is now within limits. Please retry your request with the recovered c
                 Value: value,
                 Type: 'Input' as const
             }));
-            
+
+            // Build action context: preserve the agent's context and inject resolved storage account ID
+            const actionContext = this._resolvedStorageAccountId
+                ? { ...(typeof params.context === 'object' && params.context ? params.context : {}), __resolvedStorageAccountId: this._resolvedStorageAccountId }
+                : params.context;
+
             // Execute the action and return the full ActionResult
             const result = await actionEngine.RunAction({
                 Action: actionEntity,
@@ -3968,7 +4022,7 @@ The context is now within limits. Please retry your request with the recovered c
                 ContextUser: contextUser,
                 Filters: [],
                 SkipActionLog: false,
-                Context: params.context // pass along our context to actions so they can use it however they need
+                Context: actionContext
             });
             
             if (result.Success) {
@@ -6181,6 +6235,12 @@ The context is now within limits. Please retry your request with the recovered c
                 }
             }
 
+            // Merge sub-agent's file outputs into parent's array for unified artifact creation.
+            if (subAgentResult.fileOutputs?.length) {
+                this._fileOutputs.push(...subAgentResult.fileOutputs);
+                this.logStatus(`📄 Collected ${subAgentResult.fileOutputs.length} file output(s) from sub-agent '${subAgentRequest.name}'`, true);
+            }
+
             // Determine if we should terminate after sub-agent
             const shouldTerminate = subAgentRequest.terminateAfter;
             
@@ -6505,6 +6565,12 @@ The context is now within limits. Please retry your request with the recovered c
                 if (refCount > 0) {
                     this.logStatus(`📦 Collected ${refCount} media reference(s) from related sub-agent '${subAgentRequest.name}'`, true);
                 }
+            }
+
+            // Merge sub-agent's file outputs into parent's array for unified artifact creation.
+            if (subAgentResult.fileOutputs?.length) {
+                this._fileOutputs.push(...subAgentResult.fileOutputs);
+                this.logStatus(`📄 Collected ${subAgentResult.fileOutputs.length} file output(s) from related sub-agent '${subAgentRequest.name}'`, true);
             }
 
             let mergedPayload = previousDecision.newPayload; // Start with parent's payload
@@ -7115,6 +7181,10 @@ The context is now within limits. Please retry your request with the recovered c
                 // Pass actionEntity for generic ValueType=MediaOutput detection from metadata
                 const sanitizedParams = this.interceptLargeBinaryContent(outputParams, result.actionEntity);
 
+                // Collect file outputs (PDF, Excel, Word, etc.) for post-run artifact processing
+                const fileOutputs = this.detectFileOutputs(outputParams);
+                this._fileOutputs.push(...fileOutputs);
+
                 return {
                     actionName: result.action.name,
                     success: result.success,
@@ -7587,11 +7657,8 @@ The context is now within limits. Please retry your request with the recovered c
 
     /**
      * Walks up the agent's category hierarchy looking for an AssignmentStrategy.
-     * Loads categories via RunView and caches them for the duration of this run.
-     * @private
+     * Uses AIEngine.Instance.AgentCategories (cached during engine Config).
      */
-    private _categoryCache: Array<{ ID: string; ParentID: string | null; AssignmentStrategy: string | null }> | null = null;
-
     private async resolveCategoryAssignmentStrategy(
         params: ExecuteAgentParams
     ): Promise<AgentRequestAssignmentStrategy | null> {
@@ -7599,23 +7666,14 @@ The context is now within limits. Please retry your request with the recovered c
         if (!categoryId) return null;
 
         try {
-            // Load all categories if not cached
-            if (!this._categoryCache) {
-                const rv = new RunView();
-                const result = await rv.RunView<{ ID: string; ParentID: string | null; AssignmentStrategy: string | null }>({
-                    EntityName: 'MJ: AI Agent Categories',
-                    Fields: ['ID', 'ParentID', 'AssignmentStrategy'],
-                    ResultType: 'simple'
-                }, params.contextUser);
-                this._categoryCache = result.Success ? result.Results : [];
-            }
+            const categories = AIEngine.Instance.AgentCategories;
 
             // Walk up the tree from the agent's category to the root
             let currentId: string | null = categoryId;
             const visited = new Set<string>(); // prevent infinite loops
             while (currentId && !visited.has(currentId)) {
                 visited.add(currentId);
-                const cat = this._categoryCache.find(c => UUIDsEqual(c.ID, currentId));
+                const cat = categories.find(c => UUIDsEqual(c.ID, currentId));
                 if (!cat) break;
 
                 const strategy = parseAssignmentStrategy(cat.AssignmentStrategy);
@@ -7628,6 +7686,98 @@ The context is now within limits. Please retry your request with the recovered c
         }
 
         return null;
+    }
+
+
+    /**
+     * Resolves the file storage account ID for this agent's file artifacts.
+     *
+     * Resolution chain (first non-null wins):
+     * 1. Runtime override (`params.override?.storageAccountId`)
+     * 2. Agent-level (`params.agent.DefaultStorageAccountID`)
+     * 3. Category hierarchy — walks up the agent's category tree via `ParentID`
+     * 4. Agent Type-level (`agentType.DefaultStorageAccountID`)
+     * 5. System fallback — single active storage account, if only one exists
+     *
+     * This method is `protected` so subclasses can override the resolution logic
+     * for custom storage routing (e.g., routing by file type or tenant).
+     *
+     * @param params - The current agent execution parameters
+     * @returns The resolved FileStorageAccount ID, or null if none configured
+     */
+    protected async getStorageAccountID(params: ExecuteAgentParams): Promise<string | null> {
+        // 1. Runtime override — highest priority
+        if (params.override?.storageAccountId) {
+            return params.override.storageAccountId;
+        }
+
+        // 2. Agent-level override
+        if (params.agent.DefaultStorageAccountID) {
+            return params.agent.DefaultStorageAccountID;
+        }
+
+        // 3. Category tree walk
+        const categoryId = params.agent.CategoryID;
+        if (categoryId) {
+            try {
+                const categories = AIEngine.Instance.AgentCategories;
+
+                let currentId: string | null = categoryId;
+                const visited = new Set<string>();
+                while (currentId && !visited.has(currentId)) {
+                    visited.add(currentId);
+                    const cat = categories.find(c => UUIDsEqual(c.ID, currentId));
+                    if (!cat) break;
+                    if (cat.DefaultStorageAccountID) return cat.DefaultStorageAccountID;
+                    currentId = cat.ParentID;
+                }
+            } catch (error) {
+                LogError(`Error resolving category storage account: ${(error as Error).message}`);
+            }
+        }
+
+        // 4. Agent Type-level default
+        const agentTypeId = params.agent.TypeID;
+        if (agentTypeId) {
+            const agentType = AIEngine.Instance.AgentTypes.find(
+                at => UUIDsEqual(at.ID, agentTypeId)
+            );
+            if (agentType?.DefaultStorageAccountID) {
+                return agentType.DefaultStorageAccountID;
+            }
+        }
+
+        // 5. System fallback — use cached metadata (already loaded during engine Config)
+        const activeAccounts = FileStorageEngineBase.Instance.AccountsWithProviders
+            .filter(a => a.provider.IsActive);
+
+        if (activeAccounts.length === 0) {
+            // No storage configured — return null, inline base64 fallback handles it downstream
+            return null;
+        }
+
+        if (activeAccounts.length === 1) {
+            return activeAccounts[0].account.ID;
+        }
+
+        // 2+ active accounts but nothing configured at any level
+        const agentName = params.agent.Name || params.agent.ID;
+        const typeName = params.agent.TypeID
+            ? AIEngine.Instance.AgentTypes.find(at => UUIDsEqual(at.ID, params.agent.TypeID))?.Name || params.agent.TypeID
+            : 'unknown';
+        const categoryName = params.agent.CategoryID
+            ? AIEngine.Instance.AgentCategories.find(c => UUIDsEqual(c.ID, params.agent.CategoryID))?.Name || params.agent.CategoryID
+            : 'none';
+        const accountNames = activeAccounts.map(a => `'${a.account.Name}' (${a.provider.Name})`).join(', ');
+
+        throw new Error(
+            `Multiple active file storage accounts detected (${accountNames}) but no DefaultStorageAccountID is configured ` +
+            `for agent '${agentName}', category '${categoryName}', or agent type '${typeName}'.\n` +
+            `To fix: Set DefaultStorageAccountID on one of the following (in order of priority):\n` +
+            `  1. Agent '${agentName}' — for this specific agent\n` +
+            `  2. Agent Category '${categoryName}' — for all agents in this category\n` +
+            `  3. Agent Type '${typeName}' — for all agents of this type`
+        );
     }
 
     /**
@@ -8733,7 +8883,9 @@ The context is now within limits. Please retry your request with the recovered c
                 ? this._injectedMemory
                 : undefined,
             mediaOutputs: this._mediaOutputs.length > 0 ? this._mediaOutputs : undefined,
-            feedbackRequestId: this._feedbackRequestId || undefined
+            fileOutputs: this._fileOutputs.length > 0 ? this._fileOutputs : undefined,
+            feedbackRequestId: this._feedbackRequestId || undefined,
+            resolvedStorageAccountId: this._resolvedStorageAccountId || undefined
         };
     }
 

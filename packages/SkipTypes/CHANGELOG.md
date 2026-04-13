@@ -1,5 +1,17 @@
 # Change Log - @memberjunction/skip-types
 
+## 5.25.0
+
+### Patch Changes
+
+- fc8cd52: Autotagging pipeline with run tracking, retry, and tag merge/delete; taxonomy server-side SQL aggregates; vector sync credential engine integration; search resolver and organic key support; unit test fixes across geo-core, ai-vector-sync, MJServer, and UUID compliance.
+- Updated dependencies [fc8cd52]
+  - @memberjunction/core@5.25.0
+  - @memberjunction/interactive-component-types@5.25.0
+  - @memberjunction/ai-core-plus@5.25.0
+  - @memberjunction/data-context@5.25.0
+  - @memberjunction/sql-dialect@5.25.0
+
 ## 5.24.0
 
 ### Patch Changes

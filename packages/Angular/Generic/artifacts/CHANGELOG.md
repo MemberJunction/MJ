@@ -1,5 +1,34 @@
 # @memberjunction/ng-artifacts
 
+## 5.25.0
+
+### Minor Changes
+
+- 008a62d: Add file based artifact I/O
+
+### Patch Changes
+
+- Updated dependencies [fc8cd52]
+- Updated dependencies [d6370e8]
+- Updated dependencies [7ddf732]
+- Updated dependencies [cbcf477]
+- Updated dependencies [c5426c5]
+  - @memberjunction/core@5.25.0
+  - @memberjunction/core-entities@5.25.0
+  - @memberjunction/graphql-dataprovider@5.25.0
+  - @memberjunction/interactive-component-types@5.25.0
+  - @memberjunction/ng-query-viewer@5.25.0
+  - @memberjunction/ng-trees@5.25.0
+  - @memberjunction/ng-base-types@5.25.0
+  - @memberjunction/ng-code-editor@5.25.0
+  - @memberjunction/ng-notifications@5.25.0
+  - @memberjunction/ng-react@5.25.0
+  - @memberjunction/ng-shared-generic@5.25.0
+  - @memberjunction/ng-export-service@5.25.0
+  - @memberjunction/ng-markdown@5.25.0
+  - @memberjunction/ng-pagination@5.25.0
+  - @memberjunction/global@5.25.0
+
 ## 5.24.0
 
 ### Patch Changes
