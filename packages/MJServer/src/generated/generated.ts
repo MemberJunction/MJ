@@ -63453,11 +63453,11 @@ export class MJTag_ {
     @Field(() => [MJTaggedItem_])
     MJTaggedItems_TagIDArray: MJTaggedItem_[]; // Link to MJTaggedItems
     
-    @Field(() => [MJTagCoOccurrence_])
-    MJTagCoOccurrences_TagBIDArray: MJTagCoOccurrence_[]; // Link to MJTagCoOccurrences
-    
     @Field(() => [MJContentItemTag_])
     MJContentItemTags_TagIDArray: MJContentItemTag_[]; // Link to MJContentItemTags
+    
+    @Field(() => [MJTagCoOccurrence_])
+    MJTagCoOccurrences_TagBIDArray: MJTagCoOccurrence_[]; // Link to MJTagCoOccurrences
     
     @Field(() => [MJTagAuditLog_])
     MJTagAuditLogs_RelatedTagIDArray: MJTagAuditLog_[]; // Link to MJTagAuditLogs
@@ -63465,11 +63465,11 @@ export class MJTag_ {
     @Field(() => [MJTagCoOccurrence_])
     MJTagCoOccurrences_TagAIDArray: MJTagCoOccurrence_[]; // Link to MJTagCoOccurrences
     
-    @Field(() => [MJTag_])
-    MJTags_MergedIntoTagIDArray: MJTag_[]; // Link to MJTags
-    
     @Field(() => [MJTagAuditLog_])
     MJTagAuditLogs_TagIDArray: MJTagAuditLog_[]; // Link to MJTagAuditLogs
+    
+    @Field(() => [MJTag_])
+    MJTags_MergedIntoTagIDArray: MJTag_[]; // Link to MJTags
     
 }
 
@@ -63608,16 +63608,6 @@ export class MJTagResolver extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [MJTagCoOccurrence_])
-    async MJTagCoOccurrences_TagBIDArray(@Root() mjtag_: MJTag_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Tag Co Occurrences', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwTagCoOccurrences')} WHERE ${provider.QuoteIdentifier('TagBID')}='${mjtag_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Tag Co Occurrences', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Tag Co Occurrences', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
     @FieldResolver(() => [MJContentItemTag_])
     async MJContentItemTags_TagIDArray(@Root() mjtag_: MJTag_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Content Item Tags', userPayload);
@@ -63625,6 +63615,16 @@ export class MJTagResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwContentItemTags')} WHERE ${provider.QuoteIdentifier('TagID')}='${mjtag_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Content Item Tags', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Content Item Tags', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJTagCoOccurrence_])
+    async MJTagCoOccurrences_TagBIDArray(@Root() mjtag_: MJTag_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Tag Co Occurrences', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwTagCoOccurrences')} WHERE ${provider.QuoteIdentifier('TagBID')}='${mjtag_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Tag Co Occurrences', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Tag Co Occurrences', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -63648,16 +63648,6 @@ export class MJTagResolver extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [MJTag_])
-    async MJTags_MergedIntoTagIDArray(@Root() mjtag_: MJTag_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Tags', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwTags')} WHERE ${provider.QuoteIdentifier('MergedIntoTagID')}='${mjtag_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Tags', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Tags', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
     @FieldResolver(() => [MJTagAuditLog_])
     async MJTagAuditLogs_TagIDArray(@Root() mjtag_: MJTag_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Tag Audit Logs', userPayload);
@@ -63665,6 +63655,16 @@ export class MJTagResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwTagAuditLogs')} WHERE ${provider.QuoteIdentifier('TagID')}='${mjtag_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Tag Audit Logs', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Tag Audit Logs', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJTag_])
+    async MJTags_MergedIntoTagIDArray(@Root() mjtag_: MJTag_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Tags', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwTags')} WHERE ${provider.QuoteIdentifier('MergedIntoTagID')}='${mjtag_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Tags', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Tags', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -70979,9 +70979,6 @@ export class MJUser_ {
     @Field(() => [MJOpenApp_])
     MJOpenApps_InstalledByUserIDArray: MJOpenApp_[]; // Link to MJOpenApps
     
-    @Field(() => [MJTagAuditLog_])
-    MJTagAuditLogs_PerformedByUserIDArray: MJTagAuditLog_[]; // Link to MJTagAuditLogs
-    
     @Field(() => [MJContentItemDuplicate_])
     MJContentItemDuplicates_ResolvedByUserIDArray: MJContentItemDuplicate_[]; // Link to MJContentItemDuplicates
     
@@ -70990,6 +70987,9 @@ export class MJUser_ {
     
     @Field(() => [MJKnowledgeHubSavedSearch_])
     MJKnowledgeHubSavedSearches_UserIDArray: MJKnowledgeHubSavedSearch_[]; // Link to MJKnowledgeHubSavedSearches
+    
+    @Field(() => [MJTagAuditLog_])
+    MJTagAuditLogs_PerformedByUserIDArray: MJTagAuditLog_[]; // Link to MJTagAuditLogs
     
     @Field(() => [MJResourcePermission_])
     MJResourcePermissions_UserIDArray: MJResourcePermission_[]; // Link to MJResourcePermissions

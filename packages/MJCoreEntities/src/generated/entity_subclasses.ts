@@ -44171,7 +44171,7 @@ export class MJApplicationEntity extends BaseEntity<MJApplicationEntityType> {
     * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get DefaultNavItemsObject(): Array<MJApplicationEntity_IDefaultNavItem> | null {
-        const raw = this.Get('DefaultNavItems');
+        const raw = this.DefaultNavItems;
         if (raw !== this._DefaultNavItemsObject_lastRaw) {
             this._DefaultNavItemsObject_cached = raw ? JSON.parse(raw) : null;
             this._DefaultNavItemsObject_lastRaw = raw;
@@ -44180,7 +44180,7 @@ export class MJApplicationEntity extends BaseEntity<MJApplicationEntityType> {
     }
     set DefaultNavItemsObject(value: Array<MJApplicationEntity_IDefaultNavItem> | null) {
         const raw = value ? JSON.stringify(value) : null;
-        this.Set('DefaultNavItems', raw);
+        this.DefaultNavItems = raw;
         this._DefaultNavItemsObject_cached = value;
         this._DefaultNavItemsObject_lastRaw = raw;
     }
@@ -52105,7 +52105,7 @@ export class MJContentProcessRunEntity extends BaseEntity<MJContentProcessRunEnt
     * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get ConfigurationObject(): MJContentProcessRunEntity_IContentProcessRunConfiguration | null {
-        const raw = this.Get('Configuration');
+        const raw = this.Configuration;
         if (raw !== this._ConfigurationObject_lastRaw) {
             this._ConfigurationObject_cached = raw ? JSON.parse(raw) : null;
             this._ConfigurationObject_lastRaw = raw;
@@ -52114,7 +52114,7 @@ export class MJContentProcessRunEntity extends BaseEntity<MJContentProcessRunEnt
     }
     set ConfigurationObject(value: MJContentProcessRunEntity_IContentProcessRunConfiguration | null) {
         const raw = value ? JSON.stringify(value) : null;
-        this.Set('Configuration', raw);
+        this.Configuration = raw;
         this._ConfigurationObject_cached = value;
         this._ConfigurationObject_lastRaw = raw;
     }
@@ -52567,7 +52567,7 @@ export class MJContentSourceTypeEntity extends BaseEntity<MJContentSourceTypeEnt
     * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get ConfigurationObject(): MJContentSourceTypeEntity_IContentSourceTypeConfiguration | null {
-        const raw = this.Get('Configuration');
+        const raw = this.Configuration;
         if (raw !== this._ConfigurationObject_lastRaw) {
             this._ConfigurationObject_cached = raw ? JSON.parse(raw) : null;
             this._ConfigurationObject_lastRaw = raw;
@@ -52576,7 +52576,7 @@ export class MJContentSourceTypeEntity extends BaseEntity<MJContentSourceTypeEnt
     }
     set ConfigurationObject(value: MJContentSourceTypeEntity_IContentSourceTypeConfiguration | null) {
         const raw = value ? JSON.stringify(value) : null;
-        this.Set('Configuration', raw);
+        this.Configuration = raw;
         this._ConfigurationObject_cached = value;
         this._ConfigurationObject_lastRaw = raw;
     }
@@ -52795,7 +52795,7 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
     * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get ConfigurationObject(): MJContentSourceEntity_IContentSourceConfiguration | null {
-        const raw = this.Get('Configuration');
+        const raw = this.Configuration;
         if (raw !== this._ConfigurationObject_lastRaw) {
             this._ConfigurationObject_cached = raw ? JSON.parse(raw) : null;
             this._ConfigurationObject_lastRaw = raw;
@@ -52804,7 +52804,7 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
     }
     set ConfigurationObject(value: MJContentSourceEntity_IContentSourceConfiguration | null) {
         const raw = value ? JSON.stringify(value) : null;
-        this.Set('Configuration', raw);
+        this.Configuration = raw;
         this._ConfigurationObject_cached = value;
         this._ConfigurationObject_lastRaw = raw;
     }
@@ -53230,7 +53230,7 @@ export class MJContentTypeEntity extends BaseEntity<MJContentTypeEntityType> {
     * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get ConfigurationObject(): MJContentTypeEntity_IContentTypeConfiguration | null {
-        const raw = this.Get('Configuration');
+        const raw = this.Configuration;
         if (raw !== this._ConfigurationObject_lastRaw) {
             this._ConfigurationObject_cached = raw ? JSON.parse(raw) : null;
             this._ConfigurationObject_lastRaw = raw;
@@ -53239,7 +53239,7 @@ export class MJContentTypeEntity extends BaseEntity<MJContentTypeEntityType> {
     }
     set ConfigurationObject(value: MJContentTypeEntity_IContentTypeConfiguration | null) {
         const raw = value ? JSON.stringify(value) : null;
-        this.Set('Configuration', raw);
+        this.Configuration = raw;
         this._ConfigurationObject_cached = value;
         this._ConfigurationObject_lastRaw = raw;
     }
@@ -88885,7 +88885,7 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
     * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get GridStateObject(): MJUserViewEntity_IGridState | null {
-        const raw = this.Get('GridState');
+        const raw = this.GridState;
         if (raw !== this._GridStateObject_lastRaw) {
             this._GridStateObject_cached = raw ? JSON.parse(raw) : null;
             this._GridStateObject_lastRaw = raw;
@@ -88894,7 +88894,7 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
     }
     set GridStateObject(value: MJUserViewEntity_IGridState | null) {
         const raw = value ? JSON.stringify(value) : null;
-        this.Set('GridState', raw);
+        this.GridState = raw;
         this._GridStateObject_cached = value;
         this._GridStateObject_lastRaw = raw;
     }
@@ -88920,7 +88920,7 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
     * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get FilterStateObject(): MJUserViewEntity_IFilterState | null {
-        const raw = this.Get('FilterState');
+        const raw = this.FilterState;
         if (raw !== this._FilterStateObject_lastRaw) {
             this._FilterStateObject_cached = raw ? JSON.parse(raw) : null;
             this._FilterStateObject_lastRaw = raw;
@@ -88929,7 +88929,7 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
     }
     set FilterStateObject(value: MJUserViewEntity_IFilterState | null) {
         const raw = value ? JSON.stringify(value) : null;
-        this.Set('FilterState', raw);
+        this.FilterState = raw;
         this._FilterStateObject_cached = value;
         this._FilterStateObject_lastRaw = raw;
     }
@@ -89049,7 +89049,7 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
     * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get SortStateObject(): Array<MJUserViewEntity_ISortStateItem> | null {
-        const raw = this.Get('SortState');
+        const raw = this.SortState;
         if (raw !== this._SortStateObject_lastRaw) {
             this._SortStateObject_cached = raw ? JSON.parse(raw) : null;
             this._SortStateObject_lastRaw = raw;
@@ -89058,7 +89058,7 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
     }
     set SortStateObject(value: Array<MJUserViewEntity_ISortStateItem> | null) {
         const raw = value ? JSON.stringify(value) : null;
-        this.Set('SortState', raw);
+        this.SortState = raw;
         this._SortStateObject_cached = value;
         this._SortStateObject_lastRaw = raw;
     }
@@ -89117,7 +89117,7 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
     * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get CardStateObject(): MJUserViewEntity_ICardState | null {
-        const raw = this.Get('CardState');
+        const raw = this.CardState;
         if (raw !== this._CardStateObject_lastRaw) {
             this._CardStateObject_cached = raw ? JSON.parse(raw) : null;
             this._CardStateObject_lastRaw = raw;
@@ -89126,7 +89126,7 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
     }
     set CardStateObject(value: MJUserViewEntity_ICardState | null) {
         const raw = value ? JSON.stringify(value) : null;
-        this.Set('CardState', raw);
+        this.CardState = raw;
         this._CardStateObject_cached = value;
         this._CardStateObject_lastRaw = raw;
     }
@@ -89152,7 +89152,7 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
     * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get DisplayStateObject(): MJUserViewEntity_IDisplayState | null {
-        const raw = this.Get('DisplayState');
+        const raw = this.DisplayState;
         if (raw !== this._DisplayStateObject_lastRaw) {
             this._DisplayStateObject_cached = raw ? JSON.parse(raw) : null;
             this._DisplayStateObject_lastRaw = raw;
@@ -89161,7 +89161,7 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
     }
     set DisplayStateObject(value: MJUserViewEntity_IDisplayState | null) {
         const raw = value ? JSON.stringify(value) : null;
-        this.Set('DisplayState', raw);
+        this.DisplayState = raw;
         this._DisplayStateObject_cached = value;
         this._DisplayStateObject_lastRaw = raw;
     }
