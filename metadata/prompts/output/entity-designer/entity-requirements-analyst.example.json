@@ -1,0 +1,17 @@
+{
+  "description": "Entity Requirements Analyst outputs FunctionalRequirements in two modes: Draft (with questions) or Final (complete specification).",
+
+  "example_1_draft_mode": {
+    "action": "return_to_parent",
+    "output": {
+      "FunctionalRequirements": "# DRAFT - Needs Clarification\n\n## What We Know\n\nThe user wants to track **project milestones** — key checkpoints for projects they manage. Each milestone has a title and a target date.\n\n## Questions for User\n\n1. **Milestone Status**: Should milestones have a status? For example: Active, Completed, Cancelled? Or just a completion flag (yes/no)?\n\n2. **Project Link**: Should each milestone be linked to a specific project? If yes, is 'Projects' an existing entity in your system?\n\n3. **Assigned Person**: Should milestones be assigned to a specific person? If yes, should this link to the MemberJunction Users table?\n\n4. **Notes**: Do you need a free-text notes or description field on milestones?"
+    }
+  },
+
+  "example_2_final_mode": {
+    "action": "return_to_parent",
+    "output": {
+      "FunctionalRequirements": "# Project Milestones — Entity Requirements\n\n## What This Entity Stores\n\nEach row represents a single milestone (key checkpoint) for a project. Milestones have a title, due date, status, and are associated with a project and optionally an assigned team member.\n\n## Required Columns\n\n| Column (Natural Name) | Type      | Always Required? | Notes / Constraints                   |\n|-----------------------|-----------|------------------|---------------------------------------|\n| Title                 | Text      | Yes              | Max 200 characters, milestone label   |\n| Status                | Text      | Yes              | Active, Completed, Cancelled          |\n\n## Optional Columns\n\n| Column (Natural Name) | Type      | Notes                                          |\n|-----------------------|-----------|------------------------------------------------|\n| Due Date              | Date      | Target completion date, can be null            |\n| Completed Date        | Date      | Actual completion date, null until done        |\n| Notes                 | Long Text | Free-text description or context               |\n\n## Relationships\n\n- **Project ID** → `Projects` entity (FK, required — every milestone belongs to a project)\n- **Assigned User ID** → MJ `Users` entity (FK, optional — the person responsible)\n\n## Uniqueness\n\n- No unique constraints required beyond the auto-generated `ID`.\n\n## Other Notes\n\n- Status valid values: `Active`, `Completed`, `Cancelled`\n- Default status: `Active`\n- The `ID`, `__mj_CreatedAt`, and `__mj_UpdatedAt` columns are auto-managed by MemberJunction."
+    }
+  }
+}

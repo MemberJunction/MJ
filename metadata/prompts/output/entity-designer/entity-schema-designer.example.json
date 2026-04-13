@@ -1,0 +1,146 @@
+{
+  "description": "Entity Schema Designer converts FunctionalRequirements into a complete SchemaDesign payload section. Always includes Prototype, TableDefinition, and ModificationType.",
+
+  "example_1_create_with_fk": {
+    "description": "Creating a new Project Milestones table with foreign keys",
+    "action": "return_to_parent",
+    "output": {
+      "SchemaDesign": {
+        "ModificationType": "create",
+        "Prototype": "| Column           | Type            | Required | Description                        |\n|------------------|-----------------|----------|------------------------------------||\n| Title            | string(200)     | Yes      | Milestone label                    |\n| Status           | string(50)      | Yes      | Active / Completed / Cancelled     |\n| DueDate          | datetime        | No       | Target completion date             |\n| CompletedDate    | datetime        | No       | Actual completion date             |\n| Notes            | text            | No       | Free-text description              |\n| ProjectID        | uuid (FK)       | Yes      | → Projects.ID                      |\n| AssignedUserID   | uuid (FK)       | No       | → __mj.User.ID                     |",
+        "TableDefinition": {
+          "SchemaName": "__mj_UDT",
+          "TableName": "ProjectMilestones",
+          "EntityName": "Project Milestones",
+          "Description": "Key checkpoints and milestones for projects",
+          "Columns": [
+            {
+              "Name": "Title",
+              "Type": "string",
+              "MaxLength": 200,
+              "IsNullable": false,
+              "Description": "Short label for the milestone"
+            },
+            {
+              "Name": "Status",
+              "Type": "string",
+              "RawSqlType": "NVARCHAR(50)",
+              "IsNullable": false,
+              "DefaultValue": "'Active'",
+              "Description": "Active, Completed, or Cancelled"
+            },
+            {
+              "Name": "DueDate",
+              "Type": "datetime",
+              "IsNullable": true,
+              "Description": "Target completion date (null if open-ended)"
+            },
+            {
+              "Name": "CompletedDate",
+              "Type": "datetime",
+              "IsNullable": true,
+              "Description": "Actual date the milestone was completed"
+            },
+            {
+              "Name": "Notes",
+              "Type": "text",
+              "IsNullable": true,
+              "Description": "Additional context or description"
+            },
+            {
+              "Name": "ProjectID",
+              "Type": "uuid",
+              "IsNullable": false,
+              "Description": "FK → Projects.ID (required)"
+            },
+            {
+              "Name": "AssignedUserID",
+              "Type": "uuid",
+              "IsNullable": true,
+              "Description": "FK → __mj.User.ID — the person responsible"
+            }
+          ],
+          "ForeignKeys": [
+            {
+              "ColumnName": "ProjectID",
+              "ReferencedSchema": "__mj_UDT",
+              "ReferencedTable": "Projects",
+              "ReferencedColumn": "ID",
+              "IsSoft": false
+            },
+            {
+              "ColumnName": "AssignedUserID",
+              "ReferencedSchema": "__mj",
+              "ReferencedTable": "User",
+              "ReferencedColumn": "ID",
+              "IsSoft": true
+            }
+          ]
+        }
+      }
+    }
+  },
+
+  "example_2_alter_add_column": {
+    "description": "Modifying an existing entity to add a Priority column",
+    "action": "return_to_parent",
+    "output": {
+      "SchemaDesign": {
+        "ModificationType": "alter",
+        "Prototype": "**Added columns:**\n\n| Column   | Type    | Required | Description               |\n|----------|---------|----------|---------------------------|\n| Priority | integer | No       | 1 (high) – 5 (low) scale |",
+        "TableDefinition": {
+          "SchemaName": "__mj_UDT",
+          "TableName": "ProjectMilestones",
+          "EntityName": "Project Milestones",
+          "Description": "Key checkpoints and milestones for projects",
+          "Columns": [
+            {
+              "Name": "Title",
+              "Type": "string",
+              "MaxLength": 200,
+              "IsNullable": false
+            },
+            {
+              "Name": "Status",
+              "Type": "string",
+              "RawSqlType": "NVARCHAR(50)",
+              "IsNullable": false,
+              "DefaultValue": "'Active'"
+            },
+            {
+              "Name": "DueDate",
+              "Type": "datetime",
+              "IsNullable": true
+            },
+            {
+              "Name": "CompletedDate",
+              "Type": "datetime",
+              "IsNullable": true
+            },
+            {
+              "Name": "Notes",
+              "Type": "text",
+              "IsNullable": true
+            },
+            {
+              "Name": "ProjectID",
+              "Type": "uuid",
+              "IsNullable": false
+            },
+            {
+              "Name": "AssignedUserID",
+              "Type": "uuid",
+              "IsNullable": true
+            },
+            {
+              "Name": "Priority",
+              "Type": "integer",
+              "IsNullable": true,
+              "Description": "Priority ranking: 1=highest, 5=lowest"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

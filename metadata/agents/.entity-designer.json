@@ -1,0 +1,222 @@
+[
+  {
+    "fields": {
+      "Name": "Entity Designer",
+      "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Platform Management",
+      "Description": "Conversational agent that guides users through creating and modifying MemberJunction database entities. Orchestrates Requirements Analyst, Schema Designer, Schema Validator, and Schema Builder sub-agents. Users describe what they want to store in plain English and Entity Designer handles all the schema design and deployment.",
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+      "Status": "Active",
+      "ExecutionOrder": 0,
+      "ArtifactCreationMode": "System Only",
+      "ExposeAsAction": true,
+      "IconClass": "fa-solid fa-database",
+      "PayloadSelfWritePaths": [
+        "ID"
+      ]
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Prompts": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "PromptID": "@lookup:MJ: AI Prompts.Name=Entity Designer - Main Prompt",
+            "ExecutionOrder": 0,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "BFBEF65C-CBA1-4C3A-B1FC-F98B3C428C0D"
+          },
+          "sync": {
+            "lastModified": "2026-04-13T06:12:36.926Z",
+            "checksum": "0d63b3f4727ce1cea7d04a0c955b3e3dc0ac3eaa6395650267d438a06f4278ee"
+          }
+        }
+      ],
+      "MJ: AI Agent Actions": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Describe Entity",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "513BF203-054D-41B2-93BD-A065BB0C30A7"
+          },
+          "sync": {
+            "lastModified": "2026-04-13T06:12:36.949Z",
+            "checksum": "c4a058827fa89e153efba3bdf82d4b7a6f303c6160af78252044b3de9ec95f79"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=List My Entities",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "713C9B62-6407-4B6B-8890-48538CA37558"
+          },
+          "sync": {
+            "lastModified": "2026-04-13T06:12:36.960Z",
+            "checksum": "dadfd48e043271c0eb2c89318de09414845302cbac388a911ec80e6c3fb90e2b"
+          }
+        }
+      ],
+      "MJ: AI Agents": [
+        {
+          "fields": {
+            "ParentID": "@parent:ID",
+            "Name": "Entity Requirements Analyst",
+            "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Platform Management",
+            "Description": "Gathers and clarifies data model requirements through iterative conversation. Asks the user about columns, data types, relationships, and constraints. Writes requirements to FunctionalRequirements payload field.",
+            "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+            "Status": "Active",
+            "ExecutionOrder": 1,
+            "ExposeAsAction": false,
+            "IconClass": "fa-solid fa-clipboard-question",
+            "PayloadDownstreamPaths": [
+              "*"
+            ],
+            "PayloadUpstreamPaths": [
+              "FunctionalRequirements"
+            ]
+          },
+          "relatedEntities": {
+            "MJ: AI Agent Prompts": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "PromptID": "@lookup:MJ: AI Prompts.Name=Entity Requirements Analyst - Main Prompt",
+                  "ExecutionOrder": 0,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "BAE03E5E-CA66-4F71-A29F-939AE8A6B438"
+                },
+                "sync": {
+                  "lastModified": "2026-04-13T06:12:37.008Z",
+                  "checksum": "4194877127e94d18c49f23af338223b2daa49fbf7e37f03f3cae0817b60f0f36"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "2554A2BE-5147-43D7-8BEB-B2C15C02FAC7"
+          },
+          "sync": {
+            "lastModified": "2026-04-13T06:12:36.828Z",
+            "checksum": "b07057db2079d71e4b5f778c87284b186f24386d3b0354153889e6c9edba3e9e"
+          }
+        },
+        {
+          "fields": {
+            "ParentID": "@parent:ID",
+            "Name": "Entity Schema Designer",
+            "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Platform Management",
+            "Description": "Converts functional requirements into a precise TableDefinition JSON. Knows MemberJunction schema conventions (column types, naming rules, auto-managed columns). Writes SchemaDesign including a human-readable prototype table.",
+            "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+            "Status": "Active",
+            "ExecutionOrder": 2,
+            "ExposeAsAction": false,
+            "DriverClass": "EntityDesignerSchemaDesigner",
+            "IconClass": "fa-solid fa-pen-ruler",
+            "PayloadDownstreamPaths": [
+              "*"
+            ],
+            "PayloadUpstreamPaths": [
+              "SchemaDesign"
+            ],
+            "FinalPayloadValidationMode": "Retry"
+          },
+          "relatedEntities": {
+            "MJ: AI Agent Prompts": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "PromptID": "@lookup:MJ: AI Prompts.Name=Entity Schema Designer - Main Prompt",
+                  "ExecutionOrder": 0,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "2102B0B4-F133-4010-B6C6-96B67AB650C7"
+                },
+                "sync": {
+                  "lastModified": "2026-04-13T06:12:37.018Z",
+                  "checksum": "2ba532108ecd0bdb818969f5ce2379ac6f43661d9cddb1f436f72a3b36c33c4d"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "FD11FB0D-A0CA-4EDA-A725-0933AB1BCC42"
+          },
+          "sync": {
+            "lastModified": "2026-04-13T06:12:36.850Z",
+            "checksum": "0ed6aac6bc635f5fff61376d0e2048ed84023bd20409b1f1603fb0cbcc892ddc"
+          }
+        },
+        {
+          "fields": {
+            "ParentID": "@parent:ID",
+            "Name": "Entity Schema Validator",
+            "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Platform Management",
+            "Description": "Code-based agent that deterministically validates a TableDefinition. Checks authorization, blocked schemas, structural validity (SchemaEngine), reserved column names, and naming conflicts. No LLM involved.",
+            "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+            "Status": "Active",
+            "ExecutionOrder": 3,
+            "ExposeAsAction": false,
+            "DriverClass": "EntityDesignerSchemaValidator",
+            "IconClass": "fa-solid fa-shield-check",
+            "PayloadDownstreamPaths": [
+              "*"
+            ],
+            "PayloadUpstreamPaths": [
+              "ValidationResult"
+            ]
+          },
+          "primaryKey": {
+            "ID": "C041DFDD-28C8-4A6D-83A5-BFF399764B23"
+          },
+          "sync": {
+            "lastModified": "2026-04-13T06:12:36.872Z",
+            "checksum": "5d894be5dcf769a6a4a499a0ea0089056dc3ab5cd1ca19f80fa9bdd0f335aee6"
+          }
+        },
+        {
+          "fields": {
+            "ParentID": "@parent:ID",
+            "Name": "Entity Schema Builder",
+            "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Platform Management",
+            "Description": "Code-based agent that executes the SchemaEngine → RuntimeSchemaManager pipeline to materialise a validated TableDefinition as a live MemberJunction entity. Runs migrations, triggers CodeGen, and persists provenance settings.",
+            "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+            "Status": "Active",
+            "ExecutionOrder": 4,
+            "ExposeAsAction": false,
+            "DriverClass": "EntityDesignerSchemaBuilder",
+            "IconClass": "fa-solid fa-hammer",
+            "PayloadDownstreamPaths": [
+              "*"
+            ],
+            "PayloadUpstreamPaths": [
+              "EntityDesignerResult"
+            ]
+          },
+          "primaryKey": {
+            "ID": "07D3C950-E4A2-47EE-A485-03A4972BF1D9"
+          },
+          "sync": {
+            "lastModified": "2026-04-13T06:12:36.891Z",
+            "checksum": "f550ef6cd4adab5aca3d57b36b7ca0ba46cbcaeb0016829a0ca015bd7baa3c32"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "A3C9C16A-90C7-4DC5-AFA0-9922251A1756"
+    },
+    "sync": {
+      "lastModified": "2026-04-13T06:12:36.755Z",
+      "checksum": "76cc6202853379d778a09a1e3092e4af8c2ff5dc15980150a1d542a88768d919"
+    }
+  }
+]
