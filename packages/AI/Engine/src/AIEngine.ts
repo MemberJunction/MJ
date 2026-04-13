@@ -986,29 +986,41 @@ export class AIEngine extends BaseSingleton<AIEngine> {
 
     /**
      * Compose base scope filters (agentId/userId/companyId) with an optional additional filter
-     * into a single filter callback for use with FindNearest.
+     * into a single filter callback for use with FindNearest. Always applies a Status='Active'
+     * check so that notes revoked during maintenance (e.g. consolidation sources) are excluded
+     * at search time even if they're still in the vector index.
+     *
+     * IMPORTANT: We can't trust `metadata.noteEntity.Status` because BaseEngine's CacheLocal
+     * cache invalidation doesn't update the entity instance in place — it removes the old
+     * instance and replaces with a fresh one from the DB. The vector store's metadata still
+     * holds a reference to the ORIGINAL instance (frozen at vector-add time), so reading its
+     * Status returns the stale value. Instead we look up the note's current state in the
+     * authoritative cache (`this.AgentNotes`) by ID. If the note is missing from the cache or
+     * its current Status is not 'Active', it's filtered out.
      */
     private composeNoteFilters(
         agentId?: string,
         userId?: string,
         companyId?: string,
         additionalFilter?: (metadata: NoteEmbeddingMetadata) => boolean
-    ): ((metadata: NoteEmbeddingMetadata) => boolean) | undefined {
-        const needsBaseFilter = agentId || userId || companyId;
-        const baseFilter = needsBaseFilter
-            ? (metadata: NoteEmbeddingMetadata): boolean => {
-                if (agentId && metadata.agentId && metadata.agentId !== agentId) return false;
-                if (userId && metadata.userId && metadata.userId !== userId) return false;
-                if (companyId && metadata.companyId && metadata.companyId !== companyId) return false;
-                return true;
-            }
-            : undefined;
+    ): ((metadata: NoteEmbeddingMetadata) => boolean) {
+        const baseFilter = (metadata: NoteEmbeddingMetadata): boolean => {
+            // Look up the note's current state in the authoritative cache. If it's been
+            // revoked/archived, the cache invalidation removed the entity instance entirely,
+            // so `currentNote` will be undefined and the note is filtered out.
+            const currentNote = this.AgentNotes.find(n => n.ID === metadata.id);
+            if (!currentNote || currentNote.Status !== 'Active') return false;
+            if (agentId && metadata.agentId && metadata.agentId !== agentId) return false;
+            if (userId && metadata.userId && metadata.userId !== userId) return false;
+            if (companyId && metadata.companyId && metadata.companyId !== companyId) return false;
+            return true;
+        };
 
-        if (baseFilter && additionalFilter) {
+        if (additionalFilter) {
             return (metadata: NoteEmbeddingMetadata): boolean =>
                 baseFilter(metadata) && additionalFilter(metadata);
         }
-        return baseFilter || additionalFilter || undefined;
+        return baseFilter;
     }
 
     /**

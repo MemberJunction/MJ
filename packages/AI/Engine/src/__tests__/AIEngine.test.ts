@@ -772,6 +772,92 @@ describe('AIEngine', () => {
     });
 
     // ======================================================================
+    // composeNoteFilters — Status filter (vector cache leak fix)
+    // ======================================================================
+
+    describe('composeNoteFilters', () => {
+        // Helper to invoke the protected method and apply the resulting filter
+        // to a metadata payload.
+        const callFilter = (
+            engine: AIEngine,
+            metadata: Record<string, unknown>,
+            agentId?: string,
+            userId?: string,
+            companyId?: string,
+            additionalFilter?: (m: Record<string, unknown>) => boolean
+        ): boolean => {
+            const filter = (engine as unknown as Record<string, Function>)['composeNoteFilters'](
+                agentId, userId, companyId, additionalFilter
+            );
+            return filter(metadata);
+        };
+
+        beforeEach(() => {
+            // Reset AgentNotes cache per test
+            mockBaseInstance.AgentNotes = [];
+        });
+
+        it('should return true when note is in cache with Status=Active', () => {
+            mockBaseInstance.AgentNotes = [
+                { ID: 'note-1', Status: 'Active', AgentID: 'agent-1' } as never
+            ];
+            const metadata = { id: 'note-1', agentId: 'agent-1', userId: null, companyId: null };
+            expect(callFilter(engine, metadata, 'agent-1')).toBe(true);
+        });
+
+        it('should return false when note has Status=Revoked in cache', () => {
+            mockBaseInstance.AgentNotes = [
+                { ID: 'note-1', Status: 'Revoked', AgentID: 'agent-1' } as never
+            ];
+            const metadata = { id: 'note-1', agentId: 'agent-1', userId: null, companyId: null };
+            expect(callFilter(engine, metadata, 'agent-1')).toBe(false);
+        });
+
+        it('should return false when note has Status=Archived in cache', () => {
+            mockBaseInstance.AgentNotes = [
+                { ID: 'note-1', Status: 'Archived', AgentID: 'agent-1' } as never
+            ];
+            const metadata = { id: 'note-1', agentId: 'agent-1', userId: null, companyId: null };
+            expect(callFilter(engine, metadata, 'agent-1')).toBe(false);
+        });
+
+        it('should return false when note is missing from cache (cache invalidated)', () => {
+            mockBaseInstance.AgentNotes = [];
+            const metadata = { id: 'note-missing', agentId: 'agent-1', userId: null, companyId: null };
+            expect(callFilter(engine, metadata, 'agent-1')).toBe(false);
+        });
+
+        it('should filter by agentId when provided and Status is Active', () => {
+            mockBaseInstance.AgentNotes = [
+                { ID: 'note-1', Status: 'Active', AgentID: 'agent-1' } as never
+            ];
+            const metadata = { id: 'note-1', agentId: 'agent-1', userId: null, companyId: null };
+            // Wrong agentId → should be filtered
+            expect(callFilter(engine, metadata, 'different-agent')).toBe(false);
+        });
+
+        it('should compose with additionalFilter', () => {
+            mockBaseInstance.AgentNotes = [
+                { ID: 'note-1', Status: 'Active', AgentID: 'agent-1' } as never
+            ];
+            const metadata = { id: 'note-1', agentId: 'agent-1', userId: null, companyId: null, type: 'Preference' };
+            const additional = (m: Record<string, unknown>) => m.type === 'Preference';
+            expect(callFilter(engine, metadata, 'agent-1', undefined, undefined, additional)).toBe(true);
+            const additionalReject = (m: Record<string, unknown>) => m.type === 'Constraint';
+            expect(callFilter(engine, metadata, 'agent-1', undefined, undefined, additionalReject)).toBe(false);
+        });
+
+        it('should reject Active note matching scope but failing additionalFilter', () => {
+            mockBaseInstance.AgentNotes = [
+                { ID: 'note-1', Status: 'Active', AgentID: 'agent-1' } as never
+            ];
+            const metadata = { id: 'note-1', agentId: 'agent-1', userId: null, companyId: null };
+            const additionalReject = () => false;
+            expect(callFilter(engine, metadata, 'agent-1', undefined, undefined, additionalReject)).toBe(false);
+        });
+    });
+
+    // ======================================================================
     // FindSimilarAgentExamples validation
     // ======================================================================
 
