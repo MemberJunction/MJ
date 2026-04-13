@@ -21,6 +21,7 @@ export class ProcedureToFunctionRule implements IConversionRule {
   AppliesTo: StatementType[] = ['CREATE_PROCEDURE'];
   Priority = 30;
   BypassSqlglot = true;
+  BypassJustification = 'T-SQL CREATE PROCEDURE → PG CREATE FUNCTION conversion: parameter renaming (@param → p_param), DECLARE handling, RAISERROR → RAISE EXCEPTION, INSERT...OUTPUT handling, RETURN value semantics, and SETOF return types. This is structural transformation sqlglot does not perform.';
 
   PostProcess(sql: string, _originalSQL: string, context: ConversionContext): string {
     // Extract proc name via regex

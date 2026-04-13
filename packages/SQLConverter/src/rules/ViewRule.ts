@@ -42,6 +42,7 @@ export class ViewRule implements IConversionRule {
   AppliesTo: StatementType[] = ['CREATE_VIEW'];
   Priority = 20;
   BypassSqlglot = true;
+  BypassJustification = 'CREATE VIEW handling needs DROP VIEW IF EXISTS CASCADE before CREATE OR REPLACE when DDL has changed (column lists may differ), topological sort of view dependencies, and WITH CHECK OPTION handling. sqlglot does not perform DDL-aware DROP+CREATE or dependency ordering.';
 
   PostProcess(sql: string, _originalSQL: string, context: ConversionContext): string {
     let result = sql;

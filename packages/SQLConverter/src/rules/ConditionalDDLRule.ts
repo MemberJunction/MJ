@@ -25,6 +25,7 @@ export class ConditionalDDLRule implements IConversionRule {
   AppliesTo: StatementType[] = ['CONDITIONAL_DDL'];
   Priority = 55;
   BypassSqlglot = true;
+  BypassJustification = 'T-SQL IF NOT EXISTS / IF OBJECT_ID guards around DDL (CREATE INDEX, CREATE TABLE, etc.) need conversion to PG IF NOT EXISTS clauses or DO $ BEGIN ... EXCEPTION blocks. sqlglot does not perform this structural transformation.';
 
   PostProcess(sql: string, _originalSQL: string, _context: ConversionContext): string {
     let result = sql;

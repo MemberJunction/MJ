@@ -8,6 +8,7 @@ export class GrantRule implements IConversionRule {
   AppliesTo: StatementType[] = ['GRANT', 'REVOKE'];
   Priority = 80;
   BypassSqlglot = true;
+  BypassJustification = 'T-SQL GRANT EXEC → PG GRANT EXECUTE renaming, plus wrapping each GRANT in DO $ EXCEPTION blocks so the grant tolerates missing roles or functions during fresh installs. sqlglot does not apply this idempotency wrapping or rename EXEC → EXECUTE.';
 
   PostProcess(sql: string, _originalSQL: string, context: ConversionContext): string {
     let result = convertIdentifiers(sql);

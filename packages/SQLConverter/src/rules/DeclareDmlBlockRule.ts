@@ -26,6 +26,7 @@ export class DeclareDmlBlockRule implements IConversionRule {
   AppliesTo: StatementType[] = ['DECLARE_DML_BLOCK'];
   Priority = 53;
   BypassSqlglot = true;
+  BypassJustification = 'T-SQL DECLARE @var blocks with DML or dynamic EXEC are control-flow constructs that need wrapping in PG DO $ DECLARE ... BEGIN ... END $ blocks with @var → v_var renaming, IF/BEGIN/END → IF/THEN/END IF, and EXEC(\'...\' + @var) → EXECUTE format(\'...\', v_var). sqlglot does not perform this structural transformation.';
 
   PostProcess(sql: string, _originalSQL: string, _context: ConversionContext): string {
     let result = sql;
@@ -57,11 +58,18 @@ export class DeclareDmlBlockRule implements IConversionRule {
       "RAISE EXCEPTION '$1';"
     );
 
+    // Convert EXEC('str' + v_var + 'str') → EXECUTE format('str %I str', v_var).
+    // Must run BEFORE quotePascalCaseIdentifiers (so EXEC isn't already quoted to "EXEC").
+    result = this.convertDynamicExec(result);
+
     // Quote PascalCase identifiers (ID, Name, etc.) outside string literals
     result = quotePascalCaseIdentifiers(result);
 
     // Convert IF condition BEGIN ... END → IF condition THEN ... END IF;
     result = this.convertIfBlocks(result);
+
+    // Convert single-statement IF bodies (IF cond STMT without BEGIN/END) to IF...THEN...END IF;
+    result = this.convertSingleStatementIf(result);
 
     // Convert UPDATE alias SET alias.col FROM table alias JOIN → PG UPDATE FROM
     result = this.convertUpdateFrom(result);
@@ -117,6 +125,69 @@ export class DeclareDmlBlockRule implements IConversionRule {
       if (seg.type !== 'code') return seg.text;
       return seg.text.replace(/@(\w+)/g, 'v_$1');
     }).join('');
+  }
+
+  /**
+   * Convert dynamic T-SQL EXEC('str' + @var + 'str') to PG EXECUTE format('str %I str', v_var).
+   *
+   * T-SQL uses string concatenation with `+`. PG uses `format()` with `%I` for identifiers
+   * (for names like constraint names) or `%L` for literals. We default to `%I` since that's
+   * the common pattern for drop-constraint-by-name.
+   */
+  private convertDynamicExec(sql: string): string {
+    return sql.replace(
+      /\bEXEC\s*\(\s*((?:'[^']*'|v_\w+|\s|\+)+)\s*\)/gi,
+      (_match, expr: string) => {
+        // Split expr on + operators, preserve tokens
+        const parts = expr.split(/\s*\+\s*/).map(p => p.trim()).filter(Boolean);
+        const fmtParts: string[] = [];
+        const args: string[] = [];
+        for (const part of parts) {
+          if (/^'.*'$/.test(part)) {
+            // String literal — strip quotes, escape % for format()
+            fmtParts.push(part.slice(1, -1).replace(/%/g, '%%'));
+          } else if (/^v_\w+$/.test(part)) {
+            // Variable reference — use %I (identifier quoting).
+            // %I already wraps the value in double quotes, so the surrounding
+            // string literals shouldn't include their own quotes around %I.
+            fmtParts.push('%I');
+            args.push(part);
+          } else {
+            // Unknown — use %s
+            fmtParts.push('%s');
+            args.push(part);
+          }
+        }
+        // Strip redundant double quotes immediately before/after %I — these came
+        // from T-SQL SQL-string concatenation patterns like '"... DROP CONSTRAINT "' + @name + '"'
+        // where the quotes are meant to quote the identifier. %I does that job.
+        let fmt = fmtParts.join('');
+        // Strip redundant quoting around %I — T-SQL sources often have `"' + @var + '"`
+        // or `[' + @var + ']` meaning "quote the identifier", which %I already does.
+        fmt = fmt.replace(/"%I"/g, '%I');
+        fmt = fmt.replace(/\[%I\]/g, '%I');
+        const argList = args.length ? ', ' + args.join(', ') : '';
+        return `EXECUTE format('${fmt}'${argList})`;
+      }
+    );
+  }
+
+  /**
+   * Convert single-statement IF bodies to IF...THEN...END IF; form.
+   *   IF cond EXECUTE ...;     →  IF cond THEN EXECUTE ...; END IF;
+   *   IF cond UPDATE ...;      →  IF cond THEN UPDATE ...; END IF;
+   *
+   * Only converts IF statements that don't already have THEN (to avoid double-conversion).
+   */
+  private convertSingleStatementIf(sql: string): string {
+    return sql.replace(
+      /^(\s*)IF\s+([\s\S]+?)\n\s+((?:EXECUTE|UPDATE|INSERT|DELETE|SELECT|RAISE)\s[^;]*;)/gmi,
+      (match, indent: string, cond: string, stmt: string) => {
+        // Skip if already converted (has THEN)
+        if (/\bTHEN\b/i.test(cond)) return match;
+        return `${indent}IF ${cond.trim()} THEN\n${indent}  ${stmt}\n${indent}END IF;`;
+      }
+    );
   }
 
   /** Convert IF cond BEGIN ... END to IF cond THEN ... END IF; */

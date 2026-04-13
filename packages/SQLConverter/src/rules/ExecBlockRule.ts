@@ -45,6 +45,7 @@ export class ExecBlockRule implements IConversionRule {
   AppliesTo: StatementType[] = ['EXEC_BLOCK'];
   Priority = 52;
   BypassSqlglot = true;
+  BypassJustification = 'DECLARE @var; SET @var = ...; EXEC schema.proc(...) blocks (the metadata-sync EXEC pattern) need conversion to PG PERFORM calls inside DO $ blocks with variable renaming and parameter passing. sqlglot does not understand the T-SQL @var → PG variable mapping or how to wrap as PERFORM.';
 
   PostProcess(sql: string, _originalSQL: string, _context: ConversionContext): string {
     // Split into individual DECLARE/SET/EXEC blocks (a file may contain many)

@@ -66,6 +66,7 @@ export class TriggerRule implements IConversionRule {
   AppliesTo: StatementType[] = ['CREATE_TRIGGER'];
   Priority = 40;
   BypassSqlglot = true;
+  BypassJustification = 'T-SQL CREATE TRIGGER (AFTER/INSTEAD OF, INSERTED/DELETED virtual tables) → PG trigger function + CREATE TRIGGER pair. Different execution model entirely; sqlglot cannot produce the required two-statement PG output.';
 
   PostProcess(sql: string, _originalSQL: string, _context: ConversionContext): string {
     // Extract trigger components with regex

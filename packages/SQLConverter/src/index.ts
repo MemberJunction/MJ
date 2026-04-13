@@ -1,3 +1,8 @@
+/**
+ * @deprecated Use `convertFile` (BatchConverter) for production conversion.
+ * `ConversionPipeline` is retained for backward compat and LLM-fallback tests.
+ * See `ConversionPipeline.ts` for migration guidance.
+ */
 export { ConversionPipeline } from './ConversionPipeline.js';
 export { SQLFileSplitter } from './SQLFileSplitter.js';
 export { DatabaseAuditRunner } from './DatabaseAuditor.js';

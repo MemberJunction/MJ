@@ -15,6 +15,7 @@ export class CreateTableRule implements IConversionRule {
   AppliesTo: StatementType[] = ['CREATE_TABLE'];
   Priority = 10;
   BypassSqlglot = true;
+  BypassJustification = 'T-SQL CREATE TABLE has many MJ-specific patterns: __mj_CreatedAt/__mj_UpdatedAt timestamp triggers, NEWSEQUENTIALID() defaults, IDENTITY columns, computed columns, DEFAULT NEWID() patterns, custom collations, and MJ\'s hand-crafted PG header (extensions, schema, implicit cast). sqlglot output requires extensive post-fixup; the rule produces clean PG directly.';
 
   /** SQL keywords and PG types that should NOT be quoted as column names */
   private static readonly RESERVED_WORDS = new Set([
