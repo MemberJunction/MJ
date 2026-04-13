@@ -2542,6 +2542,13 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           appId: accessResult.appId
         };
 
+      case 'not_authorized':
+        return {
+          type: 'no_access',
+          appName: accessResult.appName,
+          appId: accessResult.appId
+        };
+
       default:
         // 'accessible' shouldn't reach here, but handle it as a generic error
         return {
