@@ -32,7 +32,7 @@ import {
 } from '@memberjunction/ng-entity-viewer';
 import { ViewSelectedEvent, SaveViewRequestedEvent, ViewSelectorComponent } from './components/view-selector/view-selector.component';
 import { CompositeFilterDescriptor, FilterFieldInfo, createEmptyFilter } from '@memberjunction/ng-filter-builder';
-import { MJUserViewEntityExtended } from '@memberjunction/core-entities';
+import { MJUserViewEntityExtended, UserViewEngine } from '@memberjunction/core-entities';
 import { ExplorerStateService } from './services/explorer-state.service';
 import { DataExplorerState, DataExplorerFilter, BreadcrumbItem, DataExplorerDeepLink, DataExplorerViewMode, RecentRecordAccess, FavoriteRecord, AppEntityGroup } from './models/explorer-state.interface';
 import { MapRenderMode } from '@memberjunction/ng-map-view';
@@ -113,6 +113,13 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * Use this alongside contextName for a fully customized header (e.g., "fa-solid fa-users" for CRM).
    */
   @Input() contextIcon: string | null = null;
+
+  /**
+   * Initial query params forwarded from the resource wrapper.
+   * On hard refresh, the shell delivers params to the wrapper (which has Data.Configuration.queryParams),
+   * not to this inner dashboard component. This input bridges that gap.
+   */
+  @Input() initialQueryParams: Record<string, string> = {};
 
   /**
    * Emitted when the display title should change (entity selected, record opened, etc.)
@@ -580,9 +587,16 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     // before the user settings have been loaded from the server
     await UserInfoEngine.Instance.Config(false);
 
-    // Read initial query params from the framework - URL wins over persisted state
-    // This must happen before loading entities to prevent race conditions
-    const rawParams = this.GetQueryParams();
+    // Read initial query params — prefer params forwarded from the resource wrapper
+    // (which has Data.Configuration.queryParams from the shell), then fall back to
+    // this component's own GetQueryParams() for cases where the dashboard is used standalone.
+    const wrapperParams = this.initialQueryParams && Object.keys(this.initialQueryParams).length > 0
+      ? this.initialQueryParams
+      : null;
+    const ownParams = this.GetQueryParams();
+    const rawParams = wrapperParams || (Object.keys(ownParams).length > 0 ? ownParams : {});
+    console.log('[DataExplorer] initDashboard: wrapperParams=', JSON.stringify(wrapperParams), 'ownParams=', JSON.stringify(ownParams), 'using=', JSON.stringify(rawParams));
+
     const urlState = this.buildDeepLinkFromParams(rawParams);
 
     // Set context for state service (enables context-specific settings)
@@ -599,11 +613,14 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
     // Apply URL state after entities are loaded
     if (urlState) {
+      console.log('[DataExplorer] initDashboard: applying URL state (init path)');
       // URL has state - apply it (overrides persisted state)
-      this.applyUrlState(urlState);
+      await this.applyUrlState(urlState);
     } else if (this.deepLink) {
-      // No URL state but @Input deepLink provided - use that
+      console.log('[DataExplorer] initDashboard: no URL state, using @Input deepLink');
       await this.applyDeepLink(this.deepLink);
+    } else {
+      console.log('[DataExplorer] initDashboard: no URL state and no deepLink — using persisted state');
     }
 
     // Subscribe to state changes
@@ -613,6 +630,20 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
         const entityChanged = state.selectedEntityName !== this.state.selectedEntityName;
 
         this.state = state;
+
+        // Self-correct map mode: if a URL-sourced mode is pending and state
+        // has diverged (e.g., reset to 'point' by some init step), re-apply it.
+        if (this._pendingMapMode && state.mapRenderMode !== this._pendingMapMode) {
+          const mode = this._pendingMapMode;
+          this._pendingMapMode = null; // Clear first to prevent infinite loop
+          console.log('[DataExplorer] state subscription: re-applying pending map mode:', mode, '(state had:', state.mapRenderMode, ')');
+          this.stateService.updateState({ mapRenderMode: mode });
+          return; // Let the next subscription fire handle the rest
+        }
+        // Clear pending once state matches
+        if (this._pendingMapMode && state.mapRenderMode === this._pendingMapMode) {
+          this._pendingMapMode = null;
+        }
 
         // When entity changes, clear user search text and update title
         if (entityChanged) {
@@ -1791,10 +1822,14 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * Get the current map display state for passing to the EntityViewer/MapView.
    */
   get mapDisplayState(): { RenderMode: MapRenderMode; ZoomLevel: number; CenterLat: number; CenterLng: number } | null {
-    if (this.state.mapZoom == null) return null;
+    // Always return state when a non-default render mode is set (even without saved zoom/center),
+    // so the map component respects the URL's mapMode parameter on cold loads.
+    if (this.state.mapZoom == null && (!this.state.mapRenderMode || this.state.mapRenderMode === 'point')) {
+      return null;
+    }
     return {
       RenderMode: this.state.mapRenderMode || 'point',
-      ZoomLevel: this.state.mapZoom,
+      ZoomLevel: this.state.mapZoom ?? 2,
       CenterLat: this.state.mapCenterLat ?? 20,
       CenterLng: this.state.mapCenterLng ?? 0
     };
@@ -1805,8 +1840,18 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * Persists zoom, center, and render mode across page reloads.
    */
   public onMapDisplayStateChange(state: { RenderMode?: MapRenderMode; ZoomLevel?: number; CenterLat?: number; CenterLng?: number }): void {
+    const incomingMode = state.RenderMode || 'point';
+
+    // If a pending URL map mode exists and the map is emitting its default 'point',
+    // use the pending mode instead. Otherwise accept the incoming mode (user-initiated).
+    const newRenderMode = (this._pendingMapMode && incomingMode === 'point' && this._pendingMapMode !== 'point')
+      ? this._pendingMapMode
+      : incomingMode;
+
+    console.log('[DataExplorer] onMapDisplayStateChange: incoming=', incomingMode, 'pending=', this._pendingMapMode, 'final=', newRenderMode);
+
     this.stateService.updateState({
-      mapRenderMode: state.RenderMode || 'point',
+      mapRenderMode: newRenderMode,
       mapZoom: state.ZoomLevel ?? null,
       mapCenterLat: state.CenterLat ?? null,
       mapCenterLng: state.CenterLng ?? null
@@ -2391,6 +2436,13 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   /** Record ID to select once data loads (from deep link) */
   private pendingRecordSelection: string | null = null;
 
+  /**
+   * Pending map mode from URL that must survive initialization state resets.
+   * Set during applyUrlState, cleared once state matches or after first successful re-apply.
+   * The state subscription self-corrects: any time state diverges from this value, it re-applies.
+   */
+  private _pendingMapMode: MapRenderMode | null = null;
+
   // ========================================
   // BREADCRUMB NAVIGATION
   // ========================================
@@ -2485,8 +2537,13 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     const record = params['record'] || null;
     const filterParam = params['filter'] || null;
     const view = (params['view'] as DataExplorerViewMode) || null;
+    const viewId = params['viewId'] || null;
+    const mapMode = params['mapMode'] || null;
 
-    if (!entity && !record && !filterParam && !view) {
+    console.log('[DataExplorer] buildDeepLinkFromParams:', { entity, record, filter: filterParam, view, viewId, mapMode });
+
+    if (!entity && !record && !filterParam && !view && !viewId && !mapMode) {
+      console.log('[DataExplorer] buildDeepLinkFromParams: all params empty, returning null');
       return null;
     }
 
@@ -2494,7 +2551,9 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       entity: entity || undefined,
       record: record || undefined,
       filter: filterParam || undefined,
-      viewMode: view || undefined
+      viewMode: view || undefined,
+      viewId: viewId || undefined,
+      mapMode: mapMode || undefined
     };
   }
 
@@ -2503,16 +2562,26 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * The base class calls this when query params change via popstate or deeplink.
    */
   protected override OnQueryParamsChanged(params: Record<string, string>, _source: 'popstate' | 'deeplink'): void {
+    console.log('[DataExplorer] OnQueryParamsChanged: source=', _source, 'params=', JSON.stringify(params));
+    this.applyParams(params);
+  }
+
+  /**
+   * Public entry point for the resource wrapper to forward query param changes.
+   * The wrapper receives OnQueryParamsChanged from the framework and delegates here.
+   */
+  public HandleQueryParamsChanged(params: Record<string, string>, source: 'popstate' | 'deeplink'): void {
+    console.log('[DataExplorer] HandleQueryParamsChanged (from wrapper): source=', source, 'params=', JSON.stringify(params));
     this.applyParams(params);
   }
 
   /**
    * Apply a params map (from framework query params) to the component state.
    */
-  private applyParams(params: Record<string, string>): void {
+  private async applyParams(params: Record<string, string>): Promise<void> {
     const deepLink = this.buildDeepLinkFromParams(params);
     if (deepLink) {
-      this.applyUrlState(deepLink);
+      await this.applyUrlState(deepLink);
     } else {
       // No params — go to home view
       this.selectedEntity = null;
@@ -2529,12 +2598,19 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * Called whenever state changes so users can bookmark/share URLs.
    */
   private pushCurrentStateToUrl(): void {
+    const hasEntity = !!this.state.selectedEntityName;
+    const hasViewId = !!(this.state.selectedViewId && hasEntity);
+
     const queryParams: Record<string, string | null> = {
       entity: this.state.selectedEntityName || null,
-      record: (this.state.selectedRecordId && this.state.selectedEntityName) ? this.state.selectedRecordId : null,
-      filter: (this.state.smartFilterPrompt && this.state.selectedEntityName) ? this.state.smartFilterPrompt : null,
-      view: (this.state.viewMode && this.state.viewMode !== 'grid') ? this.state.viewMode : null
+      record: (this.state.selectedRecordId && hasEntity) ? this.state.selectedRecordId : null,
+      filter: null, // Never in URL — filters live in saved views (DB), not query strings
+      view: (this.state.viewMode && this.state.viewMode !== 'grid') ? this.state.viewMode : null,
+      viewId: hasViewId ? this.state.selectedViewId : null,
+      mapMode: this.state.viewMode === 'map' ? (this.state.mapRenderMode || 'point') : null
     };
+
+    console.log('[DataExplorer] pushCurrentStateToUrl:', JSON.stringify(queryParams), 'hasViewId=', hasViewId, 'smartFilterPrompt=', this.state.smartFilterPrompt);
 
     this.UpdateQueryParams(queryParams);
   }
@@ -2543,10 +2619,23 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * Apply URL state to the component.
    * Used both during init and for popstate handling.
    */
-  private applyUrlState(urlState: DataExplorerDeepLink): void {
-    // Apply view mode if specified
+  private async applyUrlState(urlState: DataExplorerDeepLink): Promise<void> {
+    console.log('[DataExplorer] applyUrlState:', urlState);
+
+    // Store URL-sourced map mode BEFORE switching to map view — various init steps
+    // can reset mapRenderMode to 'point'. The state subscription self-corrects using this.
+    if (urlState.mapMode && ['point', 'choropleth', 'heatmap'].includes(urlState.mapMode)) {
+      this._pendingMapMode = urlState.mapMode as MapRenderMode;
+    }
+
+    // Apply view mode (may trigger map component creation if switching to 'map')
     if (urlState.viewMode) {
       this.stateService.setViewMode(urlState.viewMode);
+    }
+
+    // Apply map render mode to state
+    if (this._pendingMapMode) {
+      this.stateService.updateState({ mapRenderMode: this._pendingMapMode });
     }
 
     // Navigate to entity if specified
@@ -2565,11 +2654,19 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
           this.stateService.selectEntity(entity.Name);
         }
 
-        // Apply filter if specified (to smart filter state, not user search)
-        if (urlState.filter) {
-          this.stateService.setSmartFilterPrompt(urlState.filter);
-        } else if (entityChanged) {
-          // Only clear filter if entity changed (selectEntity already handles this)
+        // Restore saved view by ID if specified
+        if (urlState.viewId) {
+          await this.restoreViewFromUrl(urlState.viewId, entity);
+        } else {
+          // No specific view — clear view selection to use default
+          this.selectedViewEntity = null;
+          this.stateService.selectView(null);
+          this.currentGridState = this.loadUserDefaultGridState();
+        }
+
+        // Filters live in saved views (DB), never in URL query strings.
+        // Clear smart filter on entity change when no specific view is selected.
+        if (entityChanged && !urlState.viewId) {
           this.stateService.setSmartFilterPrompt('');
         }
         // User search text is always cleared when applying URL state
@@ -2614,6 +2711,43 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       this.detailPanelEntity = null;
       this.stateService.selectEntity(null);
       this.stateService.closeDetailPanel();
+    }
+
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Restore a saved view from the URL's viewId parameter.
+   * Looks up the view by ID, sets it as selected, and applies its grid state and filters.
+   * Must be async because UserViewEngine's cache may not be populated yet on cold page loads.
+   */
+  private async restoreViewFromUrl(viewId: string, entity: EntityInfo): Promise<void> {
+    console.log('[DataExplorer] restoreViewFromUrl: viewId=', viewId, 'entity=', entity.Name);
+
+    // Ensure the view engine cache is populated before querying —
+    // on hard refresh, the cache may be empty and GetAccessibleViewsForEntity returns []
+    await UserViewEngine.Instance.Config(false);
+
+    const accessibleViews = UserViewEngine.Instance.GetAccessibleViewsForEntity(entity.ID);
+    console.log('[DataExplorer] restoreViewFromUrl: accessible views count=', accessibleViews.length);
+
+    const view = accessibleViews.find(v => v.ID === viewId) || null;
+
+    if (view) {
+      console.log('[DataExplorer] restoreViewFromUrl: found view:', view.Name, 'WhereClause:', view.WhereClause, 'SmartFilter:', view.SmartFilterPrompt);
+      this.selectedViewEntity = view;
+      this.stateService.selectView(viewId);
+      this.currentGridState = this.parseViewGridState(view);
+
+      // Apply the view's smart filter if it has one
+      if (view.SmartFilterEnabled && view.SmartFilterPrompt) {
+        this.stateService.setSmartFilterPrompt(view.SmartFilterPrompt);
+      }
+    } else {
+      console.warn('[DataExplorer] restoreViewFromUrl: view NOT FOUND, falling back to default. viewId=', viewId);
+      this.selectedViewEntity = null;
+      this.stateService.selectView(null);
+      this.currentGridState = this.loadUserDefaultGridState();
     }
 
     this.cdr.detectChanges();
