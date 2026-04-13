@@ -475,8 +475,6 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
     /** Whether the entity picker dropdown is open */
     public ShowEntityPicker = false;
     public SelectedEntityIndex = -1;
-    @ViewChild('entitySearchInput') entitySearchInput?: ElementRef<HTMLInputElement>;
-
     /** Reference to the entity search input for programmatic focus */
     @ViewChild('entitySearchInput') entitySearchInput?: ElementRef<HTMLInputElement>;
 
