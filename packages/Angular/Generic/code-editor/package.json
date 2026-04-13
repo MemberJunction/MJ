@@ -37,6 +37,7 @@
     "@codemirror/merge": "^6.11.2",
     "@codemirror/state": "latest",
     "@codemirror/view": "latest",
+    "@lezer/highlight": "latest",
     "@memberjunction/core": "5.25.0",
     "@memberjunction/core-entities": "5.25.0",
     "@memberjunction/global": "5.25.0",
