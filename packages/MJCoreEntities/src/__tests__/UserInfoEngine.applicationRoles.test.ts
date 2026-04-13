@@ -59,7 +59,19 @@ vi.mock('../generated/entity_subclasses', () => ({
 // ---------------------------------------------------------------------------
 
 import { UserInfoEngine } from '../engines/UserInfoEngine';
-import type { ApplicationRoleRecord } from '../engines/UserInfoEngine';
+
+/**
+ * Minimal shape of MJApplicationRoleEntity for test purposes.
+ * The engine reads ApplicationID/RoleID/CanAccess — these plain-object stubs
+ * satisfy those property accesses without requiring full BaseEntity mocking.
+ */
+interface ApplicationRoleRecord {
+  ID: string;
+  ApplicationID: string;
+  RoleID: string;
+  CanAccess: boolean;
+  CanAdmin: boolean;
+}
 
 // ---------------------------------------------------------------------------
 // Test constants

@@ -18,18 +18,8 @@ import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
  */
 export type UserApplicationAccessStatus = 'installed_active' | 'installed_inactive' | 'not_installed' | 'not_authorized';
 
-/**
- * Lightweight type for ApplicationRole records loaded by the engine.
- * Maps to the MJ: Application Roles entity (ApplicationRole table).
- */
-export interface ApplicationRoleRecord {
-  ID: string;
-  ApplicationID: string;
-  RoleID: string;
-  CanAccess: boolean;
-  CanAdmin: boolean;
-}
 import {
+  MJApplicationRoleEntity,
   MJUserNotificationEntity,
   MJUserNotificationTypeEntity,
   MJWorkspaceEntity,
@@ -84,7 +74,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
   // User notification preferences (user-specific)
   private _UserNotificationPreferences: MJUserNotificationPreferenceEntity[] = [];
   // Application role assignments (global - not user-specific)
-  private _applicationRoles: ApplicationRoleRecord[] = [];
+  private _applicationRoles: MJApplicationRoleEntity[] = [];
 
   // Track the user ID we loaded data for
   private _loadedForUserId: string | null = null;
