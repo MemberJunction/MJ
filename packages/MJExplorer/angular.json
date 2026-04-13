@@ -25,6 +25,11 @@
                 "glob": "**/*",
                 "input": "../../node_modules/@memberjunction/ng-explorer-app/dist/assets",
                 "output": "/assets"
+              },
+              {
+                "glob": "pdf.worker.min.mjs",
+                "input": "../../node_modules/pdfjs-dist/build",
+                "output": "/assets"
               }
             ],
             "styles": ["src/styles.scss"],

@@ -131,6 +131,7 @@ export * from './resolvers/ActionResolver.js';
 export * from './resolvers/EntityCommunicationsResolver.js';
 export * from './resolvers/EntityResolver.js';
 export * from './resolvers/ISAEntityResolver.js';
+export * from './resolvers/ArtifactFileResolver.js';
 export * from './resolvers/FileCategoryResolver.js';
 export * from './resolvers/FileResolver.js';
 export * from './resolvers/InfoResolver.js';

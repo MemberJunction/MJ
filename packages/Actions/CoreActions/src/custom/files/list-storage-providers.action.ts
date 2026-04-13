@@ -1,10 +1,8 @@
 import { ActionResultSimple, RunActionParams, ActionParam } from "@memberjunction/actions-base";
 import { RegisterClass } from "@memberjunction/global";
-import { MJGlobal } from "@memberjunction/global";
-import { RunView } from "@memberjunction/core";
-import { MJFileStorageAccountEntity, MJFileStorageProviderEntity } from "@memberjunction/core-entities";
 import { BaseFileStorageAction } from "./base-file-storage.action";
 import { BaseAction } from "@memberjunction/actions";
+import { FileStorageEngine } from "@memberjunction/storage";
 
 /**
  * Action that retrieves a list of configured file storage accounts.
@@ -42,44 +40,11 @@ export class ListStorageAccountsAction extends BaseFileStorageAction {
         const searchSupportedOnly = this.getBooleanParam(params, "searchsupportedonly", false);
 
         try {
-            const rv = new RunView();
+            await FileStorageEngine.Instance.Config(false, params.ContextUser);
 
-            // Load accounts and providers in parallel
-            const [accountsResult, providersResult] = await rv.RunViews([
-                {
-                    EntityName: 'MJ: File Storage Accounts',
-                    ExtraFilter: '',
-                    OrderBy: 'Name',
-                    ResultType: 'entity_object'
-                },
-                {
-                    EntityName: 'MJ: File Storage Providers',
-                    ExtraFilter: 'IsActive=1',
-                    OrderBy: 'Name',
-                    ResultType: 'entity_object'
-                }
-            ], params.ContextUser);
-
-            if (!accountsResult.Success) {
-                return this.createErrorResult(
-                    `Failed to retrieve storage accounts: ${accountsResult.ErrorMessage}`,
-                    "QUERY_FAILED"
-                );
-            }
-
-            if (!providersResult.Success) {
-                return this.createErrorResult(
-                    `Failed to retrieve storage providers: ${providersResult.ErrorMessage}`,
-                    "QUERY_FAILED"
-                );
-            }
-
-            const accounts = accountsResult.Results as MJFileStorageAccountEntity[] || [];
-            const providers = providersResult.Results as MJFileStorageProviderEntity[] || [];
-
-            // Create provider lookup map
-            const providerMap = new Map<string, MJFileStorageProviderEntity>();
-            providers.forEach(p => providerMap.set(p.ID, p));
+            // Use cached metadata from the engine — no RunView needed
+            const accountsWithProviders = FileStorageEngine.Instance.AccountsWithProviders
+                .filter(a => a.provider.IsActive !== false);
 
             const availableAccounts: Array<{
                 Name: string;
@@ -90,12 +55,7 @@ export class ListStorageAccountsAction extends BaseFileStorageAction {
                 HasCredential: boolean;
             }> = [];
 
-            for (const account of accounts) {
-                const provider = providerMap.get(account.ProviderID);
-                if (!provider) {
-                    continue; // Skip accounts with inactive/missing providers
-                }
-
+            for (const { account, provider } of accountsWithProviders) {
                 const supportsSearch = provider.Get('SupportsSearch') ?? false;
 
                 // Skip if filtering for search-only and this provider doesn't support it
