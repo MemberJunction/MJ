@@ -1,5 +1,25 @@
 # @memberjunction/ng-query-viewer
 
+## 5.25.0
+
+### Patch Changes
+
+- fc8cd52: Autotagging pipeline with run tracking, retry, and tag merge/delete; taxonomy server-side SQL aggregates; vector sync credential engine integration; search resolver and organic key support; unit test fixes across geo-core, ai-vector-sync, MJServer, and UUID compliance.
+- Updated dependencies [fc8cd52]
+- Updated dependencies [d6370e8]
+- Updated dependencies [7ddf732]
+- Updated dependencies [cbcf477]
+  - @memberjunction/core@5.25.0
+  - @memberjunction/core-entities@5.25.0
+  - @memberjunction/ng-code-editor@5.25.0
+  - @memberjunction/ng-notifications@5.25.0
+  - @memberjunction/ng-shared-generic@5.25.0
+  - @memberjunction/ng-export-service@5.25.0
+  - @memberjunction/ng-markdown@5.25.0
+  - @memberjunction/ng-pagination@5.25.0
+  - @memberjunction/export-engine@5.25.0
+  - @memberjunction/global@5.25.0
+
 ## 5.24.0
 
 ### Patch Changes

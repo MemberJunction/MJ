@@ -98,10 +98,19 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
         ];
         await this.Load(c, provider, forceRefresh, contextUser);
 
-        // Log enrollment summary so administrators can verify the opt-in filter is working
+        // BaseEngine loads "MJ: Entities" as MJEntityEntity objects (BaseEntity subclass),
+        // but this class needs EntityInfo objects which have the correct PrimaryKeys for each
+        // represented entity. MJEntityEntity.PrimaryKeys returns the PK of the "MJ: Entities"
+        // table itself (always "ID"), not the PK of the entity the record represents.
+        // Map each loaded record to its corresponding EntityInfo from the metadata provider.
         const md = new Metadata();
+        this._EligibleEntities = (this._EligibleEntities || [])
+            .map(e => md.EntityByID(e.ID))
+            .filter((e): e is EntityInfo => e != null);
+
+        // Log enrollment summary so administrators can verify the opt-in filter is working
         const totalWithTracking = md.Entities.filter(e => e.TrackRecordChanges).length;
-        LogStatus(`External Change Detection: ${this._EligibleEntities?.length ?? 0} of ${totalWithTracking} entities with TrackRecordChanges=1 have DetectExternalChanges=1`);
+        LogStatus(`External Change Detection: ${this._EligibleEntities.length} of ${totalWithTracking} entities with TrackRecordChanges=1 have DetectExternalChanges=1`);
     }
 
     public static get Instance(): ExternalChangeDetectorEngine {

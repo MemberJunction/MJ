@@ -7,7 +7,7 @@ import { MJUserViewEntityExtended } from '@memberjunction/core-entities';
 import { buildCompositeKey, buildPkString, computeFieldsList } from '../utils/record.util';
 import { PageChangeEvent } from '@memberjunction/ng-pagination';
 import { TimelineGroup, TimeSegmentGrouping, TimelineSortOrder, AfterEventClickArgs } from '@memberjunction/ng-timeline';
-import { MapDisplayState } from '@memberjunction/ng-map-view';
+import { MapDisplayState, MapRenderMode } from '@memberjunction/ng-map-view';
 import {
   EntityViewMode,
   EntityViewerConfig,
@@ -1495,25 +1495,42 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
   onMapMarkerClick(event: { RecordID: string; Latitude: number; Longitude: number; Record: Record<string, unknown> }): void {
     const entity = this.effectiveEntity;
     if (event.Record && entity) {
+      const compositeKey = buildCompositeKey(event.Record, entity);
+      // Emit both recordSelected (for detail panels) and recordOpened (for navigation)
       this.recordSelected.emit({
         record: event.Record,
         entity: entity,
-        compositeKey: buildCompositeKey(event.Record, entity)
+        compositeKey
+      });
+      this.recordOpened.emit({
+        record: event.Record,
+        entity: entity,
+        compositeKey
       });
     }
   }
 
-  /** Map display state — passed from parent for persistence across reloads. */
+  /** Map display state (zoom, center) — passed from parent for persistence across reloads. */
   @Input() mapDisplayState: Partial<MapDisplayState> | null = null;
 
-  /** Emitted when the map's display state changes (zoom, center, render mode). */
+  /** Map render mode — separate from DisplayState for clear single-source-of-truth. */
+  @Input() mapRenderMode: MapRenderMode = 'point';
+
+  /** Emitted when the map's display state changes (zoom, center). */
   @Output() mapDisplayStateChange = new EventEmitter<MapDisplayState>();
+
+  /** Emitted when the map's render mode changes (user clicks mode buttons). */
+  @Output() mapRenderModeChange = new EventEmitter<MapRenderMode>();
 
   /**
    * Handle map display state changes — bubble up to parent for persistence.
    */
   onMapDisplayStateChange(state: MapDisplayState): void {
     this.mapDisplayStateChange.emit(state);
+  }
+
+  onMapRenderModeChange(mode: MapRenderMode): void {
+    this.mapRenderModeChange.emit(mode);
   }
 
   /**

@@ -1,5 +1,17 @@
 # @memberjunction/integration-actions
 
+## 5.25.0
+
+### Patch Changes
+
+- Updated dependencies [fc8cd52]
+- Updated dependencies [008a62d]
+  - @memberjunction/core@5.25.0
+  - @memberjunction/actions@5.25.0
+  - @memberjunction/actions-base@5.25.0
+  - @memberjunction/integration-engine@5.25.0
+  - @memberjunction/global@5.25.0
+
 ## 5.24.0
 
 ### Patch Changes

@@ -120,6 +120,9 @@ export {
 export { HomeApplication } from './Home/home-application';
 export { HomeDashboardComponent } from './Home/home-dashboard.component';
 
+// Application Roles
+export { ApplicationRolesResourceComponent, LoadApplicationRolesResource } from './ApplicationRoles/application-roles-resource.component';
+
 // API Keys
 export { APIKeysResourceComponent } from './APIKeys/api-keys-resource.component';
 export { APIKeyCreateDialogComponent, APIKeyCreateResult } from './APIKeys/api-key-create-dialog.component';

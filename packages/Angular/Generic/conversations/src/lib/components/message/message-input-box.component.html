@@ -19,16 +19,26 @@
       (attachmentClicked)="onAttachmentClicked($event)">
     </mj-mention-editor>
 
-    <!-- Attach Button - Positioned over editor -->
+    <!-- Attach Buttons - Positioned over editor -->
     @if (enableAttachments) {
-      <button
-        class="attach-button-icon"
-        [disabled]="disabled"
-        (click)="openFilePicker(); $event.stopPropagation()"
-        title="Attach file"
-        >
-        <i class="fa-solid fa-paperclip"></i>
-      </button>
+      <div class="attach-buttons">
+        <button
+          class="attach-button-icon"
+          [disabled]="disabled"
+          (click)="openFilePicker(); $event.stopPropagation()"
+          title="Attach file"
+          >
+          <i class="fa-solid fa-paperclip"></i>
+        </button>
+        <button
+          class="attach-button-icon attach-artifact-button"
+          [disabled]="disabled"
+          (click)="openArtifactPicker(); $event.stopPropagation()"
+          title="Attach artifact from library"
+          >
+          <i class="fa-solid fa-cube"></i>
+        </button>
+      </div>
     }
 
     <!-- Send Button (Icon Only) - Positioned over editor -->

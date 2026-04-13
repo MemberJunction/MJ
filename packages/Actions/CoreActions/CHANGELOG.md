@@ -1,5 +1,44 @@
 # Change Log - @memberjunction/core-actions
 
+## 5.25.0
+
+### Patch Changes
+
+- Updated dependencies [fc8cd52]
+- Updated dependencies [4f8e980]
+- Updated dependencies [d6370e8]
+- Updated dependencies [008a62d]
+- Updated dependencies [7ddf732]
+- Updated dependencies [62af878]
+- Updated dependencies [cbcf477]
+  - @memberjunction/core@5.25.0
+  - @memberjunction/ai-vector-sync@5.25.0
+  - @memberjunction/content-autotagging@5.25.0
+  - @memberjunction/core-entities@5.25.0
+  - @memberjunction/core-entities-server@5.25.0
+  - @memberjunction/external-change-detection@5.25.0
+  - @memberjunction/generic-database-provider@5.25.0
+  - @memberjunction/geo-core@5.25.0
+  - @memberjunction/actions@5.25.0
+  - @memberjunction/ai-agents@5.25.0
+  - @memberjunction/ai-agent-manager@5.25.0
+  - @memberjunction/ai-engine-base@5.25.0
+  - @memberjunction/ai-core-plus@5.25.0
+  - @memberjunction/aiengine@5.25.0
+  - @memberjunction/ai-mcp-client@5.25.0
+  - @memberjunction/ai-prompts@5.25.0
+  - @memberjunction/actions-base@5.25.0
+  - @memberjunction/code-execution@5.25.0
+  - @memberjunction/communication-types@5.25.0
+  - @memberjunction/communication-engine@5.25.0
+  - @memberjunction/integration-engine@5.25.0
+  - @memberjunction/storage@5.25.0
+  - @memberjunction/sqlserver-dataprovider@5.25.0
+  - @memberjunction/ai@5.25.0
+  - @memberjunction/ai-betty-bot@5.25.0
+  - @memberjunction/export-engine@5.25.0
+  - @memberjunction/global@5.25.0
+
 ## 5.24.0
 
 ### Patch Changes

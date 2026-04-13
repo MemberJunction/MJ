@@ -1,5 +1,6 @@
 import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, UserInfo } from "@memberjunction/core";
 import { RegisterForStartup } from "@memberjunction/core";
+import { UUIDsEqual } from "@memberjunction/global";
 import { MJSearchProviderEntity } from "../generated/entity_subclasses";
 import { UUIDsEqual } from "@memberjunction/global";
 

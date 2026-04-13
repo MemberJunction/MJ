@@ -1,5 +1,24 @@
 # Change Log - @memberjunction/actions-content-autotag
 
+## 5.25.0
+
+### Patch Changes
+
+- fc8cd52: Autotagging pipeline with run tracking, retry, and tag merge/delete; taxonomy server-side SQL aggregates; vector sync credential engine integration; search resolver and organic key support; unit test fixes across geo-core, ai-vector-sync, MJServer, and UUID compliance.
+- Updated dependencies [fc8cd52]
+- Updated dependencies [d6370e8]
+- Updated dependencies [008a62d]
+- Updated dependencies [7ddf732]
+- Updated dependencies [cbcf477]
+  - @memberjunction/core@5.25.0
+  - @memberjunction/ai-vector-sync@5.25.0
+  - @memberjunction/content-autotagging@5.25.0
+  - @memberjunction/core-entities@5.25.0
+  - @memberjunction/actions@5.25.0
+  - @memberjunction/actions-base@5.25.0
+  - @memberjunction/core-actions@5.25.0
+  - @memberjunction/global@5.25.0
+
 ## 5.24.0
 
 ### Minor Changes

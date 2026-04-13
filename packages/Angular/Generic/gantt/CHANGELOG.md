@@ -1,5 +1,11 @@
 # @memberjunction/ng-gantt
 
+## 5.25.0
+
+### Patch Changes
+
+- @memberjunction/global@5.25.0
+
 ## 5.24.0
 
 ### Patch Changes

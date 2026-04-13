@@ -1,5 +1,14 @@
 # Change Log - @memberjunction/data-context-server
 
+## 5.25.0
+
+### Patch Changes
+
+- Updated dependencies [fc8cd52]
+  - @memberjunction/core@5.25.0
+  - @memberjunction/data-context@5.25.0
+  - @memberjunction/global@5.25.0
+
 ## 5.24.0
 
 ### Patch Changes

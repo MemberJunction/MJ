@@ -1,5 +1,85 @@
 # Change Log - @memberjunction/server
 
+## 5.25.0
+
+### Minor Changes
+
+- 4f8e980: migration
+
+### Patch Changes
+
+- fc8cd52: Autotagging pipeline with run tracking, retry, and tag merge/delete; taxonomy server-side SQL aggregates; vector sync credential engine integration; search resolver and organic key support; unit test fixes across geo-core, ai-vector-sync, MJServer, and UUID compliance.
+- Updated dependencies [fc8cd52]
+- Updated dependencies [4f8e980]
+- Updated dependencies [d6370e8]
+- Updated dependencies [008a62d]
+- Updated dependencies [7ddf732]
+- Updated dependencies [62af878]
+- Updated dependencies [cbcf477]
+- Updated dependencies [33802a7]
+  - @memberjunction/core@5.25.0
+  - @memberjunction/ai-vector-sync@5.25.0
+  - @memberjunction/core-entities@5.25.0
+  - @memberjunction/core-entities-server@5.25.0
+  - @memberjunction/external-change-detection@5.25.0
+  - @memberjunction/generic-database-provider@5.25.0
+  - @memberjunction/graphql-dataprovider@5.25.0
+  - @memberjunction/interactive-component-types@5.25.0
+  - @memberjunction/skip-types@5.25.0
+  - @memberjunction/codegen-lib@5.25.0
+  - @memberjunction/actions@5.25.0
+  - @memberjunction/ai-agents@5.25.0
+  - @memberjunction/actions-bizapps-social@5.25.0
+  - @memberjunction/ai-agent-manager-actions@5.25.0
+  - @memberjunction/ai-agent-manager@5.25.0
+  - @memberjunction/ai-core-plus@5.25.0
+  - @memberjunction/aiengine@5.25.0
+  - @memberjunction/ai-mcp-client@5.25.0
+  - @memberjunction/computer-use-engine@5.25.0
+  - @memberjunction/ai-prompts@5.25.0
+  - @memberjunction/ai-vectors-pinecone@5.25.0
+  - @memberjunction/api-keys@5.25.0
+  - @memberjunction/actions-apollo@5.25.0
+  - @memberjunction/actions-base@5.25.0
+  - @memberjunction/actions-bizapps-accounting@5.25.0
+  - @memberjunction/actions-bizapps-crm@5.25.0
+  - @memberjunction/actions-bizapps-formbuilders@5.25.0
+  - @memberjunction/actions-bizapps-lms@5.25.0
+  - @memberjunction/core-actions@5.25.0
+  - @memberjunction/auth-providers@5.25.0
+  - @memberjunction/communication-types@5.25.0
+  - @memberjunction/entity-communications-base@5.25.0
+  - @memberjunction/entity-communications-server@5.25.0
+  - @memberjunction/notifications@5.25.0
+  - @memberjunction/communication-ms-graph@5.25.0
+  - @memberjunction/communication-sendgrid@5.25.0
+  - @memberjunction/component-registry-client-sdk@5.25.0
+  - @memberjunction/doc-utils@5.25.0
+  - @memberjunction/encryption@5.25.0
+  - @memberjunction/integration-engine@5.25.0
+  - @memberjunction/data-context@5.25.0
+  - @memberjunction/data-context-server@5.25.0
+  - @memberjunction/queue@5.25.0
+  - @memberjunction/storage@5.25.0
+  - @memberjunction/postgresql-dataprovider@5.25.0
+  - @memberjunction/redis-provider@5.25.0
+  - @memberjunction/sqlserver-dataprovider@5.25.0
+  - @memberjunction/scheduling-actions@5.25.0
+  - @memberjunction/scheduling-engine-base@5.25.0
+  - @memberjunction/scheduling-engine@5.25.0
+  - @memberjunction/server-extensions-core@5.25.0
+  - @memberjunction/templates@5.25.0
+  - @memberjunction/testing-engine@5.25.0
+  - @memberjunction/testing-engine-base@5.25.0
+  - @memberjunction/version-history@5.25.0
+  - @memberjunction/ai-provider-bundle@5.25.0
+  - @memberjunction/integration-schema-builder@5.25.0
+  - @memberjunction/ai@5.25.0
+  - @memberjunction/config@5.25.0
+  - @memberjunction/global@5.25.0
+  - @memberjunction/sql-dialect@5.25.0
+  - @memberjunction/scheduling-base-types@5.25.0
+
 ## 5.24.0
 
 ### Minor Changes

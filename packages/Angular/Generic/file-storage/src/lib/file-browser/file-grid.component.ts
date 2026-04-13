@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges, ChangeDetectorRef, inject } from '@angular/core';
 import { GraphQLDataProvider, GraphQLFileStorageClient } from '@memberjunction/graphql-dataprovider';
-import { FileStorageEngine, StorageAccountWithProvider } from '@memberjunction/core-entities';
+import { FileStorageEngineBase, StorageAccountWithProvider } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
 
 /**
@@ -1390,7 +1390,7 @@ export class FileGridComponent implements OnInit, OnChanges {
     }
 
     try {
-      const engine = FileStorageEngine.Instance;
+      const engine = FileStorageEngineBase.Instance;
       await engine.Config(false);  // Use cached data if available
 
       // Build available accounts (excluding current account)
@@ -1571,7 +1571,7 @@ export class FileGridComponent implements OnInit, OnChanges {
    */
   private async loadAvailableAccountsForSearch(): Promise<void> {
     try {
-      const engine = FileStorageEngine.Instance;
+      const engine = FileStorageEngineBase.Instance;
       await engine.Config(false);  // Use cached data if available
       this.availableAccounts = engine.AccountsWithProviders;
     } catch (error) {
