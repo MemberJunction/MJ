@@ -86,6 +86,7 @@
     "@memberjunction/scheduling-actions": "5.25.0",
     "@memberjunction/scheduling-engine": "5.25.0",
     "@memberjunction/scheduling-engine-base": "5.25.0",
+    "@memberjunction/search-engine": "5.25.0",
     "@memberjunction/storage": "5.25.0",
     "@memberjunction/tag-engine-base": "5.25.0",
     "@memberjunction/templates": "5.25.0",

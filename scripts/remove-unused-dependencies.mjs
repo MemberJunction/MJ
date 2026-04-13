@@ -31,6 +31,7 @@ console.log('🔍 Analyzing unused dependencies with Knip...\n');
 
 // Run Knip to get unused dependencies
 let knipOutput;
+let knipStderr = '';
 try {
   knipOutput = execSync('npm run deps:unused --silent', {
     cwd: ROOT_DIR,
@@ -40,6 +41,27 @@ try {
 } catch (error) {
   // Knip exits with error code when issues found, but we still get output
   knipOutput = error.stdout || '';
+  knipStderr = error.stderr || '';
+}
+
+// If stderr has errors, warn. If stdout also has no parseable results, treat as fatal.
+if (knipStderr.includes('ERROR:')) {
+  console.warn('⚠️  Knip reported errors during analysis:\n');
+  console.warn(knipStderr.trim());
+  console.warn();
+
+  // Check if stdout contains any actual dependency results
+  const hasResults = knipOutput.split('\n').some(line => {
+    const match = line.match(/^(@?[^\s]+)\s+(.+package\.json):\d+:\d+/);
+    return !!match;
+  });
+
+  if (!hasResults) {
+    console.error('❌ Knip could not produce any results. Please fix the configuration issue and try again.');
+    process.exit(1);
+  }
+
+  console.warn('⚠️  Continuing with partial results — some workspaces may not have been analyzed.\n');
 }
 
 if (!knipOutput || knipOutput.trim() === '') {
