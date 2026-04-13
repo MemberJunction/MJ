@@ -48,6 +48,7 @@ import { TreeComponent } from '../tree/tree.component';
 import { Subject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
 import { Metadata, CompositeKey } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Dropdown position calculation result
@@ -739,7 +740,7 @@ export class TreeDropdownComponent implements OnInit, OnDestroy, AfterViewInit {
         } else if (node.ParentID) {
             // Move to parent
             const allNodes = this.getVisibleNodesInOrder(this.treeComponent.Nodes);
-            const parent = allNodes.find(n => n.ID === node.ParentID);
+            const parent = allNodes.find(n => UUIDsEqual(n.ID, node.ParentID));
             if (parent) {
                 this.treeComponent.FocusedNode = parent;
                 this.cdr.detectChanges();
