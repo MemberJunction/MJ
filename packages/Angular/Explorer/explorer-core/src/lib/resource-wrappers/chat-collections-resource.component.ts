@@ -57,7 +57,8 @@ import { Subject, takeUntil, distinctUntilChanged, combineLatest } from 'rxjs';
     </div>
     `,
   styles: [`
-    :host {
+    /* :host doesn't work with ViewEncapsulation.None — use the element selector */
+    mj-chat-collections-resource {
       display: flex;
       flex-direction: column;
       width: 100%;

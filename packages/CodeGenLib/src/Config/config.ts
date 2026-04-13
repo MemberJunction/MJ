@@ -325,9 +325,42 @@ const sqlOutputConfigSchema = z.object({
   })).optional(),
 });
 
+const applicationRoleDefaultSchema = z.object({
+  RoleName: z.string(),
+  CanAccess: z.boolean(),
+  CanAdmin: z.boolean(),
+});
+
+/**
+ * Settings for an application role default
+ */
+export type ApplicationRoleDefault = z.infer<typeof applicationRoleDefaultSchema>;
+
+const applicationRoleDefaultsSchema = z.object({
+  AutoAddRolesForNewApplications: z.boolean().default(true),
+  Roles: applicationRoleDefaultSchema.array().default([
+    { RoleName: 'UI', CanAccess: true, CanAdmin: false },
+    { RoleName: 'Developer', CanAccess: true, CanAdmin: true },
+    { RoleName: 'Integration', CanAccess: true, CanAdmin: false },
+  ]),
+});
+
+/**
+ * Default role assignment settings for new applications
+ */
+export type ApplicationRoleDefaults = z.infer<typeof applicationRoleDefaultsSchema>;
+
 export type NewSchemaDefaults = z.infer<typeof newSchemaDefaultsSchema>;
 const newSchemaDefaultsSchema = z.object({
   CreateNewApplicationWithSchemaName: z.boolean().default(true),
+  ApplicationRoleDefaults: applicationRoleDefaultsSchema.default({
+    AutoAddRolesForNewApplications: true,
+    Roles: [
+      { RoleName: 'UI', CanAccess: true, CanAdmin: false },
+      { RoleName: 'Developer', CanAccess: true, CanAdmin: true },
+      { RoleName: 'Integration', CanAccess: true, CanAdmin: false },
+    ],
+  }),
 });
 
 const entityPermissionSchema = z.object({
@@ -568,6 +601,14 @@ export const DEFAULT_CODEGEN_CONFIG: Partial<ConfigInfo> = {
   },
   newSchemaDefaults: {
     CreateNewApplicationWithSchemaName: true,
+    ApplicationRoleDefaults: {
+      AutoAddRolesForNewApplications: true,
+      Roles: [
+        { RoleName: 'UI', CanAccess: true, CanAdmin: false },
+        { RoleName: 'Developer', CanAccess: true, CanAdmin: true },
+        { RoleName: 'Integration', CanAccess: true, CanAdmin: false },
+      ],
+    },
   },
   excludeSchemas: ['sys', 'staging', '__mj'],
   excludeTables: [

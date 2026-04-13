@@ -1,4 +1,4 @@
-import { EntityPermissionType, Metadata, FieldValueCollection, EntitySaveOptions, RunView } from '@memberjunction/core';
+import { EntityPermissionType, Metadata, FieldValueCollection, EntitySaveOptions } from '@memberjunction/core';
 import { NormalizeUUID } from '@memberjunction/global';
 import { MJFileEntity, MJFileStorageProviderEntity, MJFileStorageAccountEntity } from '@memberjunction/core-entities';
 import {
@@ -32,7 +32,7 @@ import {
   FileSearchResult,
   UserContextOptions,
   ExtendedUserContextOptions,
-  initializeDriverWithAccountCredentials,
+  FileStorageEngine,
 } from '@memberjunction/storage';
 import { CreateMJFileInput, MJFileResolver as FileResolverBase, MJFile_, UpdateMJFileInput } from '../generated/generated.js';
 import { FieldMapper } from '@memberjunction/graphql-dataprovider';
@@ -648,12 +648,9 @@ export class FileResolver extends FileResolverBase {
     const fileEntity = await md.GetEntityObject<MJFileEntity>('MJ: Files', user);
     fileEntity.CheckPermissions(EntityPermissionType.Create, true);
 
-    // Initialize driver with account-based credentials from Credential Engine
-    const driver = await initializeDriverWithAccountCredentials({
-      accountEntity,
-      providerEntity,
-      contextUser: user,
-    });
+    // Initialize driver via FileStorageEngine (handles credential decryption + token refresh)
+    await FileStorageEngine.Instance.Config(false, user);
+    const driver = await FileStorageEngine.Instance.GetDriver(accountEntity.ID, user);
 
     const success = await driver.CreateDirectory(input.Path);
     return success;
@@ -726,23 +723,12 @@ export class FileResolver extends FileResolverBase {
     const fileEntity = await md.GetEntityObject<MJFileEntity>('MJ: Files', user);
     fileEntity.CheckPermissions(EntityPermissionType.Read, true);
 
-    // Load all requested account entities in a single query
-    const rv = new RunView();
-    const quotedIDs = input.AccountIDs.map((id) => `'${id}'`).join(', ');
-    const accountResult = await rv.RunView<MJFileStorageAccountEntity>(
-      {
-        EntityName: 'MJ: File Storage Accounts',
-        ExtraFilter: `ID IN (${quotedIDs})`,
-        ResultType: 'entity_object',
-      },
-      user,
-    );
+    // Use cached accounts from the engine — no RunView needed
+    await FileStorageEngine.Instance.Config(false, user);
+    const normalizedIDs = new Set(input.AccountIDs.map((id: string) => NormalizeUUID(id)));
+    const accountEntities = FileStorageEngine.Instance.Accounts
+      .filter(a => normalizedIDs.has(NormalizeUUID(a.ID)));
 
-    if (!accountResult.Success) {
-      throw new Error(`Failed to load storage accounts: ${accountResult.ErrorMessage}`);
-    }
-
-    const accountEntities = accountResult.Results;
     if (accountEntities.length === 0) {
       throw new Error('No valid storage accounts found for the provided IDs');
     }
@@ -754,24 +740,9 @@ export class FileResolver extends FileResolverBase {
       console.warn(`[FileResolver] Accounts not found: ${missingIDs.join(', ')}`);
     }
 
-    // Load providers for all accounts
-    const providerIDs = [...new Set(accountEntities.map((a) => a.ProviderID))];
-    const quotedProviderIDs = providerIDs.map((id) => `'${id}'`).join(', ');
-    const providerResult = await rv.RunView<MJFileStorageProviderEntity>(
-      {
-        EntityName: 'MJ: File Storage Providers',
-        ExtraFilter: `ID IN (${quotedProviderIDs})`,
-        ResultType: 'entity_object',
-      },
-      user,
-    );
-
-    if (!providerResult.Success) {
-      throw new Error(`Failed to load storage providers: ${providerResult.ErrorMessage}`);
-    }
-
+    // Load providers from cached metadata
     const providerMap = new Map<string, MJFileStorageProviderEntity>();
-    for (const provider of providerResult.Results) {
+    for (const provider of FileStorageEngine.Instance.Providers) {
       providerMap.set(provider.ID, provider);
     }
 

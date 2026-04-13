@@ -878,177 +878,6 @@
   },
   {
     "fields": {
-      "Name": "PDF Generator",
-      "Description": "Generate PDF documents from HTML or Markdown content with customizable formatting",
-      "DriverClass": "__PDFGenerator",
-      "Type": "Custom",
-      "Status": "Active"
-    },
-    "relatedEntities": {
-      "MJ: Action Params": [
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "Content",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "HTML or Markdown content to convert",
-            "IsRequired": true
-          },
-          "primaryKey": {
-            "ID": "26C93055-10AB-4DA8-8B2F-6D4DF96CB58D"
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:06:52.035Z",
-            "checksum": "5b6c76bb9cea6a9ffbf875be22ea6f6f5e40ed8de57a6c902ce3a6c86b8639d9"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "ContentType",
-            "DefaultValue": "html",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Type of content: html or markdown",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "2989C25D-F17C-40D1-971F-41EC69C079E0"
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:06:52.038Z",
-            "checksum": "4750572a553b08f616160efbc11c76e4990eddeab1b132e0e4855bd7ca3f9a6f"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "Options",
-            "Type": "Input",
-            "ValueType": "Simple Object",
-            "IsArray": false,
-            "Description": "PDF generation options (margins, orientation, etc.)",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "324DD07E-2C22-4036-A3F7-DFCBEA4A56E8"
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:06:52.039Z",
-            "checksum": "746535b37f96344d847563432f4240669803730c0a8ac1e8c1e4c9389c2e389d"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "OutputFileID",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Save PDF to MJ Storage with this ID",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "FB30FDBD-4740-4C1D-9EBD-E9EBB4024FC1"
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:06:52.040Z",
-            "checksum": "ae9530a9e519a11923a2ce74990a97e7b96960bc54deb2160f23924fe022733f"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "PDFData",
-            "Type": "Output",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Base64 encoded PDF data"
-          },
-          "primaryKey": {
-            "ID": "FEB667FB-3E5E-4761-9BC0-711A94021C4A"
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:06:52.167Z",
-            "checksum": "ad37ec8076b8afd478f062ae528f70b42f961cef78a6a288d75b63a347adb192"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "FileID",
-            "Type": "Output",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "MJ Storage file ID if saved"
-          },
-          "primaryKey": {
-            "ID": "C4171D0A-8F6A-492E-A640-4354C87AEEA7"
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:06:52.168Z",
-            "checksum": "c2a37f84aee1f8d9f13d30fa892c0d253caaf066d716b8957ae00b118cf1414a"
-          }
-        }
-      ],
-      "MJ: Action Result Codes": [
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "ResultCode": "SUCCESS",
-            "Description": "PDF generated successfully"
-          },
-          "primaryKey": {
-            "ID": "564CB9F5-F5FF-41BD-A94F-D39E4CD3D20A"
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:06:52.170Z",
-            "checksum": "0072df1d17f5b632e15d19eb25771c13c0658d644dfe53096d28aa230d390dbf"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "ResultCode": "SUCCESS_SAVED",
-            "Description": "PDF generated and saved to storage"
-          },
-          "primaryKey": {
-            "ID": "D04F9497-6627-43B5-B817-457C65AE8721"
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:06:52.171Z",
-            "checksum": "41ad25390da3d792f0d4bf39d355060f8917b09ea91ab3c06ccaf0ca4006dc12"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "ResultCode": "GENERATION_FAILED",
-            "Description": "Failed to generate PDF"
-          },
-          "primaryKey": {
-            "ID": "F1E85B21-7B08-42A8-9825-38079334AE32"
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:06:52.173Z",
-            "checksum": "281c8842bccb890791d969311a663f072158b1e2d8a8e477f7920c82f90b4aa0"
-          }
-        }
-      ]
-    },
-    "primaryKey": {
-      "ID": "0F19E377-BBC5-4CFF-8FC3-878AECA37122"
-    },
-    "sync": {
-      "lastModified": "2025-12-30T23:06:50.926Z",
-      "checksum": "e809579ec2912a536bd45d0b323dbe33f892980b26f12eb70ca1dab28426a25a"
-    }
-  },
-  {
-    "fields": {
       "Name": "PDF Extractor",
       "Description": "Extract text, metadata, and pages from PDF files",
       "DriverClass": "__PDFExtractor",
@@ -1216,7 +1045,7 @@
       "ID": "5C8E357D-2CA3-481E-A5F2-94BFE504DF55"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:50.927Z",
+      "lastModified": "2026-03-27T05:11:32.631Z",
       "checksum": "6b1d84a888c7aa14a17b28b71fe8aa28e8959a0664a6a1e90cddd21a882e4c39"
     }
   },
@@ -1425,159 +1254,6 @@
     "sync": {
       "lastModified": "2025-12-30T23:06:50.928Z",
       "checksum": "ee701c3b2c9c346a31699487ff5556c4d799cdb4c32f241ce9935c27dd642328"
-    }
-  },
-  {
-    "fields": {
-      "Name": "Excel Writer",
-      "Description": "Create Excel files from JSON data with support for multiple sheets and formatting",
-      "DriverClass": "__ExcelWriter",
-      "Type": "Custom",
-      "Status": "Active"
-    },
-    "relatedEntities": {
-      "MJ: Action Params": [
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "Sheets",
-            "Type": "Input",
-            "ValueType": "Simple Object",
-            "IsArray": true,
-            "Description": "Array of sheet definitions with data",
-            "IsRequired": true
-          },
-          "primaryKey": {
-            "ID": "1085C8D9-335C-454C-B412-3958980A567E"
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:06:52.434Z",
-            "checksum": "236316fdfa180141c67947eae00b655bf00d839579b946901208f408b6fa0925"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "OutputFileID",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Save Excel file to MJ Storage",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "5D5A9EC0-252B-4259-B777-511CCD25E8A3"
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:06:52.435Z",
-            "checksum": "1859d5d001a957b31b132e6a4e6dfb5b71b42b9a8fe382e170ae23f6c8be5e29"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "FileName",
-            "DefaultValue": "output.xlsx",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Name for the output file",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "CF747266-24DF-426A-BB9D-256D1721BE58"
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:06:52.437Z",
-            "checksum": "3de2126d55bdf652e614a932b6b920334da23e15d75ecdb3dd925e0701a9c561"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "ExcelData",
-            "Type": "Output",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Base64 encoded Excel data"
-          },
-          "primaryKey": {
-            "ID": "ECE60CF1-35A8-4788-9E73-0F324355BBC5"
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:06:52.439Z",
-            "checksum": "322d7d1db3064aee3639a84a43afd6b6c11a91153f24105482508e7bb8b7a8d7"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "FileID",
-            "Type": "Output",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "MJ Storage file ID if saved"
-          },
-          "primaryKey": {
-            "ID": "4F504724-4A29-4DDD-AFA8-C9269A1AAABB"
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:06:52.440Z",
-            "checksum": "c2a37f84aee1f8d9f13d30fa892c0d253caaf066d716b8957ae00b118cf1414a"
-          }
-        }
-      ],
-      "MJ: Action Result Codes": [
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "ResultCode": "SUCCESS",
-            "Description": "Excel file created successfully"
-          },
-          "primaryKey": {
-            "ID": "CECBBCE3-8AAB-484C-8515-70CB78F144EF"
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:06:52.568Z",
-            "checksum": "981da7f9639a1933a9bec548c516988a86512742b384c67fc8ec330d719b7f89"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "ResultCode": "SUCCESS_SAVED",
-            "Description": "Excel file created and saved to storage"
-          },
-          "primaryKey": {
-            "ID": "3B5001C7-D612-455F-B323-54DA16474C19"
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:06:52.570Z",
-            "checksum": "5d310168a84e353fd2000f0d75a9a1a9fdff20d1d60282050d7e6a39120e70cc"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "ResultCode": "INVALID_DATA",
-            "Description": "Invalid data format for Excel creation"
-          },
-          "primaryKey": {
-            "ID": "595E4DA5-F68A-4C45-9F32-7556CDBD1FA2"
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:06:52.572Z",
-            "checksum": "3597940eb934797daffbd7821e9a4b94c30361a9b2430e49fd2e2e0eebb3d4fe"
-          }
-        }
-      ]
-    },
-    "primaryKey": {
-      "ID": "8623CE49-9265-4B7F-B190-CE9F0211834E"
-    },
-    "sync": {
-      "lastModified": "2025-12-30T23:06:50.930Z",
-      "checksum": "a93195eb0d7626c428b8d938a24f67e34200a8dee33491e35dccb8cfd7325162"
     }
   },
   {
@@ -5683,6 +5359,376 @@
     "sync": {
       "lastModified": "2025-12-30T23:06:51.284Z",
       "checksum": "099f2764ad19af5b5918d9851b93f0cc05394859cfacb1f8c4a16ff959fb05c5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Create Document",
+      "Description": "Creates a new in-progress document (PDF, DOCX, or XLSX) and returns a handle for incremental building. Use with Add Document Content, Preview Document, Modify Document Section, and Finalize Document to build documents piece by piece across multiple turns.",
+      "DriverClass": "__CreateDocument",
+      "Type": "Custom",
+      "Status": "Active"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DocumentType",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Type of document to create: 'pdf', 'docx', or 'xlsx'",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "8F5BD3F5-859F-49FA-8F64-425ECB87CBA9"
+          },
+          "sync": {
+            "lastModified": "2026-04-06T15:22:48.020Z",
+            "checksum": "bcd1de0e9d2c8689f9b2b8a3bbdf5136469bf0875ba4771cabf32146b140c946"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FileName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Suggested filename (e.g., 'quarterly-report.docx'). Defaults to 'document.pdf', 'document.docx', or 'workbook.xlsx'.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "77C78135-64AC-480B-885F-E3D4FA16D9CF"
+          },
+          "sync": {
+            "lastModified": "2026-04-06T15:22:48.032Z",
+            "checksum": "789ffbd81d86313f269cb8fa6dda39b0f23e443fb21a0adbb83d497b038ead3b"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Options",
+            "Type": "Input",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "Type-specific options: { pdf: { margin, fontSize, font, orientation, size }, word: { pageSize, orientation, margins, defaultFontSize, defaultFont }, excel: { author, title, description } }",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "7D5AE589-909D-4768-A253-7E4ADD96AE8C"
+          },
+          "sync": {
+            "lastModified": "2026-04-06T15:22:48.044Z",
+            "checksum": "0f2e9f2c353ad7f17b4126afb6add847c04f1da73966568e93eb8343f7f740b4"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "1DBA5427-884D-442C-B41A-3CA7509F0AFA"
+    },
+    "sync": {
+      "lastModified": "2026-04-06T15:22:44.829Z",
+      "checksum": "68d019b084c3c0236e59f8b2593ba524895cae2f534d4b7d3c9221d17e6118ec"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Add Document Content",
+      "Description": "Appends content to an in-progress document created by Create Document. Each call creates a new addressable section. Operations include: heading, paragraph, table, list, image, hr, pageBreak, sheet (Excel), formula (Excel).",
+      "DriverClass": "__AddDocumentContent",
+      "Type": "Custom",
+      "Status": "Active"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Handle",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Document handle returned by Create Document",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "5DE8DF1B-F1A8-4766-8E60-FF755D7D579D"
+          },
+          "sync": {
+            "lastModified": "2026-04-06T15:22:48.058Z",
+            "checksum": "2271e5bd2778371d8fae94781df878f42786d7b27a1c2c38e240b8f4497e1fb5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Operations",
+            "Type": "Input",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Array of content operations. Each has a 'type' field: heading (level, text), paragraph (text, bold, italic, align), table (headers, rows), list (items, ordered), image (src, width, height, caption), hr, pageBreak, sheet (name, data, headers, columnWidths), formula (sheet, cell, formula).",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "50EC888E-93BD-4C9E-A4D9-40FF37DD7B33"
+          },
+          "sync": {
+            "lastModified": "2026-04-06T15:22:48.069Z",
+            "checksum": "b9e49d36fcb9c62f18da0d153fa1007c16bc5281e4cd8b8582d0471ba24c08b9"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "A4A9F725-1341-4748-A8E2-214814EB9F83"
+    },
+    "sync": {
+      "lastModified": "2026-04-06T15:22:44.846Z",
+      "checksum": "82a5671398463d3cbc2f3d61dcb52bc383b471ff595cce3f5cebb93060bc1487"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Preview Document",
+      "Description": "Returns a summary of an in-progress document's current state: section count, per-section operation counts and content summaries. Use to check what has been built before adding more or finalizing.",
+      "DriverClass": "__PreviewDocument",
+      "Type": "Custom",
+      "Status": "Active"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Handle",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Document handle returned by Create Document",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "5D8B6C12-683B-4335-93B1-4A03FE1F950F"
+          },
+          "sync": {
+            "lastModified": "2026-04-06T15:22:48.080Z",
+            "checksum": "2271e5bd2778371d8fae94781df878f42786d7b27a1c2c38e240b8f4497e1fb5"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "1BFF50BE-EDC4-43A3-841A-2FD297DBCE1C"
+    },
+    "sync": {
+      "lastModified": "2026-04-06T15:22:44.861Z",
+      "checksum": "c58a755fdc7266191b772ad2cd9ea2a3deb5e3ce0343bb9656a031bd94f657f4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Modify Document Section",
+      "Description": "Replaces or removes a previously-added section in an in-progress document. Section IDs are returned by Add Document Content and Preview Document.",
+      "DriverClass": "__ModifyDocumentSection",
+      "Type": "Custom",
+      "Status": "Active"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Handle",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Document handle returned by Create Document",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "DC360F49-C35E-4354-BCAE-F47CB671B9C1"
+          },
+          "sync": {
+            "lastModified": "2026-04-06T15:22:48.091Z",
+            "checksum": "2271e5bd2778371d8fae94781df878f42786d7b27a1c2c38e240b8f4497e1fb5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SectionID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the section to modify (from Add Document Content or Preview Document)",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "68B7D34D-60F5-49A0-9B2A-6608FFFC36A2"
+          },
+          "sync": {
+            "lastModified": "2026-04-06T15:22:48.132Z",
+            "checksum": "4fd13ea7f89dbf7f72cedd54b46f22636f253cdf9608fec0612475736d4ac0a9"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Action",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "'replace' to swap the section's content, or 'remove' to delete it",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "C641CF80-3CCB-48D3-BCB6-DBBA8AFFBECF"
+          },
+          "sync": {
+            "lastModified": "2026-04-06T15:22:48.145Z",
+            "checksum": "6b1ecd7713fdf725f92463f15cfc20dbda81a65daee9032d43a4e75b44d43d68"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Operations",
+            "Type": "Input",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Replacement operations (required when Action is 'replace'). Same format as Add Document Content.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "42BFD2A5-6CCB-47AC-81C0-08E2BC4982DC"
+          },
+          "sync": {
+            "lastModified": "2026-04-06T15:22:48.158Z",
+            "checksum": "3a43b8530c8685ecf03738b53d500e15c4bca7bac1ae091a713ef03e3602a6fd"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "D5E8FC95-CA21-433D-AF2D-64C3F03621EA"
+    },
+    "sync": {
+      "lastModified": "2026-04-06T15:22:44.888Z",
+      "checksum": "f3d2521ab31a12334e3a0bdd99c31e0404ee7389708d087eef08dc9cd0ed5020"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Finalize Document",
+      "Description": "Renders an in-progress document to its final binary format, saves to MJ Storage, and outputs FileOutput for automatic artifact creation. The document handle is disposed after finalization.",
+      "DriverClass": "__FinalizeDocument",
+      "Type": "Custom",
+      "Status": "Active"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Handle",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Document handle returned by Create Document",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "B8F591EF-F800-4A25-A346-57ACE95088BF"
+          },
+          "sync": {
+            "lastModified": "2026-04-06T15:22:48.169Z",
+            "checksum": "2271e5bd2778371d8fae94781df878f42786d7b27a1c2c38e240b8f4497e1fb5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FileName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Override the filename set at creation time",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "7D2279C2-BBAE-4A0F-9E79-F5CEF1274B14"
+          },
+          "sync": {
+            "lastModified": "2026-04-06T15:22:48.180Z",
+            "checksum": "f94cb3e3e7cb4c53d9ea7d10622a3d37bbf0d521ae1cad44d4034bcb9c60a995"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "StorageAccountName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Name of the MJ File Storage Account to use (defaults to first active account)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "8EC0523A-2EFC-49E6-84F4-4C2BE3B43111"
+          },
+          "sync": {
+            "lastModified": "2026-04-06T15:22:48.191Z",
+            "checksum": "6788279a3547d986c8f8b436ba9b301b46adbda1ba7ff84ed4fe9c4d80ac0464"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "StoragePath",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Custom storage path prefix (defaults to 'artifacts/{date}/{uuid}/')",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "8D58FB83-7352-4681-9A12-11C9381D1A77"
+          },
+          "sync": {
+            "lastModified": "2026-04-06T15:22:48.202Z",
+            "checksum": "98506ba16c9f283997b4e1382efdc6acb5ebe886956801b3480b86bddb3a8d7c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FileOutput",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "Structured file output: { fileName, mimeType, sizeBytes, fileData? (base64 when inline), fileId? (MJ File ID when saved to storage) }",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "F5AE3A87-80AD-44CB-B112-704753B1D44A"
+          },
+          "sync": {
+            "lastModified": "2026-04-06T15:22:48.213Z",
+            "checksum": "ba9c29029b948193028e32e52b236d78bf5c4e831aa87caf8e1404a9b447d28c"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "80FEF6D0-26BC-42AF-884D-48059612E598"
+    },
+    "sync": {
+      "lastModified": "2026-04-06T15:22:44.900Z",
+      "checksum": "3fe6150dcdc2dfb559d22ff7b358c495bfd3aa7da78eb6120985a463e6836114"
     }
   }
 ]

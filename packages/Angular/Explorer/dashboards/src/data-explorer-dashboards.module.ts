@@ -7,6 +7,7 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { FilterBuilderModule } from '@memberjunction/ng-filter-builder';
 import { ExportServiceModule } from '@memberjunction/ng-export-service';
 import { ListManagementModule } from '@memberjunction/ng-list-management';
+import { NgTreesModule } from '@memberjunction/ng-trees';
 
 // Data Explorer Components
 import { DataExplorerDashboardComponent } from './DataExplorer/data-explorer-dashboard.component';
@@ -37,7 +38,8 @@ import { ExplorerStateService } from './DataExplorer/services/explorer-state.ser
     SharedGenericModule,
     FilterBuilderModule,
     ExportServiceModule,
-    ListManagementModule
+    ListManagementModule,
+    NgTreesModule
   ],
   providers: [
     ExplorerStateService

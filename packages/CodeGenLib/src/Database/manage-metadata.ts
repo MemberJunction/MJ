@@ -4025,11 +4025,45 @@ export class ManageMetadataBase {
                        VALUES ('${appID}', '${appName}', 'Generated for schema', '${schemaName}', '${path}', 1)`;
          await this.LogSQLAndExecute(pool, sSQL, `SQL generated to create new application ${appName}`);
          LogStatus(`Created new application ${appName} with Path: ${path}`);
+
+         // Auto-assign default roles to the new application
+         await this.addDefaultRolesForApplication(pool, appID, appName);
+
          return appID;
       }
       catch (e) {
          LogError(`Failed to create new application ${appName} for schema ${schemaName}`, null, e);
          return null;
+      }
+   }
+
+   /**
+    * Adds default ApplicationRole records for a newly created application based on config settings.
+    * This grants configured roles access to the new application automatically.
+    */
+   protected async addDefaultRolesForApplication(
+      pool: CodeGenConnection,
+      appId: string,
+      appName: string
+   ): Promise<void> {
+      const defaults = configInfo.newSchemaDefaults.ApplicationRoleDefaults;
+      if (!defaults?.AutoAddRolesForNewApplications) {
+         return;
+      }
+
+      const md = new Metadata();
+      for (const roleDef of defaults.Roles) {
+         const role = md.Roles.find(
+            r => r.Name.trim().toLowerCase() === roleDef.RoleName.trim().toLowerCase()
+         );
+         if (role) {
+            const sSQLInsert = `INSERT INTO ${this.qs(mj_core_schema(), 'ApplicationRole')}
+                                 (${this.qi('ApplicationID')}, ${this.qi('RoleID')}, ${this.qi('CanAccess')}, ${this.qi('CanAdmin')}) VALUES
+                                 ('${appId}', '${role.ID}', ${roleDef.CanAccess ? 1 : 0}, ${roleDef.CanAdmin ? 1 : 0})`;
+            await this.LogSQLAndExecute(pool, sSQLInsert, `Adding role ${roleDef.RoleName} to application ${appName}`);
+         } else {
+            LogError(`Unable to find Role '${roleDef.RoleName}' for application ${appName}`);
+         }
       }
    }
 
