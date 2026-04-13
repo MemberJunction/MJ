@@ -2,7 +2,6 @@ import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, UserInfo } fro
 import { RegisterForStartup } from "@memberjunction/core";
 import { UUIDsEqual } from "@memberjunction/global";
 import { MJSearchProviderEntity } from "../generated/entity_subclasses";
-import { UUIDsEqual } from "@memberjunction/global";
 
 /**
  * SearchEngineBase provides cached access to SearchProvider metadata.
