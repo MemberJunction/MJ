@@ -132,9 +132,57 @@
                 Timeline
               </span>
             </label>
+            <label class="radio-option radio-option--compact" [class.selected]="displayMode === 'map'">
+              <input
+                type="radio"
+                name="displayMode"
+                value="map"
+                [(ngModel)]="displayMode"
+                (change)="onDisplayModeChange()">
+              <span class="radio-mark"></span>
+              <span class="radio-label">
+                <i class="fa-solid fa-map-location-dot"></i>
+                Map
+              </span>
+            </label>
           </div>
           <span class="form-hint">{{ getDisplayModeDescription() }}</span>
         </div>
+        <!-- Map Render Mode (only shown when map is selected) -->
+        @if (displayMode === 'map') {
+          <div class="form-group">
+            <label>Map Style</label>
+            <div class="radio-group radio-group--horizontal">
+              <label class="radio-option radio-option--compact" [class.selected]="mapRenderMode === 'point'">
+                <input type="radio" name="mapRenderMode" value="point"
+                  [(ngModel)]="mapRenderMode" (change)="onOptionChange()">
+                <span class="radio-mark"></span>
+                <span class="radio-label">
+                  <i class="fa-solid fa-map-pin"></i>
+                  Points
+                </span>
+              </label>
+              <label class="radio-option radio-option--compact" [class.selected]="mapRenderMode === 'choropleth'">
+                <input type="radio" name="mapRenderMode" value="choropleth"
+                  [(ngModel)]="mapRenderMode" (change)="onOptionChange()">
+                <span class="radio-mark"></span>
+                <span class="radio-label">
+                  <i class="fa-solid fa-earth-americas"></i>
+                  Regions
+                </span>
+              </label>
+              <label class="radio-option radio-option--compact" [class.selected]="mapRenderMode === 'heatmap'">
+                <input type="radio" name="mapRenderMode" value="heatmap"
+                  [(ngModel)]="mapRenderMode" (change)="onOptionChange()">
+                <span class="radio-mark"></span>
+                <span class="radio-label">
+                  <i class="fa-solid fa-fire"></i>
+                  Heatmap
+                </span>
+              </label>
+            </div>
+          </div>
+        }
         <!-- Selection Options -->
         <div class="form-group">
           <div class="checkbox-group checkbox-group--compact">

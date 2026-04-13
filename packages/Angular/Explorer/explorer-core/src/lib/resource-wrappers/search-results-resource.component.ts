@@ -353,7 +353,6 @@ import { WordCloudItem, WordCloudItemEvent } from '@memberjunction/ng-word-cloud
 })
 export class SearchResultsResource extends BaseResourceComponent {
     private cdr = inject(ChangeDetectorRef);
-    private navigationService = inject(NavigationService);
     private searchService = inject(SearchService);
     private fileOpenService = inject(FileOpenService);
 

@@ -472,7 +472,6 @@ export class DashboardResource extends BaseResourceComponent {
 
     constructor(
         private viewContainer: ViewContainerRef,
-        private navigationService: NavigationService,
         private cdr: ChangeDetectorRef
     ) {
         super();
@@ -505,6 +504,7 @@ export class DashboardResource extends BaseResourceComponent {
     }
 
     ngOnDestroy(): void {
+        super.ngOnDestroy();
         if (this.componentRef) {
             this.componentRef.destroy();
         }

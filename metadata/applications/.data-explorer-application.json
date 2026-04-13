@@ -8,13 +8,6 @@
     "Color": "#5c6bc0",
     "DefaultNavItems": [
       {
-        "Label": "Dashboards",
-        "Icon": "fa-solid fa-gauge-high",
-        "ResourceType": "Custom",
-        "DriverClass": "DashboardBrowserResource",
-        "isDefault": false
-      },
-      {
         "Label": "Data",
         "Icon": "fa-solid fa-table-cells",
         "ResourceType": "Custom",
@@ -27,6 +20,13 @@
         "ResourceType": "Custom",
         "DriverClass": "QueryBrowserResource",
         "isDefault": false
+      },
+      {
+        "Label": "Dashboards",
+        "Icon": "fa-solid fa-gauge-high",
+        "ResourceType": "Custom",
+        "DriverClass": "DashboardBrowserResource",
+        "isDefault": false
       }
     ]
   },
@@ -37,7 +37,7 @@
     "ID": "867CB743-50F2-4239-AEE1-97F147C77B8F"
   },
   "sync": {
-    "lastModified": "2026-01-21T05:01:18.819Z",
-    "checksum": "ae9520a3c9d875e35873f3758f9f2b53ce26002f0b90e8380755bbf970127ccc"
+    "lastModified": "2026-04-12T22:53:51.800Z",
+    "checksum": "88c113aade5b68f3334f7c90821b60b5e085c0a605dd818680c3e1432d779ea2"
   }
 }

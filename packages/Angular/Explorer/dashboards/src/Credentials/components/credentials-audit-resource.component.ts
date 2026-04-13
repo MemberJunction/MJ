@@ -57,10 +57,12 @@ export class CredentialsAuditResourceComponent extends BaseResourceComponent imp
     }
 
     ngOnInit(): void {
+        super.ngOnInit();
         this.loadData();
     }
 
     ngOnDestroy(): void {
+        super.ngOnDestroy();
         // Cleanup if needed
     }
 

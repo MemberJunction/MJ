@@ -601,6 +601,7 @@ const countResult = await rv.RunView({
 | `ForceAuditLog` | `boolean` | Force audit log entry |
 | `CacheLocal` | `boolean` | Use LocalCacheManager for caching |
 | `CacheLocalTTL` | `number` | Cache TTL in milliseconds |
+| `BypassCache` | `boolean` | Skip all server-side caching (read and write). Use for maintenance queries that need true DB state after direct SQL inserts. |
 | `Aggregates` | `AggregateExpression[]` | Aggregate expressions to compute |
 
 ---
@@ -831,6 +832,19 @@ const result = await rv.RunView({
     ExtraFilter: 'IsActive = 1',
     CacheLocal: true,
     CacheLocalTTL: 300000  // 5 minutes
+});
+```
+
+To bypass all caching for a specific query (e.g., maintenance actions that need to see
+records inserted via direct SQL that bypassed `BaseEntity.Save()`), set `BypassCache: true`:
+
+```typescript
+// Always hits the database — skips both cache reads and cache writes
+const result = await rv.RunView({
+    EntityName: 'Members',
+    ExtraFilter: 'State IS NOT NULL',
+    BypassCache: true,
+    IgnoreMaxRows: true
 });
 ```
 #### Cross-Server Cache Invalidation

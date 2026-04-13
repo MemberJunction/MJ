@@ -355,7 +355,7 @@ export class UserAppConfigComponent {
     try {
       const md = new Metadata();
       const rv = new RunView();
-      const systemApps = this.appManager.GetAllSystemApps();
+      const systemApps = this.appManager.GetAuthorizedSystemApps();
 
       const userAppsResult = await rv.RunView<UserAppRow>({
         EntityName: 'MJ: User Applications',

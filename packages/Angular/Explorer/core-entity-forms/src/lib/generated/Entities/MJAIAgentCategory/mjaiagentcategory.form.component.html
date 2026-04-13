@@ -12,7 +12,7 @@
     <mj-collapsible-panel
         SectionKey="categoryDefinition"
         SectionName="Category Definition"
-        Icon="fa fa-tags"
+        Icon="fa fa-info-circle"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -35,7 +35,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="AssignmentStrategy"
-            Type="code"
+            Type="textarea"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -54,7 +54,7 @@
     <mj-collapsible-panel
         SectionKey="hierarchy"
         SectionName="Hierarchy"
-        Icon="fa fa-folder-tree"
+        Icon="fa fa-info-circle"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -73,6 +73,25 @@
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Storage Configuration Section -->
+    <mj-collapsible-panel
+        SectionKey="storageConfiguration"
+        SectionName="Storage Configuration"
+        Icon="fa fa-hdd"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="false"
+            FieldName="DefaultStorageAccountID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
         ></mj-form-field>
 
     </mj-collapsible-panel>

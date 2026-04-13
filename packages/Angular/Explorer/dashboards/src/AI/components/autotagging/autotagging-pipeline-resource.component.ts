@@ -321,9 +321,9 @@ type FormMode = 'none' | 'add-source' | 'edit-source' | 'add-type' | 'edit-type'
     encapsulation: ViewEncapsulation.None
 })
 export class AutotaggingPipelineResourceComponent extends BaseResourceComponent implements AfterViewInit, OnDestroy {
-    private destroy$ = new Subject<void>();
+    protected override destroy$ = new Subject<void>();
     private cdr = inject(ChangeDetectorRef);
-    private navigationService = inject(NavigationService);
+    protected override navigationService = inject(NavigationService);
 
     // ── Global state ──
     public IsLoading = true;
@@ -980,6 +980,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     }
 
     ngOnDestroy(): void {
+        super.ngOnDestroy();
         this.destroy$.next();
         this.destroy$.complete();
     }

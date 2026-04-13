@@ -4,7 +4,7 @@ import { SQLServerCodeGenProvider } from './providers/sqlserver/SQLServerCodeGen
 import { configInfo, currentWorkingDirectory, dbType, getSettingValue, mj_core_schema, outputDir } from '../Config/config';
 import { ApplicationInfo, CodeNameFromString, EntityFieldExtendedType, EntityFieldInfo, EntityInfo, ExtractActualDefaultValue, FieldCategoryInfo, LogError, LogStatus, Metadata, SeverityType, UserInfo } from "@memberjunction/core";
 import { MJApplicationEntity } from "@memberjunction/core-entities";
-import { logError, logMessage, logStatus } from "../Misc/status_logging";
+import { logError, logMessage, logStatus, startSpinner, updateSpinner, succeedSpinner } from "../Misc/status_logging";
 import { SQLUtilityBase } from "./sql";
 import { AdvancedGeneration, EntityDescriptionResult, EntityNameResult, SmartFieldIdentificationResult, FormLayoutResult, VirtualEntityDecorationResult } from "../Misc/advanced_generation";
 import { SQLParser } from "@memberjunction/sql-parser";
@@ -210,6 +210,19 @@ type SchemaInfoRecord = {
    EntityNameSuffix: string | null;
 };
 
+/**
+ * Reason why an entity requires late-phase view regeneration.
+ */
+export type ViewRegenReason = 'Geocoding';
+
+/**
+ * Entry in the late-phase view regeneration list.
+ */
+export interface ViewRegenEntry {
+   EntityName: string;
+   Reason: ViewRegenReason;
+}
+
 export class ManageMetadataBase {
 
    // ─── Database Provider Infrastructure ─────────────────────────────
@@ -387,6 +400,20 @@ export class ManageMetadataBase {
     */
    public static get modifiedEntityList(): string[] {
       return this._modifiedEntityList;
+   }
+   private static _entitiesRequiringViewRegen: ViewRegenEntry[] = [];
+   /**
+    * Entities that had late-phase changes requiring their base views to be
+    * regenerated after the main SQL generation pass. Each entry includes
+    * the reason for regen so downstream logic can apply reason-specific fixups.
+    */
+   public static get EntitiesRequiringViewRegen(): ViewRegenEntry[] {
+      return this._entitiesRequiringViewRegen;
+   }
+   public static AddEntityRequiringViewRegen(entityName: string, reason: ViewRegenReason): void {
+      if (!this._entitiesRequiringViewRegen.some(e => e.EntityName === entityName && e.Reason === reason)) {
+         this._entitiesRequiringViewRegen.push({ EntityName: entityName, Reason: reason });
+      }
    }
    private static _generatedValidators: ValidatorResult[] = [];
    /**
@@ -2411,11 +2438,13 @@ export class ManageMetadataBase {
       // Advanced Generation - Smart field identification and form layout
       if (!skipAdvancedGeneration) {
          const step7StartTime: Date = new Date();
+         startSpinner('Applying AI-powered advanced generation (smart fields, form layout)...');
          if (! await this.applyAdvancedGeneration(pool, excludeSchemas, currentUser)) {
             logError('Error applying advanced generation features');
             // Don't fail the entire process - advanced generation is optional
          }
-         logStatus(`      Applied advanced generation features in ${(new Date().getTime() - step7StartTime.getTime()) / 1000} seconds`);
+         const step7Elapsed = ((new Date().getTime() - step7StartTime.getTime()) / 1000).toFixed(1);
+         succeedSpinner(`Advanced generation completed (${step7Elapsed}s)`);
       }
 
       logStatus(`      Total time to manage entity fields: ${(new Date().getTime() - startTime.getTime()) / 1000} seconds`);
@@ -3996,11 +4025,45 @@ export class ManageMetadataBase {
                        VALUES ('${appID}', '${appName}', 'Generated for schema', '${schemaName}', '${path}', 1)`;
          await this.LogSQLAndExecute(pool, sSQL, `SQL generated to create new application ${appName}`);
          LogStatus(`Created new application ${appName} with Path: ${path}`);
+
+         // Auto-assign default roles to the new application
+         await this.addDefaultRolesForApplication(pool, appID, appName);
+
          return appID;
       }
       catch (e) {
          LogError(`Failed to create new application ${appName} for schema ${schemaName}`, null, e);
          return null;
+      }
+   }
+
+   /**
+    * Adds default ApplicationRole records for a newly created application based on config settings.
+    * This grants configured roles access to the new application automatically.
+    */
+   protected async addDefaultRolesForApplication(
+      pool: CodeGenConnection,
+      appId: string,
+      appName: string
+   ): Promise<void> {
+      const defaults = configInfo.newSchemaDefaults.ApplicationRoleDefaults;
+      if (!defaults?.AutoAddRolesForNewApplications) {
+         return;
+      }
+
+      const md = new Metadata();
+      for (const roleDef of defaults.Roles) {
+         const role = md.Roles.find(
+            r => r.Name.trim().toLowerCase() === roleDef.RoleName.trim().toLowerCase()
+         );
+         if (role) {
+            const sSQLInsert = `INSERT INTO ${this.qs(mj_core_schema(), 'ApplicationRole')}
+                                 (${this.qi('ApplicationID')}, ${this.qi('RoleID')}, ${this.qi('CanAccess')}, ${this.qi('CanAdmin')}) VALUES
+                                 ('${appId}', '${role.ID}', ${roleDef.CanAccess ? 1 : 0}, ${roleDef.CanAdmin ? 1 : 0})`;
+            await this.LogSQLAndExecute(pool, sSQLInsert, `Adding role ${roleDef.RoleName} to application ${appName}`);
+         } else {
+            LogError(`Unable to find Role '${roleDef.RoleName}' for application ${appName}`);
+         }
       }
    }
 
@@ -4312,27 +4375,23 @@ export class ManageMetadataBase {
    }
 
    /**
-    * Process entities in batches with parallel execution
-    * @param pool Database connection pool
-    * @param entities Entities to process
-    * @param allFields All fields for all entities (will be filtered per entity)
-    * @param ag AdvancedGeneration instance
-    * @param currentUser User context
-    * @param batchSize Number of entities to process in parallel (default 5)
+    * Process entities in batches with parallel execution.
+    * Batch size is configurable via advancedGeneration.batchSize in mj.config.cjs (default: 5).
     */
    protected async processEntitiesBatched(
       pool: CodeGenConnection,
       entities: any[],
       allFields: any[],
       ag: AdvancedGeneration,
-      currentUser: UserInfo,
-      batchSize: number = 5
+      currentUser: UserInfo
    ): Promise<boolean> {
+      const batchSize = configInfo.advancedGeneration?.batchSize ?? 5;
       let processedCount = 0;
       let errorCount = 0;
+      const total = entities.length;
 
       // Process in batches
-      for (let i = 0; i < entities.length; i += batchSize) {
+      for (let i = 0; i < total; i += batchSize) {
          const batch = entities.slice(i, i + batchSize);
 
          // Process batch in parallel
@@ -4350,10 +4409,10 @@ export class ManageMetadataBase {
             }
          }
 
-         logStatus(`      Progress: ${processedCount}/${entities.length} entities processed`);
+         const pct = Math.round((processedCount / total) * 100);
+         updateSpinner(`Advanced generation: ${processedCount}/${total} entities (${pct}%)${errorCount > 0 ? ` — ${errorCount} error(s)` : ''}`);
       }
 
-      logStatus(`      Advanced Generation complete: ${processedCount} entities processed, ${errorCount} errors`);
       return errorCount === 0;
    }
 
@@ -4522,7 +4581,9 @@ export class ManageMetadataBase {
       this.applySearchableFieldUpdates(sqlStatements, fields, result);
       this.applySearchPredicateUpdates(sqlStatements, fields, result);
       this.applyEntitySearchConfig(sqlStatements, entity, result);
-      this.applyFullTextSearchUpdates(sqlStatements, entity, fields, result);
+      if (configInfo.advancedGeneration?.allowFullTextSearchAutoUpdate) {
+         this.applyFullTextSearchUpdates(sqlStatements, entity, fields, result);
+      }
 
       // Execute all updates in one batch
       if (sqlStatements.length > 0) {
@@ -4784,11 +4845,13 @@ export class ManageMetadataBase {
       entity: EntityInfo,
       fieldCategories: Array<{ fieldName: string; extendedType: EntityFieldExtendedType | null }>
    ): Promise<void> {
+      const schema = mj_core_schema();
+
       // Check if the entity's AutoUpdateSupportsGeoCoding flag allows us to modify it
       const autoUpdateResult = await pool.query(`
-         SELECT AutoUpdateSupportsGeoCoding, SupportsGeoCoding
-         FROM ${mj_core_schema()}.Entity
-         WHERE ID = '${entity.ID}'
+         SELECT ${this.qi('AutoUpdateSupportsGeoCoding')}, ${this.qi('SupportsGeoCoding')}
+         FROM ${this.qs(schema, 'Entity')}
+         WHERE ${this.qi('ID')} = '${entity.ID}'
       `);
       const row = autoUpdateResult?.recordset?.[0];
       if (!row || !row.AutoUpdateSupportsGeoCoding) {
@@ -4807,10 +4870,10 @@ export class ManageMetadataBase {
       // Also check existing fields in the database for Geo* ExtendedTypes
       // (in case the LLM didn't re-assign them this run but they were previously set)
       const existingGeoResult = await pool.query(`
-         SELECT COUNT(*) AS GeoFieldCount
-         FROM ${mj_core_schema()}.EntityField
-         WHERE EntityID = '${entity.ID}'
-           AND ExtendedType IN ('Geo', 'GeoLatitude', 'GeoLongitude', 'GeoCountry', 'GeoStateProvince', 'GeoCity', 'GeoPostalCode', 'GeoAddress')
+         SELECT COUNT(*) AS ${this.qi('GeoFieldCount')}
+         FROM ${this.qs(schema, 'EntityField')}
+         WHERE ${this.qi('EntityID')} = '${entity.ID}'
+           AND ${this.qi('ExtendedType')} IN ('Geo', 'GeoLatitude', 'GeoLongitude', 'GeoCountry', 'GeoStateProvince', 'GeoCity', 'GeoPostalCode', 'GeoAddress')
       `);
       const existingGeoCount = existingGeoResult?.recordset?.[0]?.GeoFieldCount ?? 0;
 
@@ -4818,12 +4881,15 @@ export class ManageMetadataBase {
       const currentValue = row.SupportsGeoCoding ? true : false;
 
       if (shouldSupportGeo !== currentValue) {
-         await pool.query(`
-            UPDATE ${mj_core_schema()}.Entity
-            SET SupportsGeoCoding = ${shouldSupportGeo ? 1 : 0}
-            WHERE ID = '${entity.ID}' AND AutoUpdateSupportsGeoCoding = 1
-         `);
+         await this.LogSQLAndExecute(pool, `
+            UPDATE ${this.qs(schema, 'Entity')}
+            SET ${this.qi('SupportsGeoCoding')} = ${shouldSupportGeo ? 1 : 0}
+            WHERE ${this.qi('ID')} = '${entity.ID}' AND ${this.qi('AutoUpdateSupportsGeoCoding')} = 1
+         `, `Set SupportsGeoCoding = ${shouldSupportGeo ? 1 : 0} for ${entity.Name}`);
          logStatus(`  Entity ${entity.Name}: SupportsGeoCoding = ${shouldSupportGeo ? 1 : 0} (auto-detected from ${hasGeoFields ? 'LLM' : 'existing'} geo fields)`);
+         // Queue for late-phase view regeneration — the view was already generated
+         // before this flag was set, so it needs to be regenerated with the geo JOIN
+         ManageMetadataBase.AddEntityRequiringViewRegen(entity.Name, 'Geocoding');
       }
    }
 
