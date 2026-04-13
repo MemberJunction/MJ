@@ -32,6 +32,13 @@
             "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3 Flash",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
             "Priority": 12
+          },
+          "primaryKey": {
+            "ID": "7859CC40-5745-495D-BB51-ADBB567AA616"
+          },
+          "sync": {
+            "lastModified": "2026-04-13T03:26:43.817Z",
+            "checksum": "0c4ac573f66b21e8d7ed16a2756e0070cd71fa284532dc3a3f3e53354a4c805c"
           }
         },
         {
@@ -107,6 +114,13 @@
             "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3 Flash",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
             "Priority": 12
+          },
+          "primaryKey": {
+            "ID": "4AE61AD6-A4DC-469A-9F1E-5CA171BF34F7"
+          },
+          "sync": {
+            "lastModified": "2026-04-13T03:26:43.831Z",
+            "checksum": "0c4ac573f66b21e8d7ed16a2756e0070cd71fa284532dc3a3f3e53354a4c805c"
           }
         },
         {
@@ -182,6 +196,13 @@
             "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3 Flash",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
             "Priority": 12
+          },
+          "primaryKey": {
+            "ID": "596CE88F-AF19-4829-AB83-F44BD18D7B00"
+          },
+          "sync": {
+            "lastModified": "2026-04-13T03:26:43.846Z",
+            "checksum": "0c4ac573f66b21e8d7ed16a2756e0070cd71fa284532dc3a3f3e53354a4c805c"
           }
         },
         {
@@ -257,6 +278,13 @@
             "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3 Flash",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
             "Priority": 12
+          },
+          "primaryKey": {
+            "ID": "0914BFC0-D669-4672-B849-01CD5F599F26"
+          },
+          "sync": {
+            "lastModified": "2026-04-13T03:26:43.861Z",
+            "checksum": "0c4ac573f66b21e8d7ed16a2756e0070cd71fa284532dc3a3f3e53354a4c805c"
           }
         },
         {

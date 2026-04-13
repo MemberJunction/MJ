@@ -6,6 +6,13 @@
       "IsActive": true,
       "UseAuditLog": true,
       "Description": "Root authorization for all schema management operations via the Entity Designer Agent. Users or roles must have this authorization (or a child) to invoke any Entity Designer functionality."
+    },
+    "primaryKey": {
+      "ID": "84DB865B-7681-4546-9B2A-FE51C774C20E"
+    },
+    "sync": {
+      "lastModified": "2026-04-13T03:27:01.770Z",
+      "checksum": "ff0b946a23efc2c0b9c17bcd4ae44ae165ed770acaa04daf7c98662ba2479ea7"
     }
   },
   {
@@ -15,6 +22,13 @@
       "IsActive": true,
       "UseAuditLog": true,
       "Description": "Grants the ability to create new database entities (tables) through the Entity Designer Agent. Child authorizations further restrict which schemas are permitted."
+    },
+    "primaryKey": {
+      "ID": "D36AAC11-611D-49AF-978F-1338D1F8D0E2"
+    },
+    "sync": {
+      "lastModified": "2026-04-13T03:27:01.804Z",
+      "checksum": "ff6caf548e406991ff74e3bafd9f46c9becb99dc64b80972d6e93b2885f208ff"
     }
   },
   {
@@ -24,6 +38,13 @@
       "IsActive": true,
       "UseAuditLog": true,
       "Description": "Grants the ability to create new entities in the __mj_UDT schema only. This is the most restricted create permission — recommended for most users."
+    },
+    "primaryKey": {
+      "ID": "1ADB18F6-DA0F-4521-A75B-DCFD025C7C33"
+    },
+    "sync": {
+      "lastModified": "2026-04-13T03:27:01.857Z",
+      "checksum": "47efd764617f6b4070d2728ac724e2acf2094c79a1c373e8f989dbf92182742b"
     }
   },
   {
@@ -33,6 +54,13 @@
       "IsActive": true,
       "UseAuditLog": true,
       "Description": "Grants the ability to create new entities in any non-protected schema (not __mj, dbo, sys, or INFORMATION_SCHEMA). Intended for advanced users who need to extend application schemas."
+    },
+    "primaryKey": {
+      "ID": "9EC5948F-3FB6-4A08-85F0-7AF3C53331D0"
+    },
+    "sync": {
+      "lastModified": "2026-04-13T03:27:01.871Z",
+      "checksum": "618f2a1a800969ca8463fe7f9474729f1eb5de028132c1ebfcda70c50f8fd360"
     }
   },
   {
@@ -42,6 +70,13 @@
       "IsActive": true,
       "UseAuditLog": true,
       "Description": "Grants the ability to modify existing database entities through the Entity Designer Agent. Child authorizations restrict the scope of what can be modified."
+    },
+    "primaryKey": {
+      "ID": "AC30EB98-6A09-4A84-9ABE-CB21EE934ED8"
+    },
+    "sync": {
+      "lastModified": "2026-04-13T03:27:01.827Z",
+      "checksum": "729e8f9d2f47b539b26e6e4d5c7d260a61aa86c4d21a04d2a4da69fe284eeafb"
     }
   },
   {
@@ -51,6 +86,13 @@
       "IsActive": true,
       "UseAuditLog": true,
       "Description": "Grants the ability to modify only entities that the current user originally created via the Entity Designer Agent. Tracks ownership via MJ: Entity Settings (UDT provenance metadata)."
+    },
+    "primaryKey": {
+      "ID": "E2083EEA-E8C4-47D5-8FF4-DDB2C1B5593F"
+    },
+    "sync": {
+      "lastModified": "2026-04-13T03:27:01.884Z",
+      "checksum": "9bb2f0cc27f2652fdd7fed12a9a96cc10114e3def004c16b61b5eb8663aa17c3"
     }
   },
   {
@@ -60,6 +102,13 @@
       "IsActive": true,
       "UseAuditLog": true,
       "Description": "Grants the ability to modify any entity in the __mj_UDT schema, regardless of who created it. Intended for admins who need to maintain user-defined tables."
+    },
+    "primaryKey": {
+      "ID": "887DDF68-6BC7-4CB0-ADEF-6B7F37B4AE2D"
+    },
+    "sync": {
+      "lastModified": "2026-04-13T03:27:01.896Z",
+      "checksum": "3c31a5b4f168772efbe2d6bb77952635665ec7cb3617c6b9c5a4b1a6de73d934"
     }
   },
   {
@@ -69,6 +118,13 @@
       "IsActive": false,
       "UseAuditLog": true,
       "Description": "Reserved for future use — grants the ability to delete (DROP) entities through the Entity Designer Agent. Inactive until delete workflow is implemented in a future phase."
+    },
+    "primaryKey": {
+      "ID": "13984512-2DA4-441B-83D4-F28193F8F26A"
+    },
+    "sync": {
+      "lastModified": "2026-04-13T03:27:01.838Z",
+      "checksum": "c29d64ade227734e945224a1d2828e03a75cb176e4106adb98c1ae5872bda3eb"
     }
   }
 ]
