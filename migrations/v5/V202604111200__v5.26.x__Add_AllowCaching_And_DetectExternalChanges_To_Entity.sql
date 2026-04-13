@@ -1,9 +1,12 @@
 -- Add AllowCaching and DetectExternalChanges columns to Entity table.
 --
 -- AllowCaching: When false (default), the entire cache code path is
--- short-circuited for that entity. The runtime also checks the
--- cacheSettings.enableForSchemas config array, so __mj schema entities
--- are cached automatically without per-entity flags.
+-- short-circuited for that entity. This column is the single source of
+-- truth at runtime. Schema-level opt-in is handled at CodeGen time via
+-- the `newEntityDefaults.AllowCachingBySchema` config, which flips this
+-- flag when an entity is first inserted into the metadata. Existing
+-- core (__mj) entities are backfilled below so they remain cacheable
+-- after this migration.
 --
 -- DetectExternalChanges: When true AND TrackRecordChanges is also true,
 -- the external change detection system scans this entity for changes
@@ -15,9 +18,17 @@ ALTER TABLE ${flyway:defaultSchema}.Entity ADD
     DetectExternalChanges BIT NOT NULL CONSTRAINT DF_Entity_DetectExternalChanges DEFAULT 0;
 GO
 
+-- Backfill AllowCaching for core schema entities so the existing caching
+-- behavior (previously granted by the removed cacheSettings.enableForSchemas
+-- runtime override) is preserved after this migration.
+UPDATE ${flyway:defaultSchema}.Entity
+SET AllowCaching = 1
+WHERE SchemaName = '${flyway:defaultSchema}';
+GO
+
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Controls whether this entity participates in server-side and client-side caching. When false, all cache operations (PreRunView checks, auto-cache storage, BaseEntity event fingerprint scans, client-side IndexedDB cache) are skipped entirely. Can also be enabled at the schema level via the cacheSettings.enableForSchemas server config.',
+    @value = N'Controls whether this entity participates in server-side and client-side caching. When false, all cache operations (PreRunView checks, auto-cache storage, BaseEntity event fingerprint scans, client-side IndexedDB cache) are skipped entirely. This column is the single source of truth at runtime; schema-level defaults are applied at CodeGen time via newEntityDefaults.AllowCachingBySchema.',
     @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
     @level1type = N'TABLE',  @level1name = N'Entity',
     @level2type = N'COLUMN', @level2name = N'AllowCaching';
@@ -146,7 +157,7 @@ GO
             100013,
             'AllowCaching',
             'Allow Caching',
-            'Controls whether this entity participates in server-side and client-side caching. When false, all cache operations (PreRunView checks, auto-cache storage, BaseEntity event fingerprint scans, client-side IndexedDB cache) are skipped entirely. Can also be enabled at the schema level via the cacheSettings.enableForSchemas server config.',
+            'Controls whether this entity participates in server-side and client-side caching. When false, all cache operations (PreRunView checks, auto-cache storage, BaseEntity event fingerprint scans, client-side IndexedDB cache) are skipped entirely. This column is the single source of truth at runtime; schema-level defaults are applied at CodeGen time via newEntityDefaults.AllowCachingBySchema.',
             'bit',
             1,
             1,

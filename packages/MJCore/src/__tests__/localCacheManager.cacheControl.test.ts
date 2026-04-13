@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { LocalCacheManager, LocalCacheManagerConfig } from '../generic/localCacheManager';
+import { LocalCacheManager } from '../generic/localCacheManager';
 import { MockCacheStorageProvider } from './mocks/MockCacheStorageProvider';
 import { GetGlobalObjectStore } from '@memberjunction/global';
 
@@ -146,7 +146,7 @@ describe('LocalCacheManager Cache Control', () => {
             expect((cached!.results[0] as Record<string, unknown>).Name).toBe('Updated');
         });
 
-        it('should short-circuit when AllowCaching is undefined and schema not in enableForSchemas', async () => {
+        it('should short-circuit when AllowCaching is undefined (treated as false)', async () => {
             const entityName = 'DefaultEntity';
             const fp = await setupCacheWithEntity(entityName);
 
@@ -155,10 +155,9 @@ describe('LocalCacheManager Cache Control', () => {
                 baseEntity: {
                     EntityInfo: {
                         Name: entityName,
-                        // AllowCaching not set — IsCachingEnabledForEntity treats
-                        // falsy AllowCaching + unknown schema as "caching disabled"
+                        // AllowCaching not set — IsCachingEnabledForEntity only returns
+                        // true when AllowCaching === true, so any falsy value disables caching.
                         AllowCaching: undefined,
-                        SchemaName: 'dbo',
                         PrimaryKeys: [{ Name: 'ID' }],
                     },
                     Get: (f: string) => f === 'ID' ? '1' : 'Updated',
@@ -169,8 +168,7 @@ describe('LocalCacheManager Cache Control', () => {
             await (cacheManager as unknown as { HandleBaseEntityEvent: (e: unknown) => Promise<void> })
                 .HandleBaseEntityEvent(event);
 
-            // AllowCaching is falsy and SchemaName 'dbo' is not in enableForSchemas,
-            // so the event is short-circuited and the cache is not updated.
+            // AllowCaching is falsy, so the event is short-circuited and the cache is not updated.
             const cached = await cacheManager.GetRunViewResult(fp);
             expect(cached).not.toBeNull();
             expect((cached!.results[0] as Record<string, unknown>).Name).toBe('Test');

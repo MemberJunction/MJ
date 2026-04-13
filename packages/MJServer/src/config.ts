@@ -203,12 +203,6 @@ const cacheSettingsSchema = z.object({
   evictionSweepIntervalSeconds: z.number().optional().default(300),
   /** Enable verbose cache logging (hits, misses, evictions). Default: false. */
   verboseLogging: z.boolean().optional().default(false),
-  /**
-   * Schema names for which caching is automatically enabled at runtime, regardless of
-   * the per-entity AllowCaching column. Entities in these schemas are treated as cacheable
-   * without requiring individual metadata flags. Default: ['__mj'] (core metadata).
-   */
-  enableForSchemas: z.array(z.string()).optional().default(['__mj']),
 });
 
 const configInfoSchema = z.object({
@@ -406,7 +400,6 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
     defaultTTLSeconds: 0,
     evictionSweepIntervalSeconds: 300,
     verboseLogging: false,
-    enableForSchemas: ['__mj'],
   },
 
   // Auth providers (environment-driven)

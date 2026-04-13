@@ -133,13 +133,6 @@ export interface LocalCacheManagerConfig {
      * Default: false.
      */
     verboseLogging: boolean;
-    /**
-     * Schema names for which caching is automatically enabled at runtime,
-     * regardless of the per-entity AllowCaching column. Entities in these
-     * schemas are treated as cacheable without individual metadata flags.
-     * Default: ['__mj'] (core metadata).
-     */
-    enableForSchemas: string[];
 }
 
 // ============================================================================
@@ -154,7 +147,6 @@ const DEFAULT_CONFIG: LocalCacheManagerConfig = {
     maxPercentOfCachePerEntity: 50,
     evictionSweepIntervalMs: 300000, // 5 minutes
     verboseLogging: false,
-    enableForSchemas: ['__mj'],
 };
 
 // ============================================================================
@@ -390,16 +382,14 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     }
 
     /**
-     * Checks whether caching is enabled for a given entity. Returns true if either:
-     * 1. The entity's AllowCaching metadata flag is true, OR
-     * 2. The entity's schema is in the config's enableForSchemas list
-     *
-     * Use this instead of checking entity.AllowCaching directly.
+     * Checks whether caching is enabled for a given entity. Returns the entity's
+     * AllowCaching metadata flag. This is the single source of truth for cache
+     * eligibility — schema-level opt-in is applied at CodeGen time via the
+     * `newEntityDefaults.AllowCachingBySchema` config, which flips this flag when
+     * the entity is first inserted into the metadata.
      */
-    public IsCachingEnabledForEntity(entityInfo: { AllowCaching: boolean; SchemaName: string }): boolean {
-        if (entityInfo.AllowCaching) return true;
-        const schemas = this._config.enableForSchemas;
-        return schemas.length > 0 && schemas.includes(entityInfo.SchemaName);
+    public IsCachingEnabledForEntity(entityInfo: { AllowCaching: boolean }): boolean {
+        return entityInfo.AllowCaching === true;
     }
 
     /**

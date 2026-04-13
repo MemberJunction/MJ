@@ -4135,6 +4135,7 @@ export class ManageMetadataBase {
    protected createNewEntityInsertSQL(newEntityUUID: string, newEntityName: string, newEntity: any, newEntitySuffix: string, newEntityDisplayName: string | null): string {
       const newEntityDefaults = configInfo.newEntityDefaults;
       const newEntityDescriptionEscaped = newEntity.EntityDescription ? `'${newEntity.EntityDescription.replace(/'/g, "''")}'` : null;
+      const allowCaching = this.resolveAllowCachingForSchema(newEntity.SchemaName);
       const q = (name: string) => this.qi(name);
       const sSQLInsert = `
       INSERT INTO ${this.qs(mj_core_schema(), 'Entity')} (
@@ -4147,7 +4148,8 @@ export class ManageMetadataBase {
          ${q('BaseView')},
          ${q('SchemaName')},
          ${q('IncludeInAPI')},
-         ${q('AllowUserSearchAPI')}
+         ${q('AllowUserSearchAPI')},
+         ${q('AllowCaching')}
          ${newEntityDefaults.TrackRecordChanges === undefined ? '' : ', ' + q('TrackRecordChanges')}
          ${newEntityDefaults.AuditRecordAccess === undefined ? '' : ', ' + q('AuditRecordAccess')}
          ${newEntityDefaults.AuditViewRuns === undefined ? '' : ', ' + q('AuditViewRuns')}
@@ -4169,7 +4171,8 @@ export class ManageMetadataBase {
          'vw${generatePluralName(newEntity.TableName, {capitalizeFirstLetterOnly: true}) + (newEntitySuffix && newEntitySuffix.length > 0 ? newEntitySuffix : '')}',
          '${newEntity.SchemaName}',
          1,
-         ${newEntityDefaults.AllowUserSearchAPI === undefined ? 1 : newEntityDefaults.AllowUserSearchAPI ? 1 : 0}
+         ${newEntityDefaults.AllowUserSearchAPI === undefined ? 1 : newEntityDefaults.AllowUserSearchAPI ? 1 : 0},
+         ${allowCaching ? 1 : 0}
          ${newEntityDefaults.TrackRecordChanges === undefined ? '' : ', ' + (newEntityDefaults.TrackRecordChanges ? '1' : '0')}
          ${newEntityDefaults.AuditRecordAccess === undefined ? '' : ', ' + (newEntityDefaults.AuditRecordAccess ? '1' : '0')}
          ${newEntityDefaults.AuditViewRuns === undefined ? '' : ', ' + (newEntityDefaults.AuditViewRuns ? '1' : '0')}
@@ -4184,6 +4187,26 @@ export class ManageMetadataBase {
    `;
 
       return sSQLInsert;
+   }
+
+   /**
+    * Resolves the AllowCaching default for a new entity in the given schema.
+    * AllowCachingBySchema entries override the global AllowCaching default. The
+    * `${mj_core_schema}` placeholder is expanded so core-schema rules apply
+    * regardless of how the core schema is named in this deployment.
+    */
+   protected resolveAllowCachingForSchema(schemaName: string): boolean {
+      const defaults = configInfo.newEntityDefaults;
+      const overrides = defaults.AllowCachingBySchema ?? [];
+      const match = overrides.find(entry => {
+         let candidate = entry.SchemaName;
+         if (candidate?.trim().toLowerCase() === '${mj_core_schema}') {
+            candidate = mj_core_schema();
+         }
+         return candidate.trim().toLowerCase() === schemaName.trim().toLowerCase();
+      });
+      if (match) return match.AllowCaching;
+      return defaults.AllowCaching ?? false;
    }
 
 

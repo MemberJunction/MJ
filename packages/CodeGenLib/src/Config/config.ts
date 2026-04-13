@@ -365,6 +365,12 @@ const newEntityNameRulesBySchema = z.object({
   EntityNameSuffix: z.string().default(''),
 });
 
+export type AllowCachingBySchema = z.infer<typeof allowCachingBySchemaSchema>;
+const allowCachingBySchemaSchema = z.object({
+  SchemaName: z.string(),
+  AllowCaching: z.boolean(),
+});
+
 const newEntityDefaultsSchema = z.object({
   TrackRecordChanges: z.boolean().default(true),
   AuditRecordAccess: z.boolean().default(false),
@@ -374,12 +380,23 @@ const newEntityDefaultsSchema = z.object({
   AllowUpdateAPI: z.boolean().default(true),
   AllowDeleteAPI: z.boolean().default(true),
   AllowUserSearchAPI: z.boolean().default(true),
+  AllowCaching: z.boolean().default(false),
   CascadeDeletes: z.boolean().default(false),
   UserViewMaxRows: z.number().default(1000),
   AddToApplicationWithSchemaName: z.boolean().default(true),
   IncludeFirstNFieldsAsDefaultInView: z.number().default(5),
   PermissionDefaults: newEntityPermissionDefaultsSchema,
   NameRulesBySchema: newEntityNameRulesBySchema.array().default([]),
+  /**
+   * Per-schema overrides for the AllowCaching default. When CodeGen creates a new
+   * Entity row, the schema is matched (case-insensitive) against this list and the
+   * matching entry's AllowCaching value wins over the global AllowCaching default.
+   * Schema names support the `${mj_core_schema}` placeholder. Defaults to enabling
+   * caching for the MJ core schema.
+   */
+  AllowCachingBySchema: allowCachingBySchemaSchema.array().default([
+    { SchemaName: '${mj_core_schema}', AllowCaching: true },
+  ]),
 });
 
 
@@ -542,6 +559,7 @@ export const DEFAULT_CODEGEN_CONFIG: Partial<ConfigInfo> = {
     AllowUpdateAPI: true,
     AllowDeleteAPI: true,
     AllowUserSearchAPI: true,
+    AllowCaching: false,
     CascadeDeletes: false,
     UserViewMaxRows: 1000,
     AddToApplicationWithSchemaName: true,
@@ -560,6 +578,9 @@ export const DEFAULT_CODEGEN_CONFIG: Partial<ConfigInfo> = {
         EntityNamePrefix: 'MJ: ',
         EntityNameSuffix: '',
       },
+    ],
+    AllowCachingBySchema: [
+      { SchemaName: '${mj_core_schema}', AllowCaching: true },
     ],
   },
   newEntityRelationshipDefaults: {
