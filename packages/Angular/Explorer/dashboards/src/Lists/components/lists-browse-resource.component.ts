@@ -1664,7 +1664,7 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
   encapsulation: ViewEncapsulation.None
 })
 export class ListsBrowseResource extends BaseResourceComponent implements OnDestroy {
-  private destroy$ = new Subject<void>();
+  protected override destroy$ = new Subject<void>();
 
   isLoading = true;
   searchTerm = '';
@@ -1766,11 +1766,13 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
   }
 
   async ngOnInit() {
+    super.ngOnInit();
     await this.loadData();
     this.NotifyLoadComplete();
   }
 
   ngOnDestroy() {
+    super.ngOnDestroy();
     this.destroy$.next();
     this.destroy$.complete();
   }
