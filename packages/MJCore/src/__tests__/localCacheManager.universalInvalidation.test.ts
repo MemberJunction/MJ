@@ -185,6 +185,7 @@ describe('LocalCacheManager Universal Cache Invalidation', () => {
                     EntityInfo: {
                         Name: options.entityName,
                         PrimaryKeys: [{ Name: options.pkFieldName }],
+                        AllowCaching: true,
                     },
                     Get: (fieldName: string) => fields[fieldName],
                     GetAll: () => ({ ...fields }),
@@ -380,6 +381,7 @@ describe('LocalCacheManager Universal Cache Invalidation', () => {
                     EntityInfo: {
                         Name: options.entityName,
                         PrimaryKeys: options.primaryKeys,
+                        AllowCaching: true,
                     },
                     Get: (fieldName: string) => options.fields[fieldName],
                     GetAll: () => ({ ...options.fields }),
@@ -467,6 +469,7 @@ describe('LocalCacheManager Universal Cache Invalidation', () => {
                     EntityInfo: {
                         Name: 'Users',
                         PrimaryKeys: [{ Name: 'ID' }],
+                        AllowCaching: true,
                     },
                     Get: (field: string) => field === 'ID' ? '1' : 'Alice Updated',
                     GetAll: () => ({ ID: '1', Name: 'Alice Updated' }),
@@ -587,6 +590,7 @@ describe('LocalCacheManager Universal Cache Invalidation', () => {
                     EntityInfo: {
                         Name: 'Users',
                         PrimaryKeys: [{ Name: 'ID' }],
+                        AllowCaching: true,
                     },
                     Get: () => null, // null PK value
                     GetAll: () => ({ ID: null, Name: 'Ghost' }),
@@ -618,6 +622,7 @@ describe('LocalCacheManager Universal Cache Invalidation', () => {
                     EntityInfo: {
                         Name: 'Users',
                         PrimaryKeys: [], // empty array
+                        AllowCaching: true,
                     },
                     Get: () => '1',
                     GetAll: () => ({ ID: '1' }),
@@ -640,6 +645,7 @@ describe('LocalCacheManager Universal Cache Invalidation', () => {
                     EntityInfo: {
                         Name: 'Users',
                         PrimaryKeys: undefined,
+                        AllowCaching: true,
                     },
                     Get: () => '1',
                     GetAll: () => ({ ID: '1' }),
@@ -675,6 +681,7 @@ describe('LocalCacheManager Universal Cache Invalidation', () => {
                     EntityInfo: {
                         Name: 'Users',
                         PrimaryKeys: [{ Name: 'ID' }],
+                        AllowCaching: true,
                     },
                     Get: (f: string) => f === 'ID' ? '1' : 'Alice Updated',
                     GetAll: () => ({ ID: '1', Name: 'Alice Updated' }),
