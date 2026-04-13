@@ -6,7 +6,7 @@ MemberJunction currently has **12+ distinct permission subsystems** that evolved
 
 This plan delivers the fix in two phases:
 
-- **Phase 1 — Application Roles & Immediate Fixes**: Add `ApplicationRole` entity, wire enforcement, build admin UI in the Admin app, update CodeGen to auto-assign roles to new apps, and seed metadata for all shipped apps.
+- **Phase 1 — Application Roles & Immediate Fixes**: Add `ApplicationRole` entity, wire enforcement, build admin UI in the Admin app, update CodeGen to auto-assign roles to new apps, and seed metadata for all shipped apps. ✅ **COMPLETED** (see [Phase 1 Deliverables Checklist](#18-phase-1-deliverables-checklist)).
 - **Phase 2 — Unified Permission Provider Architecture**: Define `IPermissionProvider` interface, create `PermissionDomain` catalog entity, wrap each existing permission subsystem in a provider, build a unified `PermissionEngine` singleton, and deliver a "Sharing Center" admin UI.
 
 ---
@@ -55,11 +55,13 @@ This plan delivers the fix in two phases:
 
 ---
 
-## Phase 1: Application Roles (Tech Fellow)
+## Phase 1: Application Roles (Tech Fellow) ✅ COMPLETED
 
 ### Overview
 
 Add role-based access control to Applications. Today, any authenticated user can access any application — `UserApplication` only controls which apps appear in the nav sidebar, not which apps a user is *authorized* to use. Phase 1 fixes this with an `ApplicationRole` entity, enforcement in the application loading flow, admin UI, CodeGen integration, and metadata seeding.
+
+**Status**: Implemented, tested, and merged on branch `claude/unified-permissions-architecture-PFdnU`. See the [Phase 1 Deliverables Checklist](#18-phase-1-deliverables-checklist) for per-item status.
 
 ### 1.1 Database Migration
 
@@ -463,20 +465,22 @@ Create `.application-roles.json` seeding standard roles for all shipped apps:
 
 ### 1.8 Phase 1 Deliverables Checklist
 
+All Phase 1 deliverables are complete.
+
 | # | Deliverable | Package/Location | Status |
 |---|-------------|-----------------|--------|
-| 1 | SQL migration creating `ApplicationRole` table | `migrations/v5/` | |
-| 2 | Run CodeGen to generate entity class | `MJCoreEntities/generated/` | |
-| 3 | Update `UserInfoEngine` with role checking | `MJCoreEntities/src/engines/` | |
-| 4 | Add `'not_authorized'` status handling in `ApplicationManager` | `Angular/Explorer/base-application/` | |
-| 5 | Build `ApplicationRolesComponent` admin UI | `Angular/Explorer/explorer-settings/` | |
-| 6 | Register as resource in Admin app | `Angular/Explorer/explorer-settings/` | |
-| 7 | Add "App Roles" nav item to Admin app metadata | `metadata/applications/.admin-application.json` | |
-| 8 | Update CodeGen config schema for `ApplicationRoleDefaults` | `CodeGenLib/src/Config/config.ts` | |
-| 9 | Update `createNewApplication()` to auto-assign roles | `CodeGenLib/src/Database/manage-metadata.ts` | |
-| 10 | Create `metadata/application-roles/` with seed data | `metadata/application-roles/` | |
-| 11 | Unit tests for `UserHasApplicationAccess()` and `UserCanAdminApplication()` | `MJCoreEntities/src/__tests__/` | |
-| 12 | Compile all affected packages, run tests | All | |
+| 1 | SQL migration creating `ApplicationRole` table | `migrations/v5/V202604101200__v5.26.x__Application_Roles.sql` | ✅ |
+| 2 | Run CodeGen to generate entity class `MJApplicationRoleEntity` | `MJCoreEntities/src/generated/entity_subclasses.ts` | ✅ |
+| 3 | Update `UserInfoEngine` with role checking (`UserHasApplicationAccess`, `UserCanAdminApplication`, `'not_authorized'` status) | `MJCoreEntities/src/engines/UserInfoEngine.ts` | ✅ |
+| 4 | Add `'not_authorized'` status handling in `ApplicationManager` + `GetAuthorizedSystemApps` filtering for sidebar & settings menu | `Angular/Explorer/base-application/` | ✅ |
+| 5 | Build `ApplicationRolesResourceComponent` admin UI | `Angular/Explorer/dashboards/src/ApplicationRoles/` *(located in `dashboards` rather than `explorer-settings`, following the existing Resource component pattern)* | ✅ |
+| 6 | Register as resource in Admin app (module declarations + public-api + shell dialog mapping) | `Angular/Explorer/dashboards/src/core-dashboards.module.ts`, `public-api.ts`; `explorer-core` shell | ✅ |
+| 7 | Add "App Roles" nav item to Admin app metadata | `metadata/applications/.admin-application.json` | ✅ |
+| 8 | Update CodeGen config schema for `ApplicationRoleDefaults` | `CodeGenLib/src/Config/config.ts` | ✅ |
+| 9 | Update `createNewApplication()` to auto-assign roles via `addDefaultRolesForApplication()` | `CodeGenLib/src/Database/manage-metadata.ts` | ✅ |
+| 10 | Create `metadata/application-roles/` with seed data (12 records for Admin, Home, Data Explorer, Chat, AI) | `metadata/application-roles/` | ✅ |
+| 11 | Unit tests for `UserHasApplicationAccess()`, `UserCanAdminApplication()`, `CheckUserApplicationAccess()` (17 tests) | `MJCoreEntities/src/__tests__/UserInfoEngine.applicationRoles.test.ts` | ✅ |
+| 12 | Compile all affected packages, run tests | `MJCoreEntities`, `CodeGenLib`, `ng-base-application`, `ng-explorer-core`, `ng-explorer-settings`, `ng-dashboards` — all build clean; 17/17 tests pass | ✅ |
 
 ---
 
