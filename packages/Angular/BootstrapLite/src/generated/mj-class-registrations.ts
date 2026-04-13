@@ -829,11 +829,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-<<<<<<< claude/unified-permissions-architecture-PFdnU
-export const CLASS_REGISTRATIONS_COUNT = 376;
-=======
-export const CLASS_REGISTRATIONS_COUNT = 378;
->>>>>>> next
+export const CLASS_REGISTRATIONS_COUNT = 379;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
