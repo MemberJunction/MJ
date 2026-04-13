@@ -7,7 +7,7 @@
  * and storage usage.
  */
 
-import { Component, ChangeDetectorRef, OnDestroy, AfterViewInit, Input, inject } from '@angular/core';
+import { Component, ChangeDetectorRef, OnDestroy, AfterViewInit, Input, ViewChild, ElementRef, inject } from '@angular/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { EntityInfo, Metadata, RunView } from '@memberjunction/core';
@@ -475,6 +475,8 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
     public EntitySearchText = '';
     /** Whether the entity picker dropdown is open */
     public ShowEntityPicker = false;
+    public SelectedEntityIndex = -1;
+    @ViewChild('entitySearchInput') entitySearchInput?: ElementRef<HTMLInputElement>;
 
     // --- Raw entity data (private) ---
     private entityDocuments: MJEntityDocumentEntity[] = [];
@@ -760,7 +762,62 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
                 }))
                 .filter(group => group.Entities.length > 0);
         }
+        // Reset selection to first item when filter changes
+        this.SelectedEntityIndex = this.FlatFilteredEntities.length > 0 ? 0 : -1;
         this.cdr.detectChanges();
+    }
+
+    /**
+     * Get a flat list of all entities across groups (for keyboard navigation indexing)
+     */
+    get FlatFilteredEntities(): { Name: string; ID: string }[] {
+        return this.FilteredEntityGroups.flatMap(g => g.Entities);
+    }
+
+    /**
+     * Handle keyboard events in the entity picker search input
+     */
+    public OnEntityPickerKeyDown(event: KeyboardEvent): void {
+        const entities = this.FlatFilteredEntities;
+        if (entities.length === 0) return;
+
+        switch (event.key) {
+            case 'ArrowDown':
+                event.preventDefault();
+                this.SelectedEntityIndex = Math.min(this.SelectedEntityIndex + 1, entities.length - 1);
+                this.scrollSelectedEntityIntoView();
+                this.cdr.detectChanges();
+                break;
+            case 'ArrowUp':
+                event.preventDefault();
+                this.SelectedEntityIndex = Math.max(this.SelectedEntityIndex - 1, 0);
+                this.scrollSelectedEntityIntoView();
+                this.cdr.detectChanges();
+                break;
+            case 'Enter':
+                event.preventDefault();
+                if (this.SelectedEntityIndex >= 0 && this.SelectedEntityIndex < entities.length) {
+                    this.SelectEntity(entities[this.SelectedEntityIndex].Name);
+                }
+                break;
+            case 'Escape':
+                event.preventDefault();
+                this.ShowEntityPicker = false;
+                this.cdr.detectChanges();
+                break;
+        }
+    }
+
+    /**
+     * Scroll the currently selected entity picker item into view
+     */
+    private scrollSelectedEntityIntoView(): void {
+        setTimeout(() => {
+            const selected = document.querySelector('.entity-picker-item-focused');
+            if (selected) {
+                selected.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            }
+        }, 0);
     }
 
     /** Toggle entity picker visibility */
@@ -769,8 +826,16 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         if (this.ShowEntityPicker) {
             this.FilteredEntityGroups = this.EntityGroups;
             this.EntitySearchText = '';
+            this.cdr.detectChanges();
+            // Focus search input after the @if block renders — deferred past the click event
+            setTimeout(() => {
+                if (this.entitySearchInput?.nativeElement) {
+                    this.entitySearchInput.nativeElement.focus();
+                }
+            }, 0);
+        } else {
+            this.cdr.detectChanges();
         }
-        this.cdr.detectChanges();
     }
 
     /** Handle template edits from code editor */
