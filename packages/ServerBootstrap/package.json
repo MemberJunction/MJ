@@ -94,6 +94,7 @@
     "@memberjunction/scheduling-actions": "5.25.0",
     "@memberjunction/scheduling-engine": "5.25.0",
     "@memberjunction/scheduling-engine-base": "5.25.0",
+    "@memberjunction/search-engine": "5.25.0",
     "@memberjunction/server": "5.25.0",
     "@memberjunction/server-extensions-core": "5.25.0",
     "@memberjunction/storage": "5.25.0",
