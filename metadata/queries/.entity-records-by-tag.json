@@ -1,0 +1,25 @@
+[
+  {
+    "fields": {
+      "Name": "Entity Records By Tag",
+      "CategoryID": "@lookup:MJ: Query Categories.Name=Tags",
+      "UserQuestion": "Which records of a given entity have a specific tag?",
+      "Description": "Returns record IDs for a given entity that have a specific tag assigned, with relevance weight. Composable — join on RecordID to the target entity's primary key to enrich with full record data for tag-based filtering and drill-downs.",
+      "SQL": "@file:SQL/entity-records-by-tag.sql",
+      "TechnicalDescription": "Filters vwTaggedItems by entity name and tag DisplayName, joining to vwTags to resolve the tag. Returns RecordID, Weight, and TaggedAt. Only includes Active tags. No ORDER BY for composability. Parameters: entityName (entity display name e.g. \"Member Engagement Logs\"), tagName (the tag's DisplayName to match e.g. \"Law Enforcement Liability\").",
+      "Status": "Approved",
+      "QualityRank": 8,
+      "ExecutionCostRank": 1,
+      "Reusable": true,
+      "UsesTemplate": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "52E5C84F-6B00-45AA-BCB4-9429B1CE5BA7"
+    },
+    "sync": {
+      "lastModified": "2026-04-12T22:08:48.056Z",
+      "checksum": "597f1bf5de19091f2ffd63d2d8b43d918939905e57c6102cf55d5a90688a40e7"
+    }
+  }
+]

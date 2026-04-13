@@ -58,6 +58,7 @@ export type {
     SearchClientResponse,
     SearchClientResultItem,
     SearchClientFilters,
+    SearchClientProviderInfo,
     SearchSourceCounts,
     SearchScoreBreakdown
 } from './graphQLSearchClient';

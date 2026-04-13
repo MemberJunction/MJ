@@ -56,10 +56,8 @@ export * from './custom/data/search-query-catalog.action';
 export * from './custom/code-execution/execute-code.action';
 
 // File Operation Actions
-export * from './custom/files/pdf-generator.action';
 export * from './custom/files/pdf-extractor.action';
 export * from './custom/files/excel-reader.action';
-export * from './custom/files/excel-writer.action';
 export * from './custom/files/file-compress.action';
 
 // File Storage Actions - Granular operations for cloud storage

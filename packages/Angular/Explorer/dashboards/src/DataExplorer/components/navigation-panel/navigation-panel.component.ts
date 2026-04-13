@@ -1,5 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, ViewChild } from '@angular/core';
 import { EntityInfo, Metadata, CompositeKey } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { TreeBranchConfig, TreeLeafConfig, TreeNode, TreeComponent } from '@memberjunction/ng-trees';
 import { RecentItem, FavoriteItem, AppEntityGroup } from '../../models/explorer-state.interface';
 
@@ -161,7 +162,7 @@ export class NavigationPanelComponent implements OnChanges {
     if (node.Type !== 'leaf') return;
 
     // Find the EntityInfo by ID from the node
-    const entity = this.metadata.Entities.find(e => e.ID === node.ID);
+    const entity = this.metadata.Entities.find(e => UUIDsEqual(e.ID, node.ID));
     if (entity) {
       this.entitySelected.emit(entity);
     }

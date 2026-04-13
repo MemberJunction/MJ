@@ -2707,7 +2707,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     await UserViewEngine.Instance.Config(false);
 
     const accessibleViews = UserViewEngine.Instance.GetAccessibleViewsForEntity(entity.ID);
-    const view = accessibleViews.find(v => v.ID === viewId) || null;
+    const view = accessibleViews.find(v => UUIDsEqual(v.ID, viewId)) || null;
 
     if (view) {
       this.selectedViewEntity = view;

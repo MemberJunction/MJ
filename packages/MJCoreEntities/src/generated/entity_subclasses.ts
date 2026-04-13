@@ -1016,9 +1016,19 @@ export const MJAIAgentCategorySchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    DefaultStorageAccountID: z.string().nullable().describe(`
+        * * Field Name: DefaultStorageAccountID
+        * * Display Name: Default Storage Account
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: File Storage Accounts (vwFileStorageAccounts.ID)
+        * * Description: Default file storage account for agents in this category. Inherited by child categories that do not define their own value — resolution walks up the ParentID tree until a non-null value is found. Overrides the Type-level default. FK to FileStorageAccount.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
-        * * Display Name: Parent Name
+        * * Display Name: Parent
+        * * SQL Data Type: nvarchar(200)`),
+    DefaultStorageAccount: z.string().nullable().describe(`
+        * * Field Name: DefaultStorageAccount
+        * * Display Name: Default Storage Account Name
         * * SQL Data Type: nvarchar(200)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
@@ -3289,7 +3299,7 @@ export const MJAIAgentTypeSchema = z.object({
         * * Description: Determines whether the custom form section (specified by UIFormSectionClass) should be expanded by default when the AI Agent form loads. True means the section starts expanded, False means it starts collapsed. Only applies when UIFormSectionClass is specified. Defaults to 1 (expanded).`),
     PromptParamsSchema: z.string().nullable().describe(`
         * * Field Name: PromptParamsSchema
-        * * Display Name: Prompt Parameters Schema
+        * * Display Name: Prompt Params Schema
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON Schema defining the available prompt parameters for this agent type. Includes property definitions with types, defaults, and descriptions. Used by agents of this type to customize which prompt sections are included in the system prompt. The schema follows JSON Schema draft-07 format.`),
     AssignmentStrategy: z.string().nullable().describe(`
@@ -3297,10 +3307,20 @@ export const MJAIAgentTypeSchema = z.object({
         * * Display Name: Assignment Strategy
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON-serialized AgentRequestAssignmentStrategy defining the default assignment strategy for all agents of this type. Overridden by per-invocation or category-level strategies in the resolution chain.`),
+    DefaultStorageAccountID: z.string().nullable().describe(`
+        * * Field Name: DefaultStorageAccountID
+        * * Display Name: Default Storage Account
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: File Storage Accounts (vwFileStorageAccounts.ID)
+        * * Description: Default file storage account for agents of this type. Lowest priority in the resolution chain (Type → Category tree → Agent → Runtime override). When set, all agents of this type use this storage account unless overridden at a more specific level. FK to FileStorageAccount.`),
     SystemPrompt: z.string().nullable().describe(`
         * * Field Name: SystemPrompt
-        * * Display Name: System Prompt Text
+        * * Display Name: System Prompt
         * * SQL Data Type: nvarchar(255)`),
+    DefaultStorageAccount: z.string().nullable().describe(`
+        * * Field Name: DefaultStorageAccount
+        * * Display Name: Default Storage Account Name
+        * * SQL Data Type: nvarchar(200)`),
 });
 
 export type MJAIAgentTypeEntityType = z.infer<typeof MJAIAgentTypeSchema>;
@@ -3376,17 +3396,17 @@ export const MJAIAgentSchema = z.object({
         * * Description: When true, enables automatic compression of conversation context when the message threshold is reached.`),
     ContextCompressionMessageThreshold: z.number().nullable().describe(`
         * * Field Name: ContextCompressionMessageThreshold
-        * * Display Name: Compression Message Threshold
+        * * Display Name: Context Compression Message Threshold
         * * SQL Data Type: int
         * * Description: Number of messages that triggers context compression when EnableContextCompression is true.`),
     ContextCompressionPromptID: z.string().nullable().describe(`
         * * Field Name: ContextCompressionPromptID
-        * * Display Name: Compression Prompt
+        * * Display Name: Context Compression Prompt
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)`),
     ContextCompressionMessageRetentionCount: z.number().nullable().describe(`
         * * Field Name: ContextCompressionMessageRetentionCount
-        * * Display Name: Compression Message Retention Count
+        * * Display Name: Context Compression Message Retention Count
         * * SQL Data Type: int
         * * Description: Number of recent messages to keep uncompressed when context compression is applied.`),
     TypeID: z.string().nullable().describe(`
@@ -3717,13 +3737,19 @@ if this limit is exceeded.`),
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: When true (default), this agent accepts runtime-registered ephemeral client tools that are not defined in metadata. Set to false for agents that require strict tool governance.`),
+    DefaultStorageAccountID: z.string().nullable().describe(`
+        * * Field Name: DefaultStorageAccountID
+        * * Display Name: Default Storage Account ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: File Storage Accounts (vwFileStorageAccounts.ID)
+        * * Description: Default file storage account for this specific agent. Overrides both Type-level and Category-level defaults. Can be further overridden at runtime via ExecuteAgentParams.override.storageAccountId. FK to FileStorageAccount.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent Name
         * * SQL Data Type: nvarchar(255)`),
     ContextCompressionPrompt: z.string().nullable().describe(`
         * * Field Name: ContextCompressionPrompt
-        * * Display Name: Context Compression Prompt Name
+        * * Display Name: Context Compression Prompt
         * * SQL Data Type: nvarchar(255)`),
     Type: z.string().nullable().describe(`
         * * Field Name: Type
@@ -3744,6 +3770,10 @@ if this limit is exceeded.`),
     Category: z.string().nullable().describe(`
         * * Field Name: Category
         * * Display Name: Category Name
+        * * SQL Data Type: nvarchar(200)`),
+    DefaultStorageAccount: z.string().nullable().describe(`
+        * * Field Name: DefaultStorageAccount
+        * * Display Name: Default Storage Account
         * * SQL Data Type: nvarchar(200)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
@@ -6905,6 +6935,61 @@ export const MJApplicationEntitySchema = z.object({
 export type MJApplicationEntityEntityType = z.infer<typeof MJApplicationEntitySchema>;
 
 /**
+ * zod schema definition for the entity MJ: Application Roles
+ */
+export const MJApplicationRoleSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ApplicationID: z.string().describe(`
+        * * Field Name: ApplicationID
+        * * Display Name: Application
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Applications (vwApplications.ID)
+        * * Description: Foreign key to the Application this role grant applies to`),
+    RoleID: z.string().describe(`
+        * * Field Name: RoleID
+        * * Display Name: Role
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Roles (vwRoles.ID)
+        * * Description: Foreign key to the Role being granted or denied access`),
+    CanAccess: z.boolean().describe(`
+        * * Field Name: CanAccess
+        * * Display Name: Can Access
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When true, users in this role can access the application. When false, this record acts as an explicit deny for the role.`),
+    CanAdmin: z.boolean().describe(`
+        * * Field Name: CanAdmin
+        * * Display Name: Can Admin
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When true, users in this role can modify application settings, manage nav items, and configure the application.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Application: z.string().describe(`
+        * * Field Name: Application
+        * * Display Name: Application Name
+        * * SQL Data Type: nvarchar(100)`),
+    Role: z.string().describe(`
+        * * Field Name: Role
+        * * Display Name: Role Name
+        * * SQL Data Type: nvarchar(50)`),
+});
+
+export type MJApplicationRoleEntityType = z.infer<typeof MJApplicationRoleSchema>;
+
+/**
  * zod schema definition for the entity MJ: Application Settings
  */
 export const MJApplicationSettingSchema = z.object({
@@ -7202,6 +7287,16 @@ export const MJArtifactTypeSchema = z.object({
         * * Display Name: Icon
         * * SQL Data Type: nvarchar(255)
         * * Description: Font Awesome icon class name for displaying this artifact type in the UI (e.g., fa-file-code, fa-chart-line)`),
+    ContentCategory: z.union([z.literal('File'), z.literal('Text')]).describe(`
+        * * Field Name: ContentCategory
+        * * Display Name: Content Category
+        * * SQL Data Type: nvarchar(10)
+        * * Default Value: Text
+    * * Value List Type: List
+    * * Possible Values 
+    *   * File
+    *   * Text
+        * * Description: Classifies whether this artifact type stores text content ('Text', the default for all existing types) or a binary file in MJStorage ('File'). Used by AgentRunner and viewer components to route file-based artifacts correctly.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
@@ -7344,7 +7439,7 @@ export const MJArtifactVersionSchema = z.object({
         * * Default Value: newsequentialid()`),
     ArtifactID: z.string().describe(`
         * * Field Name: ArtifactID
-        * * Display Name: Artifact ID
+        * * Display Name: Artifact
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Artifacts (vwArtifacts.ID)`),
     VersionNumber: z.number().describe(`
@@ -7369,7 +7464,7 @@ export const MJArtifactVersionSchema = z.object({
         * * Description: User comments specific to this version`),
     UserID: z.string().describe(`
         * * Field Name: UserID
-        * * Display Name: User ID
+        * * Display Name: User
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)`),
     __mj_CreatedAt: z.date().describe(`
@@ -7397,6 +7492,37 @@ export const MJArtifactVersionSchema = z.object({
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Description of this artifact version. Can differ from Artifact.Description as it may evolve with versions.`),
+    FileID: z.string().nullable().describe(`
+        * * Field Name: FileID
+        * * Display Name: File
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Files (vwFiles.ID)
+        * * Description: Foreign key to the MJ: Files entity. When ContentMode is 'File', this references the binary file stored in MJStorage. NULL when ContentMode is 'Text'.`),
+    ContentMode: z.union([z.literal('File'), z.literal('Text')]).describe(`
+        * * Field Name: ContentMode
+        * * Display Name: Content Mode
+        * * SQL Data Type: nvarchar(10)
+        * * Default Value: Text
+    * * Value List Type: List
+    * * Possible Values 
+    *   * File
+    *   * Text
+        * * Description: Determines how artifact content is stored. 'Text' (default) means the Content column holds the data. 'File' means FileID references a binary file in MJStorage and Content is unused.`),
+    MimeType: z.string().nullable().describe(`
+        * * Field Name: MimeType
+        * * Display Name: MIME Type
+        * * SQL Data Type: nvarchar(200)
+        * * Description: MIME type of the stored file (e.g. application/pdf). Denormalized from the File entity for display without joins. Only populated when ContentMode is 'File'.`),
+    FileName: z.string().nullable().describe(`
+        * * Field Name: FileName
+        * * Display Name: File Name
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Original filename of the stored file (e.g. report.pdf). Denormalized from the File entity for display without joins. Only populated when ContentMode is 'File'.`),
+    ContentSizeBytes: z.number().nullable().describe(`
+        * * Field Name: ContentSizeBytes
+        * * Display Name: Content Size Bytes
+        * * SQL Data Type: bigint
+        * * Description: Size of the stored file in bytes. Denormalized for display without loading the file. Only populated when ContentMode is 'File'.`),
     Artifact: z.string().describe(`
         * * Field Name: Artifact
         * * Display Name: Artifact
@@ -7405,6 +7531,10 @@ export const MJArtifactVersionSchema = z.object({
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
+    File: z.string().nullable().describe(`
+        * * Field Name: File
+        * * Display Name: File
+        * * SQL Data Type: nvarchar(500)`),
 });
 
 export type MJArtifactVersionEntityType = z.infer<typeof MJArtifactVersionSchema>;
@@ -24332,6 +24462,16 @@ export const MJVectorDatabaseSchema = z.object({
         * * Display Name: Configuration
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON configuration settings for this vector database provider. Stores provider-specific connection settings like custom host URLs, authentication configuration, timeouts, retry policies, and batch size limits. NULL means use defaults from environment variables or provider defaults.`),
+    CredentialID: z.string().nullable().describe(`
+        * * Field Name: CredentialID
+        * * Display Name: Credential
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)
+        * * Description: Optional link to a stored credential containing the API key and any other authentication details for this vector database provider. When set, the Credential Engine decrypts and supplies the key at runtime. When NULL, the system falls back to the environment variable AI_VENDOR_API_KEY__<ClassKey>.`),
+    Credential: z.string().nullable().describe(`
+        * * Field Name: Credential
+        * * Display Name: Credential Name
+        * * SQL Data Type: nvarchar(200)`),
 });
 
 export type MJVectorDatabaseEntityType = z.infer<typeof MJVectorDatabaseSchema>;
@@ -27748,12 +27888,35 @@ export class MJAIAgentCategoryEntity extends BaseEntity<MJAIAgentCategoryEntityT
     }
 
     /**
+    * * Field Name: DefaultStorageAccountID
+    * * Display Name: Default Storage Account
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: File Storage Accounts (vwFileStorageAccounts.ID)
+    * * Description: Default file storage account for agents in this category. Inherited by child categories that do not define their own value — resolution walks up the ParentID tree until a non-null value is found. Overrides the Type-level default. FK to FileStorageAccount.
+    */
+    get DefaultStorageAccountID(): string | null {
+        return this.Get('DefaultStorageAccountID');
+    }
+    set DefaultStorageAccountID(value: string | null) {
+        this.Set('DefaultStorageAccountID', value);
+    }
+
+    /**
     * * Field Name: Parent
-    * * Display Name: Parent Name
+    * * Display Name: Parent
     * * SQL Data Type: nvarchar(200)
     */
     get Parent(): string | null {
         return this.Get('Parent');
+    }
+
+    /**
+    * * Field Name: DefaultStorageAccount
+    * * Display Name: Default Storage Account Name
+    * * SQL Data Type: nvarchar(200)
+    */
+    get DefaultStorageAccount(): string | null {
+        return this.Get('DefaultStorageAccount');
     }
 
     /**
@@ -33700,7 +33863,7 @@ export class MJAIAgentTypeEntity extends BaseEntity<MJAIAgentTypeEntityType> {
 
     /**
     * * Field Name: PromptParamsSchema
-    * * Display Name: Prompt Parameters Schema
+    * * Display Name: Prompt Params Schema
     * * SQL Data Type: nvarchar(MAX)
     * * Description: JSON Schema defining the available prompt parameters for this agent type. Includes property definitions with types, defaults, and descriptions. Used by agents of this type to customize which prompt sections are included in the system prompt. The schema follows JSON Schema draft-07 format.
     */
@@ -33725,12 +33888,35 @@ export class MJAIAgentTypeEntity extends BaseEntity<MJAIAgentTypeEntityType> {
     }
 
     /**
+    * * Field Name: DefaultStorageAccountID
+    * * Display Name: Default Storage Account
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: File Storage Accounts (vwFileStorageAccounts.ID)
+    * * Description: Default file storage account for agents of this type. Lowest priority in the resolution chain (Type → Category tree → Agent → Runtime override). When set, all agents of this type use this storage account unless overridden at a more specific level. FK to FileStorageAccount.
+    */
+    get DefaultStorageAccountID(): string | null {
+        return this.Get('DefaultStorageAccountID');
+    }
+    set DefaultStorageAccountID(value: string | null) {
+        this.Set('DefaultStorageAccountID', value);
+    }
+
+    /**
     * * Field Name: SystemPrompt
-    * * Display Name: System Prompt Text
+    * * Display Name: System Prompt
     * * SQL Data Type: nvarchar(255)
     */
     get SystemPrompt(): string | null {
         return this.Get('SystemPrompt');
+    }
+
+    /**
+    * * Field Name: DefaultStorageAccount
+    * * Display Name: Default Storage Account Name
+    * * SQL Data Type: nvarchar(200)
+    */
+    get DefaultStorageAccount(): string | null {
+        return this.Get('DefaultStorageAccount');
     }
 }
 
@@ -34071,7 +34257,7 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
 
     /**
     * * Field Name: ContextCompressionMessageThreshold
-    * * Display Name: Compression Message Threshold
+    * * Display Name: Context Compression Message Threshold
     * * SQL Data Type: int
     * * Description: Number of messages that triggers context compression when EnableContextCompression is true.
     */
@@ -34084,7 +34270,7 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
 
     /**
     * * Field Name: ContextCompressionPromptID
-    * * Display Name: Compression Prompt
+    * * Display Name: Context Compression Prompt
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
     */
@@ -34097,7 +34283,7 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
 
     /**
     * * Field Name: ContextCompressionMessageRetentionCount
-    * * Display Name: Compression Message Retention Count
+    * * Display Name: Context Compression Message Retention Count
     * * SQL Data Type: int
     * * Description: Number of recent messages to keep uncompressed when context compression is applied.
     */
@@ -34829,6 +35015,20 @@ if this limit is exceeded.
     }
 
     /**
+    * * Field Name: DefaultStorageAccountID
+    * * Display Name: Default Storage Account ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: File Storage Accounts (vwFileStorageAccounts.ID)
+    * * Description: Default file storage account for this specific agent. Overrides both Type-level and Category-level defaults. Can be further overridden at runtime via ExecuteAgentParams.override.storageAccountId. FK to FileStorageAccount.
+    */
+    get DefaultStorageAccountID(): string | null {
+        return this.Get('DefaultStorageAccountID');
+    }
+    set DefaultStorageAccountID(value: string | null) {
+        this.Set('DefaultStorageAccountID', value);
+    }
+
+    /**
     * * Field Name: Parent
     * * Display Name: Parent Name
     * * SQL Data Type: nvarchar(255)
@@ -34839,7 +35039,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: ContextCompressionPrompt
-    * * Display Name: Context Compression Prompt Name
+    * * Display Name: Context Compression Prompt
     * * SQL Data Type: nvarchar(255)
     */
     get ContextCompressionPrompt(): string | null {
@@ -34889,6 +35089,15 @@ if this limit is exceeded.
     */
     get Category(): string | null {
         return this.Get('Category');
+    }
+
+    /**
+    * * Field Name: DefaultStorageAccount
+    * * Display Name: Default Storage Account
+    * * SQL Data Type: nvarchar(200)
+    */
+    get DefaultStorageAccount(): string | null {
+        return this.Get('DefaultStorageAccount');
     }
 
     /**
@@ -43510,6 +43719,145 @@ export class MJApplicationEntityEntity extends BaseEntity<MJApplicationEntityEnt
 
 
 /**
+ * MJ: Application Roles - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ApplicationRole
+ * * Base View: vwApplicationRoles
+ * * @description Controls which roles can access and administer specific applications. When no ApplicationRole records exist for an application, all roles can access it (open access). When at least one record exists, only roles with CanAccess=1 are permitted.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Application Roles')
+export class MJApplicationRoleEntity extends BaseEntity<MJApplicationRoleEntityType> {
+    /**
+    * Loads the MJ: Application Roles record from the database
+    * @param ID: string - primary key value to load the MJ: Application Roles record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJApplicationRoleEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ApplicationID
+    * * Display Name: Application
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Applications (vwApplications.ID)
+    * * Description: Foreign key to the Application this role grant applies to
+    */
+    get ApplicationID(): string {
+        return this.Get('ApplicationID');
+    }
+    set ApplicationID(value: string) {
+        this.Set('ApplicationID', value);
+    }
+
+    /**
+    * * Field Name: RoleID
+    * * Display Name: Role
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Roles (vwRoles.ID)
+    * * Description: Foreign key to the Role being granted or denied access
+    */
+    get RoleID(): string {
+        return this.Get('RoleID');
+    }
+    set RoleID(value: string) {
+        this.Set('RoleID', value);
+    }
+
+    /**
+    * * Field Name: CanAccess
+    * * Display Name: Can Access
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When true, users in this role can access the application. When false, this record acts as an explicit deny for the role.
+    */
+    get CanAccess(): boolean {
+        return this.Get('CanAccess');
+    }
+    set CanAccess(value: boolean) {
+        this.Set('CanAccess', value);
+    }
+
+    /**
+    * * Field Name: CanAdmin
+    * * Display Name: Can Admin
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When true, users in this role can modify application settings, manage nav items, and configure the application.
+    */
+    get CanAdmin(): boolean {
+        return this.Get('CanAdmin');
+    }
+    set CanAdmin(value: boolean) {
+        this.Set('CanAdmin', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Application
+    * * Display Name: Application Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Application(): string {
+        return this.Get('Application');
+    }
+
+    /**
+    * * Field Name: Role
+    * * Display Name: Role Name
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Role(): string {
+        return this.Get('Role');
+    }
+}
+
+
+/**
  * MJ: Application Settings - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: ApplicationSetting
@@ -44320,6 +44668,24 @@ export class MJArtifactTypeEntity extends BaseEntity<MJArtifactTypeEntityType> {
     }
 
     /**
+    * * Field Name: ContentCategory
+    * * Display Name: Content Category
+    * * SQL Data Type: nvarchar(10)
+    * * Default Value: Text
+    * * Value List Type: List
+    * * Possible Values 
+    *   * File
+    *   * Text
+    * * Description: Classifies whether this artifact type stores text content ('Text', the default for all existing types) or a binary file in MJStorage ('File'). Used by AgentRunner and viewer components to route file-based artifacts correctly.
+    */
+    get ContentCategory(): 'File' | 'Text' {
+        return this.Get('ContentCategory');
+    }
+    set ContentCategory(value: 'File' | 'Text') {
+        this.Set('ContentCategory', value);
+    }
+
+    /**
     * * Field Name: Parent
     * * Display Name: Parent
     * * SQL Data Type: nvarchar(100)
@@ -44674,7 +45040,7 @@ export class MJArtifactVersionEntity extends BaseEntity<MJArtifactVersionEntityT
 
     /**
     * * Field Name: ArtifactID
-    * * Display Name: Artifact ID
+    * * Display Name: Artifact
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Artifacts (vwArtifacts.ID)
     */
@@ -44739,7 +45105,7 @@ export class MJArtifactVersionEntity extends BaseEntity<MJArtifactVersionEntityT
 
     /**
     * * Field Name: UserID
-    * * Display Name: User ID
+    * * Display Name: User
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     */
@@ -44810,6 +45176,77 @@ export class MJArtifactVersionEntity extends BaseEntity<MJArtifactVersionEntityT
     }
 
     /**
+    * * Field Name: FileID
+    * * Display Name: File
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Files (vwFiles.ID)
+    * * Description: Foreign key to the MJ: Files entity. When ContentMode is 'File', this references the binary file stored in MJStorage. NULL when ContentMode is 'Text'.
+    */
+    get FileID(): string | null {
+        return this.Get('FileID');
+    }
+    set FileID(value: string | null) {
+        this.Set('FileID', value);
+    }
+
+    /**
+    * * Field Name: ContentMode
+    * * Display Name: Content Mode
+    * * SQL Data Type: nvarchar(10)
+    * * Default Value: Text
+    * * Value List Type: List
+    * * Possible Values 
+    *   * File
+    *   * Text
+    * * Description: Determines how artifact content is stored. 'Text' (default) means the Content column holds the data. 'File' means FileID references a binary file in MJStorage and Content is unused.
+    */
+    get ContentMode(): 'File' | 'Text' {
+        return this.Get('ContentMode');
+    }
+    set ContentMode(value: 'File' | 'Text') {
+        this.Set('ContentMode', value);
+    }
+
+    /**
+    * * Field Name: MimeType
+    * * Display Name: MIME Type
+    * * SQL Data Type: nvarchar(200)
+    * * Description: MIME type of the stored file (e.g. application/pdf). Denormalized from the File entity for display without joins. Only populated when ContentMode is 'File'.
+    */
+    get MimeType(): string | null {
+        return this.Get('MimeType');
+    }
+    set MimeType(value: string | null) {
+        this.Set('MimeType', value);
+    }
+
+    /**
+    * * Field Name: FileName
+    * * Display Name: File Name
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Original filename of the stored file (e.g. report.pdf). Denormalized from the File entity for display without joins. Only populated when ContentMode is 'File'.
+    */
+    get FileName(): string | null {
+        return this.Get('FileName');
+    }
+    set FileName(value: string | null) {
+        this.Set('FileName', value);
+    }
+
+    /**
+    * * Field Name: ContentSizeBytes
+    * * Display Name: Content Size Bytes
+    * * SQL Data Type: bigint
+    * * Description: Size of the stored file in bytes. Denormalized for display without loading the file. Only populated when ContentMode is 'File'.
+    */
+    get ContentSizeBytes(): number | null {
+        return this.Get('ContentSizeBytes');
+    }
+    set ContentSizeBytes(value: number | null) {
+        this.Set('ContentSizeBytes', value);
+    }
+
+    /**
     * * Field Name: Artifact
     * * Display Name: Artifact
     * * SQL Data Type: nvarchar(255)
@@ -44825,6 +45262,15 @@ export class MJArtifactVersionEntity extends BaseEntity<MJArtifactVersionEntityT
     */
     get User(): string {
         return this.Get('User');
+    }
+
+    /**
+    * * Field Name: File
+    * * Display Name: File
+    * * SQL Data Type: nvarchar(500)
+    */
+    get File(): string | null {
+        return this.Get('File');
     }
 }
 
@@ -89189,6 +89635,29 @@ export class MJVectorDatabaseEntity extends BaseEntity<MJVectorDatabaseEntityTyp
     }
     set Configuration(value: string | null) {
         this.Set('Configuration', value);
+    }
+
+    /**
+    * * Field Name: CredentialID
+    * * Display Name: Credential
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)
+    * * Description: Optional link to a stored credential containing the API key and any other authentication details for this vector database provider. When set, the Credential Engine decrypts and supplies the key at runtime. When NULL, the system falls back to the environment variable AI_VENDOR_API_KEY__<ClassKey>.
+    */
+    get CredentialID(): string | null {
+        return this.Get('CredentialID');
+    }
+    set CredentialID(value: string | null) {
+        this.Set('CredentialID', value);
+    }
+
+    /**
+    * * Field Name: Credential
+    * * Display Name: Credential Name
+    * * SQL Data Type: nvarchar(200)
+    */
+    get Credential(): string | null {
+        return this.Get('Credential');
     }
 }
 

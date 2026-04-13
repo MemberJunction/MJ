@@ -12,7 +12,7 @@
     <mj-collapsible-panel
         SectionKey="vectorDatabaseDetails"
         SectionName="Vector Database Details"
-        Icon="fa fa-server"
+        Icon="fa fa-align-left"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -55,6 +55,25 @@
             Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Authentication Section -->
+    <mj-collapsible-panel
+        SectionKey="authentication"
+        SectionName="Authentication"
+        Icon="fa fa-key"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="false"
+            FieldName="CredentialID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
         ></mj-form-field>
 
     </mj-collapsible-panel>
