@@ -234,7 +234,48 @@ vi.mock('@memberjunction/templates-base-types', () => ({
 // ---------------------------------------------------------------------------
 
 import { AIEngine, AIActionParams, EntityAIActionParams } from '../AIEngine';
+import type { NoteEmbeddingMetadata } from '../types/NoteMatchResult';
+import type { ExampleEmbeddingMetadata } from '../types/ExampleMatchResult';
 import { ChatMessageRole } from '@memberjunction/ai';
+
+// Minimal vector-service shape the Remove tests need. Kept local to the test file
+// so we don't couple to SimpleVectorService's full generic signature.
+interface TestVectorService {
+    RemoveVector(key: string): boolean;
+}
+
+// Subclass that exposes the protected filter composition methods for testing.
+// Using a subclass avoids `as unknown as` casts and keeps the test strongly typed.
+class TestableAIEngine extends AIEngine {
+    public invokeComposeNoteFilters(
+        agentId?: string,
+        userId?: string,
+        companyId?: string,
+        additionalFilter?: (metadata: NoteEmbeddingMetadata) => boolean
+    ): (metadata: NoteEmbeddingMetadata) => boolean {
+        return this.composeNoteFilters(agentId, userId, companyId, additionalFilter);
+    }
+
+    public invokeComposeExampleFilters(
+        agentId?: string,
+        userId?: string,
+        companyId?: string,
+        additionalFilter?: (metadata: ExampleEmbeddingMetadata) => boolean
+    ): (metadata: ExampleEmbeddingMetadata) => boolean {
+        return this.composeExampleFilters(agentId, userId, companyId, additionalFilter);
+    }
+
+    // Test-only setters for the private vector service fields. Declared as `unknown`
+    // assignment targets through a typed bracket access into `this` so unit tests can
+    // inject a minimal mock without casting via `as unknown as`.
+    public setNoteVectorServiceForTest(service: TestVectorService | null): void {
+        (this as unknown as { _noteVectorService: TestVectorService | null })._noteVectorService = service;
+    }
+
+    public setExampleVectorServiceForTest(service: TestVectorService | null): void {
+        (this as unknown as { _exampleVectorService: TestVectorService | null })._exampleVectorService = service;
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -772,88 +813,166 @@ describe('AIEngine', () => {
     });
 
     // ======================================================================
-    // composeNoteFilters — Status filter (vector cache leak fix)
+    // composeNoteFilters — scope-only filter.
+    //
+    // Status filtering is NOT performed here — the vector store is kept in sync
+    // with persisted Status by MJAIAgentNoteEntityServer.Save/Delete. Retrieval
+    // just scope-filters the vector hits. See composeNoteFilters() doc comment.
     // ======================================================================
 
     describe('composeNoteFilters', () => {
-        // Helper to invoke the protected method and apply the resulting filter
-        // to a metadata payload.
-        const callFilter = (
-            engine: AIEngine,
-            metadata: Record<string, unknown>,
-            agentId?: string,
-            userId?: string,
-            companyId?: string,
-            additionalFilter?: (m: Record<string, unknown>) => boolean
-        ): boolean => {
-            const filter = (engine as unknown as Record<string, Function>)['composeNoteFilters'](
-                agentId, userId, companyId, additionalFilter
-            );
-            return filter(metadata);
-        };
+        let testEngine: TestableAIEngine;
+
+        const buildNoteMetadata = (
+            id: string,
+            overrides: Partial<NoteEmbeddingMetadata> = {}
+        ): NoteEmbeddingMetadata => ({
+            id,
+            agentId: 'agent-1',
+            userId: null,
+            companyId: null,
+            type: 'Preference',
+            noteText: 'test note',
+            noteEntity: {} as never,
+            ...overrides,
+        });
 
         beforeEach(() => {
-            // Reset AgentNotes cache per test
-            mockBaseInstance.AgentNotes = [];
+            testEngine = new TestableAIEngine();
         });
 
-        it('should return true when note is in cache with Status=Active', () => {
-            mockBaseInstance.AgentNotes = [
-                { ID: 'note-1', Status: 'Active', AgentID: 'agent-1' } as never
-            ];
-            const metadata = { id: 'note-1', agentId: 'agent-1', userId: null, companyId: null };
-            expect(callFilter(engine, metadata, 'agent-1')).toBe(true);
+        it('should return true when no scope filters are set (accept everything)', () => {
+            const filter = testEngine.invokeComposeNoteFilters();
+            expect(filter(buildNoteMetadata('note-1'))).toBe(true);
         });
 
-        it('should return false when note has Status=Revoked in cache', () => {
-            mockBaseInstance.AgentNotes = [
-                { ID: 'note-1', Status: 'Revoked', AgentID: 'agent-1' } as never
-            ];
-            const metadata = { id: 'note-1', agentId: 'agent-1', userId: null, companyId: null };
-            expect(callFilter(engine, metadata, 'agent-1')).toBe(false);
+        it('should return true when agentId matches', () => {
+            const filter = testEngine.invokeComposeNoteFilters('agent-1');
+            expect(filter(buildNoteMetadata('note-1'))).toBe(true);
         });
 
-        it('should return false when note has Status=Archived in cache', () => {
-            mockBaseInstance.AgentNotes = [
-                { ID: 'note-1', Status: 'Archived', AgentID: 'agent-1' } as never
-            ];
-            const metadata = { id: 'note-1', agentId: 'agent-1', userId: null, companyId: null };
-            expect(callFilter(engine, metadata, 'agent-1')).toBe(false);
+        it('should return false when agentId does not match', () => {
+            const filter = testEngine.invokeComposeNoteFilters('different-agent');
+            expect(filter(buildNoteMetadata('note-1'))).toBe(false);
         });
 
-        it('should return false when note is missing from cache (cache invalidated)', () => {
-            mockBaseInstance.AgentNotes = [];
-            const metadata = { id: 'note-missing', agentId: 'agent-1', userId: null, companyId: null };
-            expect(callFilter(engine, metadata, 'agent-1')).toBe(false);
+        it('should compose with additionalFilter (accept path)', () => {
+            const acceptsPreference = (m: NoteEmbeddingMetadata) => m.type === 'Preference';
+            const filter = testEngine.invokeComposeNoteFilters('agent-1', undefined, undefined, acceptsPreference);
+            expect(filter(buildNoteMetadata('note-1'))).toBe(true);
         });
 
-        it('should filter by agentId when provided and Status is Active', () => {
-            mockBaseInstance.AgentNotes = [
-                { ID: 'note-1', Status: 'Active', AgentID: 'agent-1' } as never
-            ];
-            const metadata = { id: 'note-1', agentId: 'agent-1', userId: null, companyId: null };
-            // Wrong agentId → should be filtered
-            expect(callFilter(engine, metadata, 'different-agent')).toBe(false);
+        it('should compose with additionalFilter (reject path)', () => {
+            const rejectsPreference = (m: NoteEmbeddingMetadata) => m.type === 'Constraint';
+            const filter = testEngine.invokeComposeNoteFilters('agent-1', undefined, undefined, rejectsPreference);
+            expect(filter(buildNoteMetadata('note-1'))).toBe(false);
         });
 
-        it('should compose with additionalFilter', () => {
-            mockBaseInstance.AgentNotes = [
-                { ID: 'note-1', Status: 'Active', AgentID: 'agent-1' } as never
-            ];
-            const metadata = { id: 'note-1', agentId: 'agent-1', userId: null, companyId: null, type: 'Preference' };
-            const additional = (m: Record<string, unknown>) => m.type === 'Preference';
-            expect(callFilter(engine, metadata, 'agent-1', undefined, undefined, additional)).toBe(true);
-            const additionalReject = (m: Record<string, unknown>) => m.type === 'Constraint';
-            expect(callFilter(engine, metadata, 'agent-1', undefined, undefined, additionalReject)).toBe(false);
+        it('should reject scope-matching note when additionalFilter returns false', () => {
+            const filter = testEngine.invokeComposeNoteFilters('agent-1', undefined, undefined, () => false);
+            expect(filter(buildNoteMetadata('note-1'))).toBe(false);
+        });
+    });
+
+    // ======================================================================
+    // composeExampleFilters — scope-only filter (mirrors composeNoteFilters).
+    //
+    // Status filtering happens write-side via MJAIAgentExampleEntityServer.
+    // Retrieval just scope-filters the vector hits.
+    // ======================================================================
+
+    describe('composeExampleFilters', () => {
+        let testEngine: TestableAIEngine;
+
+        const buildExampleMetadata = (
+            id: string,
+            overrides: Partial<ExampleEmbeddingMetadata> = {}
+        ): ExampleEmbeddingMetadata => ({
+            id,
+            agentId: 'agent-1',
+            userId: null,
+            companyId: null,
+            type: 'Positive',
+            exampleInput: 'test input',
+            exampleOutput: 'test output',
+            successScore: null,
+            exampleEntity: {} as never,
+            ...overrides,
         });
 
-        it('should reject Active note matching scope but failing additionalFilter', () => {
-            mockBaseInstance.AgentNotes = [
-                { ID: 'note-1', Status: 'Active', AgentID: 'agent-1' } as never
-            ];
-            const metadata = { id: 'note-1', agentId: 'agent-1', userId: null, companyId: null };
-            const additionalReject = () => false;
-            expect(callFilter(engine, metadata, 'agent-1', undefined, undefined, additionalReject)).toBe(false);
+        beforeEach(() => {
+            testEngine = new TestableAIEngine();
+        });
+
+        it('should return true when no scope filters are set (accept everything)', () => {
+            const filter = testEngine.invokeComposeExampleFilters();
+            expect(filter(buildExampleMetadata('ex-1'))).toBe(true);
+        });
+
+        it('should return true when agentId matches', () => {
+            const filter = testEngine.invokeComposeExampleFilters('agent-1');
+            expect(filter(buildExampleMetadata('ex-1'))).toBe(true);
+        });
+
+        it('should return false when agentId does not match', () => {
+            const filter = testEngine.invokeComposeExampleFilters('different-agent');
+            expect(filter(buildExampleMetadata('ex-1'))).toBe(false);
+        });
+
+        it('should compose with additionalFilter (accept path)', () => {
+            const acceptsPositive = (m: ExampleEmbeddingMetadata) => m.type === 'Positive';
+            const filter = testEngine.invokeComposeExampleFilters('agent-1', undefined, undefined, acceptsPositive);
+            expect(filter(buildExampleMetadata('ex-1'))).toBe(true);
+        });
+
+        it('should compose with additionalFilter (reject path)', () => {
+            const rejectsPositive = (m: ExampleEmbeddingMetadata) => m.type === 'Negative';
+            const filter = testEngine.invokeComposeExampleFilters('agent-1', undefined, undefined, rejectsPositive);
+            expect(filter(buildExampleMetadata('ex-1'))).toBe(false);
+        });
+
+        it('should reject scope-matching example when additionalFilter returns false', () => {
+            const filter = testEngine.invokeComposeExampleFilters('agent-1', undefined, undefined, () => false);
+            expect(filter(buildExampleMetadata('ex-1'))).toBe(false);
+        });
+    });
+
+    // ======================================================================
+    // RemoveSingleNoteEmbedding / RemoveSingleExampleEmbedding —
+    // write-side invariant maintenance.
+    // ======================================================================
+
+    describe('RemoveSingleNoteEmbedding', () => {
+        it('should no-op safely when the vector service is not initialized', () => {
+            const engine2 = new TestableAIEngine();
+            engine2.setNoteVectorServiceForTest(null);
+            expect(() => engine2.RemoveSingleNoteEmbedding('note-1')).not.toThrow();
+        });
+
+        it('should delegate to SimpleVectorService.RemoveVector with the note ID', () => {
+            const engine2 = new TestableAIEngine();
+            const removeSpy = vi.fn().mockReturnValue(true);
+            engine2.setNoteVectorServiceForTest({ RemoveVector: removeSpy });
+            engine2.RemoveSingleNoteEmbedding('note-42');
+            expect(removeSpy).toHaveBeenCalledTimes(1);
+            expect(removeSpy).toHaveBeenCalledWith('note-42');
+        });
+    });
+
+    describe('RemoveSingleExampleEmbedding', () => {
+        it('should no-op safely when the vector service is not initialized', () => {
+            const engine2 = new TestableAIEngine();
+            engine2.setExampleVectorServiceForTest(null);
+            expect(() => engine2.RemoveSingleExampleEmbedding('ex-1')).not.toThrow();
+        });
+
+        it('should delegate to SimpleVectorService.RemoveVector with the example ID', () => {
+            const engine2 = new TestableAIEngine();
+            const removeSpy = vi.fn().mockReturnValue(true);
+            engine2.setExampleVectorServiceForTest({ RemoveVector: removeSpy });
+            engine2.RemoveSingleExampleEmbedding('ex-42');
+            expect(removeSpy).toHaveBeenCalledTimes(1);
+            expect(removeSpy).toHaveBeenCalledWith('ex-42');
         });
     });
 

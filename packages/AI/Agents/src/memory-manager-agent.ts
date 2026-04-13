@@ -15,6 +15,21 @@ import { AIEngine } from '@memberjunction/aiengine';
 import { UUIDsEqual } from '@memberjunction/global';
 
 /**
+ * Minimal shape of a conversation message that ExtractExamples needs. Lets callers pass
+ * either a full MJConversationDetailEntity or a plain literal assembled from other sources
+ * (e.g., loaded agent-run transcripts) without casting through `unknown`. Role is
+ * intentionally widened to `string` so callers don't need to satisfy the entity's stricter
+ * enum — ExtractExamples just forwards it to the prompt payload.
+ */
+interface ConversationDetailProjection {
+    ID: string;
+    ConversationID: string;
+    Role: string;
+    Message: string;
+    __mj_CreatedAt: Date;
+}
+
+/**
  * Configuration for extraction limits to ensure sparsity
  */
 const EXTRACTION_CONFIG = {
@@ -143,6 +158,57 @@ interface ConsolidationNoteProjection {
 interface ConsolidationPromptData extends Record<string, unknown> {
     anchoredMode: boolean;
     notesToConsolidate: ConsolidationNoteProjection[];
+}
+
+/** Projection of a note loaded into the decay phase. */
+interface DecayNoteCandidate {
+    ID: string;
+    ImportanceScore: number | null;
+    ProtectionTier: string;
+    LastAccessedAt: Date | null;
+    __mj_CreatedAt: Date;
+    AccessCount: number;
+    AgentID: string | null;
+}
+
+/** Projection of an example loaded into the decay phase. */
+interface DecayExampleCandidate {
+    ID: string;
+    SuccessScore: number | null;
+    LastAccessedAt: Date | null;
+    __mj_CreatedAt: Date;
+    AccessCount: number;
+    AgentID: string;
+}
+
+/** Minimal projection of a note used by the orphan pruning phase. */
+interface PruneCandidateNote {
+    ID: string;
+    AgentID: string | null;
+    UserID: string | null;
+    CompanyID: string | null;
+    SourceConversationID: string | null;
+}
+
+/** In-memory existence caches built once per pruneStaleReferences run. */
+interface ReferenceExistenceCaches {
+    activeAgentIds: Set<string>;
+    existingUserIds: Set<string>;
+    existingCompanyIds: Set<string>;
+    existingConversationIds: Set<string>;
+}
+
+/** Shape the consolidation LLM is expected to return. */
+interface ConsolidationPromptResult {
+    shouldConsolidate: boolean;
+    consolidatedNote?: {
+        type: string;
+        content: string;
+        scopeLevel: string;
+        confidence: number;
+    };
+    sourceNoteIds?: string[];
+    reason: string;
 }
 
 /** Counts returned by the 5 maintenance phases. */
@@ -317,7 +383,7 @@ export class MemoryManagerAgent extends BaseAgent {
     private _contextUser: UserInfo | null = null;
 
     /** Check if a string is a valid UUID format. Filters out LLM-generated placeholders like "user-uuid-here". */
-    private static IsValidUUID(id: string | undefined | null): boolean {
+    private static isValidUUID(id: string | undefined | null): boolean {
         if (!id) return false;
         return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
     }
@@ -704,27 +770,11 @@ export class MemoryManagerAgent extends BaseAgent {
         existingNoteCount: number,
         contextUser: UserInfo
     ): Promise<ExtractedNote[] | null> {
+        const prompt = this.findNoteExtractionPrompt();
+        if (!prompt) return null;
+
         const conversationThreads = promptData.conversationThreads;
-
-        const prompt = AIEngine.Instance.Prompts.find(p =>
-            p.Name === 'Memory Manager - Extract Notes' && p.Category === 'MJ: System'
-        );
-        if (!prompt) {
-            LogError('Memory Manager note extraction prompt not found');
-            if (this._verbose) {
-                LogStatus(`Memory Manager: Available prompts in MJ: System category: ${AIEngine.Instance.Prompts.filter(p => p.Category === 'MJ: System').map(p => p.Name).join(', ')}`);
-            }
-            return null;
-        }
-
-        if (this._verbose) {
-            LogStatus(`Memory Manager: Found extraction prompt "${prompt.Name}" (ID: ${prompt.ID})`);
-            LogStatus(`Memory Manager: Sending ${conversationThreads.length} conversation threads with ${conversationThreads.reduce((sum, t) => sum + t.messages.length, 0)} total messages for note extraction`);
-            if (conversationThreads.length > 0) {
-                const firstThread = conversationThreads[0];
-                LogStatus(`Memory Manager: Sample thread (conv ${firstThread.conversationId}): ${firstThread.messages.map(m => `[${m.role}] ${m.message?.substring(0, 80)}...`).join(' | ')}`);
-            }
-        }
+        this.logExtractionPromptContext(prompt, conversationThreads);
 
         const step = await this.CreateRunStep('Prompt', 'Extract Notes from Conversations', {
             conversationCount: conversationThreads.length,
@@ -741,12 +791,44 @@ export class MemoryManagerAgent extends BaseAgent {
         params.additionalParameters = DETERMINISTIC_PROMPT_PARAMS;
 
         const result = await runner.ExecutePrompt<{ notes: ExtractedNote[] }>(params);
-
         await this.FinalizeRunStep(step, result.success, {
             success: result.success,
             rawNoteCount: result.result && typeof result.result !== 'string' ? (result.result.notes?.length || 0) : 0
         }, result.promptRun?.ID, result.errorMessage || undefined);
 
+        return this.parseNoteExtractionResult(result);
+    }
+
+    /** Look up the extraction prompt, logging available prompts on miss. */
+    private findNoteExtractionPrompt(): MJAIPromptEntityExtended | undefined {
+        const prompt = AIEngine.Instance.Prompts.find(p =>
+            p.Name === 'Memory Manager - Extract Notes' && p.Category === 'MJ: System'
+        );
+        if (!prompt) {
+            LogError('Memory Manager note extraction prompt not found');
+            if (this._verbose) {
+                LogStatus(`Memory Manager: Available prompts in MJ: System category: ${AIEngine.Instance.Prompts.filter(p => p.Category === 'MJ: System').map(p => p.Name).join(', ')}`);
+            }
+        }
+        return prompt;
+    }
+
+    /** Verbose-only logging block for extraction prompt context. */
+    private logExtractionPromptContext(prompt: MJAIPromptEntityExtended, conversationThreads: ConversationThread[]): void {
+        if (!this._verbose) return;
+        LogStatus(`Memory Manager: Found extraction prompt "${prompt.Name}" (ID: ${prompt.ID})`);
+        LogStatus(`Memory Manager: Sending ${conversationThreads.length} conversation threads with ${conversationThreads.reduce((sum, t) => sum + t.messages.length, 0)} total messages for note extraction`);
+        if (conversationThreads.length > 0) {
+            const firstThread = conversationThreads[0];
+            LogStatus(`Memory Manager: Sample thread (conv ${firstThread.conversationId}): ${firstThread.messages.map(m => `[${m.role}] ${m.message?.substring(0, 80)}...`).join(' | ')}`);
+        }
+    }
+
+    /**
+     * Parse an extraction prompt result into an ExtractedNote array, tolerating JSON-fenced
+     * strings from models like Gemini. Returns null on failure.
+     */
+    private parseNoteExtractionResult(result: AIPromptRunResult<{ notes: ExtractedNote[] }>): ExtractedNote[] | null {
         if (this._verbose) {
             LogStatus(`Memory Manager: Extraction prompt result - success: ${result.success}, hasResult: ${!!result.result}`);
             if (result.errorMessage) LogStatus(`Memory Manager: Extraction error: ${result.errorMessage}`);
@@ -758,23 +840,18 @@ export class MemoryManagerAgent extends BaseAgent {
             return null;
         }
 
-        // Some models (e.g., Gemini) wrap JSON in ```json fences — parse strings defensively
-        let parsed: { notes: ExtractedNote[] };
         if (typeof result.result === 'string') {
             const reparsed = CleanAndParseJSON<{ notes: ExtractedNote[] }>(result.result, true);
             if (!reparsed) {
                 LogError('Failed to parse extraction result as JSON');
                 return null;
             }
-            parsed = reparsed;
             if (this._verbose) {
-                LogStatus(`Memory Manager: Parsed string result into object with ${parsed.notes?.length || 0} notes`);
+                LogStatus(`Memory Manager: Parsed string result into object with ${reparsed.notes?.length || 0} notes`);
             }
-        } else {
-            parsed = result.result;
+            return reparsed.notes || [];
         }
-
-        return parsed.notes || [];
+        return result.result.notes || [];
     }
 
     /**
@@ -859,8 +936,7 @@ export class MemoryManagerAgent extends BaseAgent {
         });
 
         const approved: ExtractedNote[] = [];
-        let rejectedCount = 0;
-        let llmCallCount = 0;
+        const stats = { rejectedCount: 0, llmCallCount: 0 };
         const runner = new AIPromptRunner();
         const dedupePrompt = AIEngine.Instance.Prompts.find(p =>
             p.Name === 'Memory Manager - Deduplicate Note' && p.Category === 'MJ: System'
@@ -871,63 +947,77 @@ export class MemoryManagerAgent extends BaseAgent {
                 if (this._verbose) LogStatus(`Memory Manager: Stopping - max notes per run (${EXTRACTION_CONFIG.maxNotesPerRun}) reached`);
                 break;
             }
-
-            // Merge/replacement candidates are auto-approved — the extraction LLM already
-            // determined they supersede an existing note. Running dedup on them would
-            // reject them as "too similar" to the very note they are replacing.
-            if (candidate.mergeWithExistingIds?.length) {
+            const decision = await this.evaluateCandidateForApproval(candidate, existingNotes, dedupePrompt, runner, contextUser, stats);
+            if (decision) {
                 approved.push(candidate);
-                if (this._verbose) {
-                    LogStatus(`Memory Manager: Auto-approved merge note targeting ${candidate.mergeWithExistingIds.join(', ')}: "${candidate.content.substring(0, 50)}..."`);
-                }
-                continue;
-            }
-
-            // Fast path: exact text match (case-insensitive, trimmed)
-            const normalizedContent = candidate.content.toLowerCase().trim();
-            const exactMatch = existingNotes.find(n => n.Note && n.Note.toLowerCase().trim() === normalizedContent);
-            if (exactMatch) {
-                rejectedCount++;
-                if (this._verbose) LogStatus(`Memory Manager: Skipping exact duplicate: "${candidate.content.substring(0, 50)}..."`);
-                continue;
-            }
-
-            // Semantic similarity lookup. Cross-user dedup for org/global notes works
-            // naturally because those notes have UserID=null — FindSimilarAgentNotes
-            // won't filter them out for any user.
-            const similarNotes = await AIEngine.Instance.FindSimilarAgentNotes(
-                candidate.content,
-                candidate.agentId,
-                candidate.userId,
-                candidate.companyId,
-                10,  // Top 10 similar
-                0.85 // 85% similarity threshold
-            );
-
-            if (dedupePrompt && similarNotes.length > 0) {
-                const decision = await this.runDedupePromptForCandidate(runner, dedupePrompt, candidate, similarNotes, contextUser);
-                llmCallCount++;
-                if (decision.shouldAdd) {
-                    approved.push(candidate);
-                    if (this._verbose) LogStatus(`Memory Manager: Approved note - ${decision.reason}`);
-                } else {
-                    rejectedCount++;
-                    if (this._verbose) LogStatus(`Memory Manager: Skipped duplicate note - ${decision.reason}`);
-                }
-            } else {
-                // No similar notes found (or no dedupe prompt) — approve the candidate
-                approved.push(candidate);
-                if (this._verbose) LogStatus(`Memory Manager: Approved note (no similar notes found): "${candidate.content.substring(0, 50)}..."`);
             }
         }
 
         await this.FinalizeRunStep(step, true, {
             approvedCount: approved.length,
-            rejectedCount,
-            llmCallCount
+            rejectedCount: stats.rejectedCount,
+            llmCallCount: stats.llmCallCount
         });
 
         return approved;
+    }
+
+    /**
+     * Evaluate a single candidate: merge markers auto-approve, exact-text duplicates are
+     * rejected, otherwise run semantic similarity + LLM dedup. Returns true if the candidate
+     * should be kept. Mutates `stats` for rejection + LLM call counts as a side effect.
+     */
+    private async evaluateCandidateForApproval(
+        candidate: ExtractedNote,
+        existingNotes: MJAIAgentNoteEntity[],
+        dedupePrompt: MJAIPromptEntityExtended | undefined,
+        runner: AIPromptRunner,
+        contextUser: UserInfo,
+        stats: { rejectedCount: number; llmCallCount: number }
+    ): Promise<boolean> {
+        // Merge/replacement candidates are auto-approved — the extraction LLM already
+        // determined they supersede an existing note. Running dedup on them would reject
+        // them as "too similar" to the very note they are replacing.
+        if (candidate.mergeWithExistingIds?.length) {
+            if (this._verbose) {
+                LogStatus(`Memory Manager: Auto-approved merge note targeting ${candidate.mergeWithExistingIds.join(', ')}: "${candidate.content.substring(0, 50)}..."`);
+            }
+            return true;
+        }
+
+        // Fast path: exact text match (case-insensitive, trimmed)
+        const normalizedContent = candidate.content.toLowerCase().trim();
+        if (existingNotes.some(n => n.Note && n.Note.toLowerCase().trim() === normalizedContent)) {
+            stats.rejectedCount++;
+            if (this._verbose) LogStatus(`Memory Manager: Skipping exact duplicate: "${candidate.content.substring(0, 50)}..."`);
+            return false;
+        }
+
+        // Semantic similarity lookup. Cross-user dedup for org/global notes works naturally
+        // because those notes have UserID=null — FindSimilarAgentNotes won't filter them out.
+        const similarNotes = await AIEngine.Instance.FindSimilarAgentNotes(
+            candidate.content,
+            candidate.agentId,
+            candidate.userId,
+            candidate.companyId,
+            10,
+            0.85
+        );
+
+        if (!dedupePrompt || similarNotes.length === 0) {
+            if (this._verbose) LogStatus(`Memory Manager: Approved note (no similar notes found): "${candidate.content.substring(0, 50)}..."`);
+            return true;
+        }
+
+        const decision = await this.runDedupePromptForCandidate(runner, dedupePrompt, candidate, similarNotes, contextUser);
+        stats.llmCallCount++;
+        if (decision.shouldAdd) {
+            if (this._verbose) LogStatus(`Memory Manager: Approved note - ${decision.reason}`);
+            return true;
+        }
+        stats.rejectedCount++;
+        if (this._verbose) LogStatus(`Memory Manager: Skipped duplicate note - ${decision.reason}`);
+        return false;
     }
 
     /**
@@ -995,7 +1085,7 @@ export class MemoryManagerAgent extends BaseAgent {
      * Uses LLM-based deduplication to avoid adding redundant examples.
      */
     private async ExtractExamples(
-        conversationDetails: MJConversationDetailEntity[],
+        conversationDetails: ConversationDetailProjection[],
         contextUser: UserInfo
     ): Promise<ExtractedExample[]> {
         if (conversationDetails.length === 0) {
@@ -1235,12 +1325,12 @@ export class MemoryManagerAgent extends BaseAgent {
                     // Create new note
                     const note = await md.GetEntityObject<MJAIAgentNoteEntity>('MJ: AI Agent Notes', contextUser);
                     // Determine AgentID - prefer extracted, then inherit from source run
-                    let agentId: string | null = MemoryManagerAgent.IsValidUUID(extracted.agentId) ? extracted.agentId! : null;
+                    let agentId: string | null = MemoryManagerAgent.isValidUUID(extracted.agentId) ? extracted.agentId! : null;
                     if (!agentId && sourceRun?.AgentID) {
                         agentId = sourceRun.AgentID;
                     }
                     note.AgentID = agentId;
-                    note.CompanyID = MemoryManagerAgent.IsValidUUID(extracted.companyId) ? extracted.companyId! : null;
+                    note.CompanyID = MemoryManagerAgent.isValidUUID(extracted.companyId) ? extracted.companyId! : null;
                     note.AgentNoteTypeID = aiNoteTypeId;  // "AI" type for AI-generated notes
                     note.Type = extracted.type;  // Category: Preference, Constraint, Context, Issue, Example
                     note.Note = extracted.content;
@@ -1254,7 +1344,7 @@ export class MemoryManagerAgent extends BaseAgent {
 
                     note.SourceConversationID = extracted.sourceConversationId || null;
                     // Only use if it's a valid UUID (LLM now sees message IDs in the prompt)
-                    note.SourceConversationDetailID = MemoryManagerAgent.IsValidUUID(extracted.sourceConversationDetailId) ? extracted.sourceConversationDetailId! : null;
+                    note.SourceConversationDetailID = MemoryManagerAgent.isValidUUID(extracted.sourceConversationDetailId) ? extracted.sourceConversationDetailId! : null;
                     note.SourceAIAgentRunID = extracted.sourceAgentRunId || null;
 
                     // Apply scope: Lean towards user-specific memories by default
@@ -1278,7 +1368,7 @@ export class MemoryManagerAgent extends BaseAgent {
                     // company, not a specific user. This also enables cross-user dedup — FindSimilarAgentNotes
                     // filters by userId, so null UserID makes company notes visible to all users.
                     note.UserID = scopeLevel === 'user'
-                        ? (MemoryManagerAgent.IsValidUUID(extracted.userId) ? extracted.userId! : null)
+                        ? (MemoryManagerAgent.isValidUUID(extracted.userId) ? extracted.userId! : null)
                         : null;
 
                     const saveResult = await note.Save();
@@ -1442,70 +1532,68 @@ export class MemoryManagerAgent extends BaseAgent {
      *   churn on every run.
      */
     private async shouldRunConsolidation(agentId: string, contextUser: UserInfo, forceMaintenance: boolean): Promise<boolean> {
-        if (forceMaintenance) {
-            return true;
-        }
+        if (forceMaintenance) return true;
 
         const freq = CONSOLIDATION_CONFIG.frequency;
-
-        if (freq === 'disabled') {
-            return false;
-        }
-
-        if (freq === 'every-run') {
-            return true;
-        }
+        if (freq === 'disabled') return false;
+        if (freq === 'every-run') return true;
 
         if (freq === 'hourly' || freq === 'daily') {
-            const thresholdHours = freq === 'hourly' ? 1 : 24;
-            const lastRun = await this.GetLastRunTime(agentId, contextUser);
-            if (!lastRun) {
-                return true; // First run — consolidate
-            }
-            const hoursSinceLast = (Date.now() - lastRun.getTime()) / (1000 * 60 * 60);
-            if (hoursSinceLast >= thresholdHours) {
-                return true; // Time-based gate fired
-            }
-
-            // Event-driven trigger: consolidate when at least `noteCountTrigger` new notes
-            // have been added system-wide since the last Memory Manager run.
-            //
-            // NOTE: this query intentionally does NOT filter by AgentID. The `agentId` parameter
-            // here is the Memory Manager's own ID (passed from `params.agent.ID` at the call
-            // site), not the agent that owns the notes. Filtering the count by MM's own agent
-            // ID would never match anything because MM doesn't own notes — it processes notes
-            // belonging to other (memory-enabled) agents. The trigger is meant to fire when the
-            // overall system note volume crosses the threshold since the last MM run.
-            const rv = new RunView();
-            const newNoteResult = await rv.RunView({
-                EntityName: 'MJ: AI Agent Notes',
-                ExtraFilter: `IsAutoGenerated=1 AND Status='Active' AND __mj_CreatedAt > '${lastRun.toISOString()}'`,
-                ResultType: 'count_only'
-            }, contextUser);
-            if (newNoteResult.Success && (newNoteResult.TotalRowCount || 0) >= CONSOLIDATION_CONFIG.noteCountTrigger) {
-                if (this._verbose) {
-                    LogStatus(`Memory Manager: Event-driven consolidation trigger fired (${newNoteResult.TotalRowCount} new notes >= ${CONSOLIDATION_CONFIG.noteCountTrigger} threshold since last MM run)`);
-                }
-                return true; // Event-driven trigger
-            }
-
-            return false;
+            return this.shouldRunConsolidationByTimeWindow(agentId, contextUser, freq === 'hourly' ? 1 : 24);
         }
 
-        // Numeric frequency: run every N completed executions
         if (typeof freq === 'number') {
-            const rv = new RunView();
-            const countResult = await rv.RunView({
-                EntityName: 'MJ: AI Agent Runs',
-                ExtraFilter: `AgentID='${agentId}' AND Status='Completed'`,
-                ResultType: 'count_only'
-            }, contextUser);
-            const completedCount = countResult.Success ? (countResult.TotalRowCount || 0) : 0;
-            return completedCount > 0 && completedCount % freq === 0;
+            return this.shouldRunConsolidationByRunCount(agentId, contextUser, freq);
         }
 
-        // Default: run every time
         return true;
+    }
+
+    /**
+     * Time-window frequency gate: returns true if enough time has passed since the last
+     * memory-manager run, OR if the event-driven new-note threshold has been crossed.
+     */
+    private async shouldRunConsolidationByTimeWindow(agentId: string, contextUser: UserInfo, thresholdHours: number): Promise<boolean> {
+        const lastRun = await this.GetLastRunTime(agentId, contextUser);
+        if (!lastRun) return true;
+
+        const hoursSinceLast = (Date.now() - lastRun.getTime()) / (1000 * 60 * 60);
+        if (hoursSinceLast >= thresholdHours) return true;
+
+        // Event-driven trigger: consolidate when at least `noteCountTrigger` new notes
+        // have been added system-wide since the last Memory Manager run.
+        //
+        // NOTE: this query intentionally does NOT filter by AgentID. The `agentId` parameter
+        // here is the Memory Manager's own ID (passed from `params.agent.ID` at the call
+        // site), not the agent that owns the notes. Filtering the count by MM's own agent
+        // ID would never match anything because MM doesn't own notes — it processes notes
+        // belonging to other (memory-enabled) agents.
+        const rv = new RunView();
+        const newNoteResult = await rv.RunView({
+            EntityName: 'MJ: AI Agent Notes',
+            ExtraFilter: `IsAutoGenerated=1 AND Status='Active' AND __mj_CreatedAt > '${lastRun.toISOString()}'`,
+            ResultType: 'count_only'
+        }, contextUser);
+
+        if (newNoteResult.Success && (newNoteResult.TotalRowCount || 0) >= CONSOLIDATION_CONFIG.noteCountTrigger) {
+            if (this._verbose) {
+                LogStatus(`Memory Manager: Event-driven consolidation trigger fired (${newNoteResult.TotalRowCount} new notes >= ${CONSOLIDATION_CONFIG.noteCountTrigger} threshold since last MM run)`);
+            }
+            return true;
+        }
+        return false;
+    }
+
+    /** Run-count frequency gate: consolidate every N completed runs. */
+    private async shouldRunConsolidationByRunCount(agentId: string, contextUser: UserInfo, everyN: number): Promise<boolean> {
+        const rv = new RunView();
+        const countResult = await rv.RunView({
+            EntityName: 'MJ: AI Agent Runs',
+            ExtraFilter: `AgentID='${agentId}' AND Status='Completed'`,
+            ResultType: 'count_only'
+        }, contextUser);
+        const completedCount = countResult.Success ? (countResult.TotalRowCount || 0) : 0;
+        return completedCount > 0 && completedCount % everyN === 0;
     }
 
     /**
@@ -1678,13 +1766,8 @@ export class MemoryManagerAgent extends BaseAgent {
      * Batches each depth level into a single `ID IN (...)` query instead of one query per ID.
      */
     private async resolveOriginalSources(noteIds: string[], contextUser: UserInfo): Promise<ResolvedNoteRecord[]> {
-        const rv = new RunView();
         const originals: ResolvedNoteRecord[] = [];
         const visited = new Set<string>();
-        const resolvedFields: (keyof ResolvedNoteRecord)[] = [
-            'ID', 'ConsolidationCount', 'DerivedFromNoteIDs', 'Note', 'Type',
-            'AccessCount', 'ImportanceScore', 'AgentID', 'UserID', 'CompanyID', '__mj_CreatedAt'
-        ];
 
         let currentIds = noteIds.filter(id => !visited.has(id));
         currentIds.forEach(id => visited.add(id));
@@ -1696,44 +1779,62 @@ export class MemoryManagerAgent extends BaseAgent {
                 break;
             }
 
-            const inClause = currentIds.map(id => `'${id}'`).join(',');
-            const result = await rv.RunView<ResolvedNoteRecord>({
-                EntityName: 'MJ: AI Agent Notes',
-                ExtraFilter: `ID IN (${inClause})`,
-                Fields: resolvedFields as string[],
-            }, contextUser);
+            const results = await this.loadResolvedNotes(currentIds, contextUser);
+            if (results.length === 0) break;
 
-            if (!result.Success || !result.Results?.length) break;
-
-            const nextLevelIds: string[] = [];
-            for (const note of result.Results) {
-                const consolidationCount = note.ConsolidationCount || 0;
-
-                if (consolidationCount === 0) {
-                    originals.push(note);
-                } else if (note.DerivedFromNoteIDs) {
-                    try {
-                        const parentIds = JSON.parse(note.DerivedFromNoteIDs) as string[];
-                        for (const parentId of parentIds) {
-                            if (!visited.has(parentId)) {
-                                visited.add(parentId);
-                                nextLevelIds.push(parentId);
-                            }
-                        }
-                    } catch {
-                        LogError(`Memory Manager: Malformed DerivedFromNoteIDs on note ${note.ID} — treating as terminal source`);
-                        originals.push(note);
-                    }
-                } else {
-                    originals.push(note);
-                }
-            }
-
-            currentIds = nextLevelIds;
+            currentIds = this.collectNextLevelSourceIds(results, originals, visited);
             depth++;
         }
 
         return originals;
+    }
+
+    /** Load a batch of notes by ID with the fields needed for source resolution. */
+    private async loadResolvedNotes(noteIds: string[], contextUser: UserInfo): Promise<ResolvedNoteRecord[]> {
+        const resolvedFields: (keyof ResolvedNoteRecord)[] = [
+            'ID', 'ConsolidationCount', 'DerivedFromNoteIDs', 'Note', 'Type',
+            'AccessCount', 'ImportanceScore', 'AgentID', 'UserID', 'CompanyID', '__mj_CreatedAt'
+        ];
+        const inClause = noteIds.map(id => `'${id}'`).join(',');
+        const rv = new RunView();
+        const result = await rv.RunView<ResolvedNoteRecord>({
+            EntityName: 'MJ: AI Agent Notes',
+            ExtraFilter: `ID IN (${inClause})`,
+            Fields: resolvedFields as string[],
+        }, contextUser);
+        return result.Success && result.Results ? result.Results : [];
+    }
+
+    /**
+     * Partition a batch of resolved notes into terminal originals (pushed into `originals`)
+     * and parent IDs that need further resolution. Mutates `originals` and `visited`.
+     */
+    private collectNextLevelSourceIds(
+        notes: ResolvedNoteRecord[],
+        originals: ResolvedNoteRecord[],
+        visited: Set<string>
+    ): string[] {
+        const nextLevelIds: string[] = [];
+        for (const note of notes) {
+            const consolidationCount = note.ConsolidationCount || 0;
+            if (consolidationCount === 0 || !note.DerivedFromNoteIDs) {
+                originals.push(note);
+                continue;
+            }
+            try {
+                const parentIds = JSON.parse(note.DerivedFromNoteIDs) as string[];
+                for (const parentId of parentIds) {
+                    if (!visited.has(parentId)) {
+                        visited.add(parentId);
+                        nextLevelIds.push(parentId);
+                    }
+                }
+            } catch {
+                LogError(`Memory Manager: Malformed DerivedFromNoteIDs on note ${note.ID} — treating as terminal source`);
+                originals.push(note);
+            }
+        }
+        return nextLevelIds;
     }
 
     /**
@@ -1749,32 +1850,9 @@ export class MemoryManagerAgent extends BaseAgent {
         const consolidatedLower = consolidatedText.toLowerCase();
 
         for (const note of sourceNotes) {
-            const text = note.Note || '';
-
-            // Extract numbers (integers, decimals, percentages)
-            const numbers = text.match(/\b\d+\.?\d*%?\b/g);
-            if (numbers) numbers.forEach(n => entities.add(n));
-
-            // Extract date-like patterns (YYYY-MM-DD, Month DD, DD/MM/YYYY variants)
-            const dates = text.match(/\b\d{4}-\d{2}-\d{2}\b|\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*\s+\d{1,2}\b|\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/gi);
-            if (dates) dates.forEach(d => entities.add(d));
-
-            // Extract capitalized sequences (proper nouns, tech terms) — skip sentence starts
-            const properNouns = text.match(/(?<=[.!?]\s+|^)(?:[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/g);
-            if (properNouns) {
-                // Filter out common sentence-starting words
-                const skipWords = new Set(['the', 'a', 'an', 'this', 'that', 'it', 'we', 'they', 'user', 'note']);
-                properNouns
-                    .filter(pn => !skipWords.has(pn.toLowerCase()) && pn.length > 2)
-                    .forEach(pn => entities.add(pn));
-            }
-
-            // Extract camelCase/PascalCase identifiers (technical terms)
-            const techTerms = text.match(/\b[a-z]+(?:[A-Z][a-z]+)+\b|\b(?:[A-Z][a-z]+){2,}\b/g);
-            if (techTerms) techTerms.forEach(t => entities.add(t));
+            this.extractVerifiableEntities(note.Note || '', entities);
         }
 
-        // Check each entity appears in consolidated text
         const missing: string[] = [];
         for (const entity of entities) {
             if (!consolidatedLower.includes(entity.toLowerCase())) {
@@ -1787,6 +1865,30 @@ export class MemoryManagerAgent extends BaseAgent {
             entitiesMissing: missing,
             passed: missing.length === 0
         };
+    }
+
+    /**
+     * Harvest numbers, dates, proper nouns, and camelCase identifiers from a note's text
+     * into the supplied set. Used only by verifyConsolidationOutput to assemble a
+     * best-effort entity inventory for post-consolidation checks.
+     */
+    private extractVerifiableEntities(text: string, entities: Set<string>): void {
+        const numbers = text.match(/\b\d+\.?\d*%?\b/g);
+        if (numbers) numbers.forEach(n => entities.add(n));
+
+        const dates = text.match(/\b\d{4}-\d{2}-\d{2}\b|\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*\s+\d{1,2}\b|\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/gi);
+        if (dates) dates.forEach(d => entities.add(d));
+
+        const properNouns = text.match(/(?<=[.!?]\s+|^)(?:[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/g);
+        if (properNouns) {
+            const skipWords = new Set(['the', 'a', 'an', 'this', 'that', 'it', 'we', 'they', 'user', 'note']);
+            properNouns
+                .filter(pn => !skipWords.has(pn.toLowerCase()) && pn.length > 2)
+                .forEach(pn => entities.add(pn));
+        }
+
+        const techTerms = text.match(/\b[a-z]+(?:[A-Z][a-z]+)+\b|\b(?:[A-Z][a-z]+){2,}\b/g);
+        if (techTerms) techTerms.forEach(t => entities.add(t));
     }
 
     /**
@@ -1900,23 +2002,8 @@ export class MemoryManagerAgent extends BaseAgent {
         md: Metadata,
         contextUser: UserInfo
     ): Promise<'flagged' | 'resolved' | 'skipped'> {
-        const bothHighImportance = (noteA.ImportanceScore || 0) >= CONTRADICTION_CONFIG.highImportanceThreshold &&
-                                    (noteB.ImportanceScore || 0) >= CONTRADICTION_CONFIG.highImportanceThreshold;
-        const hasProtected = (noteA.ProtectionTier || 'Standard') === 'Protected' || (noteB.ProtectionTier || 'Standard') === 'Protected';
-
-        if (bothHighImportance || hasProtected) {
-            const flagComment = `[Contradiction flagged: conflicts with note ${noteA.ID === llmResult.revokeNoteId ? llmResult.keepNoteId : llmResult.revokeNoteId}. ${llmResult.reason}]`;
-            for (const flagNote of [noteA, noteB]) {
-                const noteToFlag = await md.GetEntityObject<MJAIAgentNoteEntity>('MJ: AI Agent Notes', contextUser);
-                if (await noteToFlag.Load(flagNote.ID)) {
-                    noteToFlag.Comments = `${noteToFlag.Comments || ''} ${flagComment}`.trim();
-                    await noteToFlag.Save();
-                }
-            }
-            if (this._verbose) {
-                const reason = bothHighImportance ? 'both high-importance' : 'Protected tier present';
-                LogStatus(`Memory Manager: Contradiction flagged (${reason}): "${noteA.Note?.substring(0, 40)}..." vs "${noteB.Note?.substring(0, 40)}..."`);
-            }
+        if (this.shouldFlagContradiction(noteA, noteB)) {
+            await this.flagContradictionPair(noteA, noteB, llmResult, md, contextUser);
             return 'flagged';
         }
 
@@ -1924,18 +2011,49 @@ export class MemoryManagerAgent extends BaseAgent {
         if (!revokeId || !keepId) return 'skipped';
 
         const noteToRevoke = await md.GetEntityObject<MJAIAgentNoteEntity>('MJ: AI Agent Notes', contextUser);
-        if (await noteToRevoke.Load(revokeId)) {
-            noteToRevoke.Status = 'Revoked';
-            noteToRevoke.ConsolidatedIntoNoteID = keepId;
-            noteToRevoke.Comments = `[Contradiction resolved: superseded by note ${keepId}. ${llmResult.reason}]`;
-            if (await noteToRevoke.Save()) {
-                if (this._verbose) {
-                    LogStatus(`Memory Manager: Contradiction resolved — revoked note ${revokeId} in favor of ${keepId}`);
-                }
-                return 'resolved';
+        if (!(await noteToRevoke.Load(revokeId))) return 'skipped';
+
+        noteToRevoke.Status = 'Revoked';
+        noteToRevoke.ConsolidatedIntoNoteID = keepId;
+        noteToRevoke.Comments = `[Contradiction resolved: superseded by note ${keepId}. ${llmResult.reason}]`;
+        if (!(await noteToRevoke.Save())) return 'skipped';
+
+        if (this._verbose) {
+            LogStatus(`Memory Manager: Contradiction resolved — revoked note ${revokeId} in favor of ${keepId}`);
+        }
+        return 'resolved';
+    }
+
+    /** Decide whether a contradiction pair must be flagged rather than auto-resolved. */
+    private shouldFlagContradiction(noteA: MJAIAgentNoteEntity, noteB: MJAIAgentNoteEntity): boolean {
+        const bothHighImportance = (noteA.ImportanceScore || 0) >= CONTRADICTION_CONFIG.highImportanceThreshold &&
+                                    (noteB.ImportanceScore || 0) >= CONTRADICTION_CONFIG.highImportanceThreshold;
+        const hasProtected = (noteA.ProtectionTier || 'Standard') === 'Protected' || (noteB.ProtectionTier || 'Standard') === 'Protected';
+        return bothHighImportance || hasProtected;
+    }
+
+    /** Flag both notes in a contradiction pair with a cross-referencing audit comment. */
+    private async flagContradictionPair(
+        noteA: MJAIAgentNoteEntity,
+        noteB: MJAIAgentNoteEntity,
+        llmResult: { keepNoteId?: string; revokeNoteId?: string; reason: string },
+        md: Metadata,
+        contextUser: UserInfo
+    ): Promise<void> {
+        const flagComment = `[Contradiction flagged: conflicts with note ${noteA.ID === llmResult.revokeNoteId ? llmResult.keepNoteId : llmResult.revokeNoteId}. ${llmResult.reason}]`;
+        for (const flagNote of [noteA, noteB]) {
+            const noteToFlag = await md.GetEntityObject<MJAIAgentNoteEntity>('MJ: AI Agent Notes', contextUser);
+            if (await noteToFlag.Load(flagNote.ID)) {
+                noteToFlag.Comments = `${noteToFlag.Comments || ''} ${flagComment}`.trim();
+                await noteToFlag.Save();
             }
         }
-        return 'skipped';
+        if (this._verbose) {
+            const bothHighImportance = (noteA.ImportanceScore || 0) >= CONTRADICTION_CONFIG.highImportanceThreshold &&
+                                        (noteB.ImportanceScore || 0) >= CONTRADICTION_CONFIG.highImportanceThreshold;
+            const reason = bothHighImportance ? 'both high-importance' : 'Protected tier present';
+            LogStatus(`Memory Manager: Contradiction flagged (${reason}): "${noteA.Note?.substring(0, 40)}..." vs "${noteB.Note?.substring(0, 40)}..."`);
+        }
     }
 
     /**
@@ -1950,14 +2068,48 @@ export class MemoryManagerAgent extends BaseAgent {
         md: Metadata,
         contextUser: UserInfo
     ): Promise<{ consolidated: number; archived: number; newNoteId: string | null }> {
-        // Drift prevention: if any source note is at the consolidation count cap,
-        // resolve back to original generation-0 sources to avoid re-summarizing summaries
+        const { notesForPrompt, promptData } = await this.buildConsolidationPromptData(cluster, contextUser);
+
+        const parsedResult = await this.runConsolidationPrompt(consolidatePrompt, promptData, runner, contextUser);
+        if (!parsedResult || !parsedResult.shouldConsolidate) {
+            if (parsedResult && this._verbose) {
+                LogStatus(`Memory Manager: Skipping cluster consolidation - ${parsedResult.reason}`);
+            }
+            return { consolidated: 0, archived: 0, newNoteId: null };
+        }
+
+        const consolidatedNoteData = parsedResult.consolidatedNote!;
+        const newNote = await this.createConsolidatedNote(cluster, consolidatedNoteData, parsedResult.reason, aiNoteTypeId, md, contextUser);
+        if (!newNote) {
+            return { consolidated: 0, archived: 0, newNoteId: null };
+        }
+
+        await this.annotateConsolidationVerification(newNote, notesForPrompt, consolidatedNoteData.content);
+
+        const archived = await this.revokeSourceNotes(cluster, newNote.ID, parsedResult.reason, md, contextUser);
+
+        if (this._verbose) {
+            LogStatus(`Memory Manager: Consolidated ${cluster.length} notes into: "${consolidatedNoteData.content.substring(0, 50)}..."`);
+        }
+
+        return { consolidated: 1, archived, newNoteId: newNote.ID };
+    }
+
+    /**
+     * Prepare the prompt payload for consolidation. Handles drift prevention: if any source
+     * note is at the consolidation count cap, resolve back to original generation-0 sources
+     * to avoid re-summarizing summaries. Returns both the notes used (for verification) and
+     * the prompt data.
+     */
+    private async buildConsolidationPromptData(
+        cluster: MJAIAgentNoteEntity[],
+        contextUser: UserInfo
+    ): Promise<{ notesForPrompt: Array<MJAIAgentNoteEntity | ResolvedNoteRecord>; promptData: ConsolidationPromptData }> {
         const maxConsolidationCount = Math.max(...cluster.map(n => n.ConsolidationCount || 0));
         let notesForPrompt: Array<MJAIAgentNoteEntity | ResolvedNoteRecord> = cluster;
         let anchoredMode = false;
 
         if (maxConsolidationCount >= CONSOLIDATION_CONFIG.maxConsolidationCount) {
-            // At cap: resolve to original sources for fresh synthesis
             const originals = await this.resolveOriginalSources(cluster.map(n => n.ID), contextUser);
             if (originals.length > 0) {
                 notesForPrompt = originals;
@@ -1966,7 +2118,6 @@ export class MemoryManagerAgent extends BaseAgent {
                 }
             }
         } else if (maxConsolidationCount > 0) {
-            // Below cap but has consolidated notes: use anchored extension mode
             anchoredMode = true;
         }
 
@@ -1986,6 +2137,19 @@ export class MemoryManagerAgent extends BaseAgent {
             }))
         };
 
+        return { notesForPrompt, promptData };
+    }
+
+    /**
+     * Execute the consolidation prompt and parse the result. Returns null on any failure
+     * so the caller can short-circuit.
+     */
+    private async runConsolidationPrompt(
+        consolidatePrompt: MJAIPromptEntityExtended,
+        promptData: ConsolidationPromptData,
+        runner: AIPromptRunner,
+        contextUser: UserInfo
+    ): Promise<ConsolidationPromptResult | null> {
         const params = new AIPromptParams();
         params.prompt = consolidatePrompt;
         params.data = promptData;
@@ -1993,57 +2157,46 @@ export class MemoryManagerAgent extends BaseAgent {
         params.attemptJSONRepair = true;
         params.additionalParameters = DETERMINISTIC_PROMPT_PARAMS;
 
-        const result = await runner.ExecutePrompt<{
-            shouldConsolidate: boolean;
-            consolidatedNote?: {
-                type: string;
-                content: string;
-                scopeLevel: string;
-                confidence: number;
-            };
-            sourceNoteIds?: string[];
-            reason: string;
-        }>(params);
+        const result = await runner.ExecutePrompt<ConsolidationPromptResult>(params);
 
         if (!result.success || !result.result) {
             LogError(`Memory Manager: Consolidation prompt failed for cluster: ${result.errorMessage}`);
-            return { consolidated: 0, archived: 0, newNoteId: null };
+            return null;
         }
 
-        // Parse result if string (some models wrap JSON in ```json fences)
-        let parsedResult = result.result;
         if (typeof result.result === 'string') {
-            const parsed = CleanAndParseJSON<typeof result.result>(result.result, true);
+            const parsed = CleanAndParseJSON<ConsolidationPromptResult>(result.result, true);
             if (!parsed) {
                 LogError('Memory Manager: Failed to parse consolidation result');
-                return { consolidated: 0, archived: 0, newNoteId: null };
+                return null;
             }
-            parsedResult = parsed;
+            return parsed;
         }
+        return result.result;
+    }
 
-        if (!parsedResult.shouldConsolidate) {
-            if (this._verbose) {
-                LogStatus(`Memory Manager: Skipping cluster consolidation - ${parsedResult.reason}`);
-            }
-            return { consolidated: 0, archived: 0, newNoteId: null };
-        }
-
-        // Create consolidated note
-        const consolidatedNoteData = parsedResult.consolidatedNote!;
+    /**
+     * Build, validate, and save the consolidated note. Returns the saved entity on success,
+     * null on save failure. The LLM-returned Type is validated against the allowed union and
+     * falls back to the template note's Type on hallucination — previously a blind `as` cast
+     * silently wrote invalid values.
+     */
+    private async createConsolidatedNote(
+        cluster: MJAIAgentNoteEntity[],
+        consolidatedNoteData: NonNullable<ConsolidationPromptResult['consolidatedNote']>,
+        reason: string,
+        aiNoteTypeId: string,
+        md: Metadata,
+        contextUser: UserInfo
+    ): Promise<MJAIAgentNoteEntity | null> {
         const newNote = await md.GetEntityObject<MJAIAgentNoteEntity>('MJ: AI Agent Notes', contextUser);
         const templateNote = cluster[0];
 
-        // Validate the LLM-returned Type before assignment. The consolidation prompt
-        // is instructed to return one of the valid types, but LLMs can hallucinate —
-        // previously this was a blind `as` cast that silently wrote invalid values
-        // to the DB. If the LLM returns something unexpected, fall back to the
-        // template note's type (which is already valid by construction).
         let validatedType: ValidNoteType;
         if (isValidNoteType(consolidatedNoteData.type)) {
             validatedType = consolidatedNoteData.type;
         } else {
             LogError(`Memory Manager: Consolidation LLM returned invalid note Type "${consolidatedNoteData.type}" — falling back to template note's Type "${templateNote.Type}"`);
-            // templateNote.Type is already typed as the same union as ValidNoteType by the generated entity class
             validatedType = templateNote.Type;
         }
 
@@ -2056,9 +2209,8 @@ export class MemoryManagerAgent extends BaseAgent {
         newNote.IsAutoGenerated = true;
         newNote.Status = 'Active';
         newNote.AccessCount = cluster.reduce((sum, n) => sum + (n.AccessCount || 0), 0);
-        newNote.Comments = `Consolidated from ${cluster.length} notes: ${parsedResult.reason}`;
+        newNote.Comments = `Consolidated from ${cluster.length} notes: ${reason}`;
 
-        // Consolidation tracking fields
         const maxSourceConsolidationCount = Math.max(...cluster.map(n => n.ConsolidationCount || 0));
         newNote.ConsolidationCount = maxSourceConsolidationCount + 1;
         newNote.DerivedFromNoteIDs = JSON.stringify(cluster.map(n => n.ID));
@@ -2066,50 +2218,65 @@ export class MemoryManagerAgent extends BaseAgent {
 
         this.applyScopeToConsolidatedNote(newNote, templateNote, consolidatedNoteData.scopeLevel);
 
-        const saveResult = await newNote.Save();
-        if (!saveResult) {
+        if (!(await newNote.Save())) {
             LogError(`Memory Manager: Failed to save consolidated note: ${JSON.stringify(newNote.LatestResult)}`);
-            return { consolidated: 0, archived: 0, newNoteId: null };
+            return null;
+        }
+        return newNote;
+    }
+
+    /**
+     * Run post-consolidation entity verification and, if entities are missing, append a
+     * warning to the saved note's Comments (best-effort, non-blocking).
+     */
+    private async annotateConsolidationVerification(
+        newNote: MJAIAgentNoteEntity,
+        notesForPrompt: Array<MJAIAgentNoteEntity | ResolvedNoteRecord>,
+        consolidatedContent: string
+    ): Promise<void> {
+        const verification = this.verifyConsolidationOutput(notesForPrompt, consolidatedContent);
+        if (verification.passed || verification.entitiesMissing.length === 0) {
+            return;
         }
 
-        // Post-consolidation verification: check that key entities survived the consolidation
-        const verification = this.verifyConsolidationOutput(notesForPrompt, consolidatedNoteData.content);
-        if (!verification.passed && verification.entitiesMissing.length > 0) {
-            const missingList = verification.entitiesMissing.slice(0, 10).join(', ');
-            const warning = `[Verification: potentially missing entities: ${missingList}]`;
-            if (this._verbose) {
-                LogStatus(`Memory Manager: Post-consolidation verification warning — ${verification.entitiesMissing.length} entities not found in consolidated output (${verification.entitiesChecked} checked)`);
-            }
-
-            // Annotate the consolidated note (non-blocking)
-            newNote.Comments = `${newNote.Comments || ''} ${warning}`.trim();
-            await newNote.Save(); // Best-effort update
+        const missingList = verification.entitiesMissing.slice(0, 10).join(', ');
+        const warning = `[Verification: potentially missing entities: ${missingList}]`;
+        if (this._verbose) {
+            LogStatus(`Memory Manager: Post-consolidation verification warning — ${verification.entitiesMissing.length} entities not found in consolidated output (${verification.entitiesChecked} checked)`);
         }
 
-        // Revoke source notes in parallel, linking each to the consolidated replacement
-        const revokeResults = await Promise.all(
+        newNote.Comments = `${newNote.Comments || ''} ${warning}`.trim();
+        await newNote.Save();
+    }
+
+    /**
+     * Revoke source notes in parallel, linking each to the consolidated replacement.
+     * Returns the number of notes successfully revoked.
+     */
+    private async revokeSourceNotes(
+        cluster: MJAIAgentNoteEntity[],
+        newNoteId: string,
+        reason: string,
+        md: Metadata,
+        contextUser: UserInfo
+    ): Promise<number> {
+        const results = await Promise.all(
             cluster.map(async (sourceNote) => {
                 const noteToRevoke = await md.GetEntityObject<MJAIAgentNoteEntity>('MJ: AI Agent Notes', contextUser);
-                if (await noteToRevoke.Load(sourceNote.ID)) {
-                    noteToRevoke.Status = 'Revoked';
-                    noteToRevoke.ConsolidatedIntoNoteID = newNote.ID;
-                    noteToRevoke.Comments = `Consolidated into note ${newNote.ID}: ${parsedResult.reason}`;
-                    if (await noteToRevoke.Save()) {
-                        return true;
-                    } else {
-                        LogError(`Memory Manager: Failed to revoke source note ${sourceNote.ID}`);
-                    }
+                if (!(await noteToRevoke.Load(sourceNote.ID))) {
+                    return false;
                 }
+                noteToRevoke.Status = 'Revoked';
+                noteToRevoke.ConsolidatedIntoNoteID = newNoteId;
+                noteToRevoke.Comments = `Consolidated into note ${newNoteId}: ${reason}`;
+                if (await noteToRevoke.Save()) {
+                    return true;
+                }
+                LogError(`Memory Manager: Failed to revoke source note ${sourceNote.ID}`);
                 return false;
             })
         );
-        const archived = revokeResults.filter(Boolean).length;
-
-        if (this._verbose) {
-            LogStatus(`Memory Manager: Consolidated ${cluster.length} notes into: "${consolidatedNoteData.content.substring(0, 50)}..."`);
-        }
-
-        return { consolidated: 1, archived, newNoteId: newNote.ID };
+        return results.filter(Boolean).length;
     }
 
     /**
@@ -2147,114 +2314,158 @@ export class MemoryManagerAgent extends BaseAgent {
     private async pruneStaleReferences(contextUser: UserInfo): Promise<{ notesArchived: number; orphanedAgents: number; orphanedUsers: number; orphanedCompanies: number; orphanedConversations: number }> {
         const maxPerCycle = 200;
         const result = { notesArchived: 0, orphanedAgents: 0, orphanedUsers: 0, orphanedCompanies: 0, orphanedConversations: 0 };
-        const rv = new RunView();
+
+        const notes = await this.loadPruneCandidateNotes(contextUser, maxPerCycle * 2);
+        if (notes.length === 0) {
+            return result;
+        }
+
+        const caches = await this.buildReferenceExistenceCache(notes, contextUser);
         const md = new Metadata();
 
-        // Load active auto-generated notes, excluding Immutable tier
-        const notesResult = await rv.RunView<{ ID: string; AgentID: string | null; UserID: string | null; CompanyID: string | null; SourceConversationID: string | null }>({
+        for (const note of notes) {
+            if (result.notesArchived >= maxPerCycle) break;
+
+            const orphanReasons = this.detectOrphanReasons(note, caches, result);
+            if (orphanReasons.length > 0 && await this.archiveOrphanedNote(note.ID, orphanReasons, md, contextUser)) {
+                result.notesArchived++;
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * Load auto-generated, non-immutable Active notes that are candidates for orphan pruning.
+     */
+    private async loadPruneCandidateNotes(contextUser: UserInfo, maxRows: number): Promise<PruneCandidateNote[]> {
+        const rv = new RunView();
+        const notesResult = await rv.RunView<PruneCandidateNote>({
             EntityName: 'MJ: AI Agent Notes',
             ExtraFilter: `IsAutoGenerated = 1 AND Status = 'Active' AND ProtectionTier != 'Immutable'`,
             Fields: ['ID', 'AgentID', 'UserID', 'CompanyID', 'SourceConversationID'],
             OrderBy: '__mj_CreatedAt ASC',
-            MaxRows: maxPerCycle * 2,
+            MaxRows: maxRows,
             ResultType: 'simple'
         }, contextUser);
 
         if (!notesResult.Success || !notesResult.Results?.length) {
-            return result;
+            return [];
         }
+        return notesResult.Results;
+    }
 
-        const notes = notesResult.Results;
+    /**
+     * Build in-memory lookup caches of which referenced users/companies/conversations still
+     * exist and which agents are still Active. Runs all three existence lookups in a single
+     * RunViews batch to minimize round trips.
+     */
+    private async buildReferenceExistenceCache(notes: PruneCandidateNote[], contextUser: UserInfo): Promise<ReferenceExistenceCaches> {
+        const caches: ReferenceExistenceCaches = {
+            activeAgentIds: new Set(
+                AIEngine.Instance.Agents.filter(a => a.Status === 'Active').map(a => a.ID?.toLowerCase())
+            ),
+            existingUserIds: new Set<string>(),
+            existingCompanyIds: new Set<string>(),
+            existingConversationIds: new Set<string>()
+        };
 
-        // Build lookup caches with single queries per entity type
-        const activeAgentIds = new Set(
-            AIEngine.Instance.Agents
-                .filter(a => a.Status === 'Active')
-                .map(a => a.ID?.toLowerCase())
-        );
+        const { lookupQueries, queryMapping } = this.buildExistenceLookupQueries(notes);
+        if (lookupQueries.length === 0) return caches;
 
-        // Collect all referenced IDs for batch lookups
+        const rv = new RunView();
+        const lookupResults = await rv.RunViews<{ ID: string }>(lookupQueries, contextUser);
+        for (let i = 0; i < lookupResults.length; i++) {
+            if (!lookupResults[i].Success) continue;
+            const targetSet = queryMapping[i] === 'users' ? caches.existingUserIds
+                : queryMapping[i] === 'companies' ? caches.existingCompanyIds
+                : caches.existingConversationIds;
+            lookupResults[i].Results.forEach(r => targetSet.add(r.ID?.toLowerCase()));
+        }
+        return caches;
+    }
+
+    /**
+     * Collect unique referenced IDs from the note batch and assemble a RunViews query list
+     * for existence checks. Returns the query list alongside a parallel mapping array that
+     * tells the caller which target cache each query result belongs in.
+     */
+    private buildExistenceLookupQueries(notes: PruneCandidateNote[]): {
+        lookupQueries: { EntityName: string; ExtraFilter: string; Fields: string[] }[];
+        queryMapping: Array<'users' | 'companies' | 'conversations'>;
+    } {
         const referencedUserIds = new Set<string>();
         const referencedCompanyIds = new Set<string>();
         const referencedConversationIds = new Set<string>();
-
         for (const note of notes) {
             if (note.UserID) referencedUserIds.add(note.UserID);
             if (note.CompanyID) referencedCompanyIds.add(note.CompanyID);
             if (note.SourceConversationID) referencedConversationIds.add(note.SourceConversationID);
         }
 
-        // Batch lookup existing entities — run all three lookups in a single RunViews call
-        const existingUserIds = new Set<string>();
-        const existingCompanyIds = new Set<string>();
-        const existingConversationIds = new Set<string>();
-
         const lookupQueries: { EntityName: string; ExtraFilter: string; Fields: string[] }[] = [];
         const queryMapping: Array<'users' | 'companies' | 'conversations'> = [];
+        const push = (entityName: string, ids: Set<string>, kind: 'users' | 'companies' | 'conversations') => {
+            if (ids.size === 0) return;
+            lookupQueries.push({ EntityName: entityName, ExtraFilter: `ID IN (${Array.from(ids).map(id => `'${id}'`).join(',')})`, Fields: ['ID'] });
+            queryMapping.push(kind);
+        };
+        push('MJ: Users', referencedUserIds, 'users');
+        push('MJ: Companies', referencedCompanyIds, 'companies');
+        push('MJ: Conversations', referencedConversationIds, 'conversations');
+        return { lookupQueries, queryMapping };
+    }
 
-        if (referencedUserIds.size > 0) {
-            lookupQueries.push({ EntityName: 'MJ: Users', ExtraFilter: `ID IN (${Array.from(referencedUserIds).map(id => `'${id}'`).join(',')})`, Fields: ['ID'] });
-            queryMapping.push('users');
+    /**
+     * Evaluate a single note's foreign-key references against the existence caches, returning
+     * human-readable reasons for any orphaned fields. Increments the supplied counter as a
+     * side effect so aggregate totals are tracked without a second pass.
+     */
+    private detectOrphanReasons(
+        note: PruneCandidateNote,
+        caches: ReferenceExistenceCaches,
+        counter: { orphanedAgents: number; orphanedUsers: number; orphanedCompanies: number; orphanedConversations: number }
+    ): string[] {
+        const reasons: string[] = [];
+        if (note.AgentID && !caches.activeAgentIds.has(note.AgentID.toLowerCase())) {
+            reasons.push('referenced agent is inactive or deleted');
+            counter.orphanedAgents++;
         }
-        if (referencedCompanyIds.size > 0) {
-            lookupQueries.push({ EntityName: 'MJ: Companies', ExtraFilter: `ID IN (${Array.from(referencedCompanyIds).map(id => `'${id}'`).join(',')})`, Fields: ['ID'] });
-            queryMapping.push('companies');
+        if (note.UserID && !caches.existingUserIds.has(note.UserID.toLowerCase())) {
+            reasons.push('referenced user no longer exists');
+            counter.orphanedUsers++;
         }
-        if (referencedConversationIds.size > 0) {
-            lookupQueries.push({ EntityName: 'MJ: Conversations', ExtraFilter: `ID IN (${Array.from(referencedConversationIds).map(id => `'${id}'`).join(',')})`, Fields: ['ID'] });
-            queryMapping.push('conversations');
+        if (note.CompanyID && !caches.existingCompanyIds.has(note.CompanyID.toLowerCase())) {
+            reasons.push('referenced company no longer exists');
+            counter.orphanedCompanies++;
         }
-
-        if (lookupQueries.length > 0) {
-            const lookupResults = await rv.RunViews<{ ID: string }>(lookupQueries, contextUser);
-            for (let i = 0; i < lookupResults.length; i++) {
-                const lookupResult = lookupResults[i];
-                if (!lookupResult.Success) continue;
-                const targetSet = queryMapping[i] === 'users' ? existingUserIds
-                    : queryMapping[i] === 'companies' ? existingCompanyIds
-                    : existingConversationIds;
-                lookupResult.Results.forEach(r => targetSet.add(r.ID?.toLowerCase()));
-            }
+        if (note.SourceConversationID && !caches.existingConversationIds.has(note.SourceConversationID.toLowerCase())) {
+            reasons.push('source conversation no longer exists');
+            counter.orphanedConversations++;
         }
+        return reasons;
+    }
 
-        // Check each note for orphaned references
-        for (const note of notes) {
-            if (result.notesArchived >= maxPerCycle) break;
-
-            const orphanReasons: string[] = [];
-
-            if (note.AgentID && !activeAgentIds.has(note.AgentID.toLowerCase())) {
-                orphanReasons.push('referenced agent is inactive or deleted');
-                result.orphanedAgents++;
-            }
-            if (note.UserID && !existingUserIds.has(note.UserID.toLowerCase())) {
-                orphanReasons.push('referenced user no longer exists');
-                result.orphanedUsers++;
-            }
-            if (note.CompanyID && !existingCompanyIds.has(note.CompanyID.toLowerCase())) {
-                orphanReasons.push('referenced company no longer exists');
-                result.orphanedCompanies++;
-            }
-            if (note.SourceConversationID && !existingConversationIds.has(note.SourceConversationID.toLowerCase())) {
-                orphanReasons.push('source conversation no longer exists');
-                result.orphanedConversations++;
-            }
-
-            if (orphanReasons.length > 0) {
-                const noteToArchive = await md.GetEntityObject<MJAIAgentNoteEntity>('MJ: AI Agent Notes', contextUser);
-                if (await noteToArchive.Load(note.ID)) {
-                    noteToArchive.Status = 'Archived';
-                    noteToArchive.Comments = `[Archived by Memory Manager: stale reference pruning - ${orphanReasons.join('; ')} on ${new Date().toISOString()}]`;
-                    if (await noteToArchive.Save()) {
-                        result.notesArchived++;
-                    } else {
-                        LogError(`Memory Manager: Failed to archive orphaned note ${note.ID}`);
-                    }
-                }
-            }
+    /**
+     * Archive a single orphaned note with an audit-trail Comments entry. Returns true on success.
+     */
+    private async archiveOrphanedNote(
+        noteId: string,
+        reasons: string[],
+        md: Metadata,
+        contextUser: UserInfo
+    ): Promise<boolean> {
+        const noteToArchive = await md.GetEntityObject<MJAIAgentNoteEntity>('MJ: AI Agent Notes', contextUser);
+        if (!(await noteToArchive.Load(noteId))) {
+            return false;
         }
-
-        return result;
+        noteToArchive.Status = 'Archived';
+        noteToArchive.Comments = `[Archived by Memory Manager: stale reference pruning - ${reasons.join('; ')} on ${new Date().toISOString()}]`;
+        if (!(await noteToArchive.Save())) {
+            LogError(`Memory Manager: Failed to archive orphaned note ${noteId}`);
+            return false;
+        }
+        return true;
     }
 
     /**
@@ -2317,12 +2528,28 @@ export class MemoryManagerAgent extends BaseAgent {
     private async archiveExpiredItems(contextUser: UserInfo): Promise<{ notesExpired: number; examplesExpired: number }> {
         const result = { notesExpired: 0, examplesExpired: 0 };
         const md = new Metadata();
-        const rv = new RunView();
-        const now = new Date();
-        const nowISO = now.toISOString();
+        const nowISO = new Date().toISOString();
 
-        // Fetch expired notes and examples in parallel
-        const [expiredNotesResult, expiredExamplesResult] = await Promise.all([
+        const [expiredNotes, expiredExamples] = await this.loadExpiredItems(contextUser, nowISO);
+
+        for (const note of expiredNotes) {
+            if ((note.ProtectionTier || 'Standard') === 'Immutable') continue;
+            if (await this.archiveExpiredNote(note, md, contextUser)) result.notesExpired++;
+        }
+
+        for (const example of expiredExamples) {
+            if (await this.archiveExpiredExample(example, md, contextUser)) result.examplesExpired++;
+        }
+
+        return result;
+    }
+
+    private async loadExpiredItems(
+        contextUser: UserInfo,
+        nowISO: string
+    ): Promise<[Array<{ ID: string; ExpiresAt: Date; ProtectionTier: string }>, Array<{ ID: string; ExpiresAt: Date }>]> {
+        const rv = new RunView();
+        const [notesResult, examplesResult] = await Promise.all([
             rv.RunView<{ ID: string; ExpiresAt: Date; ProtectionTier: string }>({
                 EntityName: 'MJ: AI Agent Notes',
                 ExtraFilter: `Status = 'Active' AND ExpiresAt IS NOT NULL AND ExpiresAt < '${nowISO}'`,
@@ -2336,31 +2563,34 @@ export class MemoryManagerAgent extends BaseAgent {
                 MaxRows: 200,
             }, contextUser)
         ]);
+        return [
+            notesResult.Success && notesResult.Results ? notesResult.Results : [],
+            examplesResult.Success && examplesResult.Results ? examplesResult.Results : []
+        ];
+    }
 
-        if (expiredNotesResult.Success && expiredNotesResult.Results) {
-            for (const note of expiredNotesResult.Results) {
-                if ((note.ProtectionTier || 'Standard') === 'Immutable') continue;
-                const noteToArchive = await md.GetEntityObject<MJAIAgentNoteEntity>('MJ: AI Agent Notes', contextUser);
-                if (await noteToArchive.Load(note.ID)) {
-                    noteToArchive.Status = 'Archived';
-                    noteToArchive.Comments = `${noteToArchive.Comments || ''} [Archived by Memory Manager: expired on ${note.ExpiresAt}]`.trim();
-                    if (await noteToArchive.Save()) result.notesExpired++;
-                }
-            }
-        }
+    private async archiveExpiredNote(
+        note: { ID: string; ExpiresAt: Date },
+        md: Metadata,
+        contextUser: UserInfo
+    ): Promise<boolean> {
+        const noteToArchive = await md.GetEntityObject<MJAIAgentNoteEntity>('MJ: AI Agent Notes', contextUser);
+        if (!(await noteToArchive.Load(note.ID))) return false;
+        noteToArchive.Status = 'Archived';
+        noteToArchive.Comments = `${noteToArchive.Comments || ''} [Archived by Memory Manager: expired on ${note.ExpiresAt}]`.trim();
+        return await noteToArchive.Save();
+    }
 
-        if (expiredExamplesResult.Success && expiredExamplesResult.Results) {
-            for (const example of expiredExamplesResult.Results) {
-                const exampleToArchive = await md.GetEntityObject<MJAIAgentExampleEntity>('MJ: AI Agent Examples', contextUser);
-                if (await exampleToArchive.Load(example.ID)) {
-                    exampleToArchive.Status = 'Archived';
-                    exampleToArchive.Comments = `${exampleToArchive.Comments || ''} [Archived by Memory Manager: expired on ${example.ExpiresAt}]`.trim();
-                    if (await exampleToArchive.Save()) result.examplesExpired++;
-                }
-            }
-        }
-
-        return result;
+    private async archiveExpiredExample(
+        example: { ID: string; ExpiresAt: Date },
+        md: Metadata,
+        contextUser: UserInfo
+    ): Promise<boolean> {
+        const exampleToArchive = await md.GetEntityObject<MJAIAgentExampleEntity>('MJ: AI Agent Examples', contextUser);
+        if (!(await exampleToArchive.Load(example.ID))) return false;
+        exampleToArchive.Status = 'Archived';
+        exampleToArchive.Comments = `${exampleToArchive.Comments || ''} [Archived by Memory Manager: expired on ${example.ExpiresAt}]`.trim();
+        return await exampleToArchive.Save();
     }
 
     /**
@@ -2372,17 +2602,33 @@ export class MemoryManagerAgent extends BaseAgent {
     private async applyProportionalDecay(contextUser: UserInfo, archiveEnabledAgentIds: Set<string | undefined>): Promise<{ notesDecayed: number; notesArchived: number; examplesDecayed: number; examplesArchived: number }> {
         const result = { notesDecayed: 0, notesArchived: 0, examplesDecayed: 0, examplesArchived: 0 };
         const md = new Metadata();
-        const rv = new RunView();
 
-        // Fetch notes and examples in parallel — they're independent
+        const [activeNotes, activeExamples] = await this.loadDecayCandidates(contextUser);
+
+        for (const note of activeNotes) {
+            await this.decayOneNote(note, archiveEnabledAgentIds, md, contextUser, result);
+        }
+
+        for (const example of activeExamples) {
+            await this.decayOneExample(example, archiveEnabledAgentIds, md, contextUser, result);
+        }
+
+        return result;
+    }
+
+    /**
+     * Fetch notes and examples in parallel — they're independent.
+     */
+    private async loadDecayCandidates(contextUser: UserInfo): Promise<[DecayNoteCandidate[], DecayExampleCandidate[]]> {
+        const rv = new RunView();
         const [activeNotesResult, activeExamplesResult] = await Promise.all([
-            rv.RunView<{ ID: string; ImportanceScore: number | null; ProtectionTier: string; LastAccessedAt: Date | null; __mj_CreatedAt: Date; AccessCount: number; AgentID: string | null }>({
+            rv.RunView<DecayNoteCandidate>({
                 EntityName: 'MJ: AI Agent Notes',
                 ExtraFilter: `IsAutoGenerated = 1 AND Status = 'Active'`,
                 Fields: ['ID', 'ImportanceScore', 'ProtectionTier', 'LastAccessedAt', '__mj_CreatedAt', 'AccessCount', 'AgentID'],
                 MaxRows: 1000,
             }, contextUser),
-            rv.RunView<{ ID: string; SuccessScore: number | null; LastAccessedAt: Date | null; __mj_CreatedAt: Date; AccessCount: number; AgentID: string }>({
+            rv.RunView<DecayExampleCandidate>({
                 EntityName: 'MJ: AI Agent Examples',
                 ExtraFilter: `IsAutoGenerated = 1 AND Status = 'Active' AND SuccessScore < 50`,
                 Fields: ['ID', 'SuccessScore', 'LastAccessedAt', '__mj_CreatedAt', 'AccessCount', 'AgentID'],
@@ -2390,65 +2636,79 @@ export class MemoryManagerAgent extends BaseAgent {
             }, contextUser)
         ]);
 
-        if (activeNotesResult.Success && activeNotesResult.Results) {
-            for (const note of activeNotesResult.Results) {
-                if (note.AgentID && !archiveEnabledAgentIds.has(note.AgentID.toLowerCase())) continue;
-                if (note.ImportanceScore === null) continue; // Not yet scored — skip (type is `number | null`, no undefined case)
+        return [
+            activeNotesResult.Success && activeNotesResult.Results ? activeNotesResult.Results : [],
+            activeExamplesResult.Success && activeExamplesResult.Results ? activeExamplesResult.Results : []
+        ];
+    }
 
-                const tier = note.ProtectionTier || 'Standard';
-                if (tier === 'Immutable') continue;
-                if (tier === 'Protected') {
-                    const lastAccess = note.LastAccessedAt || note.__mj_CreatedAt;
-                    const daysSinceAccess = (Date.now() - new Date(lastAccess).getTime()) / (1000 * 60 * 60 * 24);
-                    if (daysSinceAccess < DECAY_CONFIG.protectedInactivityDays) continue;
-                }
+    /**
+     * Apply proportional decay to a single note. Archives if the decayed score drops below
+     * the archival floor, otherwise writes the reduced score (skipping when the factor is
+     * effectively 1.0 to avoid unnecessary saves).
+     */
+    private async decayOneNote(
+        note: DecayNoteCandidate,
+        archiveEnabledAgentIds: Set<string | undefined>,
+        md: Metadata,
+        contextUser: UserInfo,
+        result: { notesDecayed: number; notesArchived: number }
+    ): Promise<void> {
+        if (note.AgentID && !archiveEnabledAgentIds.has(note.AgentID.toLowerCase())) return;
+        if (note.ImportanceScore === null) return;
 
-                // Apply proportional decay: multiply current score by decay factor
-                const decayFactor = this.computeDecayFactor(note);
-                const newScore = Math.round(note.ImportanceScore * decayFactor * 100) / 100;
-
-                const noteToUpdate = await md.GetEntityObject<MJAIAgentNoteEntity>('MJ: AI Agent Notes', contextUser);
-                if (await noteToUpdate.Load(note.ID)) {
-                    if (newScore < DECAY_CONFIG.archivalFloor) {
-                        // Score has decayed below floor over multiple cycles → archive
-                        noteToUpdate.Status = 'Archived';
-                        noteToUpdate.ImportanceScore = newScore;
-                        noteToUpdate.Comments = `${noteToUpdate.Comments || ''} [Archived by Memory Manager: ImportanceScore decayed to ${newScore.toFixed(2)}, below floor ${DECAY_CONFIG.archivalFloor}]`.trim();
-                        if (await noteToUpdate.Save()) result.notesArchived++;
-                    } else if (decayFactor < 0.99) {
-                        // Apply proportional reduction (skip if factor is ~1.0 to avoid unnecessary saves)
-                        noteToUpdate.ImportanceScore = newScore;
-                        if (await noteToUpdate.Save()) result.notesDecayed++;
-                    }
-                }
-            }
+        const tier = note.ProtectionTier || 'Standard';
+        if (tier === 'Immutable') return;
+        if (tier === 'Protected') {
+            const lastAccess = note.LastAccessedAt || note.__mj_CreatedAt;
+            const daysSinceAccess = (Date.now() - new Date(lastAccess).getTime()) / (1000 * 60 * 60 * 24);
+            if (daysSinceAccess < DECAY_CONFIG.protectedInactivityDays) return;
         }
 
-        // Proportional decay for low-scoring examples (already fetched above)
-        if (activeExamplesResult.Success && activeExamplesResult.Results) {
-            for (const example of activeExamplesResult.Results) {
-                if (example.AgentID && !archiveEnabledAgentIds.has(example.AgentID.toLowerCase())) continue;
+        const decayFactor = this.computeDecayFactor(note);
+        const newScore = Math.round(note.ImportanceScore * decayFactor * 100) / 100;
 
-                // Use SuccessScore as proxy importance for examples
-                const normalizedImportance = (example.SuccessScore || 25) / 100.0;
-                const lambdaEff = DECAY_CONFIG.baseLambda * (1 - normalizedImportance * DECAY_CONFIG.importanceDampening);
-                const lastAccess = example.LastAccessedAt || example.__mj_CreatedAt;
-                const daysSinceAccess = (Date.now() - new Date(lastAccess).getTime()) / (1000 * 60 * 60 * 24);
-                const decayFactor = Math.min(1.0, Math.exp(-lambdaEff * daysSinceAccess) * (1 + (example.AccessCount || 0) * DECAY_CONFIG.accessBoostFactor));
-                const effectiveScore = normalizedImportance * 10.0 * decayFactor;
+        const noteToUpdate = await md.GetEntityObject<MJAIAgentNoteEntity>('MJ: AI Agent Notes', contextUser);
+        if (!(await noteToUpdate.Load(note.ID))) return;
 
-                if (effectiveScore < DECAY_CONFIG.archivalFloor) {
-                    const exampleToArchive = await md.GetEntityObject<MJAIAgentExampleEntity>('MJ: AI Agent Examples', contextUser);
-                    if (await exampleToArchive.Load(example.ID)) {
-                        exampleToArchive.Status = 'Archived';
-                        exampleToArchive.Comments = `${exampleToArchive.Comments || ''} [Archived by Memory Manager: effective score ${effectiveScore.toFixed(2)} below floor]`.trim();
-                        if (await exampleToArchive.Save()) result.examplesArchived++;
-                    }
-                }
-            }
+        if (newScore < DECAY_CONFIG.archivalFloor) {
+            noteToUpdate.Status = 'Archived';
+            noteToUpdate.ImportanceScore = newScore;
+            noteToUpdate.Comments = `${noteToUpdate.Comments || ''} [Archived by Memory Manager: ImportanceScore decayed to ${newScore.toFixed(2)}, below floor ${DECAY_CONFIG.archivalFloor}]`.trim();
+            if (await noteToUpdate.Save()) result.notesArchived++;
+        } else if (decayFactor < 0.99) {
+            noteToUpdate.ImportanceScore = newScore;
+            if (await noteToUpdate.Save()) result.notesDecayed++;
         }
+    }
 
-        return result;
+    /**
+     * Apply proportional decay to a single example, using SuccessScore as a proxy importance.
+     * Archives if the effective score drops below the archival floor.
+     */
+    private async decayOneExample(
+        example: DecayExampleCandidate,
+        archiveEnabledAgentIds: Set<string | undefined>,
+        md: Metadata,
+        contextUser: UserInfo,
+        result: { examplesArchived: number }
+    ): Promise<void> {
+        if (example.AgentID && !archiveEnabledAgentIds.has(example.AgentID.toLowerCase())) return;
+
+        const normalizedImportance = (example.SuccessScore || 25) / 100.0;
+        const lambdaEff = DECAY_CONFIG.baseLambda * (1 - normalizedImportance * DECAY_CONFIG.importanceDampening);
+        const lastAccess = example.LastAccessedAt || example.__mj_CreatedAt;
+        const daysSinceAccess = (Date.now() - new Date(lastAccess).getTime()) / (1000 * 60 * 60 * 24);
+        const decayFactor = Math.min(1.0, Math.exp(-lambdaEff * daysSinceAccess) * (1 + (example.AccessCount || 0) * DECAY_CONFIG.accessBoostFactor));
+        const effectiveScore = normalizedImportance * 10.0 * decayFactor;
+
+        if (effectiveScore >= DECAY_CONFIG.archivalFloor) return;
+
+        const exampleToArchive = await md.GetEntityObject<MJAIAgentExampleEntity>('MJ: AI Agent Examples', contextUser);
+        if (!(await exampleToArchive.Load(example.ID))) return;
+        exampleToArchive.Status = 'Archived';
+        exampleToArchive.Comments = `${exampleToArchive.Comments || ''} [Archived by Memory Manager: effective score ${effectiveScore.toFixed(2)} below floor]`.trim();
+        if (await exampleToArchive.Save()) result.examplesArchived++;
     }
 
     /**
@@ -2466,7 +2726,15 @@ export class MemoryManagerAgent extends BaseAgent {
 
         LogStatus(`Memory Manager: Running maintenance phases${forceMaintenance ? ' (forced via params.data.forceMaintenance)' : ''}...`);
 
-        // Phase 1: Compute importance scores
+        await this.runImportancePhase(r, contextUser);
+        const consolidatedNoteIds = await this.runConsolidationPhase(r, contextUser);
+        await this.runContradictionPhase(r, contextUser, consolidatedNoteIds);
+        await this.runPruneAndDecayPhases(r, contextUser);
+
+        return r;
+    }
+
+    private async runImportancePhase(r: MaintenancePhaseResults, contextUser: UserInfo): Promise<void> {
         const importanceStep = await this.CreateRunStep('Decision', 'Compute Importance Scores', {
             activeNoteCount: AIEngine.Instance.AgentNotes.filter(n => n.Status === 'Active').length
         });
@@ -2480,8 +2748,9 @@ export class MemoryManagerAgent extends BaseAgent {
             LogError('Memory Manager: Importance scoring failed, continuing with other phases:', error);
             await this.FinalizeRunStep(importanceStep, false, undefined, undefined, error instanceof Error ? error.message : String(error));
         }
+    }
 
-        // Phase 2: Consolidate related notes
+    private async runConsolidationPhase(r: MaintenancePhaseResults, contextUser: UserInfo): Promise<Set<string>> {
         const consolidatedNoteIds = new Set<string>();
         const consolidationStep = await this.CreateRunStep('Decision', 'Consolidate Related Notes', {
             activeNoteCount: AIEngine.Instance.AgentNotes.filter(n => n.Status === 'Active' && n.IsAutoGenerated).length
@@ -2503,8 +2772,10 @@ export class MemoryManagerAgent extends BaseAgent {
             LogError('Memory Manager: Consolidation failed, continuing with other phases:', error);
             await this.FinalizeRunStep(consolidationStep, false, undefined, undefined, error instanceof Error ? error.message : String(error));
         }
+        return consolidatedNoteIds;
+    }
 
-        // Phase 3: Detect and resolve contradictions
+    private async runContradictionPhase(r: MaintenancePhaseResults, contextUser: UserInfo, consolidatedNoteIds: Set<string>): Promise<void> {
         const contradictionStep = await this.CreateRunStep('Decision', 'Detect Note Contradictions', {
             consolidatedNoteIdsCount: consolidatedNoteIds.size
         });
@@ -2524,54 +2795,60 @@ export class MemoryManagerAgent extends BaseAgent {
             LogError('Memory Manager: Contradiction detection failed, continuing with other phases:', error);
             await this.FinalizeRunStep(contradictionStep, false, undefined, undefined, error instanceof Error ? error.message : String(error));
         }
+    }
 
-        // Phases 4 & 5: Prune + Decay (independent — run in parallel via Promise.allSettled)
+    /**
+     * Prune and decay are independent — run in parallel via Promise.allSettled so one failure
+     * doesn't block the other.
+     */
+    private async runPruneAndDecayPhases(r: MaintenancePhaseResults, contextUser: UserInfo): Promise<void> {
         const pruneStep = await this.CreateRunStep('Decision', 'Prune Stale References', {});
         const decayStep = await this.CreateRunStep('Decision', 'Decay-Based Archival', {});
-
         await Promise.allSettled([
-            (async () => {
-                try {
-                    const pruneResult = await this.pruneStaleReferences(contextUser);
-                    r.staleNotesArchived = pruneResult.notesArchived;
-                    if (r.staleNotesArchived > 0 && this._verbose) {
-                        LogStatus(`Memory Manager: Pruned ${r.staleNotesArchived} orphaned notes`);
-                    }
-                    await this.FinalizeRunStep(pruneStep, true, {
-                        notesArchived: r.staleNotesArchived,
-                        orphanedAgents: pruneResult.orphanedAgents,
-                        orphanedUsers: pruneResult.orphanedUsers,
-                        orphanedCompanies: pruneResult.orphanedCompanies,
-                        orphanedConversations: pruneResult.orphanedConversations
-                    });
-                } catch (error) {
-                    LogError('Memory Manager: Stale reference pruning failed:', error);
-                    await this.FinalizeRunStep(pruneStep, false, undefined, undefined, error instanceof Error ? error.message : String(error));
-                }
-            })(),
-            (async () => {
-                try {
-                    const decayResult = await this.decayBasedArchival(contextUser);
-                    r.decayNotesArchived = decayResult.notesArchived;
-                    r.decayExamplesArchived = decayResult.examplesArchived;
-                    const totalDecayArchived = decayResult.notesArchived + decayResult.examplesArchived + decayResult.notesExpired + decayResult.examplesExpired;
-                    if (totalDecayArchived > 0 && this._verbose) {
-                        LogStatus(`Memory Manager: Decay archival — ${decayResult.notesArchived} notes, ${decayResult.examplesArchived} examples, ${decayResult.notesExpired} expired notes, ${decayResult.examplesExpired} expired examples`);
-                    }
-                    await this.FinalizeRunStep(decayStep, true, {
-                        notesArchived: decayResult.notesArchived,
-                        examplesArchived: decayResult.examplesArchived,
-                        notesExpired: decayResult.notesExpired,
-                        examplesExpired: decayResult.examplesExpired
-                    });
-                } catch (error) {
-                    LogError('Memory Manager: Decay-based archival failed:', error);
-                    await this.FinalizeRunStep(decayStep, false, undefined, undefined, error instanceof Error ? error.message : String(error));
-                }
-            })()
+            this.runPrunePhase(r, contextUser, pruneStep),
+            this.runDecayPhase(r, contextUser, decayStep),
         ]);
+    }
 
-        return r;
+    private async runPrunePhase(r: MaintenancePhaseResults, contextUser: UserInfo, pruneStep: MJAIAgentRunStepEntity | null): Promise<void> {
+        try {
+            const pruneResult = await this.pruneStaleReferences(contextUser);
+            r.staleNotesArchived = pruneResult.notesArchived;
+            if (r.staleNotesArchived > 0 && this._verbose) {
+                LogStatus(`Memory Manager: Pruned ${r.staleNotesArchived} orphaned notes`);
+            }
+            await this.FinalizeRunStep(pruneStep, true, {
+                notesArchived: r.staleNotesArchived,
+                orphanedAgents: pruneResult.orphanedAgents,
+                orphanedUsers: pruneResult.orphanedUsers,
+                orphanedCompanies: pruneResult.orphanedCompanies,
+                orphanedConversations: pruneResult.orphanedConversations
+            });
+        } catch (error) {
+            LogError('Memory Manager: Stale reference pruning failed:', error);
+            await this.FinalizeRunStep(pruneStep, false, undefined, undefined, error instanceof Error ? error.message : String(error));
+        }
+    }
+
+    private async runDecayPhase(r: MaintenancePhaseResults, contextUser: UserInfo, decayStep: MJAIAgentRunStepEntity | null): Promise<void> {
+        try {
+            const decayResult = await this.decayBasedArchival(contextUser);
+            r.decayNotesArchived = decayResult.notesArchived;
+            r.decayExamplesArchived = decayResult.examplesArchived;
+            const totalDecayArchived = decayResult.notesArchived + decayResult.examplesArchived + decayResult.notesExpired + decayResult.examplesExpired;
+            if (totalDecayArchived > 0 && this._verbose) {
+                LogStatus(`Memory Manager: Decay archival — ${decayResult.notesArchived} notes, ${decayResult.examplesArchived} examples, ${decayResult.notesExpired} expired notes, ${decayResult.examplesExpired} expired examples`);
+            }
+            await this.FinalizeRunStep(decayStep, true, {
+                notesArchived: decayResult.notesArchived,
+                examplesArchived: decayResult.examplesArchived,
+                notesExpired: decayResult.notesExpired,
+                examplesExpired: decayResult.examplesExpired
+            });
+        } catch (error) {
+            LogError('Memory Manager: Decay-based archival failed:', error);
+            await this.FinalizeRunStep(decayStep, false, undefined, undefined, error instanceof Error ? error.message : String(error));
+        }
     }
 
     /** Build a human-readable summary string from maintenance phase results. */
@@ -2642,7 +2919,7 @@ export class MemoryManagerAgent extends BaseAgent {
                 example.Status = 'Active'; // Auto-approve high-confidence examples
                 example.SourceConversationID = extracted.sourceConversationId || null;
                 // Only use if it's a valid UUID
-                example.SourceConversationDetailID = MemoryManagerAgent.IsValidUUID(extracted.sourceConversationDetailId) ? extracted.sourceConversationDetailId! : null;
+                example.SourceConversationDetailID = MemoryManagerAgent.isValidUUID(extracted.sourceConversationDetailId) ? extracted.sourceConversationDetailId! : null;
                 example.SourceAIAgentRunID = extracted.sourceAgentRunId || null;
 
                 // Apply scope from source agent run based on scopeLevel hint
@@ -2777,16 +3054,17 @@ export class MemoryManagerAgent extends BaseAgent {
                     LogStatus(`Memory Manager: Extracted ${extractedNotes.length} potential notes`);
                 }
 
-                // Convert conversations back to flat details for example extraction
-                const conversationDetails = conversations.flatMap(conv =>
+                // Convert conversations back to flat details for example extraction.
+                // ExtractExamples accepts a ConversationDetailProjection, so we only
+                // need the fields it reads — no entity cast.
+                const conversationDetails: ConversationDetailProjection[] = conversations.flatMap(conv =>
                     conv.messages.map(msg => ({
                         ID: msg.id,
                         ConversationID: conv.conversationId,
                         Role: msg.role,
                         Message: msg.message,
-                        Status: 'Complete',
                         __mj_CreatedAt: msg.createdAt
-                    } as unknown as MJConversationDetailEntity))
+                    }))
                 );
                 const extractedExamples = await this.ExtractExamples(conversationDetails, params.contextUser!);
                 if (this._verbose) {
@@ -2820,7 +3098,7 @@ export class MemoryManagerAgent extends BaseAgent {
                             }
                         }
                     }
-                    if (example.agentId && !MemoryManagerAgent.IsValidUUID(example.agentId)) {
+                    if (example.agentId && !MemoryManagerAgent.isValidUUID(example.agentId)) {
                         if (this._verbose) {
                             LogStatus(`Memory Manager: Clearing invalid agentId "${example.agentId}" from example`);
                         }
