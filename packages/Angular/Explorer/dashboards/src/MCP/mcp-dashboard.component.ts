@@ -10,9 +10,8 @@
  */
 
 import { Component, OnDestroy, ChangeDetectorRef, AfterViewInit, OnInit } from '@angular/core';
-import { Router, NavigationEnd, ActivatedRoute } from '@angular/router';
 import { Subject, BehaviorSubject, Subscription } from 'rxjs';
-import { takeUntil, debounceTime, distinctUntilChanged, filter } from 'rxjs/operators';
+import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { RunView, Metadata, CompositeKey } from '@memberjunction/core';
 import { BaseDashboard, NavigationService } from '@memberjunction/ng-shared';
 import {
@@ -269,10 +268,6 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
     public ServerGroups: MCPServerGroup[] = [];
     public ExpandedToolId: string | null = null;
 
-    // Navigation state
-    private skipUrlUpdate = true;
-    private lastNavigatedUrl: string = '';
-
     // Sync state
     public SyncStates = new Map<string, MCPSyncState>();
     private syncSubscriptions = new Map<string, Subscription>();
@@ -284,13 +279,10 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
     // Lifecycle
     // ========================================
 
-    private destroy$ = new Subject<void>();
+    protected override destroy$ = new Subject<void>();
 
     constructor(
         private cdr: ChangeDetectorRef,
-        private router: Router,
-        private route: ActivatedRoute,
-        private navigationService: NavigationService,
         private mcpToolsService: MCPToolsService
     ) {
         super();
@@ -313,46 +305,26 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         // Load saved user preferences first
         this.loadUserPreferences();
 
-        // Parse initial URL state
-        this.parseAndApplyUrlState();
+        // Read initial tab from query params (deep link / direct URL)
+        const initialParams = this.GetQueryParams();
+        if (initialParams['tab'] && this.isValidTab(initialParams['tab'])) {
+            this.ActiveTab = initialParams['tab'] as MCPDashboardTab;
+        }
 
         // Apply configuration params if passed via NavigationService
         this.applyConfigurationParams();
-
-        // Enable URL updates after initialization
-        this.skipUrlUpdate = false;
-
-        // Subscribe to router events to handle browser back/forward
-        this.subscribeToRouterEvents();
     }
 
     /**
-     * Parses the current URL query string and applies the tab state
+     * Called by the framework when the URL query params change due to
+     * browser back/forward navigation or a deep link.
      */
-    private parseAndApplyUrlState(): void {
-        const urlState = this.parseUrlState();
-        if (urlState?.tab) {
-            this.ActiveTab = urlState.tab;
+    protected override OnQueryParamsChanged(params: Record<string, string>, source: 'popstate' | 'deeplink'): void {
+        const tab = params['tab'] as MCPDashboardTab | undefined;
+        if (tab && this.isValidTab(tab) && tab !== this.ActiveTab) {
+            this.ActiveTab = tab;
+            this.cdr.detectChanges();
         }
-        this.lastNavigatedUrl = this.router.url;
-    }
-
-    /**
-     * Parses URL query string to extract navigation state
-     */
-    private parseUrlState(): { tab?: MCPDashboardTab } | null {
-        const url = this.router.url;
-        const queryIndex = url.indexOf('?');
-        if (queryIndex === -1) return null;
-
-        const queryString = url.substring(queryIndex + 1);
-        const params = new URLSearchParams(queryString);
-        const tab = params.get('tab') as MCPDashboardTab | null;
-
-        if (tab && this.isValidTab(tab)) {
-            return { tab };
-        }
-        return null;
     }
 
     /**
@@ -370,23 +342,6 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         if (config?.tab && this.isValidTab(config.tab as string)) {
             this.ActiveTab = config.tab as MCPDashboardTab;
         }
-    }
-
-    /**
-     * Subscribes to router NavigationEnd events to handle browser back/forward
-     */
-    private subscribeToRouterEvents(): void {
-        this.router.events
-            .pipe(
-                filter((event): event is NavigationEnd => event instanceof NavigationEnd),
-                takeUntil(this.destroy$)
-            )
-            .subscribe(event => {
-                const currentUrl = event.urlAfterRedirects || event.url;
-                if (currentUrl !== this.lastNavigatedUrl) {
-                    this.onExternalNavigation(currentUrl);
-                }
-            });
     }
 
     // ========================================
@@ -483,40 +438,6 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         } catch (error) {
             console.warn('[MCPDashboard] Failed to persist user preferences:', error);
         }
-    }
-
-    /**
-     * Handles external navigation (browser back/forward)
-     */
-    private onExternalNavigation(url: string): void {
-        this.lastNavigatedUrl = url;
-        const queryIndex = url.indexOf('?');
-        if (queryIndex === -1) return;
-
-        const queryString = url.substring(queryIndex + 1);
-        const params = new URLSearchParams(queryString);
-        const tab = params.get('tab') as MCPDashboardTab | null;
-
-        if (tab && this.isValidTab(tab) && tab !== this.ActiveTab) {
-            this.skipUrlUpdate = true;
-            this.ActiveTab = tab;
-            this.cdr.detectChanges();
-            this.skipUrlUpdate = false;
-        }
-    }
-
-    /**
-     * Updates URL query string to reflect current state using NavigationService
-     */
-    private updateUrl(): void {
-        if (this.skipUrlUpdate) return;
-
-        const queryParams: Record<string, string | null> = {
-            tab: this.ActiveTab
-        };
-
-        this.navigationService.UpdateActiveTabQueryParams(queryParams);
-        this.lastNavigatedUrl = this.router.url;
     }
 
     // Required by BaseResourceComponent
@@ -904,7 +825,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         if (this.ActiveTab === tab) return;
 
         this.ActiveTab = tab;
-        this.updateUrl();
+        this.UpdateQueryParams({ tab: this.ActiveTab });
         this.cdr.detectChanges();
     }
 
@@ -1492,7 +1413,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
      * Checks for OAuth completion by looking for query params set by the OAuth callback
      */
     private checkOAuthCompletion(): void {
-        const params = this.route.snapshot.queryParams;
+        const params = this.GetQueryParams();
 
         if (params['oauth'] === 'success') {
             // OAuth completed successfully
@@ -1502,32 +1423,21 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
             // Show success notification
             this.showSuccessNotification('OAuth authorization completed successfully');
 
-            // Clear the query params without triggering a full navigation
-            this.router.navigate([], {
-                relativeTo: this.route,
-                queryParams: {},
-                queryParamsHandling: 'merge',
-                replaceUrl: true
-            });
+            // Clear the OAuth query params, preserving the tab param
+            this.UpdateQueryParams({ oauth: null, connectionId: null, error: null, error_description: null });
 
             // Refresh data to pick up new OAuth state
             this.loadAllData(true);
         } else if (params['oauth'] === 'error') {
             // OAuth failed
-            const errorCode = params['error'] || 'unknown_error';
             const errorMessage = params['error_description'] || 'Authorization failed';
-            console.error(`[MCPDashboard] OAuth authorization failed: ${errorCode} - ${errorMessage}`);
+            console.error(`[MCPDashboard] OAuth authorization failed: ${params['error'] ?? 'unknown_error'} - ${errorMessage}`);
 
             // Show error message
             this.ErrorMessage = `OAuth authorization failed: ${errorMessage}`;
 
-            // Clear the query params
-            this.router.navigate([], {
-                relativeTo: this.route,
-                queryParams: {},
-                queryParamsHandling: 'merge',
-                replaceUrl: true
-            });
+            // Clear the OAuth query params
+            this.UpdateQueryParams({ oauth: null, connectionId: null, error: null, error_description: null });
         }
     }
 
