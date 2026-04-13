@@ -1,6 +1,6 @@
 /**
  * Tests for entity-level cache control: AllowCaching flag,
- * per-entity cap eviction, TTL sweep, and config defaults.
+ * per-entity memory limit eviction, TTL sweep, and config defaults.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -50,19 +50,19 @@ describe('LocalCacheManager Cache Control', () => {
             expect(config.maxEntries).toBe(5000);
             expect(config.defaultTTLMs).toBe(0);
             expect(config.evictionPolicy).toBe('lru');
-            expect(config.maxEntriesPerEntity).toBe(50);
+            expect(config.maxPercentOfCachePerEntity).toBe(50);
             expect(config.evictionSweepIntervalMs).toBe(300000);
             expect(config.verboseLogging).toBe(false);
         });
 
         it('should merge partial config overrides with defaults', async () => {
             await cacheManager.Initialize(mockStorage, {
-                maxEntriesPerEntity: 10,
+                maxPercentOfCachePerEntity: 25,
                 verboseLogging: true,
             });
 
             const config = cacheManager.Config;
-            expect(config.maxEntriesPerEntity).toBe(10);
+            expect(config.maxPercentOfCachePerEntity).toBe(25);
             expect(config.verboseLogging).toBe(true);
             // Defaults preserved
             expect(config.maxEntries).toBe(5000);
@@ -71,9 +71,9 @@ describe('LocalCacheManager Cache Control', () => {
 
         it('should allow runtime config updates via UpdateConfig', async () => {
             await cacheManager.Initialize(mockStorage);
-            cacheManager.UpdateConfig({ maxEntriesPerEntity: 25 });
+            cacheManager.UpdateConfig({ maxPercentOfCachePerEntity: 30 });
 
-            expect(cacheManager.Config.maxEntriesPerEntity).toBe(25);
+            expect(cacheManager.Config.maxPercentOfCachePerEntity).toBe(30);
             // Other settings unchanged
             expect(cacheManager.Config.maxEntries).toBe(5000);
         });
@@ -147,7 +147,7 @@ describe('LocalCacheManager Cache Control', () => {
             expect((cached!.results[0] as Record<string, unknown>).Name).toBe('Updated');
         });
 
-        it('should process events normally when AllowCaching is undefined (default)', async () => {
+        it('should short-circuit when AllowCaching is undefined and schema not in enableForSchemas', async () => {
             const entityName = 'DefaultEntity';
             const fp = await setupCacheWithEntity(entityName);
 
@@ -156,9 +156,10 @@ describe('LocalCacheManager Cache Control', () => {
                 baseEntity: {
                     EntityInfo: {
                         Name: entityName,
-                        // AllowCaching not set — defaults to false in EntityInfo,
-                        // but the short-circuit checks for strict `=== false`
+                        // AllowCaching not set — IsCachingEnabledForEntity treats
+                        // falsy AllowCaching + unknown schema as "caching disabled"
                         AllowCaching: undefined,
+                        SchemaName: 'dbo',
                         PrimaryKeys: [{ Name: 'ID' }],
                     },
                     Get: (f: string) => f === 'ID' ? '1' : 'Updated',
@@ -169,14 +170,11 @@ describe('LocalCacheManager Cache Control', () => {
             await (cacheManager as unknown as { HandleBaseEntityEvent: (e: unknown) => Promise<void> })
                 .HandleBaseEntityEvent(event);
 
-            // With AllowCaching undefined, the `=== false` check should NOT short-circuit,
-            // but the entity won't have fingerprints since AllowCaching default is false
-            // and the cache check in ProviderBase would have skipped caching.
-            // For this test we manually cached, so we verify the short-circuit behavior:
-            // undefined !== false, so it proceeds to fingerprint scan.
+            // AllowCaching is falsy and SchemaName 'dbo' is not in enableForSchemas,
+            // so the event is short-circuited and the cache is not updated.
             const cached = await cacheManager.GetRunViewResult(fp);
             expect(cached).not.toBeNull();
-            expect((cached!.results[0] as Record<string, unknown>).Name).toBe('Updated');
+            expect((cached!.results[0] as Record<string, unknown>).Name).toBe('Test');
         });
     });
 
@@ -273,79 +271,106 @@ describe('LocalCacheManager Cache Control', () => {
     });
 
     // ========================================================================
-    // Per-Entity Cap Eviction
+    // Per-Entity Memory Limit Eviction
     // ========================================================================
 
-    describe('enforcePerEntityCap', () => {
-        it('should evict oldest entries for an entity when over the cap', async () => {
+    describe('enforcePerEntityMemoryLimit', () => {
+        // Helper to create a large payload (~sizeKB kilobytes when JSON-stringified)
+        function makeLargeRows(sizeKB: number): Record<string, unknown>[] {
+            const padding = 'x'.repeat(sizeKB * 512); // ~sizeKB KB after JSON.stringify * 2 bytes
+            return [{ ID: '1', Data: padding }];
+        }
+
+        it('should evict LRU entries when entity exceeds memory percentage', async () => {
+            // 100KB total budget, 50% per entity = 50KB per entity
             await cacheManager.Initialize(mockStorage, {
-                maxEntriesPerEntity: 3,
+                maxSizeBytes: 100 * 1024,
+                maxPercentOfCachePerEntity: 50,
                 maxEntries: 100,
-                maxSizeBytes: 10_000_000,
             });
 
-            // Insert 4 entries for the same entity with distinct fingerprints
-            const fps: string[] = [];
-            for (let i = 0; i < 4; i++) {
-                const fp = `Users|Filter${i}|_|-1|0|_`;
-                fps.push(fp);
-                await cacheManager.SetRunViewResult(
-                    fp,
-                    { EntityName: 'Users', ExtraFilter: `Filter${i}` } as Parameters<typeof cacheManager.SetRunViewResult>[1],
-                    [{ ID: `${i}`, Name: `User ${i}` }],
-                    '2024-01-01T00:00:00Z'
-                );
-            }
+            // Insert ~20KB entry
+            const fp1 = 'BigEntity|A|_|-1|0|_';
+            await cacheManager.SetRunViewResult(
+                fp1,
+                { EntityName: 'BigEntity', ExtraFilter: 'A' } as Parameters<typeof cacheManager.SetRunViewResult>[1],
+                makeLargeRows(20),
+                '2024-01-01T00:00:00Z'
+            );
 
-            // After inserting the 4th, only 3 should remain for 'Users'
-            const remaining = cacheManager.GetFingerprintsForEntity('Users');
-            expect(remaining.size).toBeLessThanOrEqual(3);
+            // Insert another ~20KB entry (total ~40KB, under 50KB limit)
+            const fp2 = 'BigEntity|B|_|-1|0|_';
+            await cacheManager.SetRunViewResult(
+                fp2,
+                { EntityName: 'BigEntity', ExtraFilter: 'B' } as Parameters<typeof cacheManager.SetRunViewResult>[1],
+                makeLargeRows(20),
+                '2024-01-01T00:00:00Z'
+            );
+
+            // Both should exist (under limit)
+            expect(cacheManager.GetFingerprintsForEntity('BigEntity').size).toBe(2);
+
+            // Insert ~30KB entry (total would be ~70KB, over 50KB limit)
+            const fp3 = 'BigEntity|C|_|-1|0|_';
+            await cacheManager.SetRunViewResult(
+                fp3,
+                { EntityName: 'BigEntity', ExtraFilter: 'C' } as Parameters<typeof cacheManager.SetRunViewResult>[1],
+                makeLargeRows(30),
+                '2024-01-01T00:00:00Z'
+            );
+
+            // Should have evicted oldest entries to get under the 50KB limit
+            const remaining = cacheManager.GetFingerprintsForEntity('BigEntity');
+            expect(remaining.size).toBeLessThan(3);
+            // Most recent entry should survive
+            expect(remaining.has(fp3)).toBe(true);
         });
 
-        it('should evict least-recently-accessed entries (LRU)', async () => {
+        it('should evict least-recently-accessed entries first (LRU)', async () => {
             vi.useFakeTimers();
 
+            // 60KB total, 50% per entity = 30KB per entity
             await cacheManager.Initialize(mockStorage, {
-                maxEntriesPerEntity: 2,
+                maxSizeBytes: 60 * 1024,
+                maxPercentOfCachePerEntity: 50,
                 maxEntries: 100,
-                maxSizeBytes: 10_000_000,
             });
 
-            // Insert entry 1 at t=0
+            // Insert ~10KB at t=0
             const fp1 = 'Users|A|_|-1|0|_';
             await cacheManager.SetRunViewResult(
                 fp1,
                 { EntityName: 'Users', ExtraFilter: 'A' } as Parameters<typeof cacheManager.SetRunViewResult>[1],
-                [{ ID: '1' }],
+                makeLargeRows(10),
                 '2024-01-01T00:00:00Z'
             );
 
-            // Insert entry 2 at t=1000 — entry 1 is now LRU
+            // Insert ~10KB at t=1000
             vi.advanceTimersByTime(1000);
             const fp2 = 'Users|B|_|-1|0|_';
             await cacheManager.SetRunViewResult(
                 fp2,
                 { EntityName: 'Users', ExtraFilter: 'B' } as Parameters<typeof cacheManager.SetRunViewResult>[1],
-                [{ ID: '2' }],
+                makeLargeRows(10),
                 '2024-01-01T00:00:00Z'
             );
 
-            // Access entry 1 to make it more recent than entry 2
+            // Access fp1 to make it more recent than fp2
             vi.advanceTimersByTime(1000);
             await cacheManager.GetRunViewResult(fp1);
 
-            // Insert entry 3 at t=3000 — entry 2 should be evicted (LRU)
+            // Insert ~15KB at t=3000 — would push over 30KB limit, fp2 is LRU
             vi.advanceTimersByTime(1000);
             const fp3 = 'Users|C|_|-1|0|_';
             await cacheManager.SetRunViewResult(
                 fp3,
                 { EntityName: 'Users', ExtraFilter: 'C' } as Parameters<typeof cacheManager.SetRunViewResult>[1],
-                [{ ID: '3' }],
+                makeLargeRows(15),
                 '2024-01-01T00:00:00Z'
             );
 
-            // fp1 was accessed most recently, fp3 just added — fp2 should be evicted
             const remaining = cacheManager.GetFingerprintsForEntity('Users');
+            // fp2 should be evicted (LRU), fp1 and fp3 should remain
             expect(remaining.has(fp2)).toBe(false);
             expect(remaining.has(fp1)).toBe(true);
             expect(remaining.has(fp3)).toBe(true);
@@ -354,61 +379,58 @@ describe('LocalCacheManager Cache Control', () => {
         });
 
         it('should not evict entries from other entities', async () => {
+            // 100KB total, 50% per entity = 50KB limit per entity
             await cacheManager.Initialize(mockStorage, {
-                maxEntriesPerEntity: 1,
+                maxSizeBytes: 100 * 1024,
+                maxPercentOfCachePerEntity: 50,
                 maxEntries: 100,
-                maxSizeBytes: 10_000_000,
             });
 
-            // Insert for entity A
+            // Insert ~10KB for entity A
             await cacheManager.SetRunViewResult(
                 'EntityA|_|_|-1|0|_',
                 { EntityName: 'EntityA' } as Parameters<typeof cacheManager.SetRunViewResult>[1],
-                [{ ID: '1' }],
+                makeLargeRows(10),
                 '2024-01-01T00:00:00Z'
             );
 
-            // Insert 2 entries for entity B (cap is 1)
+            // Insert ~30KB + ~30KB for entity B (total ~60KB, over 50KB limit)
             await cacheManager.SetRunViewResult(
                 'EntityB|X|_|-1|0|_',
                 { EntityName: 'EntityB', ExtraFilter: 'X' } as Parameters<typeof cacheManager.SetRunViewResult>[1],
-                [{ ID: '1' }],
+                makeLargeRows(30),
                 '2024-01-01T00:00:00Z'
             );
             await cacheManager.SetRunViewResult(
                 'EntityB|Y|_|-1|0|_',
                 { EntityName: 'EntityB', ExtraFilter: 'Y' } as Parameters<typeof cacheManager.SetRunViewResult>[1],
-                [{ ID: '2' }],
+                makeLargeRows(30),
                 '2024-01-01T00:00:00Z'
             );
 
             // Entity A should be untouched
-            const aFps = cacheManager.GetFingerprintsForEntity('EntityA');
-            expect(aFps.size).toBe(1);
-
-            // Entity B should be capped at 1
-            const bFps = cacheManager.GetFingerprintsForEntity('EntityB');
-            expect(bFps.size).toBeLessThanOrEqual(1);
+            expect(cacheManager.GetFingerprintsForEntity('EntityA').size).toBe(1);
         });
 
-        it('should skip cap enforcement when maxEntriesPerEntity is 0 (unlimited)', async () => {
+        it('should skip enforcement when maxPercentOfCachePerEntity is 0 (disabled)', async () => {
             await cacheManager.Initialize(mockStorage, {
-                maxEntriesPerEntity: 0,
+                maxSizeBytes: 10_000_000, // 10MB — large enough that global eviction won't interfere
+                maxPercentOfCachePerEntity: 0, // disabled
                 maxEntries: 100,
-                maxSizeBytes: 10_000_000,
             });
 
-            for (let i = 0; i < 10; i++) {
+            // Insert several entries — without per-entity limits, all should survive
+            for (let i = 0; i < 5; i++) {
                 await cacheManager.SetRunViewResult(
                     `Users|F${i}|_|-1|0|_`,
                     { EntityName: 'Users', ExtraFilter: `F${i}` } as Parameters<typeof cacheManager.SetRunViewResult>[1],
-                    [{ ID: `${i}` }],
+                    makeLargeRows(3),
                     '2024-01-01T00:00:00Z'
                 );
             }
 
-            // All 10 should remain — cap is disabled
-            expect(cacheManager.GetFingerprintsForEntity('Users').size).toBe(10);
+            // All 5 should remain — per-entity limit is disabled
+            expect(cacheManager.GetFingerprintsForEntity('Users').size).toBe(5);
         });
     });
 

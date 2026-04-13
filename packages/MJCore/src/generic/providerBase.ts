@@ -2086,9 +2086,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         const entity = this.EntityByName(params.EntityName);
         if (!entity) return true; // Entity not found — allow caching (will fail later anyway)
 
-        // If caching is disabled for this entity at the metadata level, skip all cache
-        // operations — no PreRunView check, no auto-cache storage, no fingerprint scans.
-        if (!entity.AllowCaching) return false;
+        // If caching is disabled for this entity (neither the per-entity flag nor the
+        // schema-level config enables it), skip all cache operations.
+        if (!LocalCacheManager.Instance.IsCachingEnabledForEntity(entity)) return false;
 
         // Always exempt Record Changes — rows are created via spCreateRecordChange_Internal
         // inside save SQL batches, never through BaseEntity.Save(), so the cache is never

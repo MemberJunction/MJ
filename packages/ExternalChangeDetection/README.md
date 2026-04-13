@@ -206,13 +206,32 @@ The eligible entities are determined by the database view `vwEntitiesWithExterna
 
 External change detection is **opt-in by default** (`DetectExternalChanges = 0`). Most entities — especially `__mj` schema metadata tables — are managed exclusively by SQL migrations and CodeGen. Scanning them produces false positives because their records are intentionally created outside the MJ `Save()` flow.
 
-To enable external change detection for specific entities:
+To enable external change detection for specific entities, create a metadata JSON file in `metadata/entities/` and push it with `mj sync`. For example, create `metadata/entities/.external-change-detection.json`:
 
-```sql
-UPDATE __mj.Entity
-SET DetectExternalChanges = 1
-WHERE Name IN ('Contacts', 'Companies', 'Invoices');
+```json
+[
+  {
+    "fields": { "Name": "Contacts", "DetectExternalChanges": true },
+    "primaryKey": { "ID": "@lookup:MJ: Entities.Name=Contacts" }
+  },
+  {
+    "fields": { "Name": "Companies", "DetectExternalChanges": true },
+    "primaryKey": { "ID": "@lookup:MJ: Entities.Name=Companies" }
+  },
+  {
+    "fields": { "Name": "Invoices", "DetectExternalChanges": true },
+    "primaryKey": { "ID": "@lookup:MJ: Entities.Name=Invoices" }
+  }
+]
 ```
+
+Then push from the repository root:
+
+```bash
+npx mj sync push --dir=metadata --include="entities"
+```
+
+Alternatively, you can toggle `DetectExternalChanges` directly in the Entity form within MJ Explorer.
 
 ### Good Candidates
 

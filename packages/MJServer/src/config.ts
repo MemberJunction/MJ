@@ -195,14 +195,20 @@ const serverExtensionSchema = z.object({
 const cacheSettingsSchema = z.object({
   /** Maximum total estimated memory for all cached results in MB. Default: 150. Set to 0 to disable memory-based eviction. */
   maxMemoryMB: z.number().optional().default(150),
-  /** Maximum cached entries per entity. Default: 50. Set to 0 for unlimited. */
-  maxEntriesPerEntity: z.number().optional().default(50),
+  /** Maximum percentage of total cache memory that any single entity can occupy. Default: 50. Set to 0 to disable. */
+  maxPercentOfCachePerEntity: z.number().optional().default(50),
   /** Default TTL in seconds. 0 = no TTL, rely on event-based invalidation. Default: 0. */
   defaultTTLSeconds: z.number().optional().default(0),
   /** Interval in seconds for periodic eviction sweep. 0 = disabled. Default: 300 (5 minutes). */
   evictionSweepIntervalSeconds: z.number().optional().default(300),
   /** Enable verbose cache logging (hits, misses, evictions). Default: false. */
   verboseLogging: z.boolean().optional().default(false),
+  /**
+   * Schema names for which caching is automatically enabled at runtime, regardless of
+   * the per-entity AllowCaching column. Entities in these schemas are treated as cacheable
+   * without requiring individual metadata flags. Default: ['__mj'] (core metadata).
+   */
+  enableForSchemas: z.array(z.string()).optional().default(['__mj']),
 });
 
 const configInfoSchema = z.object({
@@ -396,10 +402,11 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
   // Cache settings defaults
   cacheSettings: {
     maxMemoryMB: 150,
-    maxEntriesPerEntity: 50,
+    maxPercentOfCachePerEntity: 50,
     defaultTTLSeconds: 0,
     evictionSweepIntervalSeconds: 300,
     verboseLogging: false,
+    enableForSchemas: ['__mj'],
   },
 
   // Auth providers (environment-driven)

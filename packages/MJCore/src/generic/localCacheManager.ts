@@ -118,11 +118,11 @@ export interface LocalCacheManagerConfig {
     /** Eviction policy when cache is full */
     evictionPolicy: 'lru' | 'lfu' | 'fifo';
     /**
-     * Maximum number of cached query fingerprints per entity.
-     * Prevents a single entity from dominating the cache.
-     * Default: 50. Set to 0 for unlimited.
+     * Maximum percentage of total cache memory (maxSizeBytes) that any single
+     * entity's cached results can occupy. When exceeded, the least-recently-accessed
+     * entries for that entity are evicted. Default: 50. Set to 0 to disable.
      */
-    maxEntriesPerEntity: number;
+    maxPercentOfCachePerEntity: number;
     /**
      * Interval in milliseconds for the periodic eviction sweep.
      * Catches entries that should have been evicted (TTL expired) but weren't
@@ -135,6 +135,13 @@ export interface LocalCacheManagerConfig {
      * Default: false.
      */
     verboseLogging: boolean;
+    /**
+     * Schema names for which caching is automatically enabled at runtime,
+     * regardless of the per-entity AllowCaching column. Entities in these
+     * schemas are treated as cacheable without individual metadata flags.
+     * Default: ['__mj'] (core metadata).
+     */
+    enableForSchemas: string[];
 }
 
 // ============================================================================
@@ -147,9 +154,10 @@ const DEFAULT_CONFIG: LocalCacheManagerConfig = {
     maxEntries: 5000,
     defaultTTLMs: 0, // No TTL — event-based invalidation is the primary mechanism
     evictionPolicy: 'lru',
-    maxEntriesPerEntity: 50,
+    maxPercentOfCachePerEntity: 50,
     evictionSweepIntervalMs: 300000, // 5 minutes
     verboseLogging: false,
+    enableForSchemas: ['__mj'],
 };
 
 // ============================================================================
@@ -385,6 +393,19 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     }
 
     /**
+     * Checks whether caching is enabled for a given entity. Returns true if either:
+     * 1. The entity's AllowCaching metadata flag is true, OR
+     * 2. The entity's schema is in the config's enableForSchemas list
+     *
+     * Use this instead of checking entity.AllowCaching directly.
+     */
+    public IsCachingEnabledForEntity(entityInfo: { AllowCaching: boolean; SchemaName: string }): boolean {
+        if (entityInfo.AllowCaching) return true;
+        const schemas = this._config.enableForSchemas;
+        return schemas.length > 0 && schemas.includes(entityInfo.SchemaName);
+    }
+
+    /**
      * Replaces the storage provider after initialization. This is needed when
      * the initial provider (e.g., in-memory) needs to be swapped for a
      * persistent provider (e.g., Redis) that becomes available later.
@@ -541,7 +562,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         const entityName = baseEntity.EntityInfo.Name;
 
         // Short-circuit: if caching is disabled for this entity, skip the fingerprint scan
-        if (baseEntity.EntityInfo.AllowCaching === false) return;
+        if (!this.IsCachingEnabledForEntity(baseEntity.EntityInfo)) return;
 
         const fingerprints = this._entityFingerprintIndex.get(entityName);
         if (!fingerprints || fingerprints.size === 0) return;
@@ -588,7 +609,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         // Short-circuit: if caching is disabled for this entity, skip processing
         const md = new Metadata();
         const entityInfo = md.EntityByName(entityName);
-        if (entityInfo && !entityInfo.AllowCaching) return;
+        if (entityInfo && !this.IsCachingEnabledForEntity(entityInfo)) return;
 
         const fingerprints = this._entityFingerprintIndex.get(entityName);
         if (!fingerprints || fingerprints.size === 0) return;
@@ -1127,9 +1148,9 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         const value = JSON.stringify(data);
         const sizeBytes = this.estimateSize(value);
 
-        // Per-entity entry cap: evict oldest entries for this entity if at limit
+        // Per-entity memory limit: evict oldest entries for this entity if over budget
         const entityName = params.EntityName || 'Unknown';
-        await this.enforcePerEntityCap(entityName);
+        await this.enforcePerEntityMemoryLimit(entityName, sizeBytes);
 
         // Check if we need to evict entries (global budget)
         await this.evictIfNeeded(sizeBytes);
@@ -2045,38 +2066,51 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     }
 
     /**
-     * Enforces the per-entity entry cap. When an entity has more cached entries
-     * than maxEntriesPerEntity, evicts the least-recently-accessed entries for
-     * that entity until under the cap.
+     * Returns the memory limit in bytes for a given entity based on
+     * maxPercentOfCachePerEntity. Returns 0 if no limit applies.
      */
-    private async enforcePerEntityCap(entityName: string): Promise<void> {
-        const cap = this._config.maxEntriesPerEntity;
-        if (cap <= 0 || !this._storageProvider) return; // 0 = unlimited
+    private getEntityMemoryLimitBytes(): number {
+        const pct = this._config.maxPercentOfCachePerEntity;
+        if (pct <= 0) return 0;
+        return Math.floor(this._config.maxSizeBytes * pct / 100);
+    }
+
+    /**
+     * Enforces per-entity memory limits. When an entity's total cached bytes
+     * (including the incoming entry) would exceed its limit, evicts the
+     * least-recently-accessed entries for that entity until under the limit.
+     * @param incomingSizeBytes - estimated size of the entry about to be stored
+     */
+    private async enforcePerEntityMemoryLimit(entityName: string, incomingSizeBytes: number): Promise<void> {
+        const limitBytes = this.getEntityMemoryLimitBytes();
+        if (limitBytes <= 0 || !this._storageProvider) return;
 
         const fingerprints = this._entityFingerprintIndex.get(entityName);
-        if (!fingerprints || fingerprints.size < cap) return;
+        if (!fingerprints || fingerprints.size === 0) return;
 
-        // Sort entries for this entity by lastAccessedAt ascending (LRU)
+        // Sum up total bytes for this entity, including the incoming entry
         const entries = [...fingerprints]
             .map(fp => this._registry.get(fp))
-            .filter((e): e is CacheEntryInfo => !!e)
-            .sort((a, b) => a.lastAccessedAt - b.lastAccessedAt);
+            .filter((e): e is CacheEntryInfo => !!e);
 
-        // Evict enough to leave room for the incoming entry:
-        // after eviction we want (cap - 1) entries, so the new one lands at exactly cap.
-        const toEvict = entries.length - cap + 1;
-        if (toEvict <= 0) return;
+        const totalBytes = entries.reduce((sum, e) => sum + e.sizeBytes, 0) + incomingSizeBytes;
+        if (totalBytes <= limitBytes) return;
 
+        // Sort by lastAccessedAt ascending (LRU first)
+        entries.sort((a, b) => a.lastAccessedAt - b.lastAccessedAt);
+
+        let bytesToFree = totalBytes - limitBytes;
         if (this._config.verboseLogging) {
-            LogStatusEx({ message: `    🗑️ [Cache PER-ENTITY EVICT] Entity "${entityName}" has ${entries.length} entries (cap: ${cap}), evicting ${toEvict} oldest`, verboseOnly: true });
+            LogStatusEx({ message: `    🗑️ [Cache PER-ENTITY EVICT] Entity "${entityName}" using ${(totalBytes / 1024 / 1024).toFixed(1)}MB (limit: ${(limitBytes / 1024 / 1024).toFixed(1)}MB), evicting LRU entries`, verboseOnly: true });
         }
 
-        for (let i = 0; i < toEvict && i < entries.length; i++) {
-            const entry = entries[i];
+        for (const entry of entries) {
+            if (bytesToFree <= 0) break;
             try {
                 const category = this.getCategoryForType(entry.type);
                 await this._storageProvider.Remove(entry.key, category);
                 this.removeFromEntityIndex(entry.key);
+                bytesToFree -= entry.sizeBytes;
                 this._registry.delete(entry.key);
             } catch {
                 // Continue evicting

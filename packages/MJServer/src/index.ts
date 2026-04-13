@@ -455,16 +455,18 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     const cs = configInfo.cacheSettings;
     const cacheConfig = {
       maxSizeBytes: (cs.maxMemoryMB ?? 150) * 1024 * 1024,
-      maxEntriesPerEntity: cs.maxEntriesPerEntity ?? 50,
+      maxPercentOfCachePerEntity: cs.maxPercentOfCachePerEntity ?? 50,
       defaultTTLMs: (cs.defaultTTLSeconds ?? 0) * 1000,
       evictionSweepIntervalMs: (cs.evictionSweepIntervalSeconds ?? 300) * 1000,
       verboseLogging: cs.verboseLogging ?? false,
+      enableForSchemas: cs.enableForSchemas ?? ['__mj'],
     };
     await LocalCacheManager.Instance.Initialize(Metadata.Provider.LocalStorageProvider, cacheConfig);
     console.log('LocalCacheManager initialized with cache config:', JSON.stringify({
       maxMemoryMB: cs.maxMemoryMB ?? 150,
-      maxEntriesPerEntity: cs.maxEntriesPerEntity ?? 50,
+      maxPercentOfCachePerEntity: cs.maxPercentOfCachePerEntity ?? 50,
       evictionSweepIntervalSeconds: cs.evictionSweepIntervalSeconds ?? 300,
+      enableForSchemas: cacheConfig.enableForSchemas,
     }));
   }
 
