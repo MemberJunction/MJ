@@ -2731,7 +2731,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     const accessibleViews = UserViewEngine.Instance.GetAccessibleViewsForEntity(entity.ID);
     console.log('[DataExplorer] restoreViewFromUrl: accessible views count=', accessibleViews.length);
 
-    const view = accessibleViews.find(v => v.ID === viewId) || null;
+    const view = accessibleViews.find(v => UUIDsEqual(v.ID, viewId)) || null;
 
     if (view) {
       console.log('[DataExplorer] restoreViewFromUrl: found view:', view.Name, 'WhereClause:', view.WhereClause, 'SmartFilter:', view.SmartFilterPrompt);

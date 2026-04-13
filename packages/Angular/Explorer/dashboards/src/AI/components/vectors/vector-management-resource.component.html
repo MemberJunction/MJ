@@ -397,7 +397,7 @@
                     <i class="fa-solid fa-chevron-down entity-picker-arrow"></i>
                   </button>
                   @if (ShowEntityPicker) {
-                    <div class="entity-picker-dropdown">
+                    <div class="entity-picker-dropdown" (mousedown)="$event.stopPropagation()">
                       <div class="entity-picker-search">
                         <i class="fa-solid fa-search"></i>
                         <input #entitySearchInput

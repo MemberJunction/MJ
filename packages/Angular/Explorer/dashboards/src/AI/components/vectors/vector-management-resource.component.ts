@@ -16,7 +16,6 @@ import {
     MJEntityDocumentEntity,
     MJVectorDatabaseEntity,
     MJVectorIndexEntity,
-    MJEntityRecordDocumentEntity,
     MJAIModelEntity,
     MJTemplateEntity,
     MJTemplateContentEntity,
@@ -476,14 +475,17 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
     /** Whether the entity picker dropdown is open */
     public ShowEntityPicker = false;
     public SelectedEntityIndex = -1;
+    /** Reference to the entity search input for programmatic focus */
     @ViewChild('entitySearchInput') entitySearchInput?: ElementRef<HTMLInputElement>;
 
     // --- Raw entity data (private) ---
     private entityDocuments: MJEntityDocumentEntity[] = [];
     protected vectorDatabases: MJVectorDatabaseEntity[] = [];
     private vectorIndexes: MJVectorIndexEntity[] = [];
-    private recordDocuments: MJEntityRecordDocumentEntity[] = [];
     private aiModels: MJAIModelEntity[] = [];
+
+    /** Lightweight aggregate stats per EntityDocumentID — avoids loading all record documents */
+    private erdStats: Map<string, { vectorCount: number; lastSynced: Date | null }> = new Map();
 
     // ================================================================
     // Lifecycle
@@ -1014,27 +1016,40 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         this.vectorDatabases = AIEngineBase.Instance.VectorDatabases;
         this.vectorIndexes = engine.VectorIndexes;
 
-        // Entity Record Documents and AI Models are not cached in the engine —
-        // record documents are high-volume instance data, and AI models are loaded
-        // from a different domain. Fetch them via RunView.
+        // Build per-EntityDocument aggregate stats (vector count + last synced).
+        // Each query fetches only the most recent row (MaxRows: 1) and uses
+        // TotalRowCount for the actual vector count — avoids loading all rows.
+        // AI Models come from a different domain — fetched in the same batch.
         const rv = new RunView();
-        const [erdResult, modelsResult] = await rv.RunViews([
-            {
-                EntityName: 'MJ: Entity Record Documents',
-                ExtraFilter: '',
-                Fields: ['ID', 'EntityDocumentID', 'VectorID', 'EntityDocument', 'Entity', '__mj_UpdatedAt'],
-                ResultType: 'simple'
-            },
-            {
-                EntityName: 'MJ: AI Models',
-                ExtraFilter: '',
-                ResultType: 'entity_object'
-            }
-        ]);
+        const erdQueries = this.entityDocuments.map(doc => ({
+            EntityName: 'MJ: Entity Record Documents',
+            ExtraFilter: `EntityDocumentID='${doc.ID}' AND VectorID IS NOT NULL`,
+            ResultType: 'simple' as const,
+            Fields: ['__mj_UpdatedAt'],
+            OrderBy: '__mj_UpdatedAt DESC',
+            MaxRows: 1,
+        }));
+        const allQueries = [
+            ...erdQueries,
+            { EntityName: 'MJ: AI Models', ExtraFilter: '', ResultType: 'entity_object' as const }
+        ];
+        const allResults = await rv.RunViews(allQueries);
 
-        if (erdResult.Success) {
-            this.recordDocuments = erdResult.Results as MJEntityRecordDocumentEntity[];
+        // Map results back to erdStats
+        this.erdStats.clear();
+        for (let i = 0; i < this.entityDocuments.length; i++) {
+            const result = allResults[i];
+            if (result.Success) {
+                const rows = result.Results as { __mj_UpdatedAt: string }[];
+                const lastDate = rows.length > 0 ? new Date(rows[0].__mj_UpdatedAt) : null;
+                this.erdStats.set(this.entityDocuments[i].ID, {
+                    vectorCount: result.TotalRowCount,
+                    lastSynced: lastDate,
+                });
+            }
         }
+
+        const modelsResult = allResults[allResults.length - 1];
         if (modelsResult.Success) {
             this.aiModels = modelsResult.Results as MJAIModelEntity[];
         }
@@ -1042,12 +1057,10 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
 
     private buildSyncRows(): void {
         this.SyncRows = this.entityDocuments.map(doc => {
-            const docsForEntity = this.recordDocuments.filter(
-                rd => UUIDsEqual(rd.EntityDocumentID, doc.ID)
-            );
-            const vectorCount = docsForEntity.filter(rd => rd.VectorID != null).length;
-            const lastSynced = this.computeLastSynced(docsForEntity);
-            const status = this.computeSyncStatus(doc, vectorCount, docsForEntity.length);
+            const stats = this.erdStats.get(doc.ID);
+            const vectorCount = stats?.vectorCount ?? 0;
+            const lastSynced = stats?.lastSynced ?? null;
+            const status = this.computeSyncStatus(doc, vectorCount);
 
             // Preserve progress info from any active sync
             const existingRow = this.SyncRows.find(r => UUIDsEqual(r.EntityDocumentID, doc.ID));
@@ -1064,19 +1077,9 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         });
     }
 
-    private computeLastSynced(records: MJEntityRecordDocumentEntity[]): Date | null {
-        if (records.length === 0) return null;
-        const dates = records
-            .map(r => new Date(r.__mj_UpdatedAt))
-            .filter(d => !isNaN(d.getTime()));
-        if (dates.length === 0) return null;
-        return new Date(Math.max(...dates.map(d => d.getTime())));
-    }
-
     private computeSyncStatus(
         doc: MJEntityDocumentEntity,
-        vectorCount: number,
-        totalRecords: number
+        vectorCount: number
     ): 'Synced' | 'Syncing' | 'Error' | 'Pending' {
         if (this.SyncingIds.has(doc.ID)) {
             return 'Syncing';
@@ -1084,31 +1087,30 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         if (doc.Status === 'Inactive') {
             return 'Pending';
         }
-        if (totalRecords === 0) {
-            return 'Pending';
-        }
-        // If there are any vectors, consider it synced — partial syncs
-        // still represent a successful state since the pipeline ran
         if (vectorCount > 0) {
             return 'Synced';
         }
-        return 'Synced';
+        return 'Pending';
     }
 
     private buildKPICards(): void {
-        this.TotalVectors = this.recordDocuments.filter(rd => rd.VectorID != null).length;
+        let totalVectors = 0;
+        let latestSync: Date | null = null;
+        for (const stats of this.erdStats.values()) {
+            totalVectors += stats.vectorCount;
+            if (stats.lastSynced && (!latestSync || stats.lastSynced > latestSync)) {
+                latestSync = stats.lastSynced;
+            }
+        }
+        this.TotalVectors = totalVectors;
+
         const entitiesSynced = new Set(
             this.entityDocuments
                 .filter(d => d.Status === 'Active')
                 .map(d => d.EntityID)
         ).size;
 
-        const allDates = this.recordDocuments
-            .map(r => new Date(r.__mj_UpdatedAt))
-            .filter(d => !isNaN(d.getTime()));
-        const lastSyncDate = allDates.length > 0
-            ? new Date(Math.max(...allDates.map(d => d.getTime())))
-            : null;
+        const lastSyncDate = latestSync;
 
         this.KPICards = [
             {
@@ -1156,7 +1158,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
             const db = this.vectorDatabases[0];
             this.VectorDBName = db.Name;
             // Determine health based on whether we have records with vectors
-            const hasVectors = this.recordDocuments.some(rd => rd.VectorID != null);
+            const hasVectors = this.TotalVectors > 0;
             this.VectorDBStatus = hasVectors ? 'Healthy' : 'Degraded';
         } else {
             this.VectorDBName = 'Not configured';
@@ -1178,10 +1180,9 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
     }
 
     private buildStorageUsage(): void {
-        // Estimate storage as a ratio of vectorized records vs total record documents
-        const total = this.recordDocuments.length;
-        const vectorized = this.recordDocuments.filter(rd => rd.VectorID != null).length;
-        this.StorageUsagePercent = total > 0 ? Math.round((vectorized / total) * 100) : 0;
+        // All records in erdStats already have vectors (query filters VectorID IS NOT NULL),
+        // so coverage is 100% if any exist.
+        this.StorageUsagePercent = this.TotalVectors > 0 ? 100 : 0;
     }
 
     /** Check if vector DB and embedding model are configured, populate selection lists */
@@ -1362,18 +1363,22 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         if (!row) return;
 
         const rv = new RunView();
-        const result = await rv.RunView<MJEntityRecordDocumentEntity>({
+        const result = await rv.RunView<{ __mj_UpdatedAt: string }>({
             EntityName: 'MJ: Entity Record Documents',
-            ExtraFilter: `EntityDocumentID='${entityDocumentId}'`,
-            ResultType: 'entity_object'
+            ExtraFilter: `EntityDocumentID='${entityDocumentId}' AND VectorID IS NOT NULL`,
+            Fields: ['__mj_UpdatedAt'],
+            OrderBy: '__mj_UpdatedAt DESC',
+            ResultType: 'simple',
+            MaxRows: 1
         });
 
         if (result.Success) {
-            const docs = result.Results;
-            row.VectorCount = docs.filter(d => d.VectorID != null).length;
-            row.LastSynced = this.computeLastSynced(docs);
+            row.VectorCount = result.TotalRowCount;
+            row.LastSynced = result.Results.length > 0 ? new Date(result.Results[0].__mj_UpdatedAt) : null;
             row.Status = row.VectorCount > 0 ? 'Synced' : 'Pending';
             row.PercentComplete = 100;
+            this.erdStats.set(entityDocumentId, { vectorCount: row.VectorCount, lastSynced: row.LastSynced });
+            this.buildKPICards();
             this.cdr.detectChanges();
         }
     }

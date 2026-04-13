@@ -503,13 +503,45 @@ export class SQLParser {
      * falls back to paren-depth scanning if AST fails (e.g., Nunjucks-templated SQL).
      */
     static ExtractCTEs(sql: string, dialect: string = 'TransactSQL'): SQLCTEExtraction | null {
-        const trimmed = sql.trimStart();
-        if (!/^WITH\s/i.test(trimmed)) return null;
+        // Strip leading whitespace + SQL comments (/* */ and --) so that
+        // queries with a descriptive header block are recognized as CTEs.
+        // The AST parser handles comments natively, but when it fails
+        // (e.g. TRY_CAST, Nunjucks templates) the regex fallback needs
+        // the comments gone to see the WITH keyword.
+        const stripped = SQLParser.skipLeadingCommentsAndWhitespace(sql);
+        if (!/^WITH\s/i.test(stripped)) return null;
 
-        const astResult = SQLParser.extractCTEsViaAST(trimmed, dialect);
+        const astResult = SQLParser.extractCTEsViaAST(stripped, dialect);
         if (astResult) return astResult;
 
-        return SQLParser.extractCTEsViaRegex(trimmed);
+        return SQLParser.extractCTEsViaRegex(stripped);
+    }
+
+    /**
+     * Strips leading whitespace AND SQL comments from a string.
+     * Handles block comments and line comments (-- ...).
+     * Returns the remainder starting at the first non-whitespace, non-comment character.
+     */
+    private static skipLeadingCommentsAndWhitespace(sql: string): string {
+        let i = 0;
+        const len = sql.length;
+        while (i < len) {
+            const ch = sql[i];
+            if (ch === ' ' || ch === '\t' || ch === '\n' || ch === '\r') { i++; continue; }
+            if (ch === '/' && i + 1 < len && sql[i + 1] === '*') {
+                i += 2;
+                while (i < len - 1 && !(sql[i] === '*' && sql[i + 1] === '/')) i++;
+                if (i < len - 1) i += 2; else i = len;
+                continue;
+            }
+            if (ch === '-' && i + 1 < len && sql[i + 1] === '-') {
+                i += 2;
+                while (i < len && sql[i] !== '\n') i++;
+                continue;
+            }
+            break;
+        }
+        return sql.substring(i);
     }
 
     // ─── MJ Template Extraction ────────────────────────

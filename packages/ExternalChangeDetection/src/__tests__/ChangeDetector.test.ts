@@ -77,6 +77,7 @@ vi.mock('@memberjunction/core', () => {
     Metadata: class {
       Entities = [];
       GetEntityObject = vi.fn();
+      EntityByID = vi.fn();
       static Provider = {};
     },
     RunView: class {
@@ -178,6 +179,104 @@ describe('ChangeDetectionResult', () => {
     result.Success = true;
     result.Changes = [];
     expect(result.Success).toBe(true);
+  });
+});
+
+describe('ExternalChangeDetectorEngine - buildDetectionParams uses correct PK', () => {
+  it('should build detection params with entity-specific PK column, not "ID"', () => {
+    const engine = new ExternalChangeDetectorEngine();
+
+    // Initialize dialect (needed by buildDetectionParams -> getPrimaryKeyString)
+    (engine as unknown as Record<string, unknown>)['_dialect'] = {
+      ConcatOperator: () => '+',
+      CastToText: (expr: string) => `CAST(${expr} AS NVARCHAR(MAX))`,
+      QuoteIdentifier: (id: string) => `[${id}]`,
+    };
+
+    // Simulate an EntityInfo with PK = TicketId (not the default "ID")
+    // This is what the fix ensures: _EligibleEntities contains EntityInfo objects
+    // where PrimaryKeys reflects the actual entity, not the "MJ: Entities" table.
+    const entityInfo = {
+      ID: 'entity-1',
+      Name: 'Event Tickets',
+      SchemaName: 'ym',
+      BaseView: 'vwEventTickets',
+      PrimaryKeys: [{ Name: 'TicketId', IsPrimaryKey: true }],
+    };
+
+    // Also set up EligibleEntities so validateEntityEligibility passes
+    (engine as unknown as Record<string, unknown[]>)['_EligibleEntities'] = [entityInfo];
+    (engine as unknown as Record<string, string[]>)['_IneligibleEntities'] = [];
+
+    // Call the private buildDetectionParams method
+    const params = (engine as unknown as Record<string, Function>)['buildDetectionParams'](entityInfo);
+
+    // All three query param sets should reference TicketId, NOT ID
+    expect(params.creation.PrimaryKeyJoin).toContain('[TicketId]');
+    expect(params.creation.PrimaryKeyJoin).not.toContain('[ID]');
+
+    expect(params.update.PrimaryKeyJoin).toContain('[TicketId]');
+    expect(params.update.PrimaryKeyOrderBy).toBe('ot.[TicketId]');
+
+    expect(params.deletion.PrimaryKeyJoin).toContain('[TicketId]');
+    expect(params.deletion.PrimaryKeyIsNull).toBe('ot.[TicketId] IS NULL');
+  });
+
+  it('should handle composite primary keys correctly', () => {
+    const engine = new ExternalChangeDetectorEngine();
+
+    (engine as unknown as Record<string, unknown>)['_dialect'] = {
+      ConcatOperator: () => '+',
+      CastToText: (expr: string) => `CAST(${expr} AS NVARCHAR(MAX))`,
+      QuoteIdentifier: (id: string) => `[${id}]`,
+    };
+
+    const entityInfo = {
+      ID: 'entity-2',
+      Name: 'Person Attributes',
+      SchemaName: 'dbo',
+      BaseView: 'vwPersonAttributes',
+      PrimaryKeys: [
+        { Name: 'PersonID', IsPrimaryKey: true },
+        { Name: 'Name', IsPrimaryKey: true },
+      ],
+    };
+
+    (engine as unknown as Record<string, unknown[]>)['_EligibleEntities'] = [entityInfo];
+    (engine as unknown as Record<string, string[]>)['_IneligibleEntities'] = [];
+
+    const params = (engine as unknown as Record<string, Function>)['buildDetectionParams'](entityInfo);
+
+    // Should contain both PK fields
+    expect(params.creation.PrimaryKeyJoin).toContain('[PersonID]');
+    expect(params.creation.PrimaryKeyJoin).toContain('[Name]');
+    expect(params.update.PrimaryKeyOrderBy).toBe('ot.[PersonID], ot.[Name]');
+    expect(params.deletion.PrimaryKeyIsNull).toBe('ot.[PersonID] IS NULL AND ot.[Name] IS NULL');
+  });
+});
+
+describe('ExternalChangeDetectorEngine - getPrimaryKeyString uses correct PK field', () => {
+  it('should generate SQL with the entity-specific PK column, not "ID"', () => {
+    const engine = new ExternalChangeDetectorEngine();
+
+    // Initialize dialect (needed by getPrimaryKeyString)
+    (engine as unknown as Record<string, unknown>)['_dialect'] = {
+      ConcatOperator: () => '+',
+      CastToText: (expr: string) => `CAST(${expr} AS NVARCHAR(MAX))`,
+      QuoteIdentifier: (id: string) => `[${id}]`,
+    };
+
+    // EntityInfo with PK = TicketId (not ID)
+    const entityInfo = {
+      PrimaryKeys: [{ Name: 'TicketId', IsPrimaryKey: true }],
+    };
+
+    const result = (engine as unknown as Record<string, Function>)['getPrimaryKeyString'](entityInfo, 'ot');
+
+    // Should reference [TicketId], NOT [ID]
+    expect(result).toContain('[TicketId]');
+    expect(result).not.toContain('[ID]');
+    expect(result).toBe("'TicketId|' + CAST([ot].[TicketId] AS NVARCHAR(MAX))");
   });
 });
 
