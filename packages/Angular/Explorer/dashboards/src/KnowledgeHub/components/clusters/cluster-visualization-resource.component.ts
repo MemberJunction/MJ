@@ -65,8 +65,8 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
 
     private cdr = inject(ChangeDetectorRef);
     private clusteringService = inject(ClusteringService);
-    private navigationService = inject(NavigationService);
-    private destroy$ = new Subject<void>();
+    protected override navigationService = inject(NavigationService);
+    protected override destroy$ = new Subject<void>();
 
     /** LLM-generated cluster labels for the current result */
     public ClusterLabels: ClusterLabel[] = [];
@@ -129,6 +129,7 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
     }
 
     ngOnDestroy(): void {
+        super.ngOnDestroy();
         this.destroy$.next();
         this.destroy$.complete();
     }

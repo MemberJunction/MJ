@@ -61,9 +61,8 @@ export class AgentEditorComponent implements OnInit, OnDestroy, AfterViewInit {
   private zoom: any;
 
   constructor(
-    private createAgentService: CreateAgentService,
-    private navigationService: NavigationService
-  ) {}
+    private navigationService: NavigationService,
+    private createAgentService: CreateAgentService) {}
 
   ngOnInit(): void {
     if (this.agentId) {

@@ -74,7 +74,7 @@ export interface SearchParams {
  * A single search result with provenance and scoring information.
  */
 export interface SearchResultItem {
-    /** Unique identifier for deduplication (e.g., "vec-indexName-matchId" or "ft-Entity-RecordID") */
+    /** Primary key of the source record (same as RecordID) */
     ID: string;
     /** The entity this result came from */
     EntityName: string;

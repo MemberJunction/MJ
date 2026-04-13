@@ -8,7 +8,7 @@ import { CodeGenDatabaseProvider, BaseViewGenerationContext, CascadeDeleteContex
 import { SQLServerCodeGenProvider } from './providers/sqlserver/SQLServerCodeGenProvider';
 
 import { autoIndexForeignKeys, configInfo, customSqlScripts, dbDatabase, mjCoreSchema, MAX_INDEX_NAME_LENGTH } from '../Config/config';
-import { ManageMetadataBase } from './manage-metadata';
+import { ManageMetadataBase, ViewRegenEntry } from './manage-metadata';
 
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { combineFiles, logIf, sortBySequenceAndCreatedAt } from '../Misc/util';
@@ -289,6 +289,55 @@ export class SQLCodeGenBase {
             }
             // no logStatus/timer for this because manageEntityFields() has its own internal logging for this including the total, so it is redundant to log it here
 
+            // STEP 3.5 - Late-phase view regeneration
+            // Some late-phase changes (e.g., SupportsGeoCoding toggled during advanced generation)
+            // affect view structure but happen AFTER views were already generated in Step 2.
+            // Regenerate ONLY those entities' views, then re-sync their fields to pick up new virtual columns.
+            const regenList = ManageMetadataBase.EntitiesRequiringViewRegen;
+            if (regenList.length > 0) {
+                const uniqueEntityNames = [...new Set(regenList.map(e => e.EntityName))];
+                startSpinner(`Regenerating ${uniqueEntityNames.length} entities with late-phase view changes...`);
+
+                // Refresh metadata to pick up DB changes from Step 3 (e.g., SupportsGeoCoding = 1)
+                const regenMd = new Metadata();
+                await regenMd.Refresh();
+
+                // Resolve entity names to EntityInfo objects from the refreshed metadata
+                const entitiesToRegen = uniqueEntityNames
+                    .map(name => { try { return regenMd.EntityByName(name); } catch { return null; } })
+                    .filter((e): e is EntityInfo => e !== null);
+
+                if (entitiesToRegen.length > 0) {
+                    // Regenerate views + SPs for affected entities only
+                    const regenResult = await this.generateAndExecuteEntitySQLToSeparateFiles({
+                        pool,
+                        entities: entitiesToRegen,
+                        directory,
+                        onlyPermissions: false,
+                        skipExecution: false,
+                        writeFiles: true,
+                        batchSize: 1,
+                        enableSQLLoggingForNewOrModifiedEntities: true
+                    });
+
+                    if (regenResult.Success) {
+                        // Re-sync entity fields to pick up new virtual columns (e.g., __mj_Latitude, __mj_Longitude)
+                        // No LLM needed — just detect new/changed fields from the regenerated views
+                        await manageMD.manageEntityFields(pool, configInfo.excludeSchemas, true, true, currentUser, true, false);
+
+                        // Apply reason-specific fixups
+                        await this.applyLatePhaseFixups(pool, regenList, entitiesToRegen);
+
+                        succeedSpinner(`Regenerated ${entitiesToRegen.length} late-phase entities`);
+                    } else {
+                        failSpinner('Late-phase view regeneration failed');
+                        overallSuccess = false;
+                    }
+                } else {
+                    succeedSpinner('No valid entities to regenerate');
+                }
+            }
+
             // STEP 4- Apply permissions, executing all .permissions files
             startSpinner('Applying permissions...');
             const step4StartTime: Date = new Date();
@@ -330,6 +379,36 @@ export class SQLCodeGenBase {
             // Clean up temp batch files on error
             TempBatchFile.cleanup();
             return false;
+        }
+    }
+
+    /**
+     * Apply reason-specific fixups after late-phase view regeneration.
+     * Each regen reason may require additional SQL to be executed and logged
+     * to the migration output file.
+     */
+    protected async applyLatePhaseFixups(
+        pool: CodeGenConnection,
+        regenList: ViewRegenEntry[],
+        regenEntities: EntityInfo[]
+    ): Promise<void> {
+        // Geocoding fixup: set ExtendedType on virtual __mj_Latitude / __mj_Longitude fields
+        const geoEntities = regenEntities.filter(e =>
+            regenList.some(r => r.EntityName === e.Name && r.Reason === 'Geocoding')
+        );
+        if (geoEntities.length > 0) {
+            const qi = this._dbProvider.Dialect.QuoteIdentifier.bind(this._dbProvider.Dialect);
+            const qs = this._dbProvider.Dialect.QuoteSchema.bind(this._dbProvider.Dialect);
+            const entityIds = geoEntities.map(e => `'${e.ID}'`).join(',');
+
+            const latSQL = `UPDATE ${qs(mjCoreSchema, 'EntityField')} SET ${qi('ExtendedType')} = 'GeoLatitude' WHERE ${qi('Name')} = '__mj_Latitude' AND ${qi('ExtendedType')} IS NULL AND ${qi('EntityID')} IN (${entityIds})`;
+            const lngSQL = `UPDATE ${qs(mjCoreSchema, 'EntityField')} SET ${qi('ExtendedType')} = 'GeoLongitude' WHERE ${qi('Name')} = '__mj_Longitude' AND ${qi('ExtendedType')} IS NULL AND ${qi('EntityID')} IN (${entityIds})`;
+
+            // Execute and log to migration output
+            SQLLogging.appendToSQLLogFile(latSQL, 'Set ExtendedType=GeoLatitude on virtual geo fields');
+            await pool.query(latSQL);
+            SQLLogging.appendToSQLLogFile(lngSQL, 'Set ExtendedType=GeoLongitude on virtual geo fields');
+            await pool.query(lngSQL);
         }
     }
 
@@ -1378,7 +1457,7 @@ export class SQLCodeGenBase {
                 recordIdExpr = parts.join(` + '||' + `);
             }
 
-            sOutput += `LEFT OUTER JOIN\n    ${qs(entity.SchemaName, 'vwRecordGeoCodes')} AS __mj_rgc\n  ON\n    __mj_rgc.${qi('EntityID')} = '${entity.ID}'\n    AND __mj_rgc.${qi('RecordID')} = ${recordIdExpr}\n    AND __mj_rgc.${qi('LocationType')} = 'Primary'`;
+            sOutput += `LEFT OUTER JOIN\n    ${qs(mjCoreSchema, 'vwRecordGeoCodes')} AS __mj_rgc\n  ON\n    __mj_rgc.${qi('EntityID')} = '${entity.ID}'\n    AND __mj_rgc.${qi('RecordID')} = ${recordIdExpr}\n    AND __mj_rgc.${qi('LocationType')} = 'Primary'`;
         }
 
         return sOutput;

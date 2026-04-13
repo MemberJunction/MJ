@@ -2,6 +2,7 @@ import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MarkdownModule } from '@memberjunction/ng-markdown';
+import { AgGridModule } from 'ag-grid-angular';
 
 // Import MJ modules
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
@@ -22,6 +23,12 @@ import { DataArtifactViewerComponent } from './components/plugins/data-artifact-
 import { SaveQueryPanelComponent } from './components/plugins/save-query-dialog.component';
 import { DataRequirementsViewerComponent } from './components/plugins/data-requirements-viewer/data-requirements-viewer.component';
 import { ComponentFeedbackPanelComponent } from './components/plugins/component-feedback-panel/component-feedback-panel.component';
+
+// File viewer plugins
+import { FileArtifactToolbarComponent } from './components/file-artifact-toolbar.component';
+import { PdfArtifactViewerComponent } from './components/plugins/pdf-artifact-viewer.component';
+import { XlsxArtifactViewerComponent } from './components/plugins/xlsx-artifact-viewer.component';
+import { DocxArtifactViewerComponent } from './components/plugins/docx-artifact-viewer.component';
 
 // Import artifact type plugin viewer component
 import { ArtifactTypePluginViewerComponent } from './components/artifact-type-plugin-viewer.component';
@@ -57,7 +64,13 @@ import { ArtifactMessageCardComponent } from './components/artifact-message-card
     SaveQueryPanelComponent,
 
     // Custom tab components (used by plugins via dynamic component tabs)
-    DataRequirementsViewerComponent
+    DataRequirementsViewerComponent,
+
+    // File viewer toolbar and plugins
+    FileArtifactToolbarComponent,
+    PdfArtifactViewerComponent,
+    XlsxArtifactViewerComponent,
+    DocxArtifactViewerComponent,
   ],
   imports: [
     CommonModule,
@@ -69,7 +82,8 @@ import { ArtifactMessageCardComponent } from './components/artifact-message-card
     QueryViewerModule,
     SharedGenericModule,
     NgTreesModule,
-    ComponentFeedbackPanelComponent
+    ComponentFeedbackPanelComponent,
+    AgGridModule,
   ],
   exports: [
     // Export artifact type plugin viewer
@@ -87,7 +101,13 @@ import { ArtifactMessageCardComponent } from './components/artifact-message-card
     HtmlArtifactViewerComponent,
     SvgArtifactViewerComponent,
     ComponentArtifactViewerComponent,
-    DataArtifactViewerComponent
+    DataArtifactViewerComponent,
+
+    // File viewer toolbar and plugins
+    FileArtifactToolbarComponent,
+    PdfArtifactViewerComponent,
+    XlsxArtifactViewerComponent,
+    DocxArtifactViewerComponent,
   ],
   providers: [
     // Plugins are registered via @RegisterClass decorator on component classes, no providers needed
@@ -104,7 +124,10 @@ export class ArtifactsModule {
       HtmlArtifactViewerComponent,
       SvgArtifactViewerComponent,
       ComponentArtifactViewerComponent,
-      DataArtifactViewerComponent
+      DataArtifactViewerComponent,
+      PdfArtifactViewerComponent,
+      XlsxArtifactViewerComponent,
+      DocxArtifactViewerComponent,
     ];
 
     // PERF: Eagerly start downloading React, ReactDOM, and Babel from CDN in the background.

@@ -1030,14 +1030,16 @@ On the server (`TrustLocalCacheCompletely = true`), `PreRunView` and `PreRunView
 
 ```mermaid
 flowchart TD
-    A["GraphQL RunViewsQuery arrives<br/>(no CacheLocal flag)"] --> B["ProviderBase.PreRunView"]
+    A["GraphQL RunViewsQuery arrives<br/>(no CacheLocal flag)"] --> BA{"BypassCache?"}
+    BA -->|Yes| H["Execute DB query<br/>(skip all caching)"]
+    BA -->|No| B["ProviderBase.PreRunView"]
     B --> C{"TrustLocalCacheCompletely<br/>AND cache initialized?"}
     C -->|No| D["Skip cache check<br/>(client-side behavior)"]
     C -->|Yes| E["Generate fingerprint<br/>Check LocalCacheManager"]
     E --> F{Cache hit?}
     F -->|Yes| G["Return cached data<br/>Zero DB queries ✅"]
-    F -->|No| H["Execute DB query"]
-    H --> I{"shouldAutoCache?<br/>(small + unfiltered)"}
+    F -->|No| H
+    H --> I{"shouldAutoCache?<br/>(small + unfiltered<br/>+ NOT BypassCache)"}
     I -->|Yes| J["Store in cache<br/>for future hits 📦"]
     I -->|No| K["Return without caching"]
 ```
@@ -1095,6 +1097,38 @@ By limiting auto-cache to unfiltered+unsorted results, we guarantee that **every
 | `RunView('Users', filter: "Status='Active'")` | 50 | No | Has ExtraFilter |
 | `RunView('Customers')` | 5,000 | No | Exceeds threshold |
 | `RunView('AI Models', orderBy: 'Name')` | 12 | No | Has OrderBy |
+
+### BypassCache: Per-Query Cache Override
+
+The `BypassCache` parameter on `RunViewParams` provides a per-query escape hatch that skips **all** server-side caching — both the `PreRunView` cache check (read) and the post-query auto-cache storage (write). The query always hits the database and the result is never stored in cache.
+
+```typescript
+// Always hits the database, even if cached results exist for this fingerprint
+const result = await rv.RunView({
+    EntityName: 'Members',
+    ExtraFilter: 'State IS NOT NULL',
+    BypassCache: true,
+    IgnoreMaxRows: true
+});
+```
+
+**When to use `BypassCache`:**
+
+| Scenario | Why |
+|----------|-----|
+| Maintenance/audit actions | Need to find records inserted via direct SQL that bypassed `BaseEntity.Save()` and its cache invalidation events |
+| Scheduled geocoding | Must detect records missing from `RecordGeoCode` that were bulk-imported outside the normal save pipeline |
+| Data validation jobs | Need ground-truth DB state, not potentially stale cached data |
+| One-time migration scripts | Temporary queries that shouldn't pollute the cache |
+
+**How it differs from `CacheLocal`:**
+
+| Parameter | Controls | Default | Purpose |
+|-----------|----------|---------|---------|
+| `CacheLocal` | Opt-IN to caching | `false` | "I want this query's results cached for faster subsequent calls" |
+| `BypassCache` | Opt-OUT of all caching | `false` | "I need true DB state regardless of what's in cache" |
+
+Both can coexist — `BypassCache: true` takes precedence and skips all caching even if `CacheLocal: true` is also set.
 
 ---
 

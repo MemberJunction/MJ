@@ -53,6 +53,14 @@
 .mj-map-info {
     font-size: 13px;
     color: var(--mj-text-muted);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.mj-map-truncated {
+    color: var(--mj-status-warning-text);
+    font-size: 12px;
 }
 
 .mj-map-loading {

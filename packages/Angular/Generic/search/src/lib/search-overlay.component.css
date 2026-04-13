@@ -5,7 +5,7 @@
     inset: 0;
     background: var(--mj-bg-overlay);
     backdrop-filter: blur(8px);
-    z-index: 1000;
+    z-index: 99998;
     animation: backdropFadeIn 0.2s ease;
 }
 
@@ -22,7 +22,7 @@
     width: 680px;
     max-width: calc(100vw - 2rem);
     max-height: 70vh;
-    z-index: 1001;
+    z-index: 99999;
     display: flex;
     flex-direction: column;
     border-radius: 14px;
