@@ -40,45 +40,90 @@ Each subsystem serves a distinct purpose. Documentation must make this distincti
 
 ## 1. Architecture Overview
 
-### Current Search Flow
-```
-User Query → SearchEngine.Search(params)
-  → Run ALL active providers in parallel
-  → RRF Fusion → Dedup → Permission filter → Enrich
-  → SearchResult
+### Current Search Flow (No Scopes)
+
+```mermaid
+flowchart LR
+    Q["User Query"] --> SE["SearchEngine.Search()"]
+    SE --> P1["Vector Provider"]
+    SE --> P2["FullText Provider"]
+    SE --> P3["Entity Provider"]
+    SE --> P4["Storage Provider"]
+    P1 --> RRF["RRF Fusion"]
+    P2 --> RRF
+    P3 --> RRF
+    P4 --> RRF
+    RRF --> DD["Dedup"]
+    DD --> PERM["Permission Filter"]
+    PERM --> ENR["Enrich"]
+    ENR --> RES["SearchResult"]
 ```
 
 ### New Search Flow with Scopes
-```
-User Query + ScopeID(s)
-  → SearchEngine.Search(params) — params now has optional ScopeIDs
-  → Load SearchScope config(s) from metadata
-  → For EACH scope:
-  │   → Determine which providers/indexes/entities/accounts participate
-  │   → Run scoped providers in parallel
-  │   → Collect per-scope ranked lists
-  → Cross-scope RRF Fusion (if multiple scopes)
-  → Dedup → Permission filter → Enrich
-  → SearchResult
+
+```mermaid
+flowchart TD
+    Q["User Query + ScopeID(s) + SearchContext?"] --> SE["SearchEngine.Search()"]
+    SE --> LOAD["Load SearchScope configs from metadata"]
+    LOAD --> CHECK{Multiple scopes?}
+
+    CHECK -->|Single scope| S1["Scope A"]
+    CHECK -->|Multiple scopes| S1
+    CHECK -->|Multiple scopes| S2["Scope B"]
+
+    S1 --> S1V["Vector Provider\n(scoped indexes)"]
+    S1 --> S1E["Entity Provider\n(scoped entities + ExtraFilter)"]
+    S1 --> S1F["FullText Provider\n(scoped entities)"]
+    S1 --> S1S["Storage Provider\n(scoped accounts/folders)"]
+
+    S2 --> S2V["Vector Provider\n(scoped indexes)"]
+    S2 --> S2E["Entity Provider\n(scoped entities + ExtraFilter)"]
+
+    S1V --> RRF1["Per-Scope RRF\n(Scope A)"]
+    S1E --> RRF1
+    S1F --> RRF1
+    S1S --> RRF1
+
+    S2V --> RRF2["Per-Scope RRF\n(Scope B)"]
+    S2E --> RRF2
+
+    RRF1 --> XRRF["Cross-Scope RRF Fusion"]
+    RRF2 --> XRRF
+
+    XRRF --> DD["Dedup"]
+    DD --> PERM["Permission Filter"]
+    PERM --> ENR["Enrich"]
+    ENR --> RES["SearchResult"]
 ```
 
 ### Agent RAG+ Flow
+
+```mermaid
+flowchart TD
+    EXEC["BaseAgent.Execute()"] --> PH1["Phase 1: Permission + Engine Init + AgentRun"]
+
+    PH1 --> PH2["Phase 2 — All in Parallel"]
+
+    PH2 --> CFG["Config Load"]
+    PH2 --> DATA["Data Preload\n(AgentDataPreloader)\nStatic briefing"]
+    PH2 --> MEM["Context Injection\n(AgentContextInjector)\nAgent brain/memory"]
+    PH2 --> RAG["Pre-Execution RAG\n(NEW)"]
+
+    RAG --> LOAD_S["Load AIAgentSearchScope rows\nPhase IN (PreExecution, Both)\nStatus=Active, within StartAt/EndAt"]
+    LOAD_S --> TMPL["For each scope:\n1. Render QueryTemplateID\n2. Call SearchEngine.Search()"]
+    TMPL --> FUSE["Cross-scope RRF\n(if multiple scopes)"]
+    FUSE --> INJ["Format as system message\nInject via unshift()"]
+
+    CFG --> PH3["Phase 3: Agent Execution Loop"]
+    DATA --> PH3
+    MEM --> PH3
+    INJ --> PH3
+
+    PH3 --> TOOL{"Agent decides:\nneed more info?"}
+    TOOL -->|Yes| SEARCH["Invoke ScopedSearchAction\n(AgentInvoked scopes only)"]
+    SEARCH --> PH3
+    TOOL -->|No| DONE["Complete"]
 ```
-BaseAgent.Execute()
-  Phase 2 (all parallel):
-  ├── Config load
-  ├── Data preload (AgentDataPreloader)        — static briefing
-  ├── Context injection (AgentContextInjector) — brain/memory
-  └── Pre-execution RAG (NEW):                 — research library
-      ├── Load AIAgentSearchScope rows where Phase IN ('PreExecution','Both')
-      │   AND Status='Active' AND within StartAt/EndAt window
-      ├── For each scope (by Priority):
-      │   ├── Render QueryTemplateID with conversation context
-      │   │   (or use lastUserMessage if no template)
-      │   └── Call SearchEngine.Search(query, scopeId)
-      ├── Cross-scope RRF if multiple scopes
-      ├── Format results as system message
-      └── Inject into conversation (unshift, like notes/examples)
 
   Phase 3 (agent execution):
   ├── Agent sees pre-execution RAG in conversation context
@@ -467,7 +512,7 @@ This action wraps the existing `SearchAction` but enforces scope restrictions ba
 
 The `ScopedSearchAction` should be assigned to agents instead of (or in addition to) the existing `__Internal_Search` action. When an agent has `SearchScopeAccess='Assigned'`, only the scoped action should be available to prevent the agent from bypassing scope restrictions via the unscoped action.
 
-**Migration consideration:** Existing agents using `__Internal_Search` continue to work. New agents or agents with scope restrictions should use `__Scoped_Search`.
+**Migration consideration:** Existing agents like Sage that use `__Internal_Search` continue to work unchanged (`SearchScopeAccess='All'` by default). New agents or agents with scope restrictions should use `__Scoped_Search` and have `SearchScopeAccess='Assigned'`.
 
 ### 5.3 Agent Awareness of Available Scopes
 
@@ -733,51 +778,164 @@ SearchEngine.Search({
 }, contextUser);
 ```
 
-**What happens at each provider:**
+### 9.3 Multi-Tenant Request Flow
 
-1. **VectorSearchProvider** — The platform provisions a dedicated vector index per tenant on onboarding. `SearchScopeVectorIndex` rows are resolved dynamically: the scope has a per-tenant index mapping, or the vector metadata filter adds `organizationId = 'org-abc-123'` to the query. Per-tenant indexes are the cleanest approach — smaller indexes mean faster queries and true data isolation at the infrastructure level.
+The following diagram shows how a single Search Scope definition serves multiple tenants by applying `SearchContext` at runtime to filter each provider's data:
 
-2. **EntitySearchProvider** — The `SearchScopeEntity.ExtraFilter` supports Nunjucks templates. A filter like `OrganizationID='{{ context.PrimaryScopeRecordID }}'` gets rendered at runtime to `OrganizationID='org-abc-123'`, so RunView only returns that tenant's records. Secondary dimensions further narrow: `AND DepartmentID='support'`.
+```mermaid
+sequenceDiagram
+    participant App as SaaS Application
+    participant Agent as MJ Agent
+    participant SE as SearchEngine
+    participant VP as VectorProvider
+    participant EP as EntityProvider
+    participant SP as StorageProvider
 
-3. **StorageSearchProvider** — `SearchScopeStorageAccount.FolderPath` can be templated: `/tenants/{{ context.PrimaryScopeRecordID }}/documents/`. Each tenant's files live in their own subdirectory within the same storage account. Alternatively, the platform can provision separate storage accounts per tenant and map them via `SearchScopeStorageAccount` rows.
+    App->>Agent: Execute(agent, primaryScopeRecordId="tenant-A", ...)
+    Agent->>SE: Search(query, scopeIDs=["kb-scope"], context={tenant-A, dept=support})
 
-### 9.3 Inheritance Modes
+    Note over SE: Load scope config + SearchContextConfig
 
-Borrowed from the existing agent notes scoping system (`SecondaryScopeConfig`):
+    par Provider execution (parallel)
+        SE->>VP: search(query, constraints={indexIDs=[tenant-A-index]})
+        Note over VP: Per-tenant vector index<br/>provisioned at onboarding.<br/>Complete data isolation.
+        VP-->>SE: Ranked results from tenant-A vectors
 
-- **Strict**: Content tagged with `DepartmentID='support'` only matches queries where `DepartmentID='support'`. Content without a department tag does NOT match.
-- **Cascading**: Content without a department tag matches ALL department queries (it's org-wide content). Content tagged with a specific department only matches that department.
+        SE->>EP: search(query, constraints={entities + rendered ExtraFilter})
+        Note over EP: ExtraFilter template rendered:<br/>OrgID='tenant-A' AND Dept='support'
+        EP-->>SE: Tenant-A entity records only
 
-This lets platform builders create content hierarchies: org-wide knowledge articles are visible to everyone in the org, while department-specific content is only visible within that department.
+        SE->>SP: search(query, constraints={folderPath="/tenants/tenant-A/docs/"})
+        Note over SP: FolderPath template rendered<br/>to tenant-A subdirectory
+        SP-->>SE: Tenant-A files only
+    end
 
-### 9.4 Agent Integration with Search Context
-
-Agents already receive tenant context via `ExecuteAgentParams`:
-
-```typescript
-await agentRunner.Execute({
-    agent: supportAgent,
-    primaryScopeEntityId: "organization-entity-id",
-    primaryScopeRecordId: "org-abc-123",
-    secondaryScopes: { "DepartmentID": "support", "ContactID": "contact-456" },
-    conversationMessages: [...],
-    contextUser: currentUser
-});
+    SE->>SE: RRF Fusion + Dedup + Permissions
+    SE-->>Agent: Tenant-isolated SearchResult
+    Agent-->>App: Response grounded in tenant-A data only
 ```
 
-The pre-execution RAG and scoped search Action pass these values through to `SearchEngine.Search()` as the `SearchContext`. No new API surface needed — the existing scoping context that already flows for notes/examples now also flows for search.
+### 9.4 Provider Isolation Strategies
 
-### 9.5 Tenant Provisioning Automation
+Each provider uses a different mechanism to enforce tenant isolation. Platforms can mix and match these strategies depending on their security and performance requirements.
 
-When a new tenant is onboarded, the platform:
-1. Creates a vector index for the tenant (Pinecone namespace, Qdrant collection, etc.)
-2. Creates a storage folder or account for the tenant's files
-3. Creates `SearchScopeVectorIndex` and `SearchScopeStorageAccount` rows linking the scope to the tenant's infrastructure
-4. The scope definition itself doesn't change — just the infrastructure it points to grows
+```mermaid
+flowchart TD
+    CTX["SearchContext\n{PrimaryScopeRecordID: tenant-A}"] --> VP["VectorSearchProvider"]
+    CTX --> EP["EntitySearchProvider"]
+    CTX --> FT["FullTextSearchProvider"]
+    CTX --> SP["StorageSearchProvider"]
 
-This could be an MJ Action ("Provision Tenant Search Infrastructure") that the onboarding workflow calls automatically.
+    VP --> VP1{"Isolation strategy"}
+    VP1 -->|"Per-tenant index\n(recommended)"| VP2["Dedicated Pinecone namespace\nor Qdrant collection per tenant.\nSearchScopeVectorIndex row\npoints to tenant's index."]
+    VP1 -->|"Metadata filtering"| VP3["Shared index with\norganizationId metadata.\nContext adds filter:\norganizationId = 'tenant-A'"]
 
-### 9.6 Entity Model Additions for Search Context
+    EP --> EP1["ExtraFilter is a Nunjucks template.\nRendered at runtime:\nOrganizationID='{{ context.PrimaryScopeRecordID }}'\n→ OrganizationID='tenant-A'"]
+    EP --> EP2["Secondary dimensions appended:\nAND DepartmentID='support'"]
+
+    FT --> FT1["Same ExtraFilter template\napplied to FTS queries"]
+
+    SP --> SP1{"Isolation strategy"}
+    SP1 -->|"Shared account\n+ folder path"| SP2["FolderPath template:\n/tenants/{{ context.PrimaryScopeRecordID }}/\n→ /tenants/tenant-A/"]
+    SP1 -->|"Per-tenant account"| SP3["Separate storage account\nper tenant. SearchScopeStorageAccount\nrow maps to tenant's account."]
+
+    style VP2 fill:#e8f5e9
+    style EP1 fill:#e3f2fd
+    style SP2 fill:#fff3e0
+```
+
+### 9.5 Inheritance Modes
+
+Borrowed from the existing agent notes scoping system (`SecondaryScopeConfig`), inheritance modes control how content visibility cascades through dimensional hierarchies:
+
+```mermaid
+flowchart TD
+    subgraph STRICT["Strict Mode (DepartmentID)"]
+        direction TB
+        S1["Content: DepartmentID='support'"] -->|"Query: dept=support"| S1Y["MATCH"]
+        S1 -->|"Query: dept=sales"| S1N["NO MATCH"]
+        S2["Content: no DepartmentID"] -->|"Query: dept=support"| S2N["NO MATCH"]
+        S2 -->|"Query: no dept"| S2Y["MATCH"]
+    end
+
+    subgraph CASCADE["Cascading Mode (DepartmentID)"]
+        direction TB
+        C1["Content: DepartmentID='support'"] -->|"Query: dept=support"| C1Y["MATCH"]
+        C1 -->|"Query: dept=sales"| C1N["NO MATCH"]
+        C2["Content: no DepartmentID\n(org-wide)"] -->|"Query: dept=support"| C2Y["MATCH\n(cascades down)"]
+        C2 -->|"Query: dept=sales"| C2Y2["MATCH\n(cascades down)"]
+    end
+
+    style S1Y fill:#e8f5e9
+    style S2Y fill:#e8f5e9
+    style S1N fill:#ffebee
+    style S2N fill:#ffebee
+    style C1Y fill:#e8f5e9
+    style C1N fill:#ffebee
+    style C2Y fill:#e8f5e9
+    style C2Y2 fill:#e8f5e9
+```
+
+- **Strict**: Only exact matches. Content must be tagged with the queried dimension value. Untagged content does NOT match scoped queries. Use for hard data boundaries (e.g., tenant isolation — Org A's data never leaks to Org B).
+- **Cascading**: Broader retrieval. Content without a dimension tag is treated as "applies to all." Use for soft hierarchies (e.g., org-wide policies visible to every department, but department-specific content only visible within that department).
+
+Platform builders configure inheritance per dimension in `SearchContextConfig.dimensions[].inheritanceMode`.
+
+### 9.6 Agent Integration with Search Context
+
+Agents already receive tenant context via `ExecuteAgentParams`. The existing scoping context that flows for notes/examples now also flows for search — no new API surface needed:
+
+```mermaid
+flowchart LR
+    subgraph CALLER ["SaaS Platform (caller)"]
+        direction TB
+        REQ["ExecuteAgentParams:\nprimaryScopeRecordId='tenant-A'\nsecondaryScopes={DeptID:'support'}"]
+    end
+
+    subgraph AGENT ["BaseAgent.Execute()"]
+        direction TB
+        MEM["AgentContextInjector\n(notes/examples)\nFiltered by tenant-A"]
+        RAG["Pre-Execution RAG\nSearchContext={tenant-A}\nFiltered by tenant-A"]
+        TOOL["ScopedSearchAction\nSearchContext={tenant-A}\nFiltered by tenant-A"]
+    end
+
+    REQ --> MEM
+    REQ --> RAG
+    REQ --> TOOL
+
+    MEM --> LLM["LLM sees only\ntenant-A context"]
+    RAG --> LLM
+    TOOL --> LLM
+```
+
+The caller provides tenant identity once. All three context subsystems — memory (notes/examples), pre-execution RAG, and agent-invoked search — automatically filter to that tenant's data.
+
+### 9.7 Tenant Provisioning Flow
+
+When a new tenant is onboarded, the platform provisions search infrastructure automatically. The scope definition itself never changes — only the infrastructure it points to grows:
+
+```mermaid
+flowchart TD
+    NEW["New Tenant Onboarded\n(e.g., via signup workflow)"] --> ACT["MJ Action:\nProvision Tenant Search Infrastructure"]
+
+    ACT --> VI["1. Create Vector Index\n(Pinecone namespace / Qdrant collection)"]
+    ACT --> SF["2. Create Storage Folder\n/tenants/{tenantId}/documents/"]
+    ACT --> META["3. Create Metadata Records"]
+
+    META --> M1["SearchScopeVectorIndex row\nlinks scope → tenant's index"]
+    META --> M2["SearchScopeStorageAccount row\nlinks scope → tenant's folder"]
+
+    VI --> READY["Tenant Ready for Search"]
+    SF --> READY
+    M1 --> READY
+    M2 --> READY
+
+    READY --> INGEST["4. Ingest tenant content\n(Knowledge Pipeline:\nExtract → Embed → Store)"]
+```
+
+This provisioning can be an MJ Action invoked by the onboarding workflow, ensuring every new tenant automatically gets isolated search infrastructure linked to the shared scope definition.
+
+### 9.8 Entity Model Additions for Search Context
 
 **`SearchScope` — add column** (included in Section 2.1 table above):
 
@@ -817,7 +975,7 @@ export interface SearchContext {
 }
 ```
 
-### 9.7 Implementation Phasing
+### 9.9 Implementation Phasing
 
 Multi-tenant Search Context is designed as **Phase 1G** — it builds on Phase 1B (scope resolution) and can be implemented after the core scope system is working:
 
@@ -1056,56 +1214,84 @@ All new classes, methods, and interfaces must have TSDoc comments explaining:
 
 ## Appendix A: Entity Relationship Diagram
 
-```
-┌──────────────────┐     ┌────────────────────────┐
-│   SearchScope    │     │   MJ: Search Providers  │
-│──────────────────│     │────────────────────────│
-│ ID               │     │ ID                      │
-│ Name             │     │ Name                    │
-│ Description      │     │ DriverClass             │
-│ Icon             │     │ Priority                │
-│ IsGlobal         │     │ SupportsPreview         │
-│ IsDefault        │     └────────────┬─────────────┘
-│ OwnerUserID ──FK─┼──→ User                │
-│ Status           │                        │
-│ StartAt          │     ┌──────────────────┤
-│ EndAt            │     │                  │
-│ ScopeConfig      │     │  SearchScopeProvider
-│ SearchContextConf│     │
-└──────┬───────────┘     │  ├ SearchScopeID ──FK──→ SearchScope
-       │                 │  ├ SearchProviderID ─FK─→ Search Providers
-       │                 │  ├ Enabled
-       │                 │  ├ MaxResultsOverride
-       │                 │  └ ProviderConfigOverride
-       │
-       ├─── SearchScopeVectorIndex
-       │    ├ SearchScopeID ──FK──→ SearchScope
-       │    └ VectorIndexID ──FK──→ MJ: Vector Indexes
-       │
-       ├─── SearchScopeEntity
-       │    ├ SearchScopeID ──FK──→ SearchScope
-       │    ├ EntityID ──FK──→ Entity
-       │    ├ ExtraFilter
-       │    └ UserSearchString
-       │
-       ├─── SearchScopeStorageAccount
-       │    ├ SearchScopeID ──FK──→ SearchScope
-       │    ├ FileStorageAccountID ──FK──→ File Storage Accounts
-       │    └ FolderPath
-       │
-       └─── AIAgentSearchScope
-            ├ AgentID ──FK──→ AI Agents
-            ├ SearchScopeID ──FK──→ SearchScope
-            ├ Phase ('PreExecution'|'AgentInvoked'|'Both')
-            ├ Status, StartAt, EndAt
-            ├ Priority, MaxResults, MinScore
-            ├ QueryTemplateID ──FK──→ Templates
-            └ IsDefault
+```mermaid
+erDiagram
+    SearchScope ||--o{ SearchScopeProvider : "has"
+    SearchScope ||--o{ SearchScopeVectorIndex : "has"
+    SearchScope ||--o{ SearchScopeEntity : "has"
+    SearchScope ||--o{ SearchScopeStorageAccount : "has"
+    SearchScope ||--o{ AIAgentSearchScope : "assigned to agents via"
+    AIAgent ||--o{ AIAgentSearchScope : "has scopes via"
+    SearchScopeProvider }o--|| SearchProvider : "references"
+    SearchScopeVectorIndex }o--|| VectorIndex : "references"
+    SearchScopeEntity }o--|| Entity : "references"
+    SearchScopeStorageAccount }o--|| FileStorageAccount : "references"
+    AIAgentSearchScope }o--o| Template : "query template"
+    SearchScope }o--o| User : "owned by"
 
+    SearchScope {
+        uniqueidentifier ID PK
+        nvarchar Name UK
+        nvarchar Description
+        nvarchar Icon
+        bit IsGlobal
+        bit IsDefault
+        uniqueidentifier OwnerUserID FK "nullable - null=org-wide"
+        nvarchar Status "Active|Inactive"
+        datetimeoffset StartAt "nullable"
+        datetimeoffset EndAt "nullable"
+        nvarchar ScopeConfig "JSON - RRF overrides"
+        nvarchar SearchContextConfig "JSON - multi-tenant dims"
+    }
 
-AI Agents (modified)
-├ ... existing fields ...
-└ SearchScopeAccess ('All'|'Assigned'|'None')  ← NEW
+    SearchScopeProvider {
+        uniqueidentifier ID PK
+        uniqueidentifier SearchScopeID FK
+        uniqueidentifier SearchProviderID FK
+        bit Enabled
+        int MaxResultsOverride "nullable"
+        nvarchar ProviderConfigOverride "JSON nullable"
+    }
+
+    SearchScopeVectorIndex {
+        uniqueidentifier ID PK
+        uniqueidentifier SearchScopeID FK
+        uniqueidentifier VectorIndexID FK
+    }
+
+    SearchScopeEntity {
+        uniqueidentifier ID PK
+        uniqueidentifier SearchScopeID FK
+        uniqueidentifier EntityID FK
+        nvarchar ExtraFilter "nullable - Nunjucks template"
+        nvarchar UserSearchString "nullable - Nunjucks template"
+    }
+
+    SearchScopeStorageAccount {
+        uniqueidentifier ID PK
+        uniqueidentifier SearchScopeID FK
+        uniqueidentifier FileStorageAccountID FK
+        nvarchar FolderPath "nullable - Nunjucks template"
+    }
+
+    AIAgentSearchScope {
+        uniqueidentifier ID PK
+        uniqueidentifier AgentID FK
+        uniqueidentifier SearchScopeID FK
+        nvarchar Phase "PreExecution|AgentInvoked|Both"
+        nvarchar Status "Active|Inactive"
+        datetimeoffset StartAt "nullable"
+        datetimeoffset EndAt "nullable"
+        int Priority
+        int MaxResults "nullable"
+        decimal MinScore "nullable"
+        uniqueidentifier QueryTemplateID FK "nullable"
+        bit IsDefault
+    }
+
+    AIAgent {
+        nvarchar SearchScopeAccess "All|Assigned|None (NEW)"
+    }
 ```
 
 ## Appendix B: Key File Reference
