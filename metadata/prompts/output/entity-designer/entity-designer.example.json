@@ -1,88 +1,123 @@
 {
-  "description": "Entity Designer orchestrates sub-agents to gather requirements, design, validate, and build entities. It presents schema proposals to users and waits for approval before building.",
+  "description": "Entity Designer is a state-machine orchestrator. It uses terminateAfter: false for Requirements Analyst (so it runs again after and can either show DRAFT questions or chain to Schema Designer). It uses terminateAfter: true for Schema Designer and Validator (their messages go directly to user).",
 
-  "example_1_start_creation_call_requirements_analyst": {
-    "description": "User asks to create a table — Entity Designer calls Requirements Analyst first",
-    "action": "call_subagent",
-    "subagent": "Entity Requirements Analyst",
-    "payloadChangeRequest": null,
-    "chat": {
-      "message": "I'll help you set up a new table to track your project milestones. Let me start by asking a few questions to make sure we design it exactly the way you need it.",
-      "suggestedResponses": null
+  "example_1_new_entity_request": {
+    "description": "Condition 4: FunctionalRequirements absent — call Requirements Analyst with terminateAfter: false",
+    "nextStep": {
+      "type": "Sub-Agent",
+      "subAgent": {
+        "name": "Entity Requirements Analyst",
+        "message": "Gather functional requirements for a new entity. User wants: 'track project milestones — checkpoints with a title, due date, and status'. Write FINAL if you have enough info, or DRAFT with up to 3 questions if you need clarification. Return when done.",
+        "terminateAfter": false
+      }
     }
   },
 
-  "example_2_draft_requirements_relay_questions": {
-    "description": "Requirements Analyst returned DRAFT with questions — Entity Designer presents them to user",
-    "action": "continue",
-    "payloadChangeRequest": null,
-    "chat": {
-      "message": "I have a good start on the requirements. A few quick questions before I design the schema:\n\n1. **Status field**: Should milestones have a status (e.g. Active, Completed, Cancelled) or just a simple done/not-done flag?\n\n2. **Project link**: Should each milestone belong to a project? If so, is 'Projects' already an entity in your system?\n\n3. **Assigned person**: Do you want to assign milestones to a specific team member?\n\n4. **Notes**: Do you need a free-text notes or description field?\n\nJust answer what you know — you can always add more columns later.",
-      "suggestedResponses": [
-        { "label": "Yes to all, link to Projects", "value": "yes_all" },
-        { "label": "Just status + due date is fine", "value": "minimal" }
+  "example_2_after_requirements_draft": {
+    "description": "Condition 6: Requirements Analyst returned DRAFT — extract questions from FunctionalRequirements and show them with a responseForm (one text field per question)",
+    "taskComplete": false,
+    "message": "Before I design the schema, I need a few details:",
+    "responseForm": {
+      "description": "Answer these questions to continue:",
+      "submitLabel": "Continue",
+      "questions": [
+        {
+          "id": "q1",
+          "label": "Should milestones have a status (e.g. Active, Completed, Cancelled) or just a done/not-done flag?",
+          "type": { "type": "textarea" },
+          "required": true
+        },
+        {
+          "id": "q2",
+          "label": "Should each milestone belong to a project? If so, is Projects already an entity in your system?",
+          "type": { "type": "textarea" },
+          "required": false
+        },
+        {
+          "id": "q3",
+          "label": "Do you want to assign milestones to a specific team member (link to Users)?",
+          "type": { "type": "textarea" },
+          "required": false
+        }
       ]
+    },
+    "nextStep": {
+      "type": "Chat"
     }
   },
 
-  "example_3_call_schema_designer": {
-    "description": "Requirements are complete — Entity Designer calls Schema Designer",
-    "action": "call_subagent",
-    "subagent": "Entity Schema Designer",
-    "payloadChangeRequest": null,
-    "chat": {
-      "message": "Requirements look complete. Let me design the table structure for you.",
-      "suggestedResponses": null
+  "example_3_user_answered_questions": {
+    "description": "Condition 5: DRAFT in payload, user just answered questions — call Requirements Analyst again with terminateAfter: false",
+    "nextStep": {
+      "type": "Sub-Agent",
+      "subAgent": {
+        "name": "Entity Requirements Analyst",
+        "message": "Update FunctionalRequirements with the user's answers. User said: 'Yes, status: Active/Completed/Cancelled. Link to Projects entity. Assign to a team member via Users.' Finalize to FINAL mode — we have enough to design. Return when done.",
+        "terminateAfter": false
+      }
     }
   },
 
-  "example_4_present_schema_for_approval": {
-    "description": "Schema Designer returned a design — Entity Designer presents it for user approval",
-    "action": "continue",
-    "payloadChangeRequest": null,
-    "chat": {
-      "message": "Here's the proposed table structure for **Project Milestones**:\n\n| Column           | Type        | Required | Description                    |\n|------------------|-------------|----------|---------------------------------|\n| Title            | Text (200)  | Yes      | Milestone label                 |\n| Status           | Text (50)   | Yes      | Active / Completed / Cancelled  |\n| DueDate          | Date/Time   | No       | Target completion date          |\n| CompletedDate    | Date/Time   | No       | Actual completion date          |\n| Notes            | Long Text   | No       | Free-text description           |\n| ProjectID        | UUID (FK)   | Yes      | → Projects                      |\n| AssignedUserID   | UUID (FK)   | No       | → Users                         |\n\n**Auto-added by MemberJunction** (not shown above): `ID`, `__mj_CreatedAt`, `__mj_UpdatedAt`\n\nTable will be created in the `__mj_UDT` schema as `ProjectMilestones`.\n\nDoes this look right? I'll validate and build it once you confirm.",
-      "suggestedResponses": [
-        { "label": "Looks good — create it", "value": "approve" },
-        { "label": "Change something", "value": "modify" }
-      ]
+  "example_4_after_requirements_final": {
+    "description": "Condition 7: Requirements Analyst returned FINAL, SchemaDesign absent — immediately call Schema Designer with terminateAfter: true",
+    "nextStep": {
+      "type": "Sub-Agent",
+      "subAgent": {
+        "name": "Entity Schema Designer",
+        "message": "Design the schema based on FunctionalRequirements in the payload. Research any FK targets first using Database Research Agent. Write SchemaDesign (Prototype + TableDefinition + ModificationType) and return.",
+        "terminateAfter": true
+      }
     }
   },
 
-  "example_5_build_after_approval": {
-    "description": "User approved — run the validator and builder sub-agents (automatic, no user interaction)",
-    "action": "call_subagent",
-    "subagent": "Entity Schema Validator",
-    "payloadChangeRequest": null,
-    "chat": {
-      "message": "Running validation checks and creating the entity...",
-      "suggestedResponses": null
+  "example_5_user_approved_schema": {
+    "description": "Condition 1: User approved the schema ('create it') — call Schema Validator with terminateAfter: true",
+    "nextStep": {
+      "type": "Sub-Agent",
+      "subAgent": {
+        "name": "Entity Schema Validator",
+        "message": "Validate the TableDefinition in SchemaDesign.TableDefinition. Check authorization, schema blocklist, naming conflicts, and structural validity. Return ValidationResult.",
+        "terminateAfter": true
+      }
     }
   },
 
-  "example_6_report_success": {
-    "description": "Builder completed successfully — Entity Designer reports the result",
-    "action": "success",
-    "payloadChangeRequest": null,
-    "chat": {
-      "message": "Your new entity has been created! Here's a summary:\n\n- **Entity Name**: Project Milestones\n- **Table**: `__mj_UDT.ProjectMilestones`\n- **Columns**: 7 custom columns + 3 auto-managed (ID, CreatedAt, UpdatedAt)\n\nThe entity is now live in MemberJunction. You can start creating records immediately via the API or Explorer UI.\n\nWould you like to add any more entities, or is there anything else I can help you with?",
-      "suggestedResponses": [
-        { "label": "Create another entity", "value": "create_more" },
-        { "label": "Done for now", "value": "done" }
-      ]
+  "example_6_schema_change_request": {
+    "description": "Condition 2: User wants a schema change ('add a Notes field') — call Schema Designer with terminateAfter: true",
+    "nextStep": {
+      "type": "Sub-Agent",
+      "subAgent": {
+        "name": "Entity Schema Designer",
+        "message": "Design the schema based on FunctionalRequirements in the payload. Research any FK targets first using Database Research Agent. Write SchemaDesign (Prototype + TableDefinition + ModificationType) and return. Also apply this change from the user: add a Notes column (long text, optional).",
+        "terminateAfter": true
+      }
     }
   },
 
-  "example_7_validation_failure": {
-    "description": "Validator found an error — Entity Designer explains and offers options",
-    "action": "continue",
-    "payloadChangeRequest": null,
-    "chat": {
-      "message": "There's a problem with the schema design:\n\n**Error**: An entity named `Project Milestones` already exists in the `__mj_UDT` schema.\n\nWould you like to:\n- Use a different name for this table?\n- Modify the existing entity instead?",
-      "suggestedResponses": [
-        { "label": "Use a different name", "value": "rename" },
-        { "label": "Modify the existing entity", "value": "modify_existing" }
-      ]
+  "example_7_build_success": {
+    "description": "Condition 3: BuildResult present — report final success",
+    "taskComplete": true,
+    "message": "Your new entity is live!\n\n- **Entity Name**: Project Milestones\n- **Table**: `__mj_UDT.ProjectMilestones`\n- **Columns**: 7 custom + 3 auto-managed (ID, CreatedAt, UpdatedAt)\n\nYou can start creating records immediately via the API or Explorer UI."
+  },
+
+  "example_8_validation_failure": {
+    "description": "Condition 3: ValidationResult with failure — explain and ask how to proceed",
+    "taskComplete": false,
+    "message": "There's a problem with the schema:\n\n**Error**: An entity named `Project Milestones` already exists in `__mj_UDT`.\n\nWould you like to use a different name, or modify the existing entity instead?",
+    "responseForm": {
+      "questions": [{
+        "id": "resolution",
+        "type": {
+          "type": "buttongroup",
+          "options": [
+            { "value": "rename", "label": "Use a different name" },
+            { "value": "modify", "label": "Modify the existing entity" }
+          ]
+        }
+      }]
+    },
+    "nextStep": {
+      "type": "Chat"
     }
   }
 }

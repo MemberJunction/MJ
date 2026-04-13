@@ -1,146 +1,108 @@
 {
-  "description": "Entity Schema Designer converts FunctionalRequirements into a complete SchemaDesign payload section. Always includes Prototype, TableDefinition, and ModificationType.",
+  "description": "Entity Schema Designer runs in two steps: (1) call Database Research Agent with terminateAfter: false, then (2) design the schema and present it with taskComplete: true + nextStep.type: Chat + responseForm for approval.",
 
-  "example_1_create_with_fk": {
-    "description": "Creating a new Project Milestones table with foreign keys",
-    "action": "return_to_parent",
-    "output": {
-      "SchemaDesign": {
-        "ModificationType": "create",
-        "Prototype": "| Column           | Type            | Required | Description                        |\n|------------------|-----------------|----------|------------------------------------||\n| Title            | string(200)     | Yes      | Milestone label                    |\n| Status           | string(50)      | Yes      | Active / Completed / Cancelled     |\n| DueDate          | datetime        | No       | Target completion date             |\n| CompletedDate    | datetime        | No       | Actual completion date             |\n| Notes            | text            | No       | Free-text description              |\n| ProjectID        | uuid (FK)       | Yes      | → Projects.ID                      |\n| AssignedUserID   | uuid (FK)       | No       | → __mj.User.ID                     |",
-        "TableDefinition": {
-          "SchemaName": "__mj_UDT",
-          "TableName": "ProjectMilestones",
-          "EntityName": "Project Milestones",
-          "Description": "Key checkpoints and milestones for projects",
-          "Columns": [
-            {
-              "Name": "Title",
-              "Type": "string",
-              "MaxLength": 200,
-              "IsNullable": false,
-              "Description": "Short label for the milestone"
-            },
-            {
-              "Name": "Status",
-              "Type": "string",
-              "RawSqlType": "NVARCHAR(50)",
-              "IsNullable": false,
-              "DefaultValue": "'Active'",
-              "Description": "Active, Completed, or Cancelled"
-            },
-            {
-              "Name": "DueDate",
-              "Type": "datetime",
-              "IsNullable": true,
-              "Description": "Target completion date (null if open-ended)"
-            },
-            {
-              "Name": "CompletedDate",
-              "Type": "datetime",
-              "IsNullable": true,
-              "Description": "Actual date the milestone was completed"
-            },
-            {
-              "Name": "Notes",
-              "Type": "text",
-              "IsNullable": true,
-              "Description": "Additional context or description"
-            },
-            {
-              "Name": "ProjectID",
-              "Type": "uuid",
-              "IsNullable": false,
-              "Description": "FK → Projects.ID (required)"
-            },
-            {
-              "Name": "AssignedUserID",
-              "Type": "uuid",
-              "IsNullable": true,
-              "Description": "FK → __mj.User.ID — the person responsible"
-            }
-          ],
-          "ForeignKeys": [
-            {
-              "ColumnName": "ProjectID",
-              "ReferencedSchema": "__mj_UDT",
-              "ReferencedTable": "Projects",
-              "ReferencedColumn": "ID",
-              "IsSoft": false
-            },
-            {
-              "ColumnName": "AssignedUserID",
-              "ReferencedSchema": "__mj",
-              "ReferencedTable": "User",
-              "ReferencedColumn": "ID",
-              "IsSoft": true
-            }
-          ]
-        }
+  "example_1_step1_call_db_research": {
+    "description": "Step 1: Research FK targets before designing. ALWAYS terminateAfter: false so Schema Designer continues after research returns.",
+    "nextStep": {
+      "type": "Sub-Agent",
+      "subAgent": {
+        "name": "Database Research Agent",
+        "message": "Are there entities named 'Projects' or 'Users' or similar in __mj_UDT or __mj? Give me the exact schema and table names.",
+        "terminateAfter": false
       }
     }
   },
 
-  "example_2_alter_add_column": {
-    "description": "Modifying an existing entity to add a Priority column",
-    "action": "return_to_parent",
-    "output": {
-      "SchemaDesign": {
-        "ModificationType": "alter",
-        "Prototype": "**Added columns:**\n\n| Column   | Type    | Required | Description               |\n|----------|---------|----------|---------------------------|\n| Priority | integer | No       | 1 (high) – 5 (low) scale |",
-        "TableDefinition": {
-          "SchemaName": "__mj_UDT",
-          "TableName": "ProjectMilestones",
-          "EntityName": "Project Milestones",
-          "Description": "Key checkpoints and milestones for projects",
-          "Columns": [
-            {
-              "Name": "Title",
-              "Type": "string",
-              "MaxLength": 200,
-              "IsNullable": false
-            },
-            {
-              "Name": "Status",
-              "Type": "string",
-              "RawSqlType": "NVARCHAR(50)",
-              "IsNullable": false,
-              "DefaultValue": "'Active'"
-            },
-            {
-              "Name": "DueDate",
-              "Type": "datetime",
-              "IsNullable": true
-            },
-            {
-              "Name": "CompletedDate",
-              "Type": "datetime",
-              "IsNullable": true
-            },
-            {
-              "Name": "Notes",
-              "Type": "text",
-              "IsNullable": true
-            },
-            {
-              "Name": "ProjectID",
-              "Type": "uuid",
-              "IsNullable": false
-            },
-            {
-              "Name": "AssignedUserID",
-              "Type": "uuid",
-              "IsNullable": true
-            },
-            {
-              "Name": "Priority",
-              "Type": "integer",
-              "IsNullable": true,
-              "Description": "Priority ranking: 1=highest, 5=lowest"
-            }
-          ]
+  "example_2_step2_present_schema": {
+    "description": "Step 2: After research returns — design schema and present for approval. nextStep.type: Chat is REQUIRED to deliver message and responseForm to the user. Without it the agent terminates silently.",
+    "message": "Here's the proposed table for **Project Milestones**:\n\n| Column           | Type            | Required | Description                              |\n|------------------|-----------------|----------|------------------------------------------|\n| Title            | string(200)     | Yes      | Milestone label                          |\n| Status           | string(50)      | Yes      | Active / Completed / Cancelled           |\n| DueDate          | datetime        | No       | Target completion date                   |\n| CompletedDate    | datetime        | No       | Actual completion date                   |\n| Notes            | text            | No       | Free-text description                    |\n| ProjectID        | uuid (FK)       | Yes      | → Projects.ID (soft — not yet confirmed) |\n| AssignedUserID   | uuid (FK)       | No       | → __mj.User.ID                           |\n\nAuto-managed: `ID`, `__mj_CreatedAt`, `__mj_UpdatedAt`\nSchema: `__mj_UDT.ProjectMilestones`",
+    "payloadChangeRequest": {
+      "newElements": {
+        "SchemaDesign": {
+          "ModificationType": "create",
+          "Prototype": "| Column           | Type            | Required | Description                              |\n|------------------|-----------------|----------|------------------------------------------|\n| Title            | string(200)     | Yes      | Milestone label                          |\n| Status           | string(50)      | Yes      | Active / Completed / Cancelled           |\n| DueDate          | datetime        | No       | Target completion date                   |\n| CompletedDate    | datetime        | No       | Actual completion date                   |\n| Notes            | text            | No       | Free-text description                    |\n| ProjectID        | uuid (FK)       | Yes      | → Projects.ID (soft — not yet confirmed) |\n| AssignedUserID   | uuid (FK)       | No       | → __mj.User.ID                           |",
+          "TableDefinition": {
+            "SchemaName": "__mj_UDT",
+            "TableName": "ProjectMilestones",
+            "EntityName": "Project Milestones",
+            "Description": "Key checkpoints and milestones for projects",
+            "Columns": [
+              { "Name": "Title", "Type": "string", "MaxLength": 200, "IsNullable": false, "Description": "Short label for the milestone" },
+              { "Name": "Status", "Type": "string", "RawSqlType": "NVARCHAR(50)", "IsNullable": false, "DefaultValue": "'Active'", "Description": "Active, Completed, or Cancelled" },
+              { "Name": "DueDate", "Type": "datetime", "IsNullable": true, "Description": "Target completion date (null if open-ended)" },
+              { "Name": "CompletedDate", "Type": "datetime", "IsNullable": true, "Description": "Actual date the milestone was completed" },
+              { "Name": "Notes", "Type": "text", "IsNullable": true, "Description": "Additional context or description" },
+              { "Name": "ProjectID", "Type": "uuid", "IsNullable": false, "Description": "FK → Projects.ID. Research found no Projects table in __mj_UDT — using soft FK." },
+              { "Name": "AssignedUserID", "Type": "uuid", "IsNullable": true, "Description": "FK → __mj.User.ID — the person responsible" }
+            ],
+            "ForeignKeys": [
+              { "ColumnName": "ProjectID", "ReferencedSchema": "__mj_UDT", "ReferencedTable": "Projects", "ReferencedColumn": "ID", "IsSoft": true },
+              { "ColumnName": "AssignedUserID", "ReferencedSchema": "__mj", "ReferencedTable": "User", "ReferencedColumn": "ID", "IsSoft": false }
+            ]
+          }
         }
       }
+    },
+    "responseForm": {
+      "questions": [{
+        "id": "approval",
+        "label": "Does this look right?",
+        "type": {
+          "type": "buttongroup",
+          "options": [
+            { "value": "approve", "label": "Looks good — create it" },
+            { "value": "modify", "label": "Change something" }
+          ]
+        }
+      }]
+    },
+    "nextStep": {
+      "type": "Chat"
+    }
+  },
+
+  "example_3_alter_add_column": {
+    "description": "Adding a new column to an existing entity — same two-step pattern. nextStep.type: Chat is always required.",
+    "message": "Updated — here's what was added to **Project Milestones**:\n\n| Column   | Type    | Required | Description               |\n|----------|---------|----------|---------------------------|\n| Priority | integer | No       | 1 (high) – 5 (low) scale  |\n\nAuto-managed: `ID`, `__mj_CreatedAt`, `__mj_UpdatedAt`\nSchema: `__mj_UDT.ProjectMilestones`",
+    "payloadChangeRequest": {
+      "newElements": {
+        "SchemaDesign": {
+          "ModificationType": "alter",
+          "Prototype": "**Added columns:**\n\n| Column   | Type    | Required | Description               |\n|----------|---------|----------|---------------------------|\n| Priority | integer | No       | 1 (high) – 5 (low) scale |",
+          "TableDefinition": {
+            "SchemaName": "__mj_UDT",
+            "TableName": "ProjectMilestones",
+            "EntityName": "Project Milestones",
+            "Description": "Key checkpoints and milestones for projects",
+            "Columns": [
+              { "Name": "Title", "Type": "string", "MaxLength": 200, "IsNullable": false },
+              { "Name": "Status", "Type": "string", "RawSqlType": "NVARCHAR(50)", "IsNullable": false, "DefaultValue": "'Active'" },
+              { "Name": "DueDate", "Type": "datetime", "IsNullable": true },
+              { "Name": "CompletedDate", "Type": "datetime", "IsNullable": true },
+              { "Name": "Notes", "Type": "text", "IsNullable": true },
+              { "Name": "ProjectID", "Type": "uuid", "IsNullable": false },
+              { "Name": "AssignedUserID", "Type": "uuid", "IsNullable": true },
+              { "Name": "Priority", "Type": "integer", "IsNullable": true, "Description": "Priority ranking: 1=highest, 5=lowest" }
+            ]
+          }
+        }
+      }
+    },
+    "responseForm": {
+      "questions": [{
+        "id": "approval",
+        "label": "Does this look right?",
+        "type": {
+          "type": "buttongroup",
+          "options": [
+            { "value": "approve", "label": "Looks good — create it" },
+            { "value": "modify", "label": "Change something" }
+          ]
+        }
+      }]
+    },
+    "nextStep": {
+      "type": "Chat"
     }
   }
 }
