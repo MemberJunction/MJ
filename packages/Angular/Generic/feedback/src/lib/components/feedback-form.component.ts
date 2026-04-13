@@ -1,5 +1,4 @@
 import { Component, OnInit, Input, Output, EventEmitter, Inject, ChangeDetectorRef } from '@angular/core';
-import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { FeedbackSubmission, FeedbackResponse, FeedbackCategory, FeedbackSeverity, FeedbackEnvironment, CategoryOption, SeverityOption, EnvironmentOption } from '../feedback.types';
 import { FeedbackConfig, FEEDBACK_CONFIG, FeedbackFieldConfig, mergeFieldConfig } from '../feedback.config';
@@ -10,7 +9,7 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 
 @Component({
   standalone: true,
-  imports: [CommonModule, FormsModule, MJDialogComponent, MJDialogActionsComponent, MJButtonDirective, SharedGenericModule],
+  imports: [FormsModule, MJDialogComponent, MJDialogActionsComponent, MJButtonDirective, SharedGenericModule],
   selector: 'mj-feedback-form',
   template: `
     <mj-dialog
@@ -75,7 +74,7 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
               placeholder="Please provide a detailed description..."
               rows="4"
               [maxlength]="10000"></textarea>
-            <div class="char-count" [ngClass]="{'warning': Description.length < 20}">
+            <div class="char-count" [class.warning]="Description.length < 20">
               {{ Description.length }}/10000 (minimum 20 characters)
             </div>
           </div>
@@ -252,7 +251,7 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
             (click)="OnSubmit()"
             [disabled]="!CanSubmit() || IsSubmitting"
             type="button">
-            <i class="fas" [ngClass]="IsSubmitting ? 'fa-spinner fa-spin' : 'fa-paper-plane'"></i>
+            <i class="fas" [class.fa-spinner]="IsSubmitting" [class.fa-spin]="IsSubmitting" [class.fa-paper-plane]="!IsSubmitting"></i>
             {{ IsSubmitting ? 'Submitting...' : (config.submitButtonText || 'Submit') }}
           </button>
           <button mjButton (click)="OnCancel()" [disabled]="IsSubmitting" type="button">Cancel</button>
@@ -366,7 +365,7 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
       align-items: center;
       justify-content: center;
       gap: var(--mj-space-4);
-      padding: var(--mj-space-15) var(--mj-space-5);
+      padding: var(--mj-space-14) var(--mj-space-5);
       text-align: center;
     }
 
@@ -482,8 +481,7 @@ export class FeedbackFormComponent implements OnInit {
   /**
    * Handle category change
    */
-  OnCategoryChange(value: string): void {
-    this.Category = value;
+  OnCategoryChange(_value: string): void {
     this.cdr.detectChanges();
   }
 

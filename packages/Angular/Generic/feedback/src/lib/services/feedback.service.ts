@@ -76,7 +76,8 @@ export class FeedbackService {
    */
   private async executeGraphQLMutation(input: GraphQLFeedbackInput): Promise<SubmitFeedbackResult> {
     const variables = { input };
-    const result = await GraphQLDataProvider.ExecuteGQL(SUBMIT_FEEDBACK_MUTATION, variables);
+    const provider = Metadata.Provider as GraphQLDataProvider;
+    const result = await provider.ExecuteGQL(SUBMIT_FEEDBACK_MUTATION, variables);
     return result as SubmitFeedbackResult;
   }
 

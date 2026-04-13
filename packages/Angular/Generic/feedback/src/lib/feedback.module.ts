@@ -10,10 +10,6 @@ import { MJDialogComponent, MJDialogActionsComponent, MJButtonDirective } from '
 import { FeedbackFormComponent } from './components/feedback-form.component';
 import { FeedbackButtonComponent } from './components/feedback-button.component';
 
-// Services
-import { FeedbackService } from './services/feedback.service';
-import { FeedbackDialogService } from './services/feedback-dialog.service';
-
 // Config
 import { FeedbackConfig, FEEDBACK_CONFIG } from './feedback.config';
 
@@ -73,10 +69,6 @@ import { FeedbackConfig, FEEDBACK_CONFIG } from './feedback.config';
   exports: [
     FeedbackFormComponent,
     FeedbackButtonComponent
-  ],
-  providers: [
-    FeedbackService,
-    FeedbackDialogService
   ]
 })
 export class FeedbackModule {

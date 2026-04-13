@@ -1,9 +1,18 @@
 import { Resolver, Mutation, Arg, Ctx, Field, InputType, ObjectType } from 'type-graphql';
 import { Octokit } from '@octokit/rest';
+import { createAppAuth } from '@octokit/auth-app';
 import { LogError, LogStatus } from '@memberjunction/core';
 import { AppContext } from '../types.js';
 import { configInfo } from '../config.js';
 import { z } from 'zod';
+import { readFileSync } from 'fs';
+import { resolve } from 'path';
+import { homedir } from 'os';
+
+// Module-level cache — survives across resolver instances (type-graphql creates a new instance per request)
+let cachedPrivateKey: string | null | undefined; // undefined = not yet read
+let cachedOctokit: Octokit | null = null;
+let cachedAuthType: string | null = null;
 
 // ============================================================================
 // GraphQL Input/Output Types
@@ -127,11 +136,11 @@ interface FeedbackSubmission {
 interface FeedbackConfig {
   owner: string;
   repo: string;
-  token: string;
   defaultLabels?: string[];
   categoryLabels?: Record<string, string>;
   severityLabels?: Record<string, string>;
   assignees?: string[];
+  auth: { type: 'pat'; token: string } | { type: 'app'; appId: number; installationId: number; privateKey: string };
 }
 
 // ============================================================================
@@ -263,11 +272,12 @@ export class FeedbackResolver {
   // ============================================================================
 
   /**
-   * Get feedback configuration from environment/config
+   * Get feedback configuration from environment/config.
+   * Supports GitHub App auth (preferred) or PAT fallback.
    */
   private getConfig(): FeedbackConfig | null {
-    const token = process.env.GITHUB_PAT;
-    if (!token) {
+    const auth = this.resolveAuth();
+    if (!auth) {
       return null;
     }
 
@@ -278,7 +288,7 @@ export class FeedbackResolver {
     return {
       owner: (githubSettings?.owner as string) || process.env.GITHUB_FEEDBACK_OWNER || 'MemberJunction',
       repo: (githubSettings?.repo as string) || process.env.GITHUB_FEEDBACK_REPO || 'MJ',
-      token,
+      auth,
       defaultLabels: (githubSettings?.defaultLabels as string[]) || ['user-submitted'],
       categoryLabels: (githubSettings?.categoryLabels as Record<string, string>) || {
         bug: 'bug',
@@ -294,6 +304,69 @@ export class FeedbackResolver {
       },
       assignees: githubSettings?.assignees as string[] | undefined,
     };
+  }
+
+  /**
+   * Resolve authentication — prefers GitHub App, falls back to PAT.
+   */
+  private resolveAuth(): FeedbackConfig['auth'] | null {
+    // Try GitHub App first
+    const appId = process.env.GITHUB_APP_ID;
+    const installationId = process.env.GITHUB_APP_INSTALLATION_ID;
+    const privateKey = this.readPrivateKey();
+
+    if (appId && installationId && privateKey) {
+      return {
+        type: 'app',
+        appId: Number(appId),
+        installationId: Number(installationId),
+        privateKey
+      };
+    }
+
+    // Fall back to PAT
+    const token = process.env.GITHUB_PAT;
+    if (token) {
+      return { type: 'pat', token };
+    }
+
+    return null;
+  }
+
+  /**
+   * Read the GitHub App private key from file path or inline env var.
+   * Cached at module level — the key file doesn't change at runtime.
+   */
+  private readPrivateKey(): string | null {
+    if (cachedPrivateKey !== undefined) {
+      return cachedPrivateKey;
+    }
+
+    // Option 1: File path
+    const keyPath = process.env.GITHUB_APP_PRIVATE_KEY_PATH;
+    if (keyPath) {
+      try {
+        const resolved = keyPath.startsWith('~/')
+          ? resolve(homedir(), keyPath.slice(2))
+          : resolve(keyPath);
+        cachedPrivateKey = readFileSync(resolved, 'utf-8');
+        return cachedPrivateKey;
+      } catch (error) {
+        LogError('Failed to read GitHub App private key file', undefined, error);
+        cachedPrivateKey = null;
+        return null;
+      }
+    }
+
+    // Option 2: Inline key (with \n replaced)
+    const inlineKey = process.env.GITHUB_APP_PRIVATE_KEY;
+    if (inlineKey) {
+      cachedPrivateKey = inlineKey.replace(/\\n/g, '\n');
+      return cachedPrivateKey;
+    }
+
+    cachedPrivateKey = null;
+    return null;
   }
 
   /**
@@ -336,13 +409,39 @@ export class FeedbackResolver {
   }
 
   /**
+   * Get or create an authenticated Octokit instance.
+   * Cached at module level — createAppAuth handles token refresh internally.
+   */
+  private getOctokit(config: FeedbackConfig): Octokit {
+    if (cachedOctokit && cachedAuthType === config.auth.type) {
+      return cachedOctokit;
+    }
+
+    if (config.auth.type === 'app') {
+      cachedOctokit = new Octokit({
+        authStrategy: createAppAuth,
+        auth: {
+          appId: config.auth.appId,
+          privateKey: config.auth.privateKey,
+          installationId: config.auth.installationId,
+        },
+      });
+    } else {
+      cachedOctokit = new Octokit({ auth: config.auth.token });
+    }
+
+    cachedAuthType = config.auth.type;
+    return cachedOctokit;
+  }
+
+  /**
    * Create a GitHub issue from the feedback submission
    */
   private async createGitHubIssue(
     submission: FeedbackSubmission,
     config: FeedbackConfig
   ): Promise<{ number: number; html_url: string }> {
-    const octokit = new Octokit({ auth: config.token });
+    const octokit = this.getOctokit(config);
 
     const labels = this.buildLabels(submission, config);
     const body = this.formatIssueBody(submission);
