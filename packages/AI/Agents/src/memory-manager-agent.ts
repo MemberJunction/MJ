@@ -124,6 +124,22 @@ const DECAY_CONFIG = {
 };
 
 /**
+ * Configuration for stale reference pruning.
+ * Caps how many orphaned notes the pruning phase will archive per cycle to keep
+ * Memory Manager runtime bounded even on large corpora.
+ */
+const STALE_PRUNING_CONFIG = {
+    maxNotesPerRun: 200,
+};
+
+/**
+ * Minimum number of scored notes required to compute a 95th-percentile uniqueness
+ * threshold. Below this the percentile is meaningless (a 5-note cohort has a p95
+ * at index 4 which is just "the max"), so outlier auto-protection is disabled.
+ */
+const OUTLIER_PROMOTION_MIN_COHORT = 20;
+
+/**
  * Valid Type values for MJAIAgentNote records. Must match the typed union in the
  * generated entity class (MJCoreEntities/src/generated/entity_subclasses.ts).
  * Used to validate LLM-returned values before assigning to entity properties.
@@ -137,6 +153,68 @@ function isValidNoteType(value: unknown): value is ValidNoteType {
 
 /** Reusable parameter object for deterministic (temperature=0) LLM prompt calls. */
 const DETERMINISTIC_PROMPT_PARAMS = { temperature: 0 } as const;
+
+/**
+ * Possible reasons consolidation fired (or didn't). Exposed via shouldRunConsolidation's
+ * return value so the observability layer can record the trigger on the parent run step.
+ */
+type ConsolidationTriggerType = 'forced' | 'every-run' | 'time' | 'event' | 'count' | 'disabled' | 'not-triggered';
+
+interface ConsolidationTriggerDecision {
+    shouldRun: boolean;
+    triggerType: ConsolidationTriggerType;
+}
+
+/** Per-cluster verification result, aggregated into a phase-level observability step. */
+interface ConsolidationVerificationResult {
+    entitiesChecked: number;
+    entitiesMissing: string[];
+    passed: boolean;
+}
+
+/**
+ * Entity-attribute-value triple as returned by the contradiction detection prompt.
+ * Kept loose because the LLM's response shape is best-effort — countEntityTriples
+ * handles malformed payloads defensively.
+ */
+interface ContradictionEntityTriple {
+    entity: string;
+    attribute: string;
+    value: string;
+}
+
+/**
+ * Raw shape of the LLM response returned by the contradiction detection prompt.
+ * The `entityTriples` field may come back as an object keyed by noteA/noteB, a flat
+ * array, or be absent entirely — the counter normalizes across all three.
+ */
+interface ContradictionPromptResult {
+    isContradiction: boolean;
+    keepNoteId?: string;
+    revokeNoteId?: string;
+    reason: string;
+    entityTriples?: Record<string, ContradictionEntityTriple[]> | ContradictionEntityTriple[];
+}
+
+/** Normalized per-pair contradiction evaluation returned to the caller. */
+interface ContradictionPairEvaluation {
+    isContradiction: boolean;
+    keepNoteId?: string;
+    revokeNoteId?: string;
+    reason: string;
+    triplesExtracted: number;
+}
+
+/**
+ * Accumulator passed through the decay phase to collect observability signals.
+ * Mutated by decayOneNote/decayOneExample so the parent phase can surface the
+ * distribution and tier-specific counts in its run step output.
+ */
+interface DecayStatsAccumulator {
+    decayFactors: number[];
+    protectedPreserved: number;
+    ephemeralAccelerated: number;
+}
 
 /**
  * Projection of a note sent to the consolidation prompt.
@@ -1427,42 +1505,156 @@ export class MemoryManagerAgent extends BaseAgent {
      * Compute composite importance scores for all active notes.
      * Uses a 7-signal weighted formula based on Park et al.'s Generative Agents (2023).
      * Signals not available for a given note use neutral defaults (0.5) with proportional weight redistribution.
-     * Auto-promotes Standard-tier notes to Protected when score >= autoPromoteThreshold.
+     *
+     * Auto-promotes Standard-tier notes to Protected via two paths:
+     *  1. ImportanceScore >= IMPORTANCE_CONFIG.autoPromoteThreshold (default 8.0)
+     *  2. Uniqueness at or above the 95th percentile of the cohort (outlier protection,
+     *     FR-094). The cohort must be at least OUTLIER_PROMOTION_MIN_COHORT notes for
+     *     the percentile to be meaningful.
+     *
+     * Also reports the score distribution (min/max/mean/median) so the observability
+     * step can surface it in the agent run step output.
      */
-    private async computeImportanceScores(contextUser: UserInfo): Promise<{ notesScored: number; tierPromotions: number }> {
+    private async computeImportanceScores(contextUser: UserInfo): Promise<{
+        notesScored: number;
+        tierPromotions: number;
+        scoreDistribution: { min: number; max: number; mean: number; median: number } | null;
+    }> {
         const allNotes = AIEngine.Instance.AgentNotes.filter(n => n.Status === 'Active');
         let notesScored = 0;
         let tierPromotions = 0;
         const md = new Metadata();
+        const scoresForDistribution: number[] = [];
+
+        // Pre-pass: compute uniqueness per note once, derive 95th-percentile threshold.
+        // Passing uniqueness into gatherImportanceSignals also eliminates a redundant
+        // FindSimilarAgentNotes call per note.
+        const uniquenessByNoteId = await this.precomputeUniqueness(allNotes);
+        const p95Threshold = this.computeUniquenessP95(uniquenessByNoteId);
 
         for (const note of allNotes) {
-            const signals = await this.gatherImportanceSignals(note);
+            const uniquenessInfo = uniquenessByNoteId.get(note.ID);
+            const signals = this.gatherImportanceSignals(note, uniquenessInfo);
             const importanceScore = this.computeWeightedImportanceScore(signals);
 
             const noteToUpdate = await md.GetEntityObject<MJAIAgentNoteEntity>('MJ: AI Agent Notes', contextUser);
             if (await noteToUpdate.Load(note.ID)) {
                 noteToUpdate.ImportanceScore = importanceScore;
 
-                // Auto-promote Standard to Protected at threshold
-                if ((noteToUpdate.ProtectionTier || 'Standard') === 'Standard' && importanceScore >= IMPORTANCE_CONFIG.autoPromoteThreshold) {
+                // Promotion path 1: high ImportanceScore
+                const currentTier = noteToUpdate.ProtectionTier || 'Standard';
+                let promotedByScore = false;
+                if (currentTier === 'Standard' && importanceScore >= IMPORTANCE_CONFIG.autoPromoteThreshold) {
                     noteToUpdate.ProtectionTier = 'Protected';
                     noteToUpdate.Comments = `${noteToUpdate.Comments || ''} [Auto-promoted to Protected: ImportanceScore ${importanceScore} >= ${IMPORTANCE_CONFIG.autoPromoteThreshold}]`.trim();
+                    tierPromotions++;
+                    promotedByScore = true;
+                }
+
+                // Promotion path 2: uniqueness outlier (p95+). Only apply when the cohort
+                // is large enough for the percentile to be meaningful, the note has a
+                // computed uniqueness, and we didn't already promote it via the score path.
+                if (
+                    !promotedByScore &&
+                    currentTier === 'Standard' &&
+                    p95Threshold !== null &&
+                    uniquenessInfo?.available &&
+                    uniquenessInfo.value >= p95Threshold
+                ) {
+                    noteToUpdate.ProtectionTier = 'Protected';
+                    noteToUpdate.Comments = `${noteToUpdate.Comments || ''} [Auto-protected: uniqueness ${uniquenessInfo.value.toFixed(3)} at/above 95th percentile ${p95Threshold.toFixed(3)}]`.trim();
                     tierPromotions++;
                 }
 
                 if (await noteToUpdate.Save()) {
                     notesScored++;
+                    scoresForDistribution.push(importanceScore);
                 } else {
                     LogError(`Memory Manager: Failed to update ImportanceScore for note ${note.ID}`);
                 }
             }
         }
 
-        return { notesScored, tierPromotions };
+        return {
+            notesScored,
+            tierPromotions,
+            scoreDistribution: this.summarizeScores(scoresForDistribution)
+        };
     }
 
-    /** Gather the 7 importance signals for a single note. Some signals require async vector search. */
-    private async gatherImportanceSignals(note: MJAIAgentNoteEntity): Promise<ImportanceSignal[]> {
+    /**
+     * Pre-compute uniqueness (1 - maxSimilarity to nearest neighbor) for each note in
+     * one pass. Returns a map keyed by note ID. Notes without content get an
+     * unavailable signal so downstream scoring falls back to the neutral default.
+     */
+    private async precomputeUniqueness(
+        notes: MJAIAgentNoteEntity[]
+    ): Promise<Map<string, { value: number; available: boolean }>> {
+        const map = new Map<string, { value: number; available: boolean }>();
+        for (const note of notes) {
+            if (!note.Note) {
+                map.set(note.ID, { value: 0.5, available: false });
+                continue;
+            }
+            const similar = await AIEngine.Instance.FindSimilarAgentNotes(note.Note, note.AgentID, undefined, undefined, 1, 0.0);
+            const uniqueness = similar.length > 0 ? 1.0 - similar[0].similarity : 1.0;
+            map.set(note.ID, { value: uniqueness, available: true });
+        }
+        return map;
+    }
+
+    /**
+     * Derive the 95th-percentile uniqueness threshold across the cohort. Returns null
+     * when the cohort is smaller than OUTLIER_PROMOTION_MIN_COHORT (percentile isn't
+     * meaningful) or when no uniqueness was actually computable.
+     */
+    private computeUniquenessP95(
+        uniquenessMap: Map<string, { value: number; available: boolean }>
+    ): number | null {
+        const available = Array.from(uniquenessMap.values())
+            .filter(u => u.available)
+            .map(u => u.value);
+        if (available.length < OUTLIER_PROMOTION_MIN_COHORT) {
+            return null;
+        }
+        const sorted = available.slice().sort((a, b) => a - b);
+        const index = Math.floor(sorted.length * 0.95);
+        const clampedIndex = Math.min(sorted.length - 1, index);
+        return sorted[clampedIndex];
+    }
+
+    /**
+     * Summarize importance scores into min/max/mean/median. Returns null for an empty
+     * input so the caller can serialize it as an explicit "no data" signal in the
+     * observability step.
+     */
+    private summarizeScores(scores: number[]): { min: number; max: number; mean: number; median: number } | null {
+        if (scores.length === 0) return null;
+        const sorted = scores.slice().sort((a, b) => a - b);
+        const min = sorted[0];
+        const max = sorted[sorted.length - 1];
+        const mean = sorted.reduce((sum, v) => sum + v, 0) / sorted.length;
+        const mid = sorted.length / 2;
+        const median = sorted.length % 2 === 0
+            ? (sorted[mid - 1] + sorted[mid]) / 2
+            : sorted[Math.floor(mid)];
+        return {
+            min: Math.round(min * 100) / 100,
+            max: Math.round(max * 100) / 100,
+            mean: Math.round(mean * 100) / 100,
+            median: Math.round(median * 100) / 100
+        };
+    }
+
+    /**
+     * Gather the 7 importance signals for a single note. Uniqueness is precomputed by
+     * the caller so the full cohort can be examined in one pass for percentile
+     * analysis. Other signals are derived from the note itself.
+     */
+    private gatherImportanceSignals(
+        note: MJAIAgentNoteEntity,
+        precomputedUniqueness: { value: number; available: boolean } | undefined
+    ): ImportanceSignal[] {
         const signals: ImportanceSignal[] = [];
         const hoursSinceCreation = (Date.now() - new Date(note.__mj_CreatedAt).getTime()) / (1000 * 60 * 60);
         const hasConfidence = note.Comments?.includes('confidence') || false;
@@ -1471,16 +1663,11 @@ export class MemoryManagerAgent extends BaseAgent {
         signals.push({ signal: 'recencyDecay', value: Math.pow(0.995, hoursSinceCreation), available: true });
         signals.push({ signal: 'llmImportance', value: hasConfidence ? 0.7 : 0.5, available: hasConfidence });
         signals.push({ signal: 'relevance', value: 0.5, available: false }); // Phase 2 enrichment
-
-        // Uniqueness: min distance to nearest neighbor
-        let uniqueness = 0.5;
-        let uniquenessAvailable = false;
-        if (note.Note) {
-            const similar = await AIEngine.Instance.FindSimilarAgentNotes(note.Note, note.AgentID, undefined, undefined, 1, 0.0);
-            uniqueness = similar.length > 0 ? 1.0 - similar[0].similarity : 1.0;
-            uniquenessAvailable = true;
-        }
-        signals.push({ signal: 'uniqueness', value: uniqueness, available: uniquenessAvailable });
+        signals.push({
+            signal: 'uniqueness',
+            value: precomputedUniqueness?.value ?? 0.5,
+            available: precomputedUniqueness?.available ?? false
+        });
         signals.push({ signal: 'correctionBoost', value: isCorrection ? 1.0 : 0.0, available: true });
         signals.push({ signal: 'goalAlignment', value: 0.5, available: false }); // Phase 2 enrichment
         signals.push({ signal: 'userMark', value: note.IsAutoGenerated ? 0.0 : 1.0, available: true });
@@ -1530,13 +1717,20 @@ export class MemoryManagerAgent extends BaseAgent {
      *   an env var (`FORCE_MAINTENANCE=1`), which was removed because an env-var
      *   sidechannel could accidentally leak into production and cause massive DB/LLM
      *   churn on every run.
+     *
+     * Returns both a boolean and the reason it fired so the observability layer can
+     * record the trigger type on the parent consolidation run step.
      */
-    private async shouldRunConsolidation(agentId: string, contextUser: UserInfo, forceMaintenance: boolean): Promise<boolean> {
-        if (forceMaintenance) return true;
+    private async shouldRunConsolidation(
+        agentId: string,
+        contextUser: UserInfo,
+        forceMaintenance: boolean
+    ): Promise<ConsolidationTriggerDecision> {
+        if (forceMaintenance) return { shouldRun: true, triggerType: 'forced' };
 
         const freq = CONSOLIDATION_CONFIG.frequency;
-        if (freq === 'disabled') return false;
-        if (freq === 'every-run') return true;
+        if (freq === 'disabled') return { shouldRun: false, triggerType: 'disabled' };
+        if (freq === 'every-run') return { shouldRun: true, triggerType: 'every-run' };
 
         if (freq === 'hourly' || freq === 'daily') {
             return this.shouldRunConsolidationByTimeWindow(agentId, contextUser, freq === 'hourly' ? 1 : 24);
@@ -1546,19 +1740,25 @@ export class MemoryManagerAgent extends BaseAgent {
             return this.shouldRunConsolidationByRunCount(agentId, contextUser, freq);
         }
 
-        return true;
+        return { shouldRun: true, triggerType: 'every-run' };
     }
 
     /**
-     * Time-window frequency gate: returns true if enough time has passed since the last
-     * memory-manager run, OR if the event-driven new-note threshold has been crossed.
+     * Time-window frequency gate: returns shouldRun=true with triggerType='time' when
+     * enough time has passed since the last memory-manager run, or triggerType='event'
+     * when the event-driven new-note threshold has been crossed. Falls back to
+     * triggerType='not-triggered' when neither condition fires.
      */
-    private async shouldRunConsolidationByTimeWindow(agentId: string, contextUser: UserInfo, thresholdHours: number): Promise<boolean> {
+    private async shouldRunConsolidationByTimeWindow(
+        agentId: string,
+        contextUser: UserInfo,
+        thresholdHours: number
+    ): Promise<ConsolidationTriggerDecision> {
         const lastRun = await this.GetLastRunTime(agentId, contextUser);
-        if (!lastRun) return true;
+        if (!lastRun) return { shouldRun: true, triggerType: 'time' };
 
         const hoursSinceLast = (Date.now() - lastRun.getTime()) / (1000 * 60 * 60);
-        if (hoursSinceLast >= thresholdHours) return true;
+        if (hoursSinceLast >= thresholdHours) return { shouldRun: true, triggerType: 'time' };
 
         // Event-driven trigger: consolidate when at least `noteCountTrigger` new notes
         // have been added system-wide since the last Memory Manager run.
@@ -1579,13 +1779,17 @@ export class MemoryManagerAgent extends BaseAgent {
             if (this._verbose) {
                 LogStatus(`Memory Manager: Event-driven consolidation trigger fired (${newNoteResult.TotalRowCount} new notes >= ${CONSOLIDATION_CONFIG.noteCountTrigger} threshold since last MM run)`);
             }
-            return true;
+            return { shouldRun: true, triggerType: 'event' };
         }
-        return false;
+        return { shouldRun: false, triggerType: 'not-triggered' };
     }
 
     /** Run-count frequency gate: consolidate every N completed runs. */
-    private async shouldRunConsolidationByRunCount(agentId: string, contextUser: UserInfo, everyN: number): Promise<boolean> {
+    private async shouldRunConsolidationByRunCount(
+        agentId: string,
+        contextUser: UserInfo,
+        everyN: number
+    ): Promise<ConsolidationTriggerDecision> {
         const rv = new RunView();
         const countResult = await rv.RunView({
             EntityName: 'MJ: AI Agent Runs',
@@ -1593,21 +1797,24 @@ export class MemoryManagerAgent extends BaseAgent {
             ResultType: 'count_only'
         }, contextUser);
         const completedCount = countResult.Success ? (countResult.TotalRowCount || 0) : 0;
-        return completedCount > 0 && completedCount % everyN === 0;
+        const shouldRun = completedCount > 0 && completedCount % everyN === 0;
+        return { shouldRun, triggerType: shouldRun ? 'count' : 'not-triggered' };
     }
 
     /**
      * Consolidate related notes into single, comprehensive notes.
      * This method finds clusters of similar notes and synthesizes them.
      *
+     * Returns per-cluster verification results alongside the consolidation counts so
+     * the phase-level "Verify Consolidation Output" run step can aggregate them.
+     *
      * @param agentId Optional - consolidate notes for a specific agent only
      * @param contextUser The context user for database operations
-     * @returns Number of notes consolidated (archived)
      */
     public async consolidateRelatedNotes(
         agentId: string | null,
         contextUser: UserInfo
-    ): Promise<{ consolidated: number; archived: number; newNoteIds: string[] }> {
+    ): Promise<{ consolidated: number; archived: number; newNoteIds: string[]; verifications: ConsolidationVerificationResult[] }> {
         const allNotes = AIEngine.Instance.AgentNotes;
 
         // Filter to active, auto-generated notes (optionally for specific agent)
@@ -1621,7 +1828,7 @@ export class MemoryManagerAgent extends BaseAgent {
             if (this._verbose) {
                 LogStatus(`Memory Manager: Only ${activeNotes.length} active notes - need at least ${CONSOLIDATION_CONFIG.minClusterSize} to consolidate`);
             }
-            return { consolidated: 0, archived: 0, newNoteIds: [] };
+            return { consolidated: 0, archived: 0, newNoteIds: [], verifications: [] };
         }
 
         if (this._verbose) {
@@ -1634,7 +1841,7 @@ export class MemoryManagerAgent extends BaseAgent {
             if (this._verbose) {
                 LogStatus(`Memory Manager: No clusters found with ${CONSOLIDATION_CONFIG.minClusterSize}+ similar notes`);
             }
-            return { consolidated: 0, archived: 0, newNoteIds: [] };
+            return { consolidated: 0, archived: 0, newNoteIds: [], verifications: [] };
         }
 
         if (this._verbose) {
@@ -1648,18 +1855,19 @@ export class MemoryManagerAgent extends BaseAgent {
 
         if (!consolidatePrompt) {
             LogError('Memory Manager: Consolidation prompt not found');
-            return { consolidated: 0, archived: 0, newNoteIds: [] };
+            return { consolidated: 0, archived: 0, newNoteIds: [], verifications: [] };
         }
 
         const aiNoteTypeId = AIEngine.Instance.AgenteNoteTypeIDByName('AI');
         if (!aiNoteTypeId) {
             LogError('Memory Manager: Could not find "AI" note type');
-            return { consolidated: 0, archived: 0, newNoteIds: [] };
+            return { consolidated: 0, archived: 0, newNoteIds: [], verifications: [] };
         }
 
         let consolidated = 0;
         let archived = 0;
         const newNoteIds: string[] = [];
+        const verifications: ConsolidationVerificationResult[] = [];
         const runner = new AIPromptRunner();
         const md = new Metadata();
 
@@ -1671,12 +1879,13 @@ export class MemoryManagerAgent extends BaseAgent {
                 consolidated += result.consolidated;
                 archived += result.archived;
                 if (result.newNoteId) newNoteIds.push(result.newNoteId);
+                if (result.verification) verifications.push(result.verification);
             } catch (error) {
                 LogError('Memory Manager: Exception during consolidation:', error);
             }
         }
 
-        return { consolidated, archived, newNoteIds };
+        return { consolidated, archived, newNoteIds, verifications };
     }
 
     /**
@@ -1896,12 +2105,15 @@ export class MemoryManagerAgent extends BaseAgent {
      * Uses a three-stage pipeline: embedding pre-filter, entity-attribute extraction, LLM judgment.
      * High-importance pairs (both >= highImportanceThreshold) are flagged but preserved.
      * Protected-tier notes are never auto-revoked.
+     *
+     * Aggregates the per-pair entity-attribute-value triple count so the observability
+     * step can report how much structural reasoning the LLM produced.
      */
     private async detectAndResolveContradictions(
         contextUser: UserInfo,
         consolidatedNoteIds: Set<string>
-    ): Promise<{ contradictionsFound: number; resolved: number; flagged: number; pairsAnalyzed: number }> {
-        const result = { contradictionsFound: 0, resolved: 0, flagged: 0, pairsAnalyzed: 0 };
+    ): Promise<{ contradictionsFound: number; resolved: number; flagged: number; pairsAnalyzed: number; entityTriplesExtracted: number }> {
+        const result = { contradictionsFound: 0, resolved: 0, flagged: 0, pairsAnalyzed: 0, entityTriplesExtracted: 0 };
 
         const prompt = AIEngine.Instance.Prompts.find(p =>
             p.Name === 'Memory Manager - Detect Contradictions' && p.Category === 'MJ: System'
@@ -1921,7 +2133,10 @@ export class MemoryManagerAgent extends BaseAgent {
             result.pairsAnalyzed++;
 
             const llmResult = await this.evaluateContradictionPair(noteA, noteB, prompt, runner, contextUser);
-            if (!llmResult || !llmResult.isContradiction) continue;
+            if (!llmResult) continue;
+
+            result.entityTriplesExtracted += llmResult.triplesExtracted;
+            if (!llmResult.isContradiction) continue;
 
             result.contradictionsFound++;
             const resolved = await this.resolveContradiction(noteA, noteB, llmResult, md, contextUser);
@@ -1971,7 +2186,7 @@ export class MemoryManagerAgent extends BaseAgent {
         prompt: MJAIPromptEntityExtended,
         runner: AIPromptRunner,
         contextUser: UserInfo
-    ): Promise<{ isContradiction: boolean; keepNoteId?: string; revokeNoteId?: string; reason: string } | null> {
+    ): Promise<ContradictionPairEvaluation | null> {
         const params = new AIPromptParams();
         params.prompt = prompt;
         params.data = {
@@ -1982,16 +2197,42 @@ export class MemoryManagerAgent extends BaseAgent {
         params.attemptJSONRepair = true;
         params.additionalParameters = DETERMINISTIC_PROMPT_PARAMS;
 
-        const llmResult = await runner.ExecutePrompt<{ isContradiction: boolean; keepNoteId?: string; revokeNoteId?: string; reason: string }>(params);
+        const llmResult = await runner.ExecutePrompt<ContradictionPromptResult>(params);
         if (!llmResult.success || !llmResult.result) return null;
 
         let parsed = llmResult.result;
         if (typeof parsed === 'string') {
-            const cleaned = CleanAndParseJSON<typeof parsed>(parsed, true);
+            const cleaned = CleanAndParseJSON<ContradictionPromptResult>(parsed, true);
             if (!cleaned) return null;
             parsed = cleaned;
         }
-        return parsed;
+
+        return {
+            isContradiction: parsed.isContradiction,
+            keepNoteId: parsed.keepNoteId,
+            revokeNoteId: parsed.revokeNoteId,
+            reason: parsed.reason,
+            triplesExtracted: this.countEntityTriples(parsed.entityTriples)
+        };
+    }
+
+    /**
+     * Count entity-attribute-value triples returned by the contradiction detection prompt.
+     * Accepts any shape the LLM may produce: object of arrays keyed by noteId, flat array,
+     * or null/undefined. Unrecognized shapes return 0 so a malformed response can't poison
+     * the aggregate counter.
+     */
+    private countEntityTriples(entityTriples: ContradictionPromptResult['entityTriples']): number {
+        if (!entityTriples) return 0;
+        if (Array.isArray(entityTriples)) return entityTriples.length;
+        if (typeof entityTriples === 'object') {
+            let total = 0;
+            for (const value of Object.values(entityTriples)) {
+                if (Array.isArray(value)) total += value.length;
+            }
+            return total;
+        }
+        return 0;
     }
 
     /** Resolve a detected contradiction: flag both notes if high-importance/Protected, otherwise revoke the loser. */
@@ -2059,6 +2300,10 @@ export class MemoryManagerAgent extends BaseAgent {
     /**
      * Process a single consolidation cluster: run the LLM prompt, create the consolidated note,
      * and revoke source notes.
+     *
+     * Emits a per-cluster "Process Consolidation Cluster" observability step that runs
+     * between the parent consolidation step's create/finalize calls, producing an
+     * implicit parent-child relationship via step-number ordering.
      */
     private async processConsolidationCluster(
         cluster: MJAIAgentNoteEntity[],
@@ -2067,32 +2312,69 @@ export class MemoryManagerAgent extends BaseAgent {
         runner: AIPromptRunner,
         md: Metadata,
         contextUser: UserInfo
-    ): Promise<{ consolidated: number; archived: number; newNoteId: string | null }> {
-        const { notesForPrompt, promptData } = await this.buildConsolidationPromptData(cluster, contextUser);
+    ): Promise<{ consolidated: number; archived: number; newNoteId: string | null; verification: ConsolidationVerificationResult | null }> {
+        const maxGeneration = Math.max(...cluster.map(n => n.ConsolidationCount || 0));
+        const clusterStep = await this.CreateRunStep('Prompt', 'Process Consolidation Cluster', {
+            clusterSize: cluster.length,
+            noteIds: cluster.map(n => n.ID),
+            maxGeneration
+        });
 
-        const parsedResult = await this.runConsolidationPrompt(consolidatePrompt, promptData, runner, contextUser);
-        if (!parsedResult || !parsedResult.shouldConsolidate) {
-            if (parsedResult && this._verbose) {
-                LogStatus(`Memory Manager: Skipping cluster consolidation - ${parsedResult.reason}`);
+        const outcome: { consolidated: number; archived: number; newNoteId: string | null; verification: ConsolidationVerificationResult | null } = {
+            consolidated: 0,
+            archived: 0,
+            newNoteId: null,
+            verification: null
+        };
+        let stepOutput: Record<string, unknown> = { clusterSize: cluster.length };
+
+        try {
+            const { notesForPrompt, promptData } = await this.buildConsolidationPromptData(cluster, contextUser);
+
+            const parsedResult = await this.runConsolidationPrompt(consolidatePrompt, promptData, runner, contextUser);
+            if (!parsedResult) {
+                stepOutput = { ...stepOutput, shouldConsolidate: false, skipReason: 'prompt-failed' };
+                return outcome;
             }
-            return { consolidated: 0, archived: 0, newNoteId: null };
+            if (!parsedResult.shouldConsolidate) {
+                if (this._verbose) {
+                    LogStatus(`Memory Manager: Skipping cluster consolidation - ${parsedResult.reason}`);
+                }
+                stepOutput = { ...stepOutput, shouldConsolidate: false, skipReason: parsedResult.reason };
+                return outcome;
+            }
+
+            const consolidatedNoteData = parsedResult.consolidatedNote!;
+            const newNote = await this.createConsolidatedNote(cluster, consolidatedNoteData, parsedResult.reason, aiNoteTypeId, md, contextUser);
+            if (!newNote) {
+                stepOutput = { ...stepOutput, shouldConsolidate: true, skipReason: 'save-failed' };
+                return outcome;
+            }
+
+            outcome.verification = await this.annotateConsolidationVerification(newNote, notesForPrompt, consolidatedNoteData.content);
+            outcome.archived = await this.revokeSourceNotes(cluster, newNote.ID, parsedResult.reason, md, contextUser);
+            outcome.consolidated = 1;
+            outcome.newNoteId = newNote.ID;
+
+            if (this._verbose) {
+                LogStatus(`Memory Manager: Consolidated ${cluster.length} notes into: "${consolidatedNoteData.content.substring(0, 50)}..."`);
+            }
+
+            stepOutput = {
+                ...stepOutput,
+                shouldConsolidate: true,
+                consolidatedNoteId: newNote.ID,
+                sourceNotesArchived: outcome.archived,
+                verificationPassed: outcome.verification?.passed ?? null,
+                entitiesChecked: outcome.verification?.entitiesChecked ?? 0,
+                entitiesMissing: outcome.verification?.entitiesMissing ?? []
+            };
+            return outcome;
+        } finally {
+            // Treat skip (shouldConsolidate: false) as a successful completion rather than a
+            // failure — the phase intentionally chose not to consolidate this cluster.
+            await this.FinalizeRunStep(clusterStep, outcome.consolidated === 1 || stepOutput.shouldConsolidate === false, stepOutput);
         }
-
-        const consolidatedNoteData = parsedResult.consolidatedNote!;
-        const newNote = await this.createConsolidatedNote(cluster, consolidatedNoteData, parsedResult.reason, aiNoteTypeId, md, contextUser);
-        if (!newNote) {
-            return { consolidated: 0, archived: 0, newNoteId: null };
-        }
-
-        await this.annotateConsolidationVerification(newNote, notesForPrompt, consolidatedNoteData.content);
-
-        const archived = await this.revokeSourceNotes(cluster, newNote.ID, parsedResult.reason, md, contextUser);
-
-        if (this._verbose) {
-            LogStatus(`Memory Manager: Consolidated ${cluster.length} notes into: "${consolidatedNoteData.content.substring(0, 50)}..."`);
-        }
-
-        return { consolidated: 1, archived, newNoteId: newNote.ID };
     }
 
     /**
@@ -2227,16 +2509,18 @@ export class MemoryManagerAgent extends BaseAgent {
 
     /**
      * Run post-consolidation entity verification and, if entities are missing, append a
-     * warning to the saved note's Comments (best-effort, non-blocking).
+     * warning to the saved note's Comments (best-effort, non-blocking). Returns the
+     * verification result so the caller can aggregate it into the phase-level
+     * observability step.
      */
     private async annotateConsolidationVerification(
         newNote: MJAIAgentNoteEntity,
         notesForPrompt: Array<MJAIAgentNoteEntity | ResolvedNoteRecord>,
         consolidatedContent: string
-    ): Promise<void> {
+    ): Promise<ConsolidationVerificationResult> {
         const verification = this.verifyConsolidationOutput(notesForPrompt, consolidatedContent);
         if (verification.passed || verification.entitiesMissing.length === 0) {
-            return;
+            return verification;
         }
 
         const missingList = verification.entitiesMissing.slice(0, 10).join(', ');
@@ -2247,6 +2531,7 @@ export class MemoryManagerAgent extends BaseAgent {
 
         newNote.Comments = `${newNote.Comments || ''} ${warning}`.trim();
         await newNote.Save();
+        return verification;
     }
 
     /**
@@ -2312,7 +2597,7 @@ export class MemoryManagerAgent extends BaseAgent {
      * Immutable-tier notes are never pruned. Caps at 200 notes per cycle.
      */
     private async pruneStaleReferences(contextUser: UserInfo): Promise<{ notesArchived: number; orphanedAgents: number; orphanedUsers: number; orphanedCompanies: number; orphanedConversations: number }> {
-        const maxPerCycle = 200;
+        const maxPerCycle = STALE_PRUNING_CONFIG.maxNotesPerRun;
         const result = { notesArchived: 0, orphanedAgents: 0, orphanedUsers: 0, orphanedCompanies: 0, orphanedConversations: 0 };
 
         const notes = await this.loadPruneCandidateNotes(contextUser, maxPerCycle * 2);
@@ -2504,7 +2789,15 @@ export class MemoryManagerAgent extends BaseAgent {
      * Respects protection tiers: Immutable=never, Protected=365d extended, Ephemeral=2x decay.
      * Handles both notes and examples. Respects per-agent AutoArchiveEnabled.
      */
-    private async decayBasedArchival(contextUser: UserInfo): Promise<{ notesArchived: number; examplesArchived: number; notesExpired: number; examplesExpired: number }> {
+    private async decayBasedArchival(contextUser: UserInfo): Promise<{
+        notesArchived: number;
+        examplesArchived: number;
+        notesExpired: number;
+        examplesExpired: number;
+        decayScoreDistribution: { min: number; max: number; mean: number } | null;
+        protectedPreserved: number;
+        ephemeralAccelerated: number;
+    }> {
         const archiveEnabledAgentIds = new Set(
             AIEngine.Instance.Agents
                 .filter(a => a.AutoArchiveEnabled !== false)
@@ -2520,7 +2813,32 @@ export class MemoryManagerAgent extends BaseAgent {
             notesExpired: expiredResult.notesExpired,
             examplesExpired: expiredResult.examplesExpired,
             notesArchived: decayResult.notesArchived,
-            examplesArchived: decayResult.examplesArchived
+            examplesArchived: decayResult.examplesArchived,
+            decayScoreDistribution: this.summarizeDecayFactors(decayResult.stats.decayFactors),
+            protectedPreserved: decayResult.stats.protectedPreserved,
+            ephemeralAccelerated: decayResult.stats.ephemeralAccelerated
+        };
+    }
+
+    /**
+     * Summarize raw decay factors (values in [0,1]) into a min/max/mean triple for
+     * the observability step. Returns null when no factors were computed (empty
+     * cohort or all notes skipped via tier/config).
+     */
+    private summarizeDecayFactors(factors: number[]): { min: number; max: number; mean: number } | null {
+        if (factors.length === 0) return null;
+        let min = factors[0];
+        let max = factors[0];
+        let sum = 0;
+        for (const f of factors) {
+            if (f < min) min = f;
+            if (f > max) max = f;
+            sum += f;
+        }
+        return {
+            min: Math.round(min * 1000) / 1000,
+            max: Math.round(max * 1000) / 1000,
+            mean: Math.round((sum / factors.length) * 1000) / 1000
         };
     }
 
@@ -2598,22 +2916,32 @@ export class MemoryManagerAgent extends BaseAgent {
      * Per research: "decay should be proportional (multiply all strengths by a factor <1),
      * not threshold-based deletion — this preserves relative importance ordering while reducing overall load."
      * Notes without ImportanceScore (not yet scored) are skipped entirely.
+     *
+     * Threads a stats accumulator through decayOneNote/decayOneExample to collect
+     * decay-factor distribution and tier-specific counts for observability.
      */
-    private async applyProportionalDecay(contextUser: UserInfo, archiveEnabledAgentIds: Set<string | undefined>): Promise<{ notesDecayed: number; notesArchived: number; examplesDecayed: number; examplesArchived: number }> {
+    private async applyProportionalDecay(contextUser: UserInfo, archiveEnabledAgentIds: Set<string | undefined>): Promise<{
+        notesDecayed: number;
+        notesArchived: number;
+        examplesDecayed: number;
+        examplesArchived: number;
+        stats: DecayStatsAccumulator;
+    }> {
         const result = { notesDecayed: 0, notesArchived: 0, examplesDecayed: 0, examplesArchived: 0 };
+        const stats: DecayStatsAccumulator = { decayFactors: [], protectedPreserved: 0, ephemeralAccelerated: 0 };
         const md = new Metadata();
 
         const [activeNotes, activeExamples] = await this.loadDecayCandidates(contextUser);
 
         for (const note of activeNotes) {
-            await this.decayOneNote(note, archiveEnabledAgentIds, md, contextUser, result);
+            await this.decayOneNote(note, archiveEnabledAgentIds, md, contextUser, result, stats);
         }
 
         for (const example of activeExamples) {
-            await this.decayOneExample(example, archiveEnabledAgentIds, md, contextUser, result);
+            await this.decayOneExample(example, archiveEnabledAgentIds, md, contextUser, result, stats);
         }
 
-        return result;
+        return { ...result, stats };
     }
 
     /**
@@ -2652,7 +2980,8 @@ export class MemoryManagerAgent extends BaseAgent {
         archiveEnabledAgentIds: Set<string | undefined>,
         md: Metadata,
         contextUser: UserInfo,
-        result: { notesDecayed: number; notesArchived: number }
+        result: { notesDecayed: number; notesArchived: number },
+        stats: DecayStatsAccumulator
     ): Promise<void> {
         if (note.AgentID && !archiveEnabledAgentIds.has(note.AgentID.toLowerCase())) return;
         if (note.ImportanceScore === null) return;
@@ -2662,10 +2991,18 @@ export class MemoryManagerAgent extends BaseAgent {
         if (tier === 'Protected') {
             const lastAccess = note.LastAccessedAt || note.__mj_CreatedAt;
             const daysSinceAccess = (Date.now() - new Date(lastAccess).getTime()) / (1000 * 60 * 60 * 24);
-            if (daysSinceAccess < DECAY_CONFIG.protectedInactivityDays) return;
+            if (daysSinceAccess < DECAY_CONFIG.protectedInactivityDays) {
+                // Protected note within the extended-retention window — evaluated but preserved.
+                stats.protectedPreserved++;
+                return;
+            }
+        }
+        if (tier === 'Ephemeral') {
+            stats.ephemeralAccelerated++;
         }
 
         const decayFactor = this.computeDecayFactor(note);
+        stats.decayFactors.push(decayFactor);
         const newScore = Math.round(note.ImportanceScore * decayFactor * 100) / 100;
 
         const noteToUpdate = await md.GetEntityObject<MJAIAgentNoteEntity>('MJ: AI Agent Notes', contextUser);
@@ -2691,7 +3028,8 @@ export class MemoryManagerAgent extends BaseAgent {
         archiveEnabledAgentIds: Set<string | undefined>,
         md: Metadata,
         contextUser: UserInfo,
-        result: { examplesArchived: number }
+        result: { examplesArchived: number },
+        stats: DecayStatsAccumulator
     ): Promise<void> {
         if (example.AgentID && !archiveEnabledAgentIds.has(example.AgentID.toLowerCase())) return;
 
@@ -2700,6 +3038,7 @@ export class MemoryManagerAgent extends BaseAgent {
         const lastAccess = example.LastAccessedAt || example.__mj_CreatedAt;
         const daysSinceAccess = (Date.now() - new Date(lastAccess).getTime()) / (1000 * 60 * 60 * 24);
         const decayFactor = Math.min(1.0, Math.exp(-lambdaEff * daysSinceAccess) * (1 + (example.AccessCount || 0) * DECAY_CONFIG.accessBoostFactor));
+        stats.decayFactors.push(decayFactor);
         const effectiveScore = normalizedImportance * 10.0 * decayFactor;
 
         if (effectiveScore >= DECAY_CONFIG.archivalFloor) return;
@@ -2715,8 +3054,15 @@ export class MemoryManagerAgent extends BaseAgent {
      * Run all 5 maintenance phases in order: importance scoring, consolidation,
      * contradiction detection, stale-reference pruning, and decay-based archival.
      * Each phase is wrapped in try/catch so a failure in one does not abort the rest.
+     *
+     * `triggerType` flows through to the parent consolidation run step so observability
+     * records *why* the maintenance cycle fired this run.
      */
-    private async runMaintenancePhases(contextUser: UserInfo, forceMaintenance: boolean): Promise<MaintenancePhaseResults> {
+    private async runMaintenancePhases(
+        contextUser: UserInfo,
+        forceMaintenance: boolean,
+        triggerType: ConsolidationTriggerType
+    ): Promise<MaintenancePhaseResults> {
         const r: MaintenancePhaseResults = {
             consolidatedCount: 0, consolidationArchived: 0,
             contradictionsFound: 0, contradictionsResolved: 0, contradictionsFlagged: 0,
@@ -2727,7 +3073,7 @@ export class MemoryManagerAgent extends BaseAgent {
         LogStatus(`Memory Manager: Running maintenance phases${forceMaintenance ? ' (forced via params.data.forceMaintenance)' : ''}...`);
 
         await this.runImportancePhase(r, contextUser);
-        const consolidatedNoteIds = await this.runConsolidationPhase(r, contextUser);
+        const consolidatedNoteIds = await this.runConsolidationPhase(r, contextUser, triggerType);
         await this.runContradictionPhase(r, contextUser, consolidatedNoteIds);
         await this.runPruneAndDecayPhases(r, contextUser);
 
@@ -2743,20 +3089,31 @@ export class MemoryManagerAgent extends BaseAgent {
             r.importanceScored = scoringResult.notesScored;
             r.tierPromotions = scoringResult.tierPromotions;
             if (this._verbose) LogStatus(`Memory Manager: Scored ${r.importanceScored} notes, ${r.tierPromotions} tier promotions`);
-            await this.FinalizeRunStep(importanceStep, true, { notesScored: r.importanceScored, tierPromotions: r.tierPromotions });
+            await this.FinalizeRunStep(importanceStep, true, {
+                notesScored: r.importanceScored,
+                tierPromotions: r.tierPromotions,
+                scoreDistribution: scoringResult.scoreDistribution
+            });
         } catch (error) {
             LogError('Memory Manager: Importance scoring failed, continuing with other phases:', error);
             await this.FinalizeRunStep(importanceStep, false, undefined, undefined, error instanceof Error ? error.message : String(error));
         }
     }
 
-    private async runConsolidationPhase(r: MaintenancePhaseResults, contextUser: UserInfo): Promise<Set<string>> {
+    private async runConsolidationPhase(
+        r: MaintenancePhaseResults,
+        contextUser: UserInfo,
+        triggerType: ConsolidationTriggerType
+    ): Promise<Set<string>> {
         const consolidatedNoteIds = new Set<string>();
         const consolidationStep = await this.CreateRunStep('Decision', 'Consolidate Related Notes', {
+            frequency: CONSOLIDATION_CONFIG.frequency,
+            triggerType,
             activeNoteCount: AIEngine.Instance.AgentNotes.filter(n => n.Status === 'Active' && n.IsAutoGenerated).length
         });
+        let consolidationResult: { consolidated: number; archived: number; newNoteIds: string[]; verifications: ConsolidationVerificationResult[] } | null = null;
         try {
-            const consolidationResult = await this.consolidateRelatedNotes(null, contextUser);
+            consolidationResult = await this.consolidateRelatedNotes(null, contextUser);
             r.consolidatedCount = consolidationResult.consolidated;
             r.consolidationArchived = consolidationResult.archived;
             for (const id of consolidationResult.newNoteIds) consolidatedNoteIds.add(id);
@@ -2772,7 +3129,30 @@ export class MemoryManagerAgent extends BaseAgent {
             LogError('Memory Manager: Consolidation failed, continuing with other phases:', error);
             await this.FinalizeRunStep(consolidationStep, false, undefined, undefined, error instanceof Error ? error.message : String(error));
         }
+
+        // Emit the phase-level verification run step (spec Task 8c). Runs whether or not
+        // any clusters were consolidated so "no items" runs still produce a visible step.
+        await this.emitVerificationRunStep(consolidationResult?.verifications ?? []);
+
         return consolidatedNoteIds;
+    }
+
+    /** Aggregate per-cluster verification results into a single phase-level run step. */
+    private async emitVerificationRunStep(verifications: ConsolidationVerificationResult[]): Promise<void> {
+        const verificationStep = await this.CreateRunStep('Validation', 'Verify Consolidation Output', {
+            clustersVerified: verifications.length
+        });
+        const verificationsFlagged = verifications.filter(v => !v.passed).length;
+        const verificationsPassed = verifications.filter(v => v.passed).length;
+        const entitiesChecked = verifications.reduce((sum, v) => sum + v.entitiesChecked, 0);
+        const entitiesMissing = verifications.flatMap(v => v.entitiesMissing);
+        await this.FinalizeRunStep(verificationStep, true, {
+            clustersVerified: verifications.length,
+            entitiesChecked,
+            entitiesMissing,
+            verificationsPassed,
+            verificationsFlagged
+        });
     }
 
     private async runContradictionPhase(r: MaintenancePhaseResults, contextUser: UserInfo, consolidatedNoteIds: Set<string>): Promise<void> {
@@ -2789,7 +3169,10 @@ export class MemoryManagerAgent extends BaseAgent {
             }
             await this.FinalizeRunStep(contradictionStep, true, {
                 pairsAnalyzed: contradictionResult.pairsAnalyzed,
-                contradictionsFound: r.contradictionsFound, contradictionsResolved: r.contradictionsResolved, contradictionsFlagged: r.contradictionsFlagged
+                contradictionsFound: r.contradictionsFound,
+                contradictionsResolved: r.contradictionsResolved,
+                contradictionsFlagged: r.contradictionsFlagged,
+                entityTriplesExtracted: contradictionResult.entityTriplesExtracted
             });
         } catch (error) {
             LogError('Memory Manager: Contradiction detection failed, continuing with other phases:', error);
@@ -2843,7 +3226,10 @@ export class MemoryManagerAgent extends BaseAgent {
                 notesArchived: decayResult.notesArchived,
                 examplesArchived: decayResult.examplesArchived,
                 notesExpired: decayResult.notesExpired,
-                examplesExpired: decayResult.examplesExpired
+                examplesExpired: decayResult.examplesExpired,
+                decayScoreDistribution: decayResult.decayScoreDistribution,
+                protectedPreserved: decayResult.protectedPreserved,
+                ephemeralAccelerated: decayResult.ephemeralAccelerated
             });
         } catch (error) {
             LogError('Memory Manager: Decay-based archival failed:', error);
@@ -3113,8 +3499,9 @@ export class MemoryManagerAgent extends BaseAgent {
             }
 
             const forceMaintenance = params.data?.forceMaintenance === true;
-            const maintenance = await this.shouldRunConsolidation(params.agent.ID, params.contextUser!, forceMaintenance)
-                ? await this.runMaintenancePhases(params.contextUser!, forceMaintenance)
+            const triggerDecision = await this.shouldRunConsolidation(params.agent.ID, params.contextUser!, forceMaintenance);
+            const maintenance = triggerDecision.shouldRun
+                ? await this.runMaintenancePhases(params.contextUser!, forceMaintenance, triggerDecision.triggerType)
                 : { consolidatedCount: 0, consolidationArchived: 0, contradictionsFound: 0, contradictionsResolved: 0, contradictionsFlagged: 0, staleNotesArchived: 0, decayNotesArchived: 0, decayExamplesArchived: 0, importanceScored: 0, tierPromotions: 0 } satisfies MaintenancePhaseResults;
 
             const maintenanceSummary = this.buildMaintenanceSummary(maintenance);
