@@ -595,7 +595,6 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       : null;
     const ownParams = this.GetQueryParams();
     const rawParams = wrapperParams || (Object.keys(ownParams).length > 0 ? ownParams : {});
-    console.log('[DataExplorer] initDashboard: wrapperParams=', JSON.stringify(wrapperParams), 'ownParams=', JSON.stringify(ownParams), 'using=', JSON.stringify(rawParams));
 
     const urlState = this.buildDeepLinkFromParams(rawParams);
 
@@ -613,14 +612,9 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
     // Apply URL state after entities are loaded
     if (urlState) {
-      console.log('[DataExplorer] initDashboard: applying URL state (init path)');
-      // URL has state - apply it (overrides persisted state)
       await this.applyUrlState(urlState);
     } else if (this.deepLink) {
-      console.log('[DataExplorer] initDashboard: no URL state, using @Input deepLink');
       await this.applyDeepLink(this.deepLink);
-    } else {
-      console.log('[DataExplorer] initDashboard: no URL state and no deepLink — using persisted state');
     }
 
     // Subscribe to state changes
@@ -633,16 +627,12 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
         // Self-correct map mode: if a URL-sourced mode is pending and state
         // has diverged (e.g., reset to 'point' by some init step), re-apply it.
+        // _pendingMapMode stays alive until the map component emits real state
+        // via onMapDisplayStateChange (user interaction), NOT on first state match.
         if (this._pendingMapMode && state.mapRenderMode !== this._pendingMapMode) {
           const mode = this._pendingMapMode;
-          this._pendingMapMode = null; // Clear first to prevent infinite loop
-          console.log('[DataExplorer] state subscription: re-applying pending map mode:', mode, '(state had:', state.mapRenderMode, ')');
           this.stateService.updateState({ mapRenderMode: mode });
           return; // Let the next subscription fire handle the rest
-        }
-        // Clear pending once state matches
-        if (this._pendingMapMode && state.mapRenderMode === this._pendingMapMode) {
-          this._pendingMapMode = null;
         }
 
         // When entity changes, clear user search text and update title
@@ -1821,15 +1811,12 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   /**
    * Get the current map display state for passing to the EntityViewer/MapView.
    */
-  get mapDisplayState(): { RenderMode: MapRenderMode; ZoomLevel: number; CenterLat: number; CenterLng: number } | null {
-    // Always return state when a non-default render mode is set (even without saved zoom/center),
-    // so the map component respects the URL's mapMode parameter on cold loads.
-    if (this.state.mapZoom == null && (!this.state.mapRenderMode || this.state.mapRenderMode === 'point')) {
+  get mapDisplayState(): { ZoomLevel: number; CenterLat: number; CenterLng: number } | null {
+    if (this.state.mapZoom == null) {
       return null;
     }
     return {
-      RenderMode: this.state.mapRenderMode || 'point',
-      ZoomLevel: this.state.mapZoom ?? 2,
+      ZoomLevel: this.state.mapZoom,
       CenterLat: this.state.mapCenterLat ?? 20,
       CenterLng: this.state.mapCenterLng ?? 0
     };
@@ -1839,19 +1826,20 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * Handle map display state changes from the map component.
    * Persists zoom, center, and render mode across page reloads.
    */
-  public onMapDisplayStateChange(state: { RenderMode?: MapRenderMode; ZoomLevel?: number; CenterLat?: number; CenterLng?: number }): void {
-    const incomingMode = state.RenderMode || 'point';
+  /**
+   * Handle map render mode change (user clicked mode button in map component).
+   */
+  public onMapRenderModeChange(mode: MapRenderMode): void {
+    this._pendingMapMode = null; // User-initiated — clear any pending URL mode
+    this.stateService.updateState({ mapRenderMode: mode });
+  }
 
-    // If a pending URL map mode exists and the map is emitting its default 'point',
-    // use the pending mode instead. Otherwise accept the incoming mode (user-initiated).
-    const newRenderMode = (this._pendingMapMode && incomingMode === 'point' && this._pendingMapMode !== 'point')
-      ? this._pendingMapMode
-      : incomingMode;
-
-    console.log('[DataExplorer] onMapDisplayStateChange: incoming=', incomingMode, 'pending=', this._pendingMapMode, 'final=', newRenderMode);
-
+  /**
+   * Handle map display state change (zoom/pan — fires on moveend).
+   */
+  public onMapDisplayStateChange(state: { ZoomLevel?: number; CenterLat?: number; CenterLng?: number }): void {
+    this._pendingMapMode = null; // Map is interactive now — clear pending
     this.stateService.updateState({
-      mapRenderMode: newRenderMode,
       mapZoom: state.ZoomLevel ?? null,
       mapCenterLat: state.CenterLat ?? null,
       mapCenterLng: state.CenterLng ?? null
@@ -2540,10 +2528,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     const viewId = params['viewId'] || null;
     const mapMode = params['mapMode'] || null;
 
-    console.log('[DataExplorer] buildDeepLinkFromParams:', { entity, record, filter: filterParam, view, viewId, mapMode });
-
     if (!entity && !record && !filterParam && !view && !viewId && !mapMode) {
-      console.log('[DataExplorer] buildDeepLinkFromParams: all params empty, returning null');
       return null;
     }
 
@@ -2562,7 +2547,6 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * The base class calls this when query params change via popstate or deeplink.
    */
   protected override OnQueryParamsChanged(params: Record<string, string>, _source: 'popstate' | 'deeplink'): void {
-    console.log('[DataExplorer] OnQueryParamsChanged: source=', _source, 'params=', JSON.stringify(params));
     this.applyParams(params);
   }
 
@@ -2570,8 +2554,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * Public entry point for the resource wrapper to forward query param changes.
    * The wrapper receives OnQueryParamsChanged from the framework and delegates here.
    */
-  public HandleQueryParamsChanged(params: Record<string, string>, source: 'popstate' | 'deeplink'): void {
-    console.log('[DataExplorer] HandleQueryParamsChanged (from wrapper): source=', source, 'params=', JSON.stringify(params));
+  public HandleQueryParamsChanged(params: Record<string, string>, _source: 'popstate' | 'deeplink'): void {
     this.applyParams(params);
   }
 
@@ -2610,7 +2593,6 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       mapMode: this.state.viewMode === 'map' ? (this.state.mapRenderMode || 'point') : null
     };
 
-    console.log('[DataExplorer] pushCurrentStateToUrl:', JSON.stringify(queryParams), 'hasViewId=', hasViewId, 'smartFilterPrompt=', this.state.smartFilterPrompt);
 
     this.UpdateQueryParams(queryParams);
   }
@@ -2620,8 +2602,6 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * Used both during init and for popstate handling.
    */
   private async applyUrlState(urlState: DataExplorerDeepLink): Promise<void> {
-    console.log('[DataExplorer] applyUrlState:', urlState);
-
     // Store URL-sourced map mode BEFORE switching to map view — various init steps
     // can reset mapRenderMode to 'point'. The state subscription self-corrects using this.
     if (urlState.mapMode && ['point', 'choropleth', 'heatmap'].includes(urlState.mapMode)) {
@@ -2722,19 +2702,14 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * Must be async because UserViewEngine's cache may not be populated yet on cold page loads.
    */
   private async restoreViewFromUrl(viewId: string, entity: EntityInfo): Promise<void> {
-    console.log('[DataExplorer] restoreViewFromUrl: viewId=', viewId, 'entity=', entity.Name);
-
     // Ensure the view engine cache is populated before querying —
     // on hard refresh, the cache may be empty and GetAccessibleViewsForEntity returns []
     await UserViewEngine.Instance.Config(false);
 
     const accessibleViews = UserViewEngine.Instance.GetAccessibleViewsForEntity(entity.ID);
-    console.log('[DataExplorer] restoreViewFromUrl: accessible views count=', accessibleViews.length);
-
     const view = accessibleViews.find(v => v.ID === viewId) || null;
 
     if (view) {
-      console.log('[DataExplorer] restoreViewFromUrl: found view:', view.Name, 'WhereClause:', view.WhereClause, 'SmartFilter:', view.SmartFilterPrompt);
       this.selectedViewEntity = view;
       this.stateService.selectView(viewId);
       this.currentGridState = this.parseViewGridState(view);
