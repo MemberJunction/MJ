@@ -398,6 +398,27 @@
                   "lastModified": "2026-02-13T21:09:22.374Z",
                   "checksum": "5fc6e0ea86814253e3151cf7c95bdecb077deceab7af14fecb29c831b6f280de"
                 }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "SubAgentID": "@lookup:MJ: AI Agents.Name=Entity Designer",
+                  "Status": "Active",
+                  "SubAgentOutputMapping": {
+                    "EntityDesignerResult": "TechnicalDesign.entityCreationResult"
+                  },
+                  "SubAgentContextPaths": [
+                    "TechnicalDesign",
+                    "FunctionalRequirements"
+                  ]
+                },
+                "primaryKey": {
+                  "ID": "57BC8352-ACCF-4B88-874D-44C46B6DEEE0"
+                },
+                "sync": {
+                  "lastModified": "2026-04-13T06:16:42.911Z",
+                  "checksum": "657c9492db487177bddfc9e53b9a6da14c3668aadb5e19485fdb5ebd14680ad9"
+                }
               }
             ]
           },
