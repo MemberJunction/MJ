@@ -108,9 +108,17 @@ ${whereClause};
         const paramString = this.generateCRUDParamString(entity.Fields, false);
         const permissions = this.generateCRUDPermissions(entity, fnName, CRUDType.Create);
 
-        const insertColumns = this.generateInsertFieldString(entity, entity.Fields, '', false);
-        const insertValues = this.generateInsertFieldString(entity, entity.Fields, 'p_', false);
         const firstKey = entity.FirstPrimaryKey;
+        // For UUID PKs and AutoIncrement PKs, the strategy below adds the PK
+        // column manually (with v_new_id or RETURNING). Excluding it from the
+        // auto-generated insertColumns/insertValues avoids the column appearing
+        // twice in the INSERT statement.
+        const pkType = firstKey.Type.toLowerCase().trim();
+        const pkHandledByStrategy =
+            firstKey.AutoIncrement ||
+            ((pkType === 'uniqueidentifier' || pkType === 'uuid') && entity.PrimaryKeys.length === 1);
+        const insertColumns = this.generateInsertFieldString(entity, entity.Fields, '', pkHandledByStrategy);
+        const insertValues = this.generateInsertFieldString(entity, entity.Fields, 'p_', pkHandledByStrategy);
 
         const strategy = this.buildCreateInsertStrategy(
             entity, firstKey, insertColumns, insertValues
@@ -124,7 +132,7 @@ CREATE OR REPLACE FUNCTION ${pgDialect.QuoteSchema(entity.SchemaName, fnName)}(
     ${paramString}
 ) RETURNS SETOF ${pgDialect.QuoteSchema(entity.SchemaName, viewName)} AS $$
 DECLARE
-    v_new_id ${firstKey.SQLFullType};
+    v_new_id ${this.mapSQLType(firstKey.SQLFullType)};
 BEGIN
     ${strategy.preInsert}INSERT INTO ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)}
         (
@@ -1192,13 +1200,30 @@ ORDER BY ordinal_position`;
         const paramName = `${prefix}${this.toSnakeCase(ef.CodeName)}`;
 
         if (ef.HasDefaultValue && !ef.AllowsNull) {
-            const formattedDefault = this.formatDefaultValue(ef.DefaultValue, ef.NeedsQuotes);
+            const formattedDefault = this.formatBooleanCompatibleDefault(ef);
             if (ef.IsUniqueIdentifier) {
                 return `CASE WHEN ${paramName} = '00000000-0000-0000-0000-000000000000'::UUID THEN ${formattedDefault} ELSE COALESCE(${paramName}, ${formattedDefault}) END`;
             }
             return `COALESCE(${paramName}, ${formattedDefault})`;
         }
         return paramName;
+    }
+
+    /**
+     * Like formatDefaultValue, but maps SQL Server BIT defaults (0/1) to PG
+     * BOOLEAN literals (FALSE/TRUE) when the field type is bit/boolean.
+     * COALESCE() in PG is type-strict — passing `COALESCE(boolean_param, 0)`
+     * fails with "types boolean and integer cannot be matched".
+     */
+    private formatBooleanCompatibleDefault(ef: EntityFieldInfo): string {
+        const formatted = this.formatDefaultValue(ef.DefaultValue, ef.NeedsQuotes);
+        const fieldType = ef.Type.toLowerCase().trim();
+        if (fieldType === 'bit' || fieldType === 'boolean' || fieldType === 'bool') {
+            const t = formatted.trim().toLowerCase();
+            if (t === '0' || t === "'0'") return 'FALSE';
+            if (t === '1' || t === "'1'") return 'TRUE';
+        }
+        return formatted;
     }
 
     /** Builds a WHERE clause using primary key fields with a parameter prefix */

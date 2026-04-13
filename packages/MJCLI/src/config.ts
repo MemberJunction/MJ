@@ -1,5 +1,5 @@
 import { cosmiconfigSync } from 'cosmiconfig';
-import type { SkywayConfig } from '@memberjunction/skyway-core';
+import type { SkywayConfig, DatabaseProvider, DatabaseDialect } from '@memberjunction/skyway-core';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { simpleGit, SimpleGit } from 'simple-git';
@@ -101,6 +101,7 @@ const mjConfigSchema = z.object({
   dbHost: z.string().default('localhost'),
   dbDatabase: z.string().min(1),
   dbPort: z.number({ coerce: true }).default(1433),
+  dbPlatform: z.enum(['sqlserver', 'postgresql']).default('sqlserver'),
   codeGenLogin: z.string().min(1),
   codeGenPassword: z.string().min(1),
   migrationsLocation: z.string().optional().default('filesystem:./migrations'),
@@ -125,6 +126,7 @@ const mjConfigSchemaOptional = z.object({
   dbHost: z.string().optional(),
   dbDatabase: z.string().optional(),
   dbPort: z.number({ coerce: true }).optional(),
+  dbPlatform: z.enum(['sqlserver', 'postgresql']).optional(),
   codeGenLogin: z.string().optional(),
   codeGenPassword: z.string().optional(),
   migrationsLocation: z.string().optional().default('filesystem:./migrations'),
@@ -220,8 +222,14 @@ export const getSkywayConfig = async (
   dir?: string
 ): Promise<SkywayConfig> => {
   const targetSchema = schema || mjConfig.coreSchema;
+  const isPG = mjConfig.dbPlatform === 'postgresql';
 
   let location = mjConfig.migrationsLocation;
+
+  // When targeting PostgreSQL and no explicit --dir override, swap migrations → migrations-pg
+  if (isPG && !dir) {
+    location = location.replace(/\bmigrations\b/, 'migrations-pg');
+  }
 
   if (dir && !tag) {
     location = dir.startsWith('filesystem:') ? dir : `filesystem:${dir}`;
@@ -232,8 +240,9 @@ export const getSkywayConfig = async (
     const tmp = mkdtempSync(tmpdir());
     const branch = /v?\d+\.\d+\.\d+/.test(tag) ? (tag.startsWith('v') ? tag : `v${tag}`) : tag;
     const git: SimpleGit = simpleGit(tmp);
+    const sparseDir = isPG ? 'migrations-pg' : 'migrations';
     await git.clone(mjConfig.mjRepoUrl, tmp, ['--sparse', '--depth=1', '--branch', branch]);
-    await git.raw(['sparse-checkout', 'set', 'migrations']);
+    await git.raw(['sparse-checkout', 'set', sparseDir]);
 
     location = `filesystem:${tmp}`;
 
@@ -267,19 +276,27 @@ export const getSkywayConfig = async (
     placeholders['mjSchema'] = mjConfig.coreSchema;
   }
 
-  return {
-    Database: {
-      Server: mjConfig.dbHost,
-      Port: mjConfig.dbPort,
-      Database: mjConfig.dbDatabase,
-      User: mjConfig.codeGenLogin,
-      Password: mjConfig.codeGenPassword,
-      Options: {
-        Encrypt: mjConfig.dbEncrypt,
-        TrustServerCertificate: mjConfig.dbTrustServerCertificate,
-        ...(mjConfig.dbRequestTimeout ? { RequestTimeout: mjConfig.dbRequestTimeout } : {}),
-      },
+  const dialect: DatabaseDialect = mjConfig.dbPlatform === 'postgresql' ? 'postgresql' : 'sqlserver';
+
+  const dbConfig = {
+    Dialect: dialect,
+    Server: mjConfig.dbHost,
+    Port: mjConfig.dbPort,
+    Database: mjConfig.dbDatabase,
+    User: mjConfig.codeGenLogin,
+    Password: mjConfig.codeGenPassword,
+    Options: {
+      Encrypt: mjConfig.dbEncrypt,
+      TrustServerCertificate: mjConfig.dbTrustServerCertificate,
+      ...(mjConfig.dbRequestTimeout ? { RequestTimeout: mjConfig.dbRequestTimeout } : {}),
     },
+  };
+
+  const provider = await createSkywayProvider(dialect, dbConfig);
+
+  return {
+    Database: dbConfig,
+    Provider: provider,
     Migrations: {
       Locations: [cleanLocation],
       DefaultSchema: targetSchema,
@@ -292,3 +309,16 @@ export const getSkywayConfig = async (
     Placeholders: Object.keys(placeholders).length > 0 ? placeholders : undefined,
   };
 };
+
+/**
+ * Creates the appropriate Skyway database provider based on the dialect.
+ */
+async function createSkywayProvider(dialect: DatabaseDialect, dbConfig: SkywayConfig['Database']): Promise<DatabaseProvider> {
+  if (dialect === 'postgresql') {
+    const { PostgresProvider } = await import('@memberjunction/skyway-postgres');
+    return new PostgresProvider(dbConfig);
+  } else {
+    const { SqlServerProvider } = await import('@memberjunction/skyway-sqlserver');
+    return new SqlServerProvider(dbConfig);
+  }
+}

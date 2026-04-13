@@ -63,6 +63,8 @@
     "@memberjunction/query-gen": "5.24.0",
     "@memberjunction/server-bootstrap-lite": "5.24.0",
     "@memberjunction/skyway-core": "^0.5.3",
+    "@memberjunction/skyway-sqlserver": "^0.5.3",
+    "@memberjunction/skyway-postgres": "^0.5.3",
     "@memberjunction/sql-converter": "5.24.0",
     "@memberjunction/sqlserver-dataprovider": "5.24.0",
     "@memberjunction/testing-cli": "5.24.0",
