@@ -29,6 +29,7 @@ import { BaseUserMenu, UserMenuElement, UserMenuItem, UserMenuContext, isUserMen
 import { MJUserEntity, InstanceConfigEngine } from '@memberjunction/core-entities';
 import { CommandPaletteService } from '../command-palette/command-palette.service';
 import { FileOpenService } from '@memberjunction/ng-file-storage';
+import { FeedbackDialogService } from '@memberjunction/ng-feedback';
 
 /**
  * Main shell component for the new Explorer UX.
@@ -162,7 +163,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     private commandPaletteService: CommandPaletteService,
     private themeService: ThemeService,
     private homePinService: HomeAppPinService,
-    private fileOpenService: FileOpenService
+    private fileOpenService: FileOpenService,
+    private feedbackDialogService: FeedbackDialogService
   ) {
     // Initialize theme immediately so loading UI shows correct colors from the start
     this.activeTheme = getActiveTheme();

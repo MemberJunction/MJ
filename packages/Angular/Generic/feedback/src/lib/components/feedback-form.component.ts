@@ -1,20 +1,23 @@
-import { Component, OnInit, Input, Output, EventEmitter, Inject, ChangeDetectorRef, ViewChild, ElementRef, AfterViewInit } from '@angular/core';
+import { Component, OnInit, Input, Output, EventEmitter, Inject, ChangeDetectorRef } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { FeedbackSubmission, FeedbackResponse, FeedbackCategory, FeedbackSeverity, FeedbackEnvironment, CategoryOption, SeverityOption, EnvironmentOption } from '../feedback.types';
 import { FeedbackConfig, FEEDBACK_CONFIG, FeedbackFieldConfig, mergeFieldConfig } from '../feedback.config';
 import { DEFAULT_CATEGORIES, DEFAULT_SEVERITIES, DEFAULT_ENVIRONMENTS } from '../feedback.constants';
 import { FeedbackService } from '../services/feedback.service';
+import { MJDialogComponent, MJDialogActionsComponent, MJButtonDirective } from '@memberjunction/ng-ui-components';
+import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 
 @Component({
-  standalone: false,
+  standalone: true,
+  imports: [CommonModule, FormsModule, MJDialogComponent, MJDialogActionsComponent, MJButtonDirective, SharedGenericModule],
   selector: 'mj-feedback-form',
   template: `
-    <dialog #dialogEl class="mj-dialog" (close)="OnDialogClose()">
-      <div class="mj-dialog-header">
-        <h2 class="mj-dialog-title">{{ config.title || 'Submit Feedback' }}</h2>
-        <button class="mj-dialog-close" (click)="OnCancel()" type="button">
-          <i class="fa-solid fa-xmark"></i>
-        </button>
-      </div>
+    <mj-dialog
+      [Visible]="DialogVisible"
+      [Title]="config.title || 'Submit Feedback'"
+      Size="lg"
+      (Close)="OnCancel()">
 
       <!-- Subtitle -->
       @if (config.subtitle) {
@@ -54,7 +57,7 @@ import { FeedbackService } from '../services/feedback.service';
               type="text"
               class="mj-input"
               [(ngModel)]="Title"
-              (input)="OnFieldChange()"
+              (ngModelChange)="OnFieldChange()"
               placeholder="Brief summary of your feedback..."
               [maxlength]="256" />
             <div class="char-count">{{ Title.length }}/256</div>
@@ -68,7 +71,7 @@ import { FeedbackService } from '../services/feedback.service';
             <textarea
               class="mj-textarea"
               [(ngModel)]="Description"
-              (input)="OnFieldChange()"
+              (ngModelChange)="OnFieldChange()"
               placeholder="Please provide a detailed description..."
               rows="4"
               [maxlength]="10000"></textarea>
@@ -121,7 +124,7 @@ import { FeedbackService } from '../services/feedback.service';
             @if (FieldConfig.showSeverity) {
               <div class="feedback-section">
                 <label class="feedback-label">Severity</label>
-                <select class="mj-select" [(ngModel)]="Severity" style="width: 200px;">
+                <select class="mj-select severity-select" [(ngModel)]="Severity">
                   @for (sev of Severities; track sev.value) {
                     <option [value]="sev.value">{{ sev.label }}</option>
                   }
@@ -241,104 +244,45 @@ import { FeedbackService } from '../services/feedback.service';
         </div>
       }
 
-      <div class="mj-dialog-actions">
+      <mj-dialog-actions>
         @if (!SubmissionSuccess) {
           <button
-            class="mj-btn mj-btn-primary"
+            mjButton
+            variant="primary"
             (click)="OnSubmit()"
             [disabled]="!CanSubmit() || IsSubmitting"
             type="button">
             <i class="fas" [ngClass]="IsSubmitting ? 'fa-spinner fa-spin' : 'fa-paper-plane'"></i>
             {{ IsSubmitting ? 'Submitting...' : (config.submitButtonText || 'Submit') }}
           </button>
-          <button class="mj-btn" (click)="OnCancel()" [disabled]="IsSubmitting" type="button">Cancel</button>
+          <button mjButton (click)="OnCancel()" [disabled]="IsSubmitting" type="button">Cancel</button>
         }
         @if (SubmissionSuccess) {
-          <button class="mj-btn mj-btn-primary" (click)="OnCancel()" type="button">Close</button>
+          <button mjButton variant="primary" (click)="OnCancel()" type="button">Close</button>
         }
-      </div>
-    </dialog>
+      </mj-dialog-actions>
+    </mj-dialog>
   `,
   styles: [`
     :host {
       display: block;
     }
 
-    /* Dialog base */
-    .mj-dialog {
-      border: 1px solid var(--mj-border-default);
-      border-radius: var(--mj-radius-lg);
-      box-shadow: var(--mj-shadow-xl);
-      background: var(--mj-bg-surface);
-      color: var(--mj-text-primary);
-      padding: 0;
-      max-width: 700px;
-      width: 90vw;
-    }
-
-    .mj-dialog::backdrop {
-      background: var(--mj-bg-overlay);
-    }
-
-    /* Dialog header */
-    .mj-dialog-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: var(--mj-space-4) var(--mj-space-5);
-      border-bottom: 1px solid var(--mj-border-subtle);
-    }
-
-    .mj-dialog-title {
-      margin: 0;
-      font-size: var(--mj-text-lg);
-      font-weight: var(--mj-font-semibold);
-      color: var(--mj-text-primary);
-    }
-
-    .mj-dialog-close {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: var(--mj-space-8);
-      height: var(--mj-space-8);
-      border: none;
-      border-radius: var(--mj-radius-md);
-      background: transparent;
-      color: var(--mj-text-muted);
-      cursor: pointer;
-      transition: var(--mj-transition-fast);
-    }
-
-    .mj-dialog-close:hover {
-      background: var(--mj-bg-surface-hover);
-      color: var(--mj-text-primary);
-    }
-
-    /* Dialog actions */
-    .mj-dialog-actions {
-      display: flex;
-      gap: var(--mj-space-3);
-      padding: var(--mj-space-4) var(--mj-space-5);
-      border-top: 1px solid var(--mj-border-subtle);
-    }
-
     /* Subtitle */
     .feedback-subtitle {
       color: var(--mj-text-secondary);
       font-size: var(--mj-text-sm);
-      margin-bottom: var(--mj-space-4);
-      padding: 0 var(--mj-space-5);
+      margin-bottom: var(--mj-space-2);
     }
 
-    /* Form content */
+    /* Form content — horizontal padding prevents focus rings from being clipped by overflow */
     .feedback-form-content {
-      padding: 0 var(--mj-space-5) var(--mj-space-5) var(--mj-space-5);
       display: flex;
       flex-direction: column;
       gap: var(--mj-space-4);
       max-height: 60vh;
       overflow-y: auto;
+      padding: 0 var(--mj-space-1);
     }
 
     .feedback-section {
@@ -391,78 +335,28 @@ import { FeedbackService } from '../services/feedback.service';
     }
 
     /* Form controls */
-    .mj-input,
-    .mj-textarea,
     .mj-select {
       width: 100%;
       padding: var(--mj-space-2) var(--mj-space-3);
       border: 1px solid var(--mj-border-default);
       border-radius: var(--mj-radius-md);
-      background: var(--mj-bg-surface);
+      background: var(--mj-bg-surface-card);
       color: var(--mj-text-primary);
       font-size: var(--mj-text-sm);
       font-family: var(--mj-font-family);
       transition: var(--mj-transition-fast);
       box-sizing: border-box;
+      appearance: auto;
     }
 
-    .mj-input:focus,
-    .mj-textarea:focus,
+    .severity-select {
+      width: 200px;
+    }
+
     .mj-select:focus {
       outline: none;
       border-color: var(--mj-border-focus);
       box-shadow: var(--mj-focus-ring);
-    }
-
-    .mj-input::placeholder,
-    .mj-textarea::placeholder {
-      color: var(--mj-text-muted);
-    }
-
-    .mj-textarea {
-      resize: vertical;
-      min-height: var(--mj-space-15);
-    }
-
-    .mj-select {
-      appearance: auto;
-    }
-
-    /* Buttons */
-    .mj-btn {
-      display: inline-flex;
-      align-items: center;
-      gap: var(--mj-space-2);
-      padding: var(--mj-space-2) var(--mj-space-4);
-      border: 1px solid var(--mj-border-default);
-      border-radius: var(--mj-radius-md);
-      background: var(--mj-bg-surface);
-      color: var(--mj-text-primary);
-      font-size: var(--mj-text-sm);
-      font-weight: var(--mj-font-medium);
-      font-family: var(--mj-font-family);
-      cursor: pointer;
-      transition: var(--mj-transition-fast);
-    }
-
-    .mj-btn:hover:not(:disabled) {
-      background: var(--mj-bg-surface-hover);
-    }
-
-    .mj-btn:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-
-    .mj-btn-primary {
-      background: var(--mj-brand-primary);
-      color: var(--mj-brand-on-primary);
-      border-color: var(--mj-brand-primary);
-    }
-
-    .mj-btn-primary:hover:not(:disabled) {
-      background: var(--mj-brand-primary-hover);
-      border-color: var(--mj-brand-primary-hover);
     }
 
     /* Success state */
@@ -509,8 +403,9 @@ import { FeedbackService } from '../services/feedback.service';
     }
   `]
 })
-export class FeedbackFormComponent implements OnInit, AfterViewInit {
-  @ViewChild('dialogEl') DialogEl!: ElementRef<HTMLDialogElement>;
+export class FeedbackFormComponent implements OnInit {
+  /** Controls mj-dialog visibility — set by FeedbackDialogService */
+  DialogVisible = true;
 
   // Inputs for pre-filling
   @Input() PrefilledCategory?: FeedbackCategory | string;
@@ -573,12 +468,6 @@ export class FeedbackFormComponent implements OnInit, AfterViewInit {
     }
     if (this.PrefilledTitle) {
       this.Title = this.PrefilledTitle;
-    }
-  }
-
-  ngAfterViewInit(): void {
-    if (this.DialogEl?.nativeElement) {
-      this.DialogEl.nativeElement.showModal();
     }
   }
 
@@ -717,20 +606,12 @@ export class FeedbackFormComponent implements OnInit, AfterViewInit {
   }
 
   /**
-   * Handle native dialog close event (e.g., Escape key)
-   */
-  OnDialogClose(): void {
-    this.DialogClosed.emit({ success: this.SubmissionSuccess });
-  }
-
-  /**
    * Cancel and close the dialog
    */
   OnCancel(): void {
+    this.DialogVisible = false;
     this.Cancelled.emit();
-    if (this.DialogEl?.nativeElement?.open) {
-      this.DialogEl.nativeElement.close(); // fires native 'close' event → OnDialogClose() → DialogClosed.emit()
-    }
+    this.DialogClosed.emit({ success: this.SubmissionSuccess });
   }
 
   /**

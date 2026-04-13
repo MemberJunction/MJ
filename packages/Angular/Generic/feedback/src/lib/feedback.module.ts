@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 
 // MemberJunction modules
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
+import { MJDialogComponent, MJDialogActionsComponent, MJButtonDirective } from '@memberjunction/ng-ui-components';
 
 // Components
 import { FeedbackFormComponent } from './components/feedback-form.component';
@@ -58,13 +59,16 @@ import { FeedbackConfig, FEEDBACK_CONFIG } from './feedback.config';
  */
 @NgModule({
   declarations: [
-    FeedbackFormComponent,
     FeedbackButtonComponent
   ],
   imports: [
     CommonModule,
     FormsModule,
-    SharedGenericModule
+    SharedGenericModule,
+    MJDialogComponent,
+    MJDialogActionsComponent,
+    MJButtonDirective,
+    FeedbackFormComponent
   ],
   exports: [
     FeedbackFormComponent,

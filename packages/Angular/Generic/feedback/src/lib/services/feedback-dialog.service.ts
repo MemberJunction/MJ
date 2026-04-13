@@ -165,12 +165,9 @@ export class FeedbackDialogService {
   private closeActiveDialog(): void {
     if (this.activeComponentRef && this.activeDialogRef) {
       try {
-        const instance = this.activeComponentRef.instance;
-        if (instance.DialogEl?.nativeElement?.open) {
-          instance.DialogEl.nativeElement.close();
-        }
+        this.activeComponentRef.instance.DialogVisible = false;
       } catch {
-        // Dialog might already be closed
+        // Component might already be destroyed
       }
       if (!this.activeComponentRef.hostView.destroyed) {
         const hostElement = (this.activeComponentRef.hostView as EmbeddedViewRef<unknown>).rootNodes[0] as HTMLElement;

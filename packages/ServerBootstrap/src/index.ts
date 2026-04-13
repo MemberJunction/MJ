@@ -14,7 +14,7 @@
  * See BaseServerMiddleware for details.
  */
 
-import { serve, MJServerOptions } from '@memberjunction/server';
+import { serve, createApp, MJServerOptions } from '@memberjunction/server';
 import { cosmiconfigSync } from 'cosmiconfig';
 import { Application, Router } from 'express';
 
