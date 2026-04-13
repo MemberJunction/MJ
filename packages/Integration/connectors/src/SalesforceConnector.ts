@@ -518,6 +518,96 @@ const SALESFORCE_OBJECTS: IntegrationObjectInfo[] = [
             { Name: 'Description', DisplayName: 'Description', Type: 'text', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Description' },
         ],
     },
+
+    // ── Opportunity & Sales Relationships ────────────────────────────────
+    {
+        Name: 'OpportunityContactRole', DisplayName: 'Opportunity Contact Role',
+        Description: 'A contact role on an opportunity', SupportsWrite: true,
+        Fields: [
+            { Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Record ID' },
+            { Name: 'OpportunityId', DisplayName: 'Opportunity ID', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Parent opportunity' },
+            { Name: 'ContactId', DisplayName: 'Contact ID', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Contact on this opportunity' },
+            { Name: 'Role', DisplayName: 'Role', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Contact role (Decision Maker, Influencer, etc.)' },
+            { Name: 'IsPrimary', DisplayName: 'Primary', Type: 'boolean', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Whether this is the primary contact' },
+        ],
+    },
+
+    // ── Case & Service ──────────────────────────────────────────────────
+    {
+        Name: 'CaseComment', DisplayName: 'Case Comment',
+        Description: 'A comment on a support case', SupportsWrite: true,
+        Fields: [
+            { Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Record ID' },
+            { Name: 'ParentId', DisplayName: 'Case ID', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Parent case' },
+            { Name: 'CommentBody', DisplayName: 'Body', Type: 'text', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Comment text' },
+            { Name: 'IsPublished', DisplayName: 'Published', Type: 'boolean', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Whether comment is visible to customer' },
+        ],
+    },
+    {
+        Name: 'Solution', DisplayName: 'Solution',
+        Description: 'A detailed description of a customer issue and its resolution', SupportsWrite: true,
+        Fields: [
+            { Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Record ID' },
+            { Name: 'SolutionName', DisplayName: 'Solution Title', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Solution title' },
+            { Name: 'SolutionNumber', DisplayName: 'Solution Number', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Auto-generated number' },
+            { Name: 'SolutionNote', DisplayName: 'Solution Details', Type: 'text', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Detailed solution text' },
+            { Name: 'Status', DisplayName: 'Status', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Solution status' },
+            { Name: 'IsPublished', DisplayName: 'Published', Type: 'boolean', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Whether solution is published' },
+            { Name: 'IsReviewed', DisplayName: 'Reviewed', Type: 'boolean', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Whether solution has been reviewed' },
+        ],
+    },
+
+    // ── Content & Files ─────────────────────────────────────────────────
+    {
+        Name: 'Attachment', DisplayName: 'Attachment',
+        Description: 'A file attached to a record (legacy — use ContentVersion for new files)', SupportsWrite: true,
+        Fields: [
+            { Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Record ID' },
+            { Name: 'Name', DisplayName: 'File Name', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Attachment file name' },
+            { Name: 'ParentId', DisplayName: 'Parent ID', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Parent record' },
+            { Name: 'ContentType', DisplayName: 'Content Type', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'MIME type' },
+            { Name: 'BodyLength', DisplayName: 'Body Length', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'File size in bytes' },
+            { Name: 'Description', DisplayName: 'Description', Type: 'text', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Attachment description' },
+            { Name: 'IsPrivate', DisplayName: 'Private', Type: 'boolean', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Whether attachment is private' },
+        ],
+    },
+
+    // ── Communication ───────────────────────────────────────────────────
+    {
+        Name: 'EmailMessage', DisplayName: 'Email Message',
+        Description: 'An email message associated with a case or activity', SupportsWrite: true,
+        Fields: [
+            { Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Record ID' },
+            { Name: 'ParentId', DisplayName: 'Case ID', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Parent case' },
+            { Name: 'Subject', DisplayName: 'Subject', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Email subject' },
+            { Name: 'TextBody', DisplayName: 'Text Body', Type: 'text', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Plain text body' },
+            { Name: 'HtmlBody', DisplayName: 'HTML Body', Type: 'text', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'HTML body' },
+            { Name: 'FromAddress', DisplayName: 'From', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Sender email address' },
+            { Name: 'ToAddress', DisplayName: 'To', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Recipient addresses' },
+            { Name: 'CcAddress', DisplayName: 'CC', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'CC addresses' },
+            { Name: 'BccAddress', DisplayName: 'BCC', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'BCC addresses' },
+            { Name: 'Incoming', DisplayName: 'Incoming', Type: 'boolean', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Whether email was inbound' },
+            { Name: 'HasAttachment', DisplayName: 'Has Attachment', Type: 'boolean', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Whether email has attachments' },
+            { Name: 'Status', DisplayName: 'Status', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Email status' },
+            { Name: 'MessageDate', DisplayName: 'Message Date', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Date email was sent/received' },
+        ],
+    },
+
+    // ── Collaboration ───────────────────────────────────────────────────
+    {
+        Name: 'FeedItem', DisplayName: 'Feed Item',
+        Description: 'A Chatter feed post', SupportsWrite: true,
+        Fields: [
+            { Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Record ID' },
+            { Name: 'ParentId', DisplayName: 'Parent ID', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Feed parent (user, group, or record)' },
+            { Name: 'Body', DisplayName: 'Body', Type: 'text', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Post body text' },
+            { Name: 'Title', DisplayName: 'Title', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Post title' },
+            { Name: 'Type', DisplayName: 'Type', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Post type (TextPost, LinkPost, etc.)' },
+            { Name: 'LinkUrl', DisplayName: 'Link URL', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'URL for link posts' },
+            { Name: 'CommentCount', DisplayName: 'Comments', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Number of comments' },
+            { Name: 'LikeCount', DisplayName: 'Likes', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Number of likes' },
+        ],
+    },
 ];
 
 // ─── SalesforceConnector ──────────────────────────────────────────────

@@ -136,6 +136,128 @@ const RASA_ACTION_OBJECTS: IntegrationObjectInfo[] = [
             { Name: 'id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Topic interest ID' },
         ],
     },
+
+    // ── Communities & Sections ───────────────────────────────────────────
+    {
+        Name: 'communities', DisplayName: 'Community',
+        Description: 'A Rasa.io newsletter community', SupportsWrite: false,
+        Fields: [
+            { Name: 'id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Community unique identifier' },
+            { Name: 'name', DisplayName: 'Name', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: false, Description: 'Community name' },
+            { Name: 'identifier', DisplayName: 'Identifier', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Community string identifier' },
+        ],
+    },
+    {
+        Name: 'sections', DisplayName: 'Section',
+        Description: 'A content section within a community', SupportsWrite: false,
+        Fields: [
+            { Name: 'id', DisplayName: 'ID', Type: 'number', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Section ID' },
+            { Name: 'name', DisplayName: 'Name', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: false, Description: 'Section name' },
+            { Name: 'category_type_id', DisplayName: 'Category Type ID', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Category type identifier' },
+            { Name: 'category_type', DisplayName: 'Category Type', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Category type name' },
+        ],
+    },
+
+    // ── Person Details (Child Endpoints) ────────────────────────────────
+    {
+        Name: 'person-attributes', DisplayName: 'Person Attribute',
+        Description: 'Key-value attributes for a person (subscriber custom data)', SupportsWrite: false,
+        Fields: [
+            { Name: 'name', DisplayName: 'Attribute Name', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: false, Description: 'Attribute key name' },
+            { Name: 'value', DisplayName: 'Attribute Value', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Attribute value' },
+            { Name: 'data_source_name', DisplayName: 'Data Source', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Source of the attribute' },
+            { Name: 'created', DisplayName: 'Created', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'When attribute was created' },
+        ],
+    },
+    {
+        Name: 'person-sends', DisplayName: 'Person Send',
+        Description: 'Newsletter send history for a person', SupportsWrite: false,
+        Fields: [
+            { Name: 'person_id', DisplayName: 'Person ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: false, Description: 'Person identifier' },
+            { Name: 'email', DisplayName: 'Email', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Person email' },
+            { Name: 'external_id', DisplayName: 'External ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'External system ID' },
+            { Name: 'issue_id', DisplayName: 'Issue ID', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Newsletter issue ID' },
+            { Name: 'send_at', DisplayName: 'Sent At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'When sent' },
+            { Name: 'status', DisplayName: 'Status', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Delivery status' },
+            { Name: 'created', DisplayName: 'Created', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Record creation timestamp' },
+            { Name: 'updated', DisplayName: 'Updated', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Record update timestamp' },
+        ],
+    },
+
+    // ── Content ─────────────────────────────────────────────────────────
+    {
+        Name: 'content-pool', DisplayName: 'Content Pool',
+        Description: 'Curated content available for newsletter inclusion', SupportsWrite: false,
+        Fields: [
+            { Name: 'id', DisplayName: 'ID', Type: 'number', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Content pool item ID' },
+            { Name: 'url', DisplayName: 'URL', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Content URL' },
+            { Name: 'title', DisplayName: 'Title', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Content title' },
+            { Name: 'description', DisplayName: 'Description', Type: 'text', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Content description' },
+            { Name: 'image_url', DisplayName: 'Image URL', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Content image URL' },
+            { Name: 'source_url', DisplayName: 'Source URL', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Original source URL' },
+            { Name: 'site_name', DisplayName: 'Site Name', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Source site name' },
+            { Name: 'send_date', DisplayName: 'Send Date', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Scheduled send date' },
+            { Name: 'created', DisplayName: 'Created', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Record creation timestamp' },
+            { Name: 'updated', DisplayName: 'Updated', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Record update timestamp' },
+        ],
+    },
+    {
+        Name: 'lead-posts', DisplayName: 'Lead Post',
+        Description: 'Featured content posts for prominent newsletter placement', SupportsWrite: true,
+        Fields: [
+            { Name: 'id', DisplayName: 'ID', Type: 'number', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Lead post ID' },
+            { Name: 'url', DisplayName: 'URL', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Lead post URL' },
+            { Name: 'title', DisplayName: 'Title', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Post title' },
+            { Name: 'description', DisplayName: 'Description', Type: 'text', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Post description' },
+            { Name: 'image_url', DisplayName: 'Image URL', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Post image URL' },
+            { Name: 'site_name', DisplayName: 'Site Name', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Source site name' },
+        ],
+    },
+
+    // ── Analytics ────────────────────────────────────────────────────────
+    {
+        Name: 'analytics-activities', DisplayName: 'Analytics: Activity',
+        Description: 'Aggregated newsletter activity metrics over time', SupportsWrite: false,
+        Fields: [
+            { Name: 'date', DisplayName: 'Date', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Activity date/period' },
+            { Name: 'interval', DisplayName: 'Interval', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Aggregation interval' },
+            { Name: 'open_count', DisplayName: 'Opens', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Number of opens' },
+            { Name: 'click_count', DisplayName: 'Clicks', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Number of clicks' },
+            { Name: 'delivered_count', DisplayName: 'Delivered', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Number of deliveries' },
+        ],
+    },
+    {
+        Name: 'analytics-articles', DisplayName: 'Analytics: Article',
+        Description: 'Article click analytics ranked by engagement', SupportsWrite: false,
+        Fields: [
+            { Name: 'url', DisplayName: 'Article URL', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Article URL' },
+            { Name: 'title', DisplayName: 'Title', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Article title' },
+            { Name: 'click_count', DisplayName: 'Clicks', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Total clicks' },
+            { Name: 'unique_clicks', DisplayName: 'Unique Clicks', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Unique user clicks' },
+            { Name: 'site_name', DisplayName: 'Site Name', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Source site name' },
+        ],
+    },
+    {
+        Name: 'analytics-images', DisplayName: 'Analytics: Image',
+        Description: 'Static image click analytics', SupportsWrite: false,
+        Fields: [
+            { Name: 'url', DisplayName: 'Image URL', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Image URL' },
+            { Name: 'click_count', DisplayName: 'Clicks', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Total clicks' },
+            { Name: 'unique_clicks', DisplayName: 'Unique Clicks', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Unique user clicks' },
+            { Name: 'title', DisplayName: 'Title', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Image title/alt text' },
+        ],
+    },
+    {
+        Name: 'analytics-topics', DisplayName: 'Analytics: Topic',
+        Description: 'Topic engagement analytics from content tags', SupportsWrite: false,
+        Fields: [
+            { Name: 'topic', DisplayName: 'Topic', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Topic name/tag' },
+            { Name: 'interaction_count', DisplayName: 'Interactions', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Total interactions' },
+            { Name: 'unique_users', DisplayName: 'Unique Users', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Unique engaged users' },
+            { Name: 'first_interaction', DisplayName: 'First Interaction', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'First interaction date' },
+            { Name: 'last_interaction', DisplayName: 'Last Interaction', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Most recent interaction' },
+        ],
+    },
 ];
 
 @RegisterClass(BaseIntegrationConnector, 'RasaConnector')

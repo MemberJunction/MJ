@@ -201,6 +201,10 @@ export interface RSUPendingWork {
   StartSync?: boolean;
   FullSync?: boolean;
   SyncScope?: 'created' | 'all';
+  /** Override sync direction for the initial sync triggered by this RSU run. */
+  SyncDirection?: 'Pull' | 'Push' | 'Bidirectional';
+  /** Override sync direction for the created schedule (stored in ScheduledJob.Configuration). */
+  ScheduleSyncDirection?: 'Pull' | 'Push' | 'Bidirectional';
 }
 
 /**

@@ -1,5 +1,5 @@
 import { Resolver, Query, Mutation, Arg, Ctx, ObjectType, Field, InputType } from "type-graphql";
-import { CompositeKey, Metadata, RunView, UserInfo, LogError } from "@memberjunction/core";
+import { CompositeKey, LocalCacheManager, Metadata, RunView, UserInfo, LogError } from "@memberjunction/core";
 import { CronExpressionHelper } from "@memberjunction/scheduling-engine";
 import {
     MJCompanyIntegrationEntity,
@@ -24,7 +24,8 @@ import {
     ConnectionTestResult,
     IntegrationEngine,
     IntegrationSyncOptions,
-    SourceSchemaInfo
+    SourceSchemaInfo,
+    IntegrationSchemaSync
 } from "@memberjunction/integration-engine";
 import {
     SchemaBuilder,
@@ -145,6 +146,8 @@ class ApplyAllBatchInput {
     @Field(() => Boolean, { nullable: true, defaultValue: true, description: 'If false, skips sync after schema + entity maps' }) StartSync?: boolean;
     @Field(() => Boolean, { nullable: true, defaultValue: false, description: 'If true, ignores watermarks and does a full re-fetch' }) FullSync?: boolean;
     @Field({ nullable: true, defaultValue: 'created', description: 'Sync scope: "created" = only newly created entity maps, "all" = all maps for the connector' }) SyncScope?: string;
+    @Field({ nullable: true, description: 'Override sync direction for the initial sync: Pull | Push | Bidirectional. Defaults to entity map SyncDirection.' }) SyncDirection?: string;
+    @Field({ nullable: true, description: 'Override sync direction stored in the created schedule: Pull | Push | Bidirectional.' }) ScheduleSyncDirection?: string;
 }
 
 @ObjectType()
@@ -523,6 +526,8 @@ class CreateScheduleInput {
     @Field() CronExpression: string;
     @Field({ nullable: true }) Timezone?: string;
     @Field({ nullable: true }) Description?: string;
+    @Field({ nullable: true }) SyncDirection?: string;
+    @Field({ nullable: true }) FullSync?: boolean;
 }
 
 @ObjectType()
@@ -1016,15 +1021,23 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         // but the connector's GetIntegrationObjects() always has them.
         const connectorDescriptions = this.buildDescriptionLookup(connector);
 
-        return objects.map(obj => {
+        const results: TargetTableConfig[] = [];
+        for (const obj of objects) {
             const sourceObj = sourceSchema.Objects.find(o => o.ExternalName.toLowerCase() === obj.SourceObjectName.toLowerCase());
             const objDescriptions = connectorDescriptions.get(obj.SourceObjectName.toLowerCase());
+
+            // If the object wasn't discovered in IntrospectSchema (e.g. API error), skip it
+            // rather than generating a broken table with no columns and a fallback PK.
+            if (!sourceObj) {
+                LogError(`[buildTargetConfigs] Skipping "${obj.SourceObjectName}" — not found in source schema (IntrospectSchema may have failed for this object)`);
+                continue;
+            }
 
             // Filter fields if caller specified a subset
             const selectedFieldSet = obj.Fields?.length
                 ? new Set(obj.Fields.map(f => f.toLowerCase()))
                 : null;
-            const sourceFields = (sourceObj?.Fields ?? []).filter(f =>
+            const sourceFields = sourceObj.Fields.filter(f =>
                 !selectedFieldSet || selectedFieldSet.has(f.Name.toLowerCase()) || f.IsPrimaryKey
             );
 
@@ -1040,21 +1053,37 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 Description: f.Description ?? objDescriptions?.fields.get(f.Name.toLowerCase()),
             }));
 
-            const primaryKeyFields = (sourceObj?.Fields ?? [])
+            const primaryKeyFields = sourceObj.Fields
                 .filter(f => f.IsPrimaryKey)
                 .map(f => f.Name.replace(/[^A-Za-z0-9_]/g, '_'));
 
-            return {
+            // If no columns were discovered, skip rather than generating a broken table
+            // (DDL with UNIQUE ([ID]) on a non-existent column will always fail).
+            if (columns.length === 0 && primaryKeyFields.length === 0) {
+                LogError(`[buildTargetConfigs] Skipping "${obj.SourceObjectName}" — 0 fields discovered (live API likely failed and no DB-cached fields available)`);
+                continue;
+            }
+
+            // If columns exist but no PK was found, log diagnostic info and skip rather than
+            // generating broken DDL with UNIQUE ([ID]) on a non-existent column.
+            if (primaryKeyFields.length === 0 && columns.length > 0) {
+                const fieldNames = sourceObj.Fields.map(f => `${f.Name}(pk=${f.IsPrimaryKey})`).join(', ');
+                LogError(`[buildTargetConfigs] Skipping "${obj.SourceObjectName}" — ${columns.length} columns but NO primary key field found. Fields: [${fieldNames}]`);
+                continue;
+            }
+
+            results.push({
                 SourceObjectName: obj.SourceObjectName,
                 SchemaName: obj.SchemaName,
                 TableName: obj.TableName,
                 EntityName: obj.EntityName,
-                Description: sourceObj?.Description ?? objDescriptions?.objectDescription,
+                Description: sourceObj.Description ?? objDescriptions?.objectDescription,
                 Columns: columns,
-                PrimaryKeyFields: primaryKeyFields.length > 0 ? primaryKeyFields : ['ID'],
+                PrimaryKeyFields: primaryKeyFields,
                 SoftForeignKeys: []
-            };
-        });
+            });
+        }
+        return results;
     }
 
     /** Builds a lookup of object name → { objectDescription, fields: fieldName → description } from the connector's static metadata. */
@@ -1826,9 +1855,73 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             const { connector, companyIntegration } = await this.resolveConnector(input.CompanyIntegrationID, user);
             const schemaName = this.deriveSchemaName(companyIntegration.Integration);
 
-            // Step 2: Resolve object IDs to names, build inputs with per-object Fields
+            // Step 1b: Ensure IntegrationEngine cache is populated so IntrospectSchema's
+            // DB fallback (GetCachedObject/GetCachedFields) can find IntegrationObject records
+            await IntegrationEngine.Instance.Config(false, user);
+
+            // Step 2: Introspect source schema and persist discovered objects/fields
             const sourceSchema = await (connector.IntrospectSchema.bind(connector) as
                 (ci: unknown, u: unknown) => Promise<SourceSchemaInfo>)(companyIntegration, user);
+
+            // Step 2b: Persist discovered objects/fields to IntegrationObject/IntegrationObjectField.
+            // Static records (IsCustom=false) are preserved; new/custom records get IsCustom=true.
+            // This ensures custom objects are available for future sync runs, action generation, etc.
+            try {
+                const persistResult = await IntegrationSchemaSync.PersistDiscoveredSchema({
+                    IntegrationID: companyIntegration.IntegrationID,
+                    SourceSchema: sourceSchema,
+                    ContextUser: user,
+                });
+                if (persistResult.ObjectsCreated > 0 || persistResult.FieldsCreated > 0) {
+                    console.log(
+                        `[IntegrationApplyAll] Persisted discovered schema: ` +
+                        `${persistResult.ObjectsCreated} new objects, ${persistResult.FieldsCreated} new fields, ` +
+                        `${persistResult.ObjectsUpdated} updated objects, ${persistResult.FieldsUpdated} updated fields`
+                    );
+                }
+
+                // Step 2c: Generate CRUD actions for newly discovered custom objects.
+                // Uses the same ActionMetadataGenerator as the offline CLI, persisted via BaseEntity.Save().
+                if (persistResult.ObjectsCreated > 0) {
+                    try {
+                        const engineObjects = IntegrationEngine.Instance
+                            .GetIntegrationObjectsByIntegrationID(companyIntegration.IntegrationID);
+                        const customObjects = sourceSchema.Objects
+                            .filter(o => !engineObjects
+                                .some(ex => ex.Name.toLowerCase() === o.ExternalName.toLowerCase() && !ex.Get('IsCustom')))
+                            .map(o => ({
+                                Name: o.ExternalName,
+                                DisplayName: o.ExternalLabel || o.ExternalName,
+                                Description: o.Description,
+                                SupportsWrite: false,
+                                Fields: o.Fields.map(f => ({
+                                    Name: f.Name,
+                                    DisplayName: f.Label || f.Name,
+                                    Description: f.Description || '',
+                                    Type: f.SourceType || 'string',
+                                    IsRequired: f.IsRequired,
+                                    IsReadOnly: false,
+                                    IsPrimaryKey: f.IsPrimaryKey,
+                                })),
+                            }));
+                        await IntegrationSchemaSync.GenerateActionsForCustomObjects({
+                            IntegrationName: companyIntegration.Integration,
+                            CustomObjects: customObjects,
+                            SupportsSearch: connector.SupportsSearch,
+                            SupportsListing: connector.SupportsListing,
+                            ContextUser: user,
+                        });
+                    } catch (actionErr) {
+                        const msg = actionErr instanceof Error ? actionErr.message : String(actionErr);
+                        console.warn(`[IntegrationApplyAll] Action generation warning (non-fatal): ${msg}`);
+                    }
+                }
+            } catch (persistErr) {
+                // Non-fatal: schema persistence failure should not block table creation
+                const msg = persistErr instanceof Error ? persistErr.message : String(persistErr);
+                console.warn(`[IntegrationApplyAll] Schema persistence warning (non-fatal): ${msg}`);
+            }
+
             const objectIDs = input.SourceObjects.map(so => so.SourceObjectID);
             const resolvedNames = await this.resolveSourceObjectNames(objectIDs, undefined, sourceSchema, companyIntegration.IntegrationID, user);
 
@@ -2191,15 +2284,17 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         @Arg("webhookURL", { nullable: true }) webhookURL: string,
         @Arg("fullSync", () => Boolean, { defaultValue: false, description: 'If true, ignores watermarks and re-fetches all records from the source' }) fullSync: boolean,
         @Arg("entityMapIDs", () => [String], { nullable: true, description: 'Optional: sync only these entity maps. If omitted, syncs all maps for the connector.' }) entityMapIDs: string[],
+        @Arg("syncDirection", () => String, { nullable: true, description: 'Override sync direction: Pull | Push | Bidirectional. If omitted, each entity map\'s own SyncDirection is used.' }) syncDirection: 'Pull' | 'Push' | 'Bidirectional' | undefined,
         @Ctx() ctx: AppContext
     ): Promise<StartSyncOutput> {
         try {
             const user = this.getAuthenticatedUser(ctx);
             await IntegrationEngine.Instance.Config(false, user);
 
-            const syncOptions: { FullSync?: boolean; EntityMapIDs?: string[] } = {};
+            const syncOptions: { FullSync?: boolean; EntityMapIDs?: string[]; SyncDirection?: 'Pull' | 'Push' | 'Bidirectional' } = {};
             if (fullSync) syncOptions.FullSync = true;
             if (entityMapIDs?.length) syncOptions.EntityMapIDs = entityMapIDs;
+            if (syncDirection) syncOptions.SyncDirection = syncDirection;
 
             // Fire and forget — progress is tracked inside IntegrationEngine
             const syncPromise = IntegrationEngine.Instance.RunSync(
@@ -2401,7 +2496,10 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             job.Timezone = input.Timezone || 'UTC';
             job.Status = 'Active';
             job.OwnerUserID = user.ID;
-            job.Configuration = JSON.stringify({ CompanyIntegrationID: input.CompanyIntegrationID });
+            const jobConfig: Record<string, unknown> = { CompanyIntegrationID: input.CompanyIntegrationID };
+            if (input.SyncDirection) jobConfig.SyncDirection = input.SyncDirection;
+            if (input.FullSync) jobConfig.FullSync = input.FullSync;
+            job.Configuration = JSON.stringify(jobConfig);
             job.NextRunAt = CronExpressionHelper.GetNextRunTime(input.CronExpression, input.Timezone || 'UTC');
 
             if (!await job.Save()) return { Success: false, Message: 'Failed to create schedule' };
@@ -2971,6 +3069,13 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             const user = this.getAuthenticatedUser(ctx);
             const validatedPlatform = this.validatePlatform(platform);
 
+            // Bust RunView caches for integration metadata BEFORE Config(true).
+            // mj sync push writes records via stored procedures which do NOT fire
+            // BaseEntity change events, so the RunView cache is never auto-invalidated.
+            // Explicitly clearing these entries ensures Config(true) re-queries the DB.
+            await LocalCacheManager.Instance.InvalidateEntityCaches('MJ: Integration Objects');
+            await LocalCacheManager.Instance.InvalidateEntityCaches('MJ: Integration Object Fields');
+
             // Force-refresh integration metadata cache so IntrospectSchema
             // picks up any IntegrationObject/Field changes made via mj sync push
             await IntegrationEngine.Instance.Config(true, user);
@@ -3024,6 +3129,8 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                         StartSync: input.StartSync,
                         FullSync: input.FullSync ?? false,
                         SyncScope: input.SyncScope ?? 'created',
+                        SyncDirection: input.SyncDirection,
+                        ScheduleSyncDirection: input.ScheduleSyncDirection,
                         CreatedAt: new Date().toISOString(),
                     };
                     rsuInput.PostRestartFiles = [

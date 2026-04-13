@@ -278,6 +278,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 result.ErrorMessage = `Sync completed with ${result.RecordsErrored} error(s)`;
             }
             await this.FinalizeRun(run, result, contextUser, onNotification);
+            const summary = this.buildSyncResultBody(config.companyIntegration.Integration, result);
+            console.log(`[IntegrationEngine] Sync complete:\n${summary}`);
             return result;
         } catch (err) {
             await this.FailRun(run, err, contextUser, onNotification);
@@ -342,6 +344,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             integration,
             connector,
             fullSync: options?.FullSync ?? false,
+            syncDirection: options?.SyncDirection,
         };
     }
 
@@ -468,7 +471,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         onProgress?: OnProgressCallback,
         abortSignal?: AbortSignal
     ): Promise<SyncResult> {
-        const direction = entityMap.SyncDirection ?? 'Pull';
+        const direction = config.syncDirection ?? entityMap.SyncDirection ?? 'Pull';
 
         if (direction === 'Pull') {
             return this.ProcessPullSync(config, entityMap, run, contextUser, entityMapIndex, totalEntityMaps, onProgress, abortSignal);
@@ -1541,6 +1544,8 @@ interface RunConfiguration {
     integration: MJIntegrationEntity;
     connector: BaseIntegrationConnector;
     fullSync: boolean;
+    /** When set, overrides each entity map's own SyncDirection for this run. */
+    syncDirection?: 'Pull' | 'Push' | 'Bidirectional';
 }
 
 /** Shape of a validation result from BaseEntity.Validate() */

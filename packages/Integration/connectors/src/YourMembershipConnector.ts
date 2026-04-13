@@ -2524,20 +2524,46 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
             this.CheckResponseError(rawBody as Record<string, unknown>);
         }
 
+        let records: Record<string, unknown>[];
+
         if (responseDataKey != null) {
             const body = rawBody as Record<string, unknown>;
             const data = body[responseDataKey];
             if (!data || !Array.isArray(data)) return [];
-            return data as Record<string, unknown>[];
+            records = data as Record<string, unknown>[];
+        } else if (Array.isArray(rawBody)) {
+            // Null responseDataKey: raw array (Products)
+            records = rawBody as Record<string, unknown>[];
+        } else {
+            // Single object response — filter metadata and wrap in array
+            records = [this.FilterMetadataKeys(rawBody as Record<string, unknown>)];
         }
 
-        // Null responseDataKey: raw array (Products) or single object (EngagementScores)
-        if (Array.isArray(rawBody)) {
-            return rawBody as Record<string, unknown>[];
-        }
+        // Sanitize invalid date values: empty strings and DateTime.MinValue → null
+        return records.map(r => this.SanitizeDateFields(r));
+    }
 
-        // Single object response — filter metadata and wrap in array
-        return [this.FilterMetadataKeys(rawBody as Record<string, unknown>)];
+    /**
+     * Converts empty strings and DateTime.MinValue (0001-01-01) in date-like fields to null.
+     * YM API returns "" and "0001-01-01T00:00:00" instead of null for empty date fields,
+     * which causes DATETIMEOFFSET columns to reject the value.
+     */
+    private SanitizeDateFields(record: Record<string, unknown>): Record<string, unknown> {
+        for (const [key, value] of Object.entries(record)) {
+            if (typeof value !== 'string') continue;
+
+            // Empty string → null for any field
+            if (value === '') {
+                record[key] = null;
+                continue;
+            }
+
+            // DateTime.MinValue patterns → null
+            if (value.startsWith('0001-01-01') || value.startsWith('0001/01/01')) {
+                record[key] = null;
+            }
+        }
+        return record;
     }
 
     protected ExtractPaginationInfo(

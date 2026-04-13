@@ -484,6 +484,28 @@ const WICKET_OBJECTS: IntegrationObjectInfo[] = [
             { Name: 'resource_type', DisplayName: 'Resource Type', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Resource Type' },
         ],
     },
+
+    // ── Web Addresses (follows same pattern as emails/phones/addresses) ──
+    {
+        Name: 'people_web_addresses', DisplayName: 'Person Web Address',
+        Description: 'URLs and web links for a person', SupportsWrite: true,
+        Fields: [
+            { Name: 'id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Web address record ID' },
+            { Name: 'address', DisplayName: 'URL', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Web address URL' },
+            { Name: 'type', DisplayName: 'Type', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Web address type' },
+            { Name: 'primary', DisplayName: 'Primary', Type: 'boolean', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Primary web address' },
+        ],
+    },
+    {
+        Name: 'org_web_addresses', DisplayName: 'Organization Web Address',
+        Description: 'URLs and web links for an organization', SupportsWrite: true,
+        Fields: [
+            { Name: 'id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Web address record ID' },
+            { Name: 'address', DisplayName: 'URL', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Web address URL' },
+            { Name: 'type', DisplayName: 'Type', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Web address type' },
+            { Name: 'primary', DisplayName: 'Primary', Type: 'boolean', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Primary web address' },
+        ],
+    },
 ];
 
 @RegisterClass(BaseIntegrationConnector, 'WicketConnector')

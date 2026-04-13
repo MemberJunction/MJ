@@ -615,6 +615,33 @@ const QUICKBOOKS_OBJECTS: IntegrationObjectInfo[] = [
             { Name: 'Active', DisplayName: 'Active', Type: 'boolean', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Whether the type is active' },
         ],
     },
+
+    // ── Additional Standard Entities ────────────────────────────────
+    {
+        Name: 'CustomerType', DisplayName: 'Customer Type',
+        Description: 'Customer classification/categorization (read-only)', SupportsWrite: false,
+        Fields: [
+            { Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Record ID' },
+            { Name: 'Name', DisplayName: 'Name', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Customer type name' },
+            { Name: 'Active', DisplayName: 'Active', Type: 'boolean', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Whether active' },
+        ],
+    },
+    {
+        Name: 'ReimburseCharge', DisplayName: 'Reimburse Charge',
+        Description: 'Billable expenses for invoices (read-only, minorversion>=9)', SupportsWrite: false,
+        Fields: [
+            { Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Record ID' },
+            { Name: 'TxnDate', DisplayName: 'Transaction Date', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Transaction date' },
+            { Name: 'Amount', DisplayName: 'Amount', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Amount' },
+        ],
+    },
+    {
+        Name: 'TaxService', DisplayName: 'Tax Service',
+        Description: 'Creates tax codes with rate details (create-only)', SupportsWrite: true,
+        Fields: [
+            { Name: 'TaxCode', DisplayName: 'Tax Code Name', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Name for the new tax code' },
+        ],
+    },
 ];
 
 // ─── Connector Implementation ─────────────────────────────────────────

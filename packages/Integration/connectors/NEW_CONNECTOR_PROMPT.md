@@ -77,19 +77,58 @@ MJ stores integration metadata in two database tables that the engine uses at ru
 - **`IntegrationObject`** — one row per API endpoint/table (Name, APIPath, PaginationType, DefaultPageSize, ResponseDataKey, SupportsWrite, Category, etc.)
 - **`IntegrationObjectField`** — one row per field on each object (Name, Type, IsPrimaryKey, IsForeignKey, IsRequired, IsReadOnly, etc.)
 
-**The overlay pattern**: Connectors can populate these tables two ways, and they COMBINE:
+Both tables have an `IsCustom BIT` column:
+- `IsCustom = 0` (default) — standard platform object/field, defined in static metadata
+- `IsCustom = 1` — custom object/field created by the customer in their instance, discovered at runtime
 
-1. **Dynamic (live API discovery)** — `DiscoverObjects()` and `DiscoverFields()` are called at runtime when `IntegrationApplyAll` or `IntegrationApplySchema` mutations run. The engine compares the live-discovered objects/fields against what's already in the DB and adds/updates as needed. This is the preferred approach — it means new objects and fields added to the external API are automatically picked up.
+**The two-layer architecture:**
 
-2. **Static metadata overlay** — For objects/fields that the API can't self-describe (pagination type, response data key, default query params, soft FKs, field descriptions), define them in the connector's `PLATFORM_OBJECTS` array (type `IntegrationObjectInfo[]`) and/or in a metadata JSON file at `metadata/integrations/.platform-name.json`. The engine merges static metadata ON TOP of live discovery — static values win for fields they specify, but live-discovered fields/objects that aren't in the static list are preserved.
+### Layer 1: Complete Static Metadata (MANDATORY — no gaps)
 
-**When to use which approach:**
+**Every single standard endpoint and every single standard field** must be defined in the metadata JSON file at `metadata/integrations/.platform-name.json`. This is non-negotiable. The metadata is pushed to the database via `mj-sync push` and becomes the authoritative source for standard objects/fields.
 
-| Scenario | Approach |
-|---|---|
-| Platform has a schema/describe/metadata API endpoint | **Dynamic** via `DiscoverObjects()` + `DiscoverFields()`. Add static overlay only for MJ-specific metadata (PaginationType, ResponseDataKey, etc.) that the API doesn't provide. |
-| Platform has no metadata endpoint (most common) | **Static** `PLATFORM_OBJECTS` array with all objects and fields. `DiscoverObjects()` returns from this array. `DiscoverFields()` fetches one record from the API to infer field types, then merges with static metadata for PK/FK/description annotations. |
-| Platform has partial metadata (e.g., field names but not types) | **Hybrid** — `DiscoverFields()` calls the API for what it can provide, then overlays static metadata for PKs, FKs, required flags, descriptions. |
+**How to research:** Use the platform's own API to enumerate all standard objects/fields programmatically:
+- HubSpot: `/crm/v3/properties/{objectType}` returns all default properties with types
+- Salesforce: Describe API (`/services/data/vXX.0/sobjects/{object}/describe/`)
+- QuickBooks: Entity metadata endpoints
+- Sage Intacct: `inspect` XML operation
+- For APIs without introspection: webscrape official documentation for endpoint/field tables
+
+Run the API once, capture ALL results, convert to IntegrationObject/IntegrationObjectField JSON format. Every field must include: Name, DisplayName, Type, IsPrimaryKey, IsRequired, IsReadOnly, Description, AllowsNull.
+
+The connector's `PLATFORM_OBJECTS` TypeScript array and the metadata JSON file must match.
+
+### Layer 2: Custom Object/Field Discovery (runtime, `IsCustom = true`)
+
+For platforms that support user-created objects/fields, the connector implements a discovery interface:
+
+```typescript
+/** Discover custom objects created by the customer in their instance */
+async DiscoverCustomObjects(companyIntegration, contextUser): Promise<ExternalObjectSchema[]>
+
+/** Discover custom fields on an object (standard or custom) */
+async DiscoverCustomFields(companyIntegration, objectName, contextUser): Promise<ExternalFieldSchema[]>
+```
+
+Each platform has its own mechanism:
+- **HubSpot**: `/crm/v3/schemas` for custom objects, `/crm/v3/properties/{object}` with `hubspotDefined: false` for custom fields
+- **Salesforce**: Objects/fields ending in `__c` suffix
+- **QuickBooks**: Custom fields via `CustomField` array in entity responses
+- **AMS connectors** (YM, Wicket, etc.): typically no custom objects/fields — discovery returns empty
+
+Discovered custom objects/fields are persisted to IntegrationObject/IntegrationObjectField with `IsCustom = true`. The discovery captures whatever metadata the API provides (type, constraints, descriptions). If the API doesn't provide a value, it's NULL — the SchemaBuilder will make minimal assumptions (nullable, nvarchar).
+
+### What goes where:
+
+| Data | Where it lives | IsCustom |
+|---|---|---|
+| Standard endpoints (contacts, deals, etc.) | Static metadata JSON → mj-sync push | false |
+| Standard fields (email, name, hs_object_id, etc.) | Static metadata JSON → mj-sync push | false |
+| Custom objects (customer-created) | Discovery → IntegrationSchemaSync → DB | true |
+| Custom fields (customer-added to any object) | Discovery → IntegrationSchemaSync → DB | true |
+
+### After both layers are in the DB:
+RSU reads from IntegrationObject/IntegrationObjectField (standard + custom together) and generates DDL for all of them. No special handling — same SchemaBuilder, same pipeline. The only difference is that custom objects/fields have fewer guaranteed constraints.
 
 **Key fields on IntegrationObject that must be set correctly:**
 - `APIPath` — the URL path segment for this object (e.g., `contacts`, `MemberList`, `accounts`)
@@ -184,10 +223,34 @@ D7. Future-Proofing
 - **Static list connectors** (QuickBooks, Wicket, YM, Rasa): New endpoints require adding to the static `PLATFORM_OBJECTS` array. Keep the array well-organized with section comments so additions are obvious.
 - **Non-CRM/secondary APIs** (HubSpot non-CRM, QuickBooks Payments/Payroll): These are separate API paths that won't be auto-discovered. Document which API categories exist and which are implemented. When adding a connector, enumerate ALL API categories the platform offers — even if you don't implement them all, document what's missing and why (e.g., "Payments API — separate product, requires separate OAuth scope").
 
+D8. Date and Value Sanitization
+
+External APIs return invalid date values that SQL Server rejects. Your connector's `NormalizeResponse()` MUST sanitize these:
+
+- **Empty strings** (`""`) → `null` for all date/datetime fields (DATETIMEOFFSET columns reject empty strings)
+- **DateTime.MinValue** (`0001-01-01T00:00:00`) → `null` (common in .NET-based APIs like YourMembership)
+- **Invalid dates** (e.g., `0000-00-00`) → `null`
+
+The `YourMembershipConnector` has a `SanitizeDateFields()` method as a reference implementation. Apply the same pattern to any API that returns sentinel values instead of null for empty dates.
+
+D9. Generated Actions for Integration Objects
+
+The MJ integration platform auto-generates CRUD actions (Get, Create, Update, Delete, Search, List) from IntegrationObject/IntegrationObjectField metadata:
+
+- **`ActionMetadataGenerator`** reads object/field metadata and generates action definitions
+- **`IntegrationActionExecutor`** is the single shared DriverClass for all integration actions
+- **CLI**: `npx tsx src/generate-integration-actions.ts [-- connector-name]` generates action JSON files to `metadata/actions/integrations-auto-generated/`
+- Each connector implements `GetActionGeneratorConfig()` and `GetIntegrationObjects()` to provide the source data
+
+Create/Update/Delete actions are only generated for objects with `SupportsWrite: true`. Read-only reference objects (e.g., User, RecordType, TaxCode) should set `SupportsWrite: false` to prevent write action generation.
+
+For custom objects: the CLI currently generates actions from the static TypeScript array. After custom discovery persists objects to the DB, the CLI can be extended to also query IsCustom=true records.
+
 E. Error Handling
 Map platform-specific HTTP errors to MJ's error types:
 
 401 → re-authenticate, then retry once
+**403 → NEVER remove the object from metadata.** A 403 means the customer's API credentials don't have the required scope/permission for this object. Log a clear warning: "Object X requires additional API permissions/scopes — add scope Y to your OAuth app." Skip the object for this sync run and continue. The base class `BaseRESTIntegrationConnector` handles this automatically for FetchSinglePage/FetchPaginatedLoop.
 429 → exponential backoff (start 1s, max 60s, jitter)
 404 on a record → SyncErrorCode.RecordNotFound (or equivalent in codebase)
 5xx → retry up to 3 times with backoff, then fail with descriptive error
@@ -279,6 +342,171 @@ Incomplete object list: Shipping with 10 objects when the API has 40. The prompt
 Not matching base class signatures: If the base class FetchChanges() returns Promise<SyncResult> and you return Promise<any[]>, the build will pass but runtime will fail. Read the base class.
 Skipping DiscoverFields() implementation: Returning empty arrays or generic fields. Every field the API returns should be discovered with its correct type.
 Not handling empty responses: API returns null, undefined, or { data: null } instead of { data: [] }. Your ExtractRecords() must handle this.
+
+
+Static Metadata Completion Algorithm
+
+When adding or auditing a connector's static metadata, follow this algorithm exactly. The goal is ZERO missing standard objects or fields. **This is not optional — every step must be executed with proof.**
+
+### Research Methodology (MANDATORY for every connector)
+
+**You MUST use at least 2 independent sources to verify completeness.** Checking TS matches metadata is NOT verification — both could be equally incomplete. You must verify against the ACTUAL API.
+
+**Tier 1 sources (use first — authoritative):**
+- **OpenAPI/Swagger spec** — fetch the raw JSON/YAML spec (e.g., `api-docs.rasa.io/swagger.json`). This is the single best source because it's machine-readable and complete.
+- **Official API reference docs** — the developer portal's endpoint listing (e.g., `developer.intacct.com/api/`, `developers.hubspot.com/docs/reference/api/`)
+- **Programmatic self-describing APIs** — endpoints that list available objects (e.g., Salesforce `/sobjects`, HubSpot `/crm/v3/schemas`, Sage Intacct `inspect`)
+
+**Tier 2 sources (cross-reference — catches what docs miss):**
+- **Official SDKs** — Ruby, PHP, Python, Node SDKs often expose entity classes/methods that map 1:1 to API endpoints. SDKs sometimes support endpoints that the docs haven't been updated to cover.
+- **API Blueprint / Apiary docs** — some platforms host API specs on Apiary (e.g., Wicket)
+- **Third-party integration platforms** — Tray.io, Zapier, Make connector docs list supported objects
+
+**Tier 3 sources (supplementary):**
+- **Community forums / StackOverflow** — for discovering undocumented endpoints
+- **Third-party SDK wrappers** — npm/PyPI packages that wrap the API
+
+**For each connector, your research report MUST include:**
+```
+Verification Report: [Connector Name]
+Sources used:
+  1. [Primary source URL] — [what it provided]
+  2. [Cross-reference source URL] — [what it confirmed/added]
+Objects found: [count]
+Objects in metadata: [count]
+Missing: [list or "none"]
+Proof: [how you verified totality — e.g., "Swagger spec lists exactly N paths"]
+```
+
+**Examples of good research (what was done for the current connectors):**
+- **Rasa.io**: Fetched `swagger.json` directly → found 14 endpoints (was only 4). Machine-readable, authoritative, complete.
+- **Sage Intacct**: Fetched each category page at `developer.intacct.com/api/{category}` → found 150+ objects across 18 categories → added 38 commonly-used ones.
+- **Wicket**: Fetched Apiary API Blueprint + cross-referenced PHP SDK `Client.php` → confirmed 18 documented + found 2 undocumented but SDK-supported (web_addresses).
+- **QuickBooks**: Cross-referenced node-quickbooks SDK + quickbooks-ruby SDK + official all-entities docs → confirmed 33 core + 3 niche entities.
+- **YourMembership**: 123 objects derived from Swagger introspection, cross-referenced with Ruby SDK (66 XML API methods) → confirmed comprehensive.
+- **HubSpot**: CRM objects from official Object Types docs (32 types) + non-CRM from connector's API path catalog (27 endpoints) → 92 total.
+- **Salesforce**: Object Reference docs + standard objects list → 35 objects with full field expansion.
+
+**Examples of BAD research (what to avoid):**
+- "TS has 35 objects, metadata has 35 objects, they match → done" — This proves nothing. Both could be equally incomplete.
+- Checking only the CRM objects for HubSpot and missing 26 non-CRM endpoints
+- Assuming a connector with "many objects" is complete without verifying against docs
+
+```
+for connector in [HubSpot, YourMembership, Rasa, Wicket, QuickBooks, Salesforce, SageIntacct]:
+
+    # ── Step 1: Discover ALL standard objects ──────────────────────
+    objects = []
+
+    if connector.has_programmatic_object_discovery():
+        # e.g., HubSpot /crm/v3/schemas, Salesforce /sobjects, Sage inspect
+        objects = call_api_to_list_all_objects()
+
+    # ALWAYS also scrape official API docs (even if API gives objects)
+    # to catch non-discoverable endpoints (HubSpot non-CRM, QB reports, etc.)
+    doc_objects = webscrape_api_docs(connector.docs_url)
+    objects = merge_and_dedupe(objects, doc_objects)
+    
+    # ALWAYS cross-reference with at least one SDK or third-party source
+    sdk_objects = check_official_sdks(connector.sdk_repos)
+    objects = merge_and_dedupe(objects, sdk_objects)
+
+    # Cross-reference with existing static PLATFORM_OBJECTS in connector .ts
+    # Loop until convergence — keep discovering and adding until nothing is missing
+    while True:
+        existing_static = read_connector_ts_static_array()
+        missing_objects = objects - existing_static
+        extra_objects = existing_static - objects
+        if len(extra_objects) > 0:
+            log("STALE objects in static — verify these still exist: ", extra_objects)
+        if len(missing_objects) == 0:
+            break  # converged — all objects accounted for
+        # Add missing objects to static metadata and loop again
+        add_objects_to_static_metadata(missing_objects)
+        add_objects_to_metadata_json(missing_objects)
+
+    # ── Step 2: For each object, discover ALL standard fields ─────
+    for obj in objects:
+        fields = []
+
+        if connector.has_programmatic_field_discovery(obj):
+            # e.g., HubSpot /crm/v3/properties/{obj}, Salesforce describe
+            fields = call_api_to_list_all_fields(obj)
+            # API gives us: name, type, required, readOnly, description, unique
+
+        if len(fields) == 0:
+            # No programmatic discovery — scrape docs for field tables
+            fields = webscrape_field_tables(connector.docs_url, obj)
+
+        if len(fields) == 0:
+            # Last resort — fetch one sample record, infer fields from keys
+            sample = call_api_get_one_record(obj)
+            fields = infer_fields_from_sample(sample)
+
+        # For each field, determine constraints:
+        for field in fields:
+            field.type = map_to_mj_type(field.api_type)
+            field.is_primary_key = prove_pk(field, obj)
+            field.is_required = field.api_required       # NULL if API doesn't say
+            field.is_read_only = field.api_read_only     # NULL if API doesn't say
+            field.description = field.api_description    # NULL if API doesn't say
+            field.allows_null = not field.is_required
+
+        # Loop until convergence — keep discovering and adding until nothing is missing
+        while True:
+            existing_fields = read_metadata_json_fields(connector, obj)
+            missing_fields = fields - existing_fields
+            if len(missing_fields) == 0:
+                break  # converged — all fields accounted for
+            add_fields_to_metadata_json(connector, obj, missing_fields)
+            add_fields_to_static_array(connector, obj, missing_fields)
+
+    # ── Step 3: Write complete metadata JSON ──────────────────────
+    write_metadata_json(connector, objects, all_fields)  # metadata/integrations/.{connector}.json
+
+    # ── Step 4: Update connector .ts static array to match ────────
+    update_connector_static_objects_array(connector, objects, all_fields)
+
+    # ── Step 5: Custom discovery interface ─────────────────────────
+    if connector.supports_custom_objects_or_fields():
+        implement_custom_discovery_interface(connector)
+        # HubSpot: /crm/v3/schemas + hubspotDefined=false
+        # Salesforce: __c suffix
+        # QuickBooks: CustomField arrays
+    else:
+        implement_noop_custom_discovery(connector)  # AMS connectors — return empty
+
+    # ── Step 6: Generated actions for custom ──────────────────────
+    verify_action_generator_config_covers_custom(connector)
+
+    # ── Step 7: Verify bidirectional sync ─────────────────────────
+    for obj in objects:
+        if obj.supports_write:
+            verify_create_record_works(connector, obj)
+            verify_update_record_works(connector, obj)
+            verify_delete_record_works(connector, obj)
+            verify_field_map_direction_respected(connector, obj)
+
+    # ── Step 8: Build and verify ──────────────────────────────────
+    build_package(connector)
+    assert build_passes()
+
+    # ── Step 9: Prove completeness ────────────────────────────────
+    report = {
+        'connector': connector.name,
+        'total_objects': len(objects),
+        'total_fields': sum(len(obj.fields) for obj in objects),
+        'source': 'API' or 'docs' or 'sample',  # per object
+        'custom_discovery': connector.supports_custom(),
+        'bidirectional': [obj.name for obj in objects if obj.supports_write],
+        'proof_url': connector.docs_url,
+    }
+    print(report)
+```
+
+For **FileFeed**, **RelationalDB** — skip (schema-on-read, no static metadata needed).
+
+**Programmatic-first approach**: Always prefer the platform's self-describing API over manual doc research. Run the API once, capture ALL results, convert to metadata JSON format. Only manually research what the API can't tell us. For platforms without introspection, webscrape official doc pages for endpoint/field tables.
 
 
 Output Format
