@@ -46,4 +46,18 @@ Added `ClassifyFeedback` GraphQL mutation that uses available LLM (prefers Groq 
 - `packages/Angular/Generic/feedback/src/lib/services/feedback.service.ts` — client-side Classify() method
 - `packages/Angular/Generic/feedback/src/lib/components/feedback-form.component.ts` — debounced classification, hidden dropdowns, status indicator
 
-**Remaining:** Screenshot upload to GitHub (base64 data URLs don't render in GitHub issue markdown — would need file upload via API or external hosting)
+## Remaining Work
+
+### Screenshot upload to GitHub — CODE DONE, PERMISSION NEEDED
+The upload code is implemented in `FeedbackResolver.ts` — after creating an issue, it uploads the screenshot to `.github/feedback-screenshots/{issueNumber}-{timestamp}.jpg` using `octokit.repos.createOrUpdateFileContents`, then updates the issue body with the raw GitHub URL.
+
+**Blocker:** The GitHub App (App ID `3366722`) only has **Issues: Read & Write** permission. The upload requires **Contents: Read & Write** permission. Currently returns `403: Resource not accessible by integration`.
+
+**To unblock:**
+1. Someone with org admin access goes to the GitHub App settings
+2. Under **Repository permissions**, set **Contents** to **Read and write**
+3. Save — the app installation may need to be re-approved by the org
+4. No code changes needed — the upload will work once the permission is granted
+
+### Multi-repo feedback routing — SPECCED, NOT IMPLEMENTED
+See `plans/multi-repo-feedback-routing.md` for the full spec. Allows each app to target a different GitHub repo for its feedback issues.
