@@ -554,7 +554,8 @@ Rules:
   }
 
   /**
-   * Create a GitHub issue from the feedback submission
+   * Create a GitHub issue from the feedback submission.
+   * If a screenshot is present, uploads it to the repo and embeds it in the issue.
    */
   private async createGitHubIssue(
     submission: FeedbackSubmission,
@@ -562,9 +563,13 @@ Rules:
   ): Promise<{ number: number; html_url: string }> {
     const octokit = this.getOctokit(config);
 
+    // Extract screenshot before formatting (formatScreenshotSection removes it from metadata)
+    const screenshotDataUrl = submission.metadata?.screenshot as string | undefined;
+
     const labels = this.buildLabels(submission, config);
     const body = this.formatIssueBody(submission);
 
+    // Create the issue first
     const response = await octokit.issues.create({
       owner: config.owner,
       repo: config.repo,
@@ -574,10 +579,63 @@ Rules:
       assignees: config.assignees,
     });
 
+    const issueNumber = response.data.number;
+
+    // Upload screenshot and update issue body if present
+    if (screenshotDataUrl && typeof screenshotDataUrl === 'string') {
+      try {
+        const imageUrl = await this.uploadScreenshot(
+          octokit, config.owner, config.repo, screenshotDataUrl, issueNumber
+        );
+        if (imageUrl) {
+          const screenshotMarkdown = `\n## Screenshot\n\n![Screenshot](${imageUrl})\n`;
+          await octokit.issues.update({
+            owner: config.owner,
+            repo: config.repo,
+            issue_number: issueNumber,
+            body: body + screenshotMarkdown,
+          });
+        }
+      } catch (error) {
+        // Screenshot upload is best-effort — don't fail the whole submission
+        LogError('Failed to upload feedback screenshot', undefined, error);
+      }
+    }
+
     return {
-      number: response.data.number,
+      number: issueNumber,
       html_url: response.data.html_url,
     };
+  }
+
+  /**
+   * Upload a base64 screenshot to the repo and return the raw content URL.
+   */
+  private async uploadScreenshot(
+    octokit: Octokit,
+    owner: string,
+    repo: string,
+    dataUrl: string,
+    issueNumber: number
+  ): Promise<string | null> {
+    // Strip the data URL prefix (e.g., "data:image/jpeg;base64,")
+    const base64Match = dataUrl.match(/^data:image\/(\w+);base64,(.+)$/);
+    if (!base64Match) return null;
+
+    const extension = base64Match[1] === 'jpeg' ? 'jpg' : base64Match[1];
+    const base64Content = base64Match[2];
+    const filename = `${issueNumber}-${Date.now()}.${extension}`;
+    const path = `.github/feedback-screenshots/${filename}`;
+
+    await octokit.repos.createOrUpdateFileContents({
+      owner,
+      repo,
+      path,
+      message: `feedback: add screenshot for issue #${issueNumber}`,
+      content: base64Content,
+    });
+
+    return `https://raw.githubusercontent.com/${owner}/${repo}/next/${path}`;
   }
 
   /**
@@ -740,21 +798,15 @@ Rules:
   }
 
   /**
-   * Format the screenshot section.
-   * GitHub doesn't render base64 data URLs in issue markdown, so we just
-   * note that a screenshot was captured. The screenshot is still visible
-   * to the user in the feedback dialog before submission.
+   * Remove screenshot from metadata to prevent the large base64 string from
+   * bloating the issue body. The actual screenshot upload and embedding
+   * is handled in createGitHubIssue() after the issue is created.
    */
   private formatScreenshotSection(submission: FeedbackSubmission): string {
-    const screenshot = submission.metadata?.screenshot;
-    if (!screenshot || typeof screenshot !== 'string') {
-      return '';
+    if (submission.metadata?.screenshot) {
+      delete submission.metadata.screenshot;
     }
-
-    // Remove screenshot from metadata so the large base64 string doesn't bloat the issue
-    delete submission.metadata!.screenshot;
-
-    return '> A screenshot was captured at the time of submission.\n';
+    return '';
   }
 
   /**
