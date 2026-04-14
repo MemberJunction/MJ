@@ -25,6 +25,12 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
         </div>
       }
 
+      <!-- Privacy notice -->
+      <div class="feedback-privacy-notice">
+        <i class="fa-solid fa-circle-info"></i>
+        <span>Feedback is submitted as a public GitHub issue. Please do not include confidential or sensitive information.</span>
+      </div>
+
       @if (!IsSubmitting && !SubmissionSuccess) {
         <div class="feedback-form-content">
           <!-- Category -->
@@ -213,6 +219,19 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
             </div>
           }
 
+          <!-- Screenshot preview -->
+          @if (ScreenshotDataUrl) {
+            <div class="feedback-section">
+              <label class="feedback-label">Screenshot (auto-captured)</label>
+              <div class="screenshot-preview">
+                <img [src]="ScreenshotDataUrl" alt="Screenshot of current view" />
+                <button class="screenshot-remove" (click)="RemoveScreenshot()" type="button" title="Remove screenshot">
+                  <i class="fa-solid fa-xmark"></i>
+                </button>
+              </div>
+            </div>
+          }
+
           <!-- Error message -->
           @if (ErrorMessage) {
             <div class="feedback-error">
@@ -272,6 +291,25 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
       color: var(--mj-text-secondary);
       font-size: var(--mj-text-sm);
       margin-bottom: var(--mj-space-2);
+    }
+
+    /* Privacy notice */
+    .feedback-privacy-notice {
+      display: flex;
+      align-items: flex-start;
+      gap: var(--mj-space-2);
+      padding: var(--mj-space-2-5) var(--mj-space-3);
+      background: var(--mj-status-warning-bg);
+      border: 1px solid var(--mj-status-warning-border);
+      border-radius: var(--mj-radius-md);
+      font-size: var(--mj-text-xs);
+      color: var(--mj-status-warning-text);
+      margin-bottom: var(--mj-space-2);
+    }
+
+    .feedback-privacy-notice i {
+      flex-shrink: 0;
+      margin-top: 1px;
     }
 
     /* Form content — horizontal padding prevents focus rings from being clipped by overflow */
@@ -356,6 +394,42 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
       outline: none;
       border-color: var(--mj-border-focus);
       box-shadow: var(--mj-focus-ring);
+    }
+
+    /* Screenshot preview */
+    .screenshot-preview {
+      position: relative;
+      border: 1px solid var(--mj-border-default);
+      border-radius: var(--mj-radius-md);
+      overflow: hidden;
+      max-height: 150px;
+    }
+
+    .screenshot-preview img {
+      width: 100%;
+      display: block;
+      object-fit: cover;
+    }
+
+    .screenshot-remove {
+      position: absolute;
+      top: var(--mj-space-1);
+      right: var(--mj-space-1);
+      width: 24px;
+      height: 24px;
+      border: none;
+      border-radius: var(--mj-radius-sm);
+      background: var(--mj-bg-overlay);
+      color: var(--mj-text-inverse);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: var(--mj-text-xs);
+    }
+
+    .screenshot-remove:hover {
+      background: var(--mj-status-error);
     }
 
     /* Success state */
@@ -447,6 +521,7 @@ export class FeedbackFormComponent implements OnInit {
   ErrorMessage = '';
   IssueNumber?: number;
   IssueUrl?: string;
+  ScreenshotDataUrl?: string;
 
   // Merged field config
   FieldConfig: Required<FeedbackFieldConfig>;
@@ -468,6 +543,21 @@ export class FeedbackFormComponent implements OnInit {
     if (this.PrefilledTitle) {
       this.Title = this.PrefilledTitle;
     }
+    // Extract screenshot from context data if provided
+    if (this.ContextData?.['screenshot'] && typeof this.ContextData['screenshot'] === 'string') {
+      this.ScreenshotDataUrl = this.ContextData['screenshot'] as string;
+    }
+  }
+
+  /**
+   * Remove the attached screenshot
+   */
+  RemoveScreenshot(): void {
+    this.ScreenshotDataUrl = undefined;
+    if (this.ContextData) {
+      delete this.ContextData['screenshot'];
+    }
+    this.cdr.detectChanges();
   }
 
   /**

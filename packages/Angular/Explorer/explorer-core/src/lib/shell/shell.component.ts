@@ -2028,6 +2028,12 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       return;
     }
 
+    if (result.message === 'submit-feedback') {
+      this.userMenuVisible = false;
+      this.ShowFeedbackDialog();
+      return;
+    }
+
     if (result.closeMenu) {
       this.userMenuVisible = false;
     }
@@ -2564,16 +2570,26 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   /**
-   * Open the feedback dialog with current workspace context
+   * Open the feedback dialog with current workspace context.
+   * Captures a screenshot of the current view to include with the feedback.
    */
-  ShowFeedbackDialog(): void {
+  async ShowFeedbackDialog(): Promise<void> {
     const config = this.workspaceManager.GetConfiguration();
     const currentPage = config?.tabs
       ?.map(t => t.title)
       .filter(Boolean)
       .join(' \u2192 ') || undefined;
 
-    this.feedbackDialogService.OpenFeedbackDialog({ currentPage });
+    // Capture screenshot before opening dialog (dialog would overlay the content)
+    let screenshot: string | undefined;
+    if (this.tabContainerRef) {
+      screenshot = await this.tabContainerRef.CaptureActiveThumbnail();
+    }
+
+    this.feedbackDialogService.OpenFeedbackDialog({
+      currentPage,
+      contextData: screenshot ? { screenshot } : undefined
+    });
   }
 
   // ========================================

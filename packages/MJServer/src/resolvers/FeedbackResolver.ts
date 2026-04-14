@@ -489,6 +489,7 @@ export class FeedbackResolver {
   private formatIssueBody(submission: FeedbackSubmission): string {
     const sections: string[] = [
       this.formatDescriptionSection(submission),
+      this.formatScreenshotSection(submission),
       '---',
       '',
       this.formatDetailsTable(submission),
@@ -617,6 +618,26 @@ export class FeedbackResolver {
 
     rows.push('');
     return rows.join('\n');
+  }
+
+  /**
+   * Format the screenshot section — embeds the base64 image if present in metadata
+   */
+  private formatScreenshotSection(submission: FeedbackSubmission): string {
+    const screenshot = submission.metadata?.screenshot;
+    if (!screenshot || typeof screenshot !== 'string') {
+      return '';
+    }
+
+    // Remove screenshot from metadata so it doesn't appear in the JSON section too
+    delete submission.metadata!.screenshot;
+
+    return [
+      '## Screenshot',
+      '',
+      `![Screenshot](${screenshot})`,
+      '',
+    ].join('\n');
   }
 
   /**
