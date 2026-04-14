@@ -1,6 +1,6 @@
 import { CompositeKey, DataSnapshot } from "@memberjunction/core";
 import { BaseEventArgs } from "./component-events";
-import { SimpleAITools, SimpleDataContext, SimpleMetadata, SimpleRunQuery, SimpleRunView } from "./shared";
+import { SimpleAITools, SimpleDataContext, SimpleMetadata, SimpleRunQuery, SimpleRunView, SimpleSearch } from "./shared";
 
 /**
  * Callbacks a component can use.
@@ -275,5 +275,11 @@ export interface ComponentUtilities {
      * Access to AI tools. This will not always be available in all environments and security contexts, ensure
      * component code has fallbacks when this property is undefined
      */
-    ai?: SimpleAITools
+    ai?: SimpleAITools,
+    /**
+     * Access to unified search across vector, full-text, entity, and storage sources.
+     * This will not always be available in all environments — ensure component code
+     * has fallbacks when this property is undefined.
+     */
+    search?: SimpleSearch
 }

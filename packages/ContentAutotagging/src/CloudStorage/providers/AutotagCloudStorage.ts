@@ -41,7 +41,7 @@ export class AutotagCloudStorage extends AutotagBase {
     private engine!: AutotagBaseEngine;
     protected contentSourceTypeID!: string;
 
-    public async Autotag(contextUser: UserInfo, onProgress?: AutotagProgressCallback): Promise<void> {
+    public async Autotag(contextUser: UserInfo, onProgress?: AutotagProgressCallback): Promise<number> {
         this.contextUser = contextUser;
         this.engine = AutotagBaseEngine.Instance;
         this.contentSourceTypeID = this.engine.SetSubclassContentSourceType('Cloud Storage');
@@ -54,6 +54,8 @@ export class AutotagCloudStorage extends AutotagBase {
         } else {
             LogStatus('AutotagCloudStorage: no new or modified files to process');
         }
+
+        return contentItemsToProcess.length;
     }
 
     public async SetContentItemsToProcess(contentSources: MJContentSourceEntity[]): Promise<MJContentItemEntity[]> {

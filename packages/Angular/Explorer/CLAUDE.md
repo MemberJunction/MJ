@@ -9,6 +9,40 @@
 
 See the root [CLAUDE.md](../../../CLAUDE.md) for the full pattern and examples.
 
+## 🚨 CRITICAL: Routing — NavigationService Only 🚨
+
+Explorer components **MUST** use `NavigationService` for all routing operations. **NEVER** import `Router`, `ActivatedRoute`, or `NavigationEnd` directly.
+
+**Allowed exceptions:** Shell component, app-routing module, AuthGuard, OAuth callback, NavigationService itself.
+
+### Query Param Sub-Navigation Pattern
+
+For components that need URL-synced state (e.g., selected entity, active tab), use the framework's query param lifecycle instead of subscribing to Router events:
+
+```typescript
+// 1. Read initial params
+async initDashboard() {
+    const params = this.GetQueryParams();
+    if (params['entity']) this.selectEntity(params['entity']);
+}
+
+// 2. React to back/forward
+protected override OnQueryParamsChanged(params: Record<string, string>, source: 'popstate' | 'deeplink'): void {
+    this.applyParams(params);
+}
+
+// 3. Push state changes to URL
+onEntitySelected(entity: EntityInfo): void {
+    this.UpdateQueryParams({ entity: entity.Name, record: null });
+}
+```
+
+**NEVER** subscribe to `Router.events` / `NavigationEnd` in resource components. The shell handles all URL synchronization.
+
+### super.ngOnInit() / super.ngOnDestroy() Required
+
+`BaseResourceComponent` now has `ngOnInit` (sets up query param subscription) and `ngOnDestroy` (completes destroy$ Subject). **All subclasses that override these MUST call `super.ngOnInit()` / `super.ngOnDestroy()`** as the first line.
+
 ## Agent Context & Client Tools
 
 Resource components can report their state to the AI agent and register tools the agent can invoke. See **[packages/AI/Agents/AGENT_CONTEXT_GUIDE.md](/packages/AI/Agents/AGENT_CONTEXT_GUIDE.md)** for the full guide.
@@ -23,6 +57,10 @@ this.navigationService.SetAgentClientTools(this, [
     { Name: 'SwitchTab', Description: '...', ParameterSchema: {...}, Handler: async (params) => { ... } }
 ]);
 ```
+
+## Navigation & Routing Guide
+
+See **[/guides/NAVIGATION_AND_ROUTING_GUIDE.md](/guides/NAVIGATION_AND_ROUTING_GUIDE.md)** for comprehensive documentation of how navigation, URL sync, and back/forward work in MJ Explorer.
 
 ## Package Structure
 

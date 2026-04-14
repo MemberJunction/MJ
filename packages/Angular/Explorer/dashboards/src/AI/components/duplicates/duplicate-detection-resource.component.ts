@@ -112,8 +112,8 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
         }
     }
     private cdr = inject(ChangeDetectorRef);
-    private navigationService = inject(NavigationService);
-    private destroy$ = new Subject<void>();
+    protected override navigationService = inject(NavigationService);
+    protected override destroy$ = new Subject<void>();
     private filterSubject = new Subject<void>();
 
     // Loading state
@@ -325,6 +325,7 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
     }
 
     ngOnDestroy(): void {
+        super.ngOnDestroy();
         this.destroy$.next();
         this.destroy$.complete();
     }

@@ -1,0 +1,212 @@
+[
+  {
+    "fields": {
+      "Name": "Central [Serowe-Palapye]",
+      "Code": "CE",
+      "ISO3166_2": "BW-CE",
+      "Latitude": -21.8775,
+      "Longitude": 26.6144,
+      "BoundaryGeoJSON": "@file:by-country/BW/boundaries/BW-CE.geojson",
+      "CommonAliases": [
+        "Central [Serowe-Palapye]"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BW"
+    },
+    "primaryKey": {
+      "ID": "F01A601F-9E83-4D91-94C3-466222CAFA1D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:35.251Z",
+      "checksum": "8bd091166dbdc4796501248c13261ebf9018f7b56883ec83f1bfeaca83ec5944"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Chobe",
+      "Code": "CH",
+      "ISO3166_2": "BW-CH",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Chobe"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BW"
+    },
+    "primaryKey": {
+      "ID": "E6CC8C90-757F-4BC0-BE28-95C90656BAC3"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:35.269Z",
+      "checksum": "116fab169604e525cf7c5e217d1b340ed03b4bdef838fdb3af8e704cfe530e33"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ghanzi",
+      "Code": "GH",
+      "ISO3166_2": "BW-GH",
+      "Latitude": -22.1555,
+      "Longitude": 22.7086,
+      "BoundaryGeoJSON": "@file:by-country/BW/boundaries/BW-GH.geojson",
+      "CommonAliases": [
+        "Ghanzi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BW"
+    },
+    "primaryKey": {
+      "ID": "BDD5B61C-9D44-446D-840D-A2B1ACCCDEBC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:35.287Z",
+      "checksum": "ac126653c4b51d794d6cce725ffd2b8e2105fbc8cc56629c2d5963c36097e627"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kgalagadi",
+      "Code": "KG",
+      "ISO3166_2": "BW-KG",
+      "Latitude": -24.8361,
+      "Longitude": 22.2402,
+      "BoundaryGeoJSON": "@file:by-country/BW/boundaries/BW-KG.geojson",
+      "CommonAliases": [
+        "Kgalagadi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BW"
+    },
+    "primaryKey": {
+      "ID": "CB1060C5-6D7B-477C-A989-3B4EAF848EB8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:35.307Z",
+      "checksum": "c3c5d85fd18067aab9abc7a7b731c00395a186b42bda08c3b11b8df36fb795af"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kgatleng",
+      "Code": "KL",
+      "ISO3166_2": "BW-KL",
+      "Latitude": -24.2001,
+      "Longitude": 26.4263,
+      "BoundaryGeoJSON": "@file:by-country/BW/boundaries/BW-KL.geojson",
+      "CommonAliases": [
+        "Kgatleng"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BW"
+    },
+    "primaryKey": {
+      "ID": "41969B05-060B-4876-A1D4-2387002B0B02"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:35.324Z",
+      "checksum": "841941ab44537eb9b021796f00f2713e7ffadefbceb8b25d39f47338a57869c2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kweneng",
+      "Code": "KW",
+      "ISO3166_2": "BW-KW",
+      "Latitude": -23.8665,
+      "Longitude": 24.4879,
+      "BoundaryGeoJSON": "@file:by-country/BW/boundaries/BW-KW.geojson",
+      "CommonAliases": [
+        "Kweneng"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BW"
+    },
+    "primaryKey": {
+      "ID": "886B7284-320D-491F-B603-F839109BE9B4"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:35.341Z",
+      "checksum": "d44b51875db43a4ffddf76e96f99899ba68487a4cff76bf0eb9f1fefc3451031"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ngamiland [North-West]",
+      "Code": "NG",
+      "ISO3166_2": "BW-NG",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Ngamiland [North-West]"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BW"
+    },
+    "primaryKey": {
+      "ID": "F27423E7-5A20-4B7F-B2AE-8CA58046F2E4"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:35.358Z",
+      "checksum": "ee6afb5f8d0bc46780f4cf0e41b9e7ef1e1dcee6c8bcd17fb46898149450f0e8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "North-East",
+      "Code": "NE",
+      "ISO3166_2": "BW-NE",
+      "Latitude": -20.9374,
+      "Longitude": 27.4487,
+      "BoundaryGeoJSON": "@file:by-country/BW/boundaries/BW-NE.geojson",
+      "CommonAliases": [
+        "North-East"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BW"
+    },
+    "primaryKey": {
+      "ID": "F0512CF0-F92B-47A3-9922-D1A96DA42B4A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:35.374Z",
+      "checksum": "dac361f1c1bc260c7167420f65ec54acc13ec3a883d772aff00754530519fe36"
+    }
+  },
+  {
+    "fields": {
+      "Name": "South-East",
+      "Code": "SE",
+      "ISO3166_2": "BW-SE",
+      "Latitude": -24.9869,
+      "Longitude": 25.7446,
+      "BoundaryGeoJSON": "@file:by-country/BW/boundaries/BW-SE.geojson",
+      "CommonAliases": [
+        "South-East"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BW"
+    },
+    "primaryKey": {
+      "ID": "D7424065-A651-47B2-95C7-A06F014619C2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:35.391Z",
+      "checksum": "c8f5d797e804990647be6852b1ca9fd86fb4cf53683efb9353537f7097ba500a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Southern [Ngwaketse]",
+      "Code": "SO",
+      "ISO3166_2": "BW-SO",
+      "Latitude": -25.0004,
+      "Longitude": 24.3683,
+      "BoundaryGeoJSON": "@file:by-country/BW/boundaries/BW-SO.geojson",
+      "CommonAliases": [
+        "Southern [Ngwaketse]"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BW"
+    },
+    "primaryKey": {
+      "ID": "A22213F6-58E5-4765-B616-A98BA5422D83"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:35.404Z",
+      "checksum": "50ce7dc697afabf2cf3c91026652b6e8655c52689037a89da2e82e619636ac8b"
+    }
+  }
+]

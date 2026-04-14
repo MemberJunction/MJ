@@ -1,0 +1,380 @@
+[
+  {
+    "fields": {
+      "Name": "Al Anbār",
+      "Code": "AN",
+      "ISO3166_2": "IQ-AN",
+      "Latitude": 33.2317,
+      "Longitude": 41.5307,
+      "BoundaryGeoJSON": "@file:by-country/IQ/boundaries/IQ-AN.geojson",
+      "CommonAliases": [
+        "Al Anbār"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IQ"
+    },
+    "primaryKey": {
+      "ID": "065C6D53-B6A2-4FBF-BE8F-658DC11B0843"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:03.576Z",
+      "checksum": "2518aaa7587a9852ce707d7493bc4efb883ffdb6f8eff08cce1d52b9b84dfad2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Al Başrah",
+      "Code": "BA",
+      "ISO3166_2": "IQ-BA",
+      "Latitude": 30.6802,
+      "Longitude": 47.5605,
+      "BoundaryGeoJSON": "@file:by-country/IQ/boundaries/IQ-BA.geojson",
+      "CommonAliases": [
+        "Al Başrah"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IQ"
+    },
+    "primaryKey": {
+      "ID": "120C359F-B384-4313-8F98-F38D430CA666"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:03.593Z",
+      "checksum": "c3a898ad14ee21faaf5e82c05d425cdf4e054dbdac96503e50681b7e00bf4e39"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Al Muthanná",
+      "Code": "MU",
+      "ISO3166_2": "IQ-MU",
+      "Latitude": 30.4381,
+      "Longitude": 45.2843,
+      "BoundaryGeoJSON": "@file:by-country/IQ/boundaries/IQ-MU.geojson",
+      "CommonAliases": [
+        "Al Muthanná"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IQ"
+    },
+    "primaryKey": {
+      "ID": "F4653691-3EC4-42FC-BCCF-65F107E29510"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:03.610Z",
+      "checksum": "54dd451e660847f93d21e97271ad191196210595afd4e4bced3494cb7693d338"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Al Qādisīyah",
+      "Code": "QA",
+      "ISO3166_2": "IQ-QA",
+      "Latitude": 31.6081,
+      "Longitude": 45.1075,
+      "BoundaryGeoJSON": "@file:by-country/IQ/boundaries/IQ-QA.geojson",
+      "CommonAliases": [
+        "Al Qādisīyah"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IQ"
+    },
+    "primaryKey": {
+      "ID": "FE0D0E9F-B47C-4BBD-B83D-9373539FE04D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:03.627Z",
+      "checksum": "22842cb99b146bd17b927298bda840494a240664e839d548a93f464497464138"
+    }
+  },
+  {
+    "fields": {
+      "Name": "An Najaf",
+      "Code": "NA",
+      "ISO3166_2": "IQ-NA",
+      "Latitude": 30.9322,
+      "Longitude": 43.7551,
+      "BoundaryGeoJSON": "@file:by-country/IQ/boundaries/IQ-NA.geojson",
+      "CommonAliases": [
+        "An Najaf"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IQ"
+    },
+    "primaryKey": {
+      "ID": "CF93622D-C0E3-4C67-AEAA-9BDA104B07B1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:03.643Z",
+      "checksum": "e8a70953054df52b8e35d4f18d426029fc37cd5e85ec009ecea92b43efbb5c7a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Arbīl",
+      "Code": "AR",
+      "ISO3166_2": "IQ-AR",
+      "Latitude": 36.2371,
+      "Longitude": 44.1806,
+      "BoundaryGeoJSON": "@file:by-country/IQ/boundaries/IQ-AR.geojson",
+      "CommonAliases": [
+        "Arbīl"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IQ"
+    },
+    "primaryKey": {
+      "ID": "2E05D5DD-3266-4229-8EE6-EF104816428B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:03.660Z",
+      "checksum": "6488397f92906d951d673effc4e0c441b7a3f5da3b793819729c8fda90caf31b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "As Sulaymānīyah",
+      "Code": "SU",
+      "ISO3166_2": "IQ-SU",
+      "Latitude": 35.332,
+      "Longitude": 45.4331,
+      "BoundaryGeoJSON": "@file:by-country/IQ/boundaries/IQ-SU.geojson",
+      "CommonAliases": [
+        "As Sulaymānīyah"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IQ"
+    },
+    "primaryKey": {
+      "ID": "0ADF8547-5C04-49CD-8319-F6E5008BEF78"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:03.676Z",
+      "checksum": "970def4b6e895945678e1593f6ab333bbe5085269f3757f0293403df6ea4033d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "At Ta'mīm",
+      "Code": "TS",
+      "ISO3166_2": "IQ-TS",
+      "Latitude": 35.3281,
+      "Longitude": 44.0354,
+      "BoundaryGeoJSON": "@file:by-country/IQ/boundaries/IQ-TS.geojson",
+      "CommonAliases": [
+        "At Ta'mīm"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IQ"
+    },
+    "primaryKey": {
+      "ID": "5076E5A7-9838-4D4D-A897-0C54EBD17FB1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:03.695Z",
+      "checksum": "96abd612fe59a0d483d555f59c14e0661a5144d86417ae035e9343bed97ab610"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bābil",
+      "Code": "BB",
+      "ISO3166_2": "IQ-BB",
+      "Latitude": 32.6833,
+      "Longitude": 44.5099,
+      "BoundaryGeoJSON": "@file:by-country/IQ/boundaries/IQ-BB.geojson",
+      "CommonAliases": [
+        "Bābil"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IQ"
+    },
+    "primaryKey": {
+      "ID": "BCD58365-F9D8-429A-9423-334921550217"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:03.712Z",
+      "checksum": "6fc53ec081f44391fde9e634a9b475a45ae1b9aae8f33abb2dc6f41f75d6cce2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Baghdād",
+      "Code": "BG",
+      "ISO3166_2": "IQ-BG",
+      "Latitude": 33.306,
+      "Longitude": 44.3827,
+      "BoundaryGeoJSON": "@file:by-country/IQ/boundaries/IQ-BG.geojson",
+      "CommonAliases": [
+        "Baghdād"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IQ"
+    },
+    "primaryKey": {
+      "ID": "E2DB0642-438B-4C86-92E7-0F347AFFC9DB"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:03.725Z",
+      "checksum": "ad5511303e3fd39783f28c9fb20d0b224a41f1d26e5990975da874e7c2c014b8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Dahūk",
+      "Code": "DA",
+      "ISO3166_2": "IQ-DA",
+      "Latitude": 37.0875,
+      "Longitude": 43.2281,
+      "BoundaryGeoJSON": "@file:by-country/IQ/boundaries/IQ-DA.geojson",
+      "CommonAliases": [
+        "Dahūk"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IQ"
+    },
+    "primaryKey": {
+      "ID": "77075382-1BED-4A2D-9A5E-1CAE1820BF46"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:03.774Z",
+      "checksum": "2323b517949ca06914c2fb3b393fa17560e6a2bca131295b65669354d28af5fe"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Dhī Qār",
+      "Code": "DQ",
+      "ISO3166_2": "IQ-DQ",
+      "Latitude": 31.191,
+      "Longitude": 46.4203,
+      "BoundaryGeoJSON": "@file:by-country/IQ/boundaries/IQ-DQ.geojson",
+      "CommonAliases": [
+        "Dhī Qār"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IQ"
+    },
+    "primaryKey": {
+      "ID": "B66354B7-BF26-4B29-A7C1-D83540BFAE59"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:03.790Z",
+      "checksum": "8a3ddc0f0ff3c60c873048c630b44b0d10727e163cac924ed0de771a57fc7807"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Diyālá",
+      "Code": "DI",
+      "ISO3166_2": "IQ-DI",
+      "Latitude": 33.9882,
+      "Longitude": 45.1046,
+      "BoundaryGeoJSON": "@file:by-country/IQ/boundaries/IQ-DI.geojson",
+      "CommonAliases": [
+        "Diyālá"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IQ"
+    },
+    "primaryKey": {
+      "ID": "539BCE24-4C81-4E4A-A8B5-F3465899EBA1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:03.804Z",
+      "checksum": "afd95fab183867ba2b8812dd66e532fff5b80faa7d74edcb19c040e9dbd29e1d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Karbalā'",
+      "Code": "KA",
+      "ISO3166_2": "IQ-KA",
+      "Latitude": 32.502,
+      "Longitude": 43.7651,
+      "BoundaryGeoJSON": "@file:by-country/IQ/boundaries/IQ-KA.geojson",
+      "CommonAliases": [
+        "Karbalā'"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IQ"
+    },
+    "primaryKey": {
+      "ID": "AEA41477-E84A-4676-B2EB-8BD83FA3C95B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:03.817Z",
+      "checksum": "658788ee1d48ef49a08593ef7b13c129b2d37d2a039a0664d0d146dca4165109"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Maysān",
+      "Code": "MA",
+      "ISO3166_2": "IQ-MA",
+      "Latitude": 31.8089,
+      "Longitude": 47.0739,
+      "BoundaryGeoJSON": "@file:by-country/IQ/boundaries/IQ-MA.geojson",
+      "CommonAliases": [
+        "Maysān"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IQ"
+    },
+    "primaryKey": {
+      "ID": "7905E155-EC20-4F39-8F41-18ABD2A68D49"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:03.833Z",
+      "checksum": "99855245af95a166735616f49f95938f8e93bd442f67569f35fc5dca2a142102"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nīnawá",
+      "Code": "NI",
+      "ISO3166_2": "IQ-NI",
+      "Latitude": 35.9228,
+      "Longitude": 42.7469,
+      "BoundaryGeoJSON": "@file:by-country/IQ/boundaries/IQ-NI.geojson",
+      "CommonAliases": [
+        "Nīnawá"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IQ"
+    },
+    "primaryKey": {
+      "ID": "5CAD6269-5C05-48CE-B681-D547FA6779BC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:03.850Z",
+      "checksum": "b91cd86a16b43961b443a5ef7a28b07e3d1dad49ac90a1875c4dcb8950ebc858"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Şalāḩ ad Dīn",
+      "Code": "SD",
+      "ISO3166_2": "IQ-SD",
+      "Latitude": 34.3421,
+      "Longitude": 43.7294,
+      "BoundaryGeoJSON": "@file:by-country/IQ/boundaries/IQ-SD.geojson",
+      "CommonAliases": [
+        "Şalāḩ ad Dīn"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IQ"
+    },
+    "primaryKey": {
+      "ID": "872B47F5-7F59-4FF7-A6DA-8AAC49D71B12"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:03.866Z",
+      "checksum": "c02545eb675c801c4847c19f0ae9e61df51c5545f4b56dc72e6c2419db8650ff"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Wāsiţ",
+      "Code": "WA",
+      "ISO3166_2": "IQ-WA",
+      "Latitude": 32.6139,
+      "Longitude": 45.5635,
+      "BoundaryGeoJSON": "@file:by-country/IQ/boundaries/IQ-WA.geojson",
+      "CommonAliases": [
+        "Wāsiţ"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IQ"
+    },
+    "primaryKey": {
+      "ID": "EC008D7A-FF5B-47DF-B384-74FC41EE6F5E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:03.880Z",
+      "checksum": "06ed9d3aac904b5bfabcb8a1101e547aac2ce73d9205ef3685ec41338dba69e4"
+    }
+  }
+]

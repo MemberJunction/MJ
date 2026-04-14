@@ -1,10 +1,21 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+// Mutable Entities array used by the mocked Metadata.Provider so individual tests
+// can stage related entities for organic-key resolution.
+const mockMetadataEntities: Array<{ ID: string; Name: string; SchemaName: string; BaseView: string }> = [];
 
 vi.mock('@memberjunction/core', () => ({
   EntityFieldInfo: class {},
   EntityFieldValueInfo: class {},
   EntityInfo: class {},
+  EntityOrganicKeyInfo: class {},
+  EntityOrganicKeyRelatedEntityInfo: class {},
   EntityRelationshipInfo: class {},
+  Metadata: class {
+    static get Provider() {
+      return { Entities: mockMetadataEntities };
+    }
+  },
 }));
 
 vi.mock('@memberjunction/interactive-component-types', () => ({
@@ -44,6 +55,10 @@ import {
   MapEntityFieldInfoToSkipEntityFieldInfo,
   MapEntityFieldValueInfoToSkipEntityFieldValueInfo,
   MapEntityRelationshipInfoToSkipEntityRelationshipInfo,
+  MapEntityOrganicKeyInfoToSkipEntityOrganicKeyInfo,
+  MapEntityOrganicKeyRelatedEntityInfoToSkipEntityOrganicKeyRelatedEntityInfo,
+  MapEntityInfoToSkipEntityInfo,
+  MapSimpleEntityInfoToSkipEntityInfo,
   skipEntityHasField,
   skipEntityGetField,
   skipEntityGetFieldNameSet,
@@ -255,6 +270,303 @@ describe('SkipTypes util', () => {
       const result = MapSkipEntityFieldInfoToSimpleEntityFieldInfo(skipField);
       expect(result.name).toBe('ID');
       expect(result.isPrimaryKey).toBe(true);
+    });
+  });
+
+  // ============================================================================
+  // Organic key mapping
+  // ============================================================================
+
+  /**
+   * Build a fake EntityOrganicKeyInfo with the same shape MJ's runtime emits.
+   * Includes the *Array getters that the mapper relies on.
+   */
+  function makeOrganicKey(overrides: Record<string, unknown> = {}) {
+    const base = {
+      ID: 'ok-1',
+      EntityID: 'ent-source',
+      Name: 'EmailMatch',
+      Description: 'Match members across systems by email address',
+      MatchFieldNames: 'EmailAddress',
+      NormalizationStrategy: 'LowerCaseTrim' as const,
+      CustomNormalizationExpression: null,
+      Sequence: 0,
+      Status: 'Active' as const,
+      RelatedEntities: [] as unknown[],
+    };
+    const merged = { ...base, ...overrides };
+    // Mimic the MatchFieldNamesArray getter
+    Object.defineProperty(merged, 'MatchFieldNamesArray', {
+      get() {
+        return this.MatchFieldNames ? this.MatchFieldNames.split(',').map((f: string) => f.trim()) : [];
+      },
+    });
+    return merged;
+  }
+
+  /**
+   * Build a fake EntityOrganicKeyRelatedEntityInfo with the runtime getters
+   * (IsDirectMatch / IsTransitiveMatch / *Array) the mapper depends on.
+   */
+  function makeOrganicKeyRelatedEntity(overrides: Record<string, unknown> = {}) {
+    const base = {
+      ID: 'okre-1',
+      EntityOrganicKeyID: 'ok-1',
+      RelatedEntityID: 'ent-target',
+      RelatedEntityFieldNames: null as string | null,
+      TransitiveObjectName: null as string | null,
+      TransitiveObjectMatchFieldNames: null as string | null,
+      TransitiveObjectOutputFieldName: null as string | null,
+      RelatedEntityJoinFieldName: null as string | null,
+      DisplayName: null as string | null,
+      Sequence: 0,
+    };
+    const merged = { ...base, ...overrides };
+    Object.defineProperty(merged, 'IsDirectMatch', {
+      get() { return this.RelatedEntityFieldNames != null; },
+    });
+    Object.defineProperty(merged, 'IsTransitiveMatch', {
+      get() { return this.TransitiveObjectName != null; },
+    });
+    Object.defineProperty(merged, 'RelatedEntityFieldNamesArray', {
+      get() {
+        return this.RelatedEntityFieldNames ? this.RelatedEntityFieldNames.split(',').map((f: string) => f.trim()) : [];
+      },
+    });
+    Object.defineProperty(merged, 'TransitiveObjectMatchFieldNamesArray', {
+      get() {
+        return this.TransitiveObjectMatchFieldNames ? this.TransitiveObjectMatchFieldNames.split(',').map((f: string) => f.trim()) : [];
+      },
+    });
+    return merged;
+  }
+
+  describe('MapEntityOrganicKeyRelatedEntityInfoToSkipEntityOrganicKeyRelatedEntityInfo', () => {
+    beforeEach(() => {
+      mockMetadataEntities.length = 0;
+    });
+
+    it('should map a direct-match related entity using the metadata provider for schema/baseView', () => {
+      mockMetadataEntities.push({ ID: 'ent-target', Name: 'Members', SchemaName: 'ym', BaseView: 'vwMembers' });
+      const re = makeOrganicKeyRelatedEntity({
+        ID: 'okre-direct',
+        RelatedEntityID: 'ent-target',
+        RelatedEntityFieldNames: 'EmailAddress',
+        DisplayName: 'Members by Email',
+        Sequence: 1,
+      });
+
+      const result = MapEntityOrganicKeyRelatedEntityInfoToSkipEntityOrganicKeyRelatedEntityInfo(re as never);
+      expect(result).not.toBeNull();
+      expect(result!.id).toBe('okre-direct');
+      expect(result!.relatedEntityID).toBe('ent-target');
+      expect(result!.relatedEntityName).toBe('Members');
+      expect(result!.relatedEntitySchemaName).toBe('ym');
+      expect(result!.relatedEntityBaseView).toBe('vwMembers');
+      expect(result!.isDirectMatch).toBe(true);
+      expect(result!.isTransitiveMatch).toBe(false);
+      expect(result!.relatedEntityFieldNames).toEqual(['EmailAddress']);
+      expect(result!.transitiveObjectName).toBeUndefined();
+      expect(result!.transitiveObjectMatchFieldNames).toBeUndefined();
+      expect(result!.displayName).toBe('Members by Email');
+      expect(result!.sequence).toBe(1);
+    });
+
+    it('should map a transitive-match related entity through a bridge view', () => {
+      mockMetadataEntities.push({ ID: 'ent-target', Name: 'Members', SchemaName: 'ym', BaseView: 'vwMembers' });
+      const re = makeOrganicKeyRelatedEntity({
+        ID: 'okre-transitive',
+        RelatedEntityID: 'ent-target',
+        RelatedEntityFieldNames: null,
+        TransitiveObjectName: 'ym.vwAcronymToMember',
+        TransitiveObjectMatchFieldNames: 'Acronym',
+        TransitiveObjectOutputFieldName: 'MemberID',
+        RelatedEntityJoinFieldName: 'ID',
+        Sequence: 2,
+      });
+
+      const result = MapEntityOrganicKeyRelatedEntityInfoToSkipEntityOrganicKeyRelatedEntityInfo(re as never);
+      expect(result).not.toBeNull();
+      expect(result!.isDirectMatch).toBe(false);
+      expect(result!.isTransitiveMatch).toBe(true);
+      // For transitive matches, relatedEntityFieldNames must be undefined (not [])
+      expect(result!.relatedEntityFieldNames).toBeUndefined();
+      expect(result!.transitiveObjectName).toBe('ym.vwAcronymToMember');
+      expect(result!.transitiveObjectMatchFieldNames).toEqual(['Acronym']);
+      expect(result!.transitiveObjectOutputFieldName).toBe('MemberID');
+      expect(result!.relatedEntityJoinFieldName).toBe('ID');
+    });
+
+    it('should support compound match field names (comma-separated)', () => {
+      mockMetadataEntities.push({ ID: 'ent-target', Name: 'People', SchemaName: 'crm', BaseView: 'vwPeople' });
+      const re = makeOrganicKeyRelatedEntity({
+        RelatedEntityID: 'ent-target',
+        RelatedEntityFieldNames: 'FirstName, LastName, DateOfBirth',
+      });
+
+      const result = MapEntityOrganicKeyRelatedEntityInfoToSkipEntityOrganicKeyRelatedEntityInfo(re as never);
+      expect(result!.relatedEntityFieldNames).toEqual(['FirstName', 'LastName', 'DateOfBirth']);
+    });
+
+    it('should return null when the related entity is not in the metadata provider', () => {
+      // mockMetadataEntities is empty
+      const re = makeOrganicKeyRelatedEntity({
+        RelatedEntityID: 'ent-missing',
+        RelatedEntityFieldNames: 'Email',
+      });
+
+      const result = MapEntityOrganicKeyRelatedEntityInfoToSkipEntityOrganicKeyRelatedEntityInfo(re as never);
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('MapEntityOrganicKeyInfoToSkipEntityOrganicKeyInfo', () => {
+    beforeEach(() => {
+      mockMetadataEntities.length = 0;
+    });
+
+    it('should map basic organic key properties and parse comma-separated match field names', () => {
+      const ok = makeOrganicKey({
+        ID: 'ok-acronym',
+        Name: 'AcronymMatch',
+        Description: 'Match MEL rows to a Member by acronym',
+        MatchFieldNames: 'MemberOrganization',
+        NormalizationStrategy: 'LowerCaseTrim',
+        Sequence: 5,
+      });
+
+      const result = MapEntityOrganicKeyInfoToSkipEntityOrganicKeyInfo(ok as never);
+      expect(result.id).toBe('ok-acronym');
+      expect(result.name).toBe('AcronymMatch');
+      expect(result.description).toBe('Match MEL rows to a Member by acronym');
+      expect(result.matchFieldNames).toEqual(['MemberOrganization']);
+      expect(result.normalizationStrategy).toBe('LowerCaseTrim');
+      expect(result.customNormalizationExpression).toBeUndefined();
+      expect(result.sequence).toBe(5);
+      expect(result.relatedEntities).toEqual([]);
+    });
+
+    it('should preserve a custom normalization expression', () => {
+      const ok = makeOrganicKey({
+        NormalizationStrategy: 'Custom',
+        CustomNormalizationExpression: 'REPLACE(LOWER({{FieldName}}), \' \', \'\')',
+      });
+
+      const result = MapEntityOrganicKeyInfoToSkipEntityOrganicKeyInfo(ok as never);
+      expect(result.normalizationStrategy).toBe('Custom');
+      expect(result.customNormalizationExpression).toBe('REPLACE(LOWER({{FieldName}}), \' \', \'\')');
+    });
+
+    it('should drop related entities whose target entity is not in metadata, keeping resolvable ones', () => {
+      mockMetadataEntities.push({ ID: 'ent-target', Name: 'Members', SchemaName: 'ym', BaseView: 'vwMembers' });
+      const ok = makeOrganicKey({
+        RelatedEntities: [
+          makeOrganicKeyRelatedEntity({ ID: 're-good', RelatedEntityID: 'ent-target', RelatedEntityFieldNames: 'EmailAddress' }),
+          makeOrganicKeyRelatedEntity({ ID: 're-bad', RelatedEntityID: 'ent-missing', RelatedEntityFieldNames: 'EmailAddress' }),
+        ],
+      });
+
+      const result = MapEntityOrganicKeyInfoToSkipEntityOrganicKeyInfo(ok as never);
+      expect(result.relatedEntities).toHaveLength(1);
+      expect(result.relatedEntities[0].id).toBe('re-good');
+    });
+
+    it('should support compound match field names', () => {
+      const ok = makeOrganicKey({
+        MatchFieldNames: 'FirstName, LastName, DateOfBirth',
+      });
+      const result = MapEntityOrganicKeyInfoToSkipEntityOrganicKeyInfo(ok as never);
+      expect(result.matchFieldNames).toEqual(['FirstName', 'LastName', 'DateOfBirth']);
+    });
+  });
+
+  describe('MapEntityInfoToSkipEntityInfo organic key handling', () => {
+    beforeEach(() => {
+      mockMetadataEntities.length = 0;
+    });
+
+    function makeEntityInfo(overrides: Record<string, unknown> = {}) {
+      return {
+        ID: 'ent-source',
+        Name: 'MemberEngagementLog',
+        Description: 'Member engagement events',
+        SchemaName: 'document',
+        BaseView: 'vwMemberEngagementLog',
+        Fields: [],
+        RelatedEntities: [],
+        OrganicKeys: [],
+        RowsToPackWithSchema: 'None',
+        RowsToPackSampleMethod: 'top n',
+        ...overrides,
+      };
+    }
+
+    it('should emit an empty organicKeys array when the entity has no organic keys', () => {
+      const result = MapEntityInfoToSkipEntityInfo(makeEntityInfo() as never);
+      expect(result.organicKeys).toEqual([]);
+    });
+
+    it('should emit an empty organicKeys array when OrganicKeys property is missing entirely', () => {
+      const result = MapEntityInfoToSkipEntityInfo(makeEntityInfo({ OrganicKeys: undefined }) as never);
+      expect(result.organicKeys).toEqual([]);
+    });
+
+    it('should filter out organic keys with Status=Disabled', () => {
+      mockMetadataEntities.push({ ID: 'ent-target', Name: 'Members', SchemaName: 'ym', BaseView: 'vwMembers' });
+      const activeKey = makeOrganicKey({
+        ID: 'ok-active',
+        Status: 'Active',
+        RelatedEntities: [makeOrganicKeyRelatedEntity({ RelatedEntityID: 'ent-target', RelatedEntityFieldNames: 'EmailAddress' })],
+      });
+      const disabledKey = makeOrganicKey({
+        ID: 'ok-disabled',
+        Status: 'Disabled',
+        RelatedEntities: [makeOrganicKeyRelatedEntity({ RelatedEntityID: 'ent-target', RelatedEntityFieldNames: 'EmailAddress' })],
+      });
+
+      const result = MapEntityInfoToSkipEntityInfo(makeEntityInfo({ OrganicKeys: [activeKey, disabledKey] }) as never);
+      expect(result.organicKeys).toHaveLength(1);
+      expect(result.organicKeys[0].id).toBe('ok-active');
+    });
+
+    it('should serialize a fully-populated organic key end-to-end', () => {
+      mockMetadataEntities.push({ ID: 'ent-target', Name: 'Members', SchemaName: 'ym', BaseView: 'vwMembers' });
+      const ok = makeOrganicKey({
+        ID: 'ok-1',
+        Name: 'AcronymMatch',
+        MatchFieldNames: 'MemberOrganization',
+        NormalizationStrategy: 'LowerCaseTrim',
+        RelatedEntities: [
+          makeOrganicKeyRelatedEntity({
+            RelatedEntityID: 'ent-target',
+            TransitiveObjectName: 'ym.vwAcronymToMember',
+            TransitiveObjectMatchFieldNames: 'Acronym',
+            TransitiveObjectOutputFieldName: 'MemberID',
+            RelatedEntityJoinFieldName: 'ID',
+          }),
+        ],
+      });
+
+      const result = MapEntityInfoToSkipEntityInfo(makeEntityInfo({ OrganicKeys: [ok] }) as never);
+      expect(result.organicKeys).toHaveLength(1);
+      const skipKey = result.organicKeys[0];
+      expect(skipKey.name).toBe('AcronymMatch');
+      expect(skipKey.matchFieldNames).toEqual(['MemberOrganization']);
+      expect(skipKey.relatedEntities).toHaveLength(1);
+      const target = skipKey.relatedEntities[0];
+      expect(target.relatedEntityName).toBe('Members');
+      expect(target.relatedEntitySchemaName).toBe('ym');
+      expect(target.relatedEntityBaseView).toBe('vwMembers');
+      expect(target.isTransitiveMatch).toBe(true);
+      expect(target.transitiveObjectName).toBe('ym.vwAcronymToMember');
+    });
+  });
+
+  describe('MapSimpleEntityInfoToSkipEntityInfo', () => {
+    it('should emit an empty organicKeys array (SimpleEntityInfo has no organic key concept)', () => {
+      const simple = { name: 'Test', description: 'desc', fields: [] };
+      const result = MapSimpleEntityInfoToSkipEntityInfo(simple as never);
+      expect(result.organicKeys).toEqual([]);
     });
   });
 });

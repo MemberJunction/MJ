@@ -635,3 +635,5 @@ Use **Search Query Catalog** with a natural language description of what data yo
 {% else %}
 No reusable queries are currently available. Proceed with writing fresh SQL.
 {% endif %}
+
+{@include ../_includes/geo-context.md}

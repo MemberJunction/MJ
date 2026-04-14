@@ -1288,7 +1288,7 @@ interface EntityOption {
   encapsulation: ViewEncapsulation.None
 })
 export class ListsOperationsResource extends BaseResourceComponent implements OnDestroy {
-  private destroy$ = new Subject<void>();
+  protected override destroy$ = new Subject<void>();
 
   maxLists = 4;
   selectedLists: ListSelection[] = [];
@@ -1346,12 +1346,14 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
   }
 
   async ngOnInit() {
+    super.ngOnInit();
     await this.loadAvailableLists();
     await this.loadSavedState();
     this.NotifyLoadComplete();
   }
 
   ngOnDestroy() {
+    super.ngOnDestroy();
     this.destroy$.next();
     this.destroy$.complete();
 

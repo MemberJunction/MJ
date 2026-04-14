@@ -1016,9 +1016,19 @@ export const MJAIAgentCategorySchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    DefaultStorageAccountID: z.string().nullable().describe(`
+        * * Field Name: DefaultStorageAccountID
+        * * Display Name: Default Storage Account
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: File Storage Accounts (vwFileStorageAccounts.ID)
+        * * Description: Default file storage account for agents in this category. Inherited by child categories that do not define their own value — resolution walks up the ParentID tree until a non-null value is found. Overrides the Type-level default. FK to FileStorageAccount.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
-        * * Display Name: Parent Name
+        * * Display Name: Parent
+        * * SQL Data Type: nvarchar(200)`),
+    DefaultStorageAccount: z.string().nullable().describe(`
+        * * Field Name: DefaultStorageAccount
+        * * Display Name: Default Storage Account Name
         * * SQL Data Type: nvarchar(200)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
@@ -3289,7 +3299,7 @@ export const MJAIAgentTypeSchema = z.object({
         * * Description: Determines whether the custom form section (specified by UIFormSectionClass) should be expanded by default when the AI Agent form loads. True means the section starts expanded, False means it starts collapsed. Only applies when UIFormSectionClass is specified. Defaults to 1 (expanded).`),
     PromptParamsSchema: z.string().nullable().describe(`
         * * Field Name: PromptParamsSchema
-        * * Display Name: Prompt Parameters Schema
+        * * Display Name: Prompt Params Schema
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON Schema defining the available prompt parameters for this agent type. Includes property definitions with types, defaults, and descriptions. Used by agents of this type to customize which prompt sections are included in the system prompt. The schema follows JSON Schema draft-07 format.`),
     AssignmentStrategy: z.string().nullable().describe(`
@@ -3297,10 +3307,20 @@ export const MJAIAgentTypeSchema = z.object({
         * * Display Name: Assignment Strategy
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON-serialized AgentRequestAssignmentStrategy defining the default assignment strategy for all agents of this type. Overridden by per-invocation or category-level strategies in the resolution chain.`),
+    DefaultStorageAccountID: z.string().nullable().describe(`
+        * * Field Name: DefaultStorageAccountID
+        * * Display Name: Default Storage Account
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: File Storage Accounts (vwFileStorageAccounts.ID)
+        * * Description: Default file storage account for agents of this type. Lowest priority in the resolution chain (Type → Category tree → Agent → Runtime override). When set, all agents of this type use this storage account unless overridden at a more specific level. FK to FileStorageAccount.`),
     SystemPrompt: z.string().nullable().describe(`
         * * Field Name: SystemPrompt
-        * * Display Name: System Prompt Text
+        * * Display Name: System Prompt
         * * SQL Data Type: nvarchar(255)`),
+    DefaultStorageAccount: z.string().nullable().describe(`
+        * * Field Name: DefaultStorageAccount
+        * * Display Name: Default Storage Account Name
+        * * SQL Data Type: nvarchar(200)`),
 });
 
 export type MJAIAgentTypeEntityType = z.infer<typeof MJAIAgentTypeSchema>;
@@ -3376,17 +3396,17 @@ export const MJAIAgentSchema = z.object({
         * * Description: When true, enables automatic compression of conversation context when the message threshold is reached.`),
     ContextCompressionMessageThreshold: z.number().nullable().describe(`
         * * Field Name: ContextCompressionMessageThreshold
-        * * Display Name: Compression Message Threshold
+        * * Display Name: Context Compression Message Threshold
         * * SQL Data Type: int
         * * Description: Number of messages that triggers context compression when EnableContextCompression is true.`),
     ContextCompressionPromptID: z.string().nullable().describe(`
         * * Field Name: ContextCompressionPromptID
-        * * Display Name: Compression Prompt
+        * * Display Name: Context Compression Prompt
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)`),
     ContextCompressionMessageRetentionCount: z.number().nullable().describe(`
         * * Field Name: ContextCompressionMessageRetentionCount
-        * * Display Name: Compression Message Retention Count
+        * * Display Name: Context Compression Message Retention Count
         * * SQL Data Type: int
         * * Description: Number of recent messages to keep uncompressed when context compression is applied.`),
     TypeID: z.string().nullable().describe(`
@@ -3717,13 +3737,19 @@ if this limit is exceeded.`),
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: When true (default), this agent accepts runtime-registered ephemeral client tools that are not defined in metadata. Set to false for agents that require strict tool governance.`),
+    DefaultStorageAccountID: z.string().nullable().describe(`
+        * * Field Name: DefaultStorageAccountID
+        * * Display Name: Default Storage Account ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: File Storage Accounts (vwFileStorageAccounts.ID)
+        * * Description: Default file storage account for this specific agent. Overrides both Type-level and Category-level defaults. Can be further overridden at runtime via ExecuteAgentParams.override.storageAccountId. FK to FileStorageAccount.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent Name
         * * SQL Data Type: nvarchar(255)`),
     ContextCompressionPrompt: z.string().nullable().describe(`
         * * Field Name: ContextCompressionPrompt
-        * * Display Name: Context Compression Prompt Name
+        * * Display Name: Context Compression Prompt
         * * SQL Data Type: nvarchar(255)`),
     Type: z.string().nullable().describe(`
         * * Field Name: Type
@@ -3744,6 +3770,10 @@ if this limit is exceeded.`),
     Category: z.string().nullable().describe(`
         * * Field Name: Category
         * * Display Name: Category Name
+        * * SQL Data Type: nvarchar(200)`),
+    DefaultStorageAccount: z.string().nullable().describe(`
+        * * Field Name: DefaultStorageAccount
+        * * Display Name: Default Storage Account
         * * SQL Data Type: nvarchar(200)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
@@ -6905,6 +6935,61 @@ export const MJApplicationEntitySchema = z.object({
 export type MJApplicationEntityEntityType = z.infer<typeof MJApplicationEntitySchema>;
 
 /**
+ * zod schema definition for the entity MJ: Application Roles
+ */
+export const MJApplicationRoleSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ApplicationID: z.string().describe(`
+        * * Field Name: ApplicationID
+        * * Display Name: Application
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Applications (vwApplications.ID)
+        * * Description: Foreign key to the Application this role grant applies to`),
+    RoleID: z.string().describe(`
+        * * Field Name: RoleID
+        * * Display Name: Role
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Roles (vwRoles.ID)
+        * * Description: Foreign key to the Role being granted or denied access`),
+    CanAccess: z.boolean().describe(`
+        * * Field Name: CanAccess
+        * * Display Name: Can Access
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When true, users in this role can access the application. When false, this record acts as an explicit deny for the role.`),
+    CanAdmin: z.boolean().describe(`
+        * * Field Name: CanAdmin
+        * * Display Name: Can Admin
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When true, users in this role can modify application settings, manage nav items, and configure the application.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Application: z.string().describe(`
+        * * Field Name: Application
+        * * Display Name: Application Name
+        * * SQL Data Type: nvarchar(100)`),
+    Role: z.string().describe(`
+        * * Field Name: Role
+        * * Display Name: Role Name
+        * * SQL Data Type: nvarchar(50)`),
+});
+
+export type MJApplicationRoleEntityType = z.infer<typeof MJApplicationRoleSchema>;
+
+/**
  * zod schema definition for the entity MJ: Application Settings
  */
 export const MJApplicationSettingSchema = z.object({
@@ -7202,6 +7287,16 @@ export const MJArtifactTypeSchema = z.object({
         * * Display Name: Icon
         * * SQL Data Type: nvarchar(255)
         * * Description: Font Awesome icon class name for displaying this artifact type in the UI (e.g., fa-file-code, fa-chart-line)`),
+    ContentCategory: z.union([z.literal('File'), z.literal('Text')]).describe(`
+        * * Field Name: ContentCategory
+        * * Display Name: Content Category
+        * * SQL Data Type: nvarchar(10)
+        * * Default Value: Text
+    * * Value List Type: List
+    * * Possible Values 
+    *   * File
+    *   * Text
+        * * Description: Classifies whether this artifact type stores text content ('Text', the default for all existing types) or a binary file in MJStorage ('File'). Used by AgentRunner and viewer components to route file-based artifacts correctly.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
@@ -7344,7 +7439,7 @@ export const MJArtifactVersionSchema = z.object({
         * * Default Value: newsequentialid()`),
     ArtifactID: z.string().describe(`
         * * Field Name: ArtifactID
-        * * Display Name: Artifact ID
+        * * Display Name: Artifact
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Artifacts (vwArtifacts.ID)`),
     VersionNumber: z.number().describe(`
@@ -7369,7 +7464,7 @@ export const MJArtifactVersionSchema = z.object({
         * * Description: User comments specific to this version`),
     UserID: z.string().describe(`
         * * Field Name: UserID
-        * * Display Name: User ID
+        * * Display Name: User
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)`),
     __mj_CreatedAt: z.date().describe(`
@@ -7397,6 +7492,37 @@ export const MJArtifactVersionSchema = z.object({
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Description of this artifact version. Can differ from Artifact.Description as it may evolve with versions.`),
+    FileID: z.string().nullable().describe(`
+        * * Field Name: FileID
+        * * Display Name: File
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Files (vwFiles.ID)
+        * * Description: Foreign key to the MJ: Files entity. When ContentMode is 'File', this references the binary file stored in MJStorage. NULL when ContentMode is 'Text'.`),
+    ContentMode: z.union([z.literal('File'), z.literal('Text')]).describe(`
+        * * Field Name: ContentMode
+        * * Display Name: Content Mode
+        * * SQL Data Type: nvarchar(10)
+        * * Default Value: Text
+    * * Value List Type: List
+    * * Possible Values 
+    *   * File
+    *   * Text
+        * * Description: Determines how artifact content is stored. 'Text' (default) means the Content column holds the data. 'File' means FileID references a binary file in MJStorage and Content is unused.`),
+    MimeType: z.string().nullable().describe(`
+        * * Field Name: MimeType
+        * * Display Name: MIME Type
+        * * SQL Data Type: nvarchar(200)
+        * * Description: MIME type of the stored file (e.g. application/pdf). Denormalized from the File entity for display without joins. Only populated when ContentMode is 'File'.`),
+    FileName: z.string().nullable().describe(`
+        * * Field Name: FileName
+        * * Display Name: File Name
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Original filename of the stored file (e.g. report.pdf). Denormalized from the File entity for display without joins. Only populated when ContentMode is 'File'.`),
+    ContentSizeBytes: z.number().nullable().describe(`
+        * * Field Name: ContentSizeBytes
+        * * Display Name: Content Size Bytes
+        * * SQL Data Type: bigint
+        * * Description: Size of the stored file in bytes. Denormalized for display without loading the file. Only populated when ContentMode is 'File'.`),
     Artifact: z.string().describe(`
         * * Field Name: Artifact
         * * Display Name: Artifact
@@ -7405,6 +7531,10 @@ export const MJArtifactVersionSchema = z.object({
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
+    File: z.string().nullable().describe(`
+        * * Field Name: File
+        * * Display Name: File
+        * * SQL Data Type: nvarchar(500)`),
 });
 
 export type MJArtifactVersionEntityType = z.infer<typeof MJArtifactVersionSchema>;
@@ -11202,6 +11332,69 @@ export const MJConversationSchema = z.object({
 export type MJConversationEntityType = z.infer<typeof MJConversationSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Countries
+ */
+export const MJCountrySchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Full country name (e.g., "United States", "Canada").`),
+    ISO2: z.string().describe(`
+        * * Field Name: ISO2
+        * * Display Name: ISO 2
+        * * SQL Data Type: nvarchar(2)
+        * * Description: ISO 3166-1 alpha-2 code (e.g., "US", "CA"). Unique business key for lookups.`),
+    ISO3: z.string().describe(`
+        * * Field Name: ISO3
+        * * Display Name: ISO 3
+        * * SQL Data Type: nvarchar(3)
+        * * Description: ISO 3166-1 alpha-3 code (e.g., "USA", "CAN"). Unique business key for lookups.`),
+    NumericCode: z.number().nullable().describe(`
+        * * Field Name: NumericCode
+        * * Display Name: Numeric Code
+        * * SQL Data Type: int
+        * * Description: ISO 3166-1 numeric code (e.g., 840 for US, 124 for Canada).`),
+    Latitude: z.number().nullable().describe(`
+        * * Field Name: Latitude
+        * * Display Name: Latitude
+        * * SQL Data Type: decimal(10, 6)
+        * * Description: Geographic centroid latitude. Used as fallback point for country-level geocoding.`),
+    Longitude: z.number().nullable().describe(`
+        * * Field Name: Longitude
+        * * Display Name: Longitude
+        * * SQL Data Type: decimal(10, 6)
+        * * Description: Geographic centroid longitude. Used as fallback point for country-level geocoding.`),
+    BoundaryGeoJSON: z.string().nullable().describe(`
+        * * Field Name: BoundaryGeoJSON
+        * * Display Name: Boundary GeoJSON
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Medium-resolution (~50m) GeoJSON boundary polygon for choropleth map rendering. Nullable — point map falls back to centroid if absent. Total ~3MB for all countries.`),
+    CommonAliases: z.string().nullable().describe(`
+        * * Field Name: CommonAliases
+        * * Display Name: Common Aliases
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of common aliases and alternate names (e.g., ["United States","USA","U.S.","America"]). Used by GeoResolver for fuzzy text-to-country matching.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type MJCountryEntityType = z.infer<typeof MJCountrySchema>;
+
+/**
  * zod schema definition for the entity MJ: Credential Categories
  */
 export const MJCredentialCategorySchema = z.object({
@@ -12992,7 +13185,7 @@ export const MJEntitySchema = z.object({
         * * Default Value: newsequentialid()`),
     ParentID: z.string().nullable().describe(`
         * * Field Name: ParentID
-        * * Display Name: Parent ID
+        * * Display Name: Parent
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)`),
     Name: z.string().describe(`
@@ -13099,46 +13292,46 @@ export const MJEntitySchema = z.object({
         * * Description: Set to 1 if a custom resolver has been created for the entity.`),
     AllowUserSearchAPI: z.boolean().describe(`
         * * Field Name: AllowUserSearchAPI
-        * * Display Name: Allow User Search API
+        * * Display Name: Allow User Search
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Enabling this bit will result in search being possible at the API and UI layers`),
     FullTextSearchEnabled: z.boolean().describe(`
         * * Field Name: FullTextSearchEnabled
-        * * Display Name: Full Text Search Enabled
+        * * Display Name: Full-Text Search Enabled
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Whether full-text search indexing is enabled for this entity.`),
     FullTextCatalog: z.string().nullable().describe(`
         * * Field Name: FullTextCatalog
-        * * Display Name: Full Text Catalog
+        * * Display Name: Full-Text Catalog
         * * SQL Data Type: nvarchar(255)
         * * Description: Name of the SQL Server full-text catalog if search is enabled.`),
     FullTextCatalogGenerated: z.boolean().describe(`
         * * Field Name: FullTextCatalogGenerated
-        * * Display Name: Full Text Catalog Generated
+        * * Display Name: Full-Text Catalog Generated
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: Indicates if the full-text catalog was auto-generated by CodeGen.`),
     FullTextIndex: z.string().nullable().describe(`
         * * Field Name: FullTextIndex
-        * * Display Name: Full Text Index
+        * * Display Name: Full-Text Index
         * * SQL Data Type: nvarchar(255)
         * * Description: Name of the full-text index on this entity's table.`),
     FullTextIndexGenerated: z.boolean().describe(`
         * * Field Name: FullTextIndexGenerated
-        * * Display Name: Full Text Index Generated
+        * * Display Name: Full-Text Index Generated
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: Indicates if the full-text index was auto-generated by CodeGen.`),
     FullTextSearchFunction: z.string().nullable().describe(`
         * * Field Name: FullTextSearchFunction
-        * * Display Name: Full Text Search Function
+        * * Display Name: Search Function
         * * SQL Data Type: nvarchar(255)
         * * Description: Name of the function used for full-text searching this entity.`),
     FullTextSearchFunctionGenerated: z.boolean().describe(`
         * * Field Name: FullTextSearchFunctionGenerated
-        * * Display Name: Full Text Search Function Generated
+        * * Display Name: Search Function Generated
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: Indicates if the search function was auto-generated by CodeGen.`),
@@ -13150,34 +13343,34 @@ export const MJEntitySchema = z.object({
         * * Description: Maximum number of rows to return in user-created views for this entity.`),
     spCreate: z.string().nullable().describe(`
         * * Field Name: spCreate
-        * * Display Name: Create Stored Procedure
+        * * Display Name: Create Procedure
         * * SQL Data Type: nvarchar(255)
         * * Description: Name of the stored procedure for creating records in this entity.`),
     spUpdate: z.string().nullable().describe(`
         * * Field Name: spUpdate
-        * * Display Name: Update Stored Procedure
+        * * Display Name: Update Procedure
         * * SQL Data Type: nvarchar(255)
         * * Description: Name of the stored procedure for updating records in this entity.`),
     spDelete: z.string().nullable().describe(`
         * * Field Name: spDelete
-        * * Display Name: Delete Stored Procedure
+        * * Display Name: Delete Procedure
         * * SQL Data Type: nvarchar(255)
         * * Description: Name of the stored procedure for deleting records in this entity.`),
     spCreateGenerated: z.boolean().describe(`
         * * Field Name: spCreateGenerated
-        * * Display Name: Create Procedure Generated
+        * * Display Name: Create SP Generated
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: Indicates if the create procedure was auto-generated by CodeGen.`),
     spUpdateGenerated: z.boolean().describe(`
         * * Field Name: spUpdateGenerated
-        * * Display Name: Update Procedure Generated
+        * * Display Name: Update SP Generated
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: Indicates if the update procedure was auto-generated by CodeGen.`),
     spDeleteGenerated: z.boolean().describe(`
         * * Field Name: spDeleteGenerated
-        * * Display Name: Delete Procedure Generated
+        * * Display Name: Delete SP Generated
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: Indicates if the delete procedure was auto-generated by CodeGen.`),
@@ -13205,12 +13398,12 @@ export const MJEntitySchema = z.object({
         * * Description: This field must be turned on in order to enable merging of records for the entity. For AllowRecordMerge to be turned on, AllowDeleteAPI must be set to 1, and DeleteType must be set to Soft`),
     spMatch: z.string().nullable().describe(`
         * * Field Name: spMatch
-        * * Display Name: Match Stored Procedure
+        * * Display Name: Match Procedure
         * * SQL Data Type: nvarchar(255)
         * * Description: When specified, this stored procedure is used to find matching records in this particular entity. The convention is to pass in the primary key(s) columns for the given entity to the procedure and the return will be zero to many rows where there is a column for each primary key field(s) and a ProbabilityScore (numeric(1,12)) column that has a 0 to 1 value of the probability of a match.`),
     RelationshipDefaultDisplayType: z.union([z.literal('Dropdown'), z.literal('Search')]).describe(`
         * * Field Name: RelationshipDefaultDisplayType
-        * * Display Name: Relationship Default Display Type
+        * * Display Name: Default Relationship Display Type
         * * SQL Data Type: nvarchar(20)
         * * Default Value: Search
     * * Value List Type: List
@@ -13226,12 +13419,12 @@ export const MJEntitySchema = z.object({
         * * Description: Indicates if the default user form was auto-generated for this entity.`),
     EntityObjectSubclassName: z.string().nullable().describe(`
         * * Field Name: EntityObjectSubclassName
-        * * Display Name: Entity Object Subclass Name
+        * * Display Name: Subclass Name
         * * SQL Data Type: nvarchar(255)
         * * Description: TypeScript class name for the entity subclass in the codebase.`),
     EntityObjectSubclassImport: z.string().nullable().describe(`
         * * Field Name: EntityObjectSubclassImport
-        * * Display Name: Entity Object Subclass Import
+        * * Display Name: Subclass Import Path
         * * SQL Data Type: nvarchar(255)
         * * Description: Import path for the entity subclass in the TypeScript codebase.`),
     PreferredCommunicationField: z.string().nullable().describe(`
@@ -13256,12 +13449,12 @@ export const MJEntitySchema = z.object({
         * * Default Value: getutcdate()`),
     ScopeDefault: z.string().nullable().describe(`
         * * Field Name: ScopeDefault
-        * * Display Name: Scope Default
+        * * Display Name: Default Scope
         * * SQL Data Type: nvarchar(100)
         * * Description: Optional, comma-delimited string indicating the default scope for entity visibility. Options include Users, Admins, AI, and All. Defaults to All when NULL. This is used for simple defaults for filtering entity visibility, not security enforcement.`),
     RowsToPackWithSchema: z.union([z.literal('All'), z.literal('None'), z.literal('Sample')]).describe(`
         * * Field Name: RowsToPackWithSchema
-        * * Display Name: Rows To Pack With Schema
+        * * Display Name: Rows To Pack
         * * SQL Data Type: nvarchar(20)
         * * Default Value: None
     * * Value List Type: List
@@ -13272,7 +13465,7 @@ export const MJEntitySchema = z.object({
         * * Description: Determines how entity rows should be packaged for external use. Options include None, Sample, and All. Defaults to None.`),
     RowsToPackSampleMethod: z.union([z.literal('bottom n'), z.literal('random'), z.literal('top n')]).describe(`
         * * Field Name: RowsToPackSampleMethod
-        * * Display Name: Rows To Pack Sample Method
+        * * Display Name: Packing Sample Method
         * * SQL Data Type: nvarchar(20)
         * * Default Value: random
     * * Value List Type: List
@@ -13283,18 +13476,18 @@ export const MJEntitySchema = z.object({
         * * Description: Defines the sampling method for row packing when RowsToPackWithSchema is set to Sample. Options include random, top n, and bottom n. Defaults to random.`),
     RowsToPackSampleCount: z.number().describe(`
         * * Field Name: RowsToPackSampleCount
-        * * Display Name: Rows To Pack Sample Count
+        * * Display Name: Packing Sample Count
         * * SQL Data Type: int
         * * Default Value: 0
         * * Description: The number of rows to pack when RowsToPackWithSchema is set to Sample, based on the designated sampling method. Defaults to 0.`),
     RowsToPackSampleOrder: z.string().nullable().describe(`
         * * Field Name: RowsToPackSampleOrder
-        * * Display Name: Rows To Pack Sample Order
+        * * Display Name: Packing Sample Order
         * * SQL Data Type: nvarchar(MAX)
         * * Description: An optional ORDER BY clause for row packing when RowsToPackWithSchema is set to Sample. Allows custom ordering for selected entity data when using top n and bottom n.`),
     AutoRowCountFrequency: z.number().nullable().describe(`
         * * Field Name: AutoRowCountFrequency
-        * * Display Name: Auto Row Count Frequency
+        * * Display Name: Refresh Frequency (Hours)
         * * SQL Data Type: int
         * * Description: Frequency in hours for automatically performing row counts on this entity. If NULL, automatic row counting is disabled. If greater than 0, schedules recurring SELECT COUNT(*) queries at the specified interval.`),
     RowCount: z.number().nullable().describe(`
@@ -13304,7 +13497,7 @@ export const MJEntitySchema = z.object({
         * * Description: Cached row count for this entity, populated by automatic row count processes when AutoRowCountFrequency is configured.`),
     RowCountRunAt: z.date().nullable().describe(`
         * * Field Name: RowCountRunAt
-        * * Display Name: Row Count Run At
+        * * Display Name: Last Counted At
         * * SQL Data Type: datetimeoffset
         * * Description: Timestamp indicating when the last automatic row count was performed for this entity.`),
     Status: z.union([z.literal('Active'), z.literal('Deprecated'), z.literal('Disabled')]).describe(`
@@ -13329,6 +13522,48 @@ export const MJEntitySchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: When false (default), child types are disjoint - a record can only be one child type at a time. When true, a record can simultaneously exist as multiple child types (e.g., a Person can be both a Member and a Volunteer).`),
+    AutoUpdateFullTextSearch: z.boolean().describe(`
+        * * Field Name: AutoUpdateFullTextSearch
+        * * Display Name: Auto Update Search Settings
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When true, CodeGen LLM can auto-configure full-text search settings (FullTextSearchEnabled, catalog, index, function) during code generation runs.`),
+    AutoUpdateAllowUserSearchAPI: z.boolean().describe(`
+        * * Field Name: AutoUpdateAllowUserSearchAPI
+        * * Display Name: Auto Update Search API
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When true, CodeGen LLM can auto-set AllowUserSearchAPI during code generation runs.`),
+    TrustServerCacheCompletely: z.boolean().describe(`
+        * * Field Name: TrustServerCacheCompletely
+        * * Display Name: Trust Server Cache
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When true (default), the server-side RunView cache will store and return cached results for this entity, trusting that all mutations flow through BaseEntity.Save() which fires cache invalidation events. Set to false for entities whose rows are created as side-effects of other operations via raw SQL (e.g., Record Changes created by spCreateRecordChange_Internal), since those inserts bypass BaseEntity and never trigger cache invalidation.`),
+    SupportsGeoCoding: z.boolean().describe(`
+        * * Field Name: SupportsGeoCoding
+        * * Display Name: Supports Geo-Coding
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When true, CodeGen generates geo-aware subclass code, adds __mj_Latitude/__mj_Longitude virtual fields to the base view, and the UI shows a map view toggle. Auto-set by CodeGen when LLM detects geo-capable fields (address, lat/lng, etc.).`),
+    AutoUpdateSupportsGeoCoding: z.boolean().describe(`
+        * * Field Name: AutoUpdateSupportsGeoCoding
+        * * Display Name: Auto Update Geo-Coding
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When true (default), CodeGen can automatically set SupportsGeoCoding based on LLM analysis of entity fields. Set to 0 to lock the value and prevent CodeGen from changing it.`),
+    AllowCaching: z.boolean().describe(`
+        * * Field Name: AllowCaching
+        * * Display Name: Allow Caching
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Controls whether this entity participates in server-side and client-side caching. When false, all cache operations (PreRunView checks, auto-cache storage, BaseEntity event fingerprint scans, client-side IndexedDB cache) are skipped entirely. This column is the single source of truth at runtime; schema-level defaults are applied at CodeGen time via newEntityDefaults.AllowCachingBySchema.`),
+    DetectExternalChanges: z.boolean().describe(`
+        * * Field Name: DetectExternalChanges
+        * * Display Name: Detect External Changes
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When set to 1 AND TrackRecordChanges is also 1, the external change detection system will scan this entity for changes made outside the MJ framework (direct SQL, third-party tools, etc.) and replay them through Save() to create proper RecordChange audit entries. Default is 0 (opt-out) because most entities, especially __mj schema metadata tables, are managed by migrations/CodeGen and should not be scanned.`),
     CodeName: z.string().nullable().describe(`
         * * Field Name: CodeName
         * * Display Name: Code Name
@@ -14123,7 +14358,7 @@ export const MJEntityFieldSchema = z.object({
         * * Default Value: newsequentialid()`),
     EntityID: z.string().describe(`
         * * Field Name: EntityID
-        * * Display Name: Entity
+        * * Display Name: Entity ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)`),
     Sequence: z.number().describe(`
@@ -14172,7 +14407,7 @@ export const MJEntityFieldSchema = z.object({
         * * Description: Used for generating custom tabs in the generated forms, only utilized if GeneratedFormSection=Category`),
     Type: z.string().describe(`
         * * Field Name: Type
-        * * Display Name: Type
+        * * Display Name: Data Type
         * * SQL Data Type: nvarchar(100)
         * * Description: SQL Data type (auto maintained by CodeGen)`),
     Length: z.number().nullable().describe(`
@@ -14218,7 +14453,7 @@ export const MJEntityFieldSchema = z.object({
     *   * ListOrUserEntry
     *   * None
         * * Description: Possible Values of None, List, ListOrUserEntry - the last option meaning that the list of possible values are options, but a user can enter anything else desired too.`),
-    ExtendedType: z.union([z.literal('Code'), z.literal('Email'), z.literal('FaceTime'), z.literal('Geo'), z.literal('MSTeams'), z.literal('Other'), z.literal('SIP'), z.literal('SMS'), z.literal('Skype'), z.literal('Tel'), z.literal('URL'), z.literal('WhatsApp'), z.literal('ZoomMtg')]).nullable().describe(`
+    ExtendedType: z.union([z.literal('Code'), z.literal('Email'), z.literal('FaceTime'), z.literal('Geo'), z.literal('GeoAddress'), z.literal('GeoCity'), z.literal('GeoCountry'), z.literal('GeoLatitude'), z.literal('GeoLongitude'), z.literal('GeoPostalCode'), z.literal('GeoStateProvince'), z.literal('MSTeams'), z.literal('Other'), z.literal('SIP'), z.literal('SMS'), z.literal('Skype'), z.literal('Tel'), z.literal('URL'), z.literal('WhatsApp'), z.literal('ZoomMtg')]).nullable().describe(`
         * * Field Name: ExtendedType
         * * Display Name: Extended Type
         * * SQL Data Type: nvarchar(50)
@@ -14228,6 +14463,13 @@ export const MJEntityFieldSchema = z.object({
     *   * Email
     *   * FaceTime
     *   * Geo
+    *   * GeoAddress
+    *   * GeoCity
+    *   * GeoCountry
+    *   * GeoLatitude
+    *   * GeoLongitude
+    *   * GeoPostalCode
+    *   * GeoStateProvince
     *   * MSTeams
     *   * Other
     *   * SIP
@@ -14281,7 +14523,7 @@ export const MJEntityFieldSchema = z.object({
         * * Description: If set to 1, and if AllowUpdateAPI=1, the field can be edited within a view when the view is in edit mode.`),
     IncludeInUserSearchAPI: z.boolean().describe(`
         * * Field Name: IncludeInUserSearchAPI
-        * * Display Name: Include In User Search API
+        * * Display Name: Include In User Search
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: If set to 1, this column will be included in user search queries for both traditional and full text search`),
@@ -14293,7 +14535,7 @@ export const MJEntityFieldSchema = z.object({
         * * Description: If set to 1, CodeGen will automatically generate a Full Text Catalog/Index in the database and include this field in the search index.`),
     UserSearchParamFormatAPI: z.string().nullable().describe(`
         * * Field Name: UserSearchParamFormatAPI
-        * * Display Name: User Search Param Format API
+        * * Display Name: Search Param Format
         * * SQL Data Type: nvarchar(500)
         * * Description: NULL`),
     IncludeInGeneratedForm: z.boolean().describe(`
@@ -14332,18 +14574,18 @@ export const MJEntityFieldSchema = z.object({
         * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)`),
     RelatedEntityFieldName: z.string().nullable().describe(`
         * * Field Name: RelatedEntityFieldName
-        * * Display Name: Related Entity Field Name
+        * * Display Name: Related Entity Field
         * * SQL Data Type: nvarchar(255)
         * * Description: Name of the field in the Related Entity that this field links to (auto maintained by CodeGen)`),
     IncludeRelatedEntityNameFieldInBaseView: z.boolean().describe(`
         * * Field Name: IncludeRelatedEntityNameFieldInBaseView
-        * * Display Name: Include Related Entity Name Field In Base View
+        * * Display Name: Include Related Name In View
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: If set to 1, the "Name" field of the Related Entity will be included in this entity as a virtual field`),
     RelatedEntityNameFieldMap: z.string().nullable().describe(`
         * * Field Name: RelatedEntityNameFieldMap
-        * * Display Name: Related Entity Name Field Map
+        * * Display Name: Related Entity Name Map
         * * SQL Data Type: nvarchar(255)
         * * Description: For foreign key fields, maps which field in the related entity contains the display name. This is used by CodeGen to automatically add in virtual fields for the "Name Field" of the related entity.`),
     RelatedEntityDisplayType: z.string().describe(`
@@ -14374,7 +14616,7 @@ export const MJEntityFieldSchema = z.object({
         * * Description: A comma-delimited string indicating the default scope for field visibility. Options include Users, Admins, AI, and All. Defaults to All when NULL. This is used for a simple method of filtering field defaults for visibility, not security enforcement.`),
     AutoUpdateRelatedEntityInfo: z.boolean().describe(`
         * * Field Name: AutoUpdateRelatedEntityInfo
-        * * Display Name: Auto Update Related Entity Info
+        * * Display Name: Auto Update Related Info
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: Indicates whether the related entity information should be automatically updated from the database schema. When set to 0, relationships not part of the database schema can be manually defined at the application and AI agent level. Defaults to 1.`),
@@ -14426,7 +14668,7 @@ export const MJEntityFieldSchema = z.object({
         * * Description: When 1, allows system/LLM to auto-update DisplayName during CodeGen; when 0, user has locked this field`),
     AutoUpdateIncludeInUserSearchAPI: z.boolean().describe(`
         * * Field Name: AutoUpdateIncludeInUserSearchAPI
-        * * Display Name: Auto Update Include In User Search API
+        * * Display Name: Auto Update Search Inclusion
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: When 1, allows system/LLM to auto-update IncludeInUserSearchAPI during CodeGen; when 0, user has locked this field`),
@@ -14487,6 +14729,30 @@ export const MJEntityFieldSchema = z.object({
         * * Display Name: JSON Type Definition
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Raw TypeScript code emitted by CodeGen above the entity class definition. Typically contains the interface/type definition referenced by JSONType. Can include imports, multiple types, or any valid TypeScript.`),
+    UserSearchPredicateAPI: z.string().describe(`
+        * * Field Name: UserSearchPredicateAPI
+        * * Display Name: User Search Predicate
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Contains
+        * * Description: Search predicate controlling how user search queries match against this field. Valid values: BeginsWith, Contains, EndsWith, Exact.`),
+    AutoUpdateUserSearchPredicate: z.boolean().describe(`
+        * * Field Name: AutoUpdateUserSearchPredicate
+        * * Display Name: Auto Update Search Predicate
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When true, CodeGen LLM can auto-set the UserSearchPredicateAPI value during code generation runs.`),
+    AutoUpdateFullTextSearch: z.boolean().describe(`
+        * * Field Name: AutoUpdateFullTextSearch
+        * * Display Name: Auto Update Full Text Search
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When true, CodeGen LLM can auto-set the FullTextSearchEnabled value during code generation runs.`),
+    AutoUpdateExtendedType: z.boolean().describe(`
+        * * Field Name: AutoUpdateExtendedType
+        * * Display Name: Auto Update Extended Type
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When true (default), CodeGen can automatically suggest and apply ExtendedType values (GeoLatitude, GeoLongitude, GeoAddress, etc.) during LLM field categorization. Set to 0 to lock admin-specified ExtendedType.`),
     FieldCodeName: z.string().nullable().describe(`
         * * Field Name: FieldCodeName
         * * Display Name: Field Code Name
@@ -14517,19 +14783,19 @@ export const MJEntityFieldSchema = z.object({
         * * SQL Data Type: nvarchar(MAX)`),
     RelatedEntity: z.string().nullable().describe(`
         * * Field Name: RelatedEntity
-        * * Display Name: Related Entity
+        * * Display Name: Related Entity Name
         * * SQL Data Type: nvarchar(255)`),
     RelatedEntitySchemaName: z.string().nullable().describe(`
         * * Field Name: RelatedEntitySchemaName
-        * * Display Name: Related Entity Schema Name
+        * * Display Name: Related Entity Schema
         * * SQL Data Type: nvarchar(255)`),
     RelatedEntityBaseTable: z.string().nullable().describe(`
         * * Field Name: RelatedEntityBaseTable
-        * * Display Name: Related Entity Base Table
+        * * Display Name: Related Entity Table
         * * SQL Data Type: nvarchar(255)`),
     RelatedEntityBaseView: z.string().nullable().describe(`
         * * Field Name: RelatedEntityBaseView
-        * * Display Name: Related Entity Base View
+        * * Display Name: Related Entity View
         * * SQL Data Type: nvarchar(255)`),
     RelatedEntityCodeName: z.string().nullable().describe(`
         * * Field Name: RelatedEntityCodeName
@@ -15461,6 +15727,82 @@ export const MJFileEntityRecordLinkSchema = z.object({
 export type MJFileEntityRecordLinkEntityType = z.infer<typeof MJFileEntityRecordLinkSchema>;
 
 /**
+ * zod schema definition for the entity MJ: File Storage Account Permissions
+ */
+export const MJFileStorageAccountPermissionSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    FileStorageAccountID: z.string().describe(`
+        * * Field Name: FileStorageAccountID
+        * * Display Name: Storage Account
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: File Storage Accounts (vwFileStorageAccounts.ID)
+        * * Description: The storage account this permission applies to.`),
+    Type: z.union([z.literal('Everyone'), z.literal('Role'), z.literal('User')]).describe(`
+        * * Field Name: Type
+        * * Display Name: Permission Type
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Role
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Everyone
+    *   * Role
+    *   * User
+        * * Description: Permission type: User (requires UserID), Role (requires RoleID), or Everyone (both NULL).`),
+    UserID: z.string().nullable().describe(`
+        * * Field Name: UserID
+        * * Display Name: User
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: Required when Type is User. The specific user granted access to this storage account.`),
+    RoleID: z.string().nullable().describe(`
+        * * Field Name: RoleID
+        * * Display Name: Role
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Roles (vwRoles.ID)
+        * * Description: Required when Type is Role. The role granted access to this storage account.`),
+    CanRead: z.boolean().describe(`
+        * * Field Name: CanRead
+        * * Display Name: Can Read
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Whether the grantee can read/search files in this storage account.`),
+    CanWrite: z.boolean().describe(`
+        * * Field Name: CanWrite
+        * * Display Name: Can Write
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether the grantee can upload/modify files in this storage account.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    FileStorageAccount: z.string().describe(`
+        * * Field Name: FileStorageAccount
+        * * Display Name: Storage Account Name
+        * * SQL Data Type: nvarchar(200)`),
+    User: z.string().nullable().describe(`
+        * * Field Name: User
+        * * Display Name: User Name
+        * * SQL Data Type: nvarchar(100)`),
+    Role: z.string().nullable().describe(`
+        * * Field Name: Role
+        * * Display Name: Role Name
+        * * SQL Data Type: nvarchar(50)`),
+});
+
+export type MJFileStorageAccountPermissionEntityType = z.infer<typeof MJFileStorageAccountPermissionSchema>;
+
+/**
  * zod schema definition for the entity MJ: File Storage Accounts
  */
 export const MJFileStorageAccountSchema = z.object({
@@ -15502,9 +15844,15 @@ export const MJFileStorageAccountSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    IncludeInGlobalSearch: z.boolean().describe(`
+        * * Field Name: IncludeInGlobalSearch
+        * * Display Name: Include In Global Search
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When true, this storage account is included in universal/global search results. Only effective if the associated provider supports search (SupportsSearch = 1).`),
     Provider: z.string().describe(`
         * * Field Name: Provider
-        * * Display Name: Provider Name
+        * * Display Name: Provider Type
         * * SQL Data Type: nvarchar(50)`),
     Credential: z.string().describe(`
         * * Field Name: Credential
@@ -15802,6 +16150,72 @@ export const MJGeneratedCodeSchema = z.object({
 });
 
 export type MJGeneratedCodeEntityType = z.infer<typeof MJGeneratedCodeSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Instance Configurations
+ */
+export const MJInstanceConfigurationSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    FeatureKey: z.string().describe(`
+        * * Field Name: FeatureKey
+        * * Display Name: Feature Key
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Unique dot-notation key identifying the feature, e.g. Shell.SearchBar.Enabled.`),
+    Value: z.string().describe(`
+        * * Field Name: Value
+        * * Display Name: Current Value
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Current value for this feature setting.`),
+    ValueType: z.union([z.literal('boolean'), z.literal('json'), z.literal('number'), z.literal('string')]).describe(`
+        * * Field Name: ValueType
+        * * Display Name: Value Type
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: boolean
+    * * Value List Type: List
+    * * Possible Values 
+    *   * boolean
+    *   * json
+    *   * number
+    *   * string
+        * * Description: Data type of the value: boolean, string, number, or json.`),
+    Category: z.string().describe(`
+        * * Field Name: Category
+        * * Display Name: Admin Category
+        * * SQL Data Type: nvarchar(100)
+        * * Default Value: General
+        * * Description: Grouping category for admin UI display.`),
+    DisplayName: z.string().describe(`
+        * * Field Name: DisplayName
+        * * Display Name: Display Name
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Human-readable display name for the setting.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional extended description or help text for the setting.`),
+    DefaultValue: z.string().describe(`
+        * * Field Name: DefaultValue
+        * * Display Name: Default Value
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Factory default value. Used when resetting to defaults.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type MJInstanceConfigurationEntityType = z.infer<typeof MJInstanceConfigurationSchema>;
 
 /**
  * zod schema definition for the entity MJ: Integration Object Fields
@@ -19490,6 +19904,138 @@ export const MJRecordChangeSchema = z.object({
 export type MJRecordChangeEntityType = z.infer<typeof MJRecordChangeSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Record Geo Codes
+ */
+export const MJRecordGeoCodeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    EntityID: z.string().describe(`
+        * * Field Name: EntityID
+        * * Display Name: Entity
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+        * * Description: Foreign key to Entity. Identifies which entity this geocode belongs to.`),
+    RecordID: z.string().describe(`
+        * * Field Name: RecordID
+        * * Display Name: Record
+        * * SQL Data Type: nvarchar(450)
+        * * Description: MJ composite primary key format string identifying the source record (e.g., "ID|<uuid>"). Max 450 chars for SQL Server index support.`),
+    LocationType: z.string().describe(`
+        * * Field Name: LocationType
+        * * Display Name: Location Type
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: Primary
+        * * Description: Discriminator for multi-location entities. Default "Primary" for single-address entities. Multi-address examples: "Home", "Business", "Mailing", "PO Box".`),
+    Latitude: z.number().nullable().describe(`
+        * * Field Name: Latitude
+        * * Display Name: Latitude
+        * * SQL Data Type: decimal(10, 6)
+        * * Description: Geocoded latitude coordinate. NULL when Status is "pending" or "failed".`),
+    Longitude: z.number().nullable().describe(`
+        * * Field Name: Longitude
+        * * Display Name: Longitude
+        * * SQL Data Type: decimal(10, 6)
+        * * Description: Geocoded longitude coordinate. NULL when Status is "pending" or "failed".`),
+    Precision: z.union([z.literal('city'), z.literal('country'), z.literal('county'), z.literal('exact'), z.literal('postal_code'), z.literal('state_province')]).nullable().describe(`
+        * * Field Name: Precision
+        * * Display Name: Precision
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * city
+    *   * country
+    *   * county
+    *   * exact
+    *   * postal_code
+    *   * state_province
+        * * Description: Precision level of the geocoded result: exact (street address), postal_code, city, county, state_province, or country.`),
+    CountryID: z.string().nullable().describe(`
+        * * Field Name: CountryID
+        * * Display Name: Country
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Countries (vwCountries.ID)
+        * * Description: Optional FK to Country reference table. Populated alongside lat/lng to enable choropleth grouping without reverse-geocoding at render time.`),
+    StateProvinceID: z.string().nullable().describe(`
+        * * Field Name: StateProvinceID
+        * * Display Name: State Province
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: State Provinces (vwStateProvinces.ID)
+        * * Description: Optional FK to StateProvince reference table. Populated alongside lat/lng to enable state-level choropleth grouping.`),
+    Status: z.union([z.literal('failed'), z.literal('pending'), z.literal('success')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * failed
+    *   * pending
+    *   * success
+        * * Description: Current geocoding status: "pending" (awaiting geocode), "success" (geocoded), or "failed" (geocoding error). Used by scheduled job for retry logic.`),
+    ErrorMessage: z.string().nullable().describe(`
+        * * Field Name: ErrorMessage
+        * * Display Name: Error Message
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Error details when Status is "failed". Captures API error messages, rate limit info, etc. for debugging.`),
+    RetryCount: z.number().describe(`
+        * * Field Name: RetryCount
+        * * Display Name: Retry Count
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Number of geocoding attempts. Used for exponential backoff in the scheduled retry job. Stops retrying at configurable maxRetries (default 3).`),
+    SourceFieldHash: z.string().nullable().describe(`
+        * * Field Name: SourceFieldHash
+        * * Display Name: Source Field Hash
+        * * SQL Data Type: nvarchar(64)
+        * * Description: SHA-256 hash of the source field values that produced this geocode. When source fields change on save, the hash won't match and re-geocoding is triggered. Format: SHA-256(concat(field1, "|", field2, ...)).`),
+    GeocodedAt: z.date().nullable().describe(`
+        * * Field Name: GeocodedAt
+        * * Display Name: Geocoded At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Timestamp of when geocoding was last attempted (success or failure).`),
+    GeocodingSource: z.union([z.literal('google'), z.literal('ip_geolocation'), z.literal('manual'), z.literal('native'), z.literal('reference_data'), z.literal('reverse')]).nullable().describe(`
+        * * Field Name: GeocodingSource
+        * * Display Name: Geocoding Source
+        * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * google
+    *   * ip_geolocation
+    *   * manual
+    *   * native
+    *   * reference_data
+    *   * reverse
+        * * Description: How this geocode was produced: google (Google Geocoding API), reference_data (resolved via Country/StateProvince tables), manual (user-entered), ip_geolocation (IP lookup), native (copied from entity lat/lng fields), reverse (reverse geocode from coordinates).`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Entity: z.string().describe(`
+        * * Field Name: Entity
+        * * Display Name: Entity Name
+        * * SQL Data Type: nvarchar(255)`),
+    Country: z.string().nullable().describe(`
+        * * Field Name: Country
+        * * Display Name: Country Name
+        * * SQL Data Type: nvarchar(200)`),
+    StateProvince: z.string().nullable().describe(`
+        * * Field Name: StateProvince
+        * * Display Name: State Province Name
+        * * SQL Data Type: nvarchar(200)`),
+});
+
+export type MJRecordGeoCodeEntityType = z.infer<typeof MJRecordGeoCodeSchema>;
+
+/**
  * zod schema definition for the entity MJ: Record Links
  */
 export const MJRecordLinkSchema = z.object({
@@ -20900,6 +21446,102 @@ export const MJSchemaInfoSchema = z.object({
 export type MJSchemaInfoEntityType = z.infer<typeof MJSchemaInfoSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Search Providers
+ */
+export const MJSearchProviderSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Display name for this search provider (e.g., "Vector Search", "Algolia")`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Human-readable description of what this provider searches and how it works`),
+    DriverClass: z.string().describe(`
+        * * Field Name: DriverClass
+        * * Display Name: Driver Class
+        * * SQL Data Type: nvarchar(500)
+        * * Description: ClassFactory key used with @RegisterClass(ISearchProvider, DriverClass) to instantiate the provider at runtime`),
+    Status: z.union([z.literal('Active'), z.literal('Pending'), z.literal('Terminated')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Pending
+    *   * Terminated
+        * * Description: Provider lifecycle status: Pending (not yet activated), Active (in use), Terminated (disabled)`),
+    Priority: z.number().describe(`
+        * * Field Name: Priority
+        * * Display Name: Priority
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Execution priority (lower = higher priority). Controls provider ordering and can influence RRF weighting. Must be >= 0.`),
+    SupportsPreview: z.boolean().describe(`
+        * * Field Name: SupportsPreview
+        * * Display Name: Supports Preview
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Whether this provider should run during fast preview/autocomplete searches. Expensive providers (external APIs) may set this to 0.`),
+    MaxResultsOverride: z.number().nullable().describe(`
+        * * Field Name: MaxResultsOverride
+        * * Display Name: Max Results Override
+        * * SQL Data Type: int
+        * * Description: Optional per-provider cap on the number of results to return. Useful for rate-limited or pay-per-query external APIs. When NULL, uses the SearchEngine default.`),
+    ProviderConfig: z.string().nullable().describe(`
+        * * Field Name: ProviderConfig
+        * * Display Name: Provider Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional JSON configuration blob for provider-specific settings (e.g., API endpoints, index names, tuning parameters). Schema is provider-defined.`),
+    CredentialID: z.string().nullable().describe(`
+        * * Field Name: CredentialID
+        * * Display Name: Credential
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)
+        * * Description: Optional FK to the Credential entity for providers that require authentication (e.g., Algolia API key, external service credentials)`),
+    DisplayName: z.string().nullable().describe(`
+        * * Field Name: DisplayName
+        * * Display Name: Display Name
+        * * SQL Data Type: nvarchar(200)
+        * * Description: UI display name for this provider shown in filter facets and result grouping (e.g., "Database", "Semantic Search"). When NULL, falls back to the Name column.`),
+    Icon: z.string().nullable().describe(`
+        * * Field Name: Icon
+        * * Display Name: Icon
+        * * SQL Data Type: nvarchar(200)
+        * * Description: CSS icon class for UI display in filter facets and result badges (e.g., "fa-solid fa-database", "fa-solid fa-brain"). Supports any CSS-based icon library. When NULL, a default icon is used.`),
+    Comments: z.string().nullable().describe(`
+        * * Field Name: Comments
+        * * Display Name: Comments
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Free-form notes about this provider configuration`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Credential: z.string().nullable().describe(`
+        * * Field Name: Credential
+        * * Display Name: Credential Name
+        * * SQL Data Type: nvarchar(200)`),
+});
+
+export type MJSearchProviderEntityType = z.infer<typeof MJSearchProviderSchema>;
+
+/**
  * zod schema definition for the entity MJ: Skills
  */
 export const MJSkillSchema = z.object({
@@ -20999,6 +21641,74 @@ export const MJSQLDialectSchema = z.object({
 });
 
 export type MJSQLDialectEntityType = z.infer<typeof MJSQLDialectSchema>;
+
+/**
+ * zod schema definition for the entity MJ: State Provinces
+ */
+export const MJStateProvinceSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    CountryID: z.string().describe(`
+        * * Field Name: CountryID
+        * * Display Name: Country
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Countries (vwCountries.ID)
+        * * Description: Foreign key to Country. Establishes the parent country for this state/province.`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Full state/province name (e.g., "California", "Ontario").`),
+    Code: z.string().describe(`
+        * * Field Name: Code
+        * * Display Name: State Code
+        * * SQL Data Type: nvarchar(10)
+        * * Description: Short code within the country (e.g., "CA", "ON"). Unique per country via compound constraint.`),
+    ISO3166_2: z.string().describe(`
+        * * Field Name: ISO3166_2
+        * * Display Name: ISO 3166-2 Code
+        * * SQL Data Type: nvarchar(10)
+        * * Description: ISO 3166-2 subdivision code (e.g., "US-CA", "CA-ON"). Globally unique.`),
+    Latitude: z.number().nullable().describe(`
+        * * Field Name: Latitude
+        * * Display Name: Latitude
+        * * SQL Data Type: decimal(10, 6)
+        * * Description: Geographic centroid latitude. Used as fallback point for state-level geocoding.`),
+    Longitude: z.number().nullable().describe(`
+        * * Field Name: Longitude
+        * * Display Name: Longitude
+        * * SQL Data Type: decimal(10, 6)
+        * * Description: Geographic centroid longitude. Used as fallback point for state-level geocoding.`),
+    BoundaryGeoJSON: z.string().nullable().describe(`
+        * * Field Name: BoundaryGeoJSON
+        * * Display Name: Boundary GeoJSON
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Medium-resolution (~50m) GeoJSON boundary polygon for choropleth map rendering. Nullable. Total ~15-20MB for all states/provinces worldwide.`),
+    CommonAliases: z.string().nullable().describe(`
+        * * Field Name: CommonAliases
+        * * Display Name: Common Aliases
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of common aliases (e.g., ["Calif.","California","Cal"]). Used by GeoResolver for fuzzy text-to-state matching.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Country: z.string().describe(`
+        * * Field Name: Country
+        * * Display Name: Country Name
+        * * SQL Data Type: nvarchar(200)`),
+});
+
+export type MJStateProvinceEntityType = z.infer<typeof MJStateProvinceSchema>;
 
 /**
  * zod schema definition for the entity MJ: Tag Audit Logs
@@ -23764,6 +24474,16 @@ export const MJVectorDatabaseSchema = z.object({
         * * Display Name: Configuration
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON configuration settings for this vector database provider. Stores provider-specific connection settings like custom host URLs, authentication configuration, timeouts, retry policies, and batch size limits. NULL means use defaults from environment variables or provider defaults.`),
+    CredentialID: z.string().nullable().describe(`
+        * * Field Name: CredentialID
+        * * Display Name: Credential
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)
+        * * Description: Optional link to a stored credential containing the API key and any other authentication details for this vector database provider. When set, the Credential Engine decrypts and supplies the key at runtime. When NULL, the system falls back to the environment variable AI_VENDOR_API_KEY__<ClassKey>.`),
+    Credential: z.string().nullable().describe(`
+        * * Field Name: Credential
+        * * Display Name: Credential Name
+        * * SQL Data Type: nvarchar(200)`),
 });
 
 export type MJVectorDatabaseEntityType = z.infer<typeof MJVectorDatabaseSchema>;
@@ -27180,12 +27900,35 @@ export class MJAIAgentCategoryEntity extends BaseEntity<MJAIAgentCategoryEntityT
     }
 
     /**
+    * * Field Name: DefaultStorageAccountID
+    * * Display Name: Default Storage Account
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: File Storage Accounts (vwFileStorageAccounts.ID)
+    * * Description: Default file storage account for agents in this category. Inherited by child categories that do not define their own value — resolution walks up the ParentID tree until a non-null value is found. Overrides the Type-level default. FK to FileStorageAccount.
+    */
+    get DefaultStorageAccountID(): string | null {
+        return this.Get('DefaultStorageAccountID');
+    }
+    set DefaultStorageAccountID(value: string | null) {
+        this.Set('DefaultStorageAccountID', value);
+    }
+
+    /**
     * * Field Name: Parent
-    * * Display Name: Parent Name
+    * * Display Name: Parent
     * * SQL Data Type: nvarchar(200)
     */
     get Parent(): string | null {
         return this.Get('Parent');
+    }
+
+    /**
+    * * Field Name: DefaultStorageAccount
+    * * Display Name: Default Storage Account Name
+    * * SQL Data Type: nvarchar(200)
+    */
+    get DefaultStorageAccount(): string | null {
+        return this.Get('DefaultStorageAccount');
     }
 
     /**
@@ -33132,7 +33875,7 @@ export class MJAIAgentTypeEntity extends BaseEntity<MJAIAgentTypeEntityType> {
 
     /**
     * * Field Name: PromptParamsSchema
-    * * Display Name: Prompt Parameters Schema
+    * * Display Name: Prompt Params Schema
     * * SQL Data Type: nvarchar(MAX)
     * * Description: JSON Schema defining the available prompt parameters for this agent type. Includes property definitions with types, defaults, and descriptions. Used by agents of this type to customize which prompt sections are included in the system prompt. The schema follows JSON Schema draft-07 format.
     */
@@ -33157,12 +33900,35 @@ export class MJAIAgentTypeEntity extends BaseEntity<MJAIAgentTypeEntityType> {
     }
 
     /**
+    * * Field Name: DefaultStorageAccountID
+    * * Display Name: Default Storage Account
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: File Storage Accounts (vwFileStorageAccounts.ID)
+    * * Description: Default file storage account for agents of this type. Lowest priority in the resolution chain (Type → Category tree → Agent → Runtime override). When set, all agents of this type use this storage account unless overridden at a more specific level. FK to FileStorageAccount.
+    */
+    get DefaultStorageAccountID(): string | null {
+        return this.Get('DefaultStorageAccountID');
+    }
+    set DefaultStorageAccountID(value: string | null) {
+        this.Set('DefaultStorageAccountID', value);
+    }
+
+    /**
     * * Field Name: SystemPrompt
-    * * Display Name: System Prompt Text
+    * * Display Name: System Prompt
     * * SQL Data Type: nvarchar(255)
     */
     get SystemPrompt(): string | null {
         return this.Get('SystemPrompt');
+    }
+
+    /**
+    * * Field Name: DefaultStorageAccount
+    * * Display Name: Default Storage Account Name
+    * * SQL Data Type: nvarchar(200)
+    */
+    get DefaultStorageAccount(): string | null {
+        return this.Get('DefaultStorageAccount');
     }
 }
 
@@ -33503,7 +34269,7 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
 
     /**
     * * Field Name: ContextCompressionMessageThreshold
-    * * Display Name: Compression Message Threshold
+    * * Display Name: Context Compression Message Threshold
     * * SQL Data Type: int
     * * Description: Number of messages that triggers context compression when EnableContextCompression is true.
     */
@@ -33516,7 +34282,7 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
 
     /**
     * * Field Name: ContextCompressionPromptID
-    * * Display Name: Compression Prompt
+    * * Display Name: Context Compression Prompt
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
     */
@@ -33529,7 +34295,7 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
 
     /**
     * * Field Name: ContextCompressionMessageRetentionCount
-    * * Display Name: Compression Message Retention Count
+    * * Display Name: Context Compression Message Retention Count
     * * SQL Data Type: int
     * * Description: Number of recent messages to keep uncompressed when context compression is applied.
     */
@@ -34261,6 +35027,20 @@ if this limit is exceeded.
     }
 
     /**
+    * * Field Name: DefaultStorageAccountID
+    * * Display Name: Default Storage Account ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: File Storage Accounts (vwFileStorageAccounts.ID)
+    * * Description: Default file storage account for this specific agent. Overrides both Type-level and Category-level defaults. Can be further overridden at runtime via ExecuteAgentParams.override.storageAccountId. FK to FileStorageAccount.
+    */
+    get DefaultStorageAccountID(): string | null {
+        return this.Get('DefaultStorageAccountID');
+    }
+    set DefaultStorageAccountID(value: string | null) {
+        this.Set('DefaultStorageAccountID', value);
+    }
+
+    /**
     * * Field Name: Parent
     * * Display Name: Parent Name
     * * SQL Data Type: nvarchar(255)
@@ -34271,7 +35051,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: ContextCompressionPrompt
-    * * Display Name: Context Compression Prompt Name
+    * * Display Name: Context Compression Prompt
     * * SQL Data Type: nvarchar(255)
     */
     get ContextCompressionPrompt(): string | null {
@@ -34321,6 +35101,15 @@ if this limit is exceeded.
     */
     get Category(): string | null {
         return this.Get('Category');
+    }
+
+    /**
+    * * Field Name: DefaultStorageAccount
+    * * Display Name: Default Storage Account
+    * * SQL Data Type: nvarchar(200)
+    */
+    get DefaultStorageAccount(): string | null {
+        return this.Get('DefaultStorageAccount');
     }
 
     /**
@@ -42942,6 +43731,145 @@ export class MJApplicationEntityEntity extends BaseEntity<MJApplicationEntityEnt
 
 
 /**
+ * MJ: Application Roles - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ApplicationRole
+ * * Base View: vwApplicationRoles
+ * * @description Controls which roles can access and administer specific applications. When no ApplicationRole records exist for an application, all roles can access it (open access). When at least one record exists, only roles with CanAccess=1 are permitted.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Application Roles')
+export class MJApplicationRoleEntity extends BaseEntity<MJApplicationRoleEntityType> {
+    /**
+    * Loads the MJ: Application Roles record from the database
+    * @param ID: string - primary key value to load the MJ: Application Roles record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJApplicationRoleEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ApplicationID
+    * * Display Name: Application
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Applications (vwApplications.ID)
+    * * Description: Foreign key to the Application this role grant applies to
+    */
+    get ApplicationID(): string {
+        return this.Get('ApplicationID');
+    }
+    set ApplicationID(value: string) {
+        this.Set('ApplicationID', value);
+    }
+
+    /**
+    * * Field Name: RoleID
+    * * Display Name: Role
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Roles (vwRoles.ID)
+    * * Description: Foreign key to the Role being granted or denied access
+    */
+    get RoleID(): string {
+        return this.Get('RoleID');
+    }
+    set RoleID(value: string) {
+        this.Set('RoleID', value);
+    }
+
+    /**
+    * * Field Name: CanAccess
+    * * Display Name: Can Access
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When true, users in this role can access the application. When false, this record acts as an explicit deny for the role.
+    */
+    get CanAccess(): boolean {
+        return this.Get('CanAccess');
+    }
+    set CanAccess(value: boolean) {
+        this.Set('CanAccess', value);
+    }
+
+    /**
+    * * Field Name: CanAdmin
+    * * Display Name: Can Admin
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When true, users in this role can modify application settings, manage nav items, and configure the application.
+    */
+    get CanAdmin(): boolean {
+        return this.Get('CanAdmin');
+    }
+    set CanAdmin(value: boolean) {
+        this.Set('CanAdmin', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Application
+    * * Display Name: Application Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Application(): string {
+        return this.Get('Application');
+    }
+
+    /**
+    * * Field Name: Role
+    * * Display Name: Role Name
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Role(): string {
+        return this.Get('Role');
+    }
+}
+
+
+/**
  * MJ: Application Settings - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: ApplicationSetting
@@ -43752,6 +44680,24 @@ export class MJArtifactTypeEntity extends BaseEntity<MJArtifactTypeEntityType> {
     }
 
     /**
+    * * Field Name: ContentCategory
+    * * Display Name: Content Category
+    * * SQL Data Type: nvarchar(10)
+    * * Default Value: Text
+    * * Value List Type: List
+    * * Possible Values 
+    *   * File
+    *   * Text
+    * * Description: Classifies whether this artifact type stores text content ('Text', the default for all existing types) or a binary file in MJStorage ('File'). Used by AgentRunner and viewer components to route file-based artifacts correctly.
+    */
+    get ContentCategory(): 'File' | 'Text' {
+        return this.Get('ContentCategory');
+    }
+    set ContentCategory(value: 'File' | 'Text') {
+        this.Set('ContentCategory', value);
+    }
+
+    /**
     * * Field Name: Parent
     * * Display Name: Parent
     * * SQL Data Type: nvarchar(100)
@@ -44106,7 +45052,7 @@ export class MJArtifactVersionEntity extends BaseEntity<MJArtifactVersionEntityT
 
     /**
     * * Field Name: ArtifactID
-    * * Display Name: Artifact ID
+    * * Display Name: Artifact
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Artifacts (vwArtifacts.ID)
     */
@@ -44171,7 +45117,7 @@ export class MJArtifactVersionEntity extends BaseEntity<MJArtifactVersionEntityT
 
     /**
     * * Field Name: UserID
-    * * Display Name: User ID
+    * * Display Name: User
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     */
@@ -44242,6 +45188,77 @@ export class MJArtifactVersionEntity extends BaseEntity<MJArtifactVersionEntityT
     }
 
     /**
+    * * Field Name: FileID
+    * * Display Name: File
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Files (vwFiles.ID)
+    * * Description: Foreign key to the MJ: Files entity. When ContentMode is 'File', this references the binary file stored in MJStorage. NULL when ContentMode is 'Text'.
+    */
+    get FileID(): string | null {
+        return this.Get('FileID');
+    }
+    set FileID(value: string | null) {
+        this.Set('FileID', value);
+    }
+
+    /**
+    * * Field Name: ContentMode
+    * * Display Name: Content Mode
+    * * SQL Data Type: nvarchar(10)
+    * * Default Value: Text
+    * * Value List Type: List
+    * * Possible Values 
+    *   * File
+    *   * Text
+    * * Description: Determines how artifact content is stored. 'Text' (default) means the Content column holds the data. 'File' means FileID references a binary file in MJStorage and Content is unused.
+    */
+    get ContentMode(): 'File' | 'Text' {
+        return this.Get('ContentMode');
+    }
+    set ContentMode(value: 'File' | 'Text') {
+        this.Set('ContentMode', value);
+    }
+
+    /**
+    * * Field Name: MimeType
+    * * Display Name: MIME Type
+    * * SQL Data Type: nvarchar(200)
+    * * Description: MIME type of the stored file (e.g. application/pdf). Denormalized from the File entity for display without joins. Only populated when ContentMode is 'File'.
+    */
+    get MimeType(): string | null {
+        return this.Get('MimeType');
+    }
+    set MimeType(value: string | null) {
+        this.Set('MimeType', value);
+    }
+
+    /**
+    * * Field Name: FileName
+    * * Display Name: File Name
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Original filename of the stored file (e.g. report.pdf). Denormalized from the File entity for display without joins. Only populated when ContentMode is 'File'.
+    */
+    get FileName(): string | null {
+        return this.Get('FileName');
+    }
+    set FileName(value: string | null) {
+        this.Set('FileName', value);
+    }
+
+    /**
+    * * Field Name: ContentSizeBytes
+    * * Display Name: Content Size Bytes
+    * * SQL Data Type: bigint
+    * * Description: Size of the stored file in bytes. Denormalized for display without loading the file. Only populated when ContentMode is 'File'.
+    */
+    get ContentSizeBytes(): number | null {
+        return this.Get('ContentSizeBytes');
+    }
+    set ContentSizeBytes(value: number | null) {
+        this.Set('ContentSizeBytes', value);
+    }
+
+    /**
     * * Field Name: Artifact
     * * Display Name: Artifact
     * * SQL Data Type: nvarchar(255)
@@ -44257,6 +45274,15 @@ export class MJArtifactVersionEntity extends BaseEntity<MJArtifactVersionEntityT
     */
     get User(): string {
         return this.Get('User');
+    }
+
+    /**
+    * * Field Name: File
+    * * Display Name: File
+    * * SQL Data Type: nvarchar(500)
+    */
+    get File(): string | null {
+        return this.Get('File');
     }
 }
 
@@ -54257,6 +55283,175 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
 
 /**
+ * MJ: Countries - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: Country
+ * * Base View: vwCountries
+ * * @description Reference table for countries with ISO 3166-1 codes, geographic centroids, and optional medium-resolution boundary GeoJSON for choropleth rendering. Seeded with ~250 countries.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Countries')
+export class MJCountryEntity extends BaseEntity<MJCountryEntityType> {
+    /**
+    * Loads the MJ: Countries record from the database
+    * @param ID: string - primary key value to load the MJ: Countries record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJCountryEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Full country name (e.g., "United States", "Canada").
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: ISO2
+    * * Display Name: ISO 2
+    * * SQL Data Type: nvarchar(2)
+    * * Description: ISO 3166-1 alpha-2 code (e.g., "US", "CA"). Unique business key for lookups.
+    */
+    get ISO2(): string {
+        return this.Get('ISO2');
+    }
+    set ISO2(value: string) {
+        this.Set('ISO2', value);
+    }
+
+    /**
+    * * Field Name: ISO3
+    * * Display Name: ISO 3
+    * * SQL Data Type: nvarchar(3)
+    * * Description: ISO 3166-1 alpha-3 code (e.g., "USA", "CAN"). Unique business key for lookups.
+    */
+    get ISO3(): string {
+        return this.Get('ISO3');
+    }
+    set ISO3(value: string) {
+        this.Set('ISO3', value);
+    }
+
+    /**
+    * * Field Name: NumericCode
+    * * Display Name: Numeric Code
+    * * SQL Data Type: int
+    * * Description: ISO 3166-1 numeric code (e.g., 840 for US, 124 for Canada).
+    */
+    get NumericCode(): number | null {
+        return this.Get('NumericCode');
+    }
+    set NumericCode(value: number | null) {
+        this.Set('NumericCode', value);
+    }
+
+    /**
+    * * Field Name: Latitude
+    * * Display Name: Latitude
+    * * SQL Data Type: decimal(10, 6)
+    * * Description: Geographic centroid latitude. Used as fallback point for country-level geocoding.
+    */
+    get Latitude(): number | null {
+        return this.Get('Latitude');
+    }
+    set Latitude(value: number | null) {
+        this.Set('Latitude', value);
+    }
+
+    /**
+    * * Field Name: Longitude
+    * * Display Name: Longitude
+    * * SQL Data Type: decimal(10, 6)
+    * * Description: Geographic centroid longitude. Used as fallback point for country-level geocoding.
+    */
+    get Longitude(): number | null {
+        return this.Get('Longitude');
+    }
+    set Longitude(value: number | null) {
+        this.Set('Longitude', value);
+    }
+
+    /**
+    * * Field Name: BoundaryGeoJSON
+    * * Display Name: Boundary GeoJSON
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Medium-resolution (~50m) GeoJSON boundary polygon for choropleth map rendering. Nullable — point map falls back to centroid if absent. Total ~3MB for all countries.
+    */
+    get BoundaryGeoJSON(): string | null {
+        return this.Get('BoundaryGeoJSON');
+    }
+    set BoundaryGeoJSON(value: string | null) {
+        this.Set('BoundaryGeoJSON', value);
+    }
+
+    /**
+    * * Field Name: CommonAliases
+    * * Display Name: Common Aliases
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of common aliases and alternate names (e.g., ["United States","USA","U.S.","America"]). Used by GeoResolver for fuzzy text-to-country matching.
+    */
+    get CommonAliases(): string | null {
+        return this.Get('CommonAliases');
+    }
+    set CommonAliases(value: string | null) {
+        this.Set('CommonAliases', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
  * MJ: Credential Categories - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: CredentialCategory
@@ -58842,7 +60037,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: ParentID
-    * * Display Name: Parent ID
+    * * Display Name: Parent
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
     */
@@ -59095,7 +60290,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: AllowUserSearchAPI
-    * * Display Name: Allow User Search API
+    * * Display Name: Allow User Search
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Enabling this bit will result in search being possible at the API and UI layers
@@ -59109,7 +60304,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: FullTextSearchEnabled
-    * * Display Name: Full Text Search Enabled
+    * * Display Name: Full-Text Search Enabled
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Whether full-text search indexing is enabled for this entity.
@@ -59123,7 +60318,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: FullTextCatalog
-    * * Display Name: Full Text Catalog
+    * * Display Name: Full-Text Catalog
     * * SQL Data Type: nvarchar(255)
     * * Description: Name of the SQL Server full-text catalog if search is enabled.
     */
@@ -59136,7 +60331,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: FullTextCatalogGenerated
-    * * Display Name: Full Text Catalog Generated
+    * * Display Name: Full-Text Catalog Generated
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: Indicates if the full-text catalog was auto-generated by CodeGen.
@@ -59150,7 +60345,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: FullTextIndex
-    * * Display Name: Full Text Index
+    * * Display Name: Full-Text Index
     * * SQL Data Type: nvarchar(255)
     * * Description: Name of the full-text index on this entity's table.
     */
@@ -59163,7 +60358,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: FullTextIndexGenerated
-    * * Display Name: Full Text Index Generated
+    * * Display Name: Full-Text Index Generated
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: Indicates if the full-text index was auto-generated by CodeGen.
@@ -59177,7 +60372,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: FullTextSearchFunction
-    * * Display Name: Full Text Search Function
+    * * Display Name: Search Function
     * * SQL Data Type: nvarchar(255)
     * * Description: Name of the function used for full-text searching this entity.
     */
@@ -59190,7 +60385,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: FullTextSearchFunctionGenerated
-    * * Display Name: Full Text Search Function Generated
+    * * Display Name: Search Function Generated
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: Indicates if the search function was auto-generated by CodeGen.
@@ -59218,7 +60413,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: spCreate
-    * * Display Name: Create Stored Procedure
+    * * Display Name: Create Procedure
     * * SQL Data Type: nvarchar(255)
     * * Description: Name of the stored procedure for creating records in this entity.
     */
@@ -59231,7 +60426,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: spUpdate
-    * * Display Name: Update Stored Procedure
+    * * Display Name: Update Procedure
     * * SQL Data Type: nvarchar(255)
     * * Description: Name of the stored procedure for updating records in this entity.
     */
@@ -59244,7 +60439,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: spDelete
-    * * Display Name: Delete Stored Procedure
+    * * Display Name: Delete Procedure
     * * SQL Data Type: nvarchar(255)
     * * Description: Name of the stored procedure for deleting records in this entity.
     */
@@ -59257,7 +60452,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: spCreateGenerated
-    * * Display Name: Create Procedure Generated
+    * * Display Name: Create SP Generated
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: Indicates if the create procedure was auto-generated by CodeGen.
@@ -59271,7 +60466,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: spUpdateGenerated
-    * * Display Name: Update Procedure Generated
+    * * Display Name: Update SP Generated
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: Indicates if the update procedure was auto-generated by CodeGen.
@@ -59285,7 +60480,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: spDeleteGenerated
-    * * Display Name: Delete Procedure Generated
+    * * Display Name: Delete SP Generated
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: Indicates if the delete procedure was auto-generated by CodeGen.
@@ -59345,7 +60540,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: spMatch
-    * * Display Name: Match Stored Procedure
+    * * Display Name: Match Procedure
     * * SQL Data Type: nvarchar(255)
     * * Description: When specified, this stored procedure is used to find matching records in this particular entity. The convention is to pass in the primary key(s) columns for the given entity to the procedure and the return will be zero to many rows where there is a column for each primary key field(s) and a ProbabilityScore (numeric(1,12)) column that has a 0 to 1 value of the probability of a match.
     */
@@ -59358,7 +60553,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: RelationshipDefaultDisplayType
-    * * Display Name: Relationship Default Display Type
+    * * Display Name: Default Relationship Display Type
     * * SQL Data Type: nvarchar(20)
     * * Default Value: Search
     * * Value List Type: List
@@ -59390,7 +60585,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: EntityObjectSubclassName
-    * * Display Name: Entity Object Subclass Name
+    * * Display Name: Subclass Name
     * * SQL Data Type: nvarchar(255)
     * * Description: TypeScript class name for the entity subclass in the codebase.
     */
@@ -59403,7 +60598,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: EntityObjectSubclassImport
-    * * Display Name: Entity Object Subclass Import
+    * * Display Name: Subclass Import Path
     * * SQL Data Type: nvarchar(255)
     * * Description: Import path for the entity subclass in the TypeScript codebase.
     */
@@ -59462,7 +60657,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: ScopeDefault
-    * * Display Name: Scope Default
+    * * Display Name: Default Scope
     * * SQL Data Type: nvarchar(100)
     * * Description: Optional, comma-delimited string indicating the default scope for entity visibility. Options include Users, Admins, AI, and All. Defaults to All when NULL. This is used for simple defaults for filtering entity visibility, not security enforcement.
     */
@@ -59475,7 +60670,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: RowsToPackWithSchema
-    * * Display Name: Rows To Pack With Schema
+    * * Display Name: Rows To Pack
     * * SQL Data Type: nvarchar(20)
     * * Default Value: None
     * * Value List Type: List
@@ -59494,7 +60689,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: RowsToPackSampleMethod
-    * * Display Name: Rows To Pack Sample Method
+    * * Display Name: Packing Sample Method
     * * SQL Data Type: nvarchar(20)
     * * Default Value: random
     * * Value List Type: List
@@ -59513,7 +60708,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: RowsToPackSampleCount
-    * * Display Name: Rows To Pack Sample Count
+    * * Display Name: Packing Sample Count
     * * SQL Data Type: int
     * * Default Value: 0
     * * Description: The number of rows to pack when RowsToPackWithSchema is set to Sample, based on the designated sampling method. Defaults to 0.
@@ -59527,7 +60722,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: RowsToPackSampleOrder
-    * * Display Name: Rows To Pack Sample Order
+    * * Display Name: Packing Sample Order
     * * SQL Data Type: nvarchar(MAX)
     * * Description: An optional ORDER BY clause for row packing when RowsToPackWithSchema is set to Sample. Allows custom ordering for selected entity data when using top n and bottom n.
     */
@@ -59540,7 +60735,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: AutoRowCountFrequency
-    * * Display Name: Auto Row Count Frequency
+    * * Display Name: Refresh Frequency (Hours)
     * * SQL Data Type: int
     * * Description: Frequency in hours for automatically performing row counts on this entity. If NULL, automatic row counting is disabled. If greater than 0, schedules recurring SELECT COUNT(*) queries at the specified interval.
     */
@@ -59566,7 +60761,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: RowCountRunAt
-    * * Display Name: Row Count Run At
+    * * Display Name: Last Counted At
     * * SQL Data Type: datetimeoffset
     * * Description: Timestamp indicating when the last automatic row count was performed for this entity.
     */
@@ -59621,6 +60816,104 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
     }
     set AllowMultipleSubtypes(value: boolean) {
         this.Set('AllowMultipleSubtypes', value);
+    }
+
+    /**
+    * * Field Name: AutoUpdateFullTextSearch
+    * * Display Name: Auto Update Search Settings
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When true, CodeGen LLM can auto-configure full-text search settings (FullTextSearchEnabled, catalog, index, function) during code generation runs.
+    */
+    get AutoUpdateFullTextSearch(): boolean {
+        return this.Get('AutoUpdateFullTextSearch');
+    }
+    set AutoUpdateFullTextSearch(value: boolean) {
+        this.Set('AutoUpdateFullTextSearch', value);
+    }
+
+    /**
+    * * Field Name: AutoUpdateAllowUserSearchAPI
+    * * Display Name: Auto Update Search API
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When true, CodeGen LLM can auto-set AllowUserSearchAPI during code generation runs.
+    */
+    get AutoUpdateAllowUserSearchAPI(): boolean {
+        return this.Get('AutoUpdateAllowUserSearchAPI');
+    }
+    set AutoUpdateAllowUserSearchAPI(value: boolean) {
+        this.Set('AutoUpdateAllowUserSearchAPI', value);
+    }
+
+    /**
+    * * Field Name: TrustServerCacheCompletely
+    * * Display Name: Trust Server Cache
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When true (default), the server-side RunView cache will store and return cached results for this entity, trusting that all mutations flow through BaseEntity.Save() which fires cache invalidation events. Set to false for entities whose rows are created as side-effects of other operations via raw SQL (e.g., Record Changes created by spCreateRecordChange_Internal), since those inserts bypass BaseEntity and never trigger cache invalidation.
+    */
+    get TrustServerCacheCompletely(): boolean {
+        return this.Get('TrustServerCacheCompletely');
+    }
+    set TrustServerCacheCompletely(value: boolean) {
+        this.Set('TrustServerCacheCompletely', value);
+    }
+
+    /**
+    * * Field Name: SupportsGeoCoding
+    * * Display Name: Supports Geo-Coding
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When true, CodeGen generates geo-aware subclass code, adds __mj_Latitude/__mj_Longitude virtual fields to the base view, and the UI shows a map view toggle. Auto-set by CodeGen when LLM detects geo-capable fields (address, lat/lng, etc.).
+    */
+    get SupportsGeoCoding(): boolean {
+        return this.Get('SupportsGeoCoding');
+    }
+    set SupportsGeoCoding(value: boolean) {
+        this.Set('SupportsGeoCoding', value);
+    }
+
+    /**
+    * * Field Name: AutoUpdateSupportsGeoCoding
+    * * Display Name: Auto Update Geo-Coding
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When true (default), CodeGen can automatically set SupportsGeoCoding based on LLM analysis of entity fields. Set to 0 to lock the value and prevent CodeGen from changing it.
+    */
+    get AutoUpdateSupportsGeoCoding(): boolean {
+        return this.Get('AutoUpdateSupportsGeoCoding');
+    }
+    set AutoUpdateSupportsGeoCoding(value: boolean) {
+        this.Set('AutoUpdateSupportsGeoCoding', value);
+    }
+
+    /**
+    * * Field Name: AllowCaching
+    * * Display Name: Allow Caching
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Controls whether this entity participates in server-side and client-side caching. When false, all cache operations (PreRunView checks, auto-cache storage, BaseEntity event fingerprint scans, client-side IndexedDB cache) are skipped entirely. This column is the single source of truth at runtime; schema-level defaults are applied at CodeGen time via newEntityDefaults.AllowCachingBySchema.
+    */
+    get AllowCaching(): boolean {
+        return this.Get('AllowCaching');
+    }
+    set AllowCaching(value: boolean) {
+        this.Set('AllowCaching', value);
+    }
+
+    /**
+    * * Field Name: DetectExternalChanges
+    * * Display Name: Detect External Changes
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When set to 1 AND TrackRecordChanges is also 1, the external change detection system will scan this entity for changes made outside the MJ framework (direct SQL, third-party tools, etc.) and replay them through Save() to create proper RecordChange audit entries. Default is 0 (opt-out) because most entities, especially __mj schema metadata tables, are managed by migrations/CodeGen and should not be scanned.
+    */
+    get DetectExternalChanges(): boolean {
+        return this.Get('DetectExternalChanges');
+    }
+    set DetectExternalChanges(value: boolean) {
+        this.Set('DetectExternalChanges', value);
     }
 
     /**
@@ -61685,7 +62978,7 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
 
     /**
     * * Field Name: EntityID
-    * * Display Name: Entity
+    * * Display Name: Entity ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
     */
@@ -61797,7 +63090,7 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
 
     /**
     * * Field Name: Type
-    * * Display Name: Type
+    * * Display Name: Data Type
     * * SQL Data Type: nvarchar(100)
     * * Description: SQL Data type (auto maintained by CodeGen)
     */
@@ -61896,6 +63189,13 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
     *   * Email
     *   * FaceTime
     *   * Geo
+    *   * GeoAddress
+    *   * GeoCity
+    *   * GeoCountry
+    *   * GeoLatitude
+    *   * GeoLongitude
+    *   * GeoPostalCode
+    *   * GeoStateProvince
     *   * MSTeams
     *   * Other
     *   * SIP
@@ -61907,10 +63207,10 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
     *   * ZoomMtg
     * * Description: Defines extended behaviors for a field such as for Email, Web URLs, Code, etc.
     */
-    get ExtendedType(): 'Code' | 'Email' | 'FaceTime' | 'Geo' | 'MSTeams' | 'Other' | 'SIP' | 'SMS' | 'Skype' | 'Tel' | 'URL' | 'WhatsApp' | 'ZoomMtg' | null {
+    get ExtendedType(): 'Code' | 'Email' | 'FaceTime' | 'Geo' | 'GeoAddress' | 'GeoCity' | 'GeoCountry' | 'GeoLatitude' | 'GeoLongitude' | 'GeoPostalCode' | 'GeoStateProvince' | 'MSTeams' | 'Other' | 'SIP' | 'SMS' | 'Skype' | 'Tel' | 'URL' | 'WhatsApp' | 'ZoomMtg' | null {
         return this.Get('ExtendedType');
     }
-    set ExtendedType(value: 'Code' | 'Email' | 'FaceTime' | 'Geo' | 'MSTeams' | 'Other' | 'SIP' | 'SMS' | 'Skype' | 'Tel' | 'URL' | 'WhatsApp' | 'ZoomMtg' | null) {
+    set ExtendedType(value: 'Code' | 'Email' | 'FaceTime' | 'Geo' | 'GeoAddress' | 'GeoCity' | 'GeoCountry' | 'GeoLatitude' | 'GeoLongitude' | 'GeoPostalCode' | 'GeoStateProvince' | 'MSTeams' | 'Other' | 'SIP' | 'SMS' | 'Skype' | 'Tel' | 'URL' | 'WhatsApp' | 'ZoomMtg' | null) {
         this.Set('ExtendedType', value);
     }
 
@@ -62005,7 +63305,7 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
 
     /**
     * * Field Name: IncludeInUserSearchAPI
-    * * Display Name: Include In User Search API
+    * * Display Name: Include In User Search
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: If set to 1, this column will be included in user search queries for both traditional and full text search
@@ -62033,7 +63333,7 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
 
     /**
     * * Field Name: UserSearchParamFormatAPI
-    * * Display Name: User Search Param Format API
+    * * Display Name: Search Param Format
     * * SQL Data Type: nvarchar(500)
     * * Description: NULL
     */
@@ -62117,7 +63417,7 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
 
     /**
     * * Field Name: RelatedEntityFieldName
-    * * Display Name: Related Entity Field Name
+    * * Display Name: Related Entity Field
     * * SQL Data Type: nvarchar(255)
     * * Description: Name of the field in the Related Entity that this field links to (auto maintained by CodeGen)
     */
@@ -62130,7 +63430,7 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
 
     /**
     * * Field Name: IncludeRelatedEntityNameFieldInBaseView
-    * * Display Name: Include Related Entity Name Field In Base View
+    * * Display Name: Include Related Name In View
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: If set to 1, the "Name" field of the Related Entity will be included in this entity as a virtual field
@@ -62144,7 +63444,7 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
 
     /**
     * * Field Name: RelatedEntityNameFieldMap
-    * * Display Name: Related Entity Name Field Map
+    * * Display Name: Related Entity Name Map
     * * SQL Data Type: nvarchar(255)
     * * Description: For foreign key fields, maps which field in the related entity contains the display name. This is used by CodeGen to automatically add in virtual fields for the "Name Field" of the related entity.
     */
@@ -62217,7 +63517,7 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
 
     /**
     * * Field Name: AutoUpdateRelatedEntityInfo
-    * * Display Name: Auto Update Related Entity Info
+    * * Display Name: Auto Update Related Info
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: Indicates whether the related entity information should be automatically updated from the database schema. When set to 0, relationships not part of the database schema can be manually defined at the application and AI agent level. Defaults to 1.
@@ -62325,7 +63625,7 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
 
     /**
     * * Field Name: AutoUpdateIncludeInUserSearchAPI
-    * * Display Name: Auto Update Include In User Search API
+    * * Display Name: Auto Update Search Inclusion
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: When 1, allows system/LLM to auto-update IncludeInUserSearchAPI during CodeGen; when 0, user has locked this field
@@ -62475,6 +63775,62 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
     }
 
     /**
+    * * Field Name: UserSearchPredicateAPI
+    * * Display Name: User Search Predicate
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Contains
+    * * Description: Search predicate controlling how user search queries match against this field. Valid values: BeginsWith, Contains, EndsWith, Exact.
+    */
+    get UserSearchPredicateAPI(): string {
+        return this.Get('UserSearchPredicateAPI');
+    }
+    set UserSearchPredicateAPI(value: string) {
+        this.Set('UserSearchPredicateAPI', value);
+    }
+
+    /**
+    * * Field Name: AutoUpdateUserSearchPredicate
+    * * Display Name: Auto Update Search Predicate
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When true, CodeGen LLM can auto-set the UserSearchPredicateAPI value during code generation runs.
+    */
+    get AutoUpdateUserSearchPredicate(): boolean {
+        return this.Get('AutoUpdateUserSearchPredicate');
+    }
+    set AutoUpdateUserSearchPredicate(value: boolean) {
+        this.Set('AutoUpdateUserSearchPredicate', value);
+    }
+
+    /**
+    * * Field Name: AutoUpdateFullTextSearch
+    * * Display Name: Auto Update Full Text Search
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When true, CodeGen LLM can auto-set the FullTextSearchEnabled value during code generation runs.
+    */
+    get AutoUpdateFullTextSearch(): boolean {
+        return this.Get('AutoUpdateFullTextSearch');
+    }
+    set AutoUpdateFullTextSearch(value: boolean) {
+        this.Set('AutoUpdateFullTextSearch', value);
+    }
+
+    /**
+    * * Field Name: AutoUpdateExtendedType
+    * * Display Name: Auto Update Extended Type
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When true (default), CodeGen can automatically suggest and apply ExtendedType values (GeoLatitude, GeoLongitude, GeoAddress, etc.) during LLM field categorization. Set to 0 to lock admin-specified ExtendedType.
+    */
+    get AutoUpdateExtendedType(): boolean {
+        return this.Get('AutoUpdateExtendedType');
+    }
+    set AutoUpdateExtendedType(value: boolean) {
+        this.Set('AutoUpdateExtendedType', value);
+    }
+
+    /**
     * * Field Name: FieldCodeName
     * * Display Name: Field Code Name
     * * SQL Data Type: nvarchar(MAX)
@@ -62539,7 +63895,7 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
 
     /**
     * * Field Name: RelatedEntity
-    * * Display Name: Related Entity
+    * * Display Name: Related Entity Name
     * * SQL Data Type: nvarchar(255)
     */
     get RelatedEntity(): string | null {
@@ -62548,7 +63904,7 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
 
     /**
     * * Field Name: RelatedEntitySchemaName
-    * * Display Name: Related Entity Schema Name
+    * * Display Name: Related Entity Schema
     * * SQL Data Type: nvarchar(255)
     */
     get RelatedEntitySchemaName(): string | null {
@@ -62557,7 +63913,7 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
 
     /**
     * * Field Name: RelatedEntityBaseTable
-    * * Display Name: Related Entity Base Table
+    * * Display Name: Related Entity Table
     * * SQL Data Type: nvarchar(255)
     */
     get RelatedEntityBaseTable(): string | null {
@@ -62566,7 +63922,7 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
 
     /**
     * * Field Name: RelatedEntityBaseView
-    * * Display Name: Related Entity Base View
+    * * Display Name: Related Entity View
     * * SQL Data Type: nvarchar(255)
     */
     get RelatedEntityBaseView(): string | null {
@@ -64994,6 +66350,224 @@ export class MJFileEntityRecordLinkEntity extends BaseEntity<MJFileEntityRecordL
 
 
 /**
+ * MJ: File Storage Account Permissions - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: FileStorageAccountPermission
+ * * Base View: vwFileStorageAccountPermissions
+ * * @description Controls which users and roles can access specific file storage accounts. If no permission records exist for an account, it is accessible to everyone (backwards compatible).
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: File Storage Account Permissions')
+export class MJFileStorageAccountPermissionEntity extends BaseEntity<MJFileStorageAccountPermissionEntityType> {
+    /**
+    * Loads the MJ: File Storage Account Permissions record from the database
+    * @param ID: string - primary key value to load the MJ: File Storage Account Permissions record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJFileStorageAccountPermissionEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: File Storage Account Permissions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: Permissions must be correctly assigned based on the type: a 'User' type requires a User ID and no Role ID, a 'Role' type requires a Role ID and no User ID, and the 'Everyone' type requires both IDs to be empty. This ensures that permissions are always linked to the correct entity.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateTypeIdentifierAssignment(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Permissions must be correctly assigned based on the type: a 'User' type requires a User ID and no Role ID, a 'Role' type requires a Role ID and no User ID, and the 'Everyone' type requires both IDs to be empty. This ensures that permissions are always linked to the correct entity.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateTypeIdentifierAssignment(result: ValidationResult) {
+    	// Validates that the correct ID is provided or omitted based on the Type field
+    	const isUserValid = this.Type === "User" && this.UserID != null && this.RoleID == null;
+    	const isRoleValid = this.Type === "Role" && this.RoleID != null && this.UserID == null;
+    	const isEveryoneValid = this.Type === "Everyone" && this.UserID == null && this.RoleID == null;
+    
+    	if (!isUserValid && !isRoleValid && !isEveryoneValid) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"Type",
+    			"The identifier assignment is invalid for the selected Type. 'User' requires a User ID and no Role ID, 'Role' requires a Role ID and no User ID, and 'Everyone' requires both to be empty.",
+    			this.Type,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: FileStorageAccountID
+    * * Display Name: Storage Account
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: File Storage Accounts (vwFileStorageAccounts.ID)
+    * * Description: The storage account this permission applies to.
+    */
+    get FileStorageAccountID(): string {
+        return this.Get('FileStorageAccountID');
+    }
+    set FileStorageAccountID(value: string) {
+        this.Set('FileStorageAccountID', value);
+    }
+
+    /**
+    * * Field Name: Type
+    * * Display Name: Permission Type
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Role
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Everyone
+    *   * Role
+    *   * User
+    * * Description: Permission type: User (requires UserID), Role (requires RoleID), or Everyone (both NULL).
+    */
+    get Type(): 'Everyone' | 'Role' | 'User' {
+        return this.Get('Type');
+    }
+    set Type(value: 'Everyone' | 'Role' | 'User') {
+        this.Set('Type', value);
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: Required when Type is User. The specific user granted access to this storage account.
+    */
+    get UserID(): string | null {
+        return this.Get('UserID');
+    }
+    set UserID(value: string | null) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: RoleID
+    * * Display Name: Role
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Roles (vwRoles.ID)
+    * * Description: Required when Type is Role. The role granted access to this storage account.
+    */
+    get RoleID(): string | null {
+        return this.Get('RoleID');
+    }
+    set RoleID(value: string | null) {
+        this.Set('RoleID', value);
+    }
+
+    /**
+    * * Field Name: CanRead
+    * * Display Name: Can Read
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Whether the grantee can read/search files in this storage account.
+    */
+    get CanRead(): boolean {
+        return this.Get('CanRead');
+    }
+    set CanRead(value: boolean) {
+        this.Set('CanRead', value);
+    }
+
+    /**
+    * * Field Name: CanWrite
+    * * Display Name: Can Write
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether the grantee can upload/modify files in this storage account.
+    */
+    get CanWrite(): boolean {
+        return this.Get('CanWrite');
+    }
+    set CanWrite(value: boolean) {
+        this.Set('CanWrite', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: FileStorageAccount
+    * * Display Name: Storage Account Name
+    * * SQL Data Type: nvarchar(200)
+    */
+    get FileStorageAccount(): string {
+        return this.Get('FileStorageAccount');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string | null {
+        return this.Get('User');
+    }
+
+    /**
+    * * Field Name: Role
+    * * Display Name: Role Name
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Role(): string | null {
+        return this.Get('Role');
+    }
+}
+
+
+/**
  * MJ: File Storage Accounts - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: FileStorageAccount
@@ -65112,8 +66686,22 @@ export class MJFileStorageAccountEntity extends BaseEntity<MJFileStorageAccountE
     }
 
     /**
+    * * Field Name: IncludeInGlobalSearch
+    * * Display Name: Include In Global Search
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When true, this storage account is included in universal/global search results. Only effective if the associated provider supports search (SupportsSearch = 1).
+    */
+    get IncludeInGlobalSearch(): boolean {
+        return this.Get('IncludeInGlobalSearch');
+    }
+    set IncludeInGlobalSearch(value: boolean) {
+        this.Set('IncludeInGlobalSearch', value);
+    }
+
+    /**
     * * Field Name: Provider
-    * * Display Name: Provider Name
+    * * Display Name: Provider Type
     * * SQL Data Type: nvarchar(50)
     */
     get Provider(): string {
@@ -65859,6 +67447,170 @@ export class MJGeneratedCodeEntity extends BaseEntity<MJGeneratedCodeEntityType>
     */
     get LinkedEntity(): string | null {
         return this.Get('LinkedEntity');
+    }
+}
+
+
+/**
+ * MJ: Instance Configurations - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: InstanceConfiguration
+ * * Base View: vwInstanceConfigurations
+ * * @description Instance-level feature toggles and configuration. Controls which features are enabled per MJ Explorer deployment.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Instance Configurations')
+export class MJInstanceConfigurationEntity extends BaseEntity<MJInstanceConfigurationEntityType> {
+    /**
+    * Loads the MJ: Instance Configurations record from the database
+    * @param ID: string - primary key value to load the MJ: Instance Configurations record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJInstanceConfigurationEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: FeatureKey
+    * * Display Name: Feature Key
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Unique dot-notation key identifying the feature, e.g. Shell.SearchBar.Enabled.
+    */
+    get FeatureKey(): string {
+        return this.Get('FeatureKey');
+    }
+    set FeatureKey(value: string) {
+        this.Set('FeatureKey', value);
+    }
+
+    /**
+    * * Field Name: Value
+    * * Display Name: Current Value
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Current value for this feature setting.
+    */
+    get Value(): string {
+        return this.Get('Value');
+    }
+    set Value(value: string) {
+        this.Set('Value', value);
+    }
+
+    /**
+    * * Field Name: ValueType
+    * * Display Name: Value Type
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: boolean
+    * * Value List Type: List
+    * * Possible Values 
+    *   * boolean
+    *   * json
+    *   * number
+    *   * string
+    * * Description: Data type of the value: boolean, string, number, or json.
+    */
+    get ValueType(): 'boolean' | 'json' | 'number' | 'string' {
+        return this.Get('ValueType');
+    }
+    set ValueType(value: 'boolean' | 'json' | 'number' | 'string') {
+        this.Set('ValueType', value);
+    }
+
+    /**
+    * * Field Name: Category
+    * * Display Name: Admin Category
+    * * SQL Data Type: nvarchar(100)
+    * * Default Value: General
+    * * Description: Grouping category for admin UI display.
+    */
+    get Category(): string {
+        return this.Get('Category');
+    }
+    set Category(value: string) {
+        this.Set('Category', value);
+    }
+
+    /**
+    * * Field Name: DisplayName
+    * * Display Name: Display Name
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Human-readable display name for the setting.
+    */
+    get DisplayName(): string {
+        return this.Get('DisplayName');
+    }
+    set DisplayName(value: string) {
+        this.Set('DisplayName', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional extended description or help text for the setting.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: DefaultValue
+    * * Display Name: Default Value
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Factory default value. Used when resetting to defaults.
+    */
+    get DefaultValue(): string {
+        return this.Get('DefaultValue');
+    }
+    set DefaultValue(value: string) {
+        this.Set('DefaultValue', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
     }
 }
 
@@ -75408,6 +77160,307 @@ export class MJRecordChangeEntity extends BaseEntity<MJRecordChangeEntityType> {
 
 
 /**
+ * MJ: Record Geo Codes - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: RecordGeoCode
+ * * Base View: vwRecordGeoCodes
+ * * @description Polymorphic table storing persisted geocoding results for any MJ entity record. Each row maps an entity record + location type to a lat/lng coordinate, with optional country/state references for choropleth grouping. Supports multi-location entities via LocationType discriminator.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Record Geo Codes')
+export class MJRecordGeoCodeEntity extends BaseEntity<MJRecordGeoCodeEntityType> {
+    /**
+    * Loads the MJ: Record Geo Codes record from the database
+    * @param ID: string - primary key value to load the MJ: Record Geo Codes record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJRecordGeoCodeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: EntityID
+    * * Display Name: Entity
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * Description: Foreign key to Entity. Identifies which entity this geocode belongs to.
+    */
+    get EntityID(): string {
+        return this.Get('EntityID');
+    }
+    set EntityID(value: string) {
+        this.Set('EntityID', value);
+    }
+
+    /**
+    * * Field Name: RecordID
+    * * Display Name: Record
+    * * SQL Data Type: nvarchar(450)
+    * * Description: MJ composite primary key format string identifying the source record (e.g., "ID|<uuid>"). Max 450 chars for SQL Server index support.
+    */
+    get RecordID(): string {
+        return this.Get('RecordID');
+    }
+    set RecordID(value: string) {
+        this.Set('RecordID', value);
+    }
+
+    /**
+    * * Field Name: LocationType
+    * * Display Name: Location Type
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: Primary
+    * * Description: Discriminator for multi-location entities. Default "Primary" for single-address entities. Multi-address examples: "Home", "Business", "Mailing", "PO Box".
+    */
+    get LocationType(): string {
+        return this.Get('LocationType');
+    }
+    set LocationType(value: string) {
+        this.Set('LocationType', value);
+    }
+
+    /**
+    * * Field Name: Latitude
+    * * Display Name: Latitude
+    * * SQL Data Type: decimal(10, 6)
+    * * Description: Geocoded latitude coordinate. NULL when Status is "pending" or "failed".
+    */
+    get Latitude(): number | null {
+        return this.Get('Latitude');
+    }
+    set Latitude(value: number | null) {
+        this.Set('Latitude', value);
+    }
+
+    /**
+    * * Field Name: Longitude
+    * * Display Name: Longitude
+    * * SQL Data Type: decimal(10, 6)
+    * * Description: Geocoded longitude coordinate. NULL when Status is "pending" or "failed".
+    */
+    get Longitude(): number | null {
+        return this.Get('Longitude');
+    }
+    set Longitude(value: number | null) {
+        this.Set('Longitude', value);
+    }
+
+    /**
+    * * Field Name: Precision
+    * * Display Name: Precision
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * city
+    *   * country
+    *   * county
+    *   * exact
+    *   * postal_code
+    *   * state_province
+    * * Description: Precision level of the geocoded result: exact (street address), postal_code, city, county, state_province, or country.
+    */
+    get Precision(): 'city' | 'country' | 'county' | 'exact' | 'postal_code' | 'state_province' | null {
+        return this.Get('Precision');
+    }
+    set Precision(value: 'city' | 'country' | 'county' | 'exact' | 'postal_code' | 'state_province' | null) {
+        this.Set('Precision', value);
+    }
+
+    /**
+    * * Field Name: CountryID
+    * * Display Name: Country
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Countries (vwCountries.ID)
+    * * Description: Optional FK to Country reference table. Populated alongside lat/lng to enable choropleth grouping without reverse-geocoding at render time.
+    */
+    get CountryID(): string | null {
+        return this.Get('CountryID');
+    }
+    set CountryID(value: string | null) {
+        this.Set('CountryID', value);
+    }
+
+    /**
+    * * Field Name: StateProvinceID
+    * * Display Name: State Province
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: State Provinces (vwStateProvinces.ID)
+    * * Description: Optional FK to StateProvince reference table. Populated alongside lat/lng to enable state-level choropleth grouping.
+    */
+    get StateProvinceID(): string | null {
+        return this.Get('StateProvinceID');
+    }
+    set StateProvinceID(value: string | null) {
+        this.Set('StateProvinceID', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * failed
+    *   * pending
+    *   * success
+    * * Description: Current geocoding status: "pending" (awaiting geocode), "success" (geocoded), or "failed" (geocoding error). Used by scheduled job for retry logic.
+    */
+    get Status(): 'failed' | 'pending' | 'success' {
+        return this.Get('Status');
+    }
+    set Status(value: 'failed' | 'pending' | 'success') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: ErrorMessage
+    * * Display Name: Error Message
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Error details when Status is "failed". Captures API error messages, rate limit info, etc. for debugging.
+    */
+    get ErrorMessage(): string | null {
+        return this.Get('ErrorMessage');
+    }
+    set ErrorMessage(value: string | null) {
+        this.Set('ErrorMessage', value);
+    }
+
+    /**
+    * * Field Name: RetryCount
+    * * Display Name: Retry Count
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Number of geocoding attempts. Used for exponential backoff in the scheduled retry job. Stops retrying at configurable maxRetries (default 3).
+    */
+    get RetryCount(): number {
+        return this.Get('RetryCount');
+    }
+    set RetryCount(value: number) {
+        this.Set('RetryCount', value);
+    }
+
+    /**
+    * * Field Name: SourceFieldHash
+    * * Display Name: Source Field Hash
+    * * SQL Data Type: nvarchar(64)
+    * * Description: SHA-256 hash of the source field values that produced this geocode. When source fields change on save, the hash won't match and re-geocoding is triggered. Format: SHA-256(concat(field1, "|", field2, ...)).
+    */
+    get SourceFieldHash(): string | null {
+        return this.Get('SourceFieldHash');
+    }
+    set SourceFieldHash(value: string | null) {
+        this.Set('SourceFieldHash', value);
+    }
+
+    /**
+    * * Field Name: GeocodedAt
+    * * Display Name: Geocoded At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp of when geocoding was last attempted (success or failure).
+    */
+    get GeocodedAt(): Date | null {
+        return this.Get('GeocodedAt');
+    }
+    set GeocodedAt(value: Date | null) {
+        this.Set('GeocodedAt', value);
+    }
+
+    /**
+    * * Field Name: GeocodingSource
+    * * Display Name: Geocoding Source
+    * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * google
+    *   * ip_geolocation
+    *   * manual
+    *   * native
+    *   * reference_data
+    *   * reverse
+    * * Description: How this geocode was produced: google (Google Geocoding API), reference_data (resolved via Country/StateProvince tables), manual (user-entered), ip_geolocation (IP lookup), native (copied from entity lat/lng fields), reverse (reverse geocode from coordinates).
+    */
+    get GeocodingSource(): 'google' | 'ip_geolocation' | 'manual' | 'native' | 'reference_data' | 'reverse' | null {
+        return this.Get('GeocodingSource');
+    }
+    set GeocodingSource(value: 'google' | 'ip_geolocation' | 'manual' | 'native' | 'reference_data' | 'reverse' | null) {
+        this.Set('GeocodingSource', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Entity
+    * * Display Name: Entity Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Entity(): string {
+        return this.Get('Entity');
+    }
+
+    /**
+    * * Field Name: Country
+    * * Display Name: Country Name
+    * * SQL Data Type: nvarchar(200)
+    */
+    get Country(): string | null {
+        return this.Get('Country');
+    }
+
+    /**
+    * * Field Name: StateProvince
+    * * Display Name: State Province Name
+    * * SQL Data Type: nvarchar(200)
+    */
+    get StateProvince(): string | null {
+        return this.Get('StateProvince');
+    }
+}
+
+
+/**
  * MJ: Record Links - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: RecordLink
@@ -79191,6 +81244,276 @@ export class MJSchemaInfoEntity extends BaseEntity<MJSchemaInfoEntityType> {
 
 
 /**
+ * MJ: Search Providers - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: SearchProvider
+ * * Base View: vwSearchProviders
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Search Providers')
+export class MJSearchProviderEntity extends BaseEntity<MJSearchProviderEntityType> {
+    /**
+    * Loads the MJ: Search Providers record from the database
+    * @param ID: string - primary key value to load the MJ: Search Providers record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJSearchProviderEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Search Providers entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Priority: The priority level must be a non-negative value (0 or greater) to ensure valid ordering and categorization of records.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidatePriorityAtLeastZero(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * The priority level must be a non-negative value (0 or greater) to ensure valid ordering and categorization of records.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidatePriorityAtLeastZero(result: ValidationResult) {
+    	if (this.Priority < 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"Priority",
+    			"Priority must be 0 or greater.",
+    			this.Priority,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Display name for this search provider (e.g., "Vector Search", "Algolia")
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Human-readable description of what this provider searches and how it works
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: DriverClass
+    * * Display Name: Driver Class
+    * * SQL Data Type: nvarchar(500)
+    * * Description: ClassFactory key used with @RegisterClass(ISearchProvider, DriverClass) to instantiate the provider at runtime
+    */
+    get DriverClass(): string {
+        return this.Get('DriverClass');
+    }
+    set DriverClass(value: string) {
+        this.Set('DriverClass', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Pending
+    *   * Terminated
+    * * Description: Provider lifecycle status: Pending (not yet activated), Active (in use), Terminated (disabled)
+    */
+    get Status(): 'Active' | 'Pending' | 'Terminated' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Pending' | 'Terminated') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: Priority
+    * * Display Name: Priority
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Execution priority (lower = higher priority). Controls provider ordering and can influence RRF weighting. Must be >= 0.
+    */
+    get Priority(): number {
+        return this.Get('Priority');
+    }
+    set Priority(value: number) {
+        this.Set('Priority', value);
+    }
+
+    /**
+    * * Field Name: SupportsPreview
+    * * Display Name: Supports Preview
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Whether this provider should run during fast preview/autocomplete searches. Expensive providers (external APIs) may set this to 0.
+    */
+    get SupportsPreview(): boolean {
+        return this.Get('SupportsPreview');
+    }
+    set SupportsPreview(value: boolean) {
+        this.Set('SupportsPreview', value);
+    }
+
+    /**
+    * * Field Name: MaxResultsOverride
+    * * Display Name: Max Results Override
+    * * SQL Data Type: int
+    * * Description: Optional per-provider cap on the number of results to return. Useful for rate-limited or pay-per-query external APIs. When NULL, uses the SearchEngine default.
+    */
+    get MaxResultsOverride(): number | null {
+        return this.Get('MaxResultsOverride');
+    }
+    set MaxResultsOverride(value: number | null) {
+        this.Set('MaxResultsOverride', value);
+    }
+
+    /**
+    * * Field Name: ProviderConfig
+    * * Display Name: Provider Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional JSON configuration blob for provider-specific settings (e.g., API endpoints, index names, tuning parameters). Schema is provider-defined.
+    */
+    get ProviderConfig(): string | null {
+        return this.Get('ProviderConfig');
+    }
+    set ProviderConfig(value: string | null) {
+        this.Set('ProviderConfig', value);
+    }
+
+    /**
+    * * Field Name: CredentialID
+    * * Display Name: Credential
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)
+    * * Description: Optional FK to the Credential entity for providers that require authentication (e.g., Algolia API key, external service credentials)
+    */
+    get CredentialID(): string | null {
+        return this.Get('CredentialID');
+    }
+    set CredentialID(value: string | null) {
+        this.Set('CredentialID', value);
+    }
+
+    /**
+    * * Field Name: DisplayName
+    * * Display Name: Display Name
+    * * SQL Data Type: nvarchar(200)
+    * * Description: UI display name for this provider shown in filter facets and result grouping (e.g., "Database", "Semantic Search"). When NULL, falls back to the Name column.
+    */
+    get DisplayName(): string | null {
+        return this.Get('DisplayName');
+    }
+    set DisplayName(value: string | null) {
+        this.Set('DisplayName', value);
+    }
+
+    /**
+    * * Field Name: Icon
+    * * Display Name: Icon
+    * * SQL Data Type: nvarchar(200)
+    * * Description: CSS icon class for UI display in filter facets and result badges (e.g., "fa-solid fa-database", "fa-solid fa-brain"). Supports any CSS-based icon library. When NULL, a default icon is used.
+    */
+    get Icon(): string | null {
+        return this.Get('Icon');
+    }
+    set Icon(value: string | null) {
+        this.Set('Icon', value);
+    }
+
+    /**
+    * * Field Name: Comments
+    * * Display Name: Comments
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Free-form notes about this provider configuration
+    */
+    get Comments(): string | null {
+        return this.Get('Comments');
+    }
+    set Comments(value: string | null) {
+        this.Set('Comments', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Credential
+    * * Display Name: Credential Name
+    * * SQL Data Type: nvarchar(200)
+    */
+    get Credential(): string | null {
+        return this.Get('Credential');
+    }
+}
+
+
+/**
  * MJ: Skills - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: Skill
@@ -79465,6 +81788,185 @@ export class MJSQLDialectEntity extends BaseEntity<MJSQLDialectEntityType> {
 
 
 /**
+ * MJ: State Provinces - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: StateProvince
+ * * Base View: vwStateProvinces
+ * * @description Reference table for states, provinces, and first-level administrative divisions. Linked to Country via FK. Seeded with ~5,000 records with ISO 3166-2 codes, centroids, and optional boundary GeoJSON.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: State Provinces')
+export class MJStateProvinceEntity extends BaseEntity<MJStateProvinceEntityType> {
+    /**
+    * Loads the MJ: State Provinces record from the database
+    * @param ID: string - primary key value to load the MJ: State Provinces record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJStateProvinceEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: CountryID
+    * * Display Name: Country
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Countries (vwCountries.ID)
+    * * Description: Foreign key to Country. Establishes the parent country for this state/province.
+    */
+    get CountryID(): string {
+        return this.Get('CountryID');
+    }
+    set CountryID(value: string) {
+        this.Set('CountryID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Full state/province name (e.g., "California", "Ontario").
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Code
+    * * Display Name: State Code
+    * * SQL Data Type: nvarchar(10)
+    * * Description: Short code within the country (e.g., "CA", "ON"). Unique per country via compound constraint.
+    */
+    get Code(): string {
+        return this.Get('Code');
+    }
+    set Code(value: string) {
+        this.Set('Code', value);
+    }
+
+    /**
+    * * Field Name: ISO3166_2
+    * * Display Name: ISO 3166-2 Code
+    * * SQL Data Type: nvarchar(10)
+    * * Description: ISO 3166-2 subdivision code (e.g., "US-CA", "CA-ON"). Globally unique.
+    */
+    get ISO3166_2(): string {
+        return this.Get('ISO3166_2');
+    }
+    set ISO3166_2(value: string) {
+        this.Set('ISO3166_2', value);
+    }
+
+    /**
+    * * Field Name: Latitude
+    * * Display Name: Latitude
+    * * SQL Data Type: decimal(10, 6)
+    * * Description: Geographic centroid latitude. Used as fallback point for state-level geocoding.
+    */
+    get Latitude(): number | null {
+        return this.Get('Latitude');
+    }
+    set Latitude(value: number | null) {
+        this.Set('Latitude', value);
+    }
+
+    /**
+    * * Field Name: Longitude
+    * * Display Name: Longitude
+    * * SQL Data Type: decimal(10, 6)
+    * * Description: Geographic centroid longitude. Used as fallback point for state-level geocoding.
+    */
+    get Longitude(): number | null {
+        return this.Get('Longitude');
+    }
+    set Longitude(value: number | null) {
+        this.Set('Longitude', value);
+    }
+
+    /**
+    * * Field Name: BoundaryGeoJSON
+    * * Display Name: Boundary GeoJSON
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Medium-resolution (~50m) GeoJSON boundary polygon for choropleth map rendering. Nullable. Total ~15-20MB for all states/provinces worldwide.
+    */
+    get BoundaryGeoJSON(): string | null {
+        return this.Get('BoundaryGeoJSON');
+    }
+    set BoundaryGeoJSON(value: string | null) {
+        this.Set('BoundaryGeoJSON', value);
+    }
+
+    /**
+    * * Field Name: CommonAliases
+    * * Display Name: Common Aliases
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of common aliases (e.g., ["Calif.","California","Cal"]). Used by GeoResolver for fuzzy text-to-state matching.
+    */
+    get CommonAliases(): string | null {
+        return this.Get('CommonAliases');
+    }
+    set CommonAliases(value: string | null) {
+        this.Set('CommonAliases', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Country
+    * * Display Name: Country Name
+    * * SQL Data Type: nvarchar(200)
+    */
+    get Country(): string {
+        return this.Get('Country');
+    }
+}
+
+
+/**
  * MJ: Tag Audit Logs - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: TagAuditLog
@@ -79663,38 +82165,6 @@ export class MJTagCoOccurrenceEntity extends BaseEntity<MJTagCoOccurrenceEntityT
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * Validate() method override for MJ: Tag Co Occurrences entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * Table-Level: Tag A must be ordered before Tag B to ensure that each pair of tags is stored consistently and to prevent duplicate entries for the same combination.
-    * @public
-    * @method
-    * @override
-    */
-    public override Validate(): ValidationResult {
-        const result = super.Validate();
-        this.ValidateTagAIDLessThanTagBID(result);
-        result.Success = result.Success && (result.Errors.length === 0);
-
-        return result;
-    }
-
-    /**
-    * Tag A must be ordered before Tag B to ensure that each pair of tags is stored consistently and to prevent duplicate entries for the same combination.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateTagAIDLessThanTagBID(result: ValidationResult) {
-    	if (this.TagAID != null && this.TagBID != null && this.TagAID >= this.TagBID) {
-    		result.Errors.push(new ValidationErrorInfo(
-    			"TagAID",
-    			"Tag A must be ordered before Tag B to ensure a consistent ordering of tag pairs.",
-    			this.TagAID,
-    			ValidationErrorType.Failure
-    		));
-    	}
     }
 
     /**
@@ -87205,6 +89675,29 @@ export class MJVectorDatabaseEntity extends BaseEntity<MJVectorDatabaseEntityTyp
     }
     set Configuration(value: string | null) {
         this.Set('Configuration', value);
+    }
+
+    /**
+    * * Field Name: CredentialID
+    * * Display Name: Credential
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)
+    * * Description: Optional link to a stored credential containing the API key and any other authentication details for this vector database provider. When set, the Credential Engine decrypts and supplies the key at runtime. When NULL, the system falls back to the environment variable AI_VENDOR_API_KEY__<ClassKey>.
+    */
+    get CredentialID(): string | null {
+        return this.Get('CredentialID');
+    }
+    set CredentialID(value: string | null) {
+        this.Set('CredentialID', value);
+    }
+
+    /**
+    * * Field Name: Credential
+    * * Display Name: Credential Name
+    * * SQL Data Type: nvarchar(200)
+    */
+    get Credential(): string | null {
+        return this.Get('Credential');
     }
 }
 

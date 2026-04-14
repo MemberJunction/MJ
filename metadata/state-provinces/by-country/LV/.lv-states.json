@@ -1,0 +1,695 @@
+[
+  {
+    "fields": {
+      "Name": "Aizkraukles Aprinkis",
+      "Code": "AI",
+      "ISO3166_2": "LV-AI",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Aizkraukles Aprinkis"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LV"
+    },
+    "primaryKey": {
+      "ID": "14B11201-63EE-42EA-93A3-D90FEEAB545C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:12.877Z",
+      "checksum": "428705fe3687f57f8dafeb4d2d091344431d45549b11d6bf1eb2a5c671b830a7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Alūksnes Aprinkis",
+      "Code": "AL",
+      "ISO3166_2": "LV-AL",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Alūksnes Aprinkis"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LV"
+    },
+    "primaryKey": {
+      "ID": "BC354EB4-38C1-4BC1-8531-B0A522B151B0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:12.890Z",
+      "checksum": "87ade9dd2f610741f6e7f5390a4b28cf0154b3a2ba79f6aed6bac3a751ab0c5a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Balvu Aprinkis",
+      "Code": "BL",
+      "ISO3166_2": "LV-BL",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Balvu Aprinkis"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LV"
+    },
+    "primaryKey": {
+      "ID": "BFC950B4-7BB9-4E35-94E6-1FD32EA25A45"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:12.906Z",
+      "checksum": "2758229c41e059364438162333d08264c86c22305f449db1d8cdb480b4717fe3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bauskas Aprinkis",
+      "Code": "BU",
+      "ISO3166_2": "LV-BU",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Bauskas Aprinkis"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LV"
+    },
+    "primaryKey": {
+      "ID": "8B89327C-3268-4E33-A089-C5770E1DA84B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:12.921Z",
+      "checksum": "fa87dddbd4ee180396e2f0ab816c38ae0c634b5fd58639737dd469379662151b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Cēsu Aprinkis",
+      "Code": "CE",
+      "ISO3166_2": "LV-CE",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Cēsu Aprinkis"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LV"
+    },
+    "primaryKey": {
+      "ID": "A1D38FDC-5991-4F4B-9329-0517F4F073E1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:12.935Z",
+      "checksum": "19d1ca23a19d95e1bf1917f4d76714e708234c93632fde2709522969867b9d7d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Daugavpils",
+      "Code": "DGV",
+      "ISO3166_2": "LV-DGV",
+      "Latitude": 55.8814,
+      "Longitude": 26.5517,
+      "BoundaryGeoJSON": "@file:by-country/LV/boundaries/LV-DGV.geojson",
+      "CommonAliases": [
+        "Daugavpils"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LV"
+    },
+    "primaryKey": {
+      "ID": "E69685E6-8777-4C8F-A467-4CDFDF2AB6CE"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:12.949Z",
+      "checksum": "d933886a49aaa61085dd99d728c51796fedf5f000d13dbcbba4c46cf4bed6dbe"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Daugavpils Aprinkis",
+      "Code": "DA",
+      "ISO3166_2": "LV-DA",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Daugavpils Aprinkis"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LV"
+    },
+    "primaryKey": {
+      "ID": "F618FE23-A33B-48E5-9007-34EEEA59AC67"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:12.962Z",
+      "checksum": "d487b312ba1f2777e1abf08a0bf78f058c0c181f69f42967327f41a5ed48bf43"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Dobeles Aprinkis",
+      "Code": "DO",
+      "ISO3166_2": "LV-DO",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Dobeles Aprinkis"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LV"
+    },
+    "primaryKey": {
+      "ID": "7F584AFD-F063-43C3-BF75-4605236F2F1C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:12.975Z",
+      "checksum": "fa1cb54dded0ad2275c08868a13577bd6c1543efbc43f75aa19949d20ab0bc4c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gulbenes Aprinkis",
+      "Code": "GU",
+      "ISO3166_2": "LV-GU",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Gulbenes Aprinkis"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LV"
+    },
+    "primaryKey": {
+      "ID": "450254C7-606E-4F86-A9DD-008D2CA970B4"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:12.989Z",
+      "checksum": "7fbb7a9aa90b5da69d865dcb1730704520fad5d9cb39c91a06c9bdb7a6ab487e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Jēkabpils Aprinkis",
+      "Code": "JK",
+      "ISO3166_2": "LV-JK",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Jēkabpils Aprinkis"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LV"
+    },
+    "primaryKey": {
+      "ID": "8FB863CF-96F8-46F8-9A52-7F575583D177"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:13.004Z",
+      "checksum": "3231b7b78cbe5ca781ec2312e9ab3f404cfdcdf1294f4e30973129a703488404"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Jelgava",
+      "Code": "JEL",
+      "ISO3166_2": "LV-JEL",
+      "Latitude": 56.6457,
+      "Longitude": 23.7011,
+      "BoundaryGeoJSON": "@file:by-country/LV/boundaries/LV-JEL.geojson",
+      "CommonAliases": [
+        "Jelgava"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LV"
+    },
+    "primaryKey": {
+      "ID": "450328E1-164E-4493-8261-FA0B7D3EF739"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:13.059Z",
+      "checksum": "7ec583482d6656c2c209ad123285e6f2ca0f64e7cfe0f2424c06494faed97058"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Jelgavas Aprinkis",
+      "Code": "JL",
+      "ISO3166_2": "LV-JL",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Jelgavas Aprinkis"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LV"
+    },
+    "primaryKey": {
+      "ID": "BEF5C2EF-320A-43FD-B6FB-E0372D00AB32"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:13.076Z",
+      "checksum": "2f08301e2745f8b19fe7d71fe9fb589c95389e36346dc29c38a806952bd90c18"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Jūrmala",
+      "Code": "JUR",
+      "ISO3166_2": "LV-JUR",
+      "Latitude": 56.9608,
+      "Longitude": 23.7352,
+      "BoundaryGeoJSON": "@file:by-country/LV/boundaries/LV-JUR.geojson",
+      "CommonAliases": [
+        "Jūrmala"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LV"
+    },
+    "primaryKey": {
+      "ID": "7200DE54-41AF-4CCD-B800-9A838EF8587C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:13.094Z",
+      "checksum": "ac1a1bb744bc98273c4eb32d59c8820e7b97ce5c5b03a7b28f65b268b2d5fd0e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Krāslavas Aprinkis",
+      "Code": "KR",
+      "ISO3166_2": "LV-KR",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Krāslavas Aprinkis"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LV"
+    },
+    "primaryKey": {
+      "ID": "9B9DAA8D-8ACA-4CD3-B2F2-61743EEB85D9"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:13.110Z",
+      "checksum": "d3c632dba7a4231d3cf9f99d390236896e8743fe282d75e4e9f745f458cf7fd5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kuldīgas Aprinkis",
+      "Code": "KU",
+      "ISO3166_2": "LV-KU",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Kuldīgas Aprinkis"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LV"
+    },
+    "primaryKey": {
+      "ID": "56BEE008-D8C8-4A92-AEAD-5F558C364C0E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:13.127Z",
+      "checksum": "e7aac8d55ebcd8856e48053cd7f648d2fea876dcd6910967064cbae88954e078"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Liepāja",
+      "Code": "LPX",
+      "ISO3166_2": "LV-LPX",
+      "Latitude": 56.5616,
+      "Longitude": 21.0399,
+      "BoundaryGeoJSON": "@file:by-country/LV/boundaries/LV-LPX.geojson",
+      "CommonAliases": [
+        "Liepāja"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LV"
+    },
+    "primaryKey": {
+      "ID": "34BD365F-746A-4A5A-8B27-57FFBB6DA0F0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:13.143Z",
+      "checksum": "37c79991684ee2499e91c35d5fbdc59c9454d5ee5144722c4ba43205ac36e400"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Liepājas Aprinkis",
+      "Code": "LE",
+      "ISO3166_2": "LV-LE",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Liepājas Aprinkis"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LV"
+    },
+    "primaryKey": {
+      "ID": "0BD7D708-A2B8-44EB-AF24-6CA7D8B61980"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:13.159Z",
+      "checksum": "4db15167d3229247147d6f462b1cc5520ae0897f6e0604211167c90ad7c4872f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Limbažu Aprinkis",
+      "Code": "LM",
+      "ISO3166_2": "LV-LM",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Limbažu Aprinkis"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LV"
+    },
+    "primaryKey": {
+      "ID": "E1866300-1121-46E7-964D-F5095137577B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:13.176Z",
+      "checksum": "da14a75077f29ae3d5ef4516997392b2f256bcb63b37b78f6f26ade4bc27d7fb"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ludzas Aprinkis",
+      "Code": "LU",
+      "ISO3166_2": "LV-LU",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Ludzas Aprinkis"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LV"
+    },
+    "primaryKey": {
+      "ID": "1EAFEF6B-01DB-4B10-8139-F0B1780A7DA4"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:13.193Z",
+      "checksum": "a448a979a55a1a52e5b0560ba2c37208cd44a3579392d2956d01322c82812aac"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Madonas Aprinkis",
+      "Code": "MA",
+      "ISO3166_2": "LV-MA",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Madonas Aprinkis"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LV"
+    },
+    "primaryKey": {
+      "ID": "7C393EF0-7330-4AEA-8593-C2D13631AC78"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:13.206Z",
+      "checksum": "cb36bcaa445d8f3784621a2bae17956438e43f81f531a28801c9d2b556d748cb"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ogres Aprinkis",
+      "Code": "OG",
+      "ISO3166_2": "LV-OG",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Ogres Aprinkis"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LV"
+    },
+    "primaryKey": {
+      "ID": "767B55BF-5CCB-48D0-A925-3C1974BFDD6C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:13.277Z",
+      "checksum": "da2e896a8e2af513b461d2e577a697b9e7860f4ca7d93439e8bf3a6103d8752c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Preilu Aprinkis",
+      "Code": "PR",
+      "ISO3166_2": "LV-PR",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Preilu Aprinkis"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LV"
+    },
+    "primaryKey": {
+      "ID": "27230A4A-4631-47AA-937B-D3DA2937D403"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:13.295Z",
+      "checksum": "4ffac3cf6ea821d3442050d015f8f51f32269081625c411618f2736d2423e004"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rēzekne",
+      "Code": "REZ",
+      "ISO3166_2": "LV-REZ",
+      "Latitude": 56.516,
+      "Longitude": 27.3335,
+      "BoundaryGeoJSON": "@file:by-country/LV/boundaries/LV-REZ.geojson",
+      "CommonAliases": [
+        "Rēzekne"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LV"
+    },
+    "primaryKey": {
+      "ID": "9FBBD2D1-0F78-4399-8F5E-1FAD1D09B577"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:13.312Z",
+      "checksum": "44adcde977df0728e0451d4eebb8c89dc1896591c1e72eff56cc54f9617e5081"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rēzeknes Aprinkis",
+      "Code": "RE",
+      "ISO3166_2": "LV-RE",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Rēzeknes Aprinkis"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LV"
+    },
+    "primaryKey": {
+      "ID": "03B021E3-3954-4F25-974C-279F2801125C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:13.331Z",
+      "checksum": "3a275ff7112ff986d32cc962d58fac1e2355819bd69953fc717fd34576eadf17"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rīga",
+      "Code": "RIX",
+      "ISO3166_2": "LV-RIX",
+      "Latitude": 56.9878,
+      "Longitude": 24.1235,
+      "BoundaryGeoJSON": "@file:by-country/LV/boundaries/LV-RIX.geojson",
+      "CommonAliases": [
+        "Rīga"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LV"
+    },
+    "primaryKey": {
+      "ID": "6B3E76A1-2A2E-4721-AC85-FAA1B7FBB7D7"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:13.348Z",
+      "checksum": "97fba7f216db57453d2e770962eeb7973027d29df715a5ffe0bb065250ae9bb7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rīgas Aprinkis",
+      "Code": "RI",
+      "ISO3166_2": "LV-RI",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Rīgas Aprinkis"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LV"
+    },
+    "primaryKey": {
+      "ID": "770D07BA-5FEE-4637-9806-3B823F677351"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:13.365Z",
+      "checksum": "03fe869c28f904154e1a964fb790a1e84ca6dd6ea749d6a3293e79333e50b844"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Saldus Aprinkis",
+      "Code": "SA",
+      "ISO3166_2": "LV-SA",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Saldus Aprinkis"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LV"
+    },
+    "primaryKey": {
+      "ID": "202D7A05-29EF-4A41-B148-259D2954C641"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:13.381Z",
+      "checksum": "7d73dd7a8fab07ae9999329484a1b4cc8444025c63f6c1896e8a12b81d3d6d9e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Talsu Aprinkis",
+      "Code": "TA",
+      "ISO3166_2": "LV-TA",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Talsu Aprinkis"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LV"
+    },
+    "primaryKey": {
+      "ID": "72D9D954-D4DD-4FCB-AAD8-DF9834575050"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:13.398Z",
+      "checksum": "cf6f3906254c846be0df24d8b572d26d694ae8987c83d4181bf6ba4322316e11"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tukuma Aprinkis",
+      "Code": "TU",
+      "ISO3166_2": "LV-TU",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Tukuma Aprinkis"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LV"
+    },
+    "primaryKey": {
+      "ID": "B7385559-15BD-49A1-BBAA-761F2E6A7AE7"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:13.415Z",
+      "checksum": "40eb5f3f1c3c468ceddc5a45fd95f6019a2f7af75fff77174dd6e1938d89c089"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Valkas Aprinkis",
+      "Code": "VK",
+      "ISO3166_2": "LV-VK",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Valkas Aprinkis"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LV"
+    },
+    "primaryKey": {
+      "ID": "F1990B44-487E-409F-90DF-9253E47F7528"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:13.429Z",
+      "checksum": "fa4701bd66fcedc718f6ea507c9ccef9b8363c3ecfc2e12fd291a5e9b0b56695"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Valmieras Aprinkis",
+      "Code": "VM",
+      "ISO3166_2": "LV-VM",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Valmieras Aprinkis"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LV"
+    },
+    "primaryKey": {
+      "ID": "2E6D206E-7EA7-4E0D-A27E-1AE3E50A916C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:13.461Z",
+      "checksum": "50a71614ce86f936f5332872b1f2718f1aa29aed1be5f2713c2d272f8da5c3d4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ventspils",
+      "Code": "VEN",
+      "ISO3166_2": "LV-VEN",
+      "Latitude": 57.396,
+      "Longitude": 21.5869,
+      "BoundaryGeoJSON": "@file:by-country/LV/boundaries/LV-VEN.geojson",
+      "CommonAliases": [
+        "Ventspils"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LV"
+    },
+    "primaryKey": {
+      "ID": "A938D157-EB50-4DE9-8491-5D009F72FC34"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:13.477Z",
+      "checksum": "f01541abc6da6092a3bad98dd7e2c2a40f84d0afd07cd8f9e106cb5904829c00"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ventspils Aprinkis",
+      "Code": "VE",
+      "ISO3166_2": "LV-VE",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Ventspils Aprinkis"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LV"
+    },
+    "primaryKey": {
+      "ID": "383A8AC7-C20B-4CF0-B110-6A8258356105"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:13.491Z",
+      "checksum": "d5a188f82b02735629fb10016999b6bdea9e141ea94255e1ca5b1a5e104d22b5"
+    }
+  }
+]

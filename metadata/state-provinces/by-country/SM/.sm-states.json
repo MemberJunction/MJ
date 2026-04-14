@@ -1,0 +1,23 @@
+[
+  {
+    "fields": {
+      "Name": "San Marino",
+      "Code": "SM",
+      "ISO3166_2": "SM-SM",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "San Marino"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SM"
+    },
+    "primaryKey": {
+      "ID": "D2651C89-FD5F-40F2-A490-4964FA6688E1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:31.921Z",
+      "checksum": "26e8928c94b698d0f21a5b4b61679ecb1f4c271729f5cb3acabe150a6951cb06"
+    }
+  }
+]

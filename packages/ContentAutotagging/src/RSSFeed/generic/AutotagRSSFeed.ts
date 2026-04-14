@@ -30,7 +30,7 @@ export class AutotagRSSFeed extends AutotagBase {
         this.engine = AutotagBaseEngine.Instance;
     }
 
-    public async Autotag(contextUser: UserInfo, onProgress?: AutotagProgressCallback): Promise<void> {
+    public async Autotag(contextUser: UserInfo, onProgress?: AutotagProgressCallback): Promise<number> {
         this.contextUser = contextUser;
         this.contentSourceTypeID = this.engine.SetSubclassContentSourceType('RSS Feed');
         LogStatus(`[RSS] Starting RSS autotag...`);
@@ -44,7 +44,7 @@ export class AutotagRSSFeed extends AutotagBase {
         } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
             LogError(`[RSS] SetContentItemsToProcess THREW: ${msg}`);
-            return;
+            return 0;
         }
 
         if (contentItemsToProcess.length > 0) {
@@ -59,6 +59,8 @@ export class AutotagRSSFeed extends AutotagBase {
         } else {
             LogStatus('[RSS] No new or modified feed items to process');
         }
+
+        return contentItemsToProcess.length;
     }
 
     public async SetContentItemsToProcess(contentSources: MJContentSourceEntity[]): Promise<MJContentItemEntity[]> {

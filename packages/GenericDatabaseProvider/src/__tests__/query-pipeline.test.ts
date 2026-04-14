@@ -568,6 +568,124 @@ WHERE m.Region = '{{ Region }}'
             expect(finalSQL).not.toContain('WHERE');
             expect(finalSQL).toContain('SELECT m.ID, m.Name');
         });
+        it('should escape {{query:"..."}} in comments when outer query has UsesTemplate=true and no composition', () => {
+            // This is the exact bug scenario: a query with UsesTemplate=true has a
+            // {{query:"..."}} composition example in a SQL comment. There are no actual
+            // composition tokens (they're inside comments), so composition is skipped.
+            // Without the fix, Nunjucks chokes on the unescaped {{ in the comment.
+            const queryID = 'comment-esc-1';
+            const query = makeQueryInfo({
+                ID: queryID,
+                Name: 'Tags For Entity Record',
+                SQL: `-- Reusable composable query: Returns all active tags for a given entity record.
+-- Compose via {{query:"MJ/Tags/Tags For Entity Record"}} and join on RecordID.
+-- Parameters: entityName, recordID
+SELECT t.ID AS TagID, t.Name AS TagName
+FROM vwTaggedItems ti
+INNER JOIN vwTags t ON ti.TagID = t.ID
+WHERE ti.Entity = {{ entityName | sqlString }}
+AND ti.RecordID = {{ recordID | sqlString }}`,
+                UsesTemplate: true,
+            });
+
+            vi.spyOn(Metadata, 'Provider', 'get').mockReturnValue({
+                Queries: [],
+                QueryDependencies: [],
+                QueryCategories: [],
+                QueryFields: [],
+                QueryParameters: [
+                    { QueryID: queryID, Name: 'entityName', Type: 'string', IsRequired: true },
+                    { QueryID: queryID, Name: 'recordID', Type: 'string', IsRequired: true },
+                ],
+                QueryPermissions: [],
+                SQLDialects: [],
+                QuerySQLs: [],
+            } as ReturnType<typeof Metadata.Provider>);
+
+            const { finalSQL } = provider.testProcessQueryParameters(
+                query,
+                { entityName: 'Members', recordID: '42' },
+                mockUser
+            );
+
+            // Should succeed without throwing "expected variable end"
+            // The comment {{ should be escaped, but the parameter {{ should be resolved
+            expect(finalSQL).toContain("'Members'");
+            expect(finalSQL).toContain("'42'");
+            expect(finalSQL).not.toContain('{{ entityName');
+            expect(finalSQL).not.toContain('{{ recordID');
+        });
+
+        it('should escape {{ }} in block comments when outer query has UsesTemplate=true', () => {
+            const queryID = 'comment-esc-2';
+            const query = makeQueryInfo({
+                ID: queryID,
+                Name: 'Block Comment Query',
+                SQL: `/* This query demonstrates {{query:"Category/Some Query"}} syntax */
+SELECT * FROM Users WHERE Name = {{ userName | sqlString }}`,
+                UsesTemplate: true,
+            });
+
+            vi.spyOn(Metadata, 'Provider', 'get').mockReturnValue({
+                Queries: [],
+                QueryDependencies: [],
+                QueryCategories: [],
+                QueryFields: [],
+                QueryParameters: [
+                    { QueryID: queryID, Name: 'userName', Type: 'string', IsRequired: true },
+                ],
+                QueryPermissions: [],
+                SQLDialects: [],
+                QuerySQLs: [],
+            } as ReturnType<typeof Metadata.Provider>);
+
+            const { finalSQL } = provider.testProcessQueryParameters(
+                query,
+                { userName: 'Alice' },
+                mockUser
+            );
+
+            expect(finalSQL).toContain("'Alice'");
+            // Block comment {{ should be escaped
+            expect(finalSQL).not.toMatch(/\/\*.*\{\{query:/);
+        });
+
+        it('should not corrupt non-comment template tokens when escaping comments', () => {
+            // Ensure that escaping only targets comments, not actual template expressions
+            const queryID = 'comment-esc-3';
+            const query = makeQueryInfo({
+                ID: queryID,
+                Name: 'Mixed Query',
+                SQL: `-- Uses {{someParam}} in a comment
+SELECT * FROM Users WHERE Status = {{ status | sqlString }} AND Name = {{ name | sqlString }}`,
+                UsesTemplate: true,
+            });
+
+            vi.spyOn(Metadata, 'Provider', 'get').mockReturnValue({
+                Queries: [],
+                QueryDependencies: [],
+                QueryCategories: [],
+                QueryFields: [],
+                QueryParameters: [
+                    { QueryID: queryID, Name: 'status', Type: 'string', IsRequired: true },
+                    { QueryID: queryID, Name: 'name', Type: 'string', IsRequired: true },
+                ],
+                QueryPermissions: [],
+                SQLDialects: [],
+                QuerySQLs: [],
+            } as ReturnType<typeof Metadata.Provider>);
+
+            const { finalSQL } = provider.testProcessQueryParameters(
+                query,
+                { status: 'Active', name: 'Bob' },
+                mockUser
+            );
+
+            expect(finalSQL).toContain("'Active'");
+            expect(finalSQL).toContain("'Bob'");
+            // Comment should be escaped
+            expect(finalSQL).toMatch(/-- Uses \{ \{someParam\} \}/);
+        });
     });
 
     // ================================================================

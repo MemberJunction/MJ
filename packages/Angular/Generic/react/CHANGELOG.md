@@ -1,5 +1,38 @@
 # @memberjunction/ng-react
 
+## 5.26.0
+
+### Patch Changes
+
+- Updated dependencies [55de456]
+- Updated dependencies [a1002f4]
+  - @memberjunction/core-entities@5.26.0
+  - @memberjunction/core@5.26.0
+  - @memberjunction/ng-notifications@5.26.0
+  - @memberjunction/graphql-dataprovider@5.26.0
+  - @memberjunction/react-runtime@5.26.0
+  - @memberjunction/ai-vectors-memory@5.26.0
+  - @memberjunction/interactive-component-types@5.26.0
+  - @memberjunction/global@5.26.0
+
+## 5.25.0
+
+### Patch Changes
+
+- Updated dependencies [fc8cd52]
+- Updated dependencies [a24ff53]
+- Updated dependencies [d6370e8]
+- Updated dependencies [7ddf732]
+- Updated dependencies [cbcf477]
+  - @memberjunction/core@5.25.0
+  - @memberjunction/core-entities@5.25.0
+  - @memberjunction/graphql-dataprovider@5.25.0
+  - @memberjunction/interactive-component-types@5.25.0
+  - @memberjunction/react-runtime@5.25.0
+  - @memberjunction/ai-vectors-memory@5.25.0
+  - @memberjunction/ng-notifications@5.25.0
+  - @memberjunction/global@5.25.0
+
 ## 5.24.0
 
 ### Minor Changes

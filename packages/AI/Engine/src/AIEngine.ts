@@ -20,7 +20,7 @@ import { MJAIActionEntity, MJActionEntity,
          MJAIAgentDataSourceEntity, MJAIAgentConfigurationEntity, MJAIAgentExampleEntity,
          MJAICredentialBindingEntity, MJAIModalityEntity, MJAIAgentModalityEntity,
          MJAIModelModalityEntity, MJAIClientToolDefinitionEntity,
-         MJAIAgentClientToolEntity } from "@memberjunction/core-entities";
+         MJAIAgentClientToolEntity, MJAIAgentCategoryEntity } from "@memberjunction/core-entities";
 import { AIEngineBase } from "@memberjunction/ai-engine-base";
 import { SimpleVectorService } from "@memberjunction/ai-vectors-memory";
 import { AgentEmbeddingService } from "./services/AgentEmbeddingService";
@@ -115,6 +115,7 @@ export class AIEngine extends BaseSingleton<AIEngine> {
     public get Agents(): MJAIAgentEntityExtended[] { return this.Base.Agents; }
     public get AgentRelationships(): MJAIAgentRelationshipEntity[] { return this.Base.AgentRelationships; }
     public get AgentTypes(): MJAIAgentTypeEntity[] { return this.Base.AgentTypes; }
+    public get AgentCategories(): MJAIAgentCategoryEntity[] { return this.Base.AgentCategories; }
     public get AgentActions(): MJAIAgentActionEntity[] { return this.Base.AgentActions; }
     public get AgentPrompts(): MJAIAgentPromptEntity[] { return this.Base.AgentPrompts; }
     public get AgentConfigurations(): MJAIAgentConfigurationEntity[] { return this.Base.AgentConfigurations; }

@@ -88,7 +88,7 @@ export class PromptManagementComponent extends BaseResourceComponent implements 
   private loadingMessageIndex = 0;
   private loadingMessageInterval: any;
 
-  private destroy$ = new Subject<void>();
+  protected override destroy$ = new Subject<void>();
   public selectedPromptForTest: MJAIPromptEntityExtended | null = null;
 
   // === Permission Checks ===
@@ -175,7 +175,6 @@ export class PromptManagementComponent extends BaseResourceComponent implements 
   constructor(
     private sharedService: SharedService,
     private testHarnessService: AITestHarnessDialogService,
-    private navigationService: NavigationService,
     private cdr: ChangeDetectorRef
   ) {
     super();
@@ -190,6 +189,7 @@ export class PromptManagementComponent extends BaseResourceComponent implements 
   }
 
   ngOnInit(): void {
+    super.ngOnInit();
     // Load saved user preferences first
     this.loadUserPreferences();
 
@@ -204,6 +204,7 @@ export class PromptManagementComponent extends BaseResourceComponent implements 
   }
 
   ngOnDestroy(): void {
+    super.ngOnDestroy();
     this.destroy$.next();
     this.destroy$.complete();
     if (this.loadingMessageInterval) {

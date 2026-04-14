@@ -11,13 +11,14 @@
  */
 
 import { createHash } from 'crypto';
-import { LogError, LogStatusEx, IsVerboseLoggingEnabled, LogStatus, Metadata, RunView, UserInfo, IMetadataProvider } from '@memberjunction/core';
+import { LogError, LogStatusEx, IsVerboseLoggingEnabled, LogStatus, Metadata, RunView, UserInfo, IMetadataProvider, DatabaseProviderBase, ProviderType } from '@memberjunction/core';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
-import { ExecuteAgentResult, ExecuteAgentParams, MediaOutput } from '@memberjunction/ai-core-plus';
+import { ExecuteAgentResult, ExecuteAgentParams, MediaOutput, FileOutputRef, ActionStepOutputData, ActionStepSummary, ParseFileOutputRef } from '@memberjunction/ai-core-plus';
 import { BaseAgent } from './base-agent';
 import { InputArtifact } from './ArtifactToolManager';
-import { MJConversationEntity, MJConversationDetailEntity, MJArtifactEntity, MJArtifactVersionEntity, MJConversationDetailArtifactEntity, MJAIAgentRunMediaEntity, MJConversationDetailAttachmentEntity } from '@memberjunction/core-entities';
+import { MJConversationEntity, MJConversationDetailEntity, MJArtifactEntity, MJArtifactVersionEntity, MJConversationDetailArtifactEntity, MJAIAgentRunMediaEntity, MJConversationDetailAttachmentEntity, ArtifactMetadataEngine } from '@memberjunction/core-entities';
+import { FileStorageEngine } from '@memberjunction/storage';
 
 /**
  * AgentRunner provides a thin wrapper for executing AI agents.
@@ -44,6 +45,7 @@ export class AgentRunner {
     constructor(provider?: IMetadataProvider) {
         this._provider = provider || Metadata.Provider;
     }
+
 
     /**
      * Runs an AI agent with the specified parameters.
@@ -466,6 +468,19 @@ export class AgentRunner {
                 return undefined;
             })();
 
+            // Step 6b: Process file artifacts produced by file-generation actions (async)
+            const processFileArtifactsPromise = (async () => {
+                if (agentResult.success && agentResponseDetailId && agentResult.fileOutputs?.length) {
+                    await this.ProcessFileArtifacts(
+                        agentResult.fileOutputs,
+                        agentResponseDetailId,
+                        contextUser,
+                        agentResult.resolvedStorageAccountId,
+                        md
+                    );
+                }
+            })();
+
             // Step 7: Save media outputs to AIAgentRunMedia and create conversation attachments (async)
             const saveMediaPromise = (async () => {
                 if (agentResult.mediaOutputs && agentResult.mediaOutputs.length > 0) {
@@ -501,6 +516,7 @@ export class AgentRunner {
             const [, artifactInfo] = await Promise.all([
                 updateDetailPromise,
                 processArtifactsPromise,
+                processFileArtifactsPromise,
                 saveMediaPromise
             ]);
 
@@ -534,9 +550,9 @@ export class AgentRunner {
      * const newVersionNumber = maxVersion + 1;
      * ```
      */
-    public async GetMaxVersionForArtifact(artifactId: string, contextUser: UserInfo): Promise<number> {
+    public async GetMaxVersionForArtifact(artifactId: string, contextUser: UserInfo, provider?: IMetadataProvider): Promise<number> {
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(provider || this._provider);
             const result = await rv.RunView<MJArtifactVersionEntity>({
                 EntityName: 'MJ: Artifact Versions',
                 ExtraFilter: `ArtifactID='${artifactId}'`,
@@ -575,11 +591,12 @@ export class AgentRunner {
         artifactId: string,
         candidateContent: string,
         latestVersionNumber: number,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<string | null> {
         const candidateHash = createHash('sha256').update(candidateContent, 'utf8').digest('hex');
 
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(provider || this._provider);
         const result = await rv.RunView<{ ID: string; ContentHash: string }>({
             EntityName: 'MJ: Artifact Versions',
             ExtraFilter: `ArtifactID='${artifactId}' AND VersionNumber=${latestVersionNumber}`,
@@ -658,7 +675,7 @@ export class AgentRunner {
         provider?: IMetadataProvider
     ): Promise<{ artifactId: string; versionNumber: number } | null> {
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(provider || this._provider);
             const result = await rv.RunView<MJConversationDetailArtifactEntity>({
                 EntityName: 'MJ: Conversation Detail Artifacts',
                 ExtraFilter: `ConversationDetailID='${conversationDetailId}' AND Direction='Output'`,
@@ -859,7 +876,7 @@ export class AgentRunner {
 
             // Priority 1: Use explicit source artifact if provided
             if (sourceArtifactId) {
-                const maxVersion = await this.GetMaxVersionForArtifact(sourceArtifactId, contextUser);
+                const maxVersion = await this.GetMaxVersionForArtifact(sourceArtifactId, contextUser, provider);
                 artifactId = sourceArtifactId;
                 newVersionNumber = maxVersion + 1;
                 LogStatus(`Creating version ${newVersionNumber} of source artifact ${artifactId}`);
@@ -920,7 +937,7 @@ export class AgentRunner {
             // Skip version creation if content is identical to the latest version
             if (!isNewArtifact && newVersionNumber > 1) {
                 const existingVersionId = await this.CheckForDuplicateVersion(
-                    artifactId, serializedContent, newVersionNumber - 1, contextUser
+                    artifactId, serializedContent, newVersionNumber - 1, contextUser, provider
                 );
                 if (existingVersionId) {
                     console.debug(`Skipping duplicate artifact version — content identical to version ${newVersionNumber - 1}`);
@@ -1289,6 +1306,316 @@ export class AgentRunner {
             LogError(`Error in CreateConversationMediaAttachments: ${(error as Error).message}`);
             return attachmentIds;
         }
+    }
+
+    // ── File artifact processing ───────────────────────────────────────────────
+
+    /**
+     * Creates MJ: Artifact records for file outputs collected during agent execution.
+     * Reads directly from `ExecuteAgentResult.fileOutputs` — no DB query needed.
+     *
+     * Called automatically by RunAgentInConversation after the agent completes.
+     *
+     * @param fileOutputs - File outputs collected by BaseAgent during action execution
+     * @param conversationDetailId - The conversation detail to link artifacts to
+     * @param contextUser - User context for DB operations
+     * @param resolvedStorageAccountId - Pre-resolved FileStorageAccount ID from the agent's
+     *   hierarchical resolution chain (Runtime → Agent → Category → Type → fallback).
+     *   When provided, uploads use this specific account instead of picking the first active one.
+     */
+    public async ProcessFileArtifacts(
+        fileOutputs: FileOutputRef[],
+        conversationDetailId: string,
+        contextUser: UserInfo,
+        resolvedStorageAccountId?: string,
+        provider?: IMetadataProvider
+    ): Promise<void> {
+        if (fileOutputs.length === 0) return;
+
+        const md = provider || this._provider;
+
+        // Hoist engine configs before parallel processing
+        await Promise.all([
+            ArtifactMetadataEngine.Instance.Config(false, contextUser),
+            FileStorageEngine.Instance.Config(false, contextUser),
+        ]);
+
+        await Promise.all(
+            fileOutputs.map(fo => this.processFileOutput(fo, conversationDetailId, contextUser, resolvedStorageAccountId, md))
+        );
+    }
+
+    /**
+     * Re-processes file artifacts from a historical agent run by querying its persisted
+     * action step OutputData. Use this to recover artifacts for runs that completed before
+     * ProcessFileArtifacts was introduced, or for debugging.
+     *
+     * @param agentRunId - The agent run whose action steps to inspect
+     * @param conversationDetailId - The conversation detail to link artifacts to
+     * @param contextUser - User context for DB operations
+     */
+    public async ReprocessRunFileArtifacts(
+        agentRunId: string,
+        conversationDetailId: string,
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
+    ): Promise<void> {
+        const md = provider || this._provider;
+        const steps = await this.loadActionStepsForRun(agentRunId, contextUser, md);
+        if (steps.length === 0) return;
+
+        const fileOutputs = steps.flatMap(step => this.parseStepFileOutputs(step));
+
+        await this.ProcessFileArtifacts(fileOutputs, conversationDetailId, contextUser, undefined, md);
+    }
+
+    /** Loads all completed action steps for a given agent run (read-only, narrow fields). */
+    private async loadActionStepsForRun(agentRunId: string, contextUser: UserInfo, provider?: IMetadataProvider): Promise<ActionStepSummary[]> {
+        const rv = RunView.FromMetadataProvider(provider || this._provider);
+        const result = await rv.RunView<ActionStepSummary>({
+            EntityName: 'MJ: AI Agent Run Steps',
+            ExtraFilter: `AgentRunID='${agentRunId}' AND StepType='Actions' AND Status='Completed'`,
+            Fields: ['ID', 'OutputData'],
+            ResultType: 'simple'
+        }, contextUser);
+        return result.Success ? (result.Results ?? []) : [];
+    }
+
+    /**
+     * Parses persisted OutputData JSON from an action step and extracts file output metadata.
+     * Detection is shape-based (looks for objects with fileName + mimeType + fileData/fileId),
+     * not name-based — works regardless of what the action named its output parameter.
+     *
+     * Used only by the historical reprocessing path — live runs use BaseAgent's detectFileOutputs.
+     */
+    private parseStepFileOutputs(step: ActionStepSummary): FileOutputRef[] {
+        if (!step.OutputData) return [];
+
+        let outputData: ActionStepOutputData;
+        try {
+            outputData = JSON.parse(step.OutputData) as ActionStepOutputData;
+        } catch {
+            return [];
+        }
+
+        const params = outputData.actionResult?.parameters;
+        if (!params) return [];
+
+        const results: FileOutputRef[] = [];
+        for (const param of params) {
+            if (param.Value == null) continue;
+            const ref = ParseFileOutputRef(param.Value);
+            if (ref) results.push(ref);
+        }
+        return results;
+    }
+
+    /** Uploads or resolves a single file output and creates the artifact records.
+     *  Falls back to inline base64 artifact if storage is unavailable or upload fails. */
+    private async processFileOutput(
+        fo: FileOutputRef,
+        conversationDetailId: string,
+        contextUser: UserInfo,
+        resolvedStorageAccountId: string | undefined,
+        provider: IMetadataProvider
+    ): Promise<void> {
+        try {
+            if (fo.fileId) {
+                // File already in storage — create file-backed artifact
+                await this.createFileArtifact(fo.fileId, fo.mimeType, fo.fileName, fo.sizeBytes, conversationDetailId, contextUser, provider);
+                return;
+            }
+
+            // Check if any storage accounts are configured
+            const hasStorage = FileStorageEngine.Instance.HasStorageAccounts;
+
+            if (!hasStorage) {
+                // No storage configured — go straight to inline artifact
+                LogStatus(`ProcessFileArtifacts: no storage accounts configured for "${fo.fileName}", creating inline artifact`);
+                await this.createInlineFileArtifact(fo.fileData!, fo.mimeType, fo.fileName, fo.sizeBytes, conversationDetailId, contextUser, provider);
+                return;
+            }
+
+            // Try to upload to storage
+            try {
+                const fileId = await this.uploadBase64ToStorage(
+                    fo.fileData!,
+                    fo.fileName,
+                    fo.mimeType,
+                    contextUser,
+                    resolvedStorageAccountId,
+                    provider
+                );
+                await this.createFileArtifact(fileId, fo.mimeType, fo.fileName, fo.sizeBytes, conversationDetailId, contextUser, provider);
+            } catch (storageError) {
+                // Upload failed — fall back to inline artifact
+                LogStatus(`ProcessFileArtifacts: storage upload failed for "${fo.fileName}", creating inline artifact: ${(storageError as Error).message}`);
+                await this.createInlineFileArtifact(fo.fileData!, fo.mimeType, fo.fileName, fo.sizeBytes, conversationDetailId, contextUser, provider);
+            }
+        } catch (error) {
+            LogError(`ProcessFileArtifacts: failed for "${fo.fileName}": ${(error as Error).message}`);
+        }
+    }
+
+    /**
+     * Uploads base64-encoded file content to MJStorage and creates an MJ: Files record.
+     * Returns the new MJ: Files record ID.
+     *
+     * @param resolvedStorageAccountId - Pre-resolved account from the agent's storage resolution chain.
+     *   When provided, uploads to this specific account. Otherwise falls back to the first active account.
+     */
+    private async uploadBase64ToStorage(
+        base64Data: string,
+        fileName: string,
+        mimeType: string,
+        contextUser: UserInfo,
+        resolvedStorageAccountId: string | undefined,
+        provider: IMetadataProvider
+    ): Promise<string> {
+        const result = await FileStorageEngine.Instance.UploadFile({
+            content: Buffer.from(base64Data, 'base64'),
+            fileName,
+            mimeType,
+            contextUser,
+            storageAccountId: resolvedStorageAccountId,
+            provider
+        });
+        return result.FileID;
+    }
+
+    /**
+     * Shared logic for creating an artifact + version + conversation detail link in a single
+     * transaction. The caller provides a callback to set the version-specific fields (file-backed
+     * vs. inline content).
+     */
+    private async createArtifactWithVersion(
+        params: {
+            mimeType: string;
+            fileName: string;
+            sizeBytes: number | undefined;
+            conversationDetailId: string;
+            contextUser: UserInfo;
+            provider: IMetadataProvider;
+            /** Callback to set version-specific fields (ContentMode, FileID/Content, etc.) */
+            setVersionFields: (version: MJArtifactVersionEntity) => void;
+            /** Label for log/error messages (e.g. 'file' or 'inline file') */
+            label: string;
+        }
+    ): Promise<void> {
+        const { mimeType, fileName, sizeBytes, conversationDetailId, contextUser, provider, setVersionFields, label } = params;
+
+        // Resolve the artifact type by MIME type; fall back to the built-in JSON type
+        const JSON_ARTIFACT_TYPE_ID = 'ae674c7e-ea0d-49ea-89e4-0649f5eb20d4';
+        const artifactType = ArtifactMetadataEngine.Instance.GetArtifactTypeByMimeType(mimeType);
+        if (!artifactType) {
+            LogStatus(`ProcessFileArtifacts: no ArtifactType found for MIME ${mimeType}, using JSON fallback`);
+        }
+        const artifactTypeId = artifactType?.ID ?? JSON_ARTIFACT_TYPE_ID;
+
+        // Use direct provider transaction (BeginTransaction/CommitTransaction) instead of
+        // TransactionGroup. This ensures saves execute immediately within the SQL transaction,
+        // so server-side entity hooks (e.g. ArtifactVersion.ExtractAndSaveAttributes) can
+        // Load() parent records that were saved earlier in the same transaction.
+        const dbProvider = provider as unknown as DatabaseProviderBase;
+        const useTransaction = dbProvider.ProviderType === ProviderType.Database;
+
+        if (useTransaction) {
+            await dbProvider.BeginTransaction();
+        }
+
+        try {
+            // Create the artifact header
+            const artifact = await provider.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', contextUser);
+            artifact.Name = fileName;
+            artifact.TypeID = artifactTypeId;
+            artifact.UserID = contextUser.ID;
+            artifact.Visibility = 'Always';
+            if (!(await artifact.Save())) {
+                throw new Error(`Failed to save artifact for ${label}: ${fileName}`);
+            }
+
+            // Create the artifact version — shared fields first, then caller-specific fields
+            const version = await provider.GetEntityObject<MJArtifactVersionEntity>('MJ: Artifact Versions', contextUser);
+            version.ArtifactID = artifact.ID;
+            version.VersionNumber = 1;
+            version.MimeType = mimeType;
+            version.FileName = fileName;
+            version.UserID = contextUser.ID;
+            if (sizeBytes !== undefined) {
+                version.ContentSizeBytes = sizeBytes;
+            }
+            setVersionFields(version);
+            if (!(await version.Save())) {
+                throw new Error(`Failed to save artifact version for ${label}: ${fileName}`);
+            }
+
+            // Link the artifact version to the conversation detail
+            const junction = await provider.GetEntityObject<MJConversationDetailArtifactEntity>(
+                'MJ: Conversation Detail Artifacts',
+                contextUser
+            );
+            junction.ConversationDetailID = conversationDetailId;
+            junction.ArtifactVersionID = version.ID;
+            junction.Direction = 'Output';
+            if (!(await junction.Save())) {
+                throw new Error(`Failed to link ${label} artifact to conversation detail: ${conversationDetailId}`);
+            }
+
+            if (useTransaction) {
+                await dbProvider.CommitTransaction();
+            }
+
+            LogStatus(`Created ${label} artifact: ${fileName} (${mimeType}) → artifact ${artifact.ID}, version ${version.ID}`);
+        } catch (error) {
+            if (useTransaction) {
+                try {
+                    await dbProvider.RollbackTransaction();
+                } catch (rollbackError) {
+                    LogError(`Failed to rollback ${label} artifact transaction: ${rollbackError}`);
+                }
+            }
+            throw error;
+        }
+    }
+
+    /** Creates a file-backed artifact (version references a FileID in MJStorage). */
+    private async createFileArtifact(
+        fileId: string,
+        mimeType: string,
+        fileName: string,
+        sizeBytes: number | undefined,
+        conversationDetailId: string,
+        contextUser: UserInfo,
+        provider: IMetadataProvider
+    ): Promise<void> {
+        await this.createArtifactWithVersion({
+            mimeType, fileName, sizeBytes, conversationDetailId, contextUser, provider,
+            label: 'file',
+            setVersionFields: (version) => {
+                version.ContentMode = 'File';
+                version.FileID = fileId;
+            }
+        });
+    }
+
+    /** Creates an inline artifact (version stores base64 data URL directly, no MJStorage). */
+    private async createInlineFileArtifact(
+        base64Data: string,
+        mimeType: string,
+        fileName: string,
+        sizeBytes: number | undefined,
+        conversationDetailId: string,
+        contextUser: UserInfo,
+        provider: IMetadataProvider
+    ): Promise<void> {
+        await this.createArtifactWithVersion({
+            mimeType, fileName, sizeBytes, conversationDetailId, contextUser, provider,
+            label: 'inline file',
+            setVersionFields: (version) => {
+                version.ContentMode = 'Text';
+                version.Content = `data:${mimeType};base64,${base64Data}`;
+            }
+        });
     }
 
     /**

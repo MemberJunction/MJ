@@ -1,5 +1,4 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, SimpleChanges, ViewChild, ElementRef, AfterViewChecked, SecurityContext, ChangeDetectorRef } from '@angular/core';
-import { Router } from '@angular/router';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { MJAIAgentEntityExtended, MJAIPromptEntityExtended, MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptRunEntityExtended } from "@memberjunction/ai-core-plus";
 import { MJTemplateParamEntity, MJAIConfigurationEntity } from '@memberjunction/core-entities';
@@ -159,8 +158,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
      */
     constructor(
         private sanitizer: DomSanitizer,
-        private cdr: ChangeDetectorRef,
-        private router: Router
+        private cdr: ChangeDetectorRef
     ) {}
     
     /** The mode of operation - either 'agent' or 'prompt' */

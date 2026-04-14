@@ -1,0 +1,212 @@
+[
+  {
+    "fields": {
+      "Name": "Alytaus Apskritis",
+      "Code": "AL",
+      "ISO3166_2": "LT-AL",
+      "Latitude": 54.2544,
+      "Longitude": 24.167,
+      "BoundaryGeoJSON": "@file:by-country/LT/boundaries/LT-AL.geojson",
+      "CommonAliases": [
+        "Alytaus Apskritis"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LT"
+    },
+    "primaryKey": {
+      "ID": "24DAAAC4-3A60-4C40-B62C-135FD24AA0DD"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:12.450Z",
+      "checksum": "f0f88231df50aca0546eb77e1c1159527d192e0a5922b197cca7447b8f26349b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kauno Apskritis",
+      "Code": "KU",
+      "ISO3166_2": "LT-KU",
+      "Latitude": 55.0673,
+      "Longitude": 23.9879,
+      "BoundaryGeoJSON": "@file:by-country/LT/boundaries/LT-KU.geojson",
+      "CommonAliases": [
+        "Kauno Apskritis"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LT"
+    },
+    "primaryKey": {
+      "ID": "C0280914-ACA6-4C50-973B-7AC9EF4D1E4F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:12.467Z",
+      "checksum": "5295d48727abf87443c71ce45433f901b28302382d7711cc362bccd1fd3404e4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Klaipėdos Apskritis",
+      "Code": "KL",
+      "ISO3166_2": "LT-KL",
+      "Latitude": 55.6254,
+      "Longitude": 21.3879,
+      "BoundaryGeoJSON": "@file:by-country/LT/boundaries/LT-KL.geojson",
+      "CommonAliases": [
+        "Klaipėdos Apskritis"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LT"
+    },
+    "primaryKey": {
+      "ID": "09D036E7-24CB-4DF6-BEDF-004CE8435362"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:12.484Z",
+      "checksum": "5e5aae3681ae0c4a15432e7ba8e773041a8ce537a8e619b42234d49c0692f16f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Marijampolės Apskritis",
+      "Code": "MR",
+      "ISO3166_2": "LT-MR",
+      "Latitude": 54.6829,
+      "Longitude": 23.1751,
+      "BoundaryGeoJSON": "@file:by-country/LT/boundaries/LT-MR.geojson",
+      "CommonAliases": [
+        "Marijampolės Apskritis"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LT"
+    },
+    "primaryKey": {
+      "ID": "24553C0B-A0C5-4A32-AB86-7E8E86C06FD1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:12.501Z",
+      "checksum": "77c8d9592f4f4048fd6f356470fd740da81ad95772c019a4704c0d0fdfeded83"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Panevėžio Apskritis",
+      "Code": "PN",
+      "ISO3166_2": "LT-PN",
+      "Latitude": 56.0725,
+      "Longitude": 24.9143,
+      "BoundaryGeoJSON": "@file:by-country/LT/boundaries/LT-PN.geojson",
+      "CommonAliases": [
+        "Panevėžio Apskritis"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LT"
+    },
+    "primaryKey": {
+      "ID": "710F0471-2182-4BD2-BF03-DD031D23CC96"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:12.518Z",
+      "checksum": "122e2059495b223ece6e849785ddd2369e49e9aeb9d21e327f9ee7226887fb0d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Šiauliu Apskritis",
+      "Code": "SA",
+      "ISO3166_2": "LT-SA",
+      "Latitude": 55.9585,
+      "Longitude": 23.2677,
+      "BoundaryGeoJSON": "@file:by-country/LT/boundaries/LT-SA.geojson",
+      "CommonAliases": [
+        "Šiauliu Apskritis"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LT"
+    },
+    "primaryKey": {
+      "ID": "838F3A22-3CD2-4436-A62A-0BFD37F11C18"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:12.535Z",
+      "checksum": "ea5c5c8a11e46a5f43ddf891ba69af7e87367e728ed72337a818ffa288892be6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tauragės Apskritis",
+      "Code": "TA",
+      "ISO3166_2": "LT-TA",
+      "Latitude": 55.2657,
+      "Longitude": 22.6458,
+      "BoundaryGeoJSON": "@file:by-country/LT/boundaries/LT-TA.geojson",
+      "CommonAliases": [
+        "Tauragės Apskritis"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LT"
+    },
+    "primaryKey": {
+      "ID": "D1217235-E700-4C7A-81BB-0590CEC8251F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:12.552Z",
+      "checksum": "cbd3f763d0e491dee49288361c78739c8d0ca9bc7c75d21d6c99d9ea75ea1711"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Telšiu Apskritis",
+      "Code": "TE",
+      "ISO3166_2": "LT-TE",
+      "Latitude": 56.0398,
+      "Longitude": 22.1086,
+      "BoundaryGeoJSON": "@file:by-country/LT/boundaries/LT-TE.geojson",
+      "CommonAliases": [
+        "Telšiu Apskritis"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LT"
+    },
+    "primaryKey": {
+      "ID": "FB418D69-53AF-4409-A4D5-E903F11CA290"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:12.568Z",
+      "checksum": "7b50457d6185ad94093e7f5014465dccdbe6bed06a95ea00148767db47c25dce"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Utenos Apskritis",
+      "Code": "UT",
+      "ISO3166_2": "LT-UT",
+      "Latitude": 55.5267,
+      "Longitude": 25.622,
+      "BoundaryGeoJSON": "@file:by-country/LT/boundaries/LT-UT.geojson",
+      "CommonAliases": [
+        "Utenos Apskritis"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LT"
+    },
+    "primaryKey": {
+      "ID": "417B8D6E-65A4-4C1B-B31C-EAFAE39BF00C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:12.585Z",
+      "checksum": "1c4c3774fa56057f5fe2ca5efc20dbeb1acbc21107574f875e23b27c2a81406c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Vilniaus Apskritis",
+      "Code": "VL",
+      "ISO3166_2": "LT-VL",
+      "Latitude": 54.7338,
+      "Longitude": 25.1588,
+      "BoundaryGeoJSON": "@file:by-country/LT/boundaries/LT-VL.geojson",
+      "CommonAliases": [
+        "Vilniaus Apskritis"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LT"
+    },
+    "primaryKey": {
+      "ID": "CA6DF6FF-B188-43FB-850A-E3CD134B1C75"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:12.599Z",
+      "checksum": "4ddbdf221490728568cfc9a0b9f43662b74c3ef94956ff40f6ab2ce97a8ba317"
+    }
+  }
+]

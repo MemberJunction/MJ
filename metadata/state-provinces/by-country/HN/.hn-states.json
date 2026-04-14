@@ -1,0 +1,380 @@
+[
+  {
+    "fields": {
+      "Name": "Atlántida",
+      "Code": "AT",
+      "ISO3166_2": "HN-AT",
+      "Latitude": 15.6343,
+      "Longitude": -87.0783,
+      "BoundaryGeoJSON": "@file:by-country/HN/boundaries/HN-AT.geojson",
+      "CommonAliases": [
+        "Atlántida"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=HN"
+    },
+    "primaryKey": {
+      "ID": "0767B144-0FAA-456F-AC82-7294339608DD"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:59.573Z",
+      "checksum": "6d858e0720d06b6f819af7c6730e99196a908f1f83f9e3bfbea54a4e4d995095"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Choluteca",
+      "Code": "CH",
+      "ISO3166_2": "HN-CH",
+      "Latitude": 13.2587,
+      "Longitude": -87.1074,
+      "BoundaryGeoJSON": "@file:by-country/HN/boundaries/HN-CH.geojson",
+      "CommonAliases": [
+        "Choluteca"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=HN"
+    },
+    "primaryKey": {
+      "ID": "0AFC5D5B-14EA-4736-A055-AE1BD984FEEE"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:59.587Z",
+      "checksum": "30dfb6d8abc781d283327486aaf3b85f912195bfb385d7f1a4b8f94fc00a5f9e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Colón",
+      "Code": "CL",
+      "ISO3166_2": "HN-CL",
+      "Latitude": 15.7786,
+      "Longitude": -85.7236,
+      "BoundaryGeoJSON": "@file:by-country/HN/boundaries/HN-CL.geojson",
+      "CommonAliases": [
+        "Colón"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=HN"
+    },
+    "primaryKey": {
+      "ID": "DBB70058-789D-4124-BB91-0D33A4C4F2EF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:59.603Z",
+      "checksum": "7fd529f52a6a591b2671d84e526a659e6e5dee925a0ad930a2b8a454e887540f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Comayagua",
+      "Code": "CM",
+      "ISO3166_2": "HN-CM",
+      "Latitude": 14.6577,
+      "Longitude": -87.678,
+      "BoundaryGeoJSON": "@file:by-country/HN/boundaries/HN-CM.geojson",
+      "CommonAliases": [
+        "Comayagua"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=HN"
+    },
+    "primaryKey": {
+      "ID": "7376C78E-A336-4292-A139-9E05391DBD21"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:59.619Z",
+      "checksum": "232ad46911533f834ba51de0c9563a4100eefb105b6c995a4bb83d634cdbce65"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Copán",
+      "Code": "CP",
+      "ISO3166_2": "HN-CP",
+      "Latitude": 14.8909,
+      "Longitude": -88.9362,
+      "BoundaryGeoJSON": "@file:by-country/HN/boundaries/HN-CP.geojson",
+      "CommonAliases": [
+        "Copán"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=HN"
+    },
+    "primaryKey": {
+      "ID": "111EC6D7-2FB3-4979-8953-91F203CAF64B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:59.635Z",
+      "checksum": "99c8e9dfdd0af0e45fcaee9fab1520d72269c23911d25e408cab6abaafddbe4a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Cortés",
+      "Code": "CR",
+      "ISO3166_2": "HN-CR",
+      "Latitude": 15.5336,
+      "Longitude": -88.0359,
+      "BoundaryGeoJSON": "@file:by-country/HN/boundaries/HN-CR.geojson",
+      "CommonAliases": [
+        "Cortés"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=HN"
+    },
+    "primaryKey": {
+      "ID": "77B412A8-554C-473B-8D14-D088AF6706F0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:59.653Z",
+      "checksum": "dbbf2ee65eb7cb2d6479f5a477070df8d353c6083f1e61196655977e1d949f20"
+    }
+  },
+  {
+    "fields": {
+      "Name": "El Paraíso",
+      "Code": "EP",
+      "ISO3166_2": "HN-EP",
+      "Latitude": 14.037,
+      "Longitude": -86.5592,
+      "BoundaryGeoJSON": "@file:by-country/HN/boundaries/HN-EP.geojson",
+      "CommonAliases": [
+        "El Paraíso"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=HN"
+    },
+    "primaryKey": {
+      "ID": "B3D55BF0-AA1A-4F96-A15E-F30686D6EF27"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:59.670Z",
+      "checksum": "01824402d488dd9e5817ca9f4d3d9f8aaf1725dc9086f54d98600dbb58a0f3b1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Francisco Morazán",
+      "Code": "FM",
+      "ISO3166_2": "HN-FM",
+      "Latitude": 14.3474,
+      "Longitude": -87.1815,
+      "BoundaryGeoJSON": "@file:by-country/HN/boundaries/HN-FM.geojson",
+      "CommonAliases": [
+        "Francisco Morazán"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=HN"
+    },
+    "primaryKey": {
+      "ID": "A13A0B1F-A840-41FC-A077-12213A06B919"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:59.687Z",
+      "checksum": "48ec47ed4034f4b2646ff67a213f0aa7e17447c2466dfdc56d5b3dbea9a1a2f3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gracias a Dios",
+      "Code": "GD",
+      "ISO3166_2": "HN-GD",
+      "Latitude": 15.1219,
+      "Longitude": -84.3701,
+      "BoundaryGeoJSON": "@file:by-country/HN/boundaries/HN-GD.geojson",
+      "CommonAliases": [
+        "Gracias a Dios"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=HN"
+    },
+    "primaryKey": {
+      "ID": "F10A508C-9892-4666-89A9-516B19BE20E5"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:59.703Z",
+      "checksum": "72baa9313e4336979e44dca0e9af9c81a6d56b16b1e3dcc1fe9bce0089967a51"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Intibucá",
+      "Code": "IN",
+      "ISO3166_2": "HN-IN",
+      "Latitude": 14.3981,
+      "Longitude": -88.1754,
+      "BoundaryGeoJSON": "@file:by-country/HN/boundaries/HN-IN.geojson",
+      "CommonAliases": [
+        "Intibucá"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=HN"
+    },
+    "primaryKey": {
+      "ID": "31203965-7EE5-4D83-81F7-8057071482F2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:59.716Z",
+      "checksum": "5c347fdede542d51c30077d334cea7d022b323177ff6f0402fa7dae1dcaa3ecd"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Islas de la Bahía",
+      "Code": "IB",
+      "ISO3166_2": "HN-IB",
+      "Latitude": 16.1048,
+      "Longitude": -86.9319,
+      "BoundaryGeoJSON": "@file:by-country/HN/boundaries/HN-IB.geojson",
+      "CommonAliases": [
+        "Islas de la Bahía"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=HN"
+    },
+    "primaryKey": {
+      "ID": "921C72C8-7549-42CE-B10A-24C6E014A4EC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:59.766Z",
+      "checksum": "53d4ef68f927a44b537ad52df4ebd26d4edf370c449eaf83b6d35f3b53f102bc"
+    }
+  },
+  {
+    "fields": {
+      "Name": "La Paz",
+      "Code": "LP",
+      "ISO3166_2": "HN-LP",
+      "Latitude": 14.138,
+      "Longitude": -87.9144,
+      "BoundaryGeoJSON": "@file:by-country/HN/boundaries/HN-LP.geojson",
+      "CommonAliases": [
+        "La Paz"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=HN"
+    },
+    "primaryKey": {
+      "ID": "F0D21233-4EDE-41DC-B4A7-F8A935B6ACC6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:59.780Z",
+      "checksum": "bf061b1e44626dacc1a00bcdcf9f475e4f3d814abd95ee5f99e0661366b99dbd"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Lempira",
+      "Code": "LE",
+      "ISO3166_2": "HN-LE",
+      "Latitude": 14.4408,
+      "Longitude": -88.6478,
+      "BoundaryGeoJSON": "@file:by-country/HN/boundaries/HN-LE.geojson",
+      "CommonAliases": [
+        "Lempira"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=HN"
+    },
+    "primaryKey": {
+      "ID": "80C0EEE5-BCA7-4F86-91D7-7538E8FD2B40"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:59.796Z",
+      "checksum": "3f866f05283a11a1d64bd254ab4b188c09fe0af99d394f23540ee33069022b5b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ocotepeque",
+      "Code": "OC",
+      "ISO3166_2": "HN-OC",
+      "Latitude": 14.5248,
+      "Longitude": -89.0399,
+      "BoundaryGeoJSON": "@file:by-country/HN/boundaries/HN-OC.geojson",
+      "CommonAliases": [
+        "Ocotepeque"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=HN"
+    },
+    "primaryKey": {
+      "ID": "390A1617-87B5-4977-9DAD-B35C08DD441A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:59.813Z",
+      "checksum": "2eec2c560152556879732b0456f6ddf15d68cfb953e029b30a8314034285a7f3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Olancho",
+      "Code": "OL",
+      "ISO3166_2": "HN-OL",
+      "Latitude": 14.8052,
+      "Longitude": -85.9937,
+      "BoundaryGeoJSON": "@file:by-country/HN/boundaries/HN-OL.geojson",
+      "CommonAliases": [
+        "Olancho"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=HN"
+    },
+    "primaryKey": {
+      "ID": "8608BA03-DF84-4A0B-A439-B2B1C944F5BE"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:59.829Z",
+      "checksum": "f10f1e91f6c488ffa16d4a8aada86eb6083111a602c541dbbcc3fb7693ef570f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Santa Bárbara",
+      "Code": "SB",
+      "ISO3166_2": "HN-SB",
+      "Latitude": 15.0527,
+      "Longitude": -88.33,
+      "BoundaryGeoJSON": "@file:by-country/HN/boundaries/HN-SB.geojson",
+      "CommonAliases": [
+        "Santa Bárbara"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=HN"
+    },
+    "primaryKey": {
+      "ID": "9B78584A-B8F7-4A7D-AAAE-5DBC1C508539"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:59.845Z",
+      "checksum": "36393443f61095a3029a3490a7e44bd92e026f37bf8501891a08f60a62164ee1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Valle",
+      "Code": "VA",
+      "ISO3166_2": "HN-VA",
+      "Latitude": 13.5753,
+      "Longitude": -87.5992,
+      "BoundaryGeoJSON": "@file:by-country/HN/boundaries/HN-VA.geojson",
+      "CommonAliases": [
+        "Valle"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=HN"
+    },
+    "primaryKey": {
+      "ID": "F688AC05-FC49-4A11-BE22-90ED82F44776"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:59.861Z",
+      "checksum": "994150df435a0de6862e639771de89911b7857b22e2d7cb26b4f19356720e97f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Yoro",
+      "Code": "YO",
+      "ISO3166_2": "HN-YO",
+      "Latitude": 15.233,
+      "Longitude": -87.206,
+      "BoundaryGeoJSON": "@file:by-country/HN/boundaries/HN-YO.geojson",
+      "CommonAliases": [
+        "Yoro"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=HN"
+    },
+    "primaryKey": {
+      "ID": "084E221E-D4AC-4DAF-8127-F85003D935D3"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:59.874Z",
+      "checksum": "8ee3d3457d42741293753a2058a6e01533eccb43d9101b45a3b0852f3f777386"
+    }
+  }
+]

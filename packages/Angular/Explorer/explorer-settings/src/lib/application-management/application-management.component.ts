@@ -57,7 +57,7 @@ export class ApplicationManagementComponent extends BaseDashboard implements OnD
   public showDeleteConfirm = false;
   public expandedAppId: string | null = null;
 
-  private destroy$ = new Subject<void>();
+  protected override destroy$ = new Subject<void>();
   private metadata = new Metadata();
 
   constructor(private cdr: ChangeDetectorRef, private ngZone: NgZone) {

@@ -1,0 +1,191 @@
+[
+  {
+    "fields": {
+      "Name": "Eastern Cape",
+      "Code": "EC",
+      "ISO3166_2": "ZA-EC",
+      "Latitude": -32.2172,
+      "Longitude": 26.6386,
+      "BoundaryGeoJSON": "@file:by-country/ZA/boundaries/ZA-EC.geojson",
+      "CommonAliases": [
+        "Eastern Cape"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ZA"
+    },
+    "primaryKey": {
+      "ID": "AC27AEA6-7BD2-462D-B6AA-40674CC0ADBC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:45.141Z",
+      "checksum": "7e20205074a143ea18f4e134720142eba3d8fb77c70d79e1776fdf1d16f64887"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Free State",
+      "Code": "FS",
+      "ISO3166_2": "ZA-FS",
+      "Latitude": -28.7854,
+      "Longitude": 26.4979,
+      "BoundaryGeoJSON": "@file:by-country/ZA/boundaries/ZA-FS.geojson",
+      "CommonAliases": [
+        "Free State"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ZA"
+    },
+    "primaryKey": {
+      "ID": "6992BCE4-8B29-47E7-A283-FB82D23B9AA9"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:45.156Z",
+      "checksum": "b7a79fb1e877e4f5964f79e31f9c668beab1781040a0e0345a33904f5f2cc4d8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gauteng",
+      "Code": "GP",
+      "ISO3166_2": "ZA-GP",
+      "Latitude": -25.9363,
+      "Longitude": 28.0813,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Gauteng"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ZA"
+    },
+    "primaryKey": {
+      "ID": "CDF4F1E9-3F92-4E0A-9E06-DB7E36B02268"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:45.172Z",
+      "checksum": "50fdb7509e06f206c51bec6df296a9c2e8a4723c7d108b9995abe7ff153f04dd"
+    }
+  },
+  {
+    "fields": {
+      "Name": "KwaZulu-Natal",
+      "Code": "KZN",
+      "ISO3166_2": "ZA-KZN",
+      "Latitude": -28.5038,
+      "Longitude": 30.8875,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "KwaZulu-Natal"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ZA"
+    },
+    "primaryKey": {
+      "ID": "96E3A026-2648-49BD-B78C-9BE111EDE509"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:45.187Z",
+      "checksum": "c8206e0758f949552bdc1bfa2e85a62bcefbf30df63c578c41e59680ebffc940"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Limpopo",
+      "Code": "LP",
+      "ISO3166_2": "ZA-LP",
+      "Latitude": -23.4735,
+      "Longitude": 29.3959,
+      "BoundaryGeoJSON": "@file:by-country/ZA/boundaries/ZA-LP.geojson",
+      "CommonAliases": [
+        "Limpopo"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ZA"
+    },
+    "primaryKey": {
+      "ID": "D1AA5B25-20B6-4B07-ADAC-E5C697DECFD2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:45.205Z",
+      "checksum": "0678da557b69ca19efd9eb2c0e5b82a1b8efc4a075f8ac599c9aa6fd671022be"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mpumalanga",
+      "Code": "MP",
+      "ISO3166_2": "ZA-MP",
+      "Latitude": -26.2768,
+      "Longitude": 30.15,
+      "BoundaryGeoJSON": "@file:by-country/ZA/boundaries/ZA-MP.geojson",
+      "CommonAliases": [
+        "Mpumalanga"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ZA"
+    },
+    "primaryKey": {
+      "ID": "002715D2-0FFC-4CF4-82D0-BA537D376642"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:45.222Z",
+      "checksum": "a0a5eb3c40ea321726ee0b2f34724fb5b0c5d0faec4602f1002d3b17d3aaafec"
+    }
+  },
+  {
+    "fields": {
+      "Name": "North West",
+      "Code": "NW",
+      "ISO3166_2": "ZA-NW",
+      "Latitude": -26.1348,
+      "Longitude": 25.6547,
+      "BoundaryGeoJSON": "@file:by-country/ZA/boundaries/ZA-NW.geojson",
+      "CommonAliases": [
+        "North West"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ZA"
+    },
+    "primaryKey": {
+      "ID": "D59C8BB9-F3FD-42BD-8057-62182963332E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:45.239Z",
+      "checksum": "10b3a2882973c3b3ce34a2ab0633548c2b9d475655894bc83d90b44fea435f1d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Northern Cape",
+      "Code": "NC",
+      "ISO3166_2": "ZA-NC",
+      "Latitude": -29.5734,
+      "Longitude": 21.2051,
+      "BoundaryGeoJSON": "@file:by-country/ZA/boundaries/ZA-NC.geojson",
+      "CommonAliases": [
+        "Northern Cape"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ZA"
+    },
+    "primaryKey": {
+      "ID": "91972ADA-CFE1-4F53-973D-D371AD5DEF1A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:45.257Z",
+      "checksum": "5afab21edf2d4b4eb26ff7fbbc3e3b6af63f83e0d81263d2f7f504307abe8355"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Western Cape",
+      "Code": "WC",
+      "ISO3166_2": "ZA-WC",
+      "Latitude": -33.547,
+      "Longitude": 20.7275,
+      "BoundaryGeoJSON": "@file:by-country/ZA/boundaries/ZA-WC.geojson",
+      "CommonAliases": [
+        "Western Cape"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ZA"
+    },
+    "primaryKey": {
+      "ID": "36FF13C5-EAB1-422F-A6B8-FF4144FBFEB1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:45.272Z",
+      "checksum": "efb6de4adb7f5fb800ef1c830fe5264c4a2c513ef577fb19bb4fd5fae5081a42"
+    }
+  }
+]

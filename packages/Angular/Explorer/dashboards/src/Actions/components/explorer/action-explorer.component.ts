@@ -6,14 +6,13 @@ import {
   ChangeDetectorRef,
   ViewChild
 } from '@angular/core';
-import { Router, NavigationEnd } from '@angular/router';
 import { Subject } from 'rxjs';
-import { takeUntil, filter, debounceTime, distinctUntilChanged, combineLatestWith } from 'rxjs/operators';
+import { takeUntil, debounceTime, combineLatestWith } from 'rxjs/operators';
 import { CompositeKey, LogError, RunView } from '@memberjunction/core';
 import { MJActionCategoryEntity, MJActionEntity, MJActionParamEntity, ResourceData } from '@memberjunction/core-entities';
 import { ActionEngineBase, MJActionEntityExtended } from '@memberjunction/actions-base';
 import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
-import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
+import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import {
   ActionExplorerStateService,
   ActionViewMode,
@@ -48,27 +47,25 @@ export class ActionExplorerComponent extends BaseResourceComponent implements On
   public SelectedActionForRun: MJActionEntity | null = null;
   public SelectedActionParams: MJActionParamEntity[] = [];
 
-  private destroy$ = new Subject<void>();
-  private lastNavigatedUrl = '';
-  private skipUrlUpdate = false;
+  protected override destroy$ = new Subject<void>();
 
   constructor(
     public StateService: ActionExplorerStateService,
-    private navigationService: NavigationService,
-    private router: Router,
     private cdr: ChangeDetectorRef
   ) {
     super();
   }
 
   ngOnInit(): void {
+    super.ngOnInit();
     this.subscribeToState();
-    this.subscribeToRouterEvents();
-    this.loadInitialState();
+    this.applyQueryParams(this.GetQueryParams());
+    this.StateService.loadSavedState();
     this.loadData();
   }
 
   ngOnDestroy(): void {
+    super.ngOnDestroy();
     this.destroy$.next();
     this.destroy$.complete();
   }
@@ -88,7 +85,7 @@ export class ActionExplorerComponent extends BaseResourceComponent implements On
     ).subscribe(id => {
       this.SelectedCategoryId = id;
       this.applyFilters();
-      this.updateUrl();
+      this.UpdateQueryParams(this.StateService.buildQueryParams());
       this.cdr.markForCheck();
     });
 
@@ -99,37 +96,22 @@ export class ActionExplorerComponent extends BaseResourceComponent implements On
       takeUntil(this.destroy$)
     ).subscribe(() => {
       this.applyFilters();
-      this.updateUrl();
+      this.UpdateQueryParams(this.StateService.buildQueryParams());
       this.cdr.markForCheck();
     });
   }
 
-  private subscribeToRouterEvents(): void {
-    this.router.events.pipe(
-      filter((event): event is NavigationEnd => event instanceof NavigationEnd),
-      takeUntil(this.destroy$)
-    ).subscribe(event => {
-      const currentUrl = event.urlAfterRedirects || event.url;
-      if (currentUrl !== this.lastNavigatedUrl) {
-        this.onExternalNavigation(currentUrl);
+  /**
+   * Convert the framework's plain-object params into the StateService's URLSearchParams-based parser.
+   */
+  private applyQueryParams(params: Record<string, string>): void {
+    const urlParams = new URLSearchParams();
+    for (const [key, value] of Object.entries(params)) {
+      if (value != null) {
+        urlParams.set(key, value);
       }
-    });
-  }
-
-  private loadInitialState(): void {
-    // Parse URL query params
-    const url = this.router.url;
-    const queryIndex = url.indexOf('?');
-    if (queryIndex !== -1) {
-      const queryString = url.substring(queryIndex + 1);
-      const params = new URLSearchParams(queryString);
-      this.skipUrlUpdate = true;
-      this.StateService.parseQueryParams(params);
-      this.skipUrlUpdate = false;
     }
-
-    // Load saved state from UserInfoEngine
-    this.StateService.loadSavedState();
+    this.StateService.parseQueryParams(urlParams);
   }
 
   private async loadData(): Promise<void> {
@@ -264,25 +246,14 @@ export class ActionExplorerComponent extends BaseResourceComponent implements On
     return sorted;
   }
 
-  private updateUrl(): void {
-    if (this.skipUrlUpdate) return;
-
-    const queryParams = this.StateService.buildQueryParams();
-    this.navigationService.UpdateActiveTabQueryParams(queryParams);
-    this.lastNavigatedUrl = this.router.url;
-  }
-
-  private onExternalNavigation(url: string): void {
-    const queryIndex = url.indexOf('?');
-    if (queryIndex !== -1) {
-      const queryString = url.substring(queryIndex + 1);
-      const params = new URLSearchParams(queryString);
-      this.skipUrlUpdate = true;
-      this.StateService.parseQueryParams(params);
-      this.skipUrlUpdate = false;
-      this.applyFilters();
-      this.cdr.markForCheck();
-    }
+  /**
+   * React to back/forward navigation or deep-link activation.
+   * Called by the base class when the URL query params change externally.
+   */
+  protected override OnQueryParamsChanged(params: Record<string, string>, source: 'popstate' | 'deeplink'): void {
+    this.applyQueryParams(params);
+    this.applyFilters();
+    this.cdr.markForCheck();
   }
 
   public async onRefresh(): Promise<void> {

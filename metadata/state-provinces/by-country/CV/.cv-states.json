@@ -1,0 +1,338 @@
+[
+  {
+    "fields": {
+      "Name": "Boa Vista",
+      "Code": "BV",
+      "ISO3166_2": "CV-BV",
+      "Latitude": 16.1024,
+      "Longitude": -22.807,
+      "BoundaryGeoJSON": "@file:by-country/CV/boundaries/CV-BV.geojson",
+      "CommonAliases": [
+        "Boa Vista"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CV"
+    },
+    "primaryKey": {
+      "ID": "66F46512-8B0B-4468-8458-F34B17360598"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:40.269Z",
+      "checksum": "63a06af56027a10bd9fb0e2c16939d5627c663aad0fe44c63c746962032e3db8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Brava",
+      "Code": "BR",
+      "ISO3166_2": "CV-BR",
+      "Latitude": 14.851,
+      "Longitude": -24.7204,
+      "BoundaryGeoJSON": "@file:by-country/CV/boundaries/CV-BR.geojson",
+      "CommonAliases": [
+        "Brava"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CV"
+    },
+    "primaryKey": {
+      "ID": "531B3006-5D08-4E3F-82E4-1E1CC6A6868E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:40.289Z",
+      "checksum": "baea714a9b4465b62df3d814bf94b66611da98011e5e91dab330e7ad71c663cf"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Fogo",
+      "Code": "FO",
+      "ISO3166_2": "CV-FO",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Fogo"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CV"
+    },
+    "primaryKey": {
+      "ID": "608E0126-D7B6-4466-B557-40309099BC81"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:40.309Z",
+      "checksum": "082a825407227e31db43cb8a1e03c49256891d04bcb03addea4065b3c0c87739"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ilhas de Barlavento",
+      "Code": "B",
+      "ISO3166_2": "CV-B",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Ilhas de Barlavento"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CV"
+    },
+    "primaryKey": {
+      "ID": "D4151C44-C2A2-4112-8905-FB6B35983B81"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:40.326Z",
+      "checksum": "c0269312afad343868812894b2503acb0ffc8c7c5d33ae81b10f672055c79646"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ilhas de Sotavento",
+      "Code": "S",
+      "ISO3166_2": "CV-S",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Ilhas de Sotavento"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CV"
+    },
+    "primaryKey": {
+      "ID": "BC82970E-01D6-4164-B8DF-CE9416029A81"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:40.343Z",
+      "checksum": "15ca2e12a1ad2379e0dcd3794240d3a8f1bf55ff5f061eaa17ec3e56b5ac5a14"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Maio",
+      "Code": "MA",
+      "ISO3166_2": "CV-MA",
+      "Latitude": 15.2115,
+      "Longitude": -23.1806,
+      "BoundaryGeoJSON": "@file:by-country/CV/boundaries/CV-MA.geojson",
+      "CommonAliases": [
+        "Maio"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CV"
+    },
+    "primaryKey": {
+      "ID": "1C9D3E05-C17D-44CB-9029-82224FEE4F69"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:40.360Z",
+      "checksum": "156fc2b585da08be8fa17a88b7734bd26396577b20f5c7b423a6fd141d6e28e3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Paul",
+      "Code": "PA",
+      "ISO3166_2": "CV-PA",
+      "Latitude": 17.1179,
+      "Longitude": -25.0151,
+      "BoundaryGeoJSON": "@file:by-country/CV/boundaries/CV-PA.geojson",
+      "CommonAliases": [
+        "Paul"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CV"
+    },
+    "primaryKey": {
+      "ID": "37B8CB8C-E0B4-4948-8D66-11E64C53C202"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:40.376Z",
+      "checksum": "fe189983d67f1f7e38a89718d42d8800f13d3a28f3522b9f6f1088c7bc34bf4f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Porto Novo",
+      "Code": "PN",
+      "ISO3166_2": "CV-PN",
+      "Latitude": 17.0173,
+      "Longitude": -25.2258,
+      "BoundaryGeoJSON": "@file:by-country/CV/boundaries/CV-PN.geojson",
+      "CommonAliases": [
+        "Porto Novo"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CV"
+    },
+    "primaryKey": {
+      "ID": "C7913A2D-3170-441E-B774-FC23477C0A71"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:40.393Z",
+      "checksum": "15bf1ad0038d907a6a01aee7c8441ab8c208d15aff64eb9590222906ef6063dd"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Praia",
+      "Code": "PR",
+      "ISO3166_2": "CV-PR",
+      "Latitude": 14.9529,
+      "Longitude": -23.5159,
+      "BoundaryGeoJSON": "@file:by-country/CV/boundaries/CV-PR.geojson",
+      "CommonAliases": [
+        "Praia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CV"
+    },
+    "primaryKey": {
+      "ID": "FF6E3FA2-9648-44D2-BC72-7238BB176E13"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:40.410Z",
+      "checksum": "d022aa555c29e510ddecede7b06cdc0b66be8cccd85fcdd594b4faeb8a851f34"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ribeira Grande",
+      "Code": "RG",
+      "ISO3166_2": "CV-RG",
+      "Latitude": 17.1418,
+      "Longitude": -25.1204,
+      "BoundaryGeoJSON": "@file:by-country/CV/boundaries/CV-RG.geojson",
+      "CommonAliases": [
+        "Ribeira Grande"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CV"
+    },
+    "primaryKey": {
+      "ID": "BE4766A9-CC8C-45E3-8139-B422D30C7E41"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:40.424Z",
+      "checksum": "fe755ea3c8d9130ba97c24cf06f0a2943e04488e10a31b55640b64b75107702a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sal",
+      "Code": "SL",
+      "ISO3166_2": "CV-SL",
+      "Latitude": 16.7251,
+      "Longitude": -22.9363,
+      "BoundaryGeoJSON": "@file:by-country/CV/boundaries/CV-SL.geojson",
+      "CommonAliases": [
+        "Sal"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CV"
+    },
+    "primaryKey": {
+      "ID": "E957F067-D821-4B70-B0DE-607CDC1E5146"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:40.468Z",
+      "checksum": "069c03ae9e748a32b0d4296128a24d1b09c16f68d61f6ab46bf7b919c9c891e4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Santa Catarina",
+      "Code": "CA",
+      "ISO3166_2": "CV-CA",
+      "Latitude": 15.0918,
+      "Longitude": -23.7027,
+      "BoundaryGeoJSON": "@file:by-country/CV/boundaries/CV-CA.geojson",
+      "CommonAliases": [
+        "Santa Catarina"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CV"
+    },
+    "primaryKey": {
+      "ID": "5483CF37-0ADC-403E-9756-27524031D081"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:40.484Z",
+      "checksum": "6c9e246f04ac513aac755280bca511821b71015964a3eb616b6f29b86bc790d6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Santa Cruz",
+      "Code": "CR",
+      "ISO3166_2": "CV-CR",
+      "Latitude": 15.1157,
+      "Longitude": -23.5494,
+      "BoundaryGeoJSON": "@file:by-country/CV/boundaries/CV-CR.geojson",
+      "CommonAliases": [
+        "Santa Cruz"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CV"
+    },
+    "primaryKey": {
+      "ID": "8A62DE9B-2539-4886-BD53-0ED3E6F9E083"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:40.500Z",
+      "checksum": "7e882f09077a81dea7d4591ef1e6b62aecb713b4c057fd6f4e4ed4caf0db31ed"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sāo Nicolau",
+      "Code": "SN",
+      "ISO3166_2": "CV-SN",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Sāo Nicolau"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CV"
+    },
+    "primaryKey": {
+      "ID": "EF1EDE2B-23BB-458C-8558-427650DDF25A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:40.517Z",
+      "checksum": "1365e5a6166b85d99ed40b070ed20f4100616b598da897553f7a8d24b18ce884"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sāo Vicente",
+      "Code": "SV",
+      "ISO3166_2": "CV-SV",
+      "Latitude": 16.8449,
+      "Longitude": -24.972,
+      "BoundaryGeoJSON": "@file:by-country/CV/boundaries/CV-SV.geojson",
+      "CommonAliases": [
+        "Sāo Vicente"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CV"
+    },
+    "primaryKey": {
+      "ID": "7D6F8322-539A-4F9E-8935-34BBC8B2AE63"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:40.535Z",
+      "checksum": "baa946449dcbc23443ca13141b75c7654bca6101b346f7a7f166ee52ac240840"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tarrafal",
+      "Code": "TA",
+      "ISO3166_2": "CV-TA",
+      "Latitude": 15.2355,
+      "Longitude": -23.717,
+      "BoundaryGeoJSON": "@file:by-country/CV/boundaries/CV-TA.geojson",
+      "CommonAliases": [
+        "Tarrafal"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CV"
+    },
+    "primaryKey": {
+      "ID": "093E99D2-B977-4B6E-95CE-9A48DD818F6B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:40.548Z",
+      "checksum": "29c9c0c84fdf197695a45dd1904c203a8b45faa6e0356b40644bc3f7339a4dc4"
+    }
+  }
+]

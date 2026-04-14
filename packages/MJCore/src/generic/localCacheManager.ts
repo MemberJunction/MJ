@@ -109,14 +109,30 @@ export interface CachedRunViewResult {
 export interface LocalCacheManagerConfig {
     /** Whether caching is enabled */
     enabled: boolean;
-    /** Maximum cache size in bytes (default: 50MB) */
+    /** Maximum cache size in bytes (default: 150MB) */
     maxSizeBytes: number;
-    /** Maximum number of cache entries (default: 1000) */
-    maxEntries: number;
-    /** Default TTL in milliseconds (default: 5 minutes) */
+    /** Default TTL in milliseconds (default: 0 = no TTL, rely on event-based invalidation) */
     defaultTTLMs: number;
     /** Eviction policy when cache is full */
     evictionPolicy: 'lru' | 'lfu' | 'fifo';
+    /**
+     * Maximum percentage of total cache memory (maxSizeBytes) that any single
+     * entity's cached results can occupy. When exceeded, the least-recently-accessed
+     * entries for that entity are evicted. Default: 50. Set to 0 to disable.
+     */
+    maxPercentOfCachePerEntity: number;
+    /**
+     * Interval in milliseconds for the periodic eviction sweep.
+     * Catches entries that should have been evicted (TTL expired) but weren't
+     * because no new stores triggered eviction. 0 = disabled.
+     * Default: 300000 (5 minutes).
+     */
+    evictionSweepIntervalMs: number;
+    /**
+     * Enable verbose cache logging (hits, misses, evictions, memory stats).
+     * Default: false.
+     */
+    verboseLogging: boolean;
 }
 
 // ============================================================================
@@ -126,9 +142,11 @@ export interface LocalCacheManagerConfig {
 const DEFAULT_CONFIG: LocalCacheManagerConfig = {
     enabled: true,
     maxSizeBytes: 150 * 1024 * 1024, // 150MB
-    maxEntries: 5000,
-    defaultTTLMs: 5 * 60 * 1000, // 5 minutes
-    evictionPolicy: 'lru'
+    defaultTTLMs: 0, // No TTL — event-based invalidation is the primary mechanism
+    evictionPolicy: 'lru',
+    maxPercentOfCachePerEntity: 50,
+    evictionSweepIntervalMs: 300000, // 5 minutes
+    verboseLogging: false,
 };
 
 // ============================================================================
@@ -334,6 +352,9 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         await this.loadRegistry();
         this._initialized = true;
 
+        // Start periodic eviction sweep for TTL-expired entries
+        this.startEvictionSweep();
+
         // Subscribe to BaseEntity events for universal cache invalidation.
         // When any entity is saved/deleted, update all cached RunView results for that entity.
         this.subscribeToBaseEntityEvents();
@@ -358,6 +379,17 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      */
     public UpdateConfig(config: Partial<LocalCacheManagerConfig>): void {
         this._config = { ...this._config, ...config };
+    }
+
+    /**
+     * Checks whether caching is enabled for a given entity. Returns the entity's
+     * AllowCaching metadata flag. This is the single source of truth for cache
+     * eligibility — schema-level opt-in is applied at CodeGen time via the
+     * `newEntityDefaults.AllowCachingBySchema` config, which flips this flag when
+     * the entity is first inserted into the metadata.
+     */
+    public IsCachingEnabledForEntity(entityInfo: { AllowCaching: boolean }): boolean {
+        return entityInfo.AllowCaching === true;
     }
 
     /**
@@ -515,6 +547,10 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         if (!baseEntity?.EntityInfo?.Name) return;
 
         const entityName = baseEntity.EntityInfo.Name;
+
+        // Short-circuit: if caching is disabled for this entity, skip the fingerprint scan
+        if (!this.IsCachingEnabledForEntity(baseEntity.EntityInfo)) return;
+
         const fingerprints = this._entityFingerprintIndex.get(entityName);
         if (!fingerprints || fingerprints.size === 0) return;
 
@@ -557,14 +593,17 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         const entityName = entityEvent.entityName;
         if (!entityName) return;
 
+        // Short-circuit: if caching is disabled for this entity, skip processing
+        const md = new Metadata();
+        const entityInfo = md.EntityByName(entityName);
+        if (entityInfo && !this.IsCachingEnabledForEntity(entityInfo)) return;
+
         const fingerprints = this._entityFingerprintIndex.get(entityName);
         if (!fingerprints || fingerprints.size === 0) return;
 
         const action = payload?.action;
 
-        // Look up entity metadata for PK field names
-        const md = new Metadata();
-        const entityInfo = md.EntityByName(entityName);
+        // entityInfo was looked up above for the AllowCaching check
         if (!entityInfo) {
             LogStatusVerbose(`LocalCacheManager: remote-invalidate — entity "${entityName}" not found in metadata, invalidating caches`);
             for (const fp of [...fingerprints]) {
@@ -997,15 +1036,25 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         const connection = connectionPrefix || '';
         const aggHash = this.generateAggregateHash(params.Aggregates);
 
+        // UserSearchString affects which rows are returned (generates LIKE/FTS WHERE clauses)
+        // and MUST be part of the fingerprint to prevent cross-query cache poisoning.
+        const userSearch = (params.UserSearchString ?? '').trim();
+
+        // NOTE: ViewID and ViewName are intentionally excluded from the fingerprint.
+        // Views are just containers for entity + filter + orderBy. Two different views
+        // that resolve to the same entity/filter/orderBy produce identical SQL and results,
+        // so they should share the same cache entry.
+
         // Build human-readable fingerprint with pipe separators
-        // Format: Entity|Filter|OrderBy|MaxRows|StartRow|AggHash[|Connection]
+        // Format: Entity|Filter|OrderBy|MaxRows|StartRow|AggHash|UserSearch[|Connection]
         const parts = [
             entity,
             filter || '_',           // Use underscore for empty filter
             orderBy || '_',          // Use underscore for empty orderBy
             maxRows.toString(),
             startRow.toString(),
-            aggHash                  // Aggregate hash (or '_' for no aggregates)
+            aggHash,                 // Aggregate hash (or '_' for no aggregates)
+            userSearch || '_'        // User search string (generates LIKE/FTS clauses)
         ];
 
         // Only include connection if provided
@@ -1086,7 +1135,11 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         const value = JSON.stringify(data);
         const sizeBytes = this.estimateSize(value);
 
-        // Check if we need to evict entries
+        // Per-entity memory limit: evict oldest entries for this entity if over budget
+        const entityName = params.EntityName || 'Unknown';
+        await this.enforcePerEntityMemoryLimit(entityName, sizeBytes);
+
+        // Check if we need to evict entries (global budget)
         await this.evictIfNeeded(sizeBytes);
 
         try {
@@ -1931,21 +1984,20 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
 
         const stats = this.GetStats();
         const wouldExceedSize = (stats.totalSizeBytes + neededBytes) > this._config.maxSizeBytes;
-        const wouldExceedCount = stats.totalEntries >= this._config.maxEntries;
 
-        if (!wouldExceedSize && !wouldExceedCount) return;
+        if (!wouldExceedSize) return;
 
-        // Calculate how much to free
-        const targetFreeBytes = Math.max(neededBytes, this._config.maxSizeBytes * 0.1); // At least 10% of max
-        const targetFreeCount = Math.max(1, Math.floor(this._config.maxEntries * 0.1)); // At least 10% of max
+        // Calculate how much to free — at least the incoming entry's size, but
+        // free 10% of total budget to avoid thrashing on every store.
+        const targetFreeBytes = Math.max(neededBytes, this._config.maxSizeBytes * 0.1);
 
-        await this.evict(targetFreeBytes, targetFreeCount);
+        await this.evict(targetFreeBytes);
     }
 
     /**
      * Evicts entries based on the configured eviction policy.
      */
-    private async evict(targetBytes: number, targetCount: number): Promise<void> {
+    private async evict(targetBytes: number): Promise<void> {
         if (!this._storageProvider) return;
 
         const entries = this.GetAllEntries();
@@ -1964,14 +2016,12 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         }
 
         let freedBytes = 0;
-        let freedCount = 0;
         const toDelete: string[] = [];
 
         for (const entry of entries) {
-            if (freedBytes >= targetBytes && freedCount >= targetCount) break;
+            if (freedBytes >= targetBytes) break;
             toDelete.push(entry.key);
             freedBytes += entry.sizeBytes;
-            freedCount++;
         }
 
         if (toDelete.length > 0) {
@@ -1997,5 +2047,144 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         }
 
         await this.persistRegistry();
+    }
+
+    /**
+     * Returns the memory limit in bytes for a given entity based on
+     * maxPercentOfCachePerEntity. Returns 0 if no limit applies.
+     */
+    private getEntityMemoryLimitBytes(): number {
+        const pct = this._config.maxPercentOfCachePerEntity;
+        if (pct <= 0) return 0;
+        return Math.floor(this._config.maxSizeBytes * pct / 100);
+    }
+
+    /**
+     * Enforces per-entity memory limits. When an entity's total cached bytes
+     * (including the incoming entry) would exceed its limit, evicts the
+     * least-recently-accessed entries for that entity until under the limit.
+     * @param incomingSizeBytes - estimated size of the entry about to be stored
+     */
+    private async enforcePerEntityMemoryLimit(entityName: string, incomingSizeBytes: number): Promise<void> {
+        const limitBytes = this.getEntityMemoryLimitBytes();
+        if (limitBytes <= 0 || !this._storageProvider) return;
+
+        const fingerprints = this._entityFingerprintIndex.get(entityName);
+        if (!fingerprints || fingerprints.size === 0) return;
+
+        // Sum up total bytes for this entity, including the incoming entry
+        const entries = [...fingerprints]
+            .map(fp => this._registry.get(fp))
+            .filter((e): e is CacheEntryInfo => !!e);
+
+        const totalBytes = entries.reduce((sum, e) => sum + e.sizeBytes, 0) + incomingSizeBytes;
+        if (totalBytes <= limitBytes) return;
+
+        // Sort by lastAccessedAt ascending (LRU first)
+        entries.sort((a, b) => a.lastAccessedAt - b.lastAccessedAt);
+
+        let bytesToFree = totalBytes - limitBytes;
+        if (this._config.verboseLogging) {
+            LogStatusEx({ message: `    🗑️ [Cache PER-ENTITY EVICT] Entity "${entityName}" using ${(totalBytes / 1024 / 1024).toFixed(1)}MB (limit: ${(limitBytes / 1024 / 1024).toFixed(1)}MB), evicting LRU entries`, verboseOnly: true });
+        }
+
+        for (const entry of entries) {
+            if (bytesToFree <= 0) break;
+            try {
+                const category = this.getCategoryForType(entry.type);
+                await this._storageProvider.Remove(entry.key, category);
+                this.removeFromEntityIndex(entry.key);
+                bytesToFree -= entry.sizeBytes;
+                this._registry.delete(entry.key);
+            } catch {
+                // Continue evicting
+            }
+        }
+
+        this.debouncedPersistRegistry();
+    }
+
+    /**
+     * Handle for the periodic eviction sweep timer.
+     */
+    private _sweepTimer: ReturnType<typeof setInterval> | null = null;
+
+    /**
+     * Starts the periodic eviction sweep timer. Called during initialization.
+     * The sweep catches entries that should have been evicted (TTL expired)
+     * but weren't because no new stores triggered eviction.
+     */
+    private startEvictionSweep(): void {
+        this.stopEvictionSweep(); // Clear any existing timer
+
+        const intervalMs = this._config.evictionSweepIntervalMs;
+        if (intervalMs <= 0) return; // Disabled
+
+        this._sweepTimer = setInterval(() => {
+            this.runEvictionSweep().catch(err => {
+                LogError(`LocalCacheManager: eviction sweep failed: ${(err as Error).message}`);
+            });
+        }, intervalMs) as unknown as ReturnType<typeof setInterval>;
+
+        // Don't prevent Node.js process from exiting
+        if (typeof this._sweepTimer === 'object' && 'unref' in this._sweepTimer) {
+            (this._sweepTimer as { unref(): void }).unref();
+        }
+    }
+
+    /**
+     * Stops the periodic eviction sweep timer.
+     */
+    private stopEvictionSweep(): void {
+        if (this._sweepTimer) {
+            clearInterval(this._sweepTimer);
+            this._sweepTimer = null;
+        }
+    }
+
+    /**
+     * Runs a single eviction sweep: evicts entries that have exceeded their TTL
+     * or entries for entities that are over their per-entity cap.
+     */
+    private async runEvictionSweep(): Promise<void> {
+        if (!this._storageProvider || !this._config.enabled) return;
+
+        const now = Date.now();
+        const ttlMs = this._config.defaultTTLMs;
+        const toDelete: string[] = [];
+
+        for (const [key, entry] of this._registry) {
+            // TTL expiry check
+            if (ttlMs > 0 && entry.cachedAt + ttlMs < now) {
+                toDelete.push(key);
+                continue;
+            }
+            // expiresAt check (if set individually)
+            if (entry.expiresAt && entry.expiresAt < now) {
+                toDelete.push(key);
+            }
+        }
+
+        if (toDelete.length > 0) {
+            if (this._config.verboseLogging) {
+                LogStatusEx({ message: `    🗑️ [Cache SWEEP] Evicting ${toDelete.length} TTL-expired entries`, verboseOnly: true });
+            }
+
+            for (const key of toDelete) {
+                try {
+                    const entry = this._registry.get(key);
+                    const category = this.getCategoryForType(entry?.type);
+                    await this._storageProvider.Remove(key, category);
+                    if (entry?.fingerprint) {
+                        this.removeFromEntityIndex(entry.fingerprint);
+                    }
+                    this._registry.delete(key);
+                } catch {
+                    // Continue
+                }
+            }
+
+            await this.persistRegistry();
+        }
     }
 }
