@@ -389,12 +389,15 @@ export class FileResolver extends FileResolverBase {
 
     // Create the upload URL and get the record updates (provider key, content type, etc)
     const userContext = this.buildUserContext(context);
-    const { updatedInput, UploadUrl } = await createUploadUrl(providerEntity, fileEntity, userContext);
+    const { updatedInput, UploadUrl } = await createUploadUrl(providerEntity, fileEntity as unknown as { ID: string; Name: string; ProviderID: string; ContentType?: string; ProviderKey?: string }, userContext);
 
     // Save the file record with the updated input
     const mapper = new FieldMapper();
-    fileEntity.SetMany(mapper.ReverseMapFields({ ...updatedInput }), true, true);
-    await fileEntity.Save();
+    fileEntity.SetMany(mapper.ReverseMapFields({ ...updatedInput }), true, false);
+    const saved = await fileEntity.Save();
+    if (!saved) {
+      console.error('[CreateFile] File save failed:', fileEntity.LatestResult?.CompleteMessage);
+    }
     const File = mapper.MapFields({ ...fileEntity.GetAll() });
 
     return { File, UploadUrl, NameExists };
