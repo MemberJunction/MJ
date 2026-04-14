@@ -332,6 +332,38 @@ New code should import these directly from `@memberjunction/ai-reranker`.
 - `@memberjunction/aiengine` -- AIEngine for metadata and vector search
 - `@memberjunction/ai-core-plus` -- Shared types (ExecuteAgentParams, ExecuteAgentResult)
 - `@memberjunction/ai-engine-base` -- Base metadata cache and permissions
+## Storage Account Resolution
+
+When agents create file-based artifacts (PDF, Excel, Word), the system resolves which `FileStorageAccount` to use via a hierarchical chain. The first non-null value wins:
+
+| Priority | Source | Field |
+|----------|--------|-------|
+| 1 (highest) | Runtime | `ExecuteAgentParams.override.storageAccountId` |
+| 2 | Agent | `AIAgent.DefaultStorageAccountID` |
+| 3 | Category tree | `AIAgentCategory.DefaultStorageAccountID` (walks up `ParentID`) |
+| 4 (lowest) | Agent Type | `AIAgentType.DefaultStorageAccountID` |
+| Fallback | System | Single active account (if only one exists) |
+
+### How it works
+
+- `BaseAgent.getStorageAccountID(params)` implements the resolution logic. It is `protected` so subclasses can override it for custom routing.
+- The resolved ID is stored in `ExecuteAgentResult.resolvedStorageAccountId` and passed to `AgentRunner.ProcessFileArtifacts()` for upload routing.
+- `AgentRunner.uploadBase64ToStorage()` uses `FileStorageEngine.Instance.GetAccountWithProvider()` to get the account + provider, then `initializeDriverWithAccountCredentials()` for proper OAuth credential handling.
+
+### Startup validation
+
+`AIEngine.validateStorageAccountDefaults()` runs at server startup. If 2+ active storage accounts exist but agent types lack a `DefaultStorageAccountID`, it auto-assigns the highest-priority account and logs a prominent warning.
+
+### Configuration
+
+Set `DefaultStorageAccountID` at any level via the admin UI or metadata sync:
+- **Agent Type** -- broadest default (e.g., all Loop agents → Dropbox)
+- **Agent Category** -- business-domain default (e.g., Marketing → Box, Finance → SharePoint)
+- **Agent** -- per-agent override
+- **Runtime** -- `ExecuteAgentParams.override.storageAccountId` for programmatic callers
+
+## Dependencies
+
 - `@memberjunction/ai` -- Core AI abstractions
 - `@memberjunction/ai-reranker` -- Two-stage retrieval reranking
 - `@memberjunction/actions` -- Server-side action execution

@@ -1,5 +1,108 @@
 # Change Log - @memberjunction/ng-explorer-core
 
+## 5.26.0
+
+### Patch Changes
+
+- Updated dependencies [55de456]
+- Updated dependencies [a1002f4]
+  - @memberjunction/core-entities@5.26.0
+  - @memberjunction/ng-dashboard-viewer@5.26.0
+  - @memberjunction/ng-dashboards@5.26.0
+  - @memberjunction/ng-shared-generic@5.26.0
+  - @memberjunction/ng-ui-components@5.26.0
+  - @memberjunction/core@5.26.0
+  - @memberjunction/ai-engine-base@5.26.0
+  - @memberjunction/ai-core-plus@5.26.0
+  - @memberjunction/ng-base-application@5.26.0
+  - @memberjunction/ng-entity-form-dialog@5.26.0
+  - @memberjunction/ng-entity-permissions@5.26.0
+  - @memberjunction/ng-explorer-settings@5.26.0
+  - @memberjunction/ng-list-detail-grid@5.26.0
+  - @memberjunction/ng-shared@5.26.0
+  - @memberjunction/ng-ai-test-harness@5.26.0
+  - @memberjunction/ng-artifacts@5.26.0
+  - @memberjunction/ng-base-forms@5.26.0
+  - @memberjunction/ng-conversations@5.26.0
+  - @memberjunction/ng-entity-viewer@5.26.0
+  - @memberjunction/ng-file-storage@5.26.0
+  - @memberjunction/ng-notifications@5.26.0
+  - @memberjunction/ng-query-viewer@5.26.0
+  - @memberjunction/ng-record-changes@5.26.0
+  - @memberjunction/ng-record-selector@5.26.0
+  - @memberjunction/ng-record-tags@5.26.0
+  - @memberjunction/ng-resource-permissions@5.26.0
+  - @memberjunction/ng-search@5.26.0
+  - @memberjunction/ng-user-avatar@5.26.0
+  - @memberjunction/communication-types@5.26.0
+  - @memberjunction/entity-communications-client@5.26.0
+  - @memberjunction/graphql-dataprovider@5.26.0
+  - @memberjunction/templates-base-types@5.26.0
+  - @memberjunction/ng-generic-dialog@5.26.0
+  - @memberjunction/ng-auth-services@5.26.0
+  - @memberjunction/ng-container-directives@5.26.0
+  - @memberjunction/ng-export-service@5.26.0
+  - @memberjunction/ng-word-cloud@5.26.0
+  - @memberjunction/export-engine@5.26.0
+  - @memberjunction/global@5.26.0
+
+## 5.25.0
+
+### Patch Changes
+
+- fc8cd52: Autotagging pipeline with run tracking, retry, and tag merge/delete; taxonomy server-side SQL aggregates; vector sync credential engine integration; search resolver and organic key support; unit test fixes across geo-core, ai-vector-sync, MJServer, and UUID compliance.
+- a24ff53: no metadata/migration
+- 5e2a64f: no migration
+- 1eb9f6e: no migration/metadata
+- Updated dependencies [fc8cd52]
+- Updated dependencies [a24ff53]
+- Updated dependencies [d6370e8]
+- Updated dependencies [008a62d]
+- Updated dependencies [7ddf732]
+- Updated dependencies [e96f683]
+- Updated dependencies [5e2a64f]
+- Updated dependencies [1eb9f6e]
+- Updated dependencies [cbcf477]
+  - @memberjunction/core@5.25.0
+  - @memberjunction/core-entities@5.25.0
+  - @memberjunction/graphql-dataprovider@5.25.0
+  - @memberjunction/ng-conversations@5.25.0
+  - @memberjunction/ng-dashboards@5.25.0
+  - @memberjunction/ng-query-viewer@5.25.0
+  - @memberjunction/ng-ai-test-harness@5.25.0
+  - @memberjunction/ng-dashboard-viewer@5.25.0
+  - @memberjunction/ng-artifacts@5.25.0
+  - @memberjunction/ng-search@5.25.0
+  - @memberjunction/ng-entity-viewer@5.25.0
+  - @memberjunction/ai-engine-base@5.25.0
+  - @memberjunction/ai-core-plus@5.25.0
+  - @memberjunction/ng-auth-services@5.25.0
+  - @memberjunction/ng-base-application@5.25.0
+  - @memberjunction/ng-entity-form-dialog@5.25.0
+  - @memberjunction/ng-entity-permissions@5.25.0
+  - @memberjunction/ng-explorer-settings@5.25.0
+  - @memberjunction/ng-list-detail-grid@5.25.0
+  - @memberjunction/ng-shared@5.25.0
+  - @memberjunction/ng-base-forms@5.25.0
+  - @memberjunction/ng-container-directives@5.25.0
+  - @memberjunction/ng-file-storage@5.25.0
+  - @memberjunction/ng-notifications@5.25.0
+  - @memberjunction/ng-record-changes@5.25.0
+  - @memberjunction/ng-record-selector@5.25.0
+  - @memberjunction/ng-record-tags@5.25.0
+  - @memberjunction/ng-resource-permissions@5.25.0
+  - @memberjunction/ng-shared-generic@5.25.0
+  - @memberjunction/ng-user-avatar@5.25.0
+  - @memberjunction/communication-types@5.25.0
+  - @memberjunction/entity-communications-client@5.25.0
+  - @memberjunction/templates-base-types@5.25.0
+  - @memberjunction/ng-export-service@5.25.0
+  - @memberjunction/ng-generic-dialog@5.25.0
+  - @memberjunction/ng-ui-components@5.25.0
+  - @memberjunction/ng-word-cloud@5.25.0
+  - @memberjunction/export-engine@5.25.0
+  - @memberjunction/global@5.25.0
+
 ## 5.24.0
 
 ### Minor Changes

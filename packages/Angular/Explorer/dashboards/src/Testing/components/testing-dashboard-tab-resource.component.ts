@@ -45,7 +45,7 @@ import { TestingDialogService } from '@memberjunction/ng-testing';
   `]
 })
 export class TestingDashboardTabResourceComponent extends BaseResourceComponent implements OnInit, OnDestroy {
-  private destroy$ = new Subject<void>();
+  protected override destroy$ = new Subject<void>();
 
   constructor(
     public testingDialogService: TestingDialogService,
@@ -55,6 +55,7 @@ export class TestingDashboardTabResourceComponent extends BaseResourceComponent 
   }
 
   ngOnInit(): void {
+    super.ngOnInit();
     this.testingDialogService.PanelStateChanged$.pipe(
       takeUntil(this.destroy$)
     ).subscribe(() => {
@@ -65,6 +66,7 @@ export class TestingDashboardTabResourceComponent extends BaseResourceComponent 
   }
 
   ngOnDestroy(): void {
+    super.ngOnDestroy();
     this.destroy$.next();
     this.destroy$.complete();
   }

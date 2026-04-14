@@ -46,8 +46,28 @@ export interface SearchClientResponse {
     ElapsedMs: number;
     /** Breakdown of results by source type */
     SourceCounts: SearchSourceCounts;
+    /** Metadata for all active search providers (for UI filter facets and labels) */
+    Providers: SearchClientProviderInfo[];
     /** Error message if Success is false */
     ErrorMessage?: string;
+}
+
+/**
+ * Metadata about an active search provider, returned from the server.
+ */
+export interface SearchClientProviderInfo {
+    /** SearchProvider record ID */
+    ID: string;
+    /** Provider name */
+    Name: string;
+    /** UI display label (e.g., "Database", "Semantic Search") */
+    DisplayName: string;
+    /** Font Awesome icon class */
+    Icon: string;
+    /** The SourceType key this provider uses */
+    SourceType: string;
+    /** Priority (lower = higher) */
+    Priority: number;
 }
 
 /**
@@ -92,6 +112,16 @@ export interface SearchClientResultItem {
     RecordName?: string;
     /** ISO timestamp of when the match was found */
     MatchedAt: string;
+    /** Discriminator for UI rendering: 'entity-record', 'storage-file', or 'content-item' */
+    ResultType: string;
+    /** Raw metadata JSON from the search provider (e.g., storage account ID, file path) */
+    RawMetadata?: string;
+    /** ID of the SearchProvider metadata record that produced this result */
+    ProviderId?: string;
+    /** Display label from the SearchProvider metadata (e.g., "Database", "Semantic Search") */
+    ProviderLabel?: string;
+    /** Font Awesome icon class from the SearchProvider metadata */
+    ProviderIcon?: string;
 }
 
 /**
@@ -139,6 +169,7 @@ interface SearchResultItemResponse {
     EntityName: string;
     RecordID: string;
     SourceType: string;
+    ResultType: string;
     Title: string;
     Snippet: string;
     Score: number;
@@ -147,6 +178,10 @@ interface SearchResultItemResponse {
     EntityIcon?: string;
     RecordName?: string;
     MatchedAt: string;
+    RawMetadata?: string;
+    ProviderId?: string;
+    ProviderLabel?: string;
+    ProviderIcon?: string;
 }
 
 /**
@@ -159,6 +194,7 @@ interface SearchKnowledgeResponse {
     TotalCount: number;
     ElapsedMs: number;
     SourceCounts: SourceCountsResponse;
+    Providers: ProviderInfoResponse[];
     ErrorMessage?: string;
 }
 
@@ -172,7 +208,21 @@ interface PreviewSearchResponse {
     TotalCount: number;
     ElapsedMs: number;
     SourceCounts: SourceCountsResponse;
+    Providers: ProviderInfoResponse[];
     ErrorMessage?: string;
+}
+
+/**
+ * Internal response type for provider info from GraphQL.
+ * @internal
+ */
+interface ProviderInfoResponse {
+    ID: string;
+    Name: string;
+    DisplayName: string;
+    Icon: string;
+    SourceType: string;
+    Priority: number;
 }
 
 // =========================================================================
@@ -308,14 +358,15 @@ export class GraphQLSearchClient {
      */
     private buildSearchKnowledgeMutation(): string {
         return gql`
-            mutation SearchKnowledge($input: SearchKnowledgeInput!) {
-                SearchKnowledge(input: $input) {
+            mutation SearchKnowledge($query: String!, $maxResults: Float, $filters: SearchFiltersInput, $minScore: Float) {
+                SearchKnowledge(query: $query, maxResults: $maxResults, filters: $filters, minScore: $minScore) {
                     Success
                     Results {
                         ID
                         EntityName
                         RecordID
                         SourceType
+                        ResultType
                         Title
                         Snippet
                         Score
@@ -329,6 +380,10 @@ export class GraphQLSearchClient {
                         EntityIcon
                         RecordName
                         MatchedAt
+                        RawMetadata
+                        ProviderId
+                        ProviderLabel
+                        ProviderIcon
                     }
                     TotalCount
                     ElapsedMs
@@ -337,6 +392,14 @@ export class GraphQLSearchClient {
                         FullText
                         Entity
                         Storage
+                    }
+                    Providers {
+                        ID
+                        Name
+                        DisplayName
+                        Icon
+                        SourceType
+                        Priority
                     }
                     ErrorMessage
                 }
@@ -352,14 +415,15 @@ export class GraphQLSearchClient {
      */
     private buildPreviewSearchMutation(): string {
         return gql`
-            mutation PreviewSearch($input: PreviewSearchInput!) {
-                PreviewSearch(input: $input) {
+            mutation PreviewSearch($query: String!, $maxResults: Float) {
+                PreviewSearch(query: $query, maxResults: $maxResults) {
                     Success
                     Results {
                         ID
                         EntityName
                         RecordID
                         SourceType
+                        ResultType
                         Title
                         Snippet
                         Score
@@ -373,6 +437,10 @@ export class GraphQLSearchClient {
                         EntityIcon
                         RecordName
                         MatchedAt
+                        RawMetadata
+                        ProviderId
+                        ProviderLabel
+                        ProviderIcon
                     }
                     TotalCount
                     ElapsedMs
@@ -381,6 +449,14 @@ export class GraphQLSearchClient {
                         FullText
                         Entity
                         Storage
+                    }
+                    Providers {
+                        ID
+                        Name
+                        DisplayName
+                        Icon
+                        SourceType
+                        Priority
                     }
                     ErrorMessage
                 }
@@ -398,22 +474,22 @@ export class GraphQLSearchClient {
      * @returns The formatted variables object for the GraphQL request
      * @private
      */
-    private prepareSearchVariables(params: SearchClientParams): { input: Record<string, unknown> } {
-        const input: Record<string, unknown> = {
-            Query: params.Query
+    private prepareSearchVariables(params: SearchClientParams): Record<string, unknown> {
+        const variables: Record<string, unknown> = {
+            query: params.Query
         };
 
         if (params.MaxResults !== undefined) {
-            input.MaxResults = params.MaxResults;
+            variables.maxResults = params.MaxResults;
         }
         if (params.MinScore !== undefined) {
-            input.MinScore = params.MinScore;
+            variables.minScore = params.MinScore;
         }
         if (params.Filters !== undefined) {
-            input.Filters = this.prepareFilters(params.Filters);
+            variables.filters = this.prepareFilters(params.Filters);
         }
 
-        return { input };
+        return variables;
     }
 
     /**
@@ -445,16 +521,16 @@ export class GraphQLSearchClient {
      * @returns The formatted variables object for the GraphQL request
      * @private
      */
-    private preparePreviewVariables(query: string, maxResults?: number): { input: Record<string, unknown> } {
-        const input: Record<string, unknown> = {
-            Query: query
+    private preparePreviewVariables(query: string, maxResults?: number): Record<string, unknown> {
+        const variables: Record<string, unknown> = {
+            query: query
         };
 
         if (maxResults !== undefined) {
-            input.MaxResults = maxResults;
+            variables.maxResults = maxResults;
         }
 
-        return { input };
+        return variables;
     }
 
     // =========================================================================
@@ -505,6 +581,14 @@ export class GraphQLSearchClient {
             TotalCount: data.TotalCount,
             ElapsedMs: data.ElapsedMs,
             SourceCounts: this.mapSourceCounts(data.SourceCounts),
+            Providers: (data.Providers || []).map(p => ({
+                ID: p.ID,
+                Name: p.Name,
+                DisplayName: p.DisplayName,
+                Icon: p.Icon,
+                SourceType: p.SourceType,
+                Priority: p.Priority,
+            })),
             ErrorMessage: data.ErrorMessage
         };
     }
@@ -521,6 +605,7 @@ export class GraphQLSearchClient {
             EntityName: item.EntityName,
             RecordID: item.RecordID,
             SourceType: item.SourceType,
+            ResultType: item.ResultType,
             Title: item.Title,
             Snippet: item.Snippet,
             Score: item.Score,
@@ -528,7 +613,11 @@ export class GraphQLSearchClient {
             Tags: item.Tags || [],
             EntityIcon: item.EntityIcon,
             RecordName: item.RecordName,
-            MatchedAt: item.MatchedAt
+            MatchedAt: item.MatchedAt,
+            RawMetadata: item.RawMetadata,
+            ProviderId: item.ProviderId,
+            ProviderLabel: item.ProviderLabel,
+            ProviderIcon: item.ProviderIcon,
         };
     }
 
@@ -589,6 +678,7 @@ export class GraphQLSearchClient {
             TotalCount: 0,
             ElapsedMs: 0,
             SourceCounts: { Vector: 0, FullText: 0, Entity: 0, Storage: 0 },
+            Providers: [],
             ErrorMessage: `Error: ${error.message}`
         };
     }

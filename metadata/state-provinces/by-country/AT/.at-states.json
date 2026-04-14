@@ -1,0 +1,191 @@
+[
+  {
+    "fields": {
+      "Name": "Burgenland",
+      "Code": "1",
+      "ISO3166_2": "AT-1",
+      "Latitude": 47.4281,
+      "Longitude": 16.3584,
+      "BoundaryGeoJSON": "@file:by-country/AT/boundaries/AT-1.geojson",
+      "CommonAliases": [
+        "Burgenland"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AT"
+    },
+    "primaryKey": {
+      "ID": "EEDE90E8-F0C3-437E-8D31-755A85D09B84"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:28.653Z",
+      "checksum": "dd7188c6dd10ac9b5154dd9fd012f8791002473ec1aa0a494316419381ebcf59"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kärnten",
+      "Code": "2",
+      "ISO3166_2": "AT-2",
+      "Latitude": 46.7201,
+      "Longitude": 13.8695,
+      "BoundaryGeoJSON": "@file:by-country/AT/boundaries/AT-2.geojson",
+      "CommonAliases": [
+        "Kärnten"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AT"
+    },
+    "primaryKey": {
+      "ID": "686BFD76-B452-4518-8732-80DF414EFAB2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:28.667Z",
+      "checksum": "23142937c8147b3b107e7bfc14b2be93becf5dd04b5dd25a0a6090dfa02ae0ee"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Niederösterreich",
+      "Code": "3",
+      "ISO3166_2": "AT-3",
+      "Latitude": 48.2477,
+      "Longitude": 15.7448,
+      "BoundaryGeoJSON": "@file:by-country/AT/boundaries/AT-3.geojson",
+      "CommonAliases": [
+        "Niederösterreich"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AT"
+    },
+    "primaryKey": {
+      "ID": "12392D18-8660-4019-8C79-1D9594CA3683"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:28.685Z",
+      "checksum": "31870611a91e322ccbcd264881adb3398c9617d680b61069d05d2b66f3e13536"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Oberösterreich",
+      "Code": "4",
+      "ISO3166_2": "AT-4",
+      "Latitude": 48.2377,
+      "Longitude": 13.856,
+      "BoundaryGeoJSON": "@file:by-country/AT/boundaries/AT-4.geojson",
+      "CommonAliases": [
+        "Oberösterreich"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AT"
+    },
+    "primaryKey": {
+      "ID": "CF93A8B1-943B-4C84-92D5-11393B07A034"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:28.702Z",
+      "checksum": "17efe73f28439d5ad1307120276774f703e1c043f1e1fc285463b51b82c99e39"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Salzburg",
+      "Code": "5",
+      "ISO3166_2": "AT-5",
+      "Latitude": 47.2534,
+      "Longitude": 13.0106,
+      "BoundaryGeoJSON": "@file:by-country/AT/boundaries/AT-5.geojson",
+      "CommonAliases": [
+        "Salzburg"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AT"
+    },
+    "primaryKey": {
+      "ID": "1ABE291E-8105-4934-B94D-869158D44DE1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:28.719Z",
+      "checksum": "85e555a0a0433bb182e694f5f37d2d555e329c65f8d326e70abc6a683817bd2b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Steiermark",
+      "Code": "6",
+      "ISO3166_2": "AT-6",
+      "Latitude": 47.3901,
+      "Longitude": 14.8565,
+      "BoundaryGeoJSON": "@file:by-country/AT/boundaries/AT-6.geojson",
+      "CommonAliases": [
+        "Steiermark"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AT"
+    },
+    "primaryKey": {
+      "ID": "B499E36E-CA37-4FF3-A84A-83B1C2DF87F7"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:28.735Z",
+      "checksum": "8964c09a1eb480722bfc26a0f1a4f4d05367fa296c9557bb9683c34a8a72baa9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tirol",
+      "Code": "7",
+      "ISO3166_2": "AT-7",
+      "Latitude": 47.2082,
+      "Longitude": 11.38,
+      "BoundaryGeoJSON": "@file:by-country/AT/boundaries/AT-7.geojson",
+      "CommonAliases": [
+        "Tirol"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AT"
+    },
+    "primaryKey": {
+      "ID": "858C1AE0-9006-476E-8F9C-7F832D6D355D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:28.751Z",
+      "checksum": "8d3b5409579f57c35bf9b5a224d2873769cfc32a92212c9b6dfb99f91d060b20"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Vorarlberg",
+      "Code": "8",
+      "ISO3166_2": "AT-8",
+      "Latitude": 47.2617,
+      "Longitude": 9.8738,
+      "BoundaryGeoJSON": "@file:by-country/AT/boundaries/AT-8.geojson",
+      "CommonAliases": [
+        "Vorarlberg"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AT"
+    },
+    "primaryKey": {
+      "ID": "A5BF9E3C-56C4-4911-87DB-4EA5D96A3C1F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:28.768Z",
+      "checksum": "fb48707720c7a89fd477b1163e511890223c56c80c7eaf8fb52958c852895c24"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Wien",
+      "Code": "9",
+      "ISO3166_2": "AT-9",
+      "Latitude": 48.2247,
+      "Longitude": 16.3798,
+      "BoundaryGeoJSON": "@file:by-country/AT/boundaries/AT-9.geojson",
+      "CommonAliases": [
+        "Wien"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AT"
+    },
+    "primaryKey": {
+      "ID": "115C72DB-0F6C-445E-8A70-1B0BBB33A0DB"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:28.781Z",
+      "checksum": "bd136e5ee83f10e5509bc6da205a9fa01842602a809d0b87d3d3a32cf2eb521c"
+    }
+  }
+]

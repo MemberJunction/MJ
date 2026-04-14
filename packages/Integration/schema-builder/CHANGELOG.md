@@ -1,5 +1,21 @@
 # @memberjunction/integration-schema-builder
 
+## 5.26.0
+
+### Patch Changes
+
+- @memberjunction/integration-engine@5.26.0
+- @memberjunction/schema-engine@5.26.0
+- @memberjunction/global@5.26.0
+
+## 5.25.0
+
+### Patch Changes
+
+- @memberjunction/integration-engine@5.25.0
+- @memberjunction/schema-engine@5.25.0
+- @memberjunction/global@5.25.0
+
 ## 5.24.0
 
 ### Patch Changes

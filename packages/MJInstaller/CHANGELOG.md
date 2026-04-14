@@ -1,5 +1,13 @@
 # @memberjunction/installer
 
+## 5.26.0
+
+## 5.25.0
+
+### Patch Changes
+
+- f322a53: Add dual-mode installer supporting both distribution and monorepo installation methods.
+
 ## 5.24.0
 
 ## 5.23.0

@@ -2,7 +2,7 @@ import { Resolver, Mutation, Arg, Ctx, ObjectType, Field, Float, InputType } fro
 import { AppContext } from '../types.js';
 import { LogError, LogStatus } from '@memberjunction/core';
 import { ResolverBase } from '../generic/ResolverBase.js';
-import { SearchEngine } from '@memberjunction/search-engine';
+import { SearchEngine, SearchResult as SearchEngineResult, SearchResultItem as SearchEngineResultItem, SearchProviderInfo } from '@memberjunction/search-engine';
 
 /* ───── GraphQL types ───── */
 
@@ -16,6 +16,9 @@ export class SearchScoreBreakdown {
 
     @Field(() => Float, { nullable: true })
     Entity?: number;
+
+    @Field(() => Float, { nullable: true })
+    Storage?: number;
 }
 
 @ObjectType()
@@ -59,6 +62,22 @@ export class SearchKnowledgeResultItem {
     /** Raw vector metadata as JSON string — contains all entity fields stored in the vector DB */
     @Field({ nullable: true })
     RawMetadata?: string;
+
+    /** Discriminator for UI rendering: 'entity-record', 'storage-file', or 'content-item' */
+    @Field()
+    ResultType: string;
+
+    /** ID of the SearchProvider metadata record that produced this result */
+    @Field({ nullable: true })
+    ProviderId?: string;
+
+    /** Display label from the SearchProvider metadata (e.g., "Database", "Semantic Search") */
+    @Field({ nullable: true })
+    ProviderLabel?: string;
+
+    /** Font Awesome icon class from the SearchProvider metadata */
+    @Field({ nullable: true })
+    ProviderIcon?: string;
 }
 
 @ObjectType()
@@ -71,6 +90,30 @@ export class SearchSourceCounts {
 
     @Field()
     Entity: number;
+
+    @Field()
+    Storage: number;
+}
+
+@ObjectType()
+export class SearchProviderInfoType {
+    @Field()
+    ID: string;
+
+    @Field()
+    Name: string;
+
+    @Field()
+    DisplayName: string;
+
+    @Field()
+    Icon: string;
+
+    @Field()
+    SourceType: string;
+
+    @Field()
+    Priority: number;
 }
 
 @ObjectType()
@@ -89,6 +132,9 @@ export class SearchKnowledgeResult {
 
     @Field(() => SearchSourceCounts)
     SourceCounts: SearchSourceCounts;
+
+    @Field(() => [SearchProviderInfoType])
+    Providers: SearchProviderInfoType[];
 
     @Field({ nullable: true })
     ErrorMessage?: string;
@@ -137,32 +183,7 @@ export class SearchKnowledgeResolver extends ResolverBase {
                 } : undefined
             }, currentUser);
 
-            return {
-                Success: result.Success,
-                Results: result.Results.map(r => ({
-                    ID: r.ID,
-                    EntityName: r.EntityName,
-                    RecordID: r.RecordID,
-                    SourceType: r.SourceType,
-                    Title: r.Title,
-                    Snippet: r.Snippet,
-                    Score: r.Score,
-                    ScoreBreakdown: r.ScoreBreakdown as SearchScoreBreakdown,
-                    Tags: r.Tags || [],
-                    EntityIcon: r.EntityIcon,
-                    RecordName: r.RecordName,
-                    MatchedAt: r.MatchedAt,
-                    RawMetadata: r.RawMetadata
-                })),
-                TotalCount: result.TotalCount,
-                ElapsedMs: result.ElapsedMs,
-                SourceCounts: {
-                    Vector: result.SourceCounts['vector'] ?? result.SourceCounts['Vector'] ?? 0,
-                    FullText: result.SourceCounts['fulltext'] ?? result.SourceCounts['FullText'] ?? 0,
-                    Entity: result.SourceCounts['entity'] ?? result.SourceCounts['Entity'] ?? 0
-                },
-                ErrorMessage: result.ErrorMessage
-            };
+            return this.mapSearchResult(result);
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
             LogError(`SearchKnowledge mutation failed: ${msg}`);
@@ -185,37 +206,54 @@ export class SearchKnowledgeResolver extends ResolverBase {
 
             const result = await SearchEngine.Instance.PreviewSearch(query, maxResults, currentUser);
 
-            return {
-                Success: result.Success,
-                Results: result.Results.map(r => ({
-                    ID: r.ID,
-                    EntityName: r.EntityName,
-                    RecordID: r.RecordID,
-                    SourceType: r.SourceType,
-                    Title: r.Title,
-                    Snippet: r.Snippet,
-                    Score: r.Score,
-                    ScoreBreakdown: r.ScoreBreakdown as SearchScoreBreakdown,
-                    Tags: r.Tags || [],
-                    EntityIcon: r.EntityIcon,
-                    RecordName: r.RecordName,
-                    MatchedAt: r.MatchedAt,
-                    RawMetadata: r.RawMetadata
-                })),
-                TotalCount: result.TotalCount,
-                ElapsedMs: result.ElapsedMs,
-                SourceCounts: {
-                    Vector: result.SourceCounts['vector'] ?? 0,
-                    FullText: result.SourceCounts['fulltext'] ?? 0,
-                    Entity: result.SourceCounts['entity'] ?? 0
-                },
-                ErrorMessage: result.ErrorMessage
-            };
+            return this.mapSearchResult(result);
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
             LogError(`PreviewSearch mutation failed: ${msg}`);
             return this.errorResult(msg, startTime);
         }
+    }
+
+    private mapSearchResult(result: SearchEngineResult): SearchKnowledgeResult {
+        return {
+            Success: result.Success,
+            Results: result.Results.map((r: SearchEngineResultItem) => ({
+                ID: r.ID,
+                EntityName: r.EntityName,
+                RecordID: r.RecordID,
+                SourceType: r.SourceType,
+                ResultType: r.ResultType,
+                Title: r.Title,
+                Snippet: r.Snippet,
+                Score: r.Score,
+                ScoreBreakdown: r.ScoreBreakdown as SearchScoreBreakdown,
+                Tags: r.Tags || [],
+                EntityIcon: r.EntityIcon,
+                RecordName: r.RecordName,
+                MatchedAt: r.MatchedAt,
+                RawMetadata: r.RawMetadata,
+                ProviderId: r.ProviderId,
+                ProviderLabel: r.ProviderLabel,
+                ProviderIcon: r.ProviderIcon,
+            })),
+            TotalCount: result.TotalCount,
+            ElapsedMs: result.ElapsedMs,
+            SourceCounts: {
+                Vector: result.SourceCounts.Vector,
+                FullText: result.SourceCounts.FullText,
+                Entity: result.SourceCounts.Entity,
+                Storage: result.SourceCounts.Storage,
+            },
+            Providers: (result.Providers || []).map((p: SearchProviderInfo) => ({
+                ID: p.ID,
+                Name: p.Name,
+                DisplayName: p.DisplayName,
+                Icon: p.Icon,
+                SourceType: p.SourceType,
+                Priority: p.Priority,
+            })),
+            ErrorMessage: result.ErrorMessage,
+        };
     }
 
     private errorResult(message: string, startTime: number): SearchKnowledgeResult {
@@ -224,7 +262,8 @@ export class SearchKnowledgeResolver extends ResolverBase {
             Results: [],
             TotalCount: 0,
             ElapsedMs: Date.now() - startTime,
-            SourceCounts: { Vector: 0, FullText: 0, Entity: 0 },
+            SourceCounts: { Vector: 0, FullText: 0, Entity: 0, Storage: 0 },
+            Providers: [],
             ErrorMessage: message
         };
     }

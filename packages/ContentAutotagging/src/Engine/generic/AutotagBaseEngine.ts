@@ -217,13 +217,17 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         // Post-pipeline hook: recompute tag co-occurrence if TagCoOccurrenceEngine is available
         await this.recomputeCoOccurrenceIfAvailable(contextUser);
 
-        // Legacy process run tracking (for backward compatibility)
-        const processRunParams = new ProcessRunParams();
-        processRunParams.sourceID = contentItems[0].ContentSourceID;
-        processRunParams.startTime = processRun?.StartTime ?? new Date();
-        processRunParams.endTime = new Date();
-        processRunParams.numItemsProcessed = contentItems.length;
-        await this.saveProcessRun(processRunParams, contextUser);
+        // Only create a legacy process run record if no external run tracking is active.
+        // When the pipeline is invoked via RunAutotagPipeline, the resolver creates and
+        // manages the ContentProcessRun record — creating another one here would be a duplicate.
+        if (!processRun && !this.ExternalRunTrackingActive) {
+            const processRunParams = new ProcessRunParams();
+            processRunParams.sourceID = contentItems[0].ContentSourceID;
+            processRunParams.startTime = new Date();
+            processRunParams.endTime = new Date();
+            processRunParams.numItemsProcessed = contentItems.length;
+            await this.saveProcessRun(processRunParams, contextUser);
+        }
     }
 
     /**
@@ -334,6 +338,13 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
      * LLM models, or vector databases.
      */
     public ForceReprocess = false;
+
+    /**
+     * When true, suppresses the legacy saveProcessRun() call at the end of
+     * ExtractTextAndProcessWithLLM. Set by the action when the resolver is
+     * managing the ContentProcessRun record externally.
+     */
+    public ExternalRunTrackingActive = false;
 
     /** Rate limiter for LLM (tagging) API calls */
     public LLMRateLimiter = new RateLimiter({ RequestsPerMinute: 60, TokensPerMinute: 100000, Name: 'LLM' });

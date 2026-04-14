@@ -11,7 +11,15 @@
 /**
  * Source types that can contribute to search results.
  */
-export type SearchSource = 'vector' | 'fulltext' | 'entity';
+export type SearchSource = 'vector' | 'fulltext' | 'entity' | 'storage';
+
+/**
+ * Discriminator for how a search result should be rendered in the UI.
+ * - 'entity-record': A record from an MJ entity (navigable via EntityRecord viewer)
+ * - 'storage-file': A file from a file storage provider (open externally)
+ * - 'content-item': A content item (articles, web pages, etc.)
+ */
+export type SearchResultType = 'entity-record' | 'storage-file' | 'content-item';
 
 /**
  * Search modes that control the level of enrichment applied to results.
@@ -30,6 +38,8 @@ export interface SearchScoreBreakdown {
     FullText?: number;
     /** Score from entity LIKE-based search */
     Entity?: number;
+    /** Score from file storage search */
+    Storage?: number;
 }
 
 /**
@@ -64,7 +74,7 @@ export interface SearchParams {
  * A single search result with provenance and scoring information.
  */
 export interface SearchResultItem {
-    /** Unique identifier for deduplication (e.g., "vec-indexName-matchId" or "ft-Entity-RecordID") */
+    /** Primary key of the source record (same as RecordID) */
     ID: string;
     /** The entity this result came from */
     EntityName: string;
@@ -90,6 +100,14 @@ export interface SearchResultItem {
     MatchedAt: Date;
     /** Raw vector metadata as JSON string (contains all entity fields stored in vector DB) */
     RawMetadata?: string;
+    /** Discriminator for UI rendering: entity-record, storage-file, or content-item */
+    ResultType: SearchResultType;
+    /** ID of the SearchProvider metadata record that produced this result */
+    ProviderId?: string;
+    /** Display label from the SearchProvider metadata (e.g., "Database", "Semantic Search") */
+    ProviderLabel?: string;
+    /** Font Awesome icon class from the SearchProvider metadata (e.g., "fa-solid fa-brain") */
+    ProviderIcon?: string;
 }
 
 /**
@@ -109,9 +127,30 @@ export interface SearchResult {
         Vector: number;
         FullText: number;
         Entity: number;
+        Storage: number;
     };
+    /** Metadata for all active search providers (for UI filter facets and labels) */
+    Providers: SearchProviderInfo[];
     /** Error message if Success is false */
     ErrorMessage?: string;
+}
+
+/**
+ * Metadata about an active search provider, sent to the client for UI rendering.
+ */
+export interface SearchProviderInfo {
+    /** SearchProvider record ID */
+    ID: string;
+    /** Provider name from metadata */
+    Name: string;
+    /** UI display label (falls back to Name if null) */
+    DisplayName: string;
+    /** Font Awesome icon class */
+    Icon: string;
+    /** The SourceType key this provider uses */
+    SourceType: string;
+    /** Priority (lower = higher) */
+    Priority: number;
 }
 
 /**

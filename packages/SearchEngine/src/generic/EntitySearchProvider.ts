@@ -9,24 +9,18 @@
  */
 
 import { LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
-import { ISearchProvider } from './ISearchProvider';
-import { SearchSource, SearchFilters, SearchResultItem } from './search.types';
+import { RegisterClass } from '@memberjunction/global';
+import { BaseSearchProvider } from './ISearchProvider';
+import { SearchSource, SearchFilters, SearchResultItem, SearchResultType } from './search.types';
 
 /**
  * Provides entity-level LIKE-based search using RunView + UserSearchString.
  * Searches all entities where AllowUserSearchAPI=true, returning results
  * with rank-based scores.
  */
-export class EntitySearchProvider implements ISearchProvider {
+@RegisterClass(BaseSearchProvider, 'EntitySearchProvider')
+export class EntitySearchProvider extends BaseSearchProvider {
     public readonly SourceType: SearchSource = 'entity';
-
-    /**
-     * Entity search is always available since it uses the standard RunView
-     * infrastructure with no external dependencies.
-     */
-    public IsAvailable(): boolean {
-        return true;
-    }
 
     /**
      * Execute an entity search across all entities with AllowUserSearchAPI=true.
@@ -176,10 +170,11 @@ export class EntitySearchProvider implements ISearchProvider {
             const score = Math.min(baseScore + nameBoost, 0.95);
 
             return {
-                ID: `ent-${entityName}-${recordID}`,
+                ID: recordID,
                 EntityName: entityName,
                 RecordID: recordID,
                 SourceType: 'entity',
+                ResultType: 'entity-record' as SearchResultType,
                 Title: title,
                 Snippet: snippet,
                 Score: Math.round(score * 100) / 100, // Round to 2 decimal places

@@ -1,0 +1,149 @@
+[
+  {
+    "fields": {
+      "Name": "Alajuela",
+      "Code": "A",
+      "ISO3166_2": "CR-A",
+      "Latitude": 10.7527,
+      "Longitude": -84.7995,
+      "BoundaryGeoJSON": "@file:by-country/CR/boundaries/CR-A.geojson",
+      "CommonAliases": [
+        "Alajuela"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CR"
+    },
+    "primaryKey": {
+      "ID": "A3DB6BF3-089A-46D3-80BB-30966B89AF79"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:39.790Z",
+      "checksum": "0c796d9b9202c4a9a77275da1f09c1fb40fb8bec75ad7df087dce3c6bd287752"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Cartago",
+      "Code": "C",
+      "ISO3166_2": "CR-C",
+      "Latitude": 9.7841,
+      "Longitude": -83.6991,
+      "BoundaryGeoJSON": "@file:by-country/CR/boundaries/CR-C.geojson",
+      "CommonAliases": [
+        "Cartago"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CR"
+    },
+    "primaryKey": {
+      "ID": "AB2D1D4A-A3B5-4E62-AF06-9C3CF8F946EC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:39.808Z",
+      "checksum": "8190c9a5db00e7d9c2de7ad1d56a4b078220366cc90ef38315da9c4115a3ba7d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Guanacaste",
+      "Code": "G",
+      "ISO3166_2": "CR-G",
+      "Latitude": 10.3333,
+      "Longitude": -85.3552,
+      "BoundaryGeoJSON": "@file:by-country/CR/boundaries/CR-G.geojson",
+      "CommonAliases": [
+        "Guanacaste"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CR"
+    },
+    "primaryKey": {
+      "ID": "9431203A-B128-4B47-A614-C5244183D1FE"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:39.824Z",
+      "checksum": "d58b3ba94253d1a322fb41230ba6b1224f3a8cce15d064d7fca3437caea42c24"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Heredia",
+      "Code": "H",
+      "ISO3166_2": "CR-H",
+      "Latitude": 10.4626,
+      "Longitude": -83.9527,
+      "BoundaryGeoJSON": "@file:by-country/CR/boundaries/CR-H.geojson",
+      "CommonAliases": [
+        "Heredia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CR"
+    },
+    "primaryKey": {
+      "ID": "994DD25A-64BE-4B4A-8DC6-E57051FFC609"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:39.841Z",
+      "checksum": "2fb1280e364d39efcc93f49c1da7686a6580a8e091b71fb81bb2ebe9af1f4c31"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Limón",
+      "Code": "L",
+      "ISO3166_2": "CR-L",
+      "Latitude": 9.7018,
+      "Longitude": -83.1486,
+      "BoundaryGeoJSON": "@file:by-country/CR/boundaries/CR-L.geojson",
+      "CommonAliases": [
+        "Limón"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CR"
+    },
+    "primaryKey": {
+      "ID": "A72CB07E-0C78-45DE-BD76-91395B965F67"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:39.857Z",
+      "checksum": "c9c1f78996511fd2bea3159608ea704b52f37268a5e952b5655e01a6e585f8bf"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Puntarenas",
+      "Code": "P",
+      "ISO3166_2": "CR-P",
+      "Latitude": 8.9342,
+      "Longitude": -83.2294,
+      "BoundaryGeoJSON": "@file:by-country/CR/boundaries/CR-P.geojson",
+      "CommonAliases": [
+        "Puntarenas"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CR"
+    },
+    "primaryKey": {
+      "ID": "9804D8D1-9701-47FC-8FEB-84108F03AA9E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:39.875Z",
+      "checksum": "5da3a9c454d2975471316f90618efa37767c23e087034a1570cc689f301e6c4f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "San José",
+      "Code": "SJ",
+      "ISO3166_2": "CR-SJ",
+      "Latitude": 9.6037,
+      "Longitude": -84.0105,
+      "BoundaryGeoJSON": "@file:by-country/CR/boundaries/CR-SJ.geojson",
+      "CommonAliases": [
+        "San José"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CR"
+    },
+    "primaryKey": {
+      "ID": "FF948D35-CC2B-49DE-BB65-0504BCD92049"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:39.888Z",
+      "checksum": "ac7b0d1580ca55dea0034d19f0102ef9051d10d962561ba5519a880a1c5771f0"
+    }
+  }
+]

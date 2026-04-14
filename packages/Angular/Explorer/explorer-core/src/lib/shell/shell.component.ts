@@ -28,6 +28,7 @@ import { TabContainerComponent } from './components/tabs/tab-container.component
 import { BaseUserMenu, UserMenuElement, UserMenuItem, UserMenuContext, isUserMenuDivider, ApplicationInfoRef } from '../user-menu';
 import { MJUserEntity, InstanceConfigEngine } from '@memberjunction/core-entities';
 import { CommandPaletteService } from '../command-palette/command-palette.service';
+import { FileOpenService } from '@memberjunction/ng-file-storage';
 
 /**
  * Main shell component for the new Explorer UX.
@@ -47,7 +48,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   private subscriptions: Subscription[] = [];
   private urlBasedNavigation = false; // Track if we're loading from a URL
   private initialNavigationComplete = false; // Track if initial navigation has completed
-  private firstUrlSync = true; // Track if this is the first URL sync (for replaceUrl behavior)
 
   activeApp: BaseApplication | null = null;
   loading = true;
@@ -108,7 +108,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   @ViewChild('searchInput') searchInput!: ElementRef<HTMLInputElement>;
 
   // Universal search bar
-  @ViewChild('shellSearchComposite') shellSearchComposite: { Focus?(): void } | undefined;
+  @ViewChild('shellSearchComposite') shellSearchComposite: { Focus?(): void; MinRelevancePercent?: number } | undefined;
 
   // Instance configuration feature flags
   get ShowSearchBar(): boolean {
@@ -160,7 +160,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     public developerModeService: DeveloperModeService,
     private commandPaletteService: CommandPaletteService,
     private themeService: ThemeService,
-    private homePinService: HomeAppPinService
+    private homePinService: HomeAppPinService,
+    private fileOpenService: FileOpenService
   ) {
     // Initialize theme immediately so loading UI shows correct colors from the start
     this.activeTheme = getActiveTheme();
@@ -421,12 +422,21 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     this.initialized = true;
     this.waitingForFirstResource = true;
 
-    // Trigger initial URL sync: the Configuration BehaviorSubject already emitted
-    // its value when the shell subscribed (line above), but this.initialized was false
-    // at that point so syncUrlWithWorkspace() was skipped. Now that we're initialized,
-    // manually trigger the first URL sync to set the browser URL from workspace state.
+    // Decide whether to restore workspace state or honor the current URL.
+    // If the user navigated to a specific path (deep link, bookmark, typed URL),
+    // that URL takes priority — the ResourceResolver will handle tab creation.
+    // Only restore workspace state when the URL is bare root (/) or empty.
+    const initialUrl = this.router.url.split('?')[0]; // ignore query params for this check
+    const isDeepLink = initialUrl.length > 1 && initialUrl !== '/';
+
     const initConfig = this.workspaceManager.GetConfiguration();
-    if (initConfig && initConfig.activeTabId) {
+    if (isDeepLink) {
+      // User navigated to a specific URL — sync workspace to match the URL,
+      // not the other way around. The ResourceResolver will have created a tab
+      // for this URL; we just need to activate it.
+      await this.syncWorkspaceWithUrl(this.router.url);
+    } else if (initConfig && initConfig.activeTabId) {
+      // Bare root URL — restore last workspace state
       await this.syncActiveAppWithTab(initConfig);
       this.syncUrlWithWorkspace(initConfig);
     }
@@ -577,10 +587,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         // to reflect the current active tab, not requesting a new tab to be opened
         this.tabService.SuppressNextResolve();
 
-        // Replace URL on first sync (initialization), push new history entries after that
-        const replaceUrl = this.firstUrlSync;
-        this.firstUrlSync = false;
-        this.router.navigateByUrl(resourceUrl, { replaceUrl });
+        this.router.navigateByUrl(resourceUrl);
       }
     }
   }
@@ -601,11 +608,53 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     if (matchingTab && matchingTab.id !== config.activeTabId) {
       // Activate the matching tab
       this.workspaceManager.SetActiveTab(matchingTab.id);
+    } else if (matchingTab && matchingTab.id === config.activeTabId) {
+      // Same tab is already active, but query params may have changed (back/forward within nav item)
+      const urlParams = this.extractQueryParamsFromUrl(url);
+      const tabParams = (matchingTab.configuration?.['queryParams'] || {}) as Record<string, string>;
+      if (!this.queryParamsEqual(urlParams, tabParams)) {
+        // URL is source of truth during back/forward — update tab config to match.
+        this.urlBasedNavigation = true;
+        try {
+          this.workspaceManager.UpdateTabConfiguration(matchingTab.id, {
+            queryParams: Object.keys(urlParams).length > 0 ? urlParams : undefined
+          });
+          this.navigationService.NotifyQueryParamsChanged(matchingTab.id, urlParams);
+        } finally {
+          this.urlBasedNavigation = false;
+        }
+      }
     } else if (!matchingTab) {
-      // No matching tab found - check if this is an app-only URL for an app with zero nav items
-      // If so, we need to create a new tab for it (the old one was replaced when navigating away)
       await this.handleMissingTabForUrl(url);
     }
+  }
+
+  /**
+   * Extract query params from a URL string, stripping any fragment (#hash).
+   */
+  private extractQueryParamsFromUrl(url: string): Record<string, string> {
+    const fragmentIndex = url.indexOf('#');
+    const cleanUrl = fragmentIndex !== -1 ? url.substring(0, fragmentIndex) : url;
+    const queryIndex = cleanUrl.indexOf('?');
+    if (queryIndex === -1) return {};
+    const params = new URLSearchParams(cleanUrl.substring(queryIndex + 1));
+    const result: Record<string, string> = {};
+    params.forEach((value, key) => { result[key] = value; });
+    return result;
+  }
+
+  /**
+   * Compare two query param records for equality, normalizing encoding differences
+   * (URLSearchParams encodes spaces as +, Angular Router uses %20).
+   */
+  private queryParamsEqual(a: Record<string, string>, b: Record<string, string>): boolean {
+    const keysA = Object.keys(a);
+    const keysB = Object.keys(b);
+    if (keysA.length !== keysB.length) return false;
+    return keysA.every(key =>
+      decodeURIComponent(a[key]?.replace(/\+/g, ' ') || '') ===
+      decodeURIComponent(b[key]?.replace(/\+/g, ' ') || '')
+    );
   }
 
   /**
@@ -688,6 +737,36 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         return;
       }
 
+      // Check for app nav item URL: /app/:appName/:navItemName
+      const appNavItemMatch = urlPath.match(/^\/app\/([^\/]+)\/([^\/]+)$/);
+      if (appNavItemMatch) {
+        const appPath = decodeURIComponent(appNavItemMatch[1]);
+        const navItemName = decodeURIComponent(appNavItemMatch[2]);
+        const app = this.appManager.GetAppByPath(appPath) || this.appManager.GetAppByName(appPath);
+
+        if (app) {
+          // Activate the app and open the nav item
+          await this.appManager.SetActiveApp(app.ID);
+          const navItems = await app.GetNavItems();
+          const navItem = navItems.find(item => item.Label === navItemName);
+
+          if (navItem) {
+            // Parse query params to pass as configuration
+            const qpObj: Record<string, string> = {};
+            queryParams.forEach((value, key) => { qpObj[key] = value; });
+            this.navigationService.OpenNavItem(
+              app.ID,
+              navItem,
+              app.GetColor(),
+              Object.keys(qpObj).length > 0 ? { queryParams: qpObj } : undefined
+            );
+          } else {
+            console.warn('handleMissingTabForUrl: nav item not found:', navItemName, 'in app:', appPath);
+          }
+        }
+        return;
+      }
+
       // Check for app-only URL: /app/:appName
       const appOnlyMatch = urlPath.match(/^\/app\/([^\/]+)$/);
       if (appOnlyMatch) {
@@ -704,6 +783,13 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
             const defaultTab = await app.CreateDefaultTab();
             if (defaultTab) {
               this.workspaceManager.OpenTab(defaultTab, app.GetColor());
+            }
+          } else {
+            // App has nav items — activate the app and its default nav item
+            await this.appManager.SetActiveApp(app.ID);
+            const defaultNavItem = navItems.find(item => (item as { isDefault?: boolean }).isDefault) || navItems[0];
+            if (defaultNavItem) {
+              this.navigationService.OpenNavItem(app.ID, defaultNavItem, app.GetColor());
             }
           }
         }
@@ -1015,6 +1101,14 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     const isAppDefault = config['isAppDefault'] as boolean | undefined;
     const tabAppId = tab.applicationId;
 
+    // Helper to append query params to a URL, preserving any existing params
+    const appendQP = (url: string): string => {
+      if (!queryParams || Object.keys(queryParams).length === 0) return url;
+      const separator = url.includes('?') ? '&' : '?';
+      const params = new URLSearchParams(queryParams);
+      return `${url}${separator}${params.toString()}`;
+    };
+
     // Helper function to get app path for URL
     const getAppPath = (appIdOrName: string): string | null => {
       // First try by ID
@@ -1131,7 +1225,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         case 'records':
           // /app/:appName/record/:entityName/:recordId
           if (entityName && recordId) {
-            return `/app/${encodeURIComponent(appPath)}/record/${encodeURIComponent(entityName)}/${recordId}`;
+            return appendQP(`/app/${encodeURIComponent(appPath)}/record/${encodeURIComponent(entityName)}/${recordId}`);
           }
           break;
 
@@ -1144,53 +1238,63 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
               if (extraFilter) {
                 url += `?ExtraFilter=${encodeURIComponent(extraFilter)}`;
               }
-              return url;
+              return appendQP(url);
             }
           } else if (recordId) {
             // /app/:appName/view/:viewId (saved view)
-            return `/app/${encodeURIComponent(appPath)}/view/${recordId}`;
+            return appendQP(`/app/${encodeURIComponent(appPath)}/view/${recordId}`);
           }
           break;
 
         case 'dashboards':
           // /app/:appName/dashboard/:dashboardId
           if (recordId) {
-            return `/app/${encodeURIComponent(appPath)}/dashboard/${recordId}`;
+            return appendQP(`/app/${encodeURIComponent(appPath)}/dashboard/${recordId}`);
           }
           break;
 
         case 'artifacts':
           // /app/:appName/artifact/:artifactId
           if (recordId) {
-            return `/app/${encodeURIComponent(appPath)}/artifact/${recordId}`;
+            return appendQP(`/app/${encodeURIComponent(appPath)}/artifact/${recordId}`);
           }
           break;
 
         case 'queries':
           // /app/:appName/query/:queryId
           if (recordId) {
-            return `/app/${encodeURIComponent(appPath)}/query/${recordId}`;
+            return appendQP(`/app/${encodeURIComponent(appPath)}/query/${recordId}`);
           }
           break;
 
         case 'reports':
           // /app/:appName/report/:reportId
           if (recordId) {
-            return `/app/${encodeURIComponent(appPath)}/report/${recordId}`;
+            return appendQP(`/app/${encodeURIComponent(appPath)}/report/${recordId}`);
           }
           break;
 
-        case 'search results':
-          // /app/:appName/search/:searchInput?Entity=...
+        case 'search results': {
+          // /app/:appName/search/:searchInput?minRelevance=...&Entity=...
           const searchInput = config['SearchInput'] as string | undefined;
           if (searchInput) {
             let url = `/app/${encodeURIComponent(appPath)}/search/${encodeURIComponent(searchInput)}`;
+            const searchParams = new URLSearchParams();
             if (entityName) {
-              url += `?Entity=${encodeURIComponent(entityName)}`;
+              searchParams.set('Entity', entityName);
+            }
+            if (queryParams) {
+              for (const [key, value] of Object.entries(queryParams)) {
+                if (value != null) searchParams.set(key, value);
+              }
+            }
+            if (searchParams.toString()) {
+              url += `?${searchParams.toString()}`;
             }
             return url;
           }
           break;
+        }
       }
     }
 
@@ -1198,7 +1302,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     switch (resourceType) {
       case 'records':
         if (entityName && recordId) {
-          return `/resource/record/${encodeURIComponent(entityName)}/${recordId}`;
+          return appendQP(`/resource/record/${encodeURIComponent(entityName)}/${recordId}`);
         }
         break;
 
@@ -1209,30 +1313,31 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
             if (extraFilter) {
               url += `?ExtraFilter=${encodeURIComponent(extraFilter)}`;
             }
-            return url;
+            return appendQP(url);
           }
         } else if (recordId) {
-          return `/resource/view/${recordId}`;
+          return appendQP(`/resource/view/${recordId}`);
         }
         break;
 
       case 'dashboards':
         if (recordId) {
-          return `/resource/dashboard/${recordId}`;
+          return appendQP(`/resource/dashboard/${recordId}`);
         }
         break;
 
       case 'artifacts':
         if (recordId) {
-          return `/resource/artifact/${recordId}`;
+          return appendQP(`/resource/artifact/${recordId}`);
         }
         break;
 
       case 'queries':
         if (recordId) {
-          return `/resource/query/${recordId}`;
+          return appendQP(`/resource/query/${recordId}`);
         }
         break;
+
     }
 
     return null;
@@ -1630,7 +1735,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           this.workspaceManager.SetActiveTab(defaultNavItemTab.id);
           const resourceUrl = await this.buildResourceUrl(defaultNavItemTab);
           if (resourceUrl) {
-            this.router.navigateByUrl(resourceUrl, { replaceUrl: true });
+            this.router.navigateByUrl(resourceUrl);
           }
         } else {
           // No tab for default nav item - create one via NavigationService
@@ -1645,7 +1750,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         // but we can also manually trigger it here to ensure immediate update
         const resourceUrl = await this.buildResourceUrl(firstTab);
         if (resourceUrl) {
-          this.router.navigateByUrl(resourceUrl, { replaceUrl: true });
+          this.router.navigateByUrl(resourceUrl);
         }
       }
     } finally {
@@ -2401,16 +2506,25 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       }
   }
 
-  OnSearchResultSelected(result: { EntityName: string; RecordID: string }): void {
-      if (result.EntityName && result.RecordID) {
-          const pkey = new CompositeKey([{ FieldName: 'ID', Value: result.RecordID }]);
-          this.navigationService.OpenEntityRecord(result.EntityName, pkey);
+  OnSearchResultSelected(result: { EntityName: string; RecordID: string; ResultType?: string; RawMetadata?: string }): void {
+      if (result.ResultType === 'storage-file') {
+          if (!this.fileOpenService.OpenPreviewFromSearchResult(result.RawMetadata)) {
+              this.fileOpenService.OpenFileFromSearchResult(result.RawMetadata);
+          }
+          return;
       }
+
+      if (!result.EntityName || !result.RecordID) return;
+
+      // Entity records — open via NavigationService
+      const pkey = new CompositeKey([{ FieldName: 'ID', Value: result.RecordID }]);
+      this.navigationService.OpenEntityRecord(result.EntityName, pkey);
   }
 
   OnSearchSubmitted(query: string): void {
       if (query && query.trim().length >= 2) {
-          this.navigationService.OpenSearch(query);
+          const minRelevance = this.shellSearchComposite?.MinRelevancePercent;
+          this.navigationService.OpenSearch(query, minRelevance ? { minRelevance } : undefined);
       }
   }
 
@@ -2517,6 +2631,13 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       case 'disabled':
         return {
           type: 'disabled',
+          appName: accessResult.appName,
+          appId: accessResult.appId
+        };
+
+      case 'not_authorized':
+        return {
+          type: 'no_access',
           appName: accessResult.appName,
           appId: accessResult.appId
         };
@@ -2693,7 +2814,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
 
     // Update URL to reflect the new app
     const appPath = app.Path || app.Name;
-    this.router.navigateByUrl(`/app/${encodeURIComponent(appPath)}`, { replaceUrl: true });
+    this.router.navigateByUrl(`/app/${encodeURIComponent(appPath)}`);
   }
 
   /**

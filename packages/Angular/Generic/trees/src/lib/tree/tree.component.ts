@@ -1289,7 +1289,13 @@ export class TreeComponent implements OnInit, OnDestroy {
         defaultIcon: string = 'fa-solid fa-folder'
     ): string {
         if (iconField && data[iconField]) {
-            return String(data[iconField]);
+            const icon = String(data[iconField]);
+            // Only use the icon if it's a Font Awesome class (fa-*) which is
+            // guaranteed to be globally available. Custom icon classes (e.g.
+            // mj-icon-*) may not have CSS loaded in the tree's context.
+            if (icon.startsWith('fa-') || icon.startsWith('fa ')) {
+                return icon;
+            }
         }
         return defaultIcon;
     }

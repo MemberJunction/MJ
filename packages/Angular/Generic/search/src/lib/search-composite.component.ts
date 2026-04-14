@@ -79,6 +79,11 @@ export class SearchCompositeComponent implements OnInit, OnDestroy {
 
     public Query = '';
     public IsSuggestOpen = false;
+
+    /** The current min relevance percent from the suggest dropdown filter */
+    public get MinRelevancePercent(): number {
+        return this.searchSuggestRef?.MinRelevancePercent ?? 0;
+    }
     public PreviewResults: SearchResultItem[] = [];
     public RecentSearches: RecentSearch[] = [];
     public PreviewTotalCount = 0;
@@ -86,6 +91,7 @@ export class SearchCompositeComponent implements OnInit, OnDestroy {
 
     ngOnInit(): void {
         this.subscribeToRecentSearches();
+        this.searchService.LoadRecentSearches(); // fire-and-forget — loads from UserInfoEngine
     }
 
     ngOnDestroy(): void {
@@ -192,6 +198,11 @@ export class SearchCompositeComponent implements OnInit, OnDestroy {
     public OnSeeAllRequested(query: string): void {
         this.SeeAllRequested.emit(query);
         this.closeSuggest();
+    }
+
+    /** Handle "Clear" recent searches */
+    public OnClearRecentRequested(): void {
+        this.searchService.ClearRecentSearches();
     }
 
     // --- Private ---

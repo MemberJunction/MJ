@@ -21,6 +21,7 @@ interface FormattedSearchResult {
     EntityName: string;
     RecordID: string;
     SourceType: string;
+    ResultType: string;
     Title: string;
     Snippet: string;
     Score: number;
@@ -64,7 +65,7 @@ interface FormattedSearchResult {
  * });
  * ```
  */
-@RegisterClass(BaseAction, "Search")
+@RegisterClass(BaseAction, "__Internal_Search")
 export class SearchAction extends BaseAction {
 
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
@@ -225,18 +226,20 @@ export class SearchAction extends BaseAction {
             EntityName: item.EntityName,
             RecordID: item.RecordID,
             SourceType: item.SourceType,
+            ResultType: item.ResultType,
             Title: item.Title,
             Snippet: item.Snippet,
             Score: item.Score,
             ScoreBreakdown: {
                 Vector: item.ScoreBreakdown.Vector,
                 FullText: item.ScoreBreakdown.FullText,
-                Entity: item.ScoreBreakdown.Entity
+                Entity: item.ScoreBreakdown.Entity,
+                Storage: item.ScoreBreakdown.Storage
             },
             Tags: item.Tags,
             EntityIcon: item.EntityIcon,
             RecordName: item.RecordName,
-            MatchedAt: item.MatchedAt.toISOString(),
+            MatchedAt: item.MatchedAt instanceof Date ? item.MatchedAt.toISOString() : String(item.MatchedAt),
             RawMetadata: item.RawMetadata
         }));
     }

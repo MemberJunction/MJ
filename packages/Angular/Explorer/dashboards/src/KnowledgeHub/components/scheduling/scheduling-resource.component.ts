@@ -37,9 +37,9 @@ interface CronParts {
 })
 export class SchedulingResourceComponent extends BaseResourceComponent implements AfterViewInit, OnDestroy {
     private cdr = inject(ChangeDetectorRef);
-    private navigationService = inject(NavigationService);
+    protected override navigationService = inject(NavigationService);
     private scheduledJobService = inject(ScheduledJobService);
-    private destroy$ = new Subject<void>();
+    protected override destroy$ = new Subject<void>();
 
     // ================================================================
     // Resource overrides
@@ -97,6 +97,7 @@ export class SchedulingResourceComponent extends BaseResourceComponent implement
     }
 
     ngOnDestroy(): void {
+        super.ngOnDestroy();
         this.destroy$.next();
         this.destroy$.complete();
     }

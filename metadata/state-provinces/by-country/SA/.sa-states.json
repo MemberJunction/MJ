@@ -1,0 +1,275 @@
+[
+  {
+    "fields": {
+      "Name": "‘Asīr",
+      "Code": "14",
+      "ISO3166_2": "SA-14",
+      "Latitude": 19.3484,
+      "Longitude": 42.9503,
+      "BoundaryGeoJSON": "@file:by-country/SA/boundaries/SA-14.geojson",
+      "CommonAliases": [
+        "‘Asīr"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SA"
+    },
+    "primaryKey": {
+      "ID": "AD0F727E-3407-42B7-960E-A5F855CF47F0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:29.811Z",
+      "checksum": "68f939a9094d072edf177cee6f52916e2ed0a1e357f0907f1f071471942a2c54"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Al Bāḩah",
+      "Code": "11",
+      "ISO3166_2": "SA-11",
+      "Latitude": 20.1605,
+      "Longitude": 41.4165,
+      "BoundaryGeoJSON": "@file:by-country/SA/boundaries/SA-11.geojson",
+      "CommonAliases": [
+        "Al Bāḩah"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SA"
+    },
+    "primaryKey": {
+      "ID": "E9F48284-BAD5-4295-B910-34F41AC060E6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:29.827Z",
+      "checksum": "96d5996a3d9d3e7e586a58d1808858c1a6861d4ff88cc13136f1f1240c00a51e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Al Ḩudūd ash Shamālīyah",
+      "Code": "08",
+      "ISO3166_2": "SA-08",
+      "Latitude": 29.227,
+      "Longitude": 43.3124,
+      "BoundaryGeoJSON": "@file:by-country/SA/boundaries/SA-08.geojson",
+      "CommonAliases": [
+        "Al Ḩudūd ash Shamālīyah"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SA"
+    },
+    "primaryKey": {
+      "ID": "060A4B29-B048-4B6C-8DEE-DFDC641B0F8F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:29.844Z",
+      "checksum": "42e8f9d37a414d5cc801ff536de48987d582c517ab141179d70087500e6e9d96"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Al Jawf",
+      "Code": "12",
+      "ISO3166_2": "SA-12",
+      "Latitude": 29.5589,
+      "Longitude": 38.3651,
+      "BoundaryGeoJSON": "@file:by-country/SA/boundaries/SA-12.geojson",
+      "CommonAliases": [
+        "Al Jawf"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SA"
+    },
+    "primaryKey": {
+      "ID": "CB985476-0A42-4C73-9E40-217B64085700"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:29.861Z",
+      "checksum": "72be02ea56b0238bc5377c4ae38682a7687d8fd5236e94a6966c6ecf097a46be"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Al Madīnah",
+      "Code": "03",
+      "ISO3166_2": "SA-03",
+      "Latitude": 24.9279,
+      "Longitude": 39.4378,
+      "BoundaryGeoJSON": "@file:by-country/SA/boundaries/SA-03.geojson",
+      "CommonAliases": [
+        "Al Madīnah"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SA"
+    },
+    "primaryKey": {
+      "ID": "F4DB260E-07A6-44F5-8EC5-FD7EB6DAC6AE"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:29.878Z",
+      "checksum": "80f78e9bb3a16af809242446500870ae70ecf55fa863890585e99489dfb781f0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Al Qaşim",
+      "Code": "05",
+      "ISO3166_2": "SA-05",
+      "Latitude": 25.9478,
+      "Longitude": 43.2716,
+      "BoundaryGeoJSON": "@file:by-country/SA/boundaries/SA-05.geojson",
+      "CommonAliases": [
+        "Al Qaşim"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SA"
+    },
+    "primaryKey": {
+      "ID": "9C7A9D92-7551-4C6D-95A3-180755594AF8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:29.894Z",
+      "checksum": "0723137d1ba939f94c60eb6e433cbe54bb5b66a7a406295db3e556cfd121c12a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ar Riyāḑ",
+      "Code": "O1",
+      "ISO3166_2": "SA-O1",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Ar Riyāḑ"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SA"
+    },
+    "primaryKey": {
+      "ID": "0F8102B6-1380-4ED6-A1D5-FFF0013E3B00"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:29.911Z",
+      "checksum": "5bd6342f0b99cc0e51ea4ca2f3332154d8c2a5a3e4a3090d0788abf26b5ee7f0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ash Sharqīyah",
+      "Code": "04",
+      "ISO3166_2": "SA-04",
+      "Latitude": 22.9875,
+      "Longitude": 50.1714,
+      "BoundaryGeoJSON": "@file:by-country/SA/boundaries/SA-04.geojson",
+      "CommonAliases": [
+        "Ash Sharqīyah"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SA"
+    },
+    "primaryKey": {
+      "ID": "728DB713-1A19-496A-A44E-04E35FF5D612"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:29.928Z",
+      "checksum": "8c2d7f8babcea95cf68042573f35f1be52e7b3675212bd0ee757146697066663"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ḩā'il",
+      "Code": "06",
+      "ISO3166_2": "SA-06",
+      "Latitude": 27.2652,
+      "Longitude": 41.7076,
+      "BoundaryGeoJSON": "@file:by-country/SA/boundaries/SA-06.geojson",
+      "CommonAliases": [
+        "Ḩā'il"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SA"
+    },
+    "primaryKey": {
+      "ID": "D77C5481-CE9E-4CF0-9314-21E94356091D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:29.947Z",
+      "checksum": "98f89a9f9872799232af1c72741d2f9814ffda7907a45d2a571aa8d8312cbdbb"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Jīzān",
+      "Code": "09",
+      "ISO3166_2": "SA-09",
+      "Latitude": 17.3028,
+      "Longitude": 42.726,
+      "BoundaryGeoJSON": "@file:by-country/SA/boundaries/SA-09.geojson",
+      "CommonAliases": [
+        "Jīzān"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SA"
+    },
+    "primaryKey": {
+      "ID": "3A5C5D66-2871-4A2F-8B77-94F5E420CC01"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:29.961Z",
+      "checksum": "f5822ecda8977f3ae672b7a92ea1be1a6e34bf52875d26b65d3e22be9f8e71cd"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Makkah",
+      "Code": "02",
+      "ISO3166_2": "SA-02",
+      "Latitude": 21.4348,
+      "Longitude": 40.2542,
+      "BoundaryGeoJSON": "@file:by-country/SA/boundaries/SA-02.geojson",
+      "CommonAliases": [
+        "Makkah"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SA"
+    },
+    "primaryKey": {
+      "ID": "35AD4F41-28EE-459C-9485-4918ABE13B16"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:29.993Z",
+      "checksum": "1bf32ca668d9e6371f081bc8a444d37d59284b51386ba17f3c49c0aeb3a17e6d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Najrān",
+      "Code": "10",
+      "ISO3166_2": "SA-10",
+      "Latitude": 18.2931,
+      "Longitude": 45.6917,
+      "BoundaryGeoJSON": "@file:by-country/SA/boundaries/SA-10.geojson",
+      "CommonAliases": [
+        "Najrān"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SA"
+    },
+    "primaryKey": {
+      "ID": "3F5F64BD-9830-4D32-AF62-4C0DC19ACAE4"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:30.010Z",
+      "checksum": "1544429713f9e8080358554e01e6eb9ca042c13ed416e95098b6c3cfa0ab73a0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tabūk",
+      "Code": "07",
+      "ISO3166_2": "SA-07",
+      "Latitude": 27.9146,
+      "Longitude": 36.8014,
+      "BoundaryGeoJSON": "@file:by-country/SA/boundaries/SA-07.geojson",
+      "CommonAliases": [
+        "Tabūk"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SA"
+    },
+    "primaryKey": {
+      "ID": "872E9345-8277-4CAA-AA0D-FADB679D614E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:30.024Z",
+      "checksum": "75a9993886914b22c18bb28de063a9a43c173591f1bf3af9c26132bcdfbb86cd"
+    }
+  }
+]

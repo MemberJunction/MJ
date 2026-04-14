@@ -77,6 +77,59 @@ export interface SkipEntityRelationshipInfo {
 }
 
 /**
+ * Information about a related entity matched via an organic key.
+ * Either direct (relatedEntityFieldNames) or transitive (transitiveObjectName + bridge fields).
+ */
+export interface SkipEntityOrganicKeyRelatedEntityInfo {
+    id: string;
+    relatedEntityID: string;
+    relatedEntityName: string;
+    relatedEntitySchemaName: string;
+    relatedEntityBaseView: string;
+    /** True if this is a direct field-to-field match. */
+    isDirectMatch: boolean;
+    /** True if this is a transitive match through a bridge view. */
+    isTransitiveMatch: boolean;
+    /**
+     * For direct matches: field names in the related entity, positionally aligned
+     * with the parent organic key's matchFieldNames.
+     */
+    relatedEntityFieldNames?: string[];
+    /** For transitive matches: schema-qualified name of the bridge view/table. */
+    transitiveObjectName?: string;
+    /** For transitive matches: fields in the bridge that match the organic key. */
+    transitiveObjectMatchFieldNames?: string[];
+    /** For transitive matches: output field from the bridge that joins to the related entity. */
+    transitiveObjectOutputFieldName?: string;
+    /** For transitive matches: field in the related entity matching the bridge output. */
+    relatedEntityJoinFieldName?: string;
+    displayName?: string;
+    sequence: number;
+}
+
+/**
+ * Information about an organic key defined on an entity.
+ * Organic keys express cross-entity relationships via shared business data
+ * (email, acronym, domain, etc.) rather than database FK constraints.
+ */
+export interface SkipEntityOrganicKeyInfo {
+    id: string;
+    name: string;
+    description?: string;
+    /**
+     * Comma-delimited field names parsed into an array. Single value for simple
+     * keys, multiple for compound keys.
+     */
+    matchFieldNames: string[];
+    /** How to normalize values before comparison. */
+    normalizationStrategy: 'LowerCaseTrim' | 'Trim' | 'ExactMatch' | 'Custom';
+    /** SQL expression template (uses {{FieldName}} placeholder) when strategy is Custom. */
+    customNormalizationExpression?: string;
+    sequence: number;
+    relatedEntities: SkipEntityOrganicKeyRelatedEntityInfo[];
+}
+
+/**
  * Info about a single entity including fields and relationships
  */
 export interface SkipEntityInfo {
@@ -87,6 +140,13 @@ export interface SkipEntityInfo {
     baseView: string;
     fields: SkipEntityFieldInfo[];
     relatedEntities: SkipEntityRelationshipInfo[];
+    /**
+     * Organic keys defined on this entity. Empty array if none.
+     * Organic keys express cross-entity relationships via shared business data
+     * (email, acronym, domain, etc.) rather than database FK constraints. Skip
+     * should treat these as additional valid join paths beyond `relatedEntities`.
+     */
+    organicKeys: SkipEntityOrganicKeyInfo[];
 
     /**
      * If rows packed is set to anything other than none, the data is provided in the rows property.

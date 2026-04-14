@@ -7,43 +7,64 @@
 
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Subject } from 'rxjs';
-import { Metadata } from '@memberjunction/core';
+import { Metadata, StartupManager } from '@memberjunction/core';
+import { UserInfoEngine } from '@memberjunction/core-entities';
+import { MJEventType, MJGlobal } from '@memberjunction/global';
+import {
+    GraphQLSearchClient,
+    GraphQLDataProvider,
+    SearchClientResponse,
+    SearchClientResultItem
+} from '@memberjunction/graphql-dataprovider';
 import {
     SearchRequest,
     SearchResponse,
     SearchResultItem,
     SearchResultGroup,
     SearchFilter,
-    SearchFilterOption
+    SearchFilterOption,
+    SearchProviderInfo
 } from './search-types';
 
 /** Default minimum relevance score threshold (0-1). Results below this are filtered out. */
 const DEFAULT_MIN_SCORE = 0.35;
 
-/** Default icon mapping for source types */
-const SOURCE_TYPE_ICONS: Record<string, string> = {
+/** Fallback icon mapping for source types (used when provider metadata is not available) */
+const FALLBACK_SOURCE_ICONS: Record<string, string> = {
     'entity': 'fa-solid fa-database',
     'vector': 'fa-solid fa-brain',
     'fulltext': 'fa-solid fa-magnifying-glass',
     'content-item': 'fa-solid fa-file-lines',
     'file': 'fa-solid fa-file',
     'web-page': 'fa-solid fa-globe',
+    'storage': 'fa-solid fa-folder-open',
 };
 
-/** Default labels for source types */
-const SOURCE_TYPE_LABELS: Record<string, string> = {
+/** Fallback labels for source types (used when provider metadata is not available) */
+const FALLBACK_SOURCE_LABELS: Record<string, string> = {
     'entity': 'Database',
     'vector': 'Semantic Search',
     'fulltext': 'Full-Text Search',
     'content-item': 'Content Items',
     'file': 'Documents',
     'web-page': 'Web Pages',
+    'storage': 'File Storage',
 };
+
+/** User setting key for persisting recent searches */
+const RECENT_SEARCHES_KEY = 'search.recentSearches';
 
 /** Recent search entry for history */
 export interface RecentSearch {
     Query: string;
     Timestamp: Date;
+    ResultCount: number;
+}
+
+/** JSON-safe shape for persistence (Date → ISO string) */
+interface RecentSearchJson {
+    Query: string;
+    Timestamp: string;
     ResultCount: number;
 }
 
@@ -55,13 +76,17 @@ export class SearchService {
     /** Whether a search is in progress */
     public IsSearching$ = new BehaviorSubject<boolean>(false);
 
-    /** Recent search history (kept in memory, max 20 entries) */
+    /** Recent search history (persisted via UserInfoEngine, max 20 entries) */
     public RecentSearches$ = new BehaviorSubject<RecentSearch[]>([]);
 
     /** Error stream */
     public Errors$ = new Subject<string>();
 
     private readonly maxRecentSearches = 20;
+    private recentSearchesLoaded = false;
+
+    /** Cached provider metadata keyed by SourceType, populated from search responses */
+    private providersBySourceType = new Map<string, SearchProviderInfo>();
 
     /**
      * Execute a search request via the SearchKnowledge GraphQL mutation.
@@ -96,13 +121,18 @@ export class SearchService {
      */
     public async PreviewSearch(query: string, maxResults: number = 8): Promise<SearchResponse> {
         try {
-            return await this.executeGraphQLSearch({
-                Query: query,
-                MaxResults: maxResults,
-                ActiveFilters: {},
-                IncludeSources: ['vector', 'fulltext', 'entity'],
-                MinScore: 0
-            });
+            if (!query.trim()) {
+                return this.createEmptyResponse();
+            }
+
+            const provider = Metadata.Provider;
+            if (!(provider instanceof GraphQLDataProvider)) {
+                return this.createEmptyResponse('GraphQL provider not available');
+            }
+
+            const client = new GraphQLSearchClient(provider);
+            const clientResponse = await client.PreviewSearch(query, maxResults);
+            return this.mapClientResponseToSearchResponse(clientResponse);
         } catch (err) {
             const errorMessage = err instanceof Error ? err.message : 'Preview search failed';
             return this.createEmptyResponse(errorMessage);
@@ -114,9 +144,10 @@ export class SearchService {
         this.SearchResults$.next(null);
     }
 
-    /** Clear recent search history */
+    /** Clear recent search history (memory and persisted) */
     public ClearRecentSearches(): void {
         this.RecentSearches$.next([]);
+        this.persistRecentSearches([]);
     }
 
     /**
@@ -135,13 +166,17 @@ export class SearchService {
             }
         }
 
-        return Array.from(groupMap.entries()).map(([sourceType, items]) => ({
-            Label: SOURCE_TYPE_LABELS[sourceType] ?? sourceType,
-            Icon: SOURCE_TYPE_ICONS[sourceType] ?? 'fa-solid fa-circle',
-            SourceType: sourceType,
-            Results: items,
-            TotalCount: items.length
-        }));
+        return Array.from(groupMap.entries()).map(([sourceType, items]) => {
+            // Priority: cached provider metadata > per-result metadata > fallback maps
+            const cached = this.providersBySourceType.get(sourceType);
+            return {
+                Label: cached?.DisplayName ?? items[0]?.ProviderLabel ?? FALLBACK_SOURCE_LABELS[sourceType] ?? sourceType,
+                Icon: cached?.Icon ?? items[0]?.ProviderIcon ?? FALLBACK_SOURCE_ICONS[sourceType] ?? 'fa-solid fa-circle',
+                SourceType: sourceType,
+                Results: items,
+                TotalCount: items.length
+            };
+        });
     }
 
     /**
@@ -151,13 +186,14 @@ export class SearchService {
         return [
             this.buildSourceTypeFilter(results),
             this.buildEntityNameFilter(results),
+            this.buildFileTypeFilter(results),
             this.buildTagFilter(results)
-        ].filter(f => f.Options.length > 0); // Hide categories with no options (e.g., Tags when none exist)
+        ].filter(f => f.Options.length > 0); // Hide categories with no options
     }
 
     /** Get the icon for a given source type */
     public GetSourceIcon(sourceType: string): string {
-        return SOURCE_TYPE_ICONS[sourceType] ?? 'fa-solid fa-circle';
+        return this.providersBySourceType.get(sourceType)?.Icon ?? FALLBACK_SOURCE_ICONS[sourceType] ?? 'fa-solid fa-circle';
     }
 
     private buildSourceTypeFilter(results: SearchResultItem[]): SearchFilter {
@@ -165,20 +201,28 @@ export class SearchService {
         for (const r of results) {
             counts.set(r.SourceType, (counts.get(r.SourceType) ?? 0) + 1);
         }
-        const options: SearchFilterOption[] = Array.from(counts.entries()).map(([type, count]) => ({
-            Label: SOURCE_TYPE_LABELS[type] ?? type,
-            Value: type,
-            Count: count,
-            IsSelected: false,
-            Icon: SOURCE_TYPE_ICONS[type]
-        }));
+        const options: SearchFilterOption[] = Array.from(counts.entries()).map(([type, count]) => {
+            const cached = this.providersBySourceType.get(type);
+            return {
+                Label: cached?.DisplayName ?? FALLBACK_SOURCE_LABELS[type] ?? type,
+                Value: type,
+                Count: count,
+                IsSelected: false,
+                Icon: cached?.Icon ?? FALLBACK_SOURCE_ICONS[type]
+            };
+        });
         return { Category: 'Source', Options: options, MultiSelect: true };
     }
 
     private buildEntityNameFilter(results: SearchResultItem[]): SearchFilter {
         const counts = new Map<string, number>();
+        let fileCount = 0;
         for (const r of results) {
-            counts.set(r.EntityName, (counts.get(r.EntityName) ?? 0) + 1);
+            if (r.ResultType === 'storage-file') {
+                fileCount++;
+            } else {
+                counts.set(r.EntityName, (counts.get(r.EntityName) ?? 0) + 1);
+            }
         }
         const options: SearchFilterOption[] = Array.from(counts.entries())
             .sort((a, b) => b[1] - a[1])
@@ -189,7 +233,40 @@ export class SearchService {
                 IsSelected: false,
                 Icon: 'fa-solid fa-table'
             }));
+
+        // Add a single "Files" entry for all storage file results
+        if (fileCount > 0) {
+            options.push({
+                Label: 'Files',
+                Value: '__storage-files__',
+                Count: fileCount,
+                IsSelected: false,
+                Icon: 'fa-solid fa-file'
+            });
+        }
+
         return { Category: 'Entity', Options: options, MultiSelect: true };
+    }
+
+    private buildFileTypeFilter(results: SearchResultItem[]): SearchFilter {
+        const counts = new Map<string, number>();
+        for (const r of results) {
+            if (r.ResultType !== 'storage-file') continue;
+            const ext = r.Title?.split('.').pop()?.toUpperCase();
+            if (ext && ext.length <= 6) {
+                counts.set(ext, (counts.get(ext) ?? 0) + 1);
+            }
+        }
+        const options: SearchFilterOption[] = Array.from(counts.entries())
+            .sort((a, b) => b[1] - a[1])
+            .map(([ext, count]) => ({
+                Label: ext,
+                Value: ext,
+                Count: count,
+                IsSelected: false,
+                Icon: 'fa-solid fa-file'
+            }));
+        return { Category: 'File Type', Options: options, MultiSelect: true };
     }
 
     private buildTagFilter(results: SearchResultItem[]): SearchFilter {
@@ -212,6 +289,41 @@ export class SearchService {
         return { Category: 'Tags', Options: options, MultiSelect: true };
     }
 
+    /**
+     * Load persisted recent searches from UserInfoEngine.
+     * Safe to call multiple times — only loads once.
+     */
+    public async LoadRecentSearches(): Promise<void> {
+        if (this.recentSearchesLoaded) return;
+
+        try {
+            MJGlobal.Instance.GetEventListener(true).subscribe(async (event) => {
+                if (event.event === MJEventType.LoggedIn) {
+                    await StartupManager.Instance.Startup();
+
+                    const engine = UserInfoEngine.Instance;
+                    console.log('[SearchService] After Startup — engine.Loaded:', engine.Loaded, 'UserSettings count:', engine.UserSettings.length);
+
+                    const json = engine.GetSetting(RECENT_SEARCHES_KEY);
+                    console.log('[SearchService] GetSetting("' + RECENT_SEARCHES_KEY + '"):', json?.substring(0, 100));
+
+                    if (json) {
+                        const parsed = JSON.parse(json) as RecentSearchJson[];
+                        const searches: RecentSearch[] = parsed.map(s => ({
+                            Query: s.Query,
+                            Timestamp: new Date(s.Timestamp),
+                            ResultCount: s.ResultCount
+                        }));
+                        this.RecentSearches$.next(searches);
+                    }
+                }
+            });
+        } catch (err) {
+            console.error('[SearchService] LoadRecentSearches error:', err);
+        }
+        this.recentSearchesLoaded = true;
+    }
+
     private addToRecentSearches(query: string, resultCount: number): void {
         const current = this.RecentSearches$.value;
         const filtered = current.filter(s => s.Query !== query);
@@ -220,6 +332,27 @@ export class SearchService {
             ...filtered
         ].slice(0, this.maxRecentSearches);
         this.RecentSearches$.next(updated);
+        this.persistRecentSearches(updated);
+    }
+
+    private persistRecentSearches(searches: RecentSearch[]): void {
+        try {
+            const json: RecentSearchJson[] = searches.map(s => ({
+                Query: s.Query,
+                Timestamp: s.Timestamp.toISOString(),
+                ResultCount: s.ResultCount
+            }));
+            UserInfoEngine.Instance.SetSettingDebounced(RECENT_SEARCHES_KEY, JSON.stringify(json));
+        } catch {
+            // Silently fail if UserInfoEngine not available
+        }
+    }
+
+    /** Cache provider metadata by SourceType for use in GroupResults/BuildFilters */
+    private cacheProviders(providers: SearchProviderInfo[]): void {
+        for (const p of providers) {
+            this.providersBySourceType.set(p.SourceType, p);
+        }
     }
 
     private createEmptyResponse(errorMessage?: string): SearchResponse {
@@ -230,103 +363,57 @@ export class SearchService {
             Filters: [],
             TotalCount: 0,
             ElapsedMs: 0,
-            SourceCounts: { Vector: 0, FullText: 0, Entity: 0 },
+            SourceCounts: { Vector: 0, FullText: 0, Entity: 0, Storage: 0 },
+            Providers: [],
             ErrorMessage: errorMessage
         };
     }
 
     /**
-     * Execute search via the SearchKnowledge GraphQL mutation.
+     * Execute search via the GraphQLSearchClient.
      */
     private async executeGraphQLSearch(request: SearchRequest): Promise<SearchResponse> {
         if (!request.Query.trim()) {
             return this.createEmptyResponse();
         }
 
-        const provider = Metadata.Provider as { ExecuteGQL?: (query: string, variables: Record<string, unknown>) => Promise<Record<string, unknown>> };
-        if (!provider?.ExecuteGQL) {
+        const provider = Metadata.Provider;
+        if (!(provider instanceof GraphQLDataProvider)) {
             return this.createEmptyResponse('GraphQL provider not available');
         }
 
-        const mutation = `
-            mutation SearchKnowledge($query: String!, $maxResults: Float, $filters: SearchFiltersInput, $minScore: Float) {
-                SearchKnowledge(query: $query, maxResults: $maxResults, filters: $filters, minScore: $minScore) {
-                    Success
-                    TotalCount
-                    ElapsedMs
-                    ErrorMessage
-                    SourceCounts {
-                        Vector
-                        FullText
-                        Entity
-                    }
-                    Results {
-                        ID
-                        EntityName
-                        RecordID
-                        SourceType
-                        Title
-                        Snippet
-                        Score
-                        ScoreBreakdown {
-                            Vector
-                            FullText
-                            Entity
-                        }
-                        Tags
-                        EntityIcon
-                        RecordName
-                        MatchedAt
-                        RawMetadata
-                    }
-                }
-            }
-        `;
-
-        const filtersInput = this.buildFiltersInput(request);
+        const client = new GraphQLSearchClient(provider);
+        const filters = this.buildClientFilters(request);
         const minScore = request.MinScore ?? DEFAULT_MIN_SCORE;
-        const variables: Record<string, unknown> = {
-            query: request.Query,
-            maxResults: request.MaxResults || 20,
-            filters: filtersInput,
-            minScore: minScore > 0 ? minScore : undefined,
-        };
 
-        const gqlResult = await provider.ExecuteGQL(mutation, variables);
-        const data = (gqlResult as Record<string, unknown>)['SearchKnowledge'] as {
-            Success: boolean;
-            Results: Array<{
-                ID: string; EntityName: string; RecordID: string; SourceType: string;
-                Title: string; Snippet: string; Score: number;
-                ScoreBreakdown: { Vector?: number; FullText?: number; Entity?: number };
-                Tags: string[]; EntityIcon?: string; RecordName?: string; MatchedAt: string; RawMetadata?: string;
-            }>;
-            TotalCount: number;
-            ElapsedMs: number;
-            SourceCounts: { Vector: number; FullText: number; Entity: number };
-            ErrorMessage?: string;
-        };
+        const clientResponse = await client.ExecuteSearch({
+            Query: request.Query,
+            MaxResults: request.MaxResults || 20,
+            MinScore: minScore > 0 ? minScore : undefined,
+            Filters: filters
+        });
 
-        if (!data?.Success) {
-            return this.createEmptyResponse(data?.ErrorMessage ?? 'Search failed');
+        return this.mapClientResponseToSearchResponse(clientResponse);
+    }
+
+    /** Convert a SearchClientResponse into the SearchResponse shape used by this service */
+    private mapClientResponseToSearchResponse(clientResponse: SearchClientResponse): SearchResponse {
+        if (!clientResponse.Success) {
+            return this.createEmptyResponse(clientResponse.ErrorMessage ?? 'Search failed');
         }
 
-        const results: SearchResultItem[] = (data.Results ?? []).map(r => ({
-            ID: r.ID,
-            Title: r.RecordName || r.Title,
-            Snippet: r.Snippet,
-            EntityName: r.EntityName,
-            RecordID: r.RecordID,
-            SourceType: (r.SourceType as SearchResultItem['SourceType']) || 'entity',
-            Score: r.Score,
-            ScoreBreakdown: r.ScoreBreakdown ?? {},
-            Tags: r.Tags ?? [],
-            SourceIcon: r.EntityIcon || SOURCE_TYPE_ICONS[r.SourceType] || 'fa-solid fa-database',
-            EntityIcon: r.EntityIcon,
-            RecordName: r.RecordName,
-            MatchedAt: new Date(r.MatchedAt),
-            RawMetadata: r.RawMetadata,
+        // Cache provider metadata for use in GroupResults/BuildFilters
+        const providers: SearchProviderInfo[] = (clientResponse.Providers ?? []).map(p => ({
+            ID: p.ID,
+            Name: p.Name,
+            DisplayName: p.DisplayName,
+            Icon: p.Icon,
+            SourceType: p.SourceType,
+            Priority: p.Priority,
         }));
+        this.cacheProviders(providers);
+
+        const results: SearchResultItem[] = (clientResponse.Results ?? []).map(r => this.mapClientResultItem(r));
 
         const groups = this.GroupResults(results);
         const filters = this.BuildFilters(results);
@@ -336,16 +423,46 @@ export class SearchService {
             Results: results,
             Groups: groups,
             Filters: filters,
-            TotalCount: data.TotalCount,
-            ElapsedMs: data.ElapsedMs,
-            SourceCounts: data.SourceCounts,
+            TotalCount: clientResponse.TotalCount,
+            ElapsedMs: clientResponse.ElapsedMs,
+            SourceCounts: {
+                Vector: clientResponse.SourceCounts.Vector,
+                FullText: clientResponse.SourceCounts.FullText,
+                Entity: clientResponse.SourceCounts.Entity,
+                Storage: clientResponse.SourceCounts.Storage
+            },
+            Providers: providers,
         };
     }
 
-    /** Build the GraphQL filters input from active filter selections */
-    private buildFiltersInput(request: SearchRequest): { EntityNames?: string[]; SourceTypes?: string[]; Tags?: string[] } | null {
+    /** Map a single SearchClientResultItem to a SearchResultItem */
+    private mapClientResultItem(r: SearchClientResultItem): SearchResultItem {
+        return {
+            ID: r.ID,
+            Title: r.RecordName || r.Title,
+            Snippet: r.Snippet,
+            EntityName: r.EntityName,
+            RecordID: r.RecordID,
+            SourceType: (r.SourceType as SearchResultItem['SourceType']) || 'entity',
+            ResultType: r.ResultType,
+            Score: r.Score,
+            ScoreBreakdown: r.ScoreBreakdown ?? {},
+            Tags: r.Tags ?? [],
+            SourceIcon: r.EntityIcon || r.ProviderIcon || FALLBACK_SOURCE_ICONS[r.SourceType] || 'fa-solid fa-database',
+            EntityIcon: r.EntityIcon,
+            RecordName: r.RecordName,
+            MatchedAt: new Date(r.MatchedAt),
+            RawMetadata: r.RawMetadata,
+            ProviderId: r.ProviderId,
+            ProviderLabel: r.ProviderLabel,
+            ProviderIcon: r.ProviderIcon,
+        };
+    }
+
+    /** Build the client filters from active filter selections */
+    private buildClientFilters(request: SearchRequest): { EntityNames?: string[]; SourceTypes?: string[]; Tags?: string[] } | undefined {
         if (!request.ActiveFilters || Object.keys(request.ActiveFilters).length === 0) {
-            return null;
+            return undefined;
         }
 
         const result: { EntityNames?: string[]; SourceTypes?: string[]; Tags?: string[] } = {};
@@ -365,6 +482,6 @@ export class SearchService {
             result.Tags = tagFilters;
         }
 
-        return Object.keys(result).length > 0 ? result : null;
+        return Object.keys(result).length > 0 ? result : undefined;
     }
 }

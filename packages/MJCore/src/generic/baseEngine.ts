@@ -1127,6 +1127,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             ResultType: 'entity_object',
             ExtraFilter: config.Filter,
             OrderBy: config.OrderBy,
+            IgnoreMaxRows: true, // Engines always need ALL data — bypass entity-level UserViewMaxRows caps
             _fromEngine: true,  // Mark as engine-initiated to avoid false positive telemetry warnings
             CacheLocal: config.CacheLocal,
             CacheLocalTTL: config.CacheLocalTTL
@@ -1171,6 +1172,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                     ResultType: 'entity_object',
                     ExtraFilter: c.Filter,
                     OrderBy: c.OrderBy,
+                    IgnoreMaxRows: true, // Engines always need ALL data — bypass entity-level UserViewMaxRows caps
                     _fromEngine: true,  // Mark as engine-initiated to avoid false positive telemetry warnings
                     CacheLocal: c.CacheLocal,
                     CacheLocalTTL: c.CacheLocalTTL

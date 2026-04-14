@@ -1545,32 +1545,33 @@ GO
 
 
 /************* EXTERNAL TRACK CHANGES STUFF HERE *********/
-DROP VIEW IF EXISTS __mj.vwEntitiesWithExternalChangeTracking 
+DROP VIEW IF EXISTS __mj.vwEntitiesWithExternalChangeTracking
 GO
-CREATE VIEW __mj.vwEntitiesWithExternalChangeTracking 
+CREATE VIEW __mj.vwEntitiesWithExternalChangeTracking
 AS
-SELECT   
-  e.* 
-FROM 
+SELECT
+  e.*
+FROM
   __mj.vwEntities e
 WHERE
   e.TrackRecordChanges=1
+  AND e.DetectExternalChanges=1
   AND
     EXISTS (
-		  SELECT 
-			  1 
-		  FROM 
-			  __mj.vwEntityFields ef 
-		  WHERE 
+		  SELECT
+			  1
+		  FROM
+			  __mj.vwEntityFields ef
+		  WHERE
 			  ef.Name='__mj_UpdatedAt' AND ef.Type='datetimeoffset' AND ef.EntityID = e.ID
 		  )
   AND
     EXISTS (
-		  SELECT 
-			  1 
-		  FROM 
-			  __mj.vwEntityFields ef 
-		  WHERE 
+		  SELECT
+			  1
+		  FROM
+			  __mj.vwEntityFields ef
+		  WHERE
 			  ef.Name='__mj_CreatedAt' AND ef.Type='datetimeoffset' AND ef.EntityID = e.ID
 		  )
 GO
