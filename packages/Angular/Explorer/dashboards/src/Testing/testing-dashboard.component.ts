@@ -51,7 +51,7 @@ export class TestingDashboardComponent extends BaseDashboard implements AfterVie
   ];
 
   private stateChangeSubject = new Subject<TestingDashboardState>();
-  private destroy$ = new Subject<void>();
+  protected override destroy$ = new Subject<void>();
 
   constructor(
     private cdr: ChangeDetectorRef,
@@ -90,6 +90,7 @@ export class TestingDashboardComponent extends BaseDashboard implements AfterVie
   }
 
   ngOnDestroy(): void {
+    super.ngOnDestroy();
     this.destroy$.next();
     this.destroy$.complete();
     this.stateChangeSubject.complete();

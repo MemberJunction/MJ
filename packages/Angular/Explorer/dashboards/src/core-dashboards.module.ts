@@ -32,6 +32,8 @@ import { APIKeyListComponent } from './APIKeys/api-key-list.component';
 import { APIApplicationsPanelComponent } from './APIKeys/api-applications-panel.component';
 import { APIScopesPanelComponent } from './APIKeys/api-scopes-panel.component';
 import { APIUsagePanelComponent } from './APIKeys/api-usage-panel.component';
+// Application Roles
+import { ApplicationRolesResourceComponent } from './ApplicationRoles/application-roles-resource.component';
 // Version History
 import { VersionHistoryLabelsResourceComponent } from './VersionHistory/components/labels-resource.component';
 import { VersionHistoryDiffResourceComponent } from './VersionHistory/components/diff-resource.component';
@@ -58,6 +60,8 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     APIApplicationsPanelComponent,
     APIScopesPanelComponent,
     APIUsagePanelComponent,
+    // Application Roles
+    ApplicationRolesResourceComponent,
     // Version History
     VersionHistoryLabelsResourceComponent,
     VersionHistoryDiffResourceComponent,
@@ -98,6 +102,7 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     APIApplicationsPanelComponent,
     APIScopesPanelComponent,
     APIUsagePanelComponent,
+    ApplicationRolesResourceComponent,
     VersionHistoryLabelsResourceComponent,
     VersionHistoryDiffResourceComponent,
     VersionHistoryRestoreResourceComponent,

@@ -41,19 +41,48 @@ jobs:
         id: knip
         run: |
           echo "Running Knip to check for missing dependencies..."
-          # Force no color output and use compact reporter for consistent parsing
-          NO_COLOR=1 npx knip --include unlisted --reporter compact > knip-report.txt 2>&1 || true
+          # Capture stdout and stderr separately so a knip crash doesn't masquerade
+          # as "no issues found" (which is what happened for months — see 5.25.0 postmortem).
+          set +e
+          NO_COLOR=1 npx knip --include unlisted --reporter compact > knip-report.txt 2> knip-stderr.txt
+          KNIP_EXIT=$?
+          set -e
 
           # Display the raw report
           cat knip-report.txt
 
+          # Detect knip infrastructure failures (exit code 2 = crash, not "issues found")
+          if [ $KNIP_EXIT -eq 2 ]; then
+            echo ""
+            echo "::error::Knip crashed during analysis (exit code 2). Stderr:"
+            cat knip-stderr.txt
+            echo "knip_crashed=true" >> $GITHUB_OUTPUT
+          else
+            echo "knip_crashed=false" >> $GITHUB_OUTPUT
+            # Show stderr warnings if any (non-fatal)
+            if [ -s knip-stderr.txt ]; then
+              echo ""
+              echo "Knip warnings:"
+              cat knip-stderr.txt
+            fi
+          fi
+
+      - name: Fail fast if Knip crashed
+        if: steps.knip.outputs.knip_crashed == 'true'
+        run: |
+          echo "❌ Knip failed to run. The dependency check is broken and must be fixed."
+          echo "   This prevents silent accumulation of missing dependencies."
+          echo ""
+          echo "   See the knip-stderr.txt artifact for details."
+          exit 1
+
       - name: Format report
-        if: always()
+        if: steps.knip.outputs.knip_crashed != 'true'
         run: node scripts/format-knip-report.mjs knip-report.txt > formatted-report.md
 
       - name: Check for actual issues
         id: check_issues
-        if: always()
+        if: steps.knip.outputs.knip_crashed != 'true'
         run: |
           # Check the formatted report to see if there are actual missing dependencies
           # after filtering out false positives
@@ -67,12 +96,13 @@ jobs:
             echo "has_issues=false" >> $GITHUB_OUTPUT
             echo "✅ No missing dependencies found"
           else
-            echo "has_issues=false" >> $GITHUB_OUTPUT
-            echo "✅ No issues detected"
+            # Unknown output format — fail safe rather than silently passing
+            echo "has_issues=true" >> $GITHUB_OUTPUT
+            echo "⚠️ Could not determine dependency status — treating as failure"
           fi
 
       - name: Comment PR with results
-        if: always() && github.event_name == 'pull_request'
+        if: steps.knip.outputs.knip_crashed != 'true' && github.event_name == 'pull_request'
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -115,7 +145,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: knip-report
-          path: knip-report.txt
+          path: |
+            knip-report.txt
+            knip-stderr.txt
           retention-days: 30
 
       - name: Fail if missing dependencies found

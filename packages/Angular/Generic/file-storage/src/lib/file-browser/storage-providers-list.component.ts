@@ -1,5 +1,5 @@
 import { Component, EventEmitter, OnInit, Output, ChangeDetectorRef } from '@angular/core';
-import { FileStorageEngine, StorageAccountWithProvider } from '@memberjunction/core-entities';
+import { FileStorageEngineBase, StorageAccountWithProvider } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
 
 /**
@@ -49,14 +49,14 @@ export class StorageProvidersListComponent implements OnInit {
 
   /**
    * Loads all available file storage accounts with their provider details.
-   * Uses FileStorageEngine for centralized, cached access.
+   * Uses FileStorageEngineBase for centralized, cached access.
    */
   private async loadAccounts(): Promise<void> {
     this.isLoading = true;
     this.errorMessage = null;
 
     try {
-      const engine = FileStorageEngine.Instance;
+      const engine = FileStorageEngineBase.Instance;
       await engine.Config(false);  // Use cached data if available
 
       // Only show accounts whose provider is active
@@ -128,6 +128,6 @@ export class StorageProvidersListComponent implements OnInit {
    * Refreshes the accounts list by forcing a reload from the database.
    */
   public refresh(): void {
-    FileStorageEngine.Instance.Config(true).then(() => this.loadAccounts());
+    FileStorageEngineBase.Instance.Config(true).then(() => this.loadAccounts());
   }
 }

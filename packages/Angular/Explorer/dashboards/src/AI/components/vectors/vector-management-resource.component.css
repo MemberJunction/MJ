@@ -548,7 +548,7 @@
     position: fixed;
     inset: 0;
     background: var(--mj-bg-overlay);
-    z-index: 1000;
+    z-index: 100000;
 }
 
 .slide-panel {
@@ -823,6 +823,12 @@
 
 .entity-picker-item-selected i {
     color: var(--mj-brand-primary);
+}
+
+.entity-picker-item-focused {
+    background: var(--mj-bg-surface-hover);
+    outline: 2px solid var(--mj-brand-primary);
+    outline-offset: -2px;
 }
 
 .entity-picker-empty {

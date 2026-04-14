@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { BaseEmbeddings, EmbedTextsResult, GetAIAPIKey } from '@memberjunction/ai';
+import { CredentialEngine } from '@memberjunction/credentials';
 import { BaseResponse, VectorDBBase, VectorRecord } from '@memberjunction/ai-vectordb';
 import { PageRecordsParams, VectorBase } from '@memberjunction/ai-vectors';
 import { BaseEntity, EntityField, EntityFieldInfo, EntityInfo, LogError, LogStatus, Metadata, RunView, RunViewResult, UserInfo } from '@memberjunction/core';
@@ -581,7 +582,7 @@ export class EntityVectorSyncer extends VectorBase {
     const aiModelEntity: MJAIModelEntity = this.GetAIModel(entityDocument.AIModelID);
 
     const embeddingAPIKey: string = GetAIAPIKey(aiModelEntity.DriverClass);
-    const vectorDBAPIKey: string = GetAIAPIKey(vectorDBEntity.ClassKey);
+    const vectorDBAPIKey: string = await this.ResolveVectorDBAPIKey(vectorDBEntity);
 
     if (!embeddingAPIKey) {
       throw Error(`No API Key found for AI Model ${aiModelEntity.DriverClass}`);
@@ -615,6 +616,41 @@ export class EntityVectorSyncer extends VectorBase {
     };
 
     return obj;
+  }
+
+  /**
+   * Resolves the API key for a vector database provider. Checks the Credential Engine
+   * first (if VectorDatabase.CredentialID is set), then falls back to the legacy
+   * environment variable AI_VENDOR_API_KEY__<ClassKey>.
+   */
+  protected async ResolveVectorDBAPIKey(vectorDBEntity: MJVectorDatabaseEntity): Promise<string> {
+    if (vectorDBEntity.CredentialID) {
+      try {
+        await CredentialEngine.Instance.Config(false, super.CurrentUser);
+        const credentialEntity = CredentialEngine.Instance.getCredentialById(vectorDBEntity.CredentialID);
+        if (credentialEntity) {
+          const resolved = await CredentialEngine.Instance.getCredential(credentialEntity.Name, {
+            credentialId: vectorDBEntity.CredentialID,
+            contextUser: super.CurrentUser,
+            subsystem: 'VectorSync',
+          });
+          // The credential Values JSON may store the key as "apiKey" or as a raw string
+          const apiKey = resolved.values.apiKey ?? resolved.values.api_key;
+          if (apiKey) {
+            LogStatus(`Using Credential Engine API key for vector DB "${vectorDBEntity.Name}"`);
+            return apiKey;
+          }
+          LogError(`Credential "${credentialEntity.Name}" for vector DB "${vectorDBEntity.Name}" has no apiKey field, falling back to environment variable`);
+        } else {
+          LogError(`Credential ID ${vectorDBEntity.CredentialID} not found for vector DB "${vectorDBEntity.Name}", falling back to environment variable`);
+        }
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        LogError(`Failed to resolve credential for vector DB "${vectorDBEntity.Name}": ${msg}, falling back to environment variable`);
+      }
+    }
+    // Fallback to legacy environment variable
+    return GetAIAPIKey(vectorDBEntity.ClassKey);
   }
 
   public async GetEntityDocument(EntityDocumentID: string): Promise<MJEntityDocumentEntity | null> {

@@ -2,6 +2,8 @@ import { Injectable } from '@angular/core';
 import { RunView, Metadata, UserInfo } from '@memberjunction/core';
 import {
   MJConversationDetailAttachmentEntity,
+  MJConversationDetailArtifactEntity,
+  MJArtifactVersionEntity,
   MJAIModalityEntity
 } from '@memberjunction/core-entities';
 import {
@@ -61,6 +63,48 @@ export class ConversationAttachmentService {
           result.get(detailId)!.push(messageAttachment);
         }
       }
+
+      // Also load input artifacts (ConversationDetailArtifact with Direction='Input')
+      const artifactLinksResult = await rv.RunView<MJConversationDetailArtifactEntity>({
+        EntityName: 'MJ: Conversation Detail Artifacts',
+        ExtraFilter: `ConversationDetailID IN (${idList}) AND Direction = 'Input'`,
+        ResultType: 'entity_object'
+      }, contextUser);
+
+      if (artifactLinksResult.Success && artifactLinksResult.Results && artifactLinksResult.Results.length > 0) {
+        // Load the referenced artifact versions
+        const versionIds = artifactLinksResult.Results.map(l => `'${l.ArtifactVersionID}'`).join(',');
+        const versionsResult = await rv.RunView<MJArtifactVersionEntity>({
+          EntityName: 'MJ: Artifact Versions',
+          ExtraFilter: `ID IN (${versionIds})`,
+          ResultType: 'entity_object'
+        }, contextUser);
+
+        if (versionsResult.Success && versionsResult.Results) {
+          const versionMap = new Map<string, MJArtifactVersionEntity>();
+          for (const v of versionsResult.Results) {
+            versionMap.set(v.ID, v);
+          }
+
+          for (const link of artifactLinksResult.Results) {
+            const version = versionMap.get(link.ArtifactVersionID);
+            if (version) {
+              const detailId = link.ConversationDetailID;
+              if (!result.has(detailId)) {
+                result.set(detailId, []);
+              }
+              result.get(detailId)!.push({
+                id: link.ID,
+                type: version.ContentMode === 'File' ? this.getMimeAttachmentType(version.MimeType || '') : 'Document',
+                mimeType: version.MimeType || 'text/plain',
+                fileName: version.FileName || version.Name || 'Artifact',
+                sizeBytes: version.ContentSizeBytes || 0,
+                source: 'artifact'
+              } as MessageAttachment);
+            }
+          }
+        }
+      }
     } catch (error) {
       console.error('Error loading attachments:', error);
     }
@@ -118,7 +162,24 @@ export class ConversationAttachmentService {
         attachment.DisplayOrder = i;
         attachment.ThumbnailBase64 = pending.thumbnailUrl ?? null;
 
-        // Store inline data - extract base64 from data URL
+        // For artifact references, create a ConversationDetailArtifact with Direction='Input'
+        // instead of a ConversationDetailAttachment
+        if (pending.source === 'artifact' && pending.artifactVersionId) {
+          const artifactLink = await md.GetEntityObject<MJConversationDetailArtifactEntity>(
+            'MJ: Conversation Detail Artifacts',
+            contextUser
+          );
+          artifactLink.ConversationDetailID = conversationDetailId;
+          artifactLink.ArtifactVersionID = pending.artifactVersionId;
+          artifactLink.Direction = 'Input';
+          const artifactSaved = await artifactLink.Save();
+          if (!artifactSaved) {
+            console.error('Failed to save artifact input link:', artifactLink.LatestResult);
+          }
+          continue; // Skip creating a ConversationDetailAttachment for artifacts
+        }
+
+        // Store inline data for uploaded files
         if (pending.dataUrl) {
           const base64Data = this.extractBase64FromDataUrl(pending.dataUrl);
           attachment.InlineData = base64Data;
@@ -210,6 +271,16 @@ export class ConversationAttachmentService {
     if (name === 'video') return 'Video';
     if (name === 'audio') return 'Audio';
 
+    return 'Document';
+  }
+
+  /**
+   * Get the AttachmentType from a MIME type string
+   */
+  private getMimeAttachmentType(mimeType: string): 'Image' | 'Video' | 'Audio' | 'Document' {
+    if (mimeType.startsWith('image/')) return 'Image';
+    if (mimeType.startsWith('video/')) return 'Video';
+    if (mimeType.startsWith('audio/')) return 'Audio';
     return 'Document';
   }
 

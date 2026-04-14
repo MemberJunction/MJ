@@ -392,6 +392,76 @@
             "lastModified": "2026-04-11T04:11:16.095Z",
             "checksum": "a92448fc0cc93928d77e50184cd3d57029d0de07f765db104ea5e2c9574b16c2"
           }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Create Document",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "59886FB8-05A5-47EE-9452-34A575865A0E"
+          },
+          "sync": {
+            "lastModified": "2026-04-09T17:25:00.855Z",
+            "checksum": "c64953505f5d324047ea3eb3731b54be9905c69566e3b82925b9d43a168a8361"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Add Document Content",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "CB8F04F2-FACA-46CE-B6CB-93231C144D54"
+          },
+          "sync": {
+            "lastModified": "2026-04-09T17:25:00.866Z",
+            "checksum": "7697496d97e02cfc4e6234541546d2f019c2ea99d27c0dba3a4afcc54ce6820b"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Preview Document",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "6266CA2D-800B-494C-9BB2-DBBD38018479"
+          },
+          "sync": {
+            "lastModified": "2026-04-09T17:25:00.876Z",
+            "checksum": "cf16b134d19d904bd54a9445b99452c23f4f268b2f8ca3581fbc6a4e0406718c"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Modify Document Section",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "FCA667A4-4672-423B-A1B9-8F66CD70D2F3"
+          },
+          "sync": {
+            "lastModified": "2026-04-09T17:25:00.887Z",
+            "checksum": "d5c3106a16f5d325f6bf51e1c3bfac8bc3e871bd52c4fef5eeda964c515c5240"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Finalize Document",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "CE794D25-7C2B-4A76-929D-0937F4A7B1AC"
+          },
+          "sync": {
+            "lastModified": "2026-04-09T17:25:00.898Z",
+            "checksum": "f771348487b3ef029c984184fb097591e903ab745616272331914b6fb0d78c22"
+          }
         }
       ],
       "MJ: AI Agent Configurations": [

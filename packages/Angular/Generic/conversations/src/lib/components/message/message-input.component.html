@@ -23,6 +23,7 @@
     [(value)]="messageText"
     (textSubmitted)="onTextSubmitted($event)"
     (attachmentsChanged)="onAttachmentsChanged($event)"
-    (attachmentError)="onAttachmentError($event)">
+    (attachmentError)="onAttachmentError($event)"
+    (artifactPickerRequested)="onArtifactPickerRequested()">
   </mj-message-input-box>
 </div>

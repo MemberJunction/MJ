@@ -409,6 +409,60 @@
     font-family: monospace;
 }
 
+/* ---- Provider Credential Row ---- */
+
+.provider-credential-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 1rem 0.75rem;
+    margin-top: -0.25rem;
+}
+
+.provider-credential-label {
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--mj-text-secondary);
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.provider-credential-label i {
+    font-size: 0.75rem;
+    color: var(--mj-text-muted);
+}
+
+.provider-credential-picker {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex: 1;
+    min-width: 0;
+}
+
+.provider-credential-select {
+    flex: 1;
+    padding: 0.4rem 0.6rem;
+    border: 1px solid var(--mj-border-default);
+    border-radius: 6px;
+    background: var(--mj-bg-surface);
+    color: var(--mj-text-primary);
+    font-size: 0.8rem;
+}
+
+.provider-credential-select:focus {
+    outline: none;
+    border-color: var(--mj-border-focus);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
+}
+
+.provider-credential-spinner {
+    color: var(--mj-brand-primary);
+    font-size: 0.85rem;
+}
+
 /* ---- Index Cards ---- */
 
 .index-card {

@@ -19,7 +19,7 @@ import {
 import {
     FileSearchResult,
     FileSearchOptions,
-    initializeDriverWithAccountCredentials
+    FileStorageEngine
 } from '@memberjunction/storage';
 import { BaseSearchProvider } from './ISearchProvider';
 import { SearchSource, SearchFilters, SearchResultItem, SearchResultType } from './search.types';
@@ -66,33 +66,22 @@ export class StorageSearchProvider extends BaseSearchProvider {
      */
     public async CheckAvailability(contextUser: UserInfo): Promise<void> {
         try {
+            // Use cached accounts and providers from the engine — no RunView needed for these
+            await FileStorageEngine.Instance.Config(false, contextUser);
+            const allAccounts = FileStorageEngine.Instance.Accounts;
+            const allProviders = FileStorageEngine.Instance.Providers;
+
+            // Filter to accounts with IncludeInGlobalSearch and active providers that support search
+            const accounts = allAccounts.filter(a => a.Get('IncludeInGlobalSearch') === true);
+            const providers = allProviders.filter(p => p.IsActive && p.Get('SupportsSearch') === true);
+
+            // Permissions are user-context-dependent, so we still need a RunView for these
             const rv = new RunView();
-            const [accountsResult, providersResult, permissionsResult] = await rv.RunViews([
-                {
-                    EntityName: 'MJ: File Storage Accounts',
-                    ExtraFilter: 'IncludeInGlobalSearch = 1',
-                    ResultType: 'entity_object'
-                },
-                {
-                    EntityName: 'MJ: File Storage Providers',
-                    ExtraFilter: 'IsActive = 1 AND SupportsSearch = 1',
-                    ResultType: 'entity_object'
-                },
-                {
-                    EntityName: 'MJ: File Storage Account Permissions',
-                    ExtraFilter: '',
-                    ResultType: 'entity_object'
-                }
-            ], contextUser);
+            const permissionsResult = await rv.RunView<MJFileStorageAccountPermissionEntity>({
+                EntityName: 'MJ: File Storage Account Permissions',
+                ResultType: 'entity_object'
+            }, contextUser);
 
-            if (!accountsResult.Success || !providersResult.Success) {
-                LogError('StorageSearchProvider: Failed to load storage accounts or providers');
-                this._available = false;
-                return;
-            }
-
-            const accounts = accountsResult.Results as MJFileStorageAccountEntity[];
-            const providers = providersResult.Results as MJFileStorageProviderEntity[];
             this._permissions = permissionsResult.Success
                 ? permissionsResult.Results as MJFileStorageAccountPermissionEntity[]
                 : [];
@@ -235,11 +224,7 @@ export class StorageSearchProvider extends BaseSearchProvider {
         contextUser: UserInfo
     ): Promise<SearchResultItem[]> {
         try {
-            const driver = await initializeDriverWithAccountCredentials({
-                accountEntity: entry.Account,
-                providerEntity: entry.Provider,
-                contextUser
-            });
+            const driver = await FileStorageEngine.Instance.GetDriver(entry.Account.ID, contextUser);
 
             if (!driver.IsConfigured) {
                 LogError(

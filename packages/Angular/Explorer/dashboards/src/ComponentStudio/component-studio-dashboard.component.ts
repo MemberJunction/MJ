@@ -89,7 +89,7 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
 
   @ViewChild('fileInput', { static: false }) fileInput?: ElementRef<HTMLInputElement>;
 
-  private destroy$ = new Subject<void>();
+  protected override destroy$ = new Subject<void>();
   private metadata: Metadata = new Metadata();
 
   constructor(
@@ -119,6 +119,7 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
   }
 
   ngOnDestroy(): void {
+    super.ngOnDestroy();
     this.destroy$.next();
     this.destroy$.complete();
   }

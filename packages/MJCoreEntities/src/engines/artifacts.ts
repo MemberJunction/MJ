@@ -90,4 +90,30 @@ export class ArtifactMetadataEngine extends BaseEngine<ArtifactMetadataEngine> {
             .filter(v => v.ArtifactID.trim().toLowerCase() === lower)
             .sort((a, b) => (b.VersionNumber || 0) - (a.VersionNumber || 0));
     }
+
+    /** Find an artifact type by its ID */
+    public FindArtifactTypeByID(id: string): MJArtifactTypeEntity | undefined {
+        if (!id) return undefined;
+        const lower = id.trim().toLowerCase();
+        return this._artifactTypes.find(t => t.ID.trim().toLowerCase() === lower);
+    }
+
+    /**
+     * Returns true if the given artifact version stores its content as a binary
+     * file in MJStorage (ContentMode === 'File') rather than inline text.
+     */
+    public IsFileArtifact(version: MJArtifactVersionEntity): boolean {
+        return version?.ContentMode === 'File';
+    }
+
+    /**
+     * Finds the artifact type whose ContentType (MIME type) matches the given
+     * mimeType string (case-insensitive). Used by AgentRunner to resolve the
+     * correct ArtifactType for file outputs such as PDFs and spreadsheets.
+     */
+    public GetArtifactTypeByMimeType(mimeType: string): MJArtifactTypeEntity | undefined {
+        if (!mimeType) return undefined;
+        const lower = mimeType.trim().toLowerCase();
+        return this._artifactTypes.find(t => t.ContentType.trim().toLowerCase() === lower);
+    }
 }

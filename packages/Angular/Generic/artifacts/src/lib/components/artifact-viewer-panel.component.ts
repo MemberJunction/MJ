@@ -63,6 +63,9 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   public displayHtml: string | null = null;
   public versionAttributes: MJArtifactVersionAttributeEntity[] = [];
   private artifactTypeDriverClass: string | null = null;
+  /** Populated from ArtifactType.ContentCategory. Used to suppress the JSON tab for
+   *  binary file-type artifacts — driven by metadata, not hardcoded plugin overrides. */
+  private artifactContentCategory: 'File' | 'Text' | null = null;
 
   // Links tab data
   public originConversation: MJConversationEntity | null = null;
@@ -90,8 +93,13 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
     const removals = this.pluginViewer?.pluginInstance?.GetStandardTabRemovals?.() || [];
     const removalsLower = removals.map(r => r.toLowerCase());
 
-    // Add standard tabs (unless plugin removed them)
-    if (!removalsLower.includes('json')) {
+    // File-category artifacts (PDF, Excel, Word) have binary content — the JSON tab
+    // would show a base64 blob or a storage reference, which is meaningless. Suppress it
+    // using ArtifactType.ContentCategory from the database rather than a hardcoded plugin override.
+    const isFileArtifact = this.artifactContentCategory === 'File';
+
+    // Add standard tabs (unless suppressed by metadata or plugin)
+    if (!isFileArtifact && !removalsLower.includes('json')) {
       tabs.push('JSON');
     }
     if (!removalsLower.includes('details')) {
@@ -399,6 +407,10 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   }
 
   private async loadArtifactType(): Promise<void> {
+    // Reset on every load so a previous artifact's values don't bleed into the next
+    this.artifactTypeDriverClass = null;
+    this.artifactContentCategory = null;
+
     if (!this.artifact?.Type) {
       return;
     }
@@ -410,6 +422,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
       if (artifactType) {
         // Resolve DriverClass by traversing parent hierarchy if needed
         this.artifactTypeDriverClass = await this.resolveDriverClassForType(artifactType);
+        this.artifactContentCategory = artifactType.ContentCategory;
       }
     } catch (err) {
       console.error('Error loading artifact type:', err);

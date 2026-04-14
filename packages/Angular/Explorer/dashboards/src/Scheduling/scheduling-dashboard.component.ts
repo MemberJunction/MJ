@@ -64,6 +64,7 @@ export class SchedulingDashboardComponent extends BaseDashboard implements After
   }
 
   ngOnDestroy(): void {
+    super.ngOnDestroy();
     this.stateChangeSubject.complete();
     if (this.kpiSub) this.kpiSub.unsubscribe();
     if (this.alertSub) this.alertSub.unsubscribe();

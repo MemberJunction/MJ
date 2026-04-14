@@ -996,7 +996,7 @@ export class QueryCompositionEngine {
      * Only modifies content inside -- single-line and block comments.
      * Leaves string literals and normal SQL untouched.
      */
-    private escapeTemplateTokensInComments(sql: string): string {
+    public escapeTemplateTokensInComments(sql: string): string {
         let result = '';
         let i = 0;
 
