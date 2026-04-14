@@ -96,7 +96,10 @@ interface NavItem {
                         ></app-analytics-error-analysis>
                     }
                     @case ('usage-patterns') {
-                        <app-analytics-usage-patterns></app-analytics-usage-patterns>
+                        <app-analytics-usage-patterns
+                            [TimeRange]="CurrentTimeRange"
+                            (TimeRangeChange)="OnTimeRangeChange($event)"
+                        ></app-analytics-usage-patterns>
                     }
                 }
             </div>

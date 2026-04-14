@@ -59,6 +59,12 @@ interface ErrorHotspot {
       (CompareToggled)="OnCompareToggled($event)"
     ></app-analytics-filter-bar>
 
+    @if (IsLoading && KpiCards.length === 0) {
+      <div class="loading-container">
+        <mj-loading text="Loading executive summary..." size="medium"></mj-loading>
+      </div>
+    }
+
     <!-- KPI Row -->
     <div class="kpi-row">
       @for (card of KpiCards; track card.Label) {
@@ -181,6 +187,14 @@ interface ErrorHotspot {
       flex-direction: column;
       gap: 20px;
       padding: 4px;
+    }
+
+    /* ─── Loading ─────────────────────────────────────────────── */
+    .loading-container {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 60px 20px;
     }
 
     /* ─── KPI Row ─────────────────────────────────────────────── */
@@ -613,6 +627,8 @@ export class AnalyticsExecutiveSummaryComponent implements OnInit, OnDestroy {
     const { start, end } = this.computeDateRange(this.TimeRange);
     this.PeriodLabel = this.getPeriodLabel(this.TimeRange);
     this.instrumentationService.setDateRange(start, end);
+    // Explicitly refresh to ensure data loads on first visit
+    this.instrumentationService.refresh();
   }
 
   private computeDateRange(range: string): { start: Date; end: Date } {

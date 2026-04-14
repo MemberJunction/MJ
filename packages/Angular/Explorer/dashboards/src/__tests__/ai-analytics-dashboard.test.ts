@@ -57,7 +57,7 @@ vi.mock('@memberjunction/ng-shared', () => ({
         ngOnDestroy() {}
         NotifyLoadComplete() {}
         navigationService = { OpenNavItemByName: vi.fn(), SetAgentContext: vi.fn(), SetAgentClientTools: vi.fn() };
-        Data: null as null;
+        Data = null;
         destroy$ = new (class { next() {} complete() {} pipe() { return { subscribe: () => {} }; } })();
         GetQueryParams() { return {}; }
         UpdateQueryParams() {}
