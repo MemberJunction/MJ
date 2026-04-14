@@ -469,7 +469,7 @@ export class FeedbackFormComponent implements OnInit {
   Severity: FeedbackSeverity = 'minor';
   UseCase: string = '';
   ProposedSolution: string = '';
-  Environment: FeedbackEnvironment = 'production';
+  Environment: FeedbackEnvironment | '' = '';
   AffectedArea: string = '';
   Name: string = '';
   Email: string = '';

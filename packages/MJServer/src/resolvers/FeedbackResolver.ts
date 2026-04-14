@@ -345,22 +345,22 @@ export class FeedbackResolver {
       chatParams.messages = [
         {
           role: ChatMessageRole.system,
-          content: `You are a feedback classifier. Given a title and description, respond with ONLY a JSON object:
+          content: `Classify this user feedback. Respond with ONLY a JSON object, no other text:
 {"category": "bug"|"feature"|"question"|"other", "severity": "critical"|"major"|"minor"|"trivial"}
 
-Category rules:
-- "bug": something broken, error, crash, unexpected behavior, blocking issue
-- "feature": request for new functionality, improvement, enhancement
-- "question": asking how something works, seeking help
-- "other": doesn't fit above categories
+CATEGORY — what type of feedback is this:
+- "bug" = something is broken, not working, error, crash, blocking
+- "feature" = requesting new functionality or improvement
+- "question" = asking for help or how something works
+- "other" = none of the above
 
-Severity rules — pay close attention to the user's language about impact:
-- "critical": system unusable, data loss, security issue, affects all users
-- "major": user says they are blocked, can't complete a task, no workaround, essential workflow broken, "preventing me from", "can't do my job", significant functionality broken
-- "minor": something doesn't work perfectly but the user can work around it
-- "trivial": cosmetic, typo, minor visual issue, formatting
+SEVERITY — how bad is the impact. Read the user's words carefully:
+- "critical" = system completely unusable, data loss, security vulnerability
+- "major" = user is BLOCKED from completing their work. Look for: "preventing", "can't", "unable to", "blocking", "essential", "important task", "need to". ANY mention of being blocked or prevented = "major"
+- "minor" = annoying but user can still work around it
+- "trivial" = cosmetic only, typo, visual glitch
 
-When in doubt between two severity levels, choose the higher one. If the user describes being blocked or unable to do something, that is at least "major".`
+IMPORTANT: Default to "major" unless the description clearly indicates a minor or trivial issue. Err on the side of higher severity.`
         },
         {
           role: ChatMessageRole.user,
