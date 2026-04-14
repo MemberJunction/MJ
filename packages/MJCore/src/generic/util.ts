@@ -10,10 +10,13 @@ export function TypeScriptTypeFromSQLType(sqlType: string): 'string' | 'number' 
     switch (sqlType.trim().toLowerCase()) {
         case 'text':
         case 'char':
+        case 'character': // PG returns this for CHAR(N)
+        case 'character varying': // PG returns this for VARCHAR(N)
         case 'varchar':
         case 'ntext':
         case 'nchar':
         case 'nvarchar':
+        case 'citext': // PostgreSQL case-insensitive text
         case 'uniqueidentifier': //treat this as a string
         case 'uuid': // PostgreSQL UUID type
         case 'bytea': // PostgreSQL binary data, treat as string (base64)

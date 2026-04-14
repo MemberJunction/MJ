@@ -308,7 +308,8 @@ describe('PostgreSQLCodeGenProvider', () => {
             expect(sql).toContain('CREATE OR REPLACE FUNCTION');
             expect(sql).toContain('fn_trg_update_test_entity');
             expect(sql).toContain('RETURNS TRIGGER');
-            expect(sql).toContain("NEW.__mj_UpdatedAt := NOW() AT TIME ZONE 'UTC'");
+            expect(sql).toContain('NEW."__mj_UpdatedAt" := NOW()');
+
             expect(sql).toContain('RETURN NEW');
             expect(sql).toContain('CREATE TRIGGER');
             expect(sql).toContain('BEFORE UPDATE');
