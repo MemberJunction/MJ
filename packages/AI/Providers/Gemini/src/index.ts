@@ -788,23 +788,34 @@ export class GeminiLLM extends BaseLLM {
                     parts.push({text: part.content});
                 }
                 else {
-                    // use the inlineData property which expects a Blob property which consists of data and mimeType
-                    const blob: Blob = {
-                        data: part.content
+                    // Strip data-URL prefix if present — Gemini expects raw base64
+                    let rawBase64 = part.content;
+                    let detectedMime: string | undefined;
+                    const dataUrlMatch = rawBase64.match(/^data:([^;]+);base64,(.+)$/s);
+                    if (dataUrlMatch) {
+                        detectedMime = dataUrlMatch[1];
+                        rawBase64 = dataUrlMatch[2];
                     }
-                    switch (part.type) {
-                        case 'image_url':
-                            blob.mimeType = 'image/jpeg';
-                            break;
-                        case 'audio_url':
-                            blob.mimeType = 'audio/mpeg';
-                            break;
-                        case 'video_url':
-                            blob.mimeType = 'video/mp4';
-                            break;
-                        case 'file_url':
-                            blob.mimeType = 'application/octet-stream';
-                            break;
+
+                    // Guard: if content isn't valid base64, fall back to a text part.
+                    // This handles placeholder strings (e.g. "[File: ... — accessible via artifact tools]")
+                    // that were tagged as file_url content blocks.
+                    if (!dataUrlMatch && !/^[A-Za-z0-9+/\r\n]+=*$/.test(rawBase64.substring(0, 100))) {
+                        parts.push({text: part.content});
+                        continue;
+                    }
+
+                    // Use the inlineData property which expects a Blob with data and mimeType.
+                    // Prefer the explicit mimeType from the content block; fall back to
+                    // data-URL detected mime, then type-based defaults.
+                    const blob: Blob = {
+                        data: rawBase64,
+                        mimeType: part.mimeType || detectedMime || (
+                            part.type === 'image_url' ? 'image/jpeg' :
+                            part.type === 'audio_url' ? 'audio/mpeg' :
+                            part.type === 'video_url' ? 'video/mp4' :
+                            'application/octet-stream'
+                        ),
                     }
                     parts.push({inlineData: blob});
                 }

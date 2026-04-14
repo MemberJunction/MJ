@@ -212,8 +212,9 @@ export class AnthropicLLM extends BaseLLM {
             };
         }
 
-        // Raw base64 with mimeType
-        if (mimeType && !content.startsWith('http')) {
+        // Raw base64 with mimeType — but guard against placeholder text that
+        // isn't actually base64 (e.g. "[File: ... — accessible via artifact tools]")
+        if (mimeType && !content.startsWith('http') && /^[A-Za-z0-9+/\r\n]+=*$/.test(content.substring(0, 100))) {
             return {
                 type: "document",
                 source: {

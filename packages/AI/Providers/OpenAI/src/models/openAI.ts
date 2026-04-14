@@ -593,9 +593,16 @@ export class OpenAILLM extends BaseLLM {
                                 image_url: { url: c.content }
                             };
                         }
+                        // file_url with image MIME → treat as image_url (OpenAI vision)
+                        else if (c.type === 'file_url' && c.mimeType && c.mimeType.startsWith('image/')) {
+                            return {
+                                type: 'image_url' as const,
+                                image_url: { url: c.content }
+                            };
+                        }
                         // Warn about unsupported types
                         else {
-                            console.warn(`Unsupported content type for OpenAI API: ${c.type}. This content will be skipped.`);
+                            console.warn(`Unsupported content type for OpenAI API: ${c.type} (mime: ${c.mimeType}). This content will be skipped.`);
                             return null;
                         }
                     })

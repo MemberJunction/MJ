@@ -21,6 +21,21 @@ import { MJAIModelEntityExtended } from './MJAIModelEntityExtended';
 export type MediaModality = 'Image' | 'Audio' | 'Video';
 
 /**
+ * A file artifact that may be attached natively to a prompt when the
+ * resolved LLM driver supports the MIME type.
+ */
+export interface NativeFileInput {
+  /** Display name of the artifact (used in logging) */
+  Name: string;
+  /** MIME type (e.g. 'application/pdf', 'image/png') */
+  MimeType: string;
+  /** Base64-encoded file content (or data-URL) */
+  Base64Content: string;
+  /** File size in bytes — used by the resolver for limit checks */
+  SizeBytes: number;
+}
+
+/**
  * Represents a media item generated during prompt execution.
  * This is stored in AIPromptRunMedia for complete audit trail.
  */
@@ -687,6 +702,17 @@ export class AIPromptParams {
    * When omitted, falls back to the global Metadata.Provider.
    */
   provider?: IMetadataProvider;
+
+  /**
+   * Optional file artifacts that may be attached as native content blocks
+   * when the resolved LLM driver supports the file's MIME type natively.
+   *
+   * The AIPromptRunner checks each entry against the driver's FileCapabilities
+   * after model selection. Files that pass the resolver are injected as
+   * content blocks in the last user message; others are left for artifact
+   * tool-based exploration.
+   */
+  nativeFileInputs?: NativeFileInput[];
 }
 
 

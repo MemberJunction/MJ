@@ -2006,6 +2006,13 @@ export class BaseAgent {
             } else if (this._artifactToolManager.HasArtifacts()) {
                 LogStatus(`[ArtifactTools] Artifacts present but tools disabled by agent config (includeArtifactToolsDocs=false)`);
             }
+
+            // Pass file artifacts as candidate native file inputs.
+            // The AIPromptRunner will check these against the resolved driver's
+            // FileCapabilities and attach qualifying files as native content blocks.
+            if (this._artifactToolManager.HasArtifacts()) {
+                promptParams.nativeFileInputs = this._artifactToolManager.GetNativeFileInputCandidates();
+            }
         }
 
         // Only set up child prompts if we have a system prompt

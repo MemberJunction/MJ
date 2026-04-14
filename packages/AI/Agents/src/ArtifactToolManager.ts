@@ -3,6 +3,7 @@ import { BaseArtifactToolLibrary, ArtifactToolResult } from './artifact-tools/Ba
 import { DataSnapshotToolLibrary } from './artifact-tools/DataSnapshotToolLibrary';
 import { JSONToolLibrary } from './artifact-tools/JSONToolLibrary';
 import { TextToolLibrary } from './artifact-tools/TextToolLibrary';
+import { NativeFileInput } from '@memberjunction/ai-core-plus';
 
 /**
  * An input artifact provided to an agent run.
@@ -109,6 +110,29 @@ export class ArtifactToolManager {
   /** Whether any artifacts are available */
   HasArtifacts(): boolean {
     return this.artifacts.size > 0;
+  }
+
+  /**
+   * Returns artifact content formatted as NativeFileInput candidates for the
+   * AIPromptRunner. Only artifacts with a known MIME type and string/Buffer
+   * content are included. The runner will check each against the driver's
+   * FileCapabilities before actually attaching them.
+   */
+  GetNativeFileInputCandidates(): NativeFileInput[] {
+    const candidates: NativeFileInput[] = [];
+    for (const entry of this.artifacts.values()) {
+      if (!entry.mimeType) continue;
+      const base64 = typeof entry.content === 'string'
+        ? Buffer.from(entry.content).toString('base64')
+        : entry.content.toString('base64');
+      candidates.push({
+        Name: entry.name,
+        MimeType: entry.mimeType,
+        Base64Content: base64,
+        SizeBytes: typeof entry.content === 'string' ? Buffer.byteLength(entry.content) : entry.content.length,
+      });
+    }
+    return candidates;
   }
 
   // ─── PROMPT INJECTION ───

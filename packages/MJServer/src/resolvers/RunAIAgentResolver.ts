@@ -1330,15 +1330,12 @@ export class RunAIAgentResolver extends ResolverBase {
                 const mime = result.attachment.MimeType || '';
                 const isArtifactToolType = ARTIFACT_TOOL_MIME_PREFIXES.some(prefix => mime.startsWith(prefix));
                 if (isArtifactToolType) {
-                    // Skip raw file embedding — agent accesses via artifact tools instead.
-                    // Add a lightweight text placeholder so the LLM knows the file exists.
-                    const fileName = result.attachment.FileName || 'Uploaded File';
-                    validAttachments.push({
-                        type: 'Document' as AttachmentData['type'],
-                        mimeType: 'text/plain',
-                        fileName: undefined,
-                        content: `[File: ${fileName} — accessible via artifact tools]`
-                    });
+                    // Skip raw file embedding — the agent accesses the file via
+                    // artifact tools (manifest injected into prompt) and/or native
+                    // file input (resolved per-driver in AIPromptRunner).
+                    // Do NOT add a placeholder attachment: 'Document' maps to 'file_url'
+                    // content blocks, and drivers attempt base64 decoding of the text,
+                    // causing API errors.
                 } else {
                     validAttachments.push({
                         type: ConversationUtility.GetAttachmentTypeFromMime(result.attachment.MimeType),
@@ -1366,15 +1363,12 @@ export class RunAIAgentResolver extends ResolverBase {
 
                 if (artifactVersion.ContentMode === 'File' && artifactVersion.FileID) {
                     if (isArtifactToolHandled) {
-                        // Skip raw file embedding — agent accesses via artifact tools instead.
-                        // Add a lightweight text note so the LLM knows the file exists.
-                        const fileName = artifactVersion.FileName || artifactVersion.Name || 'Uploaded File';
-                        validAttachments.push({
-                            type: 'Document' as AttachmentData['type'],
-                            mimeType: 'text/plain',
-                            fileName: undefined,
-                            content: `[File: ${fileName} — accessible via artifact tools]`
-                        });
+                        // Skip raw file embedding — the agent accesses the file via
+                        // artifact tools (manifest injected into prompt) and/or native
+                        // file input (resolved per-driver in AIPromptRunner).
+                        // Do NOT add a placeholder attachment here: 'Document' maps to
+                        // 'file_url' content blocks, and drivers attempt base64 decoding
+                        // of the placeholder text, causing API errors.
                     } else {
                         // Non-artifact-tool file types: embed normally
                         const fileContent = await this.downloadArtifactFileContent(artifactVersion, contextUser, provider);
