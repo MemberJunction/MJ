@@ -93,6 +93,207 @@ const METADATA_KEYS = new Set([
     'ClientID', 'BypassCache', 'DateCached', 'Device',
 ]);
 
+/**
+ * Endpoints that live under the /Ymc/ base URL instead of /Ams/.
+ * These are Career Center endpoints requiring the alternate base path.
+ */
+const YM_YMC_ENDPOINTS = new Set([
+    'jobalerts', 'jobalertscriteria', 'jobsearch',
+    'locationcoordinates', 'pinpoint', 'savedjobs', 'templates',
+]);
+
+/**
+ * Server-side date filter params for incremental sync, sourced directly from the
+ * research analysis (yourmembership_analysis.json → incremental.server_filter_params).
+ *
+ * Maps lowercase object name → the query param name to pass with the watermark ISO date.
+ * EventIDs is the only confirmed (high-confidence) server-side filter; the rest are
+ * "probable" — accepted at runtime, confirmed by integration testing.
+ */
+const YM_SERVER_FILTER_PARAMS: Record<string, string> = {
+    'eventids':              'LastModifiedDate',  // server_side_filter (confirmed high confidence)
+    'campaignreports':       'FromDate',          // server_side_filter_probable
+    'careeropenings':        'DateFrom',          // server_side_filter_probable
+    'dashboarddata':         'EndDate',           // server_side_filter_probable
+    'donationtransactions':  'DateFrom',          // server_side_filter_probable
+    'duestionstransactions': 'DateFrom',          // server_side_filter_probable — alias
+    'duestransactions':      'DateFrom',          // server_side_filter_probable
+    'groupmembershiplogs':   'StartDate',         // server_side_filter_probable
+    'invoiceitems':          'DateFrom',          // server_side_filter_probable
+    'storeorderdetails':     'DateFrom',          // server_side_filter_probable
+    'storeorders':           'StartDate',         // server_side_filter_probable
+    'topcontributors':       'DateEnd',           // server_side_filter_probable
+    'trendingposts':         'EndDate',           // server_side_filter_probable
+};
+
+/**
+ * Client-side watermark fields for endpoints that have no server-side date filter
+ * but include a date field in each record that can be used for client-side filtering.
+ * Maps lowercase object name → { fieldName, strategy }.
+ *
+ * 'partial' means only creation date is available (misses updates to existing records).
+ * 'full'    means a last-updated timestamp is available (catches both creates and updates).
+ *
+ * Source: yourmembership_analysis.json → incremental.watermark_fields
+ */
+const YM_CLIENT_WATERMARK_FIELDS: Record<string, { field: string; strategy: 'full' | 'partial' }> = {
+    'allcampaigns':    { field: 'DateCreated',  strategy: 'partial' },
+    // 'campaigns' is NOT here — it's parameterized (Campaigns/{id}) and routes via YM_PARENT_SCOPED
+    'memberlist':      { field: 'LastUpdated',  strategy: 'full' },
+    'membersprofiles': { field: 'LastUpdated',  strategy: 'full' },
+};
+
+/**
+ * Parent-scoped endpoint configuration.
+ * - 'Event' / 'Member': built-in parent types — IDs come from EventIDs / PeopleIDs endpoints.
+ * - 'Custom': IDs fetched dynamically from a secondary list endpoint.
+ *   idSourcePath  — path relative to /Ams/{ClientID}/ to call for the ID list (no leading slash)
+ *   idResponseKey — top-level key in the response body that holds the array
+ *   idField       — field name within each item to extract as the string parent ID
+ */
+type YMParentScopeConfig =
+    | { parentType: 'Event' | 'Member'; pathTemplate: string }
+    | { parentType: 'Custom'; pathTemplate: string; idSourcePath: string; idResponseKey: string; idField: string };
+
+/**
+ * Parent-scoped endpoints that require enumerating parent IDs before fetching.
+ * Maps lowercase endpoint name → YMParentScopeConfig.
+ * pathTemplate uses {parentId} as placeholder for the resolved parent ID.
+ */
+const YM_PARENT_SCOPED: Record<string, YMParentScopeConfig> = {
+    // ── Event-scoped ──────────────────────────────────────────────────
+    'eventalias':                        { parentType: 'Event', pathTemplate: 'Event/{parentId}/Alias' },
+    'eventattendeesessions':             { parentType: 'Event', pathTemplate: 'Event/{parentId}/AttendeeTypeSessions' },
+    'eventattendeetypesessions':         { parentType: 'Event', pathTemplate: 'Event/{parentId}/AttendeeTypeSessions' },
+    'eventattendeetypetickets':          { parentType: 'Event', pathTemplate: 'Event/{parentId}/AttendeeTypeTickets' },
+    'eventattendeetypes':                { parentType: 'Event', pathTemplate: 'Event/{parentId}/AttendeeTypes' },
+    'eventceuawards':                    { parentType: 'Event', pathTemplate: 'Event/{parentId}/CEUAwards' },
+    'eventcustomlabels':                 { parentType: 'Event', pathTemplate: 'Event/{parentId}/EventCustomLabels' },
+    'eventsessiongroups':                { parentType: 'Event', pathTemplate: 'Event/{parentId}/EventSessionGroups' },
+    'eventsessions':                     { parentType: 'Event', pathTemplate: 'Event/{parentId}/Sessions' },
+    'eventtickets':                      { parentType: 'Event', pathTemplate: 'Event/{parentId}/Tickets' },
+    'eventvirtualmeetings':              { parentType: 'Event', pathTemplate: 'Event/{parentId}/VirtualMeetings' },
+    'eventvirtualwebinars':              { parentType: 'Event', pathTemplate: 'Event/{parentId}/VirtualWebinars' },
+    'eventvirtualusers':                 { parentType: 'Event', pathTemplate: 'Event/{parentId}/VirtualUsers' },
+    'eventregistrations':                { parentType: 'Event', pathTemplate: 'Event/{parentId}/EventRegistrants' },
+    'eventregistrationids':              { parentType: 'Event', pathTemplate: 'Event/{parentId}/EventRegistrationIDs' },
+    'registrationsessionrequest':        { parentType: 'Event', pathTemplate: 'Event/{parentId}/EventRegistrationSessions' },
+    'eventsessionceuawards':             { parentType: 'Event', pathTemplate: 'Event/{parentId}/Sessions' },
+    // ── Member-scoped ─────────────────────────────────────────────────
+    'basicmemberprofile':                { parentType: 'Member', pathTemplate: 'Member/{parentId}/BasicMemberProfile' },
+    'connections':                       { parentType: 'Member', pathTemplate: 'Member/{parentId}/Connections' },
+    'contentproxy':                      { parentType: 'Member', pathTemplate: 'Member/{parentId}/ContentProxy' },
+    'donationhistory':                   { parentType: 'Member', pathTemplate: 'Member/{parentId}/DonationHistory' },
+    'engagementscores':                  { parentType: 'Member', pathTemplate: 'Member/{parentId}/EngagementScores' },
+    'favorites':                         { parentType: 'Member', pathTemplate: 'Member/{parentId}/Favorites' },
+    'memberfavorites':                   { parentType: 'Member', pathTemplate: 'Member/{parentId}/Favorites' },
+    'memberconfig':                      { parentType: 'Member', pathTemplate: 'Member/{parentId}/Config' },
+    'membergroups':                      { parentType: 'Member', pathTemplate: 'Member/{parentId}/Groups' },
+    'membernetworks':                    { parentType: 'Member', pathTemplate: 'Member/{parentId}/Networks' },
+    'memberprofile':                     { parentType: 'Member', pathTemplate: 'Member/{parentId}/MemberProfile' },
+    'memberpulse':                       { parentType: 'Member', pathTemplate: 'Member/{parentId}/MemberPulse' },
+    'messagefolders':                    { parentType: 'Member', pathTemplate: 'Member/{parentId}/MessageFolders' },
+    'messages':                          { parentType: 'Member', pathTemplate: 'Member/{parentId}/Messages' },
+    'notificationsubscription':          { parentType: 'Member', pathTemplate: 'Member/{parentId}/NotificationSubscription' },
+    'wallcomments':                      { parentType: 'Member', pathTemplate: 'Member/{parentId}/WallComments' },
+    'wallpostfirst':                     { parentType: 'Member', pathTemplate: 'Member/{parentId}/WallPostFirst' },
+    'wallposts':                         { parentType: 'Member', pathTemplate: 'Member/{parentId}/WallPosts' },
+    // ── Additional Member-scoped (from research SOT) ─────────────────
+    'connectioncategorylist':            { parentType: 'Member', pathTemplate: 'Member/{parentId}/ConnectionCategoryList' },
+    'connectionsuggestions':             { parentType: 'Member', pathTemplate: 'Member/{parentId}/ConnectionSuggestions' },
+    'directorysearch':                   { parentType: 'Member', pathTemplate: 'Member/{parentId}/DirectorySearch' },
+    'eventregistrants':                  { parentType: 'Member', pathTemplate: 'Member/{parentId}/EventRegistrants' },
+    'eventsearch':                       { parentType: 'Member', pathTemplate: 'Member/{parentId}/EventSearch' },
+    'feeds':                             { parentType: 'Member', pathTemplate: 'Member/{parentId}/Feeds' },
+    'mediagalleryalbum':                 { parentType: 'Member', pathTemplate: 'Member/{parentId}/MediaGalleryAlbum' },
+    'networks':                          { parentType: 'Member', pathTemplate: 'Member/{parentId}/Networks' },
+    'networktypes':                      { parentType: 'Member', pathTemplate: 'Member/{parentId}/NetworkTypes' },
+    'networkscloud':                     { parentType: 'Member', pathTemplate: 'Member/{parentId}/NetworksCloud' },
+    'notifications':                     { parentType: 'Member', pathTemplate: 'Member/{parentId}/Notifications' },
+    'photos':                            { parentType: 'Member', pathTemplate: 'Member/{parentId}/Photos' },
+    'pushnotificationsconfig':           { parentType: 'Member', pathTemplate: 'Member/{parentId}/PushNotificationsConfig' },
+    'sponsorposts':                      { parentType: 'Member', pathTemplate: 'Member/{parentId}/SponsorPosts' },
+    // ── /Ymc/ member-scoped (base URL handled separately) ────────────
+    'jobalerts':                         { parentType: 'Member', pathTemplate: 'Member/{parentId}/JobAlerts' },
+    'jobalertscriteria':                 { parentType: 'Member', pathTemplate: 'Member/{parentId}/JobAlertsCriteria' },
+    'jobsearch':                         { parentType: 'Member', pathTemplate: 'Member/{parentId}/JobSearch' },
+    'locationcoordinates':               { parentType: 'Member', pathTemplate: 'Member/{parentId}/LocationCoordinates' },
+    'pinpoint':                          { parentType: 'Member', pathTemplate: 'Member/{parentId}/Pinpoint' },
+    'savedjobs':                         { parentType: 'Member', pathTemplate: 'Member/{parentId}/SavedJobs' },
+    'templates':                         { parentType: 'Member', pathTemplate: 'Member/{parentId}/Templates' },
+    // ── Custom-enumerated (IDs fetched from a secondary list endpoint) ─
+    // Locations/{countryId} — enumerate country IDs from Countries endpoint
+    'locations': {
+        parentType: 'Custom',
+        pathTemplate: 'Locations/{parentId}',
+        idSourcePath: 'Countries',
+        idResponseKey: 'countryList',
+        idField: 'countryId',
+    },
+    // MarkupRender/{MarkupId} — enumerate markup IDs from Markup list endpoint
+    'markuprender': {
+        parentType: 'Custom',
+        pathTemplate: 'MarkupRender/{parentId}',
+        idSourcePath: 'Markup',
+        idResponseKey: 'MarkupList',
+        idField: 'MarkupId',
+    },
+    // MembershipModifiers/{MembershipID} — enumerate membership type IDs from Memberships
+    'membershipmodifiers': {
+        parentType: 'Custom',
+        pathTemplate: 'MembershipModifiers/{parentId}',
+        idSourcePath: 'Memberships/',
+        idResponseKey: 'membershipList',
+        idField: 'MemberTypeId',
+    },
+    // MembershipPromoCodes/{MembershipID}/ — enumerate membership type IDs from Memberships
+    'membershipPromoCodes': {
+        parentType: 'Custom',
+        pathTemplate: 'MembershipPromoCodes/{parentId}/',
+        idSourcePath: 'Memberships/',
+        idResponseKey: 'membershipList',
+        idField: 'MemberTypeId',
+    },
+    // MembershipRenewalReminder/{id} — enumerate membership type IDs from Memberships
+    'membershiprenewalremindergetrequest': {
+        parentType: 'Custom',
+        pathTemplate: 'MembershipRenewalReminder/{parentId}',
+        idSourcePath: 'Memberships/',
+        idResponseKey: 'membershipList',
+        idField: 'MemberTypeId',
+    },
+    // Campaigns/{CampaignId} — enumerate campaign IDs from AllCampaigns (response.Campaigns[].Id)
+    'campaigns': {
+        parentType: 'Custom',
+        pathTemplate: 'Campaigns/{parentId}',
+        idSourcePath: 'AllCampaigns',
+        idResponseKey: 'Campaigns',
+        idField: 'Id',
+    },
+    // CampaignReports/{CampaignId} — enumerate campaign IDs from AllCampaigns
+    'campaignreports': {
+        parentType: 'Custom',
+        pathTemplate: 'CampaignReports/{parentId}',
+        idSourcePath: 'AllCampaigns',
+        idResponseKey: 'Campaigns',
+        idField: 'Id',
+    },
+    // CampaignEmailListDuplicates/{ListId} — enumerate list IDs from CampaignEmailLists (response.CampaignEmailLists[].ListId)
+    'campaignemaillistduplicates': {
+        parentType: 'Custom',
+        pathTemplate: 'CampaignEmailListDuplicates/{parentId}',
+        idSourcePath: 'CampaignEmailLists',
+        idResponseKey: 'CampaignEmailLists',
+        idField: 'ListId',
+    },
+    // NOTE: Two parameterized endpoints are intentionally NOT in this map:
+    // - 'eventattendees': doubly nested (Member/{MemberId}/Event/{EventId}/EventAttendees) — needs
+    //   both member and event IDs. Falls through to super.FetchChanges() which will fail. Requires
+    //   custom FetchChanges logic if sync is needed.
+    // - 'customformfields': scoped by FormID (CustomForms/{FormID}/Fields) — no flat form list
+    //   endpoint to enumerate IDs from. Requires manual form ID configuration if sync is needed.
+};
+
 // ─── Connector Implementation ───────────────────────────────────────
 
 /**
@@ -2423,15 +2624,19 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
     private get effectiveMaxRetries(): number { return this._config?.MaxRetries ?? MAX_RETRIES; }
     private get effectiveRequestTimeoutMs(): number { return this._config?.RequestTimeoutMs ?? REQUEST_TIMEOUT_MS; }
     private get effectiveMinRequestIntervalMs(): number { return this._config?.MinRequestIntervalMs ?? MIN_REQUEST_INTERVAL_MS; }
-    private get effectiveEnrichBatchSize(): number { return this._config?.EnrichBatchSize ?? ENRICH_BATCH_SIZE; }
+    protected get effectiveEnrichBatchSize(): number { return this._config?.EnrichBatchSize ?? ENRICH_BATCH_SIZE; }
     private get effectiveJsonTimeoutMs(): number { return this._config?.JsonTimeoutMs ?? JSON_TIMEOUT_MS; }
     private get effectiveEnrichTimeoutMs(): number { return this._config?.EnrichTimeoutMs ?? ENRICH_TIMEOUT_MS; }
 
-    /** Cache of the filtered member list pending enrichment, shared across batch calls */
-    private memberFetchCache: {
-        changedRecords: ExternalRecord[];
-        newWatermark: string | null;
-    } | null = null;
+    /** Cached parent IDs for parent-scoped fetches (keyed by objectName) */
+    private parentIdCache: Map<string, string[]> = new Map();
+
+    /**
+     * Holds the current watermark value for the duration of a FetchChanges call.
+     * Set at the top of FetchChanges so that AppendDefaultQueryParams can inject
+     * the server-side date filter param for endpoints listed in YM_SERVER_FILTER_PARAMS.
+     */
+    private _currentWatermark: string | null = null;
 
     // ─── Abstract method implementations (BaseRESTIntegrationConnector) ──
 
@@ -2451,6 +2656,36 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
 
     protected BuildHeaders(auth: RESTAuthContext): Record<string, string> {
         return { 'X-SS-ID': auth.SessionID!, 'Accept': 'application/json' };
+    }
+
+    /**
+     * Extends the base class implementation by injecting an incremental-sync date
+     * filter query parameter for endpoints that support server-side filtering.
+     *
+     * When a watermark is active (`_currentWatermark` is set by `FetchChanges`) and
+     * the current object appears in `YM_SERVER_FILTER_PARAMS`, the appropriate
+     * date param (e.g. `LastModifiedDate`, `DateFrom`, `StartDate`) is appended.
+     * The base class then appends any additional DefaultQueryParams from metadata.
+     */
+    protected override AppendDefaultQueryParams(url: string, obj: MJIntegrationObjectEntity): string {
+        let result = super.AppendDefaultQueryParams(url, obj);
+
+        if (this._currentWatermark) {
+            const paramName = YM_SERVER_FILTER_PARAMS[obj.Name.toLowerCase()];
+            if (paramName) {
+                // Avoid injecting a duplicate if the param is already in the URL
+                const existingKeys = new Set(
+                    (result.includes('?') ? result.split('?')[1].split('&') : [])
+                        .map(p => p.split('=')[0].toLowerCase())
+                );
+                if (!existingKeys.has(paramName.toLowerCase())) {
+                    const sep = result.includes('?') ? '&' : '?';
+                    result += `${sep}${encodeURIComponent(paramName)}=${encodeURIComponent(this._currentWatermark)}`;
+                }
+            }
+        }
+
+        return result;
     }
 
     protected async MakeHTTPRequest(
@@ -2649,13 +2884,31 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
     public override async FetchChanges(ctx: FetchContext): Promise<FetchBatchResult> {
         console.log(`[YM] FetchChanges called for '${ctx.ObjectName}' (batchSize=${ctx.BatchSize}, watermark=${ctx.WatermarkValue ?? 'none'}, offset=${ctx.CurrentOffset ?? 'none'})`);
 
+        // Store watermark so AppendDefaultQueryParams can inject server-side date filters.
+        this._currentWatermark = ctx.WatermarkValue;
+
         const objLower = ctx.ObjectName.toLowerCase();
+
         if (objLower === 'groups' || objLower === 'grouptypes') {
             return this.FetchGroups(ctx);
         }
 
         if (objLower === 'members') {
             return this.FetchMemberBatch(ctx);
+        }
+
+        // Client-side watermark filtering: fetch all records, filter locally by date field.
+        // Used for endpoints that return a usable date field but offer no server-side filter param.
+        const clientWatermark = YM_CLIENT_WATERMARK_FIELDS[objLower];
+        if (clientWatermark) {
+            return this.FetchWithClientWatermark(ctx, clientWatermark.field);
+        }
+
+        // Parent-scoped endpoints: only run on first call (offset 0 / undefined)
+        // to avoid duplicate fetches — they load all records in one pass
+        const parentScope = YM_PARENT_SCOPED[objLower];
+        if (parentScope && (ctx.CurrentOffset ?? 0) === 0 && !ctx.CurrentPage && !ctx.CurrentCursor) {
+            return this.FetchParentScopedRecords(ctx, parentScope);
         }
 
         return super.FetchChanges(ctx);
@@ -2706,6 +2959,41 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
         }
 
         console.log(`[YM Members] ${changedRecords.length}/${enriched.length} changed since watermark`);
+
+        return {
+            Records: changedRecords,
+            HasMore: pageResult.HasMore,
+            NextOffset: pageResult.NextOffset,
+            NextPage: pageResult.NextPage,
+            NextCursor: pageResult.NextCursor,
+            NewWatermarkValue: !pageResult.HasMore ? newWatermark : undefined,
+        };
+    }
+
+    /**
+     * Fetches records from a flat (non-enriched) endpoint and applies client-side
+     * watermark filtering against a known date field.
+     *
+     * Used for endpoints that include a usable date field (e.g. `DateCreated`,
+     * `LastUpdated`) but have no server-side date filter query parameter.
+     * The base class pagination loop is used to collect all records, then
+     * `FilterByWatermark` narrows to only changed ones.
+     *
+     * Because these endpoints are typically small-to-medium in size, fetching
+     * all and filtering locally is acceptable.
+     */
+    private async FetchWithClientWatermark(ctx: FetchContext, dateFieldName: string): Promise<FetchBatchResult> {
+        const pageResult = await super.FetchChanges(ctx);
+
+        if (pageResult.Records.length === 0) {
+            return pageResult;
+        }
+
+        const { changedRecords, newWatermark } = this.FilterByWatermark(
+            pageResult.Records, ctx.WatermarkValue, dateFieldName
+        );
+
+        console.log(`[YM] ${ctx.ObjectName}: ${changedRecords.length}/${pageResult.Records.length} records changed since watermark (field: ${dateFieldName})`);
 
         return {
             Records: changedRecords,
@@ -3379,6 +3667,275 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
         if (rs?.ErrorCode && rs.ErrorCode !== 'None' && rs.ErrorCode !== '') {
             throw new Error(`YM API error: ${rs.Message ?? rs.ErrorCode}`);
         }
+    }
+
+    // ─── Parent-scoped endpoint traversal ────────────────────────────
+
+    /**
+     * Returns the /Ymc/ base URL for Career Center endpoints.
+     */
+    private GetYmcBaseURL(clientId: string): string {
+        return `${YM_API_BASE}/Ymc/${clientId}`;
+    }
+
+    /**
+     * Fetches all event IDs by paginating the EventIDs endpoint.
+     * Returns an array of event ID strings for use in parent-scoped fetches.
+     */
+    private async FetchAllEventIDs(
+        auth: RESTAuthContext,
+        config: YMConnectionConfig
+    ): Promise<string[]> {
+        const baseUrl = `${YM_API_BASE}/Ams/${config.ClientID}/EventIDs`;
+        const headers = this.BuildHeaders(auth);
+        const ids: string[] = [];
+        let page = 1;
+
+        while (true) {
+            const url = `${baseUrl}?PageNumber=${page}&PageSize=500`;
+            const resp = await this.MakeHTTPRequest(auth, url, 'GET', headers);
+            if (resp.Status >= 400 || !resp.Body) break;
+
+            const body = resp.Body as Record<string, unknown>;
+            const list = (body['EventIDs'] ?? body['Ids'] ?? body['IDs'] ?? []) as unknown[];
+            if (!Array.isArray(list) || list.length === 0) break;
+
+            for (const item of list) {
+                const id = typeof item === 'object' && item !== null
+                    ? String((item as Record<string, unknown>)['EventId'] ?? (item as Record<string, unknown>)['Id'] ?? item)
+                    : String(item);
+                ids.push(id);
+            }
+
+            if (list.length < 500) break;
+            page++;
+        }
+
+        console.log(`[YM] FetchAllEventIDs: found ${ids.length} event IDs`);
+        return ids;
+    }
+
+    /**
+     * Fetches all member/people IDs from the PeopleIDs endpoint.
+     */
+    private async FetchAllMemberIDs(
+        auth: RESTAuthContext,
+        config: YMConnectionConfig
+    ): Promise<string[]> {
+        const baseUrl = `${YM_API_BASE}/Ams/${config.ClientID}/PeopleIDs`;
+        const headers = this.BuildHeaders(auth);
+        const ids: string[] = [];
+        let page = 1;
+
+        while (true) {
+            const url = `${baseUrl}?PageNumber=${page}&PageSize=500`;
+            const resp = await this.MakeHTTPRequest(auth, url, 'GET', headers);
+            if (resp.Status >= 400 || !resp.Body) break;
+
+            const body = resp.Body as Record<string, unknown>;
+            const list = (body['PeopleIDs'] ?? body['Ids'] ?? body['IDs'] ?? []) as unknown[];
+            if (!Array.isArray(list) || list.length === 0) break;
+
+            for (const item of list) {
+                const id = typeof item === 'object' && item !== null
+                    ? String((item as Record<string, unknown>)['ProfileId'] ?? (item as Record<string, unknown>)['Id'] ?? item)
+                    : String(item);
+                ids.push(id);
+            }
+
+            if (list.length < 500) break;
+            page++;
+        }
+
+        console.log(`[YM] FetchAllMemberIDs: found ${ids.length} member IDs`);
+        return ids;
+    }
+
+    /**
+     * Fetches parent IDs from a secondary list endpoint for 'Custom' parent-scoped objects.
+     * Calls GET /Ams/{ClientID}/{sourcePath}, extracts the array at responseKey,
+     * and returns the idField value from each item as a string.
+     *
+     * Results are NOT cached here — callers manage the cache via parentIdCache.
+     */
+    private async FetchCustomParentIDs(
+        auth: YMAuthContext,
+        config: YMConnectionConfig,
+        sourcePath: string,
+        responseKey: string,
+        idField: string,
+    ): Promise<string[]> {
+        const url = `${YM_API_BASE}/Ams/${config.ClientID}/${sourcePath}`;
+        const headers = this.BuildHeaders(auth);
+        const resp = await this.MakeHTTPRequest(auth, url, 'GET', headers);
+        if (resp.Status >= 400 || !resp.Body) {
+            console.warn(`[YM] FetchCustomParentIDs: failed to fetch '${sourcePath}' (HTTP ${resp.Status})`);
+            return [];
+        }
+
+        const body = resp.Body as Record<string, unknown>;
+        const raw = body[responseKey];
+        if (!Array.isArray(raw)) {
+            console.warn(`[YM] FetchCustomParentIDs: '${sourcePath}' response has no array at key '${responseKey}'`);
+            return [];
+        }
+
+        const ids: string[] = [];
+        for (const item of raw as Record<string, unknown>[]) {
+            const val = item[idField];
+            if (val !== undefined && val !== null) ids.push(String(val));
+        }
+
+        console.log(`[YM] FetchCustomParentIDs: '${sourcePath}' → ${ids.length} IDs (field '${idField}')`);
+        return ids;
+    }
+
+    /**
+     * Fetches all records for a parent-scoped endpoint by:
+     * 1. Enumerating all parent IDs (cached per sync run)
+     * 2. Fetching child records for each parent ID
+     * 3. Returning all records as a single batch with HasMore=false
+     *
+     * Parent IDs are cached in parentIdCache so subsequent calls for the same
+     * parent type within a sync run don't re-fetch the ID list.
+     */
+    private async FetchParentScopedRecords(
+        ctx: FetchContext,
+        scope: YMParentScopeConfig
+    ): Promise<FetchBatchResult> {
+        const companyIntegration = ctx.CompanyIntegration as MJCompanyIntegrationEntity;
+        const config = await this.ParseConfig(companyIntegration, ctx.ContextUser);
+        const auth = await this.Authenticate(companyIntegration, ctx.ContextUser) as YMAuthContext;
+        const headers = this.BuildHeaders(auth);
+
+        // Fetch or use cached parent IDs
+        // Narrow the Custom variant explicitly to satisfy TypeScript (first union member
+        // uses 'Event'|'Member' as a combined literal so narrowing via else doesn't work).
+        type CustomScope = { parentType: 'Custom'; pathTemplate: string; idSourcePath: string; idResponseKey: string; idField: string };
+        const isCustom = (s: YMParentScopeConfig): s is CustomScope => s.parentType === 'Custom';
+
+        const cacheKey = isCustom(scope) ? `custom:${scope.idSourcePath}` : scope.parentType;
+        let parentIds = this.parentIdCache.get(cacheKey);
+        if (!parentIds) {
+            if (scope.parentType === 'Event') {
+                parentIds = await this.FetchAllEventIDs(auth, config);
+            } else if (scope.parentType === 'Member') {
+                parentIds = await this.FetchAllMemberIDs(auth, config);
+            } else {
+                const cs = scope as CustomScope;
+                parentIds = await this.FetchCustomParentIDs(auth, config, cs.idSourcePath, cs.idResponseKey, cs.idField);
+            }
+            this.parentIdCache.set(cacheKey, parentIds);
+        }
+
+        if (parentIds.length === 0) {
+            const sourceDesc = isCustom(scope) ? scope.idSourcePath
+                : scope.parentType === 'Event' ? 'EventIDs' : 'PeopleIDs';
+            console.warn(`[YM] FetchParentScopedRecords: 0 ${scope.parentType} IDs found for '${ctx.ObjectName}' — check ${sourceDesc} endpoint`);
+            return { Records: [], HasMore: false };
+        }
+
+        console.log(`[YM] FetchParentScopedRecords: fetching '${ctx.ObjectName}' for ${parentIds.length} ${scope.parentType} IDs`);
+
+        const isYmc = YM_YMC_ENDPOINTS.has(ctx.ObjectName.toLowerCase());
+        const baseUrl = isYmc
+            ? this.GetYmcBaseURL(config.ClientID)
+            : `${YM_API_BASE}/Ams/${config.ClientID}`;
+
+        const allRecords: ExternalRecord[] = [];
+        let fetched = 0;
+
+        for (const parentId of parentIds) {
+            const childPath = scope.pathTemplate.replace('{parentId}', parentId);
+            const url = `${baseUrl}/${childPath}`;
+
+            try {
+                const resp = await this.MakeHTTPRequest(auth, url, 'GET', headers);
+                if (resp.Status >= 400 || !resp.Body) continue;
+
+                const raw = resp.Body as Record<string, unknown>;
+                // Find the array in the response
+                let records: Record<string, unknown>[] = [];
+                if (Array.isArray(resp.Body)) {
+                    records = resp.Body as Record<string, unknown>[];
+                } else {
+                    for (const val of Object.values(raw)) {
+                        if (Array.isArray(val) && val.length > 0) {
+                            records = val as Record<string, unknown>[];
+                            break;
+                        }
+                    }
+                    if (records.length === 0 && Object.keys(raw).length > 0) {
+                        records = [this.FilterMetadataKeys(raw)];
+                    }
+                }
+
+                for (const rec of records) {
+                    const sanitized = this.SanitizeDateFields({ ...rec, _parentId: parentId });
+                    const flattened = this.FlattenYMRecord(sanitized);
+                    const externalId = String(
+                        flattened['Id'] ?? flattened['ID'] ?? flattened['ProfileID'] ??
+                        flattened['EventId'] ?? flattened['SessionId'] ?? `${parentId}_${fetched}_${allRecords.length}`
+                    );
+                    allRecords.push({ Fields: flattened, ExternalID: externalId, ObjectType: ctx.ObjectName });
+                }
+
+                fetched++;
+            } catch (err) {
+                console.warn(`[YM] FetchParentScopedRecords: error fetching '${ctx.ObjectName}' for ${scope.parentType} ${parentId}: ${err}`);
+            }
+        }
+
+        console.log(`[YM] FetchParentScopedRecords: '${ctx.ObjectName}' — ${allRecords.length} records from ${fetched}/${parentIds.length} parents`);
+        return { Records: allRecords, HasMore: false };
+    }
+
+    /**
+     * Flattens YM custom field DTOs into top-level fields.
+     * Handles two shapes from the research:
+     *   Simple:  [{ Code: 'field_code', Response: 'value' }]
+     *   Complex: [{ ExportLabel: 'label', CustomFieldValue: { FieldCode: 'code', Values: [{ Value: 'v' }] } }]
+     */
+    private FlattenYMRecord(record: Record<string, unknown>): Record<string, unknown> {
+        const result: Record<string, unknown> = { ...record };
+
+        for (const [key, value] of Object.entries(record)) {
+            if (!Array.isArray(value)) continue;
+
+            const arr = value as Record<string, unknown>[];
+            if (arr.length === 0) continue;
+            const first = arr[0];
+            if (typeof first !== 'object' || first === null) continue;
+
+            // Simple shape: { Code, Response }
+            if ('Code' in first && 'Response' in first) {
+                delete result[key];
+                for (const item of arr) {
+                    const code = String(item['Code'] ?? '');
+                    if (code) result[`cf_${code}`] = item['Response'] ?? null;
+                }
+                continue;
+            }
+
+            // Complex shape: { ExportLabel, CustomFieldValue: { FieldCode, Values: [{ Value }] } }
+            if ('ExportLabel' in first || 'CustomFieldValue' in first) {
+                delete result[key];
+                for (const item of arr) {
+                    const cfv = item['CustomFieldValue'] as Record<string, unknown> | undefined;
+                    const code = cfv ? String(cfv['FieldCode'] ?? item['ExportLabel'] ?? '') : String(item['ExportLabel'] ?? '');
+                    if (!code) continue;
+                    const values = cfv?.['Values'];
+                    if (Array.isArray(values) && values.length > 0) {
+                        const firstVal = values[0] as Record<string, unknown>;
+                        result[`cf_${code}`] = firstVal['Value'] ?? null;
+                    } else {
+                        result[`cf_${code}`] = null;
+                    }
+                }
+            }
+        }
+
+        return result;
     }
 
     /** Filters out YM API metadata keys that shouldn't be stored as field data. */

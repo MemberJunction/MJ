@@ -564,14 +564,13 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
 
             const batch = await config.connector.FetchChanges(ctx);
 
-            // Enforce MaxBatchSize — connectors are asked to respect it but may overshoot
+            // If the connector returned more records than MaxBatchSize, log it but never truncate —
+            // all records are written, just in sub-batches to keep DB transactions manageable.
             if (batch.Records.length > this.MaxBatchSize) {
-                console.warn(
+                console.log(
                     `[IntegrationEngine] ${entityMap.ExternalObjectName}: connector returned ` +
-                    `${batch.Records.length} records, exceeding MaxBatchSize of ${this.MaxBatchSize}. ` +
-                    `Truncating to ${this.MaxBatchSize}.`
+                    `${batch.Records.length} records (> MaxBatchSize ${this.MaxBatchSize}), writing in chunks.`
                 );
-                batch.Records = batch.Records.slice(0, this.MaxBatchSize);
             }
 
             if (batch.Records.length > 0) {

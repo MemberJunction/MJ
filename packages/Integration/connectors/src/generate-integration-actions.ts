@@ -85,7 +85,7 @@ const CONNECTOR_REGISTRY: Record<string, {
     hubspot:     { Connector: new HubSpotConnector(),       FileName: '.hubspot-actions.json',      MetadataFile: 'integrations/.hubspot.json' },
     rasa:        { Connector: new RasaConnector(),           FileName: '.rasa-actions.json' },
     salesforce:  { Connector: new SalesforceConnector(),     FileName: '.salesforce-actions.json' },
-    ym:          { Connector: new YourMembershipConnector(), FileName: '.ym-actions.json' },
+    ym:          { Connector: new YourMembershipConnector(), FileName: '.ym-actions.json',         MetadataFile: 'integrations/.your-membership.json' },
     'sage-intacct': { Connector: new SageIntacctConnector(), FileName: '.sage-intacct-actions.json' },
     quickbooks:  { Connector: new QuickBooksConnector(),     FileName: '.quickbooks-actions.json' },
 };
