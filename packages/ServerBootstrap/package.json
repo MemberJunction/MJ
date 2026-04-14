@@ -101,7 +101,8 @@
     "@memberjunction/tag-engine-base": "5.26.0",
     "@memberjunction/templates": "5.26.0",
     "@memberjunction/testing-engine": "5.26.0",
-    "cosmiconfig": "^9.0.0"
+    "cosmiconfig": "^9.0.0",
+    "express": "^5.2.1"
   },
   "devDependencies": {
     "@types/node": "^24.10.11",
