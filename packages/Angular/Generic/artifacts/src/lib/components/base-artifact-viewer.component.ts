@@ -242,4 +242,20 @@ export abstract class BaseArtifactViewerPluginComponent implements IArtifactView
    *          Note: 'Display' cannot be removed (it's the main view)
    */
   public GetStandardTabRemovals?(): string[];
+
+  /**
+   * Trigger a browser file download from a URL.
+   * Shared by all file-backed viewer plugins (PDF, XLSX, DOCX) so the fetch →
+   * blob → object-URL → anchor pattern lives in exactly one place.
+   */
+  protected async triggerBrowserDownload(url: string, fileName: string): Promise<void> {
+    const response = await fetch(url);
+    const blob = await response.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = objectUrl;
+    anchor.download = fileName;
+    anchor.click();
+    URL.revokeObjectURL(objectUrl);
+  }
 }

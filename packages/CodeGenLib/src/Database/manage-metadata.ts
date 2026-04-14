@@ -4025,11 +4025,45 @@ export class ManageMetadataBase {
                        VALUES ('${appID}', '${appName}', 'Generated for schema', '${schemaName}', '${path}', 1)`;
          await this.LogSQLAndExecute(pool, sSQL, `SQL generated to create new application ${appName}`);
          LogStatus(`Created new application ${appName} with Path: ${path}`);
+
+         // Auto-assign default roles to the new application
+         await this.addDefaultRolesForApplication(pool, appID, appName);
+
          return appID;
       }
       catch (e) {
          LogError(`Failed to create new application ${appName} for schema ${schemaName}`, null, e);
          return null;
+      }
+   }
+
+   /**
+    * Adds default ApplicationRole records for a newly created application based on config settings.
+    * This grants configured roles access to the new application automatically.
+    */
+   protected async addDefaultRolesForApplication(
+      pool: CodeGenConnection,
+      appId: string,
+      appName: string
+   ): Promise<void> {
+      const defaults = configInfo.newSchemaDefaults.ApplicationRoleDefaults;
+      if (!defaults?.AutoAddRolesForNewApplications) {
+         return;
+      }
+
+      const md = new Metadata();
+      for (const roleDef of defaults.Roles) {
+         const role = md.Roles.find(
+            r => r.Name.trim().toLowerCase() === roleDef.RoleName.trim().toLowerCase()
+         );
+         if (role) {
+            const sSQLInsert = `INSERT INTO ${this.qs(mj_core_schema(), 'ApplicationRole')}
+                                 (${this.qi('ApplicationID')}, ${this.qi('RoleID')}, ${this.qi('CanAccess')}, ${this.qi('CanAdmin')}) VALUES
+                                 ('${appId}', '${role.ID}', ${roleDef.CanAccess ? 1 : 0}, ${roleDef.CanAdmin ? 1 : 0})`;
+            await this.LogSQLAndExecute(pool, sSQLInsert, `Adding role ${roleDef.RoleName} to application ${appName}`);
+         } else {
+            LogError(`Unable to find Role '${roleDef.RoleName}' for application ${appName}`);
+         }
       }
    }
 
@@ -4135,6 +4169,7 @@ export class ManageMetadataBase {
    protected createNewEntityInsertSQL(newEntityUUID: string, newEntityName: string, newEntity: any, newEntitySuffix: string, newEntityDisplayName: string | null): string {
       const newEntityDefaults = configInfo.newEntityDefaults;
       const newEntityDescriptionEscaped = newEntity.EntityDescription ? `'${newEntity.EntityDescription.replace(/'/g, "''")}'` : null;
+      const allowCaching = this.resolveAllowCachingForSchema(newEntity.SchemaName);
       const q = (name: string) => this.qi(name);
       const sSQLInsert = `
       INSERT INTO ${this.qs(mj_core_schema(), 'Entity')} (
@@ -4147,7 +4182,8 @@ export class ManageMetadataBase {
          ${q('BaseView')},
          ${q('SchemaName')},
          ${q('IncludeInAPI')},
-         ${q('AllowUserSearchAPI')}
+         ${q('AllowUserSearchAPI')},
+         ${q('AllowCaching')}
          ${newEntityDefaults.TrackRecordChanges === undefined ? '' : ', ' + q('TrackRecordChanges')}
          ${newEntityDefaults.AuditRecordAccess === undefined ? '' : ', ' + q('AuditRecordAccess')}
          ${newEntityDefaults.AuditViewRuns === undefined ? '' : ', ' + q('AuditViewRuns')}
@@ -4169,7 +4205,8 @@ export class ManageMetadataBase {
          'vw${generatePluralName(newEntity.TableName, {capitalizeFirstLetterOnly: true}) + (newEntitySuffix && newEntitySuffix.length > 0 ? newEntitySuffix : '')}',
          '${newEntity.SchemaName}',
          1,
-         ${newEntityDefaults.AllowUserSearchAPI === undefined ? 1 : newEntityDefaults.AllowUserSearchAPI ? 1 : 0}
+         ${newEntityDefaults.AllowUserSearchAPI === undefined ? 1 : newEntityDefaults.AllowUserSearchAPI ? 1 : 0},
+         ${allowCaching ? 1 : 0}
          ${newEntityDefaults.TrackRecordChanges === undefined ? '' : ', ' + (newEntityDefaults.TrackRecordChanges ? '1' : '0')}
          ${newEntityDefaults.AuditRecordAccess === undefined ? '' : ', ' + (newEntityDefaults.AuditRecordAccess ? '1' : '0')}
          ${newEntityDefaults.AuditViewRuns === undefined ? '' : ', ' + (newEntityDefaults.AuditViewRuns ? '1' : '0')}
@@ -4184,6 +4221,26 @@ export class ManageMetadataBase {
    `;
 
       return sSQLInsert;
+   }
+
+   /**
+    * Resolves the AllowCaching default for a new entity in the given schema.
+    * AllowCachingBySchema entries override the global AllowCaching default. The
+    * `${mj_core_schema}` placeholder is expanded so core-schema rules apply
+    * regardless of how the core schema is named in this deployment.
+    */
+   protected resolveAllowCachingForSchema(schemaName: string): boolean {
+      const defaults = configInfo.newEntityDefaults;
+      const overrides = defaults.AllowCachingBySchema ?? [];
+      const match = overrides.find(entry => {
+         let candidate = entry.SchemaName;
+         if (candidate?.trim().toLowerCase() === '${mj_core_schema}') {
+            candidate = mj_core_schema();
+         }
+         return candidate.trim().toLowerCase() === schemaName.trim().toLowerCase();
+      });
+      if (match) return match.AllowCaching;
+      return defaults.AllowCaching ?? false;
    }
 
 

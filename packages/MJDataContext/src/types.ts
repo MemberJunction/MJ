@@ -1,4 +1,4 @@
-import { BaseEntity, DataObjectRelatedEntityParam, EntityInfo, LogError, Metadata, KeyValuePair, QueryInfo, RunQuery, RunView, RunViewParams, UserInfo, CompositeKey, IMetadataProvider, IRunViewProvider } from "@memberjunction/core";
+import { BaseEntity, DataObjectRelatedEntityParam, EntityInfo, LogError, Metadata, KeyValuePair, QueryInfo, RunQuery, RunView, RunViewParams, UserInfo, CompositeKey, IMetadataProvider } from "@memberjunction/core";
 import { MJDataContextEntity, MJDataContextItemEntity, MJDataContextItemEntityType, MJUserViewEntityExtended } from "@memberjunction/core-entities";
 import { MJGlobal, RegisterClass, UUIDsEqual } from "@memberjunction/global";
 
@@ -606,7 +606,7 @@ export class DataContext {
                 throw new Error(`Data Context ID not set or invalid`);
 
             const p = provider ? provider : Metadata.Provider; 
-            const rv = <IRunViewProvider><any>p;
+            const rv = RunView.FromMetadataProvider(p);
             const dciEntityInfo = p.Entities.find((e) => e.Name === 'MJ: Data Context Items');
             if (!dciEntityInfo)
               throw new Error(`Data Context Items entity not found`);

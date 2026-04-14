@@ -96,7 +96,7 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
 
   // Service injections
   private navigationService = inject(NavigationService);
-  private testingDialogService = inject(TestingDialogService);
+  public testingDialogService = inject(TestingDialogService);
   private evalPrefsService = inject(EvaluationPreferencesService);
   private viewContainerRef = inject(ViewContainerRef);
   private appManager = inject(ApplicationManager);
@@ -127,6 +127,13 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
       .subscribe(value => {
         this.matrixTestFilter = value;
         this.cdr.markForCheck();
+      });
+
+    // Subscribe to panel state changes so the slide panel renders in this form
+    this.testingDialogService.PanelStateChanged$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(() => {
+        this.cdr.detectChanges();
       });
   }
 
@@ -309,6 +316,11 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
     if (this.record?.ID) {
       this.testingDialogService.OpenSuitePanel(this.record.ID);
     }
+  }
+
+  OnPanelClosed(): void {
+    this.testingDialogService.ClosePanel();
+    this.cdr.markForCheck();
   }
 
   async refresh() {

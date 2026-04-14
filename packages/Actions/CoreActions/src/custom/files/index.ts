@@ -23,3 +23,10 @@ export { CreateDirectoryAction } from './create-directory.action';
 export { DeleteDirectoryAction } from './delete-directory.action';
 export { SearchStorageFilesAction } from './search-storage-files.action';
 export { ListStorageAccountsAction } from './list-storage-providers.action';
+
+// Incremental Document Building
+export { CreateDocumentAction } from './create-document.action';
+export { AddDocumentContentAction } from './add-document-content.action';
+export { PreviewDocumentAction } from './preview-document.action';
+export { ModifyDocumentSectionAction } from './modify-document-section.action';
+export { FinalizeDocumentAction } from './finalize-document.action';

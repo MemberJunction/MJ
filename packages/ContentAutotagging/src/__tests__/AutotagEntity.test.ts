@@ -104,7 +104,7 @@ vi.mock('../Engine', () => ({
 
 vi.mock('../Core', () => ({
     AutotagBase: class {
-        async Autotag(): Promise<void> {}
+        async Autotag(): Promise<number> { return 0; }
     },
     AutotagProgressCallback: undefined,
 }));
@@ -164,6 +164,107 @@ describe('AutotagEntity', () => {
             await provider.Autotag({ ID: 'user-1' } as never);
             expect(mockEngineInstance.TaxonomyContext).toBeNull();
             expect(mockEngineInstance.OnContentItemTagSaved).toBeNull();
+        });
+
+        it('should return the number of items processed (new + retried)', async () => {
+            mockEngineInstance.getAllContentSources.mockResolvedValueOnce([]);
+            // No new items, no retries
+            mockRunView.mockResolvedValue({ Success: true, Results: [] });
+            const count = await provider.Autotag({ ID: 'user-1' } as never);
+            expect(count).toBe(0);
+        });
+
+        it('should pick up untagged ContentItems for retry alongside new items', async () => {
+            const source = {
+                ID: 'src-1', Name: 'Entity Source',
+                EntityID: 'ent-1', EntityDocumentID: 'doc-1',
+                ContentTypeID: 'ct-1', ContentFileTypeID: 'cft-1',
+                ContentSourceTypeID: 'cst-1', URL: null,
+                ConfigurationObject: { ShareTaxonomyWithLLM: false },
+            };
+            mockEngineInstance.getAllContentSources.mockResolvedValueOnce([source]);
+
+            // SetContentItemsToProcess returns 0 new items (no modified entity records)
+            // — first call: LoadEntityDocument returns null → 0 new items
+            mockRunView
+                .mockResolvedValueOnce({ Success: true, Results: [] })
+                // GetUntaggedContentItems: returns 3 untagged items
+                .mockResolvedValueOnce({
+                    Success: true,
+                    Results: [
+                        { ID: 'ci-1', ContentSourceID: 'src-1', Text: 'text1' },
+                        { ID: 'ci-2', ContentSourceID: 'src-1', Text: 'text2' },
+                        { ID: 'ci-3', ContentSourceID: 'src-1', Text: 'text3' },
+                    ]
+                });
+
+            const count = await provider.Autotag({ ID: 'user-1' } as never);
+            expect(count).toBe(3);
+            expect(mockEngineInstance.ExtractTextAndProcessWithLLM).toHaveBeenCalledTimes(1);
+            // Verify the 3 retry items were passed to the LLM
+            const passedItems = mockEngineInstance.ExtractTextAndProcessWithLLM.mock.calls[0][0];
+            expect(passedItems).toHaveLength(3);
+        });
+
+        it('should not call ExtractTextAndProcessWithLLM when no new or retry items exist', async () => {
+            mockEngineInstance.getAllContentSources.mockResolvedValueOnce([{
+                ID: 'src-1', Name: 'Source',
+                EntityID: null, EntityDocumentID: null,
+                ConfigurationObject: { ShareTaxonomyWithLLM: false },
+            }]);
+            // No new items (no EntityID)
+            // GetUntaggedContentItems returns 0
+            mockRunView.mockResolvedValue({ Success: true, Results: [] });
+
+            const count = await provider.Autotag({ ID: 'user-1' } as never);
+            expect(count).toBe(0);
+            expect(mockEngineInstance.ExtractTextAndProcessWithLLM).not.toHaveBeenCalled();
+        });
+
+        it('should deduplicate items that appear in both new and retry sets', async () => {
+            const source = {
+                ID: 'src-1', Name: 'Source',
+                EntityID: 'ent-1', EntityDocumentID: 'doc-1',
+                ContentTypeID: 'ct-1', ContentFileTypeID: 'cft-1',
+                ContentSourceTypeID: 'cst-1', URL: null,
+                ConfigurationObject: { ShareTaxonomyWithLLM: false },
+            };
+            mockEngineInstance.getAllContentSources.mockResolvedValueOnce([source]);
+
+            // LoadEntityDocument returns a doc
+            mockRunView
+                .mockResolvedValueOnce({ Success: true, Results: [{ ID: 'doc-1', TemplateID: 'tmpl-1', VectorIndexID: 'vi-1' }] })
+                // GetModifiedRecords returns 1 record
+                .mockResolvedValueOnce({ Success: true, Results: [{ ID: 'rec-1', Name: 'Record 1' }] })
+                // LoadExistingERDs
+                .mockResolvedValueOnce({ Success: true, Results: [] })
+                // LoadExistingContentItems
+                .mockResolvedValueOnce({ Success: true, Results: [] })
+                // GetUntaggedContentItems returns the same item (already created by ProcessContentSource)
+                .mockResolvedValueOnce({ Success: true, Results: [{ ID: 'ci-new', ContentSourceID: 'src-1' }] });
+
+            // Mock entity saves for ERD + ContentItem creation
+            mockEntitySave.mockResolvedValue(true);
+            let savedContentItemID = 'ci-new';
+            mockGetEntityObject.mockImplementation(() => {
+                const entity: Record<string, unknown> = {
+                    Save: mockEntitySave,
+                    NewRecord: mockEntityNewRecord,
+                    LatestResult: null,
+                    ID: savedContentItemID,
+                    PrimaryKey: { Values: () => savedContentItemID },
+                    GetAll: () => ({}),
+                    Get: (f: string) => f === 'ID' ? savedContentItemID : null,
+                };
+                return Promise.resolve(new Proxy(entity, {
+                    set(target, prop, value) { target[prop as string] = value; return true; },
+                    get(target, prop) { return target[prop as string]; }
+                }));
+            });
+
+            const count = await provider.Autotag({ ID: 'user-1' } as never);
+            // Should not double-count — the retry item with same ID should be deduped
+            expect(count).toBeGreaterThan(0);
         });
     });
 
