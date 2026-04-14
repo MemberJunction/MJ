@@ -2281,7 +2281,7 @@ export class MemoryManagerAgent extends BaseAgent {
         md: Metadata,
         contextUser: UserInfo
     ): Promise<void> {
-        const flagComment = `[Contradiction flagged: conflicts with note ${noteA.ID === llmResult.revokeNoteId ? llmResult.keepNoteId : llmResult.revokeNoteId}. ${llmResult.reason}]`;
+        const flagComment = `[Contradiction flagged: conflicts with note ${llmResult.revokeNoteId && UUIDsEqual(noteA.ID, llmResult.revokeNoteId) ? llmResult.keepNoteId : llmResult.revokeNoteId}. ${llmResult.reason}]`;
         for (const flagNote of [noteA, noteB]) {
             const noteToFlag = await md.GetEntityObject<MJAIAgentNoteEntity>('MJ: AI Agent Notes', contextUser);
             if (await noteToFlag.Load(flagNote.ID)) {
