@@ -1,6 +1,6 @@
 # Feedback Dialog UX Enhancements
 
-**Status:** 3 of 4 implemented
+**Status:** All 4 implemented
 **Author:** Matt Chriest
 **Date:** April 13, 2026
 **Branch:** `bug-reporting`
@@ -38,16 +38,12 @@ Auto-captures a screenshot of the current view when the feedback dialog opens (b
 - `packages/Angular/Generic/feedback/src/lib/components/feedback-form.component.ts` — preview UI + remove button
 - `packages/MJServer/src/resolvers/FeedbackResolver.ts` — embed in issue body
 
-### 4. LLM auto-categorization — NOT YET IMPLEMENTED
-Use an LLM to automatically categorize feedback based on title and description content.
+### 4. LLM auto-categorization — DONE
+Added `ClassifyFeedback` GraphQL mutation that uses available LLM (prefers Groq for speed, falls back to OpenAI or any configured model). Classification happens after user types title + description (1 second debounce). Category, severity, and environment dropdowns are hidden — LLM fills them automatically. Bug/feature-specific fields appear once classification completes.
 
-**Possible approaches:**
-- Client-side: Call an AI endpoint after the user finishes typing the description (with debounce)
-- Server-side: Run categorization in the FeedbackResolver before creating the issue, and apply the appropriate labels
-- Could also auto-suggest severity, affected area, and additional labels based on content
+**Files changed:**
+- `packages/MJServer/src/resolvers/FeedbackResolver.ts` — new ClassifyFeedback mutation
+- `packages/Angular/Generic/feedback/src/lib/services/feedback.service.ts` — client-side Classify() method
+- `packages/Angular/Generic/feedback/src/lib/components/feedback-form.component.ts` — debounced classification, hidden dropdowns, status indicator
 
-**Considerations:**
-- Should be a suggestion, not forced — user can override
-- Latency: should not block submission
-- Could use MJ's existing AI Prompt system for the categorization prompt
-- Server-side is simpler (no additional client-side AI dependencies)
+**Remaining:** Screenshot upload to GitHub (base64 data URLs don't render in GitHub issue markdown — would need file upload via API or external hosting)
