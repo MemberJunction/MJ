@@ -90,8 +90,14 @@ export class AnthropicLLM extends BaseLLM {
                     if (imageBlock) {
                         formattedBlocks.push(imageBlock);
                     }
+                } else if (block.type === 'file_url') {
+                    // Convert to Anthropic's document format
+                    const docBlock = this.formatDocumentBlock(block);
+                    if (docBlock) {
+                        formattedBlocks.push(docBlock);
+                    }
                 }
-                // Other types (video_url, audio_url, file_url) are not yet supported by Anthropic
+                // Note: video_url, audio_url not yet supported by Anthropic
             }
         } else {
             // Fallback for any other type
@@ -164,6 +170,76 @@ export class AnthropicLLM extends BaseLLM {
                 data: content
             }
         };
+    }
+
+    /**
+     * Format a file content block as an Anthropic document block.
+     * Anthropic supports documents in the format:
+     * { type: "document", source: { type: "base64", media_type: "application/pdf", data: "..." } }
+     *
+     * Supported MIME types: application/pdf, text/plain, text/csv, text/html,
+     * application/vnd.openxmlformats-officedocument.wordprocessingml.document (docx),
+     * application/vnd.openxmlformats-officedocument.spreadsheetml.sheet (xlsx)
+     */
+    private formatDocumentBlock(block: ChatMessageContentBlock): any | null {
+        const content = block.content;
+
+        // Determine the MIME type
+        const mimeType = block.mimeType || this.inferDocumentMimeType(block.fileName) || 'application/octet-stream';
+
+        // Check if it's a data URL (data:application/pdf;base64,...)
+        const parsed = parseBase64DataUrl(content);
+        if (parsed) {
+            return {
+                type: "document",
+                source: {
+                    type: "base64",
+                    media_type: parsed.mediaType,
+                    data: parsed.data
+                }
+            };
+        }
+
+        // Raw base64 with mimeType
+        if (mimeType && !content.startsWith('http')) {
+            return {
+                type: "document",
+                source: {
+                    type: "base64",
+                    media_type: mimeType,
+                    data: content
+                }
+            };
+        }
+
+        // URL-based documents
+        if (content.startsWith('http://') || content.startsWith('https://')) {
+            return {
+                type: "document",
+                source: {
+                    type: "url",
+                    url: content
+                }
+            };
+        }
+
+        console.warn(`Document content block has unknown format (mime: ${mimeType}), skipping`);
+        return null;
+    }
+
+    /** Infer MIME type from file extension when mimeType is not provided */
+    private inferDocumentMimeType(fileName?: string): string | null {
+        if (!fileName) return null;
+        const ext = fileName.split('.').pop()?.toLowerCase();
+        switch (ext) {
+            case 'pdf': return 'application/pdf';
+            case 'csv': return 'text/csv';
+            case 'txt': return 'text/plain';
+            case 'html': case 'htm': return 'text/html';
+            case 'docx': return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+            case 'xlsx': return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+            default: return null;
+        }
     }
 
     /**

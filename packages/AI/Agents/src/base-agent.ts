@@ -1129,6 +1129,9 @@ export class BaseAgent {
             const inputArtifacts = (wrappedParams.data as Record<string, unknown>)?.__inputArtifacts as InputArtifact[] | undefined;
             if (inputArtifacts?.length) {
                 this._artifactToolManager.Initialize(inputArtifacts);
+                LogStatus(`[ArtifactTools] Initialized with ${inputArtifacts.length} artifact(s): ${inputArtifacts.map(a => `${a.typeName}:"${a.name}"`).join(', ')}`);
+            } else {
+                LogStatus(`[ArtifactTools] No input artifacts found for this run`);
             }
 
             // Initialize starting payload — must complete before AgentRun creation since the
@@ -1999,6 +2002,9 @@ export class BaseAgent {
                 promptParams.data['_ARTIFACT_TOOLS'] = this._artifactToolManager.GetToolDocumentation();
                 promptParams.data['_ARTIFACT_TOOL_RESULTS'] = this._artifactToolManager.GetPendingResults();
                 promptParams.data['_ARTIFACT_TOOL_SUMMARY'] = this._artifactToolManager.GetSummary();
+                LogStatus(`[ArtifactTools] Injected manifest into prompt: ${this._artifactToolManager.GetSummary()}`);
+            } else if (this._artifactToolManager.HasArtifacts()) {
+                LogStatus(`[ArtifactTools] Artifacts present but tools disabled by agent config (includeArtifactToolsDocs=false)`);
             }
         }
 
@@ -5793,8 +5799,12 @@ The context is now within limits. Please retry your request with the recovered c
 
             // Execute artifact tool calls if provided (zero turn cost — processed inline)
             const artifactToolCalls = initialNextStep.artifactToolCalls as ArtifactToolCall[] | undefined;
-            if (artifactToolCalls?.length) {
-                await this._artifactToolManager.ExecuteToolCalls(artifactToolCalls);
+            const artifactToolsExecutedThisTurn = !!(artifactToolCalls?.length);
+            if (artifactToolsExecutedThisTurn) {
+                LogStatus(`[ArtifactTools] LLM requested ${artifactToolCalls!.length} tool call(s): ${artifactToolCalls!.map(c => `${c.artifactId}.${c.tool}`).join(', ')}`);
+                await this._artifactToolManager.ExecuteToolCalls(artifactToolCalls!);
+            } else if (this._artifactToolManager.HasArtifacts()) {
+                LogStatus(`[ArtifactTools] LLM did not use artifact tools this turn (artifacts available but not accessed)`);
             }
 
             // now that we have processed the payload, we can process the next step which does validation and changes the next step if
@@ -5863,6 +5873,15 @@ The context is now within limits. Please retry your request with the recovered c
             
             // Return based on next step
             if (updatedNextStep.step === 'Chat') {
+                // If artifact tools were called THIS turn, don't terminate yet — the LLM
+                // needs one more turn to see the results and incorporate them into its response.
+                // Without this, the tool results are wasted because the run exits before
+                // the LLM ever sees them.
+                if (artifactToolsExecutedThisTurn && this._artifactToolManager.HasArtifacts()) {
+                    LogStatus(`[ArtifactTools] Chat step included tool calls — forcing one more turn so LLM can use results`);
+                    return { ...updatedNextStep, terminate: false, step: 'Retry' as BaseAgentNextStep<P>['step'] };
+                }
+
                 // For root agents, create a persistent AIAgentRequest so the request is
                 // tracked in the dashboard and can be responded to outside a conversation.
                 // This is done here because Chat decisions from executePromptStep terminate
