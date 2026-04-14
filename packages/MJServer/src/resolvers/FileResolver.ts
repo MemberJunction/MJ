@@ -368,9 +368,21 @@ export class FileResolver extends FileResolverBase {
     return { account, provider };
   }
 
+  /**
+   * Legacy file upload path — used by the `<mj-files-file-upload>` Angular component.
+   * Creates a File entity record in the database AND generates a pre-authenticated upload URL.
+   * The client then PUTs the file binary directly to that URL.
+   *
+   * Driver initialization: uses `buildUserContext()` (no storage account). The driver
+   * initializes from environment variables (e.g. STORAGE_AZURE_ACCOUNT_NAME, STORAGE_DROPBOX_ACCESS_TOKEN).
+   *
+   * Input: `ProviderID` identifies which storage provider to use.
+   * Returns: `{ File, UploadUrl, NameExists }` — the persisted File record, upload URL, and duplicate check.
+   *
+   * @see CreatePreAuthUploadUrl for the enterprise storage-account-based path (used by File Browser).
+   */
   @Mutation(() => CreateFilePayload)
   async CreateFile(@Arg('input', () => CreateMJFileInput) input: CreateMJFileInput, @Ctx() context: AppContext, @PubSub() pubSub: PubSubEngine) {
-    // Check to see if there's already an object with that name
     const provider = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true });
     const user = this.GetUserFromPayload(context.userPayload);
     const fileEntity = await provider.GetEntityObject<MJFileEntity>('MJ: Files', user);
@@ -537,6 +549,20 @@ export class FileResolver extends FileResolverBase {
     return downloadUrl;
   }
 
+  /**
+   * Enterprise file upload path — used by the File Browser UI.
+   * Generates a pre-authenticated upload URL only (does NOT create a File entity record).
+   * The client handles the upload directly to the storage provider via the returned URL.
+   *
+   * Driver initialization: uses `buildExtendedUserContext()` with a FileStorageAccount entity.
+   * Credentials are loaded from the Credential Engine (encrypted in the database), with
+   * automatic token refresh for OAuth providers like Dropbox and Box.com.
+   *
+   * Input: `AccountID` identifies which storage account (and its linked provider/credentials) to use.
+   * Returns: `{ UploadUrl, ProviderKey }` — the pre-authenticated URL and optional provider key.
+   *
+   * @see CreateFile for the legacy path that also creates a File entity record.
+   */
   @Mutation(() => CreatePreAuthUploadUrlPayload)
   async CreatePreAuthUploadUrl(@Arg('input', () => CreatePreAuthUploadUrlInput) input: CreatePreAuthUploadUrlInput, @Ctx() context: AppContext) {
     const md = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true });
