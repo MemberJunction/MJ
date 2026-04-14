@@ -1299,6 +1299,14 @@ export class EntityInfo extends BaseInfo {
      */
     TrustServerCacheCompletely: boolean = true
     /**
+     * Controls whether this entity participates in server-side and client-side
+     * caching at all. When false (default for non-__mj entities), the entire
+     * cache code path is short-circuited: no PreRunView cache check, no
+     * auto-cache storage, no HandleBaseEntityEvent fingerprint scan, no
+     * client-side IndexedDB cache. Zero overhead on hot save/query paths.
+     */
+    AllowCaching: boolean = false
+    /**
      * Whether this entity is available through the GraphQL API
      */
     IncludeInAPI: boolean = false
