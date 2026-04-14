@@ -14,9 +14,8 @@
  * See BaseServerMiddleware for details.
  */
 
-import { serve, createApp, MJServerOptions } from '@memberjunction/server';
+import { serve, MJServerOptions } from '@memberjunction/server';
 import { cosmiconfigSync } from 'cosmiconfig';
-import { Application, Router } from 'express';
 
 /**
  * Configuration options for creating an MJ Server
@@ -47,27 +46,6 @@ export interface MJServerConfig {
    * Options for REST API configuration
    */
   restApiOptions?: MJServerOptions['restApiOptions'];
-
-  /**
-   * Custom Express middleware/routers to add before the server starts.
-   * These are added to the Express app before the GraphQL endpoint is set up.
-   *
-   * @example
-   * ```typescript
-   * createMJServer({
-   *   customMiddleware: (app) => {
-   *     // Add custom health check endpoint
-   *     app.get('/health', (req, res) => {
-   *       res.json({ status: 'ok', timestamp: new Date().toISOString() });
-   *     });
-   *
-   *     // Add custom API routes
-   *     app.use('/api/custom', myCustomRouter);
-   *   }
-   * });
-   * ```
-   */
-  customMiddleware?: (app: Application) => void | Promise<void>;
 }
 
 /**
@@ -197,16 +175,6 @@ export async function createMJServer(options: MJServerConfig = {}): Promise<void
     restApiOptions: options.restApiOptions,
   };
 
-  // Create Express app
-  const app = createApp();
-
-  // Apply custom middleware if provided
-  if (options.customMiddleware) {
-    console.log('Applying custom middleware...');
-    await Promise.resolve(options.customMiddleware(app));
-    console.log('');
-  }
-
   // Start the MJ Server
   // The serve() function from @memberjunction/server handles:
   // - Database connection pooling
@@ -216,7 +184,7 @@ export async function createMJServer(options: MJServerConfig = {}): Promise<void
   // - REST API endpoint registration
   // - Graceful shutdown handling
   console.log('Starting MemberJunction Server...\n');
-  await serve(resolverPaths, app, serverOptions);
+  await serve(resolverPaths, undefined, serverOptions);
 
   // Optional post-start hook
   if (options.afterStart) {
