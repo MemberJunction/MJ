@@ -33,26 +33,6 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 
       @if (!IsSubmitting && !SubmissionSuccess) {
         <div class="feedback-form-content">
-          <!-- Category -->
-          <div class="feedback-section">
-            <label class="feedback-label">
-              Category <span class="required">*</span>
-            </label>
-            <select
-              class="mj-select"
-              [(ngModel)]="Category"
-              (ngModelChange)="OnCategoryChange($event)">
-              @for (cat of Categories; track cat.value) {
-                <option [value]="cat.value">{{ cat.label }}</option>
-              }
-            </select>
-            @if (SelectedCategoryDescription) {
-              <div class="category-description">
-                {{ SelectedCategoryDescription }}
-              </div>
-            }
-          </div>
-
           <!-- Title -->
           <div class="feedback-section">
             <label class="feedback-label">
@@ -83,6 +63,15 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
             <div class="char-count" [class.warning]="Description.length < 20">
               {{ Description.length }}/10000 (minimum 20 characters)
             </div>
+            @if (IsClassifying) {
+              <div class="classify-indicator">
+                <i class="fas fa-spinner fa-spin"></i> Analyzing feedback type...
+              </div>
+            } @else if (WasAutoClassified) {
+              <div class="classify-indicator classified">
+                <i class="fas fa-wand-magic-sparkles"></i> Classified as {{ Category }}
+              </div>
+            }
           </div>
 
           <!-- Bug-specific fields -->
@@ -125,17 +114,7 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
               </div>
             }
 
-            <!-- Severity -->
-            @if (FieldConfig.showSeverity) {
-              <div class="feedback-section">
-                <label class="feedback-label">Severity</label>
-                <select class="mj-select severity-select" [(ngModel)]="Severity">
-                  @for (sev of Severities; track sev.value) {
-                    <option [value]="sev.value">{{ sev.label }}</option>
-                  }
-                </select>
-              </div>
-            }
+            <!-- Severity is auto-classified by LLM, no dropdown needed -->
           }
 
           <!-- Feature-specific fields -->
@@ -167,31 +146,7 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
             }
           }
 
-          <!-- Environment and Affected Area row -->
-          @if (FieldConfig.showEnvironment || FieldConfig.showAffectedArea) {
-            <div class="feedback-row">
-              @if (FieldConfig.showEnvironment) {
-                <div class="feedback-section half">
-                  <label class="feedback-label">Environment</label>
-                  <select class="mj-select" [(ngModel)]="Environment">
-                    @for (env of Environments; track env.value) {
-                      <option [value]="env.value">{{ env.label }}</option>
-                    }
-                  </select>
-                </div>
-              }
-              @if (FieldConfig.showAffectedArea && AffectedAreas.length > 0) {
-                <div class="feedback-section half">
-                  <label class="feedback-label">Affected Area</label>
-                  <select class="mj-select" [(ngModel)]="AffectedArea">
-                    @for (area of AffectedAreas; track area) {
-                      <option [value]="area">{{ area }}</option>
-                    }
-                  </select>
-                </div>
-              }
-            </div>
-          }
+          <!-- Environment and affected area are auto-classified by LLM -->
 
           <!-- Contact info row -->
           @if (FieldConfig.showName || FieldConfig.showEmail) {
@@ -355,6 +310,18 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
       color: var(--mj-text-muted);
     }
 
+    .classify-indicator {
+      font-size: var(--mj-text-xs);
+      color: var(--mj-text-muted);
+      display: flex;
+      align-items: center;
+      gap: var(--mj-space-1-5);
+    }
+
+    .classify-indicator.classified {
+      color: var(--mj-brand-primary);
+    }
+
     .category-description {
       font-size: var(--mj-text-xs);
       color: var(--mj-text-secondary);
@@ -402,13 +369,11 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
       border: 1px solid var(--mj-border-default);
       border-radius: var(--mj-radius-md);
       overflow: hidden;
-      max-height: 150px;
     }
 
     .screenshot-preview img {
       width: 100%;
       display: block;
-      object-fit: cover;
     }
 
     .screenshot-remove {
@@ -517,11 +482,14 @@ export class FeedbackFormComponent implements OnInit {
 
   // State
   IsSubmitting = false;
+  IsClassifying = false;
+  WasAutoClassified = false;
   SubmissionSuccess = false;
   ErrorMessage = '';
   IssueNumber?: number;
   IssueUrl?: string;
   ScreenshotDataUrl?: string;
+  private classifyTimeout?: ReturnType<typeof setTimeout>;
 
   // Merged field config
   FieldConfig: Required<FeedbackFieldConfig>;
@@ -572,13 +540,49 @@ export class FeedbackFormComponent implements OnInit {
    * Handle category change
    */
   OnCategoryChange(_value: string): void {
+    this.WasAutoClassified = false;
     this.cdr.detectChanges();
   }
 
   /**
-   * Handle field value changes to ensure button state updates
+   * Handle field value changes to ensure button state updates.
+   * Triggers LLM auto-classification after a debounce when description is long enough.
    */
   OnFieldChange(): void {
+    this.cdr.detectChanges();
+    this.scheduleClassification();
+  }
+
+  /**
+   * Schedule LLM classification with debounce (1 second after user stops typing)
+   */
+  private scheduleClassification(): void {
+    if (this.classifyTimeout) {
+      clearTimeout(this.classifyTimeout);
+    }
+    // Only classify if we have enough text and haven't already classified this content
+    if (this.Title.trim().length >= 5 && this.Description.trim().length >= 20 && !this.WasAutoClassified) {
+      this.classifyTimeout = setTimeout(() => this.runClassification(), 1000);
+    }
+  }
+
+  /**
+   * Run LLM classification and apply suggestions
+   */
+  private async runClassification(): Promise<void> {
+    if (this.IsClassifying || this.IsSubmitting) return;
+
+    this.IsClassifying = true;
+    this.cdr.detectChanges();
+
+    const result = await this.feedbackService.Classify(this.Title.trim(), this.Description.trim());
+
+    this.IsClassifying = false;
+    if (result) {
+      this.Category = result.category;
+      this.Severity = result.severity as FeedbackSeverity;
+      this.WasAutoClassified = true;
+    }
     this.cdr.detectChanges();
   }
 

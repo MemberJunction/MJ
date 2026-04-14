@@ -7,6 +7,20 @@ import { FeedbackSubmission, FeedbackResponse } from '../feedback.types';
 import { FeedbackConfig, FEEDBACK_CONFIG } from '../feedback.config';
 
 /**
+ * GraphQL mutation for classifying feedback via LLM
+ */
+const CLASSIFY_FEEDBACK_MUTATION = gql`
+  mutation ClassifyFeedback($input: ClassifyFeedbackInput!) {
+    ClassifyFeedback(input: $input) {
+      Success
+      Category
+      Severity
+      Error
+    }
+  }
+`;
+
+/**
  * GraphQL mutation for submitting feedback
  */
 const SUBMIT_FEEDBACK_MUTATION = gql`
@@ -40,6 +54,29 @@ export class FeedbackService {
    */
   public GetConfig(): FeedbackConfig {
     return this.config;
+  }
+
+  /**
+   * Classify feedback using an LLM to suggest category and severity.
+   * Returns null if classification fails — callers should fall back to manual selection.
+   */
+  public async Classify(title: string, description: string): Promise<{ category: string; severity: string } | null> {
+    try {
+      const provider = Metadata.Provider as GraphQLDataProvider;
+      const result = await provider.ExecuteGQL(CLASSIFY_FEEDBACK_MUTATION, {
+        input: { Title: title, Description: description }
+      }) as ClassifyFeedbackResult;
+
+      if (result?.ClassifyFeedback?.Success) {
+        return {
+          category: result.ClassifyFeedback.Category!,
+          severity: result.ClassifyFeedback.Severity!
+        };
+      }
+      return null;
+    } catch {
+      return null;
+    }
   }
 
   /**
@@ -210,6 +247,18 @@ interface SubmitFeedbackResult {
     Success: boolean;
     IssueNumber?: number;
     IssueUrl?: string;
+    Error?: string;
+  };
+}
+
+/**
+ * GraphQL result type for classification
+ */
+interface ClassifyFeedbackResult {
+  ClassifyFeedback: {
+    Success: boolean;
+    Category?: string;
+    Severity?: string;
     Error?: string;
   };
 }

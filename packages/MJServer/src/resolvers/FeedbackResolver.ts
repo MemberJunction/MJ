@@ -5,6 +5,9 @@ import { LogError, LogStatus } from '@memberjunction/core';
 import { AppContext } from '../types.js';
 import { configInfo } from '../config.js';
 import { z } from 'zod';
+import { ChatParams, ChatMessage, ChatMessageRole, GetAIAPIKey, BaseLLM } from '@memberjunction/ai';
+import { AIEngine } from '@memberjunction/aiengine';
+import { MJGlobal } from '@memberjunction/global';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 import { homedir } from 'os';
@@ -100,6 +103,36 @@ export class FeedbackResponseType {
 
   @Field({ nullable: true })
   IssueUrl?: string;
+
+  @Field({ nullable: true })
+  Error?: string;
+}
+
+/**
+ * Input type for feedback classification
+ */
+@InputType()
+export class ClassifyFeedbackInput {
+  @Field()
+  Title: string;
+
+  @Field()
+  Description: string;
+}
+
+/**
+ * Response type for feedback classification
+ */
+@ObjectType()
+export class FeedbackClassificationResult {
+  @Field()
+  Success: boolean;
+
+  @Field({ nullable: true })
+  Category?: string;
+
+  @Field({ nullable: true })
+  Severity?: string;
 
   @Field({ nullable: true })
   Error?: string;
@@ -264,6 +297,92 @@ export class FeedbackResolver {
         Success: false,
         Error: message,
       };
+    }
+  }
+
+  /**
+   * Classify feedback using an LLM to suggest category and severity.
+   */
+  @Mutation(() => FeedbackClassificationResult)
+  async ClassifyFeedback(
+    @Arg('input') input: ClassifyFeedbackInput,
+    @Ctx() ctx: AppContext
+  ): Promise<FeedbackClassificationResult> {
+    try {
+      // Get the current context user for AIEngine config
+      const contextUser = ctx.userPayload?.userRecord;
+      await AIEngine.Instance.Config(false, contextUser);
+
+      // Get active LLM models with valid API keys
+      const allModels = AIEngine.Instance.Models.filter(m =>
+        m.AIModelType?.trim().toLowerCase() === 'llm' && m.IsActive
+      );
+      const models = allModels.filter(m => {
+        const key = GetAIAPIKey(m.DriverClass);
+        return key && key.trim().length > 0;
+      });
+
+      if (models.length === 0) {
+        return { Success: false, Error: 'No AI models configured' };
+      }
+
+      // Pick a fast, cheap model — prefer Groq, then OpenAI, then any available
+      const model = models.find(m => m.DriverClass === 'GroqLLM')
+        || models.find(m => m.DriverClass === 'OpenAILLM')
+        || models[0];
+
+      const apiKey = GetAIAPIKey(model.DriverClass);
+      const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(
+        BaseLLM, model.DriverClass, apiKey
+      );
+
+      if (!llm) {
+        return { Success: false, Error: 'Failed to create LLM instance' };
+      }
+
+      const chatParams = new ChatParams();
+      chatParams.model = model.APIName;
+      chatParams.messages = [
+        {
+          role: ChatMessageRole.system,
+          content: `You are a feedback classifier. Given a title and description, respond with ONLY a JSON object:
+{"category": "bug"|"feature"|"question"|"other", "severity": "critical"|"major"|"minor"|"trivial"}
+
+Rules:
+- "bug": something broken, error, crash, unexpected behavior
+- "feature": request for new functionality, improvement, enhancement
+- "question": asking how something works, seeking help
+- "other": doesn't fit above categories
+- "critical": system unusable, data loss, security issue
+- "major": significant functionality broken, no workaround
+- "minor": something doesn't work perfectly but has a workaround
+- "trivial": cosmetic, typo, minor visual issue`
+        },
+        {
+          role: ChatMessageRole.user,
+          content: `Title: ${input.Title}\nDescription: ${input.Description}`
+        }
+      ];
+
+      const result = await llm.ChatCompletion(chatParams);
+      const content = result?.data?.choices?.[0]?.message?.content?.trim();
+
+      if (!content) {
+        return { Success: false, Error: 'Empty response from AI' };
+      }
+
+      // Parse JSON from response (handle potential markdown code fences)
+      const jsonStr = content.replace(/```json?\s*/g, '').replace(/```/g, '').trim();
+      const parsed = JSON.parse(jsonStr);
+
+      return {
+        Success: true,
+        Category: parsed.category,
+        Severity: parsed.severity
+      };
+    } catch (error) {
+      LogError('Error classifying feedback', undefined, error);
+      return { Success: false, Error: 'Classification failed' };
     }
   }
 
@@ -621,7 +740,10 @@ export class FeedbackResolver {
   }
 
   /**
-   * Format the screenshot section — embeds the base64 image if present in metadata
+   * Format the screenshot section.
+   * GitHub doesn't render base64 data URLs in issue markdown, so we just
+   * note that a screenshot was captured. The screenshot is still visible
+   * to the user in the feedback dialog before submission.
    */
   private formatScreenshotSection(submission: FeedbackSubmission): string {
     const screenshot = submission.metadata?.screenshot;
@@ -629,15 +751,10 @@ export class FeedbackResolver {
       return '';
     }
 
-    // Remove screenshot from metadata so it doesn't appear in the JSON section too
+    // Remove screenshot from metadata so the large base64 string doesn't bloat the issue
     delete submission.metadata!.screenshot;
 
-    return [
-      '## Screenshot',
-      '',
-      `![Screenshot](${screenshot})`,
-      '',
-    ].join('\n');
+    return '> A screenshot was captured at the time of submission.\n';
   }
 
   /**

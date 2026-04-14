@@ -2571,25 +2571,26 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
 
   /**
    * Open the feedback dialog with current workspace context.
-   * Captures a screenshot of the current view to include with the feedback.
+   * Captures a screenshot in the background and attaches it once ready.
    */
-  async ShowFeedbackDialog(): Promise<void> {
+  ShowFeedbackDialog(): void {
     const config = this.workspaceManager.GetConfiguration();
     const currentPage = config?.tabs
       ?.map(t => t.title)
       .filter(Boolean)
       .join(' \u2192 ') || undefined;
 
-    // Capture screenshot before opening dialog (dialog would overlay the content)
-    let screenshot: string | undefined;
-    if (this.tabContainerRef) {
-      screenshot = await this.tabContainerRef.CaptureActiveThumbnail();
-    }
+    // Open dialog immediately — don't make the user wait for screenshot
+    this.feedbackDialogService.OpenFeedbackDialog({ currentPage });
 
-    this.feedbackDialogService.OpenFeedbackDialog({
-      currentPage,
-      contextData: screenshot ? { screenshot } : undefined
-    });
+    // Capture screenshot in the background and attach via service
+    if (this.tabContainerRef) {
+      this.tabContainerRef.CaptureActiveThumbnail().then(screenshot => {
+        if (screenshot) {
+          this.feedbackDialogService.AttachScreenshot(screenshot);
+        }
+      });
+    }
   }
 
   // ========================================

@@ -136,6 +136,23 @@ export class FeedbackDialogService {
   }
 
   /**
+   * Attach a screenshot to the currently open feedback dialog.
+   * Called asynchronously after the dialog is already open.
+   */
+  public AttachScreenshot(screenshotDataUrl: string): void {
+    if (this.activeComponentRef && !this.activeComponentRef.hostView.destroyed) {
+      const instance = this.activeComponentRef.instance;
+      instance.ScreenshotDataUrl = screenshotDataUrl;
+      if (!instance.ContextData) {
+        instance.ContextData = {};
+      }
+      instance.ContextData['screenshot'] = screenshotDataUrl;
+      // Trigger change detection since this happens asynchronously after render
+      this.activeComponentRef.changeDetectorRef.detectChanges();
+    }
+  }
+
+  /**
    * Close all open feedback dialogs
    */
   public CloseAllDialogs(): void {
