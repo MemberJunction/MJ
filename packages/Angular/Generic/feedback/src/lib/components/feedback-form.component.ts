@@ -561,7 +561,7 @@ export class FeedbackFormComponent implements OnInit {
       clearTimeout(this.classifyTimeout);
     }
     // Only classify if we have enough text and haven't already classified this content
-    if (this.Title.trim().length >= 5 && this.Description.trim().length >= 20 && !this.WasAutoClassified) {
+    if (this.Title.trim().length >= 5 && this.Description.trim().length >= 20) {
       this.classifyTimeout = setTimeout(() => this.runClassification(), 1000);
     }
   }

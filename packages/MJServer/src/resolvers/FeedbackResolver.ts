@@ -313,13 +313,17 @@ export class FeedbackResolver {
       const contextUser = ctx.userPayload?.userRecord;
       await AIEngine.Instance.Config(false, contextUser);
 
-      // Get active LLM models with valid API keys
+      // Get active LLM models with valid API keys (guard against null DriverClass)
       const allModels = AIEngine.Instance.Models.filter(m =>
-        m.AIModelType?.trim().toLowerCase() === 'llm' && m.IsActive
+        m.AIModelType?.trim().toLowerCase() === 'llm' && m.IsActive && m.DriverClass
       );
       const models = allModels.filter(m => {
-        const key = GetAIAPIKey(m.DriverClass);
-        return key && key.trim().length > 0;
+        try {
+          const key = GetAIAPIKey(m.DriverClass);
+          return key && key.trim().length > 0;
+        } catch {
+          return false;
+        }
       });
 
       if (models.length === 0) {
@@ -348,19 +352,21 @@ export class FeedbackResolver {
           content: `Classify this user feedback. Respond with ONLY a JSON object, no other text:
 {"category": "bug"|"feature"|"question"|"other", "severity": "critical"|"major"|"minor"|"trivial"}
 
-CATEGORY — what type of feedback is this:
-- "bug" = something is broken, not working, error, crash, blocking
-- "feature" = requesting new functionality or improvement
-- "question" = asking for help or how something works
-- "other" = none of the above
+Step 1 — CATEGORY. Read carefully and choose the best fit:
+- "question" = user is ASKING something: "how do I", "where is", "can I", "is it possible", "help me understand". Questions are NOT bugs.
+- "feature" = user WANTS something new: "it would be nice", "can you add", "I wish", "please add", "would love to see"
+- "bug" = something is BROKEN: "error", "crash", "doesn't work", "stopped working", "broken", "fails", "unexpected behavior"
+- "other" = doesn't fit the above
 
-SEVERITY — how bad is the impact. Read the user's words carefully:
-- "critical" = system completely unusable, data loss, security vulnerability
-- "major" = user is BLOCKED from completing their work. Look for: "preventing", "can't", "unable to", "blocking", "essential", "important task", "need to". ANY mention of being blocked or prevented = "major"
-- "minor" = annoying but user can still work around it
-- "trivial" = cosmetic only, typo, visual glitch
-
-IMPORTANT: Default to "major" unless the description clearly indicates a minor or trivial issue. Err on the side of higher severity.`
+Step 2 — SEVERITY. Depends on the category:
+- If category is "question" → severity is "trivial"
+- If category is "feature" → severity is "minor"
+- If category is "other" → severity is "minor"
+- If category is "bug" → read the user's language about impact:
+  - "critical" = system completely unusable, data loss, security issue
+  - "major" = user says they are blocked or prevented from completing work
+  - "minor" = something is wrong but user can work around it
+  - "trivial" = cosmetic, typo, visual glitch`
         },
         {
           role: ChatMessageRole.user,
@@ -802,15 +808,29 @@ IMPORTANT: Default to "major" unless the description clearly indicates a minor o
   }
 
   /**
-   * Remove screenshot from metadata to prevent the large base64 string from
-   * bloating the issue body. The actual screenshot upload and embedding
-   * is handled in createGitHubIssue() after the issue is created.
+   * Format the screenshot section. Embeds the base64 data in a collapsed block
+   * that AI agents can parse, even though GitHub won't render it visually.
+   * If the file upload succeeds (in createGitHubIssue), the issue body gets
+   * updated with a rendered image above this block.
    */
   private formatScreenshotSection(submission: FeedbackSubmission): string {
-    if (submission.metadata?.screenshot) {
-      delete submission.metadata.screenshot;
+    const screenshot = submission.metadata?.screenshot;
+    if (!screenshot || typeof screenshot !== 'string') {
+      return '';
     }
-    return '';
+
+    // Remove from metadata so it doesn't also appear in the JSON section
+    delete submission.metadata!.screenshot;
+
+    return [
+      '<details>',
+      '<summary>📷 Screenshot (for AI agents — not rendered by GitHub)</summary>',
+      '',
+      `![Screenshot](${screenshot})`,
+      '',
+      '</details>',
+      '',
+    ].join('\n');
   }
 
   /**

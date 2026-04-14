@@ -2573,24 +2573,37 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
    * Open the feedback dialog with current workspace context.
    * Captures a screenshot in the background and attaches it once ready.
    */
-  ShowFeedbackDialog(): void {
+  async ShowFeedbackDialog(): Promise<void> {
     const config = this.workspaceManager.GetConfiguration();
     const currentPage = config?.tabs
       ?.map(t => t.title)
       .filter(Boolean)
       .join(' \u2192 ') || undefined;
 
-    // Open dialog immediately — don't make the user wait for screenshot
-    this.feedbackDialogService.OpenFeedbackDialog({ currentPage });
-
-    // Capture screenshot in the background and attach via service
-    if (this.tabContainerRef) {
-      this.tabContainerRef.CaptureActiveThumbnail().then(screenshot => {
-        if (screenshot) {
-          this.feedbackDialogService.AttachScreenshot(screenshot);
+    // Capture screenshot BEFORE opening the dialog — the dialog backdrop blocks capture
+    let screenshot: string | undefined;
+    try {
+      // Try tab container first, then fall back to the main content area
+      if (this.tabContainerRef) {
+        screenshot = await this.tabContainerRef.CaptureActiveThumbnail();
+      }
+      if (!screenshot) {
+        // Fall back to capturing the entire shell content area
+        const { toJpeg } = await import('html-to-image');
+        const contentEl = document.querySelector('.shell-content') as HTMLElement
+          || document.querySelector('mj-tab-container') as HTMLElement;
+        if (contentEl && contentEl.clientWidth > 0 && contentEl.clientHeight > 0) {
+          screenshot = await toJpeg(contentEl, { quality: 0.6, pixelRatio: 0.3, cacheBust: true });
         }
-      });
+      }
+    } catch {
+      // Screenshot is best-effort
     }
+
+    this.feedbackDialogService.OpenFeedbackDialog({
+      currentPage,
+      contextData: screenshot ? { screenshot } : undefined,
+    });
   }
 
   // ========================================

@@ -3,7 +3,7 @@ import { Observable, from, BehaviorSubject, throwError } from 'rxjs';
 import { catchError, tap, map } from 'rxjs/operators';
 import { GraphQLDataProvider, gql } from '@memberjunction/graphql-dataprovider';
 import { Metadata } from '@memberjunction/core';
-import { FeedbackSubmission, FeedbackResponse } from '../feedback.types';
+import { FeedbackSubmission, FeedbackResponse, FeedbackEnvironment } from '../feedback.types';
 import { FeedbackConfig, FEEDBACK_CONFIG } from '../feedback.config';
 
 /**
@@ -152,12 +152,30 @@ export class FeedbackService {
       name: data.name || currentUser?.Name,
       email: data.email || currentUser?.Email,
       // Auto-capture environment data
+      environment: data.environment || this.detectEnvironment(),
       userAgent: data.userAgent || navigator.userAgent,
       screenSize: data.screenSize || `${window.innerWidth}x${window.innerHeight}`,
       appName: data.appName || this.config.appName,
       appVersion: data.appVersion || this.config.appVersion,
       timestamp: data.timestamp || new Date().toISOString()
     };
+  }
+
+  /**
+   * Detect environment from the current URL hostname
+   */
+  private detectEnvironment(): FeedbackEnvironment {
+    const hostname = window.location.hostname;
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return 'local';
+    }
+    if (hostname.includes('staging') || hostname.includes('stage')) {
+      return 'staging';
+    }
+    if (hostname.includes('dev')) {
+      return 'development';
+    }
+    return 'production';
   }
 
   /**

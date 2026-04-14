@@ -46,18 +46,36 @@ Added `ClassifyFeedback` GraphQL mutation that uses available LLM (prefers Groq 
 - `packages/Angular/Generic/feedback/src/lib/services/feedback.service.ts` — client-side Classify() method
 - `packages/Angular/Generic/feedback/src/lib/components/feedback-form.component.ts` — debounced classification, hidden dropdowns, status indicator
 
-## Remaining Work
+## Screenshot Strategy Decision
 
-### Screenshot upload to GitHub — CODE DONE, PERMISSION NEEDED
-The upload code is implemented in `FeedbackResolver.ts` — after creating an issue, it uploads the screenshot to `.github/feedback-screenshots/{issueNumber}-{timestamp}.jpg` using `octokit.repos.createOrUpdateFileContents`, then updates the issue body with the raw GitHub URL.
+### Current: Base64 embedded in issue body (for AI agents)
+The screenshot is embedded as a base64 data URL inside a collapsible `<details>` block in the GitHub issue body. GitHub doesn't render base64 images in the web UI, but AI agents can read the data via the GitHub API and decode/analyze it with vision-capable models.
 
-**Blocker:** The GitHub App (App ID `3366722`) only has **Issues: Read & Write** permission. The upload requires **Contents: Read & Write** permission. Currently returns `403: Resource not accessible by integration`.
+**Why this works for us:** Our triage workflow relies on AI agents, not humans manually reading every issue. The base64 data is self-contained — no extra infrastructure, no permissions, no broken image links, works across any repo.
 
-**To unblock:**
+| Base64 (current) | File upload (future option) |
+|---|---|
+| Works today, no extra permissions | Requires Contents:write on GitHub App |
+| AI agents can read via API | Humans AND AI can see the image |
+| Zero infrastructure | Creates files that accumulate in repo |
+| Bloats issue body (~5-15KB per screenshot) | Clean issue body |
+| Humans can't see it on GitHub web UI | Standard GitHub image rendering |
+
+### Future option: File upload to repo
+Code is already implemented in `FeedbackResolver.ts` — uploads to `.github/feedback-screenshots/` and updates the issue body with the rendered image URL. Currently blocked on GitHub App needing **Contents: Read & Write** permission (returns 403).
+
+If both approaches are enabled, the issue gets: (1) a rendered image for humans, and (2) the base64 fallback for AI agents. The code already attempts the upload and falls back gracefully.
+
+**To unblock file upload:**
 1. Someone with org admin access goes to the GitHub App settings
 2. Under **Repository permissions**, set **Contents** to **Read and write**
 3. Save — the app installation may need to be re-approved by the org
 4. No code changes needed — the upload will work once the permission is granted
 
+## Remaining Work
+
 ### Multi-repo feedback routing — SPECCED, NOT IMPLEMENTED
 See `plans/multi-repo-feedback-routing.md` for the full spec. Allows each app to target a different GitHub repo for its feedback issues.
+
+### Screenshot not appearing in dialog
+The screenshot capture (`CaptureActiveThumbnail`) runs async after the dialog opens, but the dialog's backdrop overlay may be blocking the capture. Needs investigation — the capture may need to happen before the dialog opens (which adds a brief delay) or the capture method needs to ignore overlays.
