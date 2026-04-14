@@ -4,7 +4,7 @@
 import { GoogleGenAI, Content, Part, Blob} from "@google/genai";
 
 // MJ stuff
-import { BaseLLM, ChatMessage, ChatParams, ChatResult, SummarizeParams, SummarizeResult, StreamingChatCallbacks, ChatMessageContent, ModelUsage, ErrorAnalyzer } from "@memberjunction/ai";
+import { BaseLLM, ChatMessage, ChatParams, ChatResult, SummarizeParams, SummarizeResult, StreamingChatCallbacks, ChatMessageContent, ModelUsage, ErrorAnalyzer, FileCapabilities } from "@memberjunction/ai";
 import { RegisterClass } from "@memberjunction/global";
 
 @RegisterClass(BaseLLM, "GeminiLLM")
@@ -56,6 +56,24 @@ export class GeminiLLM extends BaseLLM {
 
         this._gemini = await this._geminiPromise;
         return this._gemini;
+    }
+
+    /**
+     * Gemini supports a wide range of file types natively, including via the Files API.
+     */
+    public override GetFileCapabilities(): FileCapabilities | null {
+        return {
+            SupportedMimeTypes: [
+                'application/pdf',
+                'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+                'audio/mp3', 'audio/wav', 'audio/ogg',
+                'video/mp4', 'video/webm',
+                'text/plain', 'text/csv', 'text/html',
+            ],
+            MaxFileSize: 20 * 1024 * 1024,
+            MaxFilesPerRequest: 10,
+            HasFileAPI: true,
+        };
     }
 
     /**

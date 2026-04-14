@@ -2,7 +2,7 @@ import { Anthropic } from "@anthropic-ai/sdk";
 import { MessageCreateParams, MessageParam } from "@anthropic-ai/sdk/resources/messages";
 import { BaseLLM, ChatMessage, ChatMessageRole, ChatMessageContent, ChatMessageContentBlock, ChatParams, ChatResult, ClassifyParams, ClassifyResult,
     GetSystemPromptFromChatParams, GetUserMessageFromChatParams, SummarizeParams,
-    SummarizeResult, ModelUsage, ErrorAnalyzer, parseBase64DataUrl } from "@memberjunction/ai";
+    SummarizeResult, ModelUsage, ErrorAnalyzer, parseBase64DataUrl, FileCapabilities } from "@memberjunction/ai";
 import { RegisterClass } from "@memberjunction/global";
 
 @RegisterClass(BaseLLM, 'AnthropicLLM')
@@ -46,6 +46,18 @@ export class AnthropicLLM extends BaseLLM {
      */
     public override get SupportsPrefill(): boolean {
         return true;
+    }
+
+    /**
+     * Anthropic supports PDF and image file inputs natively.
+     */
+    public override GetFileCapabilities(): FileCapabilities | null {
+        return {
+            SupportedMimeTypes: ['application/pdf', 'image/jpeg', 'image/png', 'image/gif', 'image/webp'],
+            MaxFileSize: 32 * 1024 * 1024,
+            MaxFilesPerRequest: 5,
+            HasFileAPI: false,
+        };
     }
 
     /**

@@ -183,7 +183,7 @@ export class ArtifactToolManager {
       '## Artifact Tool Results',
       '',
       'These are results from your previous artifact tool calls. **Use these results to answer the user — do NOT re-call the same tools.**',
-      ''
+      '',
     ].join('\n');
 
     // Render each result, capping individual results that are disproportionately large
@@ -195,8 +195,9 @@ export class ArtifactToolManager {
       if (stored.result.success) {
         let data = typeof stored.result.data === 'string' ? stored.result.data : JSON.stringify(stored.result.data, null, 2);
         if (data.length > ArtifactToolManager.MAX_SINGLE_RESULT_CHARS) {
-          data = data.slice(0, ArtifactToolManager.MAX_SINGLE_RESULT_CHARS)
-            + `\n... (truncated — ${data.length} chars total. Use more specific tool calls to narrow results.)`;
+          data =
+            data.slice(0, ArtifactToolManager.MAX_SINGLE_RESULT_CHARS) +
+            `\n... (truncated — ${data.length} chars total. Use more specific tool calls to narrow results.)`;
         }
         lines.push('```json');
         lines.push(data);
@@ -299,6 +300,61 @@ export class ArtifactToolManager {
       })),
       resultCount: this.toolResults.length,
     };
+  }
+
+  // ─── STATIC HELPERS ───
+
+  /**
+   * Determines whether artifact content should be externalized to MJStorage
+   * instead of being stored inline.
+   */
+  static ShouldExternalizeContent(contentLength: number, options?: { maxInlineChars?: number }): { shouldExternalize: boolean; reason: string } {
+    const maxInlineChars = options?.maxInlineChars ?? 50_000;
+    if (contentLength <= maxInlineChars) {
+      return { shouldExternalize: false, reason: 'Content within inline limit' };
+    }
+    return {
+      shouldExternalize: true,
+      reason: 'Content exceeds ' + maxInlineChars + ' chars (' + contentLength + ' actual). Row data should be stored in MJStorage.',
+    };
+  }
+
+  /**
+   * Builds a truncated inline preview of a tables-based content JSON by keeping
+   * only the first `maxRowsPerTable` rows per table and attaching truncation metadata.
+   */
+  static BuildInlinePreview(contentJson: string, maxRowsPerTable: number = 30): string {
+    let parsed: Record<string, unknown>;
+    try {
+      parsed = JSON.parse(contentJson);
+    } catch {
+      return contentJson;
+    }
+
+    const tables = parsed['tables'];
+    if (!Array.isArray(tables)) {
+      return contentJson;
+    }
+
+    let modified = false;
+    for (const table of tables) {
+      const rows = (table as Record<string, unknown>)['rows'];
+      if (!Array.isArray(rows) || rows.length <= maxRowsPerTable) {
+        continue;
+      }
+
+      const tbl = table as Record<string, unknown>;
+      if (!tbl['metadata']) {
+        tbl['metadata'] = {};
+      }
+      const metadata = tbl['metadata'] as Record<string, unknown>;
+      metadata['totalRowCount'] = rows.length;
+      metadata['truncatedForStorage'] = true;
+      tbl['rows'] = rows.slice(0, maxRowsPerTable);
+      modified = true;
+    }
+
+    return modified ? JSON.stringify(parsed) : contentJson;
   }
 
   // ─── PRIVATE ───

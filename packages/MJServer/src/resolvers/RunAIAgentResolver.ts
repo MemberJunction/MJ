@@ -2,7 +2,7 @@ import { Resolver, Mutation, Query, Arg, Ctx, ObjectType, Field, PubSub, PubSubE
 import { AppContext, UserPayload } from '../types.js';
 import { DatabaseProviderBase, LogError, LogStatus, Metadata, RunView, UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { MJConversationDetailEntity, MJConversationDetailAttachmentEntity, MJConversationDetailArtifactEntity, MJArtifactVersionEntity, MJAIAgentRequestEntity } from '@memberjunction/core-entities';
-import { AgentRunner } from '@memberjunction/ai-agents';
+import { AgentRunner, ArtifactToolManager } from '@memberjunction/ai-agents';
 import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, ExecuteAgentResult, ConversationUtility, AttachmentData } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ChatMessage, ChatMessageContent } from '@memberjunction/ai';
@@ -1389,19 +1389,18 @@ export class RunAIAgentResolver extends ResolverBase {
                         }
                     }
                 } else if (artifactVersion.Content) {
-                    // Text artifact — include directly, but cap large ones that are
-                    // accessible via artifact tools (DataSnapshots, large JSON, etc.)
-                    // to prevent context overflow on conversation replay.
+                    // Text artifact — use BuildInlinePreview for large DataSnapshots
+                    // to preserve table structure instead of raw substring truncation.
                     const textContent = artifactVersion.Content;
                     const MAX_INLINE_ARTIFACT_CHARS = 10_000;
 
                     if (textContent.length > MAX_INLINE_ARTIFACT_CHARS) {
-                        const preview = textContent.substring(0, 500);
+                        const preview = ArtifactToolManager.BuildInlinePreview(textContent, 5);
                         validAttachments.push({
                             type: 'Document' as AttachmentData['type'],
                             mimeType: 'text/plain',
                             fileName: undefined,
-                            content: `[Artifact: ${artifactVersion.Name || 'Untitled'} — ${textContent.length.toLocaleString()} chars, accessible via artifact tools]\n\nPreview:\n${preview}…`
+                            content: `[Artifact: ${artifactVersion.Name || 'Untitled'} — ${textContent.length.toLocaleString()} chars, accessible via artifact tools]\n\nPreview (first 5 rows per table):\n${preview}`
                         });
                     } else {
                         validAttachments.push({

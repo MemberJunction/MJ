@@ -1,4 +1,4 @@
-import { BaseLLM, ChatMessage, ChatMessageRole, ChatParams, ChatResult, ClassifyParams, ClassifyResult, GetUserMessageFromChatParams, ModelUsage, SummarizeParams, SummarizeResult, StreamingChatCallbacks, ErrorAnalyzer } from "@memberjunction/ai";
+import { BaseLLM, ChatMessage, ChatMessageRole, ChatParams, ChatResult, ClassifyParams, ClassifyResult, GetUserMessageFromChatParams, ModelUsage, SummarizeParams, SummarizeResult, StreamingChatCallbacks, ErrorAnalyzer, FileCapabilities } from "@memberjunction/ai";
 import { OpenAI } from "openai";
 import { RegisterClass } from '@memberjunction/global';
 import { ChatCompletionAssistantMessageParam, ChatCompletionContentPart, ChatCompletionMessageParam, ChatCompletionSystemMessageParam, ChatCompletionUserMessageParam } from "openai/resources";
@@ -35,6 +35,18 @@ export class OpenAILLM extends BaseLLM {
      */
     public override get SupportsStreaming(): boolean {
         return true;
+    }
+
+    /**
+     * OpenAI supports image file inputs natively via vision.
+     */
+    public override GetFileCapabilities(): FileCapabilities | null {
+        return {
+            SupportedMimeTypes: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
+            MaxFileSize: 20 * 1024 * 1024,
+            MaxFilesPerRequest: 10,
+            HasFileAPI: false,
+        };
     }
 
     /**

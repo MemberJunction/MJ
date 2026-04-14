@@ -15,7 +15,23 @@ type ThinkingStreamState = {
 };
 
 /**
- * Base class for all LLM sub-class implementations. Not all sub-classes will support all methods. 
+ * Describes the native file input capabilities of an LLM driver.
+ * Returned by BaseLLM.GetFileCapabilities(). When null, the driver
+ * does not support file input and artifact tools should be used instead.
+ */
+export interface FileCapabilities {
+    /** MIME type patterns this driver can accept natively (e.g. 'application/pdf', 'image/*') */
+    SupportedMimeTypes: string[];
+    /** Maximum size in bytes for a single file attachment */
+    MaxFileSize: number;
+    /** Maximum number of file attachments per API request */
+    MaxFilesPerRequest: number;
+    /** Whether this driver has a separate file upload API (e.g. Gemini Files API) vs inline base64 */
+    HasFileAPI: boolean;
+}
+
+/**
+ * Base class for all LLM sub-class implementations. Not all sub-classes will support all methods.
  * If a method is not supported an exception will be thrown.
  */
 export abstract class BaseLLM extends BaseModel {
@@ -167,6 +183,15 @@ export abstract class BaseLLM extends BaseModel {
      */
     public get SupportsPrefill(): boolean {
         return false;
+    }
+
+    /**
+     * Returns the native file input capabilities of this LLM driver, or null if
+     * the driver does not support file attachments. Subclasses that accept files
+     * (PDFs, images, etc.) should override this method.
+     */
+    public GetFileCapabilities(): FileCapabilities | null {
+        return null;
     }
 
     /**

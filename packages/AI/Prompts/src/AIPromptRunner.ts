@@ -1296,6 +1296,8 @@ export class AIPromptRunner {
           });
           
           if (!childRenderResult.Success) {
+            console.error(`[ChildTemplateRender] FAILED for "${childPrompt.Name}": ${childRenderResult.Message}`);
+            console.error(`[ChildTemplateRender] Data keys: ${Object.keys(mergedChildData).join(', ')}`);
             throw new Error(`Failed to render child template for prompt ${childPrompt.Name}: ${childRenderResult.Message}`);
           }
           
