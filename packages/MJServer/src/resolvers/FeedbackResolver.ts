@@ -348,15 +348,19 @@ export class FeedbackResolver {
           content: `You are a feedback classifier. Given a title and description, respond with ONLY a JSON object:
 {"category": "bug"|"feature"|"question"|"other", "severity": "critical"|"major"|"minor"|"trivial"}
 
-Rules:
-- "bug": something broken, error, crash, unexpected behavior
+Category rules:
+- "bug": something broken, error, crash, unexpected behavior, blocking issue
 - "feature": request for new functionality, improvement, enhancement
 - "question": asking how something works, seeking help
 - "other": doesn't fit above categories
-- "critical": system unusable, data loss, security issue
-- "major": significant functionality broken, no workaround
-- "minor": something doesn't work perfectly but has a workaround
-- "trivial": cosmetic, typo, minor visual issue`
+
+Severity rules — pay close attention to the user's language about impact:
+- "critical": system unusable, data loss, security issue, affects all users
+- "major": user says they are blocked, can't complete a task, no workaround, essential workflow broken, "preventing me from", "can't do my job", significant functionality broken
+- "minor": something doesn't work perfectly but the user can work around it
+- "trivial": cosmetic, typo, minor visual issue, formatting
+
+When in doubt between two severity levels, choose the higher one. If the user describes being blocked or unable to do something, that is at least "major".`
         },
         {
           role: ChatMessageRole.user,
