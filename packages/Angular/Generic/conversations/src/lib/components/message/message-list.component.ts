@@ -14,12 +14,11 @@ import {
   AfterViewInit,
   AfterViewChecked
 } from '@angular/core';
-import { MJConversationDetailEntity, MJConversationEntity } from '@memberjunction/core-entities';
+import { MJConversationDetailEntity, MJConversationEntity, RatingJSON } from '@memberjunction/core-entities';
 import { UserInfo, CompositeKey } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MessageItemComponent, MessageAttachment } from './message-item.component';
 import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
-import { RatingJSON } from '../../models/conversation-complete-query.model';
 import { MJAIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
 
 /**

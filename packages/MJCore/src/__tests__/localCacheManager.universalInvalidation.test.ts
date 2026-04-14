@@ -185,6 +185,7 @@ describe('LocalCacheManager Universal Cache Invalidation', () => {
                     EntityInfo: {
                         Name: options.entityName,
                         PrimaryKeys: [{ Name: options.pkFieldName }],
+                        AllowCaching: true,
                     },
                     Get: (fieldName: string) => fields[fieldName],
                     GetAll: () => ({ ...fields }),
@@ -380,6 +381,7 @@ describe('LocalCacheManager Universal Cache Invalidation', () => {
                     EntityInfo: {
                         Name: options.entityName,
                         PrimaryKeys: options.primaryKeys,
+                        AllowCaching: true,
                     },
                     Get: (fieldName: string) => options.fields[fieldName],
                     GetAll: () => ({ ...options.fields }),
@@ -467,6 +469,7 @@ describe('LocalCacheManager Universal Cache Invalidation', () => {
                     EntityInfo: {
                         Name: 'Users',
                         PrimaryKeys: [{ Name: 'ID' }],
+                        AllowCaching: true,
                     },
                     Get: (field: string) => field === 'ID' ? '1' : 'Alice Updated',
                     GetAll: () => ({ ID: '1', Name: 'Alice Updated' }),
@@ -490,8 +493,8 @@ describe('LocalCacheManager Universal Cache Invalidation', () => {
 
     describe('Eviction Entity Index Cleanup', () => {
         it('should remove fingerprints from entity index when entries are evicted', async () => {
-            // Configure a very small cache to force eviction
-            cacheManager.UpdateConfig({ maxEntries: 2, maxSizeBytes: 10_000_000 });
+            // Configure a small cache to force eviction (each entry ~150 bytes; budget holds 2, 3rd triggers eviction)
+            cacheManager.UpdateConfig({ maxSizeBytes: 400 });
 
             const fp1 = 'EntityA|_|_|-1|0|_';
             const fp2 = 'EntityB|_|_|-1|0|_';
@@ -587,6 +590,7 @@ describe('LocalCacheManager Universal Cache Invalidation', () => {
                     EntityInfo: {
                         Name: 'Users',
                         PrimaryKeys: [{ Name: 'ID' }],
+                        AllowCaching: true,
                     },
                     Get: () => null, // null PK value
                     GetAll: () => ({ ID: null, Name: 'Ghost' }),
@@ -618,6 +622,7 @@ describe('LocalCacheManager Universal Cache Invalidation', () => {
                     EntityInfo: {
                         Name: 'Users',
                         PrimaryKeys: [], // empty array
+                        AllowCaching: true,
                     },
                     Get: () => '1',
                     GetAll: () => ({ ID: '1' }),
@@ -640,6 +645,7 @@ describe('LocalCacheManager Universal Cache Invalidation', () => {
                     EntityInfo: {
                         Name: 'Users',
                         PrimaryKeys: undefined,
+                        AllowCaching: true,
                     },
                     Get: () => '1',
                     GetAll: () => ({ ID: '1' }),
@@ -675,6 +681,7 @@ describe('LocalCacheManager Universal Cache Invalidation', () => {
                     EntityInfo: {
                         Name: 'Users',
                         PrimaryKeys: [{ Name: 'ID' }],
+                        AllowCaching: true,
                     },
                     Get: (f: string) => f === 'ID' ? '1' : 'Alice Updated',
                     GetAll: () => ({ ID: '1', Name: 'Alice Updated' }),
@@ -693,6 +700,128 @@ describe('LocalCacheManager Universal Cache Invalidation', () => {
             const productsCache = await cacheManager.GetRunViewResult(fpProducts);
             expect(productsCache).not.toBeNull();
             expect((productsCache!.results[0] as Record<string, unknown>).Name).toBe('Widget');
+        });
+    });
+
+    // ========================================================================
+    // CONCURRENT MUTATION SERIALIZATION (per-fingerprint lock)
+    // ========================================================================
+
+    describe('Concurrent mutation serialization', () => {
+        it('should not lose deletes when multiple RemoveSingleEntity calls fire concurrently', async () => {
+            // Seed the cache with 3 records
+            const fp = 'rv__MJ: Conversations||__mj_CreatedAt DESC|1000|';
+            await cacheManager.SetRunViewResult(
+                fp,
+                { EntityName: 'MJ: Conversations' } as Parameters<typeof cacheManager.SetRunViewResult>[1],
+                [
+                    { ID: 'aaa', Name: 'Conv A' },
+                    { ID: 'bbb', Name: 'Conv B' },
+                    { ID: 'ccc', Name: 'Conv C' },
+                ],
+                '2025-01-01T00:00:00Z'
+            );
+
+            // Register entity in fingerprint index
+            (cacheManager as unknown as { _entityFingerprintIndex: Map<string, Set<string>> })
+                ._entityFingerprintIndex.set('MJ: Conversations', new Set([fp]));
+
+            const { CompositeKey } = await import('@memberjunction/core');
+
+            const keyA = new CompositeKey();
+            keyA.KeyValuePairs = [{ FieldName: 'ID', Value: 'aaa' }];
+            const keyB = new CompositeKey();
+            keyB.KeyValuePairs = [{ FieldName: 'ID', Value: 'bbb' }];
+            const keyC = new CompositeKey();
+            keyC.KeyValuePairs = [{ FieldName: 'ID', Value: 'ccc' }];
+
+            const now = new Date().toISOString();
+
+            // Fire all 3 removals concurrently — this is the race condition scenario
+            await Promise.all([
+                cacheManager.RemoveSingleEntity(fp, keyA, now),
+                cacheManager.RemoveSingleEntity(fp, keyB, now),
+                cacheManager.RemoveSingleEntity(fp, keyC, now),
+            ]);
+
+            // All 3 should be removed — without the lock, some would survive
+            const cached = await cacheManager.GetRunViewResult(fp);
+            expect(cached).not.toBeNull();
+            expect(cached!.results).toHaveLength(0);
+        });
+
+        it('should not lose upserts when multiple UpsertSingleEntity calls fire concurrently', async () => {
+            const fp = 'rv__MJ: Users||Name ASC|100|';
+            await cacheManager.SetRunViewResult(
+                fp,
+                { EntityName: 'MJ: Users' } as Parameters<typeof cacheManager.SetRunViewResult>[1],
+                [
+                    { ID: '1', Name: 'Alice' },
+                    { ID: '2', Name: 'Bob' },
+                ],
+                '2025-01-01T00:00:00Z'
+            );
+
+            (cacheManager as unknown as { _entityFingerprintIndex: Map<string, Set<string>> })
+                ._entityFingerprintIndex.set('MJ: Users', new Set([fp]));
+
+            const { CompositeKey } = await import('@memberjunction/core');
+
+            const key1 = new CompositeKey();
+            key1.KeyValuePairs = [{ FieldName: 'ID', Value: '1' }];
+            const key2 = new CompositeKey();
+            key2.KeyValuePairs = [{ FieldName: 'ID', Value: '2' }];
+
+            const now = new Date().toISOString();
+
+            // Fire concurrent updates to both records
+            await Promise.all([
+                cacheManager.UpsertSingleEntity(fp, { ID: '1', Name: 'Alice Updated' }, key1, now),
+                cacheManager.UpsertSingleEntity(fp, { ID: '2', Name: 'Bob Updated' }, key2, now),
+            ]);
+
+            const cached = await cacheManager.GetRunViewResult(fp);
+            expect(cached).not.toBeNull();
+            expect(cached!.results).toHaveLength(2);
+
+            const names = cached!.results.map((r: Record<string, unknown>) => r['Name']).sort();
+            expect(names).toEqual(['Alice Updated', 'Bob Updated']);
+        });
+
+        it('should handle mixed concurrent deletes and upserts on the same fingerprint', async () => {
+            const fp = 'rv__MJ: Items||ID ASC|100|';
+            await cacheManager.SetRunViewResult(
+                fp,
+                { EntityName: 'MJ: Items' } as Parameters<typeof cacheManager.SetRunViewResult>[1],
+                [
+                    { ID: 'x', Name: 'Delete Me' },
+                    { ID: 'y', Name: 'Update Me' },
+                ],
+                '2025-01-01T00:00:00Z'
+            );
+
+            (cacheManager as unknown as { _entityFingerprintIndex: Map<string, Set<string>> })
+                ._entityFingerprintIndex.set('MJ: Items', new Set([fp]));
+
+            const { CompositeKey } = await import('@memberjunction/core');
+
+            const keyX = new CompositeKey();
+            keyX.KeyValuePairs = [{ FieldName: 'ID', Value: 'x' }];
+            const keyY = new CompositeKey();
+            keyY.KeyValuePairs = [{ FieldName: 'ID', Value: 'y' }];
+
+            const now = new Date().toISOString();
+
+            // Delete x and update y concurrently
+            await Promise.all([
+                cacheManager.RemoveSingleEntity(fp, keyX, now),
+                cacheManager.UpsertSingleEntity(fp, { ID: 'y', Name: 'Updated!' }, keyY, now),
+            ]);
+
+            const cached = await cacheManager.GetRunViewResult(fp);
+            expect(cached).not.toBeNull();
+            expect(cached!.results).toHaveLength(1);
+            expect((cached!.results[0] as Record<string, unknown>)['Name']).toBe('Updated!');
         });
     });
 

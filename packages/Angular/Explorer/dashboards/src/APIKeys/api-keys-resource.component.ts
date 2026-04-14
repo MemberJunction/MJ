@@ -52,7 +52,7 @@ type MainTab = 'keys' | 'applications' | 'scopes' | 'usage';
 export class APIKeysResourceComponent extends BaseResourceComponent implements OnInit, OnDestroy {
     @ViewChild('keyList') keyListComponent: APIKeyListComponent | undefined;
 
-    private destroy$ = new Subject<void>();
+    protected override destroy$ = new Subject<void>();
     private md = new Metadata();
     private cdr: ChangeDetectorRef;
 
@@ -107,10 +107,12 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
     }
 
     async ngOnInit(): Promise<void> {
+        super.ngOnInit();
         await this.loadData();
     }
 
     ngOnDestroy(): void {
+        super.ngOnDestroy();
         this.destroy$.next();
         this.destroy$.complete();
     }

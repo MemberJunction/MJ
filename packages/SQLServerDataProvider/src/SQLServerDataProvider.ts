@@ -33,7 +33,6 @@ import {
   TransactionGroupBase,
   TransactionItem,
   EntityPermissionType,
-  EntitySaveOptions,
   LogError,
   EntityRecordNameInput,
   EntityRecordNameResult,
@@ -1281,32 +1280,6 @@ export class SQLServerDataProvider
     };
   }
 
-  protected override async OnSaveCompleted(
-    entity: BaseEntity,
-    saveSQLResult: SaveSQLResult,
-    user: UserInfo,
-    options: EntitySaveOptions,
-  ): Promise<void> {
-    const overlappingChangeData = saveSQLResult.extraData?.overlappingChangeData as
-      | { changesJSON: string; changesDescription: string }
-      | undefined;
-    if (
-      overlappingChangeData &&
-      entity.EntityInfo.AllowMultipleSubtypes &&
-      entity.EntityInfo.TrackRecordChanges
-    ) {
-      const transaction = (entity.ProviderTransaction as sql.Transaction) ?? undefined;
-      await this.PropagateRecordChangesToSiblings(
-        entity.EntityInfo,
-        overlappingChangeData,
-        entity.PrimaryKey.Values(),
-        user?.ID ?? '',
-        options.ISAActiveChildEntityName,
-        transaction ? { connectionSource: transaction } : undefined,
-      );
-    }
-  }
-
   protected override OnSuspendRefresh(): void {
     this._bAllowRefresh = false;
   }
@@ -2104,6 +2077,23 @@ IF ${varName} IS NOT NULL
         this._savepointStack.pop();
       }
     } catch (e) {
+      // If commit() threw after we already decremented _transactionDepth to 0,
+      // the caller's RollbackTransaction() will see depth===0 and refuse to act,
+      // leaving the mssql transaction permanently open on SQL Server and holding
+      // row locks until the TCP connection drops (requires MJAPI restart).
+      // Detect this state and force a direct rollback to release the locks.
+      if (this._transactionDepth === 0 && this._transaction) {
+        try {
+          await this._transaction.rollback();
+        } catch (rollbackError) {
+          LogError('Rollback after commit failure also failed:', undefined, rollbackError);
+        } finally {
+          this._transaction = null;
+          this._savepointStack = [];
+          this._savepointCounter = 0;
+          this._transactionState$.next(false);
+        }
+      }
       LogError(e);
       throw e; // force caller to handle
     }

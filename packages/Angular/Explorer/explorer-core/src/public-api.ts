@@ -2,7 +2,6 @@
  * Public API Surface 
  */
 
-export * from './lib/generic/form-toolbar';
 export * from './lib/generic/resource-container-component';
 
 export * from './lib/resource-wrappers/dashboard-resource.component'
@@ -43,7 +42,7 @@ export * from './lib/services/startup-validation.service'
 
 // Lazy loading infrastructure
 export * from './lib/services/lazy-module-registry'
-export * from './lib/services/lazy-feature-config'
+export * from './generated/lazy-feature-config'
 export * from './lib/system-validation/system-validation-banner.component'
 
 // User Menu Plugin System

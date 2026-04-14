@@ -163,6 +163,19 @@ export class RunViewParams {
     CacheLocal?: boolean;
 
     /**
+     * When set to true, bypasses ALL server-side caching — both the PreRunView cache
+     * check and the post-query auto-cache storage. The query always hits the database
+     * and the result is NOT stored in the cache.
+     *
+     * Use this for maintenance/audit operations that need to see the true database state,
+     * especially when querying for records that were inserted via direct SQL (bypassing
+     * BaseEntity.Save() and its cache invalidation events).
+     *
+     * @default false
+     */
+    BypassCache?: boolean;
+
+    /**
      * Optional TTL (time-to-live) in milliseconds for cached results when CacheLocal is true.
      * After this time, cached results will be considered stale and fresh data will be fetched.
      * If not specified, the LocalCacheManager's default TTL will be used (typically 5 minutes).
@@ -327,6 +340,18 @@ export class RunView  {
     }
 
     /**
+     * Creates a RunView instance from an IMetadataProvider. At runtime the provider object
+     * (ProviderBase) implements both IMetadataProvider and IRunViewProvider, but TypeScript
+     * doesn't know that statically. This factory centralizes the cast so callers don't need
+     * their own helper methods.
+     * @param provider An IMetadataProvider instance (typically from Metadata.Provider or a contextUser's provider)
+     * @returns A new RunView wired to the given provider
+     */
+    public static FromMetadataProvider(provider: IMetadataProvider): RunView {
+        return new RunView(provider as unknown as IRunViewProvider);
+    }
+
+    /**
      * This property is used to get the IRunViewProvider implementation that is used by this instance of the RunView class. If a provider was specified to the constructor, that provider is used, otherwise the static RunView.Provider property is used.
      */
     public get ProviderToUse(): IRunViewProvider {
@@ -396,7 +421,7 @@ export class RunView  {
         }
         else if (params.ViewID || params.ViewName) {
             // we don't have a view entity loaded, so load it up now
-            const rv = new RunView(<IRunViewProvider><any>p);
+            const rv = RunView.FromMetadataProvider(p);
             const result = await rv.RunView({
                 EntityName: "MJ: User Views",
                 ExtraFilter: params.ViewID ? `ID = '${params.ViewID}'` : `Name = '${params.ViewName}'`,

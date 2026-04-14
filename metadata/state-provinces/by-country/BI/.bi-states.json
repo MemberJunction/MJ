@@ -1,0 +1,317 @@
+[
+  {
+    "fields": {
+      "Name": "Bubanza",
+      "Code": "BB",
+      "ISO3166_2": "BI-BB",
+      "Latitude": -3.1045,
+      "Longitude": 29.3862,
+      "BoundaryGeoJSON": "@file:by-country/BI/boundaries/BI-BB.geojson",
+      "CommonAliases": [
+        "Bubanza"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BI"
+    },
+    "primaryKey": {
+      "ID": "0ED554E0-2539-4874-939F-0F8B338B331B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:32.965Z",
+      "checksum": "fa977953bc55f3d971620c2e0a5cd3f7dfa3129ef83642d96f45152eff8d4df1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bujumbura",
+      "Code": "BJ",
+      "ISO3166_2": "BI-BJ",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Bujumbura"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BI"
+    },
+    "primaryKey": {
+      "ID": "4FDDA13E-519B-4AF8-A787-1CDCD68D3EE8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:32.980Z",
+      "checksum": "6d3c923194283503a6499f9077e98160640221c39d95f3d6786f423721e56836"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bururi",
+      "Code": "BR",
+      "ISO3166_2": "BI-BR",
+      "Latitude": -3.8515,
+      "Longitude": 29.5672,
+      "BoundaryGeoJSON": "@file:by-country/BI/boundaries/BI-BR.geojson",
+      "CommonAliases": [
+        "Bururi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BI"
+    },
+    "primaryKey": {
+      "ID": "7A8FE2B5-2B80-423F-8E67-FB06398E41D4"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:32.998Z",
+      "checksum": "71a4806fa88271ea3d9bc5d5a20eaadc5469184adbbc3901d47ea38d477d3c6f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Cankuzo",
+      "Code": "CA",
+      "ISO3166_2": "BI-CA",
+      "Latitude": -3.111,
+      "Longitude": 30.5612,
+      "BoundaryGeoJSON": "@file:by-country/BI/boundaries/BI-CA.geojson",
+      "CommonAliases": [
+        "Cankuzo"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BI"
+    },
+    "primaryKey": {
+      "ID": "F8921339-CC53-4619-B21C-0466F19DC448"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:33.014Z",
+      "checksum": "d29523d4519af2c3b71bc2a32c6b408642d36962eecee3d0b5ec48f693065bd2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Cibitoke",
+      "Code": "CI",
+      "ISO3166_2": "BI-CI",
+      "Latitude": -2.8674,
+      "Longitude": 29.2407,
+      "BoundaryGeoJSON": "@file:by-country/BI/boundaries/BI-CI.geojson",
+      "CommonAliases": [
+        "Cibitoke"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BI"
+    },
+    "primaryKey": {
+      "ID": "554BFEDA-7E0C-4FE0-BE52-D9B30F52586E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:33.032Z",
+      "checksum": "34870ca863ba70c1a85752891f9a4f491da636a9d75e376622d847d994e9f273"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gitega",
+      "Code": "GI",
+      "ISO3166_2": "BI-GI",
+      "Latitude": -3.4898,
+      "Longitude": 29.9159,
+      "BoundaryGeoJSON": "@file:by-country/BI/boundaries/BI-GI.geojson",
+      "CommonAliases": [
+        "Gitega"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BI"
+    },
+    "primaryKey": {
+      "ID": "3E80049A-69A2-4B8C-A7AF-CEDDB5E1BEC9"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:33.051Z",
+      "checksum": "8aa8c95a5f22b5a018795ea98e15654558d46134072d9537899874adaf280939"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Karuzi",
+      "Code": "KR",
+      "ISO3166_2": "BI-KR",
+      "Latitude": -3.1444,
+      "Longitude": 30.1146,
+      "BoundaryGeoJSON": "@file:by-country/BI/boundaries/BI-KR.geojson",
+      "CommonAliases": [
+        "Karuzi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BI"
+    },
+    "primaryKey": {
+      "ID": "D328EDDE-18DC-4C7B-BCBF-D789EB478BFF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:33.068Z",
+      "checksum": "b0ae916495d1ecedad3f470634e24b33b2195639d1971860ec6efa51a0ddece8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kayanza",
+      "Code": "KY",
+      "ISO3166_2": "BI-KY",
+      "Latitude": -3.025,
+      "Longitude": 29.6613,
+      "BoundaryGeoJSON": "@file:by-country/BI/boundaries/BI-KY.geojson",
+      "CommonAliases": [
+        "Kayanza"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BI"
+    },
+    "primaryKey": {
+      "ID": "994EBFF7-2DB3-4BD9-AACD-AE5EFC00D1F0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:33.089Z",
+      "checksum": "5004dd5185841030fd84e0902aa441123949bd7b2819e353a4effc12ae334fa0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kirundo",
+      "Code": "KI",
+      "ISO3166_2": "BI-KI",
+      "Latitude": -2.5641,
+      "Longitude": 30.1647,
+      "BoundaryGeoJSON": "@file:by-country/BI/boundaries/BI-KI.geojson",
+      "CommonAliases": [
+        "Kirundo"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BI"
+    },
+    "primaryKey": {
+      "ID": "50562D03-A5A7-45F1-B258-6F50E840096D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:33.110Z",
+      "checksum": "86accc4f01a2805a90c265812692dbfccf191f14251c844683cdaa5c175c979c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Makamba",
+      "Code": "MA",
+      "ISO3166_2": "BI-MA",
+      "Latitude": -4.2162,
+      "Longitude": 29.771,
+      "BoundaryGeoJSON": "@file:by-country/BI/boundaries/BI-MA.geojson",
+      "CommonAliases": [
+        "Makamba"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BI"
+    },
+    "primaryKey": {
+      "ID": "C3A95ADA-FB9E-40A0-844C-CB6D25F616B9"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:33.128Z",
+      "checksum": "46a1991675caa34c3bb0625ed0fe772ed5b77422aefacb9235adb46d56e348bc"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Muramvya",
+      "Code": "MU",
+      "ISO3166_2": "BI-MU",
+      "Latitude": -3.2533,
+      "Longitude": 29.668,
+      "BoundaryGeoJSON": "@file:by-country/BI/boundaries/BI-MU.geojson",
+      "CommonAliases": [
+        "Muramvya"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BI"
+    },
+    "primaryKey": {
+      "ID": "0E93DA6D-570B-4CAF-AE2B-2D0702BD8FCD"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:33.174Z",
+      "checksum": "9d0f46cac0ffb573a1ebfd269a94e8ca4339a8dfb40cf5f3dd75ac699196faec"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Muyinga",
+      "Code": "MY",
+      "ISO3166_2": "BI-MY",
+      "Latitude": -2.8921,
+      "Longitude": 30.3161,
+      "BoundaryGeoJSON": "@file:by-country/BI/boundaries/BI-MY.geojson",
+      "CommonAliases": [
+        "Muyinga"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BI"
+    },
+    "primaryKey": {
+      "ID": "4537CB52-80B5-408E-9758-5991FF5E652F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:33.191Z",
+      "checksum": "e638ba93a285d447346250152e0d5f29d3dcc4b46f74c376a2b174b7d7e3c156"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ngozi",
+      "Code": "NG",
+      "ISO3166_2": "BI-NG",
+      "Latitude": -2.869,
+      "Longitude": 29.896,
+      "BoundaryGeoJSON": "@file:by-country/BI/boundaries/BI-NG.geojson",
+      "CommonAliases": [
+        "Ngozi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BI"
+    },
+    "primaryKey": {
+      "ID": "D25CB7FF-548F-43CD-BA42-3E436D18067F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:33.207Z",
+      "checksum": "f3c3c15c5adb7bac4a7248634fb502a6d85c27c79ded932af3f0e76dd304267f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rutana",
+      "Code": "RT",
+      "ISO3166_2": "BI-RT",
+      "Latitude": -3.8482,
+      "Longitude": 30.1331,
+      "BoundaryGeoJSON": "@file:by-country/BI/boundaries/BI-RT.geojson",
+      "CommonAliases": [
+        "Rutana"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BI"
+    },
+    "primaryKey": {
+      "ID": "6BDAB48E-9743-43A9-AC0F-819B403B7A7E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:33.224Z",
+      "checksum": "844bb2f24faf1ce5e0df617bc47f5653676c0ed5fec2007884131feb3fd24efb"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ruyigi",
+      "Code": "RY",
+      "ISO3166_2": "BI-RY",
+      "Latitude": -3.4427,
+      "Longitude": 30.3391,
+      "BoundaryGeoJSON": "@file:by-country/BI/boundaries/BI-RY.geojson",
+      "CommonAliases": [
+        "Ruyigi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BI"
+    },
+    "primaryKey": {
+      "ID": "3FE88299-B5A5-4E3B-9300-89B53AA51F27"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:33.238Z",
+      "checksum": "c8046f83d0f0f982f9c12dd8126987dd5ad0cb950be65a619eda91f06ff77e65"
+    }
+  }
+]

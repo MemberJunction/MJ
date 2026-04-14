@@ -133,11 +133,11 @@ export class CodeGenPhase {
 
   /**
    * Detect whether the install directory uses the bootstrap distribution layout
-   * (only `packages/GeneratedEntities` + `packages/GeneratedActions`) vs the
+   * (only `apps/MJAPI`, `apps/MJExplorer`, `packages/GeneratedEntities`) vs the
    * full monorepo layout (which also has `packages/MJCoreEntities`, etc.).
    *
-   * In distribution mode, the `@memberjunction/*` packages are pre-built in
-   * `node_modules/` from npm and don't need rebuilding or manifest regeneration.
+   * In distribution mode, `@memberjunction/*` packages are pre-built from npm
+   * and don't need rebuilding or manifest regeneration.
    */
   private async isDistributionLayout(dir: string): Promise<boolean> {
     const monorepoMarker = path.join(dir, 'packages', 'MJCoreEntities');
@@ -150,7 +150,7 @@ export class CodeGenPhase {
    *
    * @param context - Codegen input with directory, emitter, and fast-mode flag.
    * @returns Codegen result with success status, artifact verification, and retry flag.
-   * @throws {InstallerError} With code `CODEGEN_TIMEOUT` if codegen exceeds 10 minutes.
+   * @throws {InstallerError} With code `CODEGEN_TIMEOUT` if codegen exceeds 15 minutes.
    * @throws {InstallerError} With code `CODEGEN_FAILED` if codegen fails after rebuild + retry.
    */
   async Run(context: CodeGenContext): Promise<CodeGenResult> {
@@ -262,7 +262,8 @@ export class CodeGenPhase {
    *
    * Tries the local CLI binary first (used by the full monorepo where
    * `@memberjunction/cli` is a workspace dependency). Falls back to
-   * `npx @memberjunction/cli@<version>` for the bootstrap distribution.
+   * the local CLI binary. Falls back to `npx @memberjunction/cli@<version>` for
+   * the distribution layout where the CLI may not be installed locally.
    *
    * @param dir - Repo root directory.
    * @param versionTag - Release tag (e.g., `"v5.9.0"`) for version pinning.
@@ -274,11 +275,18 @@ export class CodeGenPhase {
     versionTag: string | undefined,
     cliArgs: string[]
   ): Promise<{ cmd: string; args: string[] }> {
-    const localCli = path.join(dir, 'apps', 'MJAPI', 'node_modules', '@memberjunction', 'cli', 'bin', 'run.js');
-    if (await this.fileSystem.FileExists(localCli)) {
-      return { cmd: 'node', args: [localCli, ...cliArgs] };
+    const candidates = [
+      path.join(dir, 'node_modules', '@memberjunction', 'cli', 'bin', 'run.js'),
+      path.join(dir, 'apps', 'MJAPI', 'node_modules', '@memberjunction', 'cli', 'bin', 'run.js'),
+    ];
+
+    for (const localCli of candidates) {
+      if (await this.fileSystem.FileExists(localCli)) {
+        return { cmd: 'node', args: [localCli, ...cliArgs] };
+      }
     }
 
+    // Fall back to npx with version pinning (distribution layout)
     const cliPackage = versionTag
       ? `@memberjunction/cli@${versionTag.replace(/^v/, '')}`
       : '@memberjunction/cli';
@@ -300,7 +308,7 @@ export class CodeGenPhase {
    * @param dir - Repo root directory.
    * @param emitter - Event emitter for progress reporting.
    * @returns Structured result with success flag, AFTER-command failure detection, and error summary.
-   * @throws {InstallerError} With code `CODEGEN_TIMEOUT` if the process exceeds 10 minutes.
+   * @throws {InstallerError} With code `CODEGEN_TIMEOUT` if the process exceeds 15 minutes.
    */
   private async runCodeGen(
     dir: string,
@@ -310,7 +318,7 @@ export class CodeGenPhase {
     const { cmd, args } = await this.resolveCli(dir, versionTag, ['codegen']);
     const result = await this.processRunner.Run(cmd, args, {
       Cwd: dir,
-      TimeoutMs: 600_000, // 10 minutes
+      TimeoutMs: 900_000, // 15 minutes
       OnStdout: (line: string) => {
         emitter.Emit('step:progress', {
           Type: 'step:progress',
@@ -576,10 +584,8 @@ export class CodeGenPhase {
   private async regenerateManifestsAndRebuild(dir: string, emitter: InstallerEventEmitter, fast: boolean): Promise<void> {
     const isDistribution = await this.isDistributionLayout(dir);
 
-    // In distribution mode, the @memberjunction/* packages are pre-built from
-    // npm with correct manifests. The apps' prestart hooks regenerate their own
-    // supplemental manifests. Steps 1-3 (which target monorepo source packages
-    // like MJCoreEntities, ServerBootstrap, etc.) are not applicable.
+    // In distribution mode, @memberjunction/* packages are pre-built from npm.
+    // Steps 1-3 (targeting monorepo source packages) are not applicable.
     if (isDistribution) {
       emitter.Emit('log', {
         Type: 'log',
@@ -587,12 +593,7 @@ export class CodeGenPhase {
         Message: 'Distribution layout detected — skipping post-codegen steps 1-3 (manifests are pre-built in npm packages).',
       });
 
-      // Only rebuild the local generated packages (GeneratedEntities/GeneratedActions)
-      // since codegen just regenerated their source.
       await this.forceRebuildLocalGeneratedPackages(dir, emitter);
-
-      // Step 4 patches target monorepo source files that don't exist in the
-      // distribution, so applyKnownIssuePatches will skip them gracefully.
       await this.applyKnownIssuePatches(dir, emitter);
       return;
     }
@@ -1248,8 +1249,8 @@ export class CodeGenPhase {
     {
       Id: 'resource-permission-engine-null-safety-dist',
       Description:
-        'Distribution-mode variant: patches the compiled .js in node_modules when the monorepo source ' +
-        'path does not exist. Same null-safety fix for _ResourceTypes and _Permissions.',
+        'Compiled .js variant: patches the compiled output in node_modules/dist. ' +
+        'Same null-safety fix for _ResourceTypes and _Permissions.',
       RelativePath: 'node_modules/@memberjunction/core-entities/dist/custom/ResourcePermissions/ResourcePermissionEngine.js',
       PackageRelativeDir: '',
       NeedsPatch: (content: string): boolean =>

@@ -117,12 +117,12 @@ export interface ExecutionMonitoringState {
       </div>
 
       <!-- Main Dashboard with Kendo Splitter -->
-      <kendo-splitter class="dashboard-splitter" orientation="vertical" (layoutChange)="onSplitterLayoutChange($event)">
+      <as-split direction="vertical" class="dashboard-splitter">
         <!-- Top Row: System Health and Trends Chart -->
-        <kendo-splitter-pane size="45%" [resizable]="true" [collapsible]="false">
-          <kendo-splitter orientation="horizontal" (layoutChange)="onSplitterLayoutChange($event)">
+        <as-split-area [size]="45">
+          <as-split direction="horizontal">
             <!-- System Health -->
-            <kendo-splitter-pane size="30%" [resizable]="true" [collapsible]="true" [collapsed]="false">
+            <as-split-area [size]="30">
               <div class="dashboard-section system-status">
                 <div class="status-container">
                   <div class="chart-header">
@@ -180,10 +180,10 @@ export interface ExecutionMonitoringState {
                   }
                 </div>
               </div>
-            </kendo-splitter-pane>
-            
+            </as-split-area>
+
             <!-- Drill-down Tab Container -->
-            <kendo-splitter-pane [resizable]="true" [collapsible]="false">
+            <as-split-area [size]="70">
               <div class="dashboard-section drill-down-container">
                 <div class="drill-down-tabs">
                   <div class="tab-header">
@@ -343,15 +343,15 @@ export interface ExecutionMonitoringState {
                   </div>
                 </div>
               </div>
-            </kendo-splitter-pane>
-          </kendo-splitter>
-        </kendo-splitter-pane>
+            </as-split-area>
+          </as-split>
+        </as-split-area>
 
         <!-- Bottom Row: Analysis Panels with Expansion Layout -->
-        <kendo-splitter-pane [resizable]="true" [collapsible]="false">
-          <kendo-splitter orientation="horizontal" (layoutChange)="onSplitterLayoutChange($event)">
+        <as-split-area [size]="55">
+          <as-split direction="horizontal">
             <!-- Left: Performance Heatmap -->
-            <kendo-splitter-pane size="50%" [resizable]="true" [collapsible]="false">
+            <as-split-area [size]="50">
               <div class="dashboard-section performance-matrix">
                 <app-performance-heatmap
                   [data]="(performanceMatrix$ | async) ?? []"
@@ -359,10 +359,10 @@ export interface ExecutionMonitoringState {
                   [config]="heatmapConfig"
                 ></app-performance-heatmap>
               </div>
-            </kendo-splitter-pane>
+            </as-split-area>
 
             <!-- Right: Analysis Panels with Collapsible Sections -->
-            <kendo-splitter-pane [resizable]="true" [collapsible]="false">
+            <as-split-area [size]="50">
               <div class="dashboard-section analysis-panels">
                 
                 <!-- Cost Analysis Panel -->
@@ -468,10 +468,10 @@ export interface ExecutionMonitoringState {
                   }
                 </div>
               </div>
-            </kendo-splitter-pane>
-          </kendo-splitter>
-        </kendo-splitter-pane>
-      </kendo-splitter>
+            </as-split-area>
+          </as-split>
+        </as-split-area>
+      </as-split>
 
       <!-- Execution Details Modal -->
       @if (selectedExecution) {
@@ -770,21 +770,10 @@ export interface ExecutionMonitoringState {
       box-shadow: 0 8px 24px color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
     }
 
-    /* Ensure splitter panes take full height */
-    :host ::ng-deep .k-splitter-pane {
+    /* Ensure splitter areas take full height */
+    :host ::ng-deep as-split-area > .as-split-area-content {
       overflow: hidden;
-    }
-
-    :host ::ng-deep .k-splitter .k-splitter-pane {
       padding: 10px;
-    }
-
-    :host ::ng-deep .k-splitter-horizontal > .k-splitter-pane {
-      padding: 10px 5px;
-    }
-
-    :host ::ng-deep .k-splitter-vertical > .k-splitter-pane {
-      padding: 5px 10px;
     }
 
     /* Cost Analysis Styles */
@@ -1718,18 +1707,10 @@ export interface ExecutionMonitoringState {
       }
 
       /* Reduce padding on smaller screens */
-      :host ::ng-deep .k-splitter .k-splitter-pane {
+      :host ::ng-deep as-split-area > .as-split-area-content {
         padding: 5px;
       }
 
-      :host ::ng-deep .k-splitter-horizontal > .k-splitter-pane {
-        padding: 5px 2px;
-      }
-
-      :host ::ng-deep .k-splitter-vertical > .k-splitter-pane {
-        padding: 2px 5px;
-      }
-      
       .tab-header {
         overflow-x: auto;
       }
@@ -1784,7 +1765,7 @@ export interface ExecutionMonitoringState {
   `]
 })
 export class ExecutionMonitoringComponent extends BaseResourceComponent implements OnInit, OnDestroy {
-  private destroy$ = new Subject<void>();
+  protected override destroy$ = new Subject<void>();
   private stateChangeSubject$ = new Subject<ExecutionMonitoringState>();
 
   // Configuration
@@ -1840,7 +1821,6 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
 
   constructor(
     private instrumentationService: AIInstrumentationService,
-    private navigationService: NavigationService,
     private cdr: ChangeDetectorRef
   ) {
     super();
@@ -1882,6 +1862,7 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
   }
 
   ngOnInit() {
+    super.ngOnInit();
     // Load initial state if provided from resource configuration
     if (this.Data?.Configuration) {
       this.loadUserState(this.Data.Configuration);
@@ -1916,6 +1897,7 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
   }
 
   ngOnDestroy() {
+    super.ngOnDestroy();
     this.destroy$.next();
     this.destroy$.complete();
     this.stateChangeSubject$.complete();

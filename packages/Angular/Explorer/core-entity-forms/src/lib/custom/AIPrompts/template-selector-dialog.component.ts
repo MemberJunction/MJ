@@ -1,5 +1,4 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
-import { DialogRef } from '@progress/kendo-angular-dialog';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, Output, EventEmitter } from '@angular/core';
 import { Subject, BehaviorSubject, debounceTime, distinctUntilChanged, takeUntil } from 'rxjs';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { CommonModule } from '@angular/common';
@@ -64,8 +63,9 @@ export class TemplateSelectorDialogComponent implements OnInit, OnDestroy {
   // View mode
   viewMode: 'grid' | 'list' = 'list';
 
+  @Output() DialogClose = new EventEmitter<void>();
+
   constructor(
-    private dialogRef: DialogRef,
     private cdr: ChangeDetectorRef
   ) {}
 
@@ -287,7 +287,7 @@ export class TemplateSelectorDialogComponent implements OnInit, OnDestroy {
     };
 
     this.result.next(result);
-    this.dialogRef.close();
+    this.DialogClose.emit();
   }
 
   createNew() {
@@ -297,11 +297,11 @@ export class TemplateSelectorDialogComponent implements OnInit, OnDestroy {
     };
 
     this.result.next(result);
-    this.dialogRef.close();
+    this.DialogClose.emit();
   }
 
   cancel() {
     this.result.next(null);
-    this.dialogRef.close();
+    this.DialogClose.emit();
   }
 }

@@ -53,7 +53,7 @@ export interface MJEnvironmentConfig {
   /**
    * Authentication provider type
    */
-  AUTH_TYPE: 'msal' | 'auth0';
+  AUTH_TYPE: 'msal' | 'auth0' | 'okta' | 'cognito';
 
   /**
    * MemberJunction core schema name in the database

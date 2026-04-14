@@ -111,10 +111,6 @@
     gap: 8px;
 }
 
-.credential-row kendo-dropdownlist {
-    flex: 1;
-}
-
 .credential-row button {
     white-space: nowrap;
 }
@@ -156,21 +152,3 @@
     pointer-events: none;
 }
 
-/* Kendo overrides */
-:host ::ng-deep .k-dialog-actions {
-    padding: 16px;
-    border-top: 1px solid var(--mj-border-default);
-}
-
-:host ::ng-deep .k-dialog-content {
-    padding: 20px;
-    max-height: 70vh;
-    overflow-y: auto;
-}
-
-:host ::ng-deep .k-textbox,
-:host ::ng-deep .k-textarea,
-:host ::ng-deep .k-numerictextbox,
-:host ::ng-deep .k-dropdownlist {
-    width: 100%;
-}

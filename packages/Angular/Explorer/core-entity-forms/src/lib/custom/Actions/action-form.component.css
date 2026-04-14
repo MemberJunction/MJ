@@ -194,7 +194,7 @@
     flex-wrap: wrap;
 }
 
-.hero-actions kendo-button {
+.hero-actions button {
     backdrop-filter: blur(10px);
 }
 

@@ -5,7 +5,8 @@ import {
     UserMenuContext,
     UserMenuActionResult,
     UserMenuOptions,
-    UserMenuDivider
+    UserMenuDivider,
+    UserDisplayInfo
 } from './user-menu.types';
 
 /**
@@ -133,6 +134,17 @@ export class BaseUserMenu {
                 enabled: true,
                 tooltip: 'View and edit your profile'
             },
+            {
+                id: 'pin-to-home',
+                label: 'Pin to Home',
+                icon: 'fa-solid fa-house-chimney',
+                group: 'primary',
+                order: 20,
+                developerOnly: false,
+                visible: true,
+                enabled: true,
+                tooltip: 'Pin the current resource to your Home dashboard'
+            },
 
             // === DEVELOPER GROUP (Only visible to developers) ===
             {
@@ -213,7 +225,7 @@ export class BaseUserMenu {
         const elements: UserMenuElement[] = [];
 
         // Define group order
-        const groupOrder = ['primary', 'developer', 'system', 'danger'];
+        const groupOrder = this.GetGroupOrder();
         const sortedGroupKeys = Object.keys(groups).sort((a, b) => {
             const aIndex = groupOrder.indexOf(a);
             const bIndex = groupOrder.indexOf(b);
@@ -245,6 +257,14 @@ export class BaseUserMenu {
 
         // Check item's own visible flag
         return item.visible;
+    }
+
+    /**
+     * Get the ordered list of group names for menu rendering.
+     * Override to insert custom groups (e.g., 'organization' before 'primary').
+     */
+    protected GetGroupOrder(): string[] {
+        return ['primary', 'developer', 'system', 'danger'];
     }
 
     /**
@@ -403,6 +423,23 @@ export class BaseUserMenu {
     }
 
     // ========================================
+    // PIN TO HOME HELPERS
+    // ========================================
+
+    /**
+     * Handle "Pin to Home" click - signals the shell to pin the active resource
+     */
+    protected async Handle_pin_to_home(): Promise<UserMenuActionResult> {
+        // Signal the shell to handle the actual pinning (it has access to DI and the active tab)
+        // The shell's handler checks for Home app and duplicate pin conditions
+        return {
+            success: true,
+            closeMenu: true,
+            message: 'pin-to-home'
+        };
+    }
+
+    // ========================================
     // THEME HELPERS
     // ========================================
 
@@ -466,7 +503,7 @@ export class BaseUserMenu {
     /**
      * Get user display information for menu header
      */
-    public GetUserDisplayInfo(): { name: string; email: string; avatarUrl: string | null; initials: string } {
+    public GetUserDisplayInfo(): UserDisplayInfo {
         const user = this._context?.userEntity;
         const name = user?.Name || this._context?.user?.Name || 'User';
         const email = user?.Email || '';

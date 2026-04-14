@@ -1,0 +1,44 @@
+[
+  {
+    "fields": {
+      "Name": "Federacija Bosna i Hercegovina",
+      "Code": "BIH",
+      "ISO3166_2": "BA-BIH",
+      "Latitude": 43.6774,
+      "Longitude": 18.8198,
+      "BoundaryGeoJSON": "@file:by-country/BA/boundaries/BA-BIH.geojson",
+      "CommonAliases": [
+        "Federacija Bosna i Hercegovina"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BA"
+    },
+    "primaryKey": {
+      "ID": "D9E274B7-FE7D-48C4-8E90-7FE940B13762"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:30.668Z",
+      "checksum": "8e6edaa7aecdbeda0342e90795934e20afa7929b215585e3f2aa7b8bc4a9d060"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Republika Srpska",
+      "Code": "SRP",
+      "ISO3166_2": "BA-SRP",
+      "Latitude": 45.06,
+      "Longitude": 18.2977,
+      "BoundaryGeoJSON": "@file:by-country/BA/boundaries/BA-SRP.geojson",
+      "CommonAliases": [
+        "Republika Srpska"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BA"
+    },
+    "primaryKey": {
+      "ID": "C1069F41-E321-4369-9748-BE2B1BA8AE2B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:30.682Z",
+      "checksum": "a7f0e99947187ab1b208eb07dc9476667b8033f9a187feb08c04c30e4811a8f6"
+    }
+  }
+]

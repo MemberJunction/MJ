@@ -20,11 +20,9 @@
 
   <!-- Status -->
   <div class="item-status">
-    <kendo-chip
-      [themeColor]="getStatusColor()"
-      [size]="'small'">
+    <span class="status-chip" [attr.data-color]="getStatusColor()">
       {{ Action.Status }}
-    </kendo-chip>
+    </span>
   </div>
 
   <!-- Type -->
@@ -61,17 +59,17 @@
 
   <!-- Actions -->
   <div class="item-actions">
-    <button kendoButton
-      [fillMode]="'flat'"
-      [size]="'small'"
+    <button mjButton
+      variant="flat"
+      size="sm"
       title="Run Action"
       [disabled]="Action.Status !== 'Active'"
       (click)="onRunClick($event)">
       <i class="fa-solid fa-play"></i>
     </button>
-    <button kendoButton
-      [fillMode]="'flat'"
-      [size]="'small'"
+    <button mjButton
+      variant="flat"
+      size="sm"
       title="Edit Action"
       (click)="onEditClick($event)">
       <i class="fa-solid fa-pen"></i>

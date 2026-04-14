@@ -601,6 +601,7 @@ const countResult = await rv.RunView({
 | `ForceAuditLog` | `boolean` | Force audit log entry |
 | `CacheLocal` | `boolean` | Use LocalCacheManager for caching |
 | `CacheLocalTTL` | `number` | Cache TTL in milliseconds |
+| `BypassCache` | `boolean` | Skip all server-side caching (read and write). Use for maintenance queries that need true DB state after direct SQL inserts. |
 | `Aggregates` | `AggregateExpression[]` | Aggregate expressions to compute |
 
 ---
@@ -655,6 +656,9 @@ Parameterized queries use Nunjucks templates with built-in SQL injection protect
 | `sqlBoolean` | Converts to SQL bit | `{{ flag \| sqlBoolean }}` produces `1` |
 | `sqlIdentifier` | Brackets identifiers | `{{ table \| sqlIdentifier }}` produces `[UserAccounts]` |
 | `sqlIn` | Formats arrays for IN clauses | `{{ list \| sqlIn }}` produces `('A', 'B', 'C')` |
+| `sqlLikeContains` | Wraps value with `%` for LIKE contains | `{{ term \| sqlLikeContains }}` produces `'%Conference%'` |
+| `sqlLikeBegins` | Appends `%` for LIKE begins-with | `{{ term \| sqlLikeBegins }}` produces `'Conference%'` |
+| `sqlLikeEnds` | Prepends `%` for LIKE ends-with | `{{ term \| sqlLikeEnds }}` produces `'%Conference'` |
 | `sqlNoKeywordsExpression` | Blocks dangerous SQL keywords | Allows `Revenue DESC`, blocks `DROP TABLE` |
 
 ---
@@ -828,6 +832,19 @@ const result = await rv.RunView({
     ExtraFilter: 'IsActive = 1',
     CacheLocal: true,
     CacheLocalTTL: 300000  // 5 minutes
+});
+```
+
+To bypass all caching for a specific query (e.g., maintenance actions that need to see
+records inserted via direct SQL that bypassed `BaseEntity.Save()`), set `BypassCache: true`:
+
+```typescript
+// Always hits the database — skips both cache reads and cache writes
+const result = await rv.RunView({
+    EntityName: 'Members',
+    ExtraFilter: 'State IS NOT NULL',
+    BypassCache: true,
+    IgnoreMaxRows: true
 });
 ```
 #### Cross-Server Cache Invalidation
@@ -1429,6 +1446,12 @@ For detailed guides on specific topics, see the [docs/](./docs/) folder:
 - [IS-A Relationships](./docs/isa-relationships.md) — Type inheritance, save/delete orchestration, provider integration
 - [Organic Keys](./docs/organic-keys.md) — Cross-system matching by shared business data (email, phone, domain), CodeGen integration, transitive views
 - [RunQuery Pagination](./docs/runquery-pagination.md) — Parameterized queries with pagination support
+- [Full-Text Search](./docs/FULL_TEXT_SEARCH_GUIDE.md) — Database-native FTS via `Metadata.FullTextSearch()`, SQL Server FREETEXT / PostgreSQL tsvector, provider architecture, Knowledge Hub integration
+
+### Scoring Utilities
+
+- **`ComputeRRF(rankedLists, k?)`** — Reciprocal Rank Fusion for combining ranked result lists from different retrieval methods. Score-scale independent — works on ordinal position, making it ideal for fusing vector similarity results with full-text search results. Located in `@memberjunction/core` (exported from `src/generic/scoring/ReciprocalRankFusion.ts`).
+- **`ScoredCandidate`** — Interface for RRF input/output: `{ ID: string, Score: number, Metadata?: Record<string, unknown> }`
 
 ## Support
 

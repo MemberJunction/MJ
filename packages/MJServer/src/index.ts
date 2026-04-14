@@ -42,6 +42,7 @@ import { GetAPIKeyEngine } from '@memberjunction/api-keys';
 import { RedisLocalStorageProvider } from '@memberjunction/redis-provider';
 import { GenericDatabaseProvider } from '@memberjunction/generic-database-provider';
 import { PubSubManager } from './generic/PubSubManager.js';
+import { ClientToolRequestManager } from '@memberjunction/ai-agents';
 import { CACHE_INVALIDATION_TOPIC } from './generic/CacheInvalidationResolver.js';
 import { ConnectorFactory, IntegrationEngine, IntegrationSyncOptions } from '@memberjunction/integration-engine';
 import { CronExpressionHelper } from '@memberjunction/scheduling-engine';
@@ -93,6 +94,12 @@ export * from './generic/RunViewResolver.js';
 export * from './resolvers/RunTemplateResolver.js';
 export * from './resolvers/RunAIPromptResolver.js';
 export * from './resolvers/RunAIAgentResolver.js';
+export * from './resolvers/VectorizeEntityResolver.js';
+export * from './resolvers/SearchKnowledgeResolver.js';
+export * from './resolvers/FetchEntityVectorsResolver.js';
+export * from './resolvers/PipelineProgressResolver.js';
+export * from './resolvers/ClientToolRequestResolver.js';
+export * from './resolvers/AutotagPipelineResolver.js';
 export * from './resolvers/TaskResolver.js';
 export * from './generic/KeyValuePairInput.js';
 export * from './generic/KeyInputOutputTypes.js';
@@ -101,6 +108,7 @@ export * from './generic/DeleteOptionsInput.js';
 export * from './agents/skip-agent.js';
 export * from './agents/skip-sdk.js';
 
+export * from './resolvers/GeoResolver.js';
 export * from './resolvers/ColorResolver.js';
 export * from './resolvers/ComponentRegistryResolver.js';
 export * from './resolvers/DatasetResolver.js';
@@ -120,9 +128,11 @@ export * from './resolvers/TelemetryResolver.js';
 export * from './resolvers/APIKeyResolver.js';
 export * from './resolvers/MCPResolver.js';
 export * from './resolvers/ActionResolver.js';
+export * from './resolvers/CacheStatsResolver.js';
 export * from './resolvers/EntityCommunicationsResolver.js';
 export * from './resolvers/EntityResolver.js';
 export * from './resolvers/ISAEntityResolver.js';
+export * from './resolvers/ArtifactFileResolver.js';
 export * from './resolvers/FileCategoryResolver.js';
 export * from './resolvers/FileResolver.js';
 export * from './resolvers/InfoResolver.js';
@@ -442,8 +452,21 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   }
   // Ensure LocalCacheManager is initialized (no-op if already done during engine loading)
   if (!LocalCacheManager.Instance.IsInitialized) {
-    await LocalCacheManager.Instance.Initialize(Metadata.Provider.LocalStorageProvider);
-    console.log('LocalCacheManager initialized');
+    // Build cache config from mj.config.cjs cacheSettings
+    const cs = configInfo.cacheSettings;
+    const cacheConfig = {
+      maxSizeBytes: (cs.maxMemoryMB ?? 150) * 1024 * 1024,
+      maxPercentOfCachePerEntity: cs.maxPercentOfCachePerEntity ?? 50,
+      defaultTTLMs: (cs.defaultTTLSeconds ?? 0) * 1000,
+      evictionSweepIntervalMs: (cs.evictionSweepIntervalSeconds ?? 300) * 1000,
+      verboseLogging: cs.verboseLogging ?? false,
+    };
+    await LocalCacheManager.Instance.Initialize(Metadata.Provider.LocalStorageProvider, cacheConfig);
+    console.log('LocalCacheManager initialized with cache config:', JSON.stringify({
+      maxMemoryMB: cs.maxMemoryMB ?? 150,
+      maxPercentOfCachePerEntity: cs.maxPercentOfCachePerEntity ?? 50,
+      evictionSweepIntervalSeconds: cs.evictionSweepIntervalSeconds ?? 300,
+    }));
   }
 
   // Initialize APIKeyEngine singleton — reads apiKeyGeneration from mj.config.cjs automatically
@@ -578,6 +601,12 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     pubSub.asyncIterator = pubSub.asyncIterableIterator;
   }
   PubSubManager.Instance.SetPubSubEngine(pubSub as unknown as PubSubEngine);
+
+  // Wire the ClientToolRequestManager so BaseAgent can publish client tool requests
+  // via the same PubSub infrastructure used for pipeline progress and cache invalidation.
+  ClientToolRequestManager.Instance.SetPublishFunction(
+    (topic: string, payload: Record<string, unknown>) => PubSubManager.Instance.Publish(topic, payload)
+  );
 
   // Global listener: broadcast CACHE_INVALIDATION to all browser clients whenever
   // ANY BaseEntity save/delete occurs on this server — regardless of whether it

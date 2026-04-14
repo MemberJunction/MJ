@@ -4,6 +4,9 @@ Don't say "You're absolutely right" each time I correct you. Mix it up, that's s
 ## Claude Code Fast Mode
 To enable fast mode (2.5x faster Opus 4.6 responses), add `"fastMode": true` to `~/.claude/settings.json`. This is the reliable way to enable it in the **VSCode IDE extension** — the `/fast` slash command only works consistently in CLI mode. The setting persists across sessions. Note: fast mode bills to extra usage at a higher per-token rate.
 
+## Full Autonomy Development (Sandboxed Environments Only)
+See **[claude-full-auto.md](claude-full-auto.md)** for the full-autonomy development guide — used when Claude operates as an independent developer on sandboxed/air-gapped machines with full database, build, and testing access. **Not for regular development machines.**
+
 # MemberJunction Development Guide
 
 ## 🚨 CRITICAL RULES - VIOLATIONS ARE UNACCEPTABLE 🚨
@@ -171,6 +174,13 @@ The `/guides/` folder contains comprehensive best practices guides for specific 
   - User preferences and local caching
   - Layout patterns, permission checking, and more
 
+- **[Lazy Loading Guide](guides/LAZY_LOADING_GUIDE.md)**: How MJExplorer's code-split lazy loading works:
+  - Adding new dashboard components (zero config — just `@RegisterClass` + feature module)
+  - Making a package lazy-loadable (add subpath exports to `package.json`)
+  - Adding new feature modules with subpath exports
+  - How the auto-generated lazy config is produced by `mj codegen manifest --lazy-config`
+  - Troubleshooting lazy loading issues
+
 When building dashboards, creating new Angular applications, comparing UUIDs, or implementing complex UI features, **read the relevant guide first** to ensure consistency with established patterns.
 
 ---
@@ -337,6 +347,28 @@ MemberJunction uses `@RegisterClass` decorators with a dynamic class factory (`M
   - Always use hardcoded UUIDs (not NEWID())
   - Never insert __mj timestamp columns
   - Use `${flyway:defaultSchema}` placeholder
+  - **Consolidate ALTER TABLE statements**: When adding multiple columns to the same table, use a SINGLE `ALTER TABLE` with multiple `ADD` clauses separated by commas — never multiple separate `ALTER TABLE` statements for the same table. This is more efficient and cleaner.
+    ```sql
+    -- ✅ CORRECT - Single ALTER TABLE with multiple columns
+    ALTER TABLE ${flyway:defaultSchema}.EntityField ADD
+        UserSearchPredicateAPI NVARCHAR(20) NOT NULL DEFAULT 'Contains',
+        AutoUpdateUserSearchPredicate BIT NOT NULL DEFAULT 1,
+        AutoUpdateFullTextSearch BIT NOT NULL DEFAULT 1;
+
+    -- ❌ WRONG - Separate ALTER TABLEs for the same table
+    ALTER TABLE ${flyway:defaultSchema}.EntityField ADD UserSearchPredicateAPI NVARCHAR(20) NOT NULL DEFAULT 'Contains';
+    ALTER TABLE ${flyway:defaultSchema}.EntityField ADD AutoUpdateUserSearchPredicate BIT NOT NULL DEFAULT 1;
+    ALTER TABLE ${flyway:defaultSchema}.EntityField ADD AutoUpdateFullTextSearch BIT NOT NULL DEFAULT 1;
+    ```
+  - **Always add `sp_addextendedproperty`** for every new column (except primary keys and foreign keys which CodeGen handles). This provides descriptions that CodeGen uses:
+    ```sql
+    EXEC sp_addextendedproperty
+        @name = N'MS_Description',
+        @value = N'Description of what this column does',
+        @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+        @level1type = N'TABLE',  @level1name = N'TableName',
+        @level2type = N'COLUMN', @level2name = N'ColumnName';
+    ```
 
 ### 🚨 CRITICAL: CodeGen Handles These Automatically
 **NEVER include the following in migration CREATE TABLE statements - CodeGen generates them:**
@@ -690,6 +722,7 @@ Key principles:
 - **Auto-cache**: Small (≤250 rows), unfiltered, unsorted results are automatically cached on the server because they can be safely maintained in-place via upsert/remove
 - **Filtered/sorted caches are invalidated (not updated)** on entity changes — we can't evaluate SQL predicates in JS, so the safe approach is to blow away the cache entry and let it repopulate on next request
 - **ResultType is excluded from cache fingerprints** — cache stores plain JSON regardless; transformation to BaseEntity objects happens post-cache
+- **`BypassCache: true`** — per-query escape hatch that skips all server-side caching (both read and write). Use for maintenance actions, scheduled jobs, or any query that needs true DB state after direct SQL operations that bypassed `BaseEntity.Save()`
 
 ### Batch Database Operations
 - Use `RunViews` (plural) instead of multiple `RunView` calls
@@ -1214,6 +1247,43 @@ try {
 }
 ```
 
+### BaseEntity Save/Delete Error Handling
+**Critical**: `BaseEntity.Save()` and `BaseEntity.Delete()` do NOT throw exceptions on failure. They return `boolean` — `true` on success, `false` on failure. Error details are available via `entity.LatestResult.CompleteMessage` which combines all error info into a single string.
+
+```typescript
+// ✅ CORRECT — Always check the return value
+const saved = await entity.Save();
+if (!saved) {
+    LogError(`Save failed: ${entity.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+    return; // Handle the failure
+}
+
+// ✅ CORRECT — Same pattern for Delete
+const deleted = await entity.Delete();
+if (!deleted) {
+    LogError(`Delete failed: ${entity.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+}
+
+// ❌ WRONG — Don't ignore the return value
+await entity.Save(); // Silent failure — you'll never know it failed
+
+// ❌ WRONG — Don't use try/catch for Save/Delete failures
+try {
+    await entity.Save();
+} catch (error) {
+    // This won't catch Save failures! Save returns false, it doesn't throw.
+}
+
+// ❌ WRONG — Don't use LatestResult.Message, use CompleteMessage
+LogError(`Error: ${entity.LatestResult?.Message}`); // Incomplete info
+```
+
+**Rules:**
+- **Always** check the boolean return value of `Save()` and `Delete()`
+- **Always** use `LatestResult?.CompleteMessage` (not `.Message`) for error details — `CompleteMessage` combines all error info
+- **Never** wrap `Save()`/`Delete()` in try/catch expecting them to throw on business logic failures
+- Save/Delete CAN still throw for infrastructure errors (network, connection), but logical failures (validation, permissions, FK violations) return `false`
+
 ### Key Benefits of This Pattern
 - **Type Safety**: Generic method provides full TypeScript typing
 - **Performance**: `ResultType: 'entity_object'` eliminates manual conversion loops
@@ -1390,12 +1460,14 @@ When encountering `ExpressionChangedAfterItHasBeenCheckedError` in Angular compo
 - Replace `setTimeout` with `Promise.resolve().then()` for microtask timing
 - Common scenarios: clearing inputs, focus management, dynamic content updates
 
-### Kendo UI Component Usage
-- **Deprecated Syntax**: Replace `<kendo-button>` with `<button kendoButton>`
-- **Window/Dialog Positioning**: 
-  - Use `kendoWindowContainer` directive on parent containers
-  - For dynamic windows, inject `ViewContainerRef` in WindowService.open()
-  - Set explicit `top` and `left` values for center positioning
+### MJ UI Components (`@memberjunction/ng-ui-components`)
+- **All UI components** should use the MJ UI components package — NOT Kendo, PrimeNG, or Angular Material
+- Available components: `mjButton`, `mj-dialog`, `MJDialogService`, `mj-window`, `mj-dropdown`, `mj-combobox`, `mj-switch`, `mj-numeric-input`, `mj-datepicker`, `mj-progress-bar`, `mj-accordion-panel` (with `mjAccordionTitle` for rich HTML titles)
+- Splitters: Use `angular-split` (`as-split` + `as-split-area`)
+- Grids: Use AG Grid (`ag-grid-angular`)
+- CSS classes: `.mj-input`, `.mj-textarea`, `.mj-checkbox` for styled native form elements
+- All components are standalone with `inject()` DI, PascalCase inputs/outputs, and `--mj-*` design tokens
+- Import from: `import { MJButtonDirective, MJDialogComponent, ... } from '@memberjunction/ng-ui-components'`
 
 ### GraphQL Parameter Types
 - **Numeric Types**: Pay attention to GraphQL scalar types
@@ -1470,6 +1542,33 @@ When encountering `ExpressionChangedAfterItHasBeenCheckedError` in Angular compo
   ```
 - Size presets: `'small'` (40x22px), `'medium'` (80x45px), `'large'` (120x67px), `'auto'` (fills container)
 - The component displays the animated MJ logo with optional text below
+
+### 🚨 CRITICAL: BaseResourceComponent Subclasses MUST Call NotifyLoadComplete() 🚨
+
+Every class that extends `BaseResourceComponent` (including `BaseDashboard` subclasses) **MUST** call `this.NotifyLoadComplete()` when its initial load is finished. Without this call, the app loading screen will hang indefinitely when navigating directly to a URL that targets that resource.
+
+- **`BaseDashboard` subclasses**: Handled automatically — `BaseDashboard.ngOnInit()` calls `NotifyLoadComplete()` after `loadData()` completes
+- **Direct `BaseResourceComponent` subclasses**: You MUST call `this.NotifyLoadComplete()` yourself, typically at the end of `ngOnInit()` or `ngAfterViewInit()`
+
+```typescript
+// ✅ CORRECT — NotifyLoadComplete called after initialization
+export class MyResourceComponent extends BaseResourceComponent implements OnInit {
+    async ngOnInit(): Promise<void> {
+        await this.loadMyData();
+        this.NotifyLoadComplete(); // REQUIRED — signals the loading screen to clear
+    }
+}
+
+// ❌ WRONG — missing NotifyLoadComplete causes permanent loading screen
+export class MyResourceComponent extends BaseResourceComponent implements OnInit {
+    async ngOnInit(): Promise<void> {
+        await this.loadMyData();
+        // Loading screen will hang forever on direct URL navigation!
+    }
+}
+```
+
+**Why this matters**: The shell's loading screen waits for the first resource component to signal completion via `LoadCompleteEvent`, which is wired to `NotifyLoadComplete()`. If the component never calls it, the loading animation plays indefinitely.
 
 ### Creating Custom Entity Forms
 

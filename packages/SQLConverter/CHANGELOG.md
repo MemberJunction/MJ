@@ -1,5 +1,47 @@
 # @memberjunction/sql-converter
 
+## 5.26.0
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.26.0
+- @memberjunction/sqlglot-ts@5.26.0
+
+## 5.25.0
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.25.0
+- @memberjunction/sqlglot-ts@5.25.0
+
+## 5.24.0
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.24.0
+- @memberjunction/sqlglot-ts@5.24.0
+
+## 5.23.0
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.23.0
+- @memberjunction/sqlglot-ts@5.23.0
+
+## 5.22.0
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.22.0
+- @memberjunction/sqlglot-ts@5.22.0
+
+## 5.21.0
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.21.0
+- @memberjunction/sqlglot-ts@5.21.0
+
 ## 5.20.0
 
 ### Patch Changes

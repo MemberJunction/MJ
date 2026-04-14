@@ -1,0 +1,23 @@
+[
+  {
+    "fields": {
+      "Name": "Falkland Islands (Malvinas)",
+      "Code": "FK",
+      "ISO3166_2": "FK-FK",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Falkland Islands (Malvinas)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=FK"
+    },
+    "primaryKey": {
+      "ID": "009A55B5-C607-48FB-9ECB-F539D54564DC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:46.862Z",
+      "checksum": "6bb2a21ccdd5149e31230f535373e6adf83b6fb8e57a47f8b589016dd5cf3659"
+    }
+  }
+]

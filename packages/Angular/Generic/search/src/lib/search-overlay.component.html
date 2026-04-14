@@ -1,0 +1,153 @@
+@if (IsOpen) {
+    <!-- Backdrop -->
+    <div class="search-backdrop" (click)="OnBackdropClick()"></div>
+
+    <!-- Spotlight container -->
+    <div class="search-spotlight" (click)="$event.stopPropagation()">
+        <!-- Search input area -->
+        <div class="search-input-wrap">
+            <i class="fa-solid fa-magnifying-glass search-icon"></i>
+            <input
+                #searchInput
+                type="text"
+                class="search-input"
+                [placeholder]="Placeholder"
+                [value]="Query"
+                (input)="OnQueryInput($any($event.target).value)"
+                autocomplete="off"
+                spellcheck="false"
+            />
+            @if (IsSearching) {
+                <div class="search-spinner">
+                    <i class="fa-solid fa-spinner fa-spin"></i>
+                </div>
+            }
+            <div class="search-shortcut-hint">
+                <kbd>ESC</kbd>
+            </div>
+        </div>
+
+        <!-- Results area -->
+        <div class="search-results-area">
+            @if (ShowFilters && Filters.length > 0) {
+                <!-- Filter chips -->
+                <div class="search-filter-bar">
+                    @for (filter of Filters; track filter.Category) {
+                        @for (option of filter.Options; track option.Value) {
+                            <button
+                                class="filter-chip"
+                                [class.filter-chip-active]="IsFilterActive(filter.Category, option.Value)"
+                                (click)="OnFilterToggle(filter.Category, option.Value)"
+                            >
+                                @if (option.Icon) {
+                                    <i [class]="option.Icon"></i>
+                                }
+                                <span>{{ option.Label }}</span>
+                                <span class="filter-chip-count">{{ option.Count }}</span>
+                            </button>
+                        }
+                    }
+                    @if (hasActiveFilters()) {
+                        <button class="filter-clear-btn" (click)="ClearAllFilters()">
+                            <i class="fa-solid fa-times"></i> Clear
+                        </button>
+                    }
+                </div>
+            }
+
+            @if (HasSearched && AllResults.length === 0 && !IsSearching) {
+                <!-- No results -->
+                <div class="search-empty-state">
+                    <i class="fa-solid fa-search search-empty-icon"></i>
+                    <p class="search-empty-title">No results found</p>
+                    <p class="search-empty-text">Try different keywords or remove some filters</p>
+                    @if (ShowAgentCta) {
+                        <button class="agent-cta-btn" (click)="OnAgentCtaClick()">
+                            <i class="fa-solid fa-robot"></i>
+                            {{ AgentCtaText }}
+                        </button>
+                    }
+                </div>
+            }
+
+            @if (!HasSearched && !IsSearching) {
+                <!-- Recent searches -->
+                <div class="search-recent">
+                    @if (searchService.RecentSearches$.value.length > 0) {
+                        <div class="search-recent-header">
+                            <span class="search-recent-title">Recent Searches</span>
+                        </div>
+                        @for (recent of searchService.RecentSearches$.value; track recent.Query; let i = $index) {
+                            @if (i < 5) {
+                                <div class="search-recent-item" (click)="OnQueryInput(recent.Query)">
+                                    <i class="fa-solid fa-clock search-recent-icon"></i>
+                                    <span>{{ recent.Query }}</span>
+                                    <span class="search-recent-count">{{ recent.ResultCount }} results</span>
+                                </div>
+                            }
+                        }
+                    } @else {
+                        <div class="search-empty-state search-empty-state-compact">
+                            <i class="fa-solid fa-magnifying-glass search-empty-icon"></i>
+                            <p class="search-empty-text">Start typing to search across all your knowledge</p>
+                        </div>
+                    }
+                </div>
+            }
+
+            @if (AllResults.length > 0) {
+                <!-- Grouped results -->
+                @for (group of ResultGroups; track group.SourceType) {
+                    <div class="result-group">
+                        <div class="result-group-header">
+                            <i [class]="group.Icon"></i>
+                            <span class="result-group-label">{{ group.Label }}</span>
+                            <span class="result-group-count">{{ group.TotalCount }}</span>
+                        </div>
+                        @for (result of group.Results; track result.ID; let ri = $index) {
+                            <div
+                                class="result-item"
+                                [class.result-item-highlighted]="isResultHighlighted(result)"
+                                (click)="OnResultClick(result, $event)"
+                                (mouseenter)="HighlightedIndex = getFlatIndex(result)"
+                            >
+                                <div class="result-item-icon">
+                                    <i [class]="result.SourceIcon"></i>
+                                </div>
+                                <div class="result-item-content">
+                                    <div class="result-item-title">{{ result.Title }}</div>
+                                    <div class="result-item-snippet">{{ result.Snippet }}</div>
+                                    @if (result.Tags.length > 0) {
+                                        <div class="result-item-tags">
+                                            @for (tag of result.Tags; track tag; let ti = $index) {
+                                                @if (ti < 3) {
+                                                    <span class="result-tag">{{ tag }}</span>
+                                                }
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                                <div class="result-item-score">
+                                    <span class="score-badge">{{ FormatScore(result.Score) }}</span>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+
+                <!-- Footer -->
+                <div class="search-footer">
+                    <span class="search-footer-count">
+                        {{ TotalCount }} results in {{ FormatElapsedTime(ElapsedMs) }}
+                    </span>
+                    @if (ShowAgentCta) {
+                        <button class="agent-cta-btn agent-cta-btn-small" (click)="OnAgentCtaClick()">
+                            <i class="fa-solid fa-robot"></i>
+                            {{ AgentCtaText }}
+                        </button>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+}

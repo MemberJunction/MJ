@@ -1,7 +1,22 @@
 import { Component,  EventEmitter,  Input, OnDestroy, OnInit, Output } from '@angular/core';
 import { BaseEntity, EntityFieldInfo, EntityInfo, LogError, Metadata, RunView } from '@memberjunction/core';
-import { Subject } from 'rxjs';
+import { Subject, Subscription } from 'rxjs';
 import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
+import {
+  ColDef,
+  GridReadyEvent,
+  GridApi,
+  ModuleRegistry,
+  AllCommunityModule,
+  RowSelectionOptions,
+  SelectionChangedEvent,
+  themeAlpine,
+  colorSchemeVariable,
+  type Theme
+} from 'ag-grid-community';
+
+// Register AG Grid modules
+ModuleRegistry.registerModules([AllCommunityModule]);
  
 @Component({
   standalone: false,
@@ -32,14 +47,29 @@ export class FindRecordComponent implements OnInit, OnDestroy {
   @Output() OnRecordSelected = new EventEmitter<BaseEntity>();
 
   public searchTerm: string = ''; // User search term
-  public records: any[] = []; // Store search results
+  public records: BaseEntity[] = []; // Store search results
 
   public loading = false; // Loading state for search
   public searchHasRun: boolean = false; // has a search been run
   private entityInfo: EntityInfo | undefined; // Entity metadata
 
   private searchSubject = new Subject<string>(); // Subject to emit search term changes
-  private searchSubscription: any;
+  private searchSubscription: Subscription | undefined;
+
+  // AG Grid configuration
+  public ColumnDefs: ColDef[] = [];
+  public DefaultColDef: ColDef = {
+    sortable: true,
+    resizable: true,
+    filter: false
+  };
+  public RowSelectionConfig: RowSelectionOptions = {
+    mode: 'singleRow',
+    checkboxes: false,
+    enableClickSelection: true
+  };
+  public GridTheme: Theme = themeAlpine.withPart(colorSchemeVariable);
+  private gridApi: GridApi | null = null;
 
  
   ngOnInit() {
@@ -58,6 +88,9 @@ export class FindRecordComponent implements OnInit, OnDestroy {
       );
     }
 
+    // Build AG Grid column definitions from display fields
+    this.ColumnDefs = this.buildColumnDefs();
+
     // Subscribe to the searchSubject with debounce
     this.searchSubscription = this.searchSubject.pipe(
       debounceTime(this.SearchDebounceTime), // Delay search execution by 300ms
@@ -67,7 +100,7 @@ export class FindRecordComponent implements OnInit, OnDestroy {
         return this.doSearch(term);
       })
     ).subscribe({
-      next: (results: any[]) => {
+      next: (results: BaseEntity[]) => {
         this.records = results;
         this.loading = false;
         this.searchHasRun = true;
@@ -97,9 +130,22 @@ export class FindRecordComponent implements OnInit, OnDestroy {
     this.searchSubject.next(term); // Emit the new search term
   }
 
-  public onSelectionChange(event: any) {
-    // Emit the selected record
-    this.OnRecordSelected.emit(event.selectedRows[0].dataItem);
+  public onSelectionChange(event: SelectionChangedEvent) {
+    const selectedRows = event.api.getSelectedRows();
+    if (selectedRows.length > 0) {
+      this.OnRecordSelected.emit(selectedRows[0]);
+    }
+  }
+
+  public onGridReady(event: GridReadyEvent) {
+    this.gridApi = event.api;
+  }
+
+  private buildColumnDefs(): ColDef[] {
+    return this.DisplayFields.map((field: EntityFieldInfo) => ({
+      field: field.Name,
+      headerName: field.DisplayNameOrName
+    }));
   }
 
   // Stub function for simulating a database search (replace with actual search logic)

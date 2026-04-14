@@ -78,18 +78,20 @@ export class VersionHistoryLabelsResourceComponent extends BaseResourceComponent
     public ShowCreateWizard = false;
 
     private metadata = new Metadata();
-    private destroy$ = new Subject<void>();
+    protected override destroy$ = new Subject<void>();
 
-    constructor(private cdr: ChangeDetectorRef, private navigationService: NavigationService) {
+    constructor(private cdr: ChangeDetectorRef) {
         super();
     }
 
     ngOnInit(): void {
+        super.ngOnInit();
         this.loadUserPreferences();
         this.LoadData();
     }
 
     ngOnDestroy(): void {
+        super.ngOnDestroy();
         this.destroy$.next();
         this.destroy$.complete();
     }

@@ -16,9 +16,9 @@
     gap: 15px;
 }
 
-.dashboard-title .k-icon {
-    color: var(--border-blue);
-    font-size: 25px;
+.dashboard-star-icon {
+    color: var(--mj-brand-primary);
+    font-size: 22px;
 }
 
 .dashboard-title h3 {
@@ -39,89 +39,7 @@
     display: flex;
     gap: 10px;
     align-items: center;
-}
-
-::ng-deep .dashboard-header .k-button-solid-base {
-    border: 1px solid var(--border-blue) !important;
-    color: var(--border-blue) !important;
-    border-radius: 10px;
-    line-height: 34px;
-    background: var(--white-color);
-}
-
-::ng-deep .dashboard-header .k-button-solid-primary {
-    background: var(--border-blue) !important;
-    color: var(--white-color) !important;
-    border-radius: 10px;
-    line-height: 34px;
-    border-color: var(--border-blue);
-}
-
-::ng-deep .dashboard-header .btn-ref .k-button-text {
-    display: flex;
-    gap: 10px;
-}
-
-.dashboard-header .btn-ref {
-    border: none;
-    background: transparent;
-}
-
-.main-head-dashboard {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 20px;
-    padding-bottom: 20px;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
-}
-
-.tile-resource-container {
-    margin-top: 20px;
-    padding: 15px;
-    border-radius: 8px;
-    background-color: var(--mj-bg-surface-card);
-}
-
-.tile-resource-container .k-tilelayout {
-    background: var(--mj-bg-surface);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-    border-radius: 8px;
-    padding: 10px;
-}
-
-/* Dashboard item styling */
-::ng-deep kendo-tilelayout-item {
-    border-radius: 6px;
-    overflow: hidden;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    margin: 5px;
-}
-
-.bg-light-grey {
-    background-color: var(--mj-bg-surface-sunken);
-}
-
-.bg-dark-grey {
-    background-color: var(--mj-text-secondary);
-    color: white;
-}
-
-.bg-blue {
-    background-color: var(--mj-brand-primary);
-    color: white;
-}
-
-.dashboard-item-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 10px 15px;
-    font-weight: 500;
-}
-
-.dashboard-item-header i {
-    margin-right: 8px;
+    justify-content: flex-end;
 }
 
 .button-spacing {
@@ -135,6 +53,79 @@
 
 .btn-wrapper > button {
     margin-left: 5px;
+}
+
+.main-head-dashboard {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--mj-border-subtle);
+}
+
+.tile-resource-container {
+    margin-top: 20px;
+    padding: 15px;
+    border-radius: 8px;
+    background-color: var(--mj-bg-surface-card);
+}
+
+/* CSS Grid tile layout */
+.mj-tile-layout {
+    display: grid;
+    gap: 16px;
+    background: var(--mj-bg-surface);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    border-radius: 8px;
+    padding: 10px;
+}
+
+.mj-tile-item {
+    border-radius: 6px;
+    overflow: hidden;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    background: var(--mj-bg-surface);
+    display: flex;
+    flex-direction: column;
+}
+
+.mj-tile-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 15px;
+    font-weight: 500;
+    background-color: var(--mj-brand-primary);
+    color: var(--mj-text-inverse, white);
+}
+
+.mj-tile-header .item-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.mj-tile-body {
+    flex: 1;
+    overflow: auto;
+}
+
+.bg-light-grey {
+    background-color: var(--mj-bg-surface-sunken);
+}
+
+.bg-dark-grey {
+    background-color: var(--mj-text-secondary);
+    color: var(--mj-text-inverse, white);
+}
+
+.bg-blue {
+    background-color: var(--mj-brand-primary);
+    color: var(--mj-text-inverse, white);
 }
 
 /* Empty dashboard state */

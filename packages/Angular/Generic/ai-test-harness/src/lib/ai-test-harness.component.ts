@@ -1,8 +1,5 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, SimpleChanges, ViewChild, ElementRef, AfterViewChecked, SecurityContext, ViewContainerRef, ChangeDetectorRef } from '@angular/core';
-import { Router } from '@angular/router';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, SimpleChanges, ViewChild, ElementRef, AfterViewChecked, SecurityContext, ChangeDetectorRef } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
-import { TextAreaComponent } from '@progress/kendo-angular-inputs';
-import { WindowService, WindowRef, WindowCloseResult } from '@progress/kendo-angular-dialog';
 import { MJAIAgentEntityExtended, MJAIPromptEntityExtended, MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptRunEntityExtended } from "@memberjunction/ai-core-plus";
 import { MJTemplateParamEntity, MJAIConfigurationEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
@@ -157,16 +154,11 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     /**
      * Creates a new AI Test Harness component instance.
      * @param sanitizer - Angular DomSanitizer for safe HTML rendering of formatted content
-     * @param windowService - Kendo WindowService for creating modal windows
-     * @param viewContainerRef - Angular ViewContainerRef for window positioning
      * @param cdr - Angular ChangeDetectorRef for managing change detection
      */
     constructor(
         private sanitizer: DomSanitizer,
-        private windowService: WindowService,
-        private viewContainerRef: ViewContainerRef,
-        private cdr: ChangeDetectorRef,
-        private router: Router
+        private cdr: ChangeDetectorRef
     ) {}
     
     /** The mode of operation - either 'agent' or 'prompt' */
@@ -237,7 +229,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     @ViewChild('fileInput') private fileInput!: ElementRef;
     
     /** Reference to the message input textarea */
-    @ViewChild('messageInput') private messageInput!: TextAreaComponent;
+    @ViewChild('messageInput') private messageInput!: ElementRef<HTMLTextAreaElement>;
     
     /** Reference to the save dialog input */
     @ViewChild('saveDialogInput') private saveDialogInput?: ElementRef;
@@ -341,8 +333,8 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     /** Current JSON content to display in the dialog */
     public currentJsonContent: string = '';
     
-    /** Reference to the JSON window when open */
-    private jsonWindowRef: WindowRef | null = null;
+    /** Whether the JSON viewer window is visible */
+    public showJsonWindow = false;
     
     // === Execution Monitor Properties ===
     /** Mode for the execution monitor component */
@@ -505,7 +497,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
         if (this.isVisible && !this._hasFocused && this.messageInput) {
             this._hasFocused = true;
             Promise.resolve().then(() => {
-                this.messageInput?.focus();
+                this.messageInput?.nativeElement?.focus();
             });
         }
     }
@@ -2470,65 +2462,25 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
      */
     public showRawJsonDialog(message: ConversationMessage) {
         if (message.rawContent) {
-            // Close any existing window
-            if (this.jsonWindowRef) {
-                this.jsonWindowRef.close();
-            }
-
             try {
-                // Try to parse and format the JSON
                 const parsed = JSON.parse(message.rawContent);
-                
-                // If this is an agent result with execution tree, enhance the display
                 if (parsed.agentRunID) {
-                    // Add agent run ID for reference
-                    const enhancedParsed = {
-                        ...parsed,
-                        _agentRunID: parsed.agentRunID
-                    };
+                    const enhancedParsed = { ...parsed, _agentRunID: parsed.agentRunID };
                     this.currentJsonContent = this.formatJson(enhancedParsed);
                 } else {
-                    // Apply recursive JSON parsing
                     this.currentJsonContent = this.formatJson(parsed);
                 }
             } catch {
-                // If not valid JSON, show as-is
                 this.currentJsonContent = message.rawContent;
             }
-
-            // Import the JsonViewerWindowComponent dynamically
-            import('./json-viewer-window.component').then(({ JsonViewerWindowComponent }) => {
-                // Create the window using WindowService
-                // Calculate center position accounting for scroll
-                const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-                const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
-                const centerTop = Math.max(50, (window.innerHeight - 700) / 2 + scrollTop);
-                const centerLeft = Math.max(50, (window.innerWidth - 900) / 2 + scrollLeft);
-
-                this.jsonWindowRef = this.windowService.open({
-                    title: 'Raw JSON Response',
-                    content: JsonViewerWindowComponent,
-                    width: 900,
-                    height: 700,
-                    minWidth: 600,
-                    minHeight: 400,
-                    resizable: true,
-                    draggable: true,
-                    top: centerTop,
-                    left: centerLeft
-                });
-
-                // Pass the JSON content to the component
-                const windowContent = this.jsonWindowRef.content.instance;
-                windowContent.jsonContent = this.currentJsonContent;
-
-                // Handle window close
-                this.jsonWindowRef.result.subscribe((result: WindowCloseResult) => {
-                    this.jsonWindowRef = null;
-                    this.currentJsonContent = '';
-                });
-            });
+            this.showJsonWindow = true;
         }
+    }
+
+    /** Closes the JSON viewer window */
+    public closeJsonWindow(): void {
+        this.showJsonWindow = false;
+        this.currentJsonContent = '';
     }
     
     /**
@@ -2602,7 +2554,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     private focusMessageInput(): void {
         if (this.messageInput) {
             setTimeout(() => {
-                this.messageInput.focus();
+                this.messageInput.nativeElement.focus();
             }, 100);
         }
     }
@@ -2881,11 +2833,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
      * Closes the JSON dialog
      */
     public closeJsonDialog() {
-        if (this.jsonWindowRef) {
-            this.jsonWindowRef.close();
-            this.jsonWindowRef = null;
-        }
-        this.showJsonDialog = false;
+        this.showJsonWindow = false;
         this.currentJsonContent = '';
     }
     

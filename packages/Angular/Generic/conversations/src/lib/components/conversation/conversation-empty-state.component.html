@@ -1,4 +1,4 @@
-<div class="conversation-empty-state">
+<div class="conversation-empty-state" [class.overlay-mode]="overlayMode">
   <!-- Sidebar Toggle Button (top-left when sidebar is collapsed) -->
   @if (showSidebarToggle) {
     <button class="sidebar-toggle-btn"
@@ -16,60 +16,76 @@
   }
 
   <div class="empty-state-container" [class.loading]="disabled">
-    <!-- Greeting Header -->
-    <div class="greeting-section">
-      <div class="greeting-icon">
-        <i class="fa-solid fa-comments fa-3x"></i>
+    <!-- Greeting Header (hidden in overlay mode) -->
+    @if (!overlayMode) {
+      <div class="greeting-section">
+        <div class="greeting-icon">
+          <i class="fa-solid fa-comments fa-3x"></i>
+        </div>
+        <h1 class="greeting-title">Welcome to Conversations</h1>
+        <p class="greeting-subtitle">
+          Start a new conversation by typing a message below, or choose a suggested prompt to get started.
+        </p>
       </div>
-      <h1 class="greeting-title">Welcome to Conversations</h1>
-      <p class="greeting-subtitle">
-        Start a new conversation by typing a message below, or choose a suggested prompt to get started.
-      </p>
-    </div>
+    }
 
-    <!-- Suggested Prompts -->
-    <div class="suggested-prompts">
-      <div class="prompt-grid">
-        @for (prompt of suggestedPrompts; track prompt) {
-          <div
-            class="prompt-card"
-            (click)="onSuggestedPromptClicked(prompt.prompt)"
-            [class.disabled]="disabled"
-            >
-            <div class="prompt-icon">
-              <i class="fa-solid {{prompt.icon}}"></i>
+    <!-- Suggested Prompts (hidden in overlay mode) -->
+    @if (suggestedPrompts.length > 0) {
+      <div class="suggested-prompts">
+        <div class="prompt-grid">
+          @for (prompt of suggestedPrompts; track prompt) {
+            <div
+              class="prompt-card"
+              (click)="onSuggestedPromptClicked(prompt.prompt)"
+              [class.disabled]="disabled"
+              >
+              <div class="prompt-icon">
+                <i class="fa-solid {{prompt.icon}}"></i>
+              </div>
+              <div class="prompt-content">
+                <div class="prompt-title">{{prompt.title}}</div>
+                <div class="prompt-text">{{prompt.prompt}}</div>
+              </div>
             </div>
-            <div class="prompt-content">
-              <div class="prompt-title">{{prompt.title}}</div>
-              <div class="prompt-text">{{prompt.prompt}}</div>
-            </div>
-          </div>
-        }
+          }
+        </div>
       </div>
-    </div>
+    }
+
+    <!-- Compact greeting for overlay mode -->
+    @if (overlayMode) {
+      <div class="overlay-greeting">
+        <p class="overlay-greeting-text">{{ greeting }}</p>
+      </div>
+    }
 
     <!-- Message Input (using full mj-message-input in empty state mode) -->
     <div class="message-input-wrapper">
       <mj-message-input
-        [placeholder]="'Type your message to start a new conversation...'"
+        [placeholder]="overlayMode ? 'Type a message...' : 'Type your message to start a new conversation...'"
         [disabled]="disabled"
         [currentUser]="currentUser"
         [emptyStateMode]="true"
-        [enableAttachments]="true"
+        [enableAttachments]="enableAttachments"
+        [maxAttachments]="maxAttachments"
+        [maxAttachmentSizeBytes]="maxAttachmentSizeBytes"
+        [acceptedFileTypes]="acceptedFileTypes"
         (emptyStateSubmit)="onEmptyStateSubmit($event)">
       </mj-message-input>
     </div>
 
-    <!-- Footer Tips -->
-    <div class="tips-section">
-      <div class="tip-item">
-        <i class="fa-solid fa-at"></i>
-        <span>Use <strong>&#64;AgentName</strong> to directly invoke a specific agent</span>
+    <!-- Footer Tips (hidden in overlay mode) -->
+    @if (!overlayMode) {
+      <div class="tips-section">
+        <div class="tip-item">
+          <i class="fa-solid fa-at"></i>
+          <span>Use <strong>&#64;AgentName</strong> to directly invoke a specific agent</span>
+        </div>
+        <div class="tip-item">
+          <i class="fa-solid fa-keyboard"></i>
+          <span>Press <strong>Enter</strong> to send, <strong>Shift+Enter</strong> for new line</span>
+        </div>
       </div>
-      <div class="tip-item">
-        <i class="fa-solid fa-keyboard"></i>
-        <span>Press <strong>Enter</strong> to send, <strong>Shift+Enter</strong> for new line</span>
-      </div>
-    </div>
+    }
   </div>
 </div>

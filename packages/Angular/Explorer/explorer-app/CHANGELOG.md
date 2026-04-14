@@ -1,5 +1,96 @@
 # @memberjunction/ng-explorer-app
 
+## 5.26.0
+
+### Patch Changes
+
+- 55de456: Fix missing dependencies across 17 packages that accumulated while knip dependency checking was silently broken. Repair knip infrastructure: disable crashing vitest plugin, harden CI workflow to fail-fast on tool crashes instead of silently passing, and fix hardcoded Angular version in auto-fix script.
+- Updated dependencies [a1002f4]
+  - @memberjunction/core@5.26.0
+  - @memberjunction/ai-core-plus@5.26.0
+  - @memberjunction/ng-bootstrap@5.26.0
+  - @memberjunction/ng-base-application@5.26.0
+  - @memberjunction/ng-explorer-core@5.26.0
+  - @memberjunction/ng-shared@5.26.0
+  - @memberjunction/ng-conversations@5.26.0
+  - @memberjunction/ng-notifications@5.26.0
+  - @memberjunction/ng-workspace-initializer@5.26.0
+  - @memberjunction/ai-agent-client@5.26.0
+  - @memberjunction/ng-auth-services@5.26.0
+  - @memberjunction/ng-agent-client@5.26.0
+
+## 5.25.0
+
+### Patch Changes
+
+- Updated dependencies [fc8cd52]
+- Updated dependencies [a24ff53]
+- Updated dependencies [008a62d]
+- Updated dependencies [5e2a64f]
+- Updated dependencies [1eb9f6e]
+  - @memberjunction/core@5.25.0
+  - @memberjunction/ng-conversations@5.25.0
+  - @memberjunction/ng-explorer-core@5.25.0
+  - @memberjunction/ng-bootstrap@5.25.0
+  - @memberjunction/ng-auth-services@5.25.0
+  - @memberjunction/ng-workspace-initializer@5.25.0
+
+## 5.24.0
+
+### Patch Changes
+
+- Updated dependencies [c318a0c]
+- Updated dependencies [3a35955]
+- Updated dependencies [1912726]
+  - @memberjunction/ng-bootstrap@5.24.0
+  - @memberjunction/ng-explorer-core@5.24.0
+  - @memberjunction/core@5.24.0
+  - @memberjunction/ng-auth-services@5.24.0
+  - @memberjunction/ng-conversations@5.24.0
+  - @memberjunction/ng-workspace-initializer@5.24.0
+
+## 5.23.0
+
+### Patch Changes
+
+- Updated dependencies [247df16]
+- Updated dependencies [9250070]
+- Updated dependencies [513b20c]
+- Updated dependencies [44bc22b]
+  - @memberjunction/core@5.23.0
+  - @memberjunction/ng-explorer-core@5.23.0
+  - @memberjunction/ng-bootstrap@5.23.0
+  - @memberjunction/ng-auth-services@5.23.0
+  - @memberjunction/ng-workspace-initializer@5.23.0
+  - @memberjunction/ng-conversations@5.23.0
+
+## 5.22.0
+
+### Patch Changes
+
+- Updated dependencies [6a5093b]
+- Updated dependencies [e123e4b]
+- Updated dependencies [a42aba6]
+- Updated dependencies [e5993ff]
+- Updated dependencies [f2a6bec]
+  - @memberjunction/core@5.22.0
+  - @memberjunction/ng-bootstrap@5.22.0
+  - @memberjunction/ng-chat-overlay@5.22.0
+  - @memberjunction/ng-explorer-core@5.22.0
+  - @memberjunction/ng-auth-services@5.22.0
+  - @memberjunction/ng-workspace-initializer@5.22.0
+
+## 5.21.0
+
+### Patch Changes
+
+- Updated dependencies [c7dfb20]
+  - @memberjunction/core@5.21.0
+  - @memberjunction/ng-bootstrap@5.21.0
+  - @memberjunction/ng-auth-services@5.21.0
+  - @memberjunction/ng-explorer-core@5.21.0
+  - @memberjunction/ng-workspace-initializer@5.21.0
+
 ## 5.20.0
 
 ### Patch Changes

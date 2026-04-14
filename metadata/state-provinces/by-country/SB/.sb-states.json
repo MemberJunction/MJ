@@ -1,0 +1,170 @@
+[
+  {
+    "fields": {
+      "Name": "Capital Territory (Honiara)",
+      "Code": "CT",
+      "ISO3166_2": "SB-CT",
+      "Latitude": -9.4466,
+      "Longitude": 160.019,
+      "BoundaryGeoJSON": "@file:by-country/SB/boundaries/SB-CT.geojson",
+      "CommonAliases": [
+        "Capital Territory (Honiara)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SB"
+    },
+    "primaryKey": {
+      "ID": "57C293C7-E6AC-441B-8873-AD1FC854E361"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:30.079Z",
+      "checksum": "eaed619b06631d610f044215cacb5e24134c2124345a89cc25b9c33800382256"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Central",
+      "Code": "CE",
+      "ISO3166_2": "SB-CE",
+      "Latitude": -9.14,
+      "Longitude": 159.825,
+      "BoundaryGeoJSON": "@file:by-country/SB/boundaries/SB-CE.geojson",
+      "CommonAliases": [
+        "Central"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SB"
+    },
+    "primaryKey": {
+      "ID": "0E9499C3-F041-42EE-B613-D22A5EF817F0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:30.096Z",
+      "checksum": "3c06758c1e84f87d36266eeb1b3c5592623715f68ab099183854edb4ea90c3df"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Guadalcanal",
+      "Code": "GU",
+      "ISO3166_2": "SB-GU",
+      "Latitude": -9.6169,
+      "Longitude": 160.209,
+      "BoundaryGeoJSON": "@file:by-country/SB/boundaries/SB-GU.geojson",
+      "CommonAliases": [
+        "Guadalcanal"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SB"
+    },
+    "primaryKey": {
+      "ID": "84384924-EDDA-4E68-9764-229BFBBE907F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:30.112Z",
+      "checksum": "c76874970ed9a3555573bc991a43e3845dcf34935a9250700023887e3074bf09"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Isabel",
+      "Code": "IS",
+      "ISO3166_2": "SB-IS",
+      "Latitude": -8.4469,
+      "Longitude": 159.619,
+      "BoundaryGeoJSON": "@file:by-country/SB/boundaries/SB-IS.geojson",
+      "CommonAliases": [
+        "Isabel"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SB"
+    },
+    "primaryKey": {
+      "ID": "68C96304-2EB0-4EAB-87D7-820F3E9D2231"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:30.128Z",
+      "checksum": "66ddfa4db673284daa0c3621d1a9362f1d627398805dd876e535815d07ac99c1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Makira",
+      "Code": "MK",
+      "ISO3166_2": "SB-MK",
+      "Latitude": -10.2782,
+      "Longitude": 161.744,
+      "BoundaryGeoJSON": "@file:by-country/SB/boundaries/SB-MK.geojson",
+      "CommonAliases": [
+        "Makira"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SB"
+    },
+    "primaryKey": {
+      "ID": "ABB84A65-B5F9-4D55-A19F-88203BE8975E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:30.146Z",
+      "checksum": "b2814c0441a5be84979fd6258945ab2f0e773fc051ce05c2eb66f87c31b2fe96"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Malaita",
+      "Code": "ML",
+      "ISO3166_2": "SB-ML",
+      "Latitude": -9.7583,
+      "Longitude": 161.956,
+      "BoundaryGeoJSON": "@file:by-country/SB/boundaries/SB-ML.geojson",
+      "CommonAliases": [
+        "Malaita"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SB"
+    },
+    "primaryKey": {
+      "ID": "279FFDC6-C22E-42CF-9FE2-C7F642E31D75"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:30.164Z",
+      "checksum": "7e76cceb7db6e7881eab685a94e610dbee734709214e61d784057e30d47a47eb"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Temotu",
+      "Code": "TE",
+      "ISO3166_2": "SB-TE",
+      "Latitude": -12.277,
+      "Longitude": 168.812,
+      "BoundaryGeoJSON": "@file:by-country/SB/boundaries/SB-TE.geojson",
+      "CommonAliases": [
+        "Temotu"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SB"
+    },
+    "primaryKey": {
+      "ID": "4DD7B5D5-8E37-4CFB-A4E2-D8DF64A18E58"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:30.183Z",
+      "checksum": "f26849858f1ab9d0eac7abc417102367da88e86e53e89e30cb2756fda8ae5f9d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Western",
+      "Code": "WE",
+      "ISO3166_2": "SB-WE",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Western"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SB"
+    },
+    "primaryKey": {
+      "ID": "B23692D4-B9D8-43BF-9466-455EE71A6EF6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:30.196Z",
+      "checksum": "e1a3f5d1a571612a844703700d37b74d33d8da40fc774d14e6cb114146df8a42"
+    }
+  }
+]

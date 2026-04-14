@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Metadata } from '@memberjunction/core';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
+import { MarkdownModule } from '@memberjunction/ng-markdown';
 
 /**
  * Flattened tree item for rendering the component hierarchy
@@ -21,7 +22,7 @@ interface TreeItem {
 @Component({
   selector: 'mj-component-feedback-panel',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, MarkdownModule],
   templateUrl: './component-feedback-panel.component.html',
   styleUrls: ['./component-feedback-panel.component.css']
 })
@@ -104,14 +105,14 @@ export class ComponentFeedbackPanelComponent implements OnDestroy {
     return `${depth * 20}px`;
   }
 
-  // --- Star Rating ---
+  // --- Star Rating (supports half-star increments) ---
 
-  SetRating(stars: number): void {
-    this.StarRating = stars;
+  SetRating(value: number): void {
+    this.StarRating = value;
   }
 
-  SetHoverRating(stars: number): void {
-    this.HoverRating = stars;
+  SetHoverRating(value: number): void {
+    this.HoverRating = value;
   }
 
   ClearHoverRating(): void {
@@ -120,6 +121,14 @@ export class ComponentFeedbackPanelComponent implements OnDestroy {
 
   GetDisplayRating(): number {
     return this.HoverRating || this.StarRating;
+  }
+
+  /** Returns 'full' | 'half' | 'empty' for the given 1-based star index */
+  GetStarState(index: number): 'full' | 'half' | 'empty' {
+    const rating = this.GetDisplayRating();
+    if (index <= rating) return 'full';
+    if (index - 0.5 <= rating) return 'half';
+    return 'empty';
   }
 
   IsStarFilled(index: number): boolean {

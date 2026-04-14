@@ -63,10 +63,14 @@ export class VectorBase {
         return rvResult.Results;
     }
 
-    protected BuildExtraFilter(CompositeKey: CompositeKey[]): string {
-        return CompositeKey.map((keyValue) => {
+    /**
+     * Builds a SQL filter from composite keys. Values are sanitized to prevent SQL injection.
+     */
+    protected BuildExtraFilter(compositeKeys: CompositeKey[]): string {
+        return compositeKeys.map((keyValue) => {
             return keyValue.KeyValuePairs.map((keys) => {
-                return `${keys.FieldName} = '${keys.Value}'`;
+                const sanitizedValue = String(keys.Value).replace(/'/g, "''");
+                return `${keys.FieldName} = '${sanitizedValue}'`;
             }).join(" AND ");
         }).join("\n OR ");
     }

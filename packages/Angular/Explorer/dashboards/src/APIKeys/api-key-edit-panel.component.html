@@ -105,26 +105,24 @@
             </div>
             <div class="form-field">
               <label>Label</label>
-              <input kendoTextBox [(ngModel)]="EditLabel"
-                [disabled]="!IsEditing"
-                class="form-input" />
+              <input class="mj-input form-input" [(ngModel)]="EditLabel"
+                [disabled]="!IsEditing" />
             </div>
             <div class="form-field">
               <label>Description</label>
-              <textarea kendoTextArea [(ngModel)]="EditDescription"
+              <textarea class="mj-textarea form-textarea" [(ngModel)]="EditDescription"
                 [disabled]="!IsEditing"
-                [rows]="3"
-              class="form-textarea"></textarea>
+                [rows]="3"></textarea>
             </div>
             <div class="form-field">
               <label>Expiration</label>
               <div class="expiration-field">
-                <kendo-datepicker [(ngModel)]="EditExpiresAt"
-                  [disabled]="!IsEditing"
-                  [min]="getMinDate()"
-                  format="MMM d, yyyy"
-                  placeholder="Never expires">
-                </kendo-datepicker>
+                <mj-datepicker [(ngModel)]="EditExpiresAt"
+                  [Disabled]="!IsEditing"
+                  [Min]="getMinDate()"
+                  Format="MMM d, yyyy"
+                  Placeholder="Never expires">
+                </mj-datepicker>
                 @if (IsEditing && EditExpiresAt) {
                   <button class="clear-btn"
                     (click)="EditExpiresAt = null">
@@ -136,7 +134,7 @@
             </div>
             @if (IsEditing) {
               <div class="edit-actions">
-                <button kendoButton [themeColor]="'primary'"
+                <button mjButton variant="primary"
                   [disabled]="IsSaving"
                   (click)="saveChanges()">
                   @if (IsSaving) {
@@ -182,11 +180,11 @@
                   </div>
                   <div class="confirm-input">
                     <label>Type <code>REVOKE</code> to confirm:</label>
-                    <input kendoTextBox [(ngModel)]="RevokeConfirmText"
+                    <input class="mj-input" [(ngModel)]="RevokeConfirmText"
                       placeholder="REVOKE" />
                   </div>
                   <div class="confirm-actions">
-                    <button kendoButton (click)="cancelRevoke()">Cancel</button>
+                    <button mjButton (click)="cancelRevoke()">Cancel</button>
                     <button class="confirm-revoke-btn"
                       [disabled]="RevokeConfirmText !== 'REVOKE' || IsRevoking"
                       (click)="confirmRevoke()">
@@ -225,7 +223,7 @@
               <span class="scope-count">{{getAssignedScopeCount()}} permissions assigned</span>
             </div>
             @if (HasScopeChanges && APIKey.Status === 'Active') {
-              <button kendoButton [themeColor]="'primary'"
+              <button mjButton variant="primary"
                 [disabled]="IsSaving"
                 (click)="saveScopeChanges()">
                 @if (IsSaving) {
@@ -270,7 +268,7 @@
                         <label class="category-all-toggle"
                           (click)="$event.stopPropagation()"
                           >
-                          <input type="checkbox" kendoCheckBox
+                          <input type="checkbox" class="mj-checkbox"
                             [checked]="category.allSelected"
                             (change)="toggleCategoryAll(category)" />
                           <span>All</span>
@@ -285,7 +283,7 @@
                       @for (item of category.scopes; track item) {
                         <div class="scope-item">
                           <label class="scope-label">
-                            <input type="checkbox" kendoCheckBox
+                            <input type="checkbox" class="mj-checkbox"
                               [(ngModel)]="item.selected"
                               [disabled]="APIKey.Status === 'Revoked'"
                               (change)="onScopeChange()" />
@@ -367,7 +365,7 @@
     </div>
     <!-- Footer -->
     <div class="slideout-footer">
-      <button kendoButton (click)="close()">Close</button>
+      <button mjButton (click)="close()">Close</button>
     </div>
   }
 </div>

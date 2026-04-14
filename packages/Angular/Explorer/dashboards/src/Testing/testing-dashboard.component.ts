@@ -2,8 +2,9 @@ import { Component, AfterViewInit, OnDestroy, ChangeDetectorRef, ChangeDetection
 import { BaseDashboard } from '@memberjunction/ng-shared';
 import { RegisterClass } from '@memberjunction/global';
 import { Subject } from 'rxjs';
-import { debounceTime } from 'rxjs/operators';
+import { debounceTime, takeUntil } from 'rxjs/operators';
 import { ResourceData } from '@memberjunction/core-entities';
+import { TestingDialogService, TestingExecutionService, ActiveRun } from '@memberjunction/ng-testing';
 
 interface TestingDashboardState {
   activeTab: string;
@@ -27,6 +28,9 @@ export class TestingDashboardComponent extends BaseDashboard implements AfterVie
   public activeTab = 'dashboard';
   public selectedIndex = 0;
 
+  // Active test runs from execution service
+  public ActiveRuns: ActiveRun[] = [];
+
   // Component states
   public dashboardState: Record<string, unknown> | null = null;
   public runsState: Record<string, unknown> | null = null;
@@ -47,8 +51,13 @@ export class TestingDashboardComponent extends BaseDashboard implements AfterVie
   ];
 
   private stateChangeSubject = new Subject<TestingDashboardState>();
+  protected override destroy$ = new Subject<void>();
 
-  constructor(private cdr: ChangeDetectorRef) {
+  constructor(
+    private cdr: ChangeDetectorRef,
+    public testingDialogService: TestingDialogService,
+    private executionService: TestingExecutionService
+  ) {
     super();
     this.setupStateManagement();
     this.updateNavigationSelection();
@@ -62,10 +71,28 @@ export class TestingDashboardComponent extends BaseDashboard implements AfterVie
     this.visitedTabs.add(this.activeTab);
     this.updateNavigationSelection();
     this.emitStateChange();
+
+    this.executionService.ActiveRuns$.pipe(
+      takeUntil(this.destroy$)
+    ).subscribe(runs => {
+      this.ActiveRuns = runs;
+      this.cdr.markForCheck();
+    });
+
+    this.testingDialogService.PanelStateChanged$.pipe(
+      takeUntil(this.destroy$)
+    ).subscribe((isOpen) => {
+      console.log('[TestingDashboard] PanelStateChanged$:', isOpen, 'IsPanelOpen:', this.testingDialogService.IsPanelOpen);
+      this.cdr.detectChanges();
+    });
+
     this.cdr.detectChanges();
   }
 
   ngOnDestroy(): void {
+    super.ngOnDestroy();
+    this.destroy$.next();
+    this.destroy$.complete();
     this.stateChangeSubject.complete();
   }
 
@@ -166,6 +193,21 @@ export class TestingDashboardComponent extends BaseDashboard implements AfterVie
   public getCurrentTabLabel(): string {
     const tabIndex = this.navigationItems.indexOf(this.activeTab);
     return tabIndex >= 0 ? this.navigationConfig[tabIndex].text : 'Testing Dashboard';
+  }
+
+  public OnPanelClosed(): void {
+    this.testingDialogService.ClosePanel();
+    this.cdr.markForCheck();
+  }
+
+  public OnViewActiveRun(run: ActiveRun): void {
+    this.testingDialogService.OpenTestPanel(run.TestId);
+    this.cdr.markForCheck();
+  }
+
+  public OnViewRunningTestFromTab(testId: string): void {
+    this.testingDialogService.OpenTestPanel(testId);
+    this.cdr.detectChanges();
   }
 
   private updateNavigationSelection(): void {

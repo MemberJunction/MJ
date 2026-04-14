@@ -13,11 +13,12 @@
 import { MJAIAgentTypeEntity,  } from '@memberjunction/core-entities';
 import { ChatMessage } from '@memberjunction/ai';
 import {  } from '@memberjunction/core-entities';
-import { UserInfo } from '@memberjunction/core';
+import { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { AgentPayloadChangeRequest } from './agent-payload-change-request';
 import { AgentScratchpad } from './agent-scratchpad';
 import { AIAPIKey } from '@memberjunction/ai';
 import { AgentResponseForm } from './response-forms';
+import { ActionParam } from '@memberjunction/actions-base';
 import { ActionableCommand, AutomaticCommand } from './ui-commands';
 import { AgentRequestAssignmentStrategy } from './assignment-strategy';
 import { MJAIAgentRunEntityExtended } from './MJAIAgentRunEntityExtended';
@@ -219,6 +220,64 @@ export interface MediaOutput {
     description?: string;
 }
 
+/**
+ * A lightweight reference to a file produced by an agent action (PDF, Excel, Word, etc.).
+ * Collected during execution and processed by AgentRunner into MJ: Artifacts after the run.
+ *
+ * Distinct from MediaOutput (images/audio/video embedded in the LLM conversation).
+ * FileOutputRef represents document files that are archived as versioned artifacts —
+ * they are never injected into the LLM context.
+ *
+ * @since 5.22.0
+ */
+export interface FileOutputRef {
+    /** Original filename (e.g. "report.xlsx") */
+    fileName: string;
+    /** MIME type (e.g. "application/pdf") */
+    mimeType: string;
+    /** Base64-encoded file content — present when the action returned the file inline */
+    fileData?: string;
+    /** MJ: Files record ID — present when the action already saved the file to MJStorage */
+    fileId?: string;
+    /** File size in bytes */
+    sizeBytes?: number;
+}
+
+/**
+ * Attempts to parse an unknown value as a FileOutputRef by checking its shape.
+ * Returns null if the value doesn't have the required fields (fileName, mimeType,
+ * and either fileData or fileId).
+ *
+ * Detection is shape-based, not name-based — works regardless of what the action
+ * named its output parameter.
+ *
+ * @since 5.22.0
+ */
+export function ParseFileOutputRef(raw: unknown): FileOutputRef | null {
+    let fo: Record<string, unknown> | null = null;
+    if (typeof raw === 'string') {
+        try { fo = JSON.parse(raw) as Record<string, unknown>; } catch { return null; }
+    } else if (raw && typeof raw === 'object') {
+        fo = raw as Record<string, unknown>;
+    }
+    if (!fo) return null;
+
+    const fileName = fo['fileName'];
+    const mimeType = fo['mimeType'];
+    if (typeof fileName !== 'string' || typeof mimeType !== 'string') return null;
+
+    const fileData = typeof fo['fileData'] === 'string' ? fo['fileData'] : undefined;
+    const fileId = typeof fo['fileId'] === 'string' ? fo['fileId'] : undefined;
+    if (!fileData && !fileId) return null;
+
+    return {
+        fileName,
+        mimeType,
+        fileData,
+        fileId,
+        sizeBytes: typeof fo['sizeBytes'] === 'number' ? fo['sizeBytes'] : undefined
+    };
+}
 
 /**
  * Represents a single action to be executed.
@@ -232,9 +291,77 @@ export type AgentAction = {
     outputMapping?: string;   
 }
 
+// ============================================================================
+// Client Tool Types
+// ============================================================================
+
+/**
+ * Metadata definition for a client tool. Stored in agent configuration
+ * or a dedicated entity. The LLM sees Name + Description + InputSchema
+ * in its system prompt to know how to invoke the tool.
+ */
+export interface ClientToolMetadata {
+    /** Unique identifier for this tool */
+    Name: string;
+    /** Human-readable description — this is what the LLM reads to decide when to use it */
+    Description: string;
+    /** JSON Schema describing the input parameters */
+    InputSchema: Record<string, unknown>;
+    /** JSON Schema describing what the tool returns (optional, for LLM context) */
+    OutputSchema?: Record<string, unknown>;
+    /** Category for grouping in prompts (e.g., 'navigation', 'display', 'data') */
+    Category?: string;
+    /** Default timeout in ms for this specific tool (overrides agent default) */
+    DefaultTimeoutMs?: number;
+}
+
+/**
+ * A single client tool invocation request from the LLM.
+ * Uses the tool's Name to look up the full metadata (description, schema).
+ */
+export type AgentClientToolInvocation = {
+    /** Name of the client tool (must match a registered ClientToolMetadata.Name) */
+    Name: string;
+    /** Parameters to pass to the tool (validated against InputSchema) */
+    Params: Record<string, unknown>;
+    /** Override timeout for this specific invocation */
+    TimeoutMs?: number;
+    /** Human-readable description of why the agent is invoking this tool */
+    Description?: string;
+};
+
+/**
+ * Response from a client tool execution — returned to the server when
+ * the client finishes running the tool.
+ */
+export interface ClientToolResponse {
+    /** Must match the RequestID from the original request */
+    RequestID: string;
+    /** Whether the tool executed successfully */
+    Success: boolean;
+    /** The tool result (if successful) */
+    Result?: unknown;
+    /** Error message (if failed) */
+    ErrorMessage?: string;
+}
+
+/**
+ * Summary of a client tool execution result, used in conversation messages.
+ */
+export interface ClientToolResultSummary {
+    /** Name of the tool that was executed */
+    ToolName: string;
+    /** Whether the execution succeeded */
+    Success: boolean;
+    /** Result data from the tool */
+    Result?: unknown;
+    /** Error message if the tool failed */
+    ErrorMessage?: string;
+}
+
 /**
  * Represents a sub-agent invocation request.
- * 
+ *
  * @template TContext - Type of the context object passed to the sub-agent.
  *                      This allows for type-safe context propagation from parent to sub-agent.
  *                      Defaults to any for backward compatibility.
@@ -386,6 +513,18 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
      * @since 3.1.0
      */
     promoteMediaOutputs?: MediaOutput[];
+    /**
+     * Client-side tools to execute when step is 'ClientTools'.
+     * Each invocation maps to a registered ClientToolMetadata by Name.
+     */
+    clientTools?: AgentClientToolInvocation[];
+    /**
+     * When true, the agent should terminate after executing the current step.
+     * Used by ClientTools: the main loop needs `terminate: false` so it continues
+     * to dispatch the tool execution, but `executeClientToolsStep` checks this
+     * to decide whether to return Success or continue to another prompt.
+     */
+    terminateAfterExecution?: boolean;
 }
 
 /**
@@ -461,6 +600,19 @@ export type ExecuteAgentResult<P = any> = {
     mediaOutputs?: MediaOutput[];
 
     /**
+     * File outputs (PDF, Excel, Word, etc.) produced by file-generation actions during this run.
+     * Collected by BaseAgent during action execution and processed by AgentRunner into
+     * MJ: Artifacts (ContentMode='File') after the run completes.
+     *
+     * Unlike mediaOutputs (which are injected into the LLM conversation as multimodal content),
+     * file outputs are archived as versioned artifacts and never sent to the LLM.
+     * Sub-agents bubble their fileOutputs up to the parent for unified artifact creation.
+     *
+     * @since 5.22.0
+     */
+    fileOutputs?: FileOutputRef[];
+
+    /**
      * When a Chat step fires, BaseAgent creates a persistent AIAgentRequest row and
      * returns the new record's ID here. Callers use this to:
      * - Send notifications to the assigned user
@@ -471,6 +623,17 @@ export type ExecuteAgentResult<P = any> = {
      * @since 5.12.0
      */
     feedbackRequestId?: string;
+
+    /**
+     * The resolved FileStorageAccount ID for file artifact storage, determined during
+     * agent execution via the hierarchical resolution chain:
+     * Runtime → Agent → Category tree → Type → system fallback.
+     *
+     * Used by AgentRunner to route file artifact uploads to the correct storage account.
+     * Null when no storage account could be resolved (e.g., no accounts configured).
+     * @since 5.24.0
+     */
+    resolvedStorageAccountId?: string;
 }
 
 /**
@@ -679,6 +842,13 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
     override?: {
         modelId?: string;
         vendorId?: string;
+        /**
+         * Runtime override for the file storage account used when creating file artifacts.
+         * Highest priority in the resolution chain: Runtime → Agent → Category tree → Type → system fallback.
+         * Resolves to a FileStorageAccount record which carries both the provider driver
+         * (via ProviderID) and credentials (via CredentialID).
+         */
+        storageAccountId?: string;
     };
     /** 
      * Optional flag to enable verbose logging during agent execution.
@@ -1080,6 +1250,28 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      * ```
      */
     assignmentStrategy?: AgentRequestAssignmentStrategy;
+
+    /**
+     * Optional per-request metadata provider for multi-user server isolation.
+     * Pass the request-scoped provider from the GraphQL context so agent DB operations
+     * never share the global singleton's transaction state with concurrent requests.
+     * When omitted, falls back to the global Metadata.Provider (safe for single-user/client-side use).
+     */
+    provider?: IMetadataProvider;
+
+    /**
+     * Optional session ID for client tool communication.
+     * When provided, enables the agent to invoke client-side tools via PubSub.
+     * The session ID correlates tool requests/responses between server and client.
+     */
+    sessionID?: string;
+
+    /**
+     * Optional runtime override for client tool timeout (ms).
+     * Takes precedence over the agent's DefaultClientToolTimeoutMs config.
+     */
+    clientToolTimeoutMs?: number;
+
 }
 
 /**
@@ -1104,6 +1296,10 @@ export type AgentContextData = {
     actionCount: number;
     /** Markdown formatted details of available actions (name, params, result codes) */
     actionDetails: string;
+    /** Markdown formatted details of available client tools (name, category, description, input schema) */
+    clientToolDetails?: string;
+    /** Markdown formatted snapshot of the user's current application context */
+    appContext?: string;
 }
 
 /**
@@ -1151,8 +1347,12 @@ export type AgentChatMessageMetadata = {
     canExpand?: boolean;
     /** Whether this message has expired */
     isExpired?: boolean;
-    /** Type of message (for logging/debugging) */
-    messageType?: 'action-result' | 'sub-agent-result' | 'chat' | 'system' | 'user';
+    /** Type of message (for lifecycle management and logging) */
+    messageType?: 'action-result' | 'client-tool-result' | 'loop-result' | 'sub-agent-result' | 'chat' | 'system' | 'user';
+    /** Name of the sub-agent (only for sub-agent-result messages) */
+    subAgentName?: string;
+    /** ID of the sub-agent (only for sub-agent-result messages) */
+    subAgentId?: string;
 }
 
 /**
@@ -1333,4 +1533,17 @@ export interface ActionChange {
     actionLimits?: Record<string, number>;
 }
 
+// ── Types for action-step output parsing (used by AgentRunner reprocessing) ──
 
+/** Typed shape of the OutputData JSON written by base-agent for action steps */
+export interface ActionStepOutputData {
+    actionResult?: {
+        parameters?: ActionParam[];
+    };
+}
+
+/** Minimal read-only shape loaded from MJ: AI Agent Run Steps for reprocessing */
+export interface ActionStepSummary {
+    ID: string;
+    OutputData: string | null;
+}

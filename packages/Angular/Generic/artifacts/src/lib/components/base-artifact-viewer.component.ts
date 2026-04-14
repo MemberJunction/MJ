@@ -202,6 +202,28 @@ export abstract class BaseArtifactViewerPluginComponent implements IArtifactView
   public navigationRequest?: EventEmitter<NavigationRequest>;
 
   /**
+   * Whether this plugin supports user feedback.
+   * Plugins that return true will get a feedback button in the artifact viewer header.
+   * Override this getter to return true when feedback is available.
+   *
+   * Default: false
+   */
+  public get SupportsFeedback(): boolean {
+    return false;
+  }
+
+  /**
+   * Ask the user for feedback on the current artifact.
+   * Called by the artifact viewer panel when the user clicks the feedback button in the header.
+   * Each plugin implements its own feedback UX (dialog, panel, inline form, etc.).
+   *
+   * Default: no-op. Subclasses should override to implement artifact-type-specific feedback.
+   */
+  public AskUserForFeedback(): void {
+    // Subclasses override to implement feedback UX
+  }
+
+  /**
    * Get additional tabs that this plugin wants to provide to the artifact viewer.
    * Override this method to provide custom tabs for viewing metadata, code, etc.
    *
@@ -220,4 +242,20 @@ export abstract class BaseArtifactViewerPluginComponent implements IArtifactView
    *          Note: 'Display' cannot be removed (it's the main view)
    */
   public GetStandardTabRemovals?(): string[];
+
+  /**
+   * Trigger a browser file download from a URL.
+   * Shared by all file-backed viewer plugins (PDF, XLSX, DOCX) so the fetch →
+   * blob → object-URL → anchor pattern lives in exactly one place.
+   */
+  protected async triggerBrowserDownload(url: string, fileName: string): Promise<void> {
+    const response = await fetch(url);
+    const blob = await response.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = objectUrl;
+    anchor.download = fileName;
+    anchor.click();
+    URL.revokeObjectURL(objectUrl);
+  }
 }

@@ -19,7 +19,8 @@ import { MJAIActionEntity, MJActionEntity,
          MJAIAgentStepPathEntity, MJAIAgentRelationshipEntity, MJAIAgentPermissionEntity,
          MJAIAgentDataSourceEntity, MJAIAgentConfigurationEntity, MJAIAgentExampleEntity,
          MJAICredentialBindingEntity, MJAIModalityEntity, MJAIAgentModalityEntity,
-         MJAIModelModalityEntity } from "@memberjunction/core-entities";
+         MJAIModelModalityEntity, MJAIClientToolDefinitionEntity,
+         MJAIAgentClientToolEntity, MJAIAgentCategoryEntity } from "@memberjunction/core-entities";
 import { AIEngineBase } from "@memberjunction/ai-engine-base";
 import { SimpleVectorService } from "@memberjunction/ai-vectors-memory";
 import { AgentEmbeddingService } from "./services/AgentEmbeddingService";
@@ -114,6 +115,7 @@ export class AIEngine extends BaseSingleton<AIEngine> {
     public get Agents(): MJAIAgentEntityExtended[] { return this.Base.Agents; }
     public get AgentRelationships(): MJAIAgentRelationshipEntity[] { return this.Base.AgentRelationships; }
     public get AgentTypes(): MJAIAgentTypeEntity[] { return this.Base.AgentTypes; }
+    public get AgentCategories(): MJAIAgentCategoryEntity[] { return this.Base.AgentCategories; }
     public get AgentActions(): MJAIAgentActionEntity[] { return this.Base.AgentActions; }
     public get AgentPrompts(): MJAIAgentPromptEntity[] { return this.Base.AgentPrompts; }
     public get AgentConfigurations(): MJAIAgentConfigurationEntity[] { return this.Base.AgentConfigurations; }
@@ -125,6 +127,9 @@ export class AIEngine extends BaseSingleton<AIEngine> {
     public get Vendors(): MJAIVendorEntity[] { return this.Base.Vendors; }
     public get ModelVendors(): MJAIModelVendorEntity[] { return this.Base.ModelVendors; }
     public get CredentialBindings(): MJAICredentialBindingEntity[] { return this.Base.CredentialBindings; }
+    public get ClientToolDefinitions(): MJAIClientToolDefinitionEntity[] { return this.Base.ClientToolDefinitions; }
+    public get AgentClientTools(): MJAIAgentClientToolEntity[] { return this.Base.AgentClientTools; }
+    public GetClientToolsForAgent(agentId: string): MJAIClientToolDefinitionEntity[] { return this.Base.GetClientToolsForAgent(agentId); }
     public GetCredentialBindingsForTarget(
         bindingType: 'Vendor' | 'ModelVendor' | 'PromptModel',
         targetId: string

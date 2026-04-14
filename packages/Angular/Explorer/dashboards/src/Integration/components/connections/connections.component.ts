@@ -196,12 +196,15 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
   private documentClickHandler: ((e: Event) => void) | null = null;
 
   async ngOnInit(): Promise<void> {
+    super.ngOnInit();
     this.documentClickHandler = (e: Event) => this.onDocumentClick(e);
     document.addEventListener('click', this.documentClickHandler);
     await this.LoadData();
+    this.NotifyLoadComplete();
   }
 
   ngOnDestroy(): void {
+    super.ngOnDestroy();
     if (this.documentClickHandler) {
       document.removeEventListener('click', this.documentClickHandler);
     }
