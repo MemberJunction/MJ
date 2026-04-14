@@ -172,9 +172,10 @@ describe('DataSnapshotToolLibrary', () => {
             );
             expect(result.success).toBe(true);
 
-            const rows = result.data as Array<Record<string, unknown>>;
-            expect(rows).toHaveLength(1);
-            expect(rows[0]).toEqual({ ID: 1, Name: 'Acme Corp', Revenue: 50000 });
+            const data = result.data as { rows: Array<Record<string, unknown>>; totalMatches: number };
+            expect(data.rows).toHaveLength(1);
+            expect(data.totalMatches).toBe(1);
+            expect(data.rows[0]).toEqual({ ID: 1, Name: 'Acme Corp', Revenue: 50000 });
         });
 
         it('should return empty array when no rows match', async () => {
@@ -184,7 +185,9 @@ describe('DataSnapshotToolLibrary', () => {
                 snapshot
             );
             expect(result.success).toBe(true);
-            expect(result.data).toEqual([]);
+            const data = result.data as { rows: Array<Record<string, unknown>>; totalMatches: number };
+            expect(data.rows).toEqual([]);
+            expect(data.totalMatches).toBe(0);
         });
     });
 
@@ -201,9 +204,10 @@ describe('DataSnapshotToolLibrary', () => {
             );
             expect(result.success).toBe(true);
 
-            const rows = result.data as Array<Record<string, unknown>>;
-            expect(rows).toHaveLength(2);
-            expect(rows.map(r => r.Name)).toEqual(['Acme Corp', 'Acme Labs']);
+            const data = result.data as { rows: Array<Record<string, unknown>>; totalMatches: number };
+            expect(data.rows).toHaveLength(2);
+            expect(data.totalMatches).toBe(2);
+            expect(data.rows.map(r => r.Name)).toEqual(['Acme Corp', 'Acme Labs']);
         });
     });
 
@@ -265,10 +269,15 @@ describe('DataSnapshotToolLibrary', () => {
     // -----------------------------------------------------------------------
 
     describe('get_full', () => {
-        it('should return the entire parsed snapshot', async () => {
+        it('should return the parsed snapshot with tables', async () => {
             const result = await lib.InvokeTool('get_full', {}, snapshot);
             expect(result.success).toBe(true);
-            expect(result.data).toEqual(JSON.parse(snapshot));
+            const data = result.data as { tables: Array<{ name: string; rows: Array<Record<string, unknown>> }> };
+            expect(data.tables).toHaveLength(2);
+            expect(data.tables.map(t => t.name)).toEqual(['customers', 'orders']);
+            // Small tables are returned in full (no truncation)
+            expect(data.tables[0].rows).toHaveLength(3);
+            expect(data.tables[1].rows).toHaveLength(2);
         });
     });
 
@@ -361,8 +370,8 @@ describe('DataSnapshotToolLibrary', () => {
                 snapshot
             );
             expect(result.success).toBe(true);
-            const rows = result.data as Array<Record<string, unknown>>;
-            expect(rows).toHaveLength(2);
+            const data = result.data as { rows: Array<Record<string, unknown>>; totalMatches: number };
+            expect(data.rows).toHaveLength(2);
         });
 
         it('should handle gt operator', async () => {
@@ -372,8 +381,8 @@ describe('DataSnapshotToolLibrary', () => {
                 snapshot
             );
             expect(result.success).toBe(true);
-            const rows = result.data as Array<Record<string, unknown>>;
-            expect(rows).toHaveLength(2);
+            const data = result.data as { rows: Array<Record<string, unknown>>; totalMatches: number };
+            expect(data.rows).toHaveLength(2);
         });
 
         it('should handle gte operator', async () => {
@@ -383,8 +392,8 @@ describe('DataSnapshotToolLibrary', () => {
                 snapshot
             );
             expect(result.success).toBe(true);
-            const rows = result.data as Array<Record<string, unknown>>;
-            expect(rows).toHaveLength(2);
+            const data = result.data as { rows: Array<Record<string, unknown>>; totalMatches: number };
+            expect(data.rows).toHaveLength(2);
         });
 
         it('should handle lt operator', async () => {
@@ -394,8 +403,8 @@ describe('DataSnapshotToolLibrary', () => {
                 snapshot
             );
             expect(result.success).toBe(true);
-            const rows = result.data as Array<Record<string, unknown>>;
-            expect(rows).toHaveLength(1);
+            const data = result.data as { rows: Array<Record<string, unknown>>; totalMatches: number };
+            expect(data.rows).toHaveLength(1);
         });
 
         it('should handle lte operator', async () => {
@@ -405,8 +414,8 @@ describe('DataSnapshotToolLibrary', () => {
                 snapshot
             );
             expect(result.success).toBe(true);
-            const rows = result.data as Array<Record<string, unknown>>;
-            expect(rows).toHaveLength(2);
+            const data = result.data as { rows: Array<Record<string, unknown>>; totalMatches: number };
+            expect(data.rows).toHaveLength(2);
         });
 
         it('should handle startsWith operator', async () => {
@@ -416,9 +425,9 @@ describe('DataSnapshotToolLibrary', () => {
                 snapshot
             );
             expect(result.success).toBe(true);
-            const rows = result.data as Array<Record<string, unknown>>;
-            expect(rows).toHaveLength(1);
-            expect(rows[0]).toEqual({ ID: 2, Name: 'Globex Inc', Revenue: 30000 });
+            const data = result.data as { rows: Array<Record<string, unknown>>; totalMatches: number };
+            expect(data.rows).toHaveLength(1);
+            expect(data.rows[0]).toEqual({ ID: 2, Name: 'Globex Inc', Revenue: 30000 });
         });
     });
 

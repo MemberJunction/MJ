@@ -84,7 +84,7 @@ export class DataSnapshotToolLibrary extends BaseArtifactToolLibrary {
             },
             {
                 name: 'search_rows',
-                description: 'Returns rows matching a field condition. Operators: eq, neq, gt, lt, gte, lte, contains, startsWith.',
+                description: 'Returns rows matching a field condition (max 200 rows). Operators: eq, neq, gt, lt, gte, lte, contains, startsWith.',
                 inputSchema: {
                     type: 'object',
                     properties: {
@@ -92,6 +92,7 @@ export class DataSnapshotToolLibrary extends BaseArtifactToolLibrary {
                         field: { type: 'string' },
                         operator: { type: 'string' },
                         value: {},
+                        limit: { type: 'number', description: 'Max rows to return. Default: 200' },
                     },
                     required: ['table', 'field', 'operator', 'value'],
                 },
@@ -111,7 +112,7 @@ export class DataSnapshotToolLibrary extends BaseArtifactToolLibrary {
             },
             {
                 name: 'get_full',
-                description: 'Returns the entire parsed DataSnapshot content.',
+                description: 'Returns the parsed DataSnapshot content. Large tables are truncated to the first 100 rows; use get_rows to page through the rest.',
                 inputSchema: { type: 'object', properties: {}, required: [] },
             },
         ];
@@ -149,7 +150,7 @@ export class DataSnapshotToolLibrary extends BaseArtifactToolLibrary {
             case 'aggregate':
                 return this.handleAggregate(payload, input);
             case 'get_full':
-                return this.successResult(payload);
+                return this.handleGetFull(payload);
             default:
                 return this.errorResult(`Unknown tool: "${toolName}".`);
         }
@@ -205,15 +206,22 @@ export class DataSnapshotToolLibrary extends BaseArtifactToolLibrary {
         const field = input.field as string;
         const operator = input.operator as string;
         const value = input.value;
+        const limit = Math.min((input.limit as number) ?? 200, 500);
 
         if (!VALID_SEARCH_OPERATORS.has(operator)) {
             return this.errorResult(`Unsupported search operator: "${operator}". Valid operators: ${[...VALID_SEARCH_OPERATORS].join(', ')}.`);
         }
 
-        const matched = table.rows.filter(row =>
+        const allMatched = table.rows.filter(row =>
             this.evaluateCondition(row[field], operator as SearchOperator, value)
         );
-        return this.successResult(matched);
+        const truncated = allMatched.length > limit;
+        const rows = truncated ? allMatched.slice(0, limit) : allMatched;
+        return this.successResult({
+            rows,
+            totalMatches: allMatched.length,
+            ...(truncated ? { truncated: true, note: `Showing ${limit} of ${allMatched.length} matches. Use the 'limit' parameter or narrow your search.` } : {}),
+        });
     }
 
     private handleAggregate(
@@ -234,6 +242,24 @@ export class DataSnapshotToolLibrary extends BaseArtifactToolLibrary {
 
         const result = this.computeAggregate(table.rows, field, operation as AggregateOperation);
         return this.successResult(result);
+    }
+
+    private handleGetFull(payload: SnapshotPayload): ArtifactToolResult {
+        const MAX_ROWS_PER_TABLE = 100;
+        const truncatedTables = payload.tables.map(t => {
+            if (t.rows.length <= MAX_ROWS_PER_TABLE) return t;
+            return {
+                ...t,
+                rows: t.rows.slice(0, MAX_ROWS_PER_TABLE),
+                metadata: {
+                    ...t.metadata,
+                    rowCount: t.rows.length,
+                    truncated: true,
+                    note: `Showing first ${MAX_ROWS_PER_TABLE} of ${t.rows.length} rows. Use get_rows to page through the rest.`,
+                },
+            };
+        });
+        return this.successResult({ tables: truncatedTables });
     }
 
     // -----------------------------------------------------------------------

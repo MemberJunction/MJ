@@ -161,21 +161,43 @@ export class ArtifactToolManager {
     return sections.join('\n');
   }
 
+  /**
+   * Max characters for the tool results section injected into the prompt.
+   * Prevents context overflow when tool results contain large datasets.
+   * Results are truncated from oldest first, with a summary of what was dropped.
+   */
+  private static readonly MAX_RESULTS_CHARS = 50_000;
+
+  /**
+   * Max characters for a single tool result's data section.
+   * Individual results that exceed this are truncated with a note,
+   * preventing one huge result from consuming the entire budget.
+   */
+  private static readonly MAX_SINGLE_RESULT_CHARS = 15_000;
+
   /** Markdown results from previous turns */
   GetPendingResults(): string {
     if (this.toolResults.length === 0) return '';
 
-    const lines: string[] = [
+    const header = [
       '## Artifact Tool Results',
       '',
       'These are results from your previous artifact tool calls. **Use these results to answer the user — do NOT re-call the same tools.**',
       ''
-    ];
+    ].join('\n');
+
+    // Render each result, capping individual results that are disproportionately large
+    const rendered: Array<{ text: string; index: number }> = [];
     for (let i = 0; i < this.toolResults.length; i++) {
       const stored = this.toolResults[i];
+      const lines: string[] = [];
       lines.push(`### Result ${i + 1}: ${stored.artifactId}.${stored.tool}(${JSON.stringify(stored.input)})`);
       if (stored.result.success) {
-        const data = typeof stored.result.data === 'string' ? stored.result.data : JSON.stringify(stored.result.data, null, 2);
+        let data = typeof stored.result.data === 'string' ? stored.result.data : JSON.stringify(stored.result.data, null, 2);
+        if (data.length > ArtifactToolManager.MAX_SINGLE_RESULT_CHARS) {
+          data = data.slice(0, ArtifactToolManager.MAX_SINGLE_RESULT_CHARS)
+            + `\n... (truncated — ${data.length} chars total. Use more specific tool calls to narrow results.)`;
+        }
         lines.push('```json');
         lines.push(data);
         lines.push('```');
@@ -183,9 +205,31 @@ export class ArtifactToolManager {
         lines.push(`**Error:** ${stored.result.errorMessage}`);
       }
       lines.push('');
+      rendered.push({ text: lines.join('\n'), index: i });
     }
 
-    return lines.join('\n');
+    // Check total size and truncate oldest results if over limit
+    let totalChars = header.length;
+    const included: string[] = [];
+    let droppedCount = 0;
+
+    // Include results from newest to oldest so most recent are preserved
+    for (let i = rendered.length - 1; i >= 0; i--) {
+      if (totalChars + rendered[i].text.length > ArtifactToolManager.MAX_RESULTS_CHARS && included.length > 0) {
+        droppedCount = i + 1;
+        break;
+      }
+      totalChars += rendered[i].text.length;
+      included.unshift(rendered[i].text);
+    }
+
+    const parts = [header];
+    if (droppedCount > 0) {
+      parts.push(`> **Note:** ${droppedCount} earlier result(s) truncated to fit context window. Use artifact tools to re-query if needed.\n`);
+    }
+    parts.push(...included);
+
+    return parts.join('\n');
   }
 
   /** One-line summary for compact contexts */
