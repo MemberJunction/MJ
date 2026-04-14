@@ -143,11 +143,21 @@ export class FeedbackDialogService {
     if (this.activeComponentRef && !this.activeComponentRef.hostView.destroyed) {
       const instance = this.activeComponentRef.instance;
       instance.ScreenshotDataUrl = screenshotDataUrl;
+      instance.IsCapturingScreenshot = false;
       if (!instance.ContextData) {
         instance.ContextData = {};
       }
       instance.ContextData['screenshot'] = screenshotDataUrl;
-      // Trigger change detection since this happens asynchronously after render
+      this.activeComponentRef.changeDetectorRef.detectChanges();
+    }
+  }
+
+  /**
+   * Stop the screenshot loading indicator if capture failed or returned nothing.
+   */
+  public StopScreenshotLoading(): void {
+    if (this.activeComponentRef && !this.activeComponentRef.hostView.destroyed) {
+      this.activeComponentRef.instance.IsCapturingScreenshot = false;
       this.activeComponentRef.changeDetectorRef.detectChanges();
     }
   }

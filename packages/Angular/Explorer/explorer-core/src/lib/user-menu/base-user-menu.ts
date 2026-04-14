@@ -450,6 +450,7 @@ export class BaseUserMenu {
         };
     }
 
+    /** Signal the shell to open the feedback dialog */
     protected async Handle_submit_feedback(): Promise<UserMenuActionResult> {
         return {
             success: true,

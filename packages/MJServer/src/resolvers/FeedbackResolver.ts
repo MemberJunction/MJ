@@ -352,21 +352,21 @@ export class FeedbackResolver {
           content: `Classify this user feedback. Respond with ONLY a JSON object, no other text:
 {"category": "bug"|"feature"|"question"|"other", "severity": "critical"|"major"|"minor"|"trivial"}
 
-Step 1 — CATEGORY. Read carefully and choose the best fit:
-- "question" = user is ASKING something: "how do I", "where is", "can I", "is it possible", "help me understand". Questions are NOT bugs.
-- "feature" = user WANTS something new: "it would be nice", "can you add", "I wish", "please add", "would love to see"
-- "bug" = something is BROKEN: "error", "crash", "doesn't work", "stopped working", "broken", "fails", "unexpected behavior"
+Step 1 — CATEGORY. Choose ONE. Read the intent, not just keywords:
+- "question" = user is SEEKING HELP or INFORMATION. Clues: "how do I", "where is", "can I", "is it possible", "I can't find", "where did ___ go", "used to see ___ but now", "help me". Even if they sound frustrated, if they're looking for guidance it's a question. A user who can't FIND something is asking a question, not reporting a bug.
+- "feature" = user WANTS something NEW: "it would be nice", "can you add", "I wish", "please add", "would love to see"
+- "bug" = something is OBJECTIVELY BROKEN: "error message", "crash", "500 error", "white screen", "data lost", "button does nothing when clicked", "stops responding". The system is malfunctioning, not just confusing.
 - "other" = doesn't fit the above
 
-Step 2 — SEVERITY. Depends on the category:
-- If category is "question" → severity is "trivial"
-- If category is "feature" → severity is "minor"
-- If category is "other" → severity is "minor"
-- If category is "bug" → read the user's language about impact:
-  - "critical" = system completely unusable, data loss, security issue
-  - "major" = user says they are blocked or prevented from completing work
-  - "minor" = something is wrong but user can work around it
-  - "trivial" = cosmetic, typo, visual glitch`
+Step 2 — SEVERITY. Strictly follow these rules:
+- If category is "question" → severity MUST be "trivial"
+- If category is "feature" → severity MUST be "minor"
+- If category is "other" → severity MUST be "minor"
+- If category is "bug":
+  - "critical" = data loss, security vulnerability, entire system unusable for ALL users
+  - "major" = user EXPLICITLY says words like "blocking me", "preventing me from", "can't complete my work", "unable to do my job". Without these exact phrases, do NOT use major.
+  - "trivial" = purely visual: typo, misspelling, alignment, spacing, colors, dark mode, theme, font, styling, cosmetic appearance
+  - "minor" = everything else. This is the DEFAULT for bugs. If unsure between trivial and minor, pick trivial. If unsure between minor and major, pick minor.`
         },
         {
           role: ChatMessageRole.user,

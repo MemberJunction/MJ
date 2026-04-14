@@ -2573,37 +2573,44 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
    * Open the feedback dialog with current workspace context.
    * Captures a screenshot in the background and attaches it once ready.
    */
-  async ShowFeedbackDialog(): Promise<void> {
+  ShowFeedbackDialog(): void {
     const config = this.workspaceManager.GetConfiguration();
     const currentPage = config?.tabs
       ?.map(t => t.title)
       .filter(Boolean)
       .join(' \u2192 ') || undefined;
 
-    // Capture screenshot BEFORE opening the dialog — the dialog backdrop blocks capture
-    let screenshot: string | undefined;
+    // Open dialog immediately — screenshot loads in background
+    this.feedbackDialogService.OpenFeedbackDialog({ currentPage });
+
+    // Capture screenshot in background and attach when ready
+    this.captureAndAttachFeedbackScreenshot();
+  }
+
+  /**
+   * Capture a screenshot in the background and attach it to the open feedback dialog.
+   */
+  private async captureAndAttachFeedbackScreenshot(): Promise<void> {
     try {
-      // Try tab container first, then fall back to the main content area
+      let screenshot: string | undefined;
       if (this.tabContainerRef) {
         screenshot = await this.tabContainerRef.CaptureActiveThumbnail();
       }
       if (!screenshot) {
-        // Fall back to capturing the entire shell content area
-        const { toJpeg } = await import('html-to-image');
         const contentEl = document.querySelector('.shell-content') as HTMLElement
           || document.querySelector('mj-tab-container') as HTMLElement;
-        if (contentEl && contentEl.clientWidth > 0 && contentEl.clientHeight > 0) {
-          screenshot = await toJpeg(contentEl, { quality: 0.6, pixelRatio: 0.3, cacheBust: true });
+        if (contentEl) {
+          screenshot = await this.homePinService.CaptureThumbnail(contentEl);
         }
       }
+      if (screenshot) {
+        this.feedbackDialogService.AttachScreenshot(screenshot);
+      } else {
+        this.feedbackDialogService.StopScreenshotLoading();
+      }
     } catch {
-      // Screenshot is best-effort
+      this.feedbackDialogService.StopScreenshotLoading();
     }
-
-    this.feedbackDialogService.OpenFeedbackDialog({
-      currentPage,
-      contextData: screenshot ? { screenshot } : undefined,
-    });
   }
 
   // ========================================

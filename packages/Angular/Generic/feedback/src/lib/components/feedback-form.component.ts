@@ -1,8 +1,7 @@
 import { Component, OnInit, Input, Output, EventEmitter, Inject, ChangeDetectorRef } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { FeedbackSubmission, FeedbackResponse, FeedbackCategory, FeedbackSeverity, FeedbackEnvironment, CategoryOption, SeverityOption, EnvironmentOption } from '../feedback.types';
+import { FeedbackSubmission, FeedbackResponse, FeedbackCategory, FeedbackSeverity, FeedbackEnvironment } from '../feedback.types';
 import { FeedbackConfig, FEEDBACK_CONFIG, FeedbackFieldConfig, mergeFieldConfig } from '../feedback.config';
-import { DEFAULT_CATEGORIES, DEFAULT_SEVERITIES, DEFAULT_ENVIRONMENTS } from '../feedback.constants';
 import { FeedbackService } from '../services/feedback.service';
 import { MJDialogComponent, MJDialogActionsComponent, MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
@@ -185,6 +184,13 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
                 </button>
               </div>
             </div>
+          } @else if (IsCapturingScreenshot) {
+            <div class="feedback-section">
+              <label class="feedback-label">Screenshot</label>
+              <div class="screenshot-loading">
+                <i class="fas fa-spinner fa-spin"></i> Capturing screenshot...
+              </div>
+            </div>
           }
 
           <!-- Error message -->
@@ -322,12 +328,6 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
       color: var(--mj-brand-primary);
     }
 
-    .category-description {
-      font-size: var(--mj-text-xs);
-      color: var(--mj-text-secondary);
-      font-style: italic;
-    }
-
     .char-count {
       font-size: var(--mj-text-xs);
       color: var(--mj-text-muted);
@@ -338,29 +338,15 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
       color: var(--mj-status-warning);
     }
 
-    /* Form controls */
-    .mj-select {
-      width: 100%;
-      padding: var(--mj-space-2) var(--mj-space-3);
-      border: 1px solid var(--mj-border-default);
+    .screenshot-loading {
+      display: flex;
+      align-items: center;
+      gap: var(--mj-space-2);
+      padding: var(--mj-space-4);
+      border: 1px dashed var(--mj-border-default);
       border-radius: var(--mj-radius-md);
-      background: var(--mj-bg-surface-card);
-      color: var(--mj-text-primary);
+      color: var(--mj-text-muted);
       font-size: var(--mj-text-sm);
-      font-family: var(--mj-font-family);
-      transition: var(--mj-transition-fast);
-      box-sizing: border-box;
-      appearance: auto;
-    }
-
-    .severity-select {
-      width: 200px;
-    }
-
-    .mj-select:focus {
-      outline: none;
-      border-color: var(--mj-border-focus);
-      box-shadow: var(--mj-focus-ring);
     }
 
     /* Screenshot preview */
@@ -474,11 +460,6 @@ export class FeedbackFormComponent implements OnInit {
   Name: string = '';
   Email: string = '';
 
-  // Options
-  Categories: CategoryOption[] = DEFAULT_CATEGORIES;
-  Severities: SeverityOption[] = DEFAULT_SEVERITIES;
-  Environments: EnvironmentOption[] = DEFAULT_ENVIRONMENTS;
-  AffectedAreas: string[] = [];
 
   // State
   IsSubmitting = false;
@@ -486,9 +467,12 @@ export class FeedbackFormComponent implements OnInit {
   WasAutoClassified = false;
   SubmissionSuccess = false;
   ErrorMessage = '';
+  private lastClassifiedTitle = '';
+  private lastClassifiedDescription = '';
   IssueNumber?: number;
   IssueUrl?: string;
   ScreenshotDataUrl?: string;
+  IsCapturingScreenshot = true;
   private classifyTimeout?: ReturnType<typeof setTimeout>;
 
   // Merged field config
@@ -500,7 +484,6 @@ export class FeedbackFormComponent implements OnInit {
     private cdr: ChangeDetectorRef
   ) {
     this.FieldConfig = mergeFieldConfig(config.fields);
-    this.AffectedAreas = this.FieldConfig.affectedAreas;
   }
 
   ngOnInit(): void {
@@ -525,22 +508,6 @@ export class FeedbackFormComponent implements OnInit {
     if (this.ContextData) {
       delete this.ContextData['screenshot'];
     }
-    this.cdr.detectChanges();
-  }
-
-  /**
-   * Get description for selected category
-   */
-  get SelectedCategoryDescription(): string {
-    const category = this.Categories.find(c => c.value === this.Category);
-    return category?.description || '';
-  }
-
-  /**
-   * Handle category change
-   */
-  OnCategoryChange(_value: string): void {
-    this.WasAutoClassified = false;
     this.cdr.detectChanges();
   }
 
@@ -572,16 +539,24 @@ export class FeedbackFormComponent implements OnInit {
   private async runClassification(): Promise<void> {
     if (this.IsClassifying || this.IsSubmitting) return;
 
+    const title = this.Title.trim();
+    const description = this.Description.trim();
+
+    // Skip if content hasn't changed since last classification
+    if (title === this.lastClassifiedTitle && description === this.lastClassifiedDescription) return;
+
     this.IsClassifying = true;
     this.cdr.detectChanges();
 
-    const result = await this.feedbackService.Classify(this.Title.trim(), this.Description.trim());
+    const result = await this.feedbackService.Classify(title, description);
 
     this.IsClassifying = false;
     if (result) {
       this.Category = result.category;
-      this.Severity = result.severity as FeedbackSeverity;
+      this.Severity = result.severity;
       this.WasAutoClassified = true;
+      this.lastClassifiedTitle = title;
+      this.lastClassifiedDescription = description;
     }
     this.cdr.detectChanges();
   }

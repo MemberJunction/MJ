@@ -3,7 +3,7 @@ import { Observable, from, BehaviorSubject, throwError } from 'rxjs';
 import { catchError, tap, map } from 'rxjs/operators';
 import { GraphQLDataProvider, gql } from '@memberjunction/graphql-dataprovider';
 import { Metadata } from '@memberjunction/core';
-import { FeedbackSubmission, FeedbackResponse, FeedbackEnvironment } from '../feedback.types';
+import { FeedbackSubmission, FeedbackResponse, FeedbackEnvironment, FeedbackCategory, FeedbackSeverity } from '../feedback.types';
 import { FeedbackConfig, FEEDBACK_CONFIG } from '../feedback.config';
 
 /**
@@ -60,17 +60,17 @@ export class FeedbackService {
    * Classify feedback using an LLM to suggest category and severity.
    * Returns null if classification fails — callers should fall back to manual selection.
    */
-  public async Classify(title: string, description: string): Promise<{ category: string; severity: string } | null> {
+  public async Classify(title: string, description: string): Promise<{ category: FeedbackCategory; severity: FeedbackSeverity } | null> {
     try {
       const provider = Metadata.Provider as GraphQLDataProvider;
       const result = await provider.ExecuteGQL(CLASSIFY_FEEDBACK_MUTATION, {
         input: { Title: title, Description: description }
       }) as ClassifyFeedbackResult;
 
-      if (result?.ClassifyFeedback?.Success) {
+      if (result?.ClassifyFeedback?.Success && result.ClassifyFeedback.Category && result.ClassifyFeedback.Severity) {
         return {
-          category: result.ClassifyFeedback.Category!,
-          severity: result.ClassifyFeedback.Severity!
+          category: result.ClassifyFeedback.Category as FeedbackCategory,
+          severity: result.ClassifyFeedback.Severity as FeedbackSeverity
         };
       }
       return null;
