@@ -229,8 +229,8 @@ If Step 1 found a match >= 0.6, use **Run Stored Query** or composition SQL per 
 - **Get the schema from entity metadata**: Each entity has a `SchemaName` property (returned by **Get Entity Details**). Many entities use `__mj`, but entities can live in **any schema** (e.g., `dbo`, `sales`, `hr`, `custom`). **Never assume `__mj`** — always check.
 - **Never** use raw table names — always use views
 - Use proper JOINs, WHERE clauses, and aggregations
-- For parameters, use Nunjucks syntax: `{{paramName}}`
-- For optional parameters: `{% if paramName %}AND Field = '{{paramName}}'{% endif %}`
+- For parameters, use Nunjucks syntax: `{% raw %}{{paramName}}{% endraw %}`
+- For optional parameters: `{% raw %}{% if paramName %}AND Field = '{{paramName}}'{% endif %}{% endraw %}`
 - Name parameters descriptively: `startDate`, `customerStatus`, `minOrderTotal`
 
 ### 5. Test the Query
