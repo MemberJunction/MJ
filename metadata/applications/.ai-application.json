@@ -51,7 +51,7 @@
       },
       {
         "Label": "Analytics",
-        "Icon": "fa-solid fa-chart-mixed",
+        "Icon": "fa-solid fa-chart-line",
         "ResourceType": "Custom",
         "DriverClass": "AIAnalyticsResource",
         "isDefault": false
