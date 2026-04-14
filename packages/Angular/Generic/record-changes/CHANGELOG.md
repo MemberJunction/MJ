@@ -1,5 +1,18 @@
 # @memberjunction/ng-record-changes
 
+## 5.26.0
+
+### Patch Changes
+
+- Updated dependencies [55de456]
+- Updated dependencies [a1002f4]
+  - @memberjunction/core-entities@5.26.0
+  - @memberjunction/ng-shared-generic@5.26.0
+  - @memberjunction/core@5.26.0
+  - @memberjunction/ng-notifications@5.26.0
+  - @memberjunction/ng-versions@5.26.0
+  - @memberjunction/global@5.26.0
+
 ## 5.25.0
 
 ### Patch Changes

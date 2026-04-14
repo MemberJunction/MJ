@@ -1,5 +1,82 @@
 # Change Log - @memberjunction/server
 
+## 5.26.0
+
+### Minor Changes
+
+- a1002f4: - Entities now expose AllowCaching as the runtime source of truth for
+
+### Patch Changes
+
+- 55de456: Fix missing dependencies across 17 packages that accumulated while knip dependency checking was silently broken. Repair knip infrastructure: disable crashing vitest plugin, harden CI workflow to fail-fast on tool crashes instead of silently passing, and fix hardcoded Angular version in auto-fix script.
+- Updated dependencies [55de456]
+- Updated dependencies [a1002f4]
+  - @memberjunction/ai-agents@5.26.0
+  - @memberjunction/core-actions@5.26.0
+  - @memberjunction/core-entities@5.26.0
+  - @memberjunction/skip-types@5.26.0
+  - @memberjunction/codegen-lib@5.26.0
+  - @memberjunction/external-change-detection@5.26.0
+  - @memberjunction/core@5.26.0
+  - @memberjunction/ai-agent-manager@5.26.0
+  - @memberjunction/scheduling-engine@5.26.0
+  - @memberjunction/testing-engine@5.26.0
+  - @memberjunction/ai-agent-manager-actions@5.26.0
+  - @memberjunction/ai-core-plus@5.26.0
+  - @memberjunction/aiengine@5.26.0
+  - @memberjunction/ai-mcp-client@5.26.0
+  - @memberjunction/computer-use-engine@5.26.0
+  - @memberjunction/ai-prompts@5.26.0
+  - @memberjunction/ai-vector-sync@5.26.0
+  - @memberjunction/api-keys@5.26.0
+  - @memberjunction/actions-apollo@5.26.0
+  - @memberjunction/actions-base@5.26.0
+  - @memberjunction/actions-bizapps-accounting@5.26.0
+  - @memberjunction/actions-bizapps-crm@5.26.0
+  - @memberjunction/actions-bizapps-formbuilders@5.26.0
+  - @memberjunction/actions-bizapps-lms@5.26.0
+  - @memberjunction/actions-bizapps-social@5.26.0
+  - @memberjunction/actions@5.26.0
+  - @memberjunction/communication-types@5.26.0
+  - @memberjunction/entity-communications-base@5.26.0
+  - @memberjunction/entity-communications-server@5.26.0
+  - @memberjunction/notifications@5.26.0
+  - @memberjunction/communication-ms-graph@5.26.0
+  - @memberjunction/communication-sendgrid@5.26.0
+  - @memberjunction/doc-utils@5.26.0
+  - @memberjunction/encryption@5.26.0
+  - @memberjunction/generic-database-provider@5.26.0
+  - @memberjunction/graphql-dataprovider@5.26.0
+  - @memberjunction/integration-engine@5.26.0
+  - @memberjunction/core-entities-server@5.26.0
+  - @memberjunction/data-context@5.26.0
+  - @memberjunction/queue@5.26.0
+  - @memberjunction/storage@5.26.0
+  - @memberjunction/sqlserver-dataprovider@5.26.0
+  - @memberjunction/scheduling-actions@5.26.0
+  - @memberjunction/scheduling-engine-base@5.26.0
+  - @memberjunction/search-engine@5.26.0
+  - @memberjunction/templates@5.26.0
+  - @memberjunction/testing-engine-base@5.26.0
+  - @memberjunction/version-history@5.26.0
+  - @memberjunction/ai-vectordb@5.26.0
+  - @memberjunction/ai-vectors-pinecone@5.26.0
+  - @memberjunction/auth-providers@5.26.0
+  - @memberjunction/component-registry-client-sdk@5.26.0
+  - @memberjunction/interactive-component-types@5.26.0
+  - @memberjunction/data-context-server@5.26.0
+  - @memberjunction/postgresql-dataprovider@5.26.0
+  - @memberjunction/redis-provider@5.26.0
+  - @memberjunction/schema-engine@5.26.0
+  - @memberjunction/server-extensions-core@5.26.0
+  - @memberjunction/ai-provider-bundle@5.26.0
+  - @memberjunction/integration-schema-builder@5.26.0
+  - @memberjunction/ai@5.26.0
+  - @memberjunction/config@5.26.0
+  - @memberjunction/global@5.26.0
+  - @memberjunction/sql-dialect@5.26.0
+  - @memberjunction/scheduling-base-types@5.26.0
+
 ## 5.25.0
 
 ### Minor Changes
