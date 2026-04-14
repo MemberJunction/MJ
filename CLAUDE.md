@@ -1686,10 +1686,10 @@ Each nav item with `ResourceType: "Custom"` requires a corresponding component:
 4. Call the load function from the module's `public-api.ts`
 5. Register the component in the module's declarations and exports
 
-## Browser Testing with Chrome DevTools MCP
+## Browser Testing with Playwright CLI
 
 ### Overview
-MemberJunction uses the **Chrome DevTools MCP** server for browser-based testing and UI interaction during development. The tools use accessibility-tree snapshots with stable `uid` handles that are token-efficient for AI agents and give direct access to the Chrome DevTools protocol (console, network, performance, screenshots). Playwright CLI is **not** used — do not invoke `npx playwright-cli` for MJ browser testing.
+MemberJunction uses `@playwright/cli` (Playwright CLI) for browser-based testing and UI interaction during development. The CLI uses an accessibility-snapshot approach that is token-efficient for AI agents.
 
 ### Managing Dev Servers
 Claude Code should start and stop MJAPI and MJExplorer as background processes itself. This allows restarting them after code changes without relying on the user to manage them externally.
@@ -1699,51 +1699,74 @@ Claude Code should start and stop MJAPI and MJExplorer as background processes i
 # Run as a background task from: packages/MJAPI/
 npm run start
 
-# Start MJExplorer (port 4200 via the docker container, or 4201 if run from source)
-# Run as a background task from: packages/MJExplorer/ when running from source
+# Start MJExplorer (port 4201, configured in package.json start script)
+# Run as a background task from: packages/MJExplorer/
 npm run start
 ```
 
 **Key points:**
 - MJAPI runs on port **4001** (set by `GRAPHQL_PORT=4001` in `.env`)
-- MJExplorer typically runs on port **4200** when served by the docker container, or **4201** when run from source (configured via `--port 4201` in its start script)
+- MJExplorer runs on port **4201** (set by `--port 4201` in its start script)
 - Run both as background tasks so you can monitor output and restart as needed
 - After rebuilding a server-side package, restart MJAPI to pick up changes
 - After rebuilding an Angular library, MJExplorer's Vite dev server auto-detects changes and triggers a browser reload — no restart needed
 - Always check that servers are healthy before launching the browser (wait for "listening on" / compilation success messages)
 
 ### Persistent Browser Profile (Auth Caching)
-Chrome DevTools MCP attaches to a long-lived browser instance, so MSAL tokens and localStorage are naturally preserved across test runs. If auth expires, complete the normal MSAL login flow once in the attached browser window — the refreshed token is cached for subsequent sessions.
+To avoid re-authenticating every time you launch a browser session, use the `--profile` flag to store session data (MSAL tokens, cookies, localStorage) persistently:
 
-### Common Tools
-Chrome DevTools tools are exposed via MCP (`mcp__chrome-devtools__*`). The most common ones for UI tests are:
+```bash
+# First-time launch (requires manual login in the headed browser):
+npx playwright-cli open --headed --profile .playwright-cli/profile http://localhost:4201
 
-| Task | Tool |
-|---|---|
-| List open pages | `mcp__chrome-devtools__list_pages` |
-| Open / navigate a tab | `mcp__chrome-devtools__new_page` / `mcp__chrome-devtools__navigate_page` |
-| Snapshot the a11y tree (returns `uid` handles) | `mcp__chrome-devtools__take_snapshot` |
-| Click an element by uid | `mcp__chrome-devtools__click` |
-| Fill an input/textarea by uid | `mcp__chrome-devtools__fill` |
-| Keyboard input | `mcp__chrome-devtools__press_key` / `type_text` |
-| Wait for text to appear | `mcp__chrome-devtools__wait_for` |
-| Read console messages | `mcp__chrome-devtools__list_console_messages` |
-| Read network requests | `mcp__chrome-devtools__list_network_requests` |
-| Run JS in the page | `mcp__chrome-devtools__evaluate_script` |
-| Screenshots / memory snapshots | `mcp__chrome-devtools__take_screenshot` / `take_memory_snapshot` |
+# Subsequent launches reuse cached auth automatically:
+npx playwright-cli open --headed --profile .playwright-cli/profile http://localhost:4201
+```
 
-Always prefer `take_snapshot` over `take_screenshot` for interaction — the a11y snapshot is tokenwise cheaper and gives you the `uid` handles the click/fill tools require.
+**Key points:**
+- The `.playwright-cli/` directory is gitignored — profile data stays local
+- After authenticating once, MSAL tokens are cached in the profile directory
+- Sessions typically persist for 30+ days (same as the VSCode debug browser)
+- If auth expires, just log in once in the headed browser to refresh the cache
+
+### Common Commands
+```bash
+# Open browser with persistent auth
+npx playwright-cli open --headed --profile .playwright-cli/profile http://localhost:4201
+
+# Take a snapshot (get element refs for interaction)
+npx playwright-cli snapshot
+
+# Click an element by ref
+npx playwright-cli click <ref>
+
+# Type text
+npx playwright-cli type "some text"
+
+# Press a key
+npx playwright-cli press Enter
+
+# Run arbitrary Playwright code
+npx playwright-cli run-code "async (page) => { return await page.title(); }"
+
+# Check console logs
+npx playwright-cli console info
+
+# Close browser
+npx playwright-cli close
+```
 
 ### Workflow for UI Bug Investigation
 1. Start MJAPI and MJExplorer as background processes (if not already running)
 2. Wait for both servers to be ready (MJAPI listening, MJExplorer compiled)
-3. Use `mcp__chrome-devtools__list_pages` to see the current browser state; open a new tab or navigate an existing one to the page under test
-4. Use `mcp__chrome-devtools__take_snapshot` to inspect the page — uids from the snapshot drive `click`/`fill`/etc.
-5. Use `mcp__chrome-devtools__list_console_messages` / `list_network_requests` to check for errors
-6. Make code fixes, rebuild affected packages
+3. Launch browser with persistent profile: `npx playwright-cli open --headed --profile .playwright-cli/profile http://localhost:4201`
+4. Authenticate once if needed (cached for future sessions)
+5. Use `snapshot` to inspect the page, `click`/`type` to interact
+6. Use `console info` / `console error` to check for issues
+7. Make code fixes, rebuild affected packages
    - Server-side changes: restart MJAPI background process
    - Angular library changes: Vite auto-reloads the browser
-7. Re-snapshot and re-test to verify the fix
+8. Re-test to verify the fix
 
 ## Active Technologies
 - TypeScript 5.x, Node.js 18+ + `@memberjunction/server` (auth providers), `express`, `jsonwebtoken`, `@modelcontextprotocol/sdk` (601-mcp-oauth)
