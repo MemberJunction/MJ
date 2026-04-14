@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Clustering Visualization Mockups</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #0d0d1a;
+    color: #e2e8f0;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .container {
+    max-width: 900px;
+    width: 100%;
+    padding: 60px 40px;
+  }
+  h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    margin-bottom: 8px;
+    color: #fff;
+  }
+  h1 i { color: #264FAF; margin-right: 12px; }
+  .subtitle {
+    color: #94a3b8;
+    font-size: 1.05rem;
+    margin-bottom: 48px;
+  }
+  .section-title {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: #64748b;
+    margin-bottom: 16px;
+    padding-left: 4px;
+  }
+  .cards { display: flex; flex-direction: column; gap: 12px; margin-bottom: 48px; }
+  a.card {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 20px 24px;
+    background: #1a1a2e;
+    border: 1px solid #2a2a4a;
+    border-radius: 12px;
+    text-decoration: none;
+    color: #e2e8f0;
+    transition: all 0.2s;
+  }
+  a.card:hover {
+    background: #222244;
+    border-color: #264FAF;
+    transform: translateX(4px);
+  }
+  .card-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    flex-shrink: 0;
+  }
+  .card-icon.kh { background: rgba(38,79,175,0.15); color: #5b8def; }
+  .card-icon.de { background: rgba(16,185,129,0.15); color: #34d399; }
+  .card-body { flex: 1; }
+  .card-title { font-weight: 600; font-size: 1rem; margin-bottom: 2px; }
+  .card-desc { font-size: 0.85rem; color: #94a3b8; }
+  .card-arrow { color: #475569; font-size: 0.9rem; }
+  a.card:hover .card-arrow { color: #264FAF; }
+  .badge {
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    margin-left: 8px;
+  }
+  .badge-a { background: rgba(99,102,241,0.15); color: #818cf8; }
+  .badge-b { background: rgba(245,158,11,0.15); color: #fbbf24; }
+  .badge-c { background: rgba(16,185,129,0.15); color: #34d399; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1><i class="fa-solid fa-circle-nodes"></i>Clustering Mockups</h1>
+  <p class="subtitle">6 design options for cluster visualization in MemberJunction</p>
+
+  <div class="section-title">Knowledge Hub &mdash; Clusters Dashboard</div>
+  <div class="cards">
+    <a class="card" href="kh-clusters-option-a.html">
+      <div class="card-icon kh"><i class="fa-solid fa-minimize"></i></div>
+      <div class="card-body">
+        <div class="card-title">Option A <span class="badge badge-a">Minimal</span></div>
+        <div class="card-desc">Clean floating config panel over a full-bleed scatter plot</div>
+      </div>
+      <div class="card-arrow"><i class="fa-solid fa-arrow-right"></i></div>
+    </a>
+    <a class="card" href="kh-clusters-option-b.html">
+      <div class="card-icon kh"><i class="fa-solid fa-columns"></i></div>
+      <div class="card-body">
+        <div class="card-title">Option B <span class="badge badge-b">Side-by-Side</span></div>
+        <div class="card-desc">Config panel on left, scatter plot on right, collapsible saved list</div>
+      </div>
+      <div class="card-arrow"><i class="fa-solid fa-arrow-right"></i></div>
+    </a>
+    <a class="card" href="kh-clusters-option-c.html">
+      <div class="card-icon kh"><i class="fa-solid fa-table-columns"></i></div>
+      <div class="card-body">
+        <div class="card-title">Option C <span class="badge badge-c">Full-Featured</span></div>
+        <div class="card-desc">Top toolbar, center scatter, right panel with cluster details and member list</div>
+      </div>
+      <div class="card-arrow"><i class="fa-solid fa-arrow-right"></i></div>
+    </a>
+  </div>
+
+  <div class="section-title">Data Explorer &mdash; Clusters View Mode</div>
+  <div class="cards">
+    <a class="card" href="de-clusters-option-a.html">
+      <div class="card-icon de"><i class="fa-solid fa-minimize"></i></div>
+      <div class="card-body">
+        <div class="card-title">Option A <span class="badge badge-a">Inline</span></div>
+        <div class="card-desc">Inline scatter with minimal controls in the existing Data Explorer</div>
+      </div>
+      <div class="card-arrow"><i class="fa-solid fa-arrow-right"></i></div>
+    </a>
+    <a class="card" href="de-clusters-option-b.html">
+      <div class="card-icon de"><i class="fa-solid fa-grip-lines"></i></div>
+      <div class="card-body">
+        <div class="card-title">Option B <span class="badge badge-b">Split View</span></div>
+        <div class="card-desc">Scatter plot on top, cluster member table on bottom</div>
+      </div>
+      <div class="card-arrow"><i class="fa-solid fa-arrow-right"></i></div>
+    </a>
+    <a class="card" href="de-clusters-option-c.html">
+      <div class="card-icon de"><i class="fa-solid fa-expand"></i></div>
+      <div class="card-body">
+        <div class="card-title">Option C <span class="badge badge-c">Interactive</span></div>
+        <div class="card-desc">Click-to-zoom clusters with sliding detail panel</div>
+      </div>
+      <div class="card-arrow"><i class="fa-solid fa-arrow-right"></i></div>
+    </a>
+  </div>
+</div>
+</body>
+</html>

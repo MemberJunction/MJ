@@ -1,0 +1,236 @@
+<div class="scatter-container">
+    <!-- Loading overlay -->
+    @if (IsLoading) {
+        <div class="loading-overlay">
+            <div class="loading-spinner">
+                <i class="fa-solid fa-circle-nodes fa-spin"></i>
+                <span>Computing clusters...</span>
+            </div>
+        </div>
+    }
+
+    <!-- Empty state -->
+    @if (!IsLoading && Points.length === 0) {
+        <div class="empty-state">
+            <i class="fa-solid fa-chart-scatter"></i>
+            <p>No data to display</p>
+            <p class="empty-hint">Configure and run clustering to see results</p>
+        </div>
+    }
+
+    <!-- SVG scatter plot -->
+    @if (Points.length > 0) {
+        <svg #svgElement
+             class="scatter-svg"
+             [class.no-transitions]="!AnimateTransitions"
+             [attr.viewBox]="ViewBoxString"
+             preserveAspectRatio="xMidYMid meet"
+             (wheel)="OnWheel($event)"
+             (mousedown)="OnMouseDown($event)">
+
+            <!-- Gradient definitions for cluster glow -->
+            <defs>
+                @for (centroid of ClusterCentroids; track TrackCentroidBy($index, centroid)) {
+                    <radialGradient [attr.id]="'cluster-glow-' + centroid.ClusterId"
+                                    cx="50%" cy="50%" r="50%">
+                        <stop offset="0%" [attr.stop-color]="centroid.Color" stop-opacity="0.12"/>
+                        <stop offset="100%" [attr.stop-color]="centroid.Color" stop-opacity="0"/>
+                    </radialGradient>
+                }
+            </defs>
+
+            <!-- Background grid lines -->
+            <g class="grid-lines">
+                @for (y of HorizontalGridLines; track y) {
+                    <line [attr.x1]="0" [attr.y1]="y" [attr.x2]="1000" [attr.y2]="y"/>
+                }
+                @for (x of VerticalGridLines; track x) {
+                    <line [attr.x1]="x" [attr.y1]="0" [attr.x2]="x" [attr.y2]="700"/>
+                }
+            </g>
+
+            <!-- Cluster glow circles -->
+            @for (centroid of ClusterCentroids; track TrackCentroidBy($index, centroid)) {
+                <circle [attr.cx]="centroid.Cx"
+                        [attr.cy]="centroid.Cy"
+                        [attr.r]="centroid.R"
+                        [attr.fill]="'url(#cluster-glow-' + centroid.ClusterId + ')'"/>
+            }
+
+            <!-- Cluster labels (positioned above centroids) -->
+            @for (centroid of ClusterCentroids; track TrackCentroidBy($index, centroid)) {
+                @if (GetClusterLabelById(centroid.ClusterId); as label) {
+                    <text class="cluster-label"
+                          [attr.x]="centroid.Cx"
+                          [attr.y]="centroid.Cy - centroid.R - 8"
+                          text-anchor="middle"
+                          [attr.fill]="centroid.Color">{{ label }}</text>
+                }
+            }
+
+            <!-- Data points -->
+            @for (point of Points; track TrackPointBy($index, point)) {
+                <circle class="data-point"
+                        [attr.cx]="point.X"
+                        [attr.cy]="point.Y"
+                        [attr.r]="GetPointRadius(point)"
+                        [attr.fill]="GetPointColor(point)"
+                        [attr.opacity]="GetPointOpacity(point)"
+                        (mouseenter)="OnPointMouseEnter(point, $event)"
+                        (mouseleave)="OnPointMouseLeave()"
+                        (click)="OnPointClick(point); $event.stopPropagation()"/>
+            }
+
+            <!-- Selection rings for selected points -->
+            @for (point of Points; track TrackPointBy($index, point)) {
+                @if (IsSelected(point)) {
+                    <circle class="selection-ring"
+                            [attr.cx]="point.X"
+                            [attr.cy]="point.Y"
+                            [attr.r]="HighlightRadius + 2"
+                            fill="none"
+                            [attr.stroke]="GetPointColor(point)"
+                            stroke-width="2"
+                            opacity="0.8"/>
+                }
+            }
+
+            <!-- Highlight ring for last-clicked point -->
+            @if (HighlightedKey) {
+                @for (point of Points; track TrackPointBy($index, point)) {
+                    @if (IsHighlighted(point)) {
+                        <circle [attr.cx]="point.X"
+                                [attr.cy]="point.Y"
+                                [attr.r]="HighlightRadius + 4"
+                                fill="none"
+                                [attr.stroke]="GetPointColor(point)"
+                                stroke-width="2.5"
+                                opacity="0.9"/>
+                    }
+                }
+            }
+        </svg>
+    }
+
+    <!-- Legend overlay -->
+    @if (ShowLegend && Clusters.length > 0) {
+        <div class="legend">
+            <div class="legend-title">Clusters</div>
+            @for (cluster of Clusters; track TrackClusterBy($index, cluster)) {
+                <div class="legend-item" (click)="OnClusterLegendClick(cluster)">
+                    <div class="legend-dot" [style.background]="cluster.Color"></div>
+                    @if (EditingClusterId === cluster.Id) {
+                        <input class="legend-label-input"
+                               [(ngModel)]="EditingLabelDraft"
+                               (keydown)="OnLabelEditKeydown($event, cluster)"
+                               (blur)="CommitLabelEdit(cluster)"
+                               (click)="$event.stopPropagation()"
+                               autofocus />
+                    } @else {
+                        <span class="legend-label">{{ cluster.Label }}</span>
+                        <button class="legend-edit-btn"
+                                title="Edit label"
+                                (click)="StartLabelEdit(cluster, $event)">
+                            <i class="fa-solid fa-pencil"></i>
+                        </button>
+                    }
+                    <span class="legend-count">{{ cluster.MemberCount }}</span>
+                </div>
+            }
+        </div>
+    }
+
+    <!-- Tooltip -->
+    @if (ShowTooltip && HoveredPoint) {
+        <div class="tooltip"
+             [style.left.px]="TooltipX"
+             [style.top.px]="TooltipY">
+            <mj-entity-card
+                [EntityName]="EntityName"
+                [Record]="HoveredPoint.Metadata"
+                Variant="compact">
+            </mj-entity-card>
+            <div class="tt-cluster">
+                <i class="fa-solid fa-circle" style="font-size: 7px; vertical-align: middle"></i>
+                {{ GetClusterLabel(HoveredPoint) }}
+            </div>
+            <div class="tt-action">
+                <i class="fa-solid fa-arrow-up-right-from-square"></i> Click to view details
+            </div>
+        </div>
+    }
+
+    <!-- Detail Panel (slide-in from right) -->
+    <div class="detail-panel" [class.detail-panel-open]="ShowDetailPanel && SelectedPoint">
+        @if (SelectedPoint) {
+            <!-- Panel Header -->
+            <div class="detail-header">
+                <div class="detail-header-content">
+                    @if (SelectedPoint.Metadata?.['EntityIcon']) {
+                        <div class="detail-icon">
+                            <i [class]="SelectedPoint.Metadata['EntityIcon']"></i>
+                        </div>
+                    }
+                    <div class="detail-header-text">
+                        <div class="detail-name">{{ SelectedPoint.Label }}</div>
+                        @if (SelectedPoint.Metadata?.['Entity']) {
+                            <span class="detail-entity-badge">{{ SelectedPoint.Metadata['Entity'] }}</span>
+                        }
+                    </div>
+                </div>
+                <button class="detail-close" (click)="CloseDetailPanel()" title="Close">
+                    <i class="fa-solid fa-times"></i>
+                </button>
+            </div>
+
+            <!-- Cluster badge -->
+            <div class="detail-cluster">
+                <span class="detail-cluster-dot"
+                      [style.background]="GetClusterColor(SelectedPoint.ClusterId)"></span>
+                {{ GetClusterLabel(SelectedPoint) }}
+            </div>
+
+            <!-- Metadata fields via entity card -->
+            <mj-entity-card
+                [EntityName]="EntityName"
+                [Record]="SelectedPoint.Metadata"
+                Variant="detail"
+                CssClass="detail-entity-card">
+            </mj-entity-card>
+
+            <!-- Cluster Members -->
+            <div class="detail-members-section">
+                <button class="detail-members-toggle" (click)="ToggleClusterMembers()">
+                    <i class="fa-solid"
+                       [class.fa-chevron-down]="ClusterMembersExpanded"
+                       [class.fa-chevron-right]="!ClusterMembersExpanded"></i>
+                    <span>Cluster Members</span>
+                    <span class="detail-members-count">{{ ClusterMembers.length }}</span>
+                </button>
+
+                @if (ClusterMembersExpanded) {
+                    <div class="detail-members-list">
+                        @for (member of ClusterMembers; track TrackMemberBy($index, member)) {
+                            <div class="detail-member-row"
+                                 [class.active]="member.VectorKey === SelectedPoint.VectorKey"
+                                 (click)="OnClusterMemberClick(member)">
+                                @if (member.Metadata?.['EntityIcon']) {
+                                    <i [class]="member.Metadata['EntityIcon']" class="member-icon"></i>
+                                }
+                                <span class="member-label">{{ member.Label }}</span>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+
+            <!-- Open Record button -->
+            <div class="detail-footer">
+                <button class="detail-open-btn" (click)="OnOpenRecordClick()">
+                    <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                    Open Record
+                </button>
+            </div>
+        }
+    </div>
+</div>

@@ -29,6 +29,7 @@ import {
     ILocalStorageProvider,
     InMemoryLocalStorageProvider,
     Metadata,
+    RunView,
     RunViewParams,
     RunViewResult,
     RunViewWithCacheCheckParams,
@@ -59,6 +60,9 @@ import {
     QueryCacheManager,
     DatabasePlatform,
     QueryExecutionSpec,
+    SaveContext,
+    SaveContextField,
+    SaveSQLResult,
 } from '@memberjunction/core';
 
 import { MJGlobal, SQLExpressionValidator, UUIDsEqual } from '@memberjunction/global';
@@ -83,6 +87,7 @@ import { QueueManager } from '@memberjunction/queue';
 import { EntityActionEngineServer } from '@memberjunction/actions';
 import { ActionResult } from '@memberjunction/actions-base';
 import { EncryptionEngine } from '@memberjunction/encryption';
+import { GeoCodeSyncService, GeocodeResult } from '@memberjunction/geo-core';
 
 /**
  * Configuration options for batch SQL execution.
@@ -104,6 +109,12 @@ export interface ExecuteSQLBatchOptions {
  * Platform-specific providers should extend this class instead of DatabaseProviderBase
  * to inherit these shared behaviors.
  */
+/** ExtendedType values that indicate a geo-relevant field */
+const GEO_EXTENDED_TYPES = new Set([
+    'Geo', 'GeoAddress', 'GeoCity', 'GeoStateProvince',
+    'GeoCountry', 'GeoPostalCode', 'GeoLatitude', 'GeoLongitude'
+]);
+
 export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     private _compositionEngine = new QueryCompositionEngine();
 
@@ -528,18 +539,88 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         return null;
     }
 
-    protected override async OnBeforeSaveExecute(entity: BaseEntity, user: UserInfo, options: EntitySaveOptions): Promise<void> {
+    protected override async OnBeforeSaveExecute(entity: BaseEntity, user: UserInfo, options: EntitySaveOptions, context: SaveContext): Promise<void> {
         if (options.SkipEntityActions !== true)
             await this.HandleEntityActions(entity, 'save', true, user);
         if (options.SkipEntityAIActions !== true)
             await this.HandleEntityAIActions(entity, 'save', true, user);
+
+        // Flag geo sync needed in the SaveContext state bag.
+        // Check: entity supports geocoding AND (new record OR any geo field was dirty)
+        if (entity.EntityInfo.SupportsGeoCoding) {
+            const needsGeoSync = context.IsNew || context.Fields.some(
+                (f: SaveContextField) => f.WasDirty && f.FieldInfo.ExtendedType != null && GEO_EXTENDED_TYPES.has(f.FieldInfo.ExtendedType)
+            );
+            if (needsGeoSync) {
+                context.State['geoSyncNeeded'] = true;
+            }
+        }
     }
 
-    protected override OnAfterSaveExecute(entity: BaseEntity, user: UserInfo, options: EntitySaveOptions): void {
+    protected override OnAfterSaveExecute(entity: BaseEntity, user: UserInfo, options: EntitySaveOptions, _context: SaveContext): void {
         if (options.SkipEntityAIActions !== true)
             this.HandleEntityAIActions(entity, 'save', false, user); // NO AWAIT INTENTIONALLY
         if (options.SkipEntityActions !== true)
             this.HandleEntityActions(entity, 'save', false, user); // NO AWAIT INTENTIONALLY
+    }
+
+    protected override async OnSaveCompleted(entity: BaseEntity, saveSQLResult: SaveSQLResult, user: UserInfo, options: EntitySaveOptions, context: SaveContext): Promise<Record<string, unknown> | null> {
+        const superPatches = await super.OnSaveCompleted(entity, saveSQLResult, user, options, context);
+
+        // Build parallel post-save tasks — geocoding and ISA sibling propagation
+        // are independent (write to RecordGeoCode and RecordChange respectively).
+        let geoResult: GeocodeResult | null = null;
+
+        // Geocoding: awaited so the SP result can be patched with fresh lat/lng
+        const geoPromise = context.State['geoSyncNeeded']
+            ? GeoCodeSyncService.Instance.SyncIfChanged(entity, user).catch(e => {
+                const msg = e instanceof Error ? e.message : String(e);
+                LogError(`GenericDatabaseProvider: Geo sync failed for ${entity.EntityInfo.Name}: ${msg}`);
+                return null;
+            })
+            : null;
+
+        // ISA sibling record-change propagation — when saving an overlapping-subtype entity,
+        // propagate the record change to sibling branches so their change history stays in sync.
+        const overlappingChangeData = saveSQLResult.extraData?.overlappingChangeData as
+            | { changesJSON: string; changesDescription: string }
+            | undefined;
+        const siblingPromise = (
+            overlappingChangeData &&
+            entity.EntityInfo.AllowMultipleSubtypes &&
+            entity.EntityInfo.TrackRecordChanges
+        )
+            ? this.PropagateRecordChangesToSiblings(
+                entity.EntityInfo,
+                overlappingChangeData,
+                entity.PrimaryKey.Values(),
+                user?.ID ?? '',
+                options.ISAActiveChildEntityName,
+                entity.ProviderTransaction ? { connectionSource: entity.ProviderTransaction } : undefined,
+            )
+            : null;
+
+        // Await both in parallel
+        if (geoPromise && siblingPromise) {
+            [geoResult] = await Promise.all([geoPromise, siblingPromise]);
+        } else if (geoPromise) {
+            geoResult = await geoPromise;
+        } else if (siblingPromise) {
+            await siblingPromise;
+        }
+
+        // Build patches: merge super's patches with geocoding lat/lng if available.
+        // These patch the SP result row before finalizeSave() loads it into the entity,
+        // ensuring the entity object has fresh coordinates without a re-query.
+        if (geoResult) {
+            const geoPatches: Record<string, unknown> = {
+                __mj_Latitude: geoResult.Latitude,
+                __mj_Longitude: geoResult.Longitude,
+            };
+            return superPatches ? { ...superPatches, ...geoPatches } : geoPatches;
+        }
+
+        return superPatches;
     }
 
     protected override async OnBeforeDeleteExecute(entity: BaseEntity, user: UserInfo, options: EntityDeleteOptions): Promise<void> {
@@ -554,6 +635,41 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             this.HandleEntityActions(entity, 'delete', false, user);
         if (false === options?.SkipEntityAIActions)
             this.HandleEntityAIActions(entity, 'delete', false, user);
+
+        // Fire-and-forget: clean up RecordGeoCode rows for the deleted record
+        if (entity.EntityInfo.SupportsGeoCoding) {
+            this.cleanupGeoCodesForDeletedRecord(entity, user).catch(e => {
+                const msg = e instanceof Error ? e.message : String(e);
+                LogError(`GenericDatabaseProvider: Geo cleanup failed for deleted ${entity.EntityInfo.Name}: ${msg}`);
+            });
+        }
+    }
+
+    /**
+     * Delete RecordGeoCode rows associated with a deleted entity record.
+     */
+    private async cleanupGeoCodesForDeletedRecord(entity: BaseEntity, contextUser: UserInfo): Promise<void> {
+        const pkPairs = entity.PrimaryKey.KeyValuePairs;
+        const recordId = pkPairs.length === 1
+            ? String(pkPairs[0].Value)
+            : pkPairs.map(pk => String(pk.Value)).join('||');
+
+        const rv = new RunView();
+        const result = await rv.RunView({
+            EntityName: 'MJ: Record Geo Codes',
+            ExtraFilter: `EntityID='${entity.EntityInfo.ID}' AND RecordID='${recordId}'`,
+            ResultType: 'entity_object'
+        }, contextUser);
+
+        if (result.Success && result.Results.length > 0) {
+            for (const row of result.Results) {
+                const geoRecord = row as unknown as BaseEntity;
+                const deleted = await geoRecord.Delete();
+                if (!deleted) {
+                    LogError(`GenericDatabaseProvider: Failed to delete orphaned RecordGeoCode: ${geoRecord.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+                }
+            }
+        }
     }
 
     /**************************************************************************/
@@ -613,6 +729,86 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
             return processedRow;
         }));
+    }
+
+    /**************************************************************************/
+    // PreProcessFieldsForSave — Field-Level Encryption Before Save
+    /**************************************************************************/
+
+    /**
+     * Encrypts field values before saving to the database.
+     *
+     * This method handles field-level encryption for any entity with encrypted fields.
+     * It is called by platform-specific providers (SQL Server, PostgreSQL) before
+     * building their SQL parameters, ensuring encryption is handled generically.
+     *
+     * For each field marked with `Encrypt=true`:
+     * - If `EncryptionKeyID` is null → throws an error (misconfiguration)
+     * - If value is null/undefined → skips (nothing to encrypt)
+     * - If value is already encrypted → skips (prevents double-encryption)
+     * - Otherwise → encrypts the value using the configured key
+     *
+     * @param entity The entity being saved
+     * @param fieldValues Map of field info to current values — values are mutated in-place
+     * @param contextUser User context for encryption operations
+     * @throws Error if a field is marked for encryption but has no EncryptionKeyID configured
+     * @throws Error if encryption fails (to prevent storing unencrypted sensitive data)
+     */
+    protected async EncryptFieldValuesForSave(
+        entity: BaseEntity,
+        fieldValues: Map<EntityFieldInfo, unknown>,
+        contextUser?: UserInfo
+    ): Promise<void> {
+        // Lazy-load encryption engine only when needed
+        let encryptionEngine: EncryptionEngine | null = null;
+
+        for (const [field, value] of fieldValues) {
+            if (!field.Encrypt) continue;
+
+            // SECURITY: If field is marked for encryption but has no key, refuse to save.
+            // This prevents silent storage of cleartext data in fields intended to be encrypted.
+            if (!field.EncryptionKeyID) {
+                throw new Error(
+                    `Field "${field.Name}" on entity "${entity.EntityInfo.Name}" is marked for encryption ` +
+                    `(Encrypt=true) but has no EncryptionKeyID configured. ` +
+                    `Cannot save — refusing to store sensitive data without encryption. ` +
+                    `Configure an encryption key for this field in the EntityField metadata.`
+                );
+            }
+
+            if (value === null || value === undefined) continue;
+
+            // Lazy-load encryption engine on first encrypted field
+            if (!encryptionEngine) {
+                encryptionEngine = EncryptionEngine.Instance;
+                await encryptionEngine.Config(false, contextUser);
+            }
+
+            // Only encrypt if the value is not already encrypted
+            // This handles cases where values may already be encrypted (e.g., re-save scenarios)
+            const keyMarker = encryptionEngine.GetKeyByID(field.EncryptionKeyID)?.Marker;
+            if (!encryptionEngine.IsEncrypted(value, keyMarker)) {
+                try {
+                    const stringValue = typeof value === 'string' ? value : JSON.stringify(value);
+                    const encryptedValue = await encryptionEngine.Encrypt(stringValue, field.EncryptionKeyID, contextUser);
+                    fieldValues.set(field, encryptedValue);
+                } catch (encryptError) {
+                    // SECURITY: Never store unencrypted data in an encrypted field.
+                    // Log the detailed error server-side for operators, but throw a
+                    // generic message to prevent leaking infrastructure details
+                    // (env var names, config paths, vault URLs) to API consumers.
+                    const detail = encryptError instanceof Error ? encryptError.message : String(encryptError);
+                    LogError(
+                        `Encryption failed for field "${field.Name}" on entity "${entity.EntityInfo.Name}": ${detail}`
+                    );
+                    throw new Error(
+                        `Failed to encrypt field "${field.Name}" on entity "${entity.EntityInfo.Name}". ` +
+                        'The save operation has been aborted to prevent storing unencrypted sensitive data. ' +
+                        'Check server logs for details.'
+                    );
+                }
+            }
+        }
     }
 
     /**
@@ -1265,7 +1461,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
             // Phase 1: Check server's LocalCacheManager first (zero DB hits)
             const currentResults: RunViewWithCacheCheckResult<T>[] = [];
-            const serverCacheStaleItems: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo; serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number } }> = [];
+            const serverCacheStaleItems: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo; serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number; totalRowCount?: number } }> = [];
             const serverCacheMissItems: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo }> = [];
 
             for (const { index, item, entityInfo } of itemsNeedingValidation) {
@@ -1331,7 +1527,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             }
 
             // Phase 3: For items without cacheStatus (client has nothing), check server cache before hitting DB
-            const noCacheStatusServedFromCache: Array<{ index: number; serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number } }> = [];
+            const noCacheStatusServedFromCache: Array<{ index: number; serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number; totalRowCount?: number } }> = [];
             const noCacheStatusNeedsDB: Array<{ index: number; item: RunViewWithCacheCheckParams }> = [];
 
             for (const entry of itemsWithoutCacheCheck) {
@@ -1478,7 +1674,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             return { viewIndex, status: 'error', errorMessage: result.ErrorMessage || 'Unknown error executing view' };
         }
         const maxUpdatedAt = this.extractMaxUpdatedAt(result.Results);
-        return { viewIndex, status: 'stale', results: result.Results, maxUpdatedAt, rowCount: result.Results.length };
+        return { viewIndex, status: 'stale', results: result.Results, maxUpdatedAt, rowCount: result.TotalRowCount };
     }
 
     /**
@@ -1495,7 +1691,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         if (result.status !== 'error' && result.results && LocalCacheManager.Instance.IsInitialized) {
             const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params, this.InstanceConnectionString);
             const maxUpdatedAt = result.maxUpdatedAt || new Date().toISOString();
-            await LocalCacheManager.Instance.SetRunViewResult(fingerprint, params, result.results, maxUpdatedAt);
+            await LocalCacheManager.Instance.SetRunViewResult(fingerprint, params, result.results, maxUpdatedAt, undefined, result.rowCount);
         }
         return result;
     }
@@ -1509,7 +1705,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         item: RunViewWithCacheCheckParams,
         index: number,
         entityLabel: string,
-    ): Promise<{ status: 'current'; result: RunViewWithCacheCheckResult<never> } | { status: 'stale'; serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number } } | null> {
+    ): Promise<{ status: 'current'; result: RunViewWithCacheCheckResult<never> } | { status: 'stale'; serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number; totalRowCount?: number } } | null> {
         if (!LocalCacheManager.Instance.IsInitialized) return null;
 
         const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(item.params, this.InstanceConnectionString);
@@ -1532,14 +1728,14 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      */
     private async serveFromServerCache<T = unknown>(
         viewIndex: number,
-        serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number },
+        serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number; totalRowCount?: number },
     ): Promise<RunViewWithCacheCheckResult<T>> {
         return {
             viewIndex,
             status: 'stale',
             results: serverCached.results as T[],
             maxUpdatedAt: serverCached.maxUpdatedAt,
-            rowCount: serverCached.rowCount,
+            rowCount: serverCached.totalRowCount ?? serverCached.rowCount,
         };
     }
 
@@ -2218,6 +2414,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         const needsTemplateProcessing = query.UsesTemplate || compositionResult.AnyDependencyUsesTemplates;
 
         if (needsTemplateProcessing) {
+            // Escape {{ }} inside SQL comments before Nunjucks processes them.
+            // Without this, patterns like {{query:"..."}} in comments cause
+            // Nunjucks parse errors ("expected variable end").
+            finalSQL = this._compositionEngine.escapeTemplateTokensInComments(finalSQL);
+
             const processingResult = QueryParameterProcessor.processQueryTemplate(
                 query,
                 parameters,

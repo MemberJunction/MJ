@@ -92,11 +92,15 @@
   opacity: 0.5;
 }
 
-/* Attach button */
-.attach-button-icon {
+/* Attach buttons container */
+.attach-buttons {
   position: absolute;
   bottom: 0.75rem;
   right: 3rem;
+  display: flex;
+  gap: 2px;
+}
+.attach-button-icon {
   width: 36px;
   height: 36px;
   display: flex;
@@ -150,11 +154,13 @@
   .send-button-icon i {
     font-size: 0.875rem;
   }
+  .attach-buttons {
+    bottom: 0.625rem;
+    right: 2.75rem;
+  }
   .attach-button-icon {
     width: 32px;
     height: 32px;
-    bottom: 0.625rem;
-    right: 2.75rem;
   }
   .attach-button-icon i {
     font-size: 0.875rem;
@@ -183,11 +189,13 @@
   .send-button-icon i {
     font-size: 0.875rem;
   }
+  .attach-buttons {
+    bottom: 0.5rem;
+    right: 2.75rem;
+  }
   .attach-button-icon {
     width: 32px;
     height: 32px;
-    bottom: 0.5rem;
-    right: 2.75rem;
   }
   .attach-button-icon i {
     font-size: 0.875rem;

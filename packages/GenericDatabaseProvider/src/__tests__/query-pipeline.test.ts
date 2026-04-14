@@ -568,6 +568,124 @@ WHERE m.Region = '{{ Region }}'
             expect(finalSQL).not.toContain('WHERE');
             expect(finalSQL).toContain('SELECT m.ID, m.Name');
         });
+        it('should escape {{query:"..."}} in comments when outer query has UsesTemplate=true and no composition', () => {
+            // This is the exact bug scenario: a query with UsesTemplate=true has a
+            // {{query:"..."}} composition example in a SQL comment. There are no actual
+            // composition tokens (they're inside comments), so composition is skipped.
+            // Without the fix, Nunjucks chokes on the unescaped {{ in the comment.
+            const queryID = 'comment-esc-1';
+            const query = makeQueryInfo({
+                ID: queryID,
+                Name: 'Tags For Entity Record',
+                SQL: `-- Reusable composable query: Returns all active tags for a given entity record.
+-- Compose via {{query:"MJ/Tags/Tags For Entity Record"}} and join on RecordID.
+-- Parameters: entityName, recordID
+SELECT t.ID AS TagID, t.Name AS TagName
+FROM vwTaggedItems ti
+INNER JOIN vwTags t ON ti.TagID = t.ID
+WHERE ti.Entity = {{ entityName | sqlString }}
+AND ti.RecordID = {{ recordID | sqlString }}`,
+                UsesTemplate: true,
+            });
+
+            vi.spyOn(Metadata, 'Provider', 'get').mockReturnValue({
+                Queries: [],
+                QueryDependencies: [],
+                QueryCategories: [],
+                QueryFields: [],
+                QueryParameters: [
+                    { QueryID: queryID, Name: 'entityName', Type: 'string', IsRequired: true },
+                    { QueryID: queryID, Name: 'recordID', Type: 'string', IsRequired: true },
+                ],
+                QueryPermissions: [],
+                SQLDialects: [],
+                QuerySQLs: [],
+            } as ReturnType<typeof Metadata.Provider>);
+
+            const { finalSQL } = provider.testProcessQueryParameters(
+                query,
+                { entityName: 'Members', recordID: '42' },
+                mockUser
+            );
+
+            // Should succeed without throwing "expected variable end"
+            // The comment {{ should be escaped, but the parameter {{ should be resolved
+            expect(finalSQL).toContain("'Members'");
+            expect(finalSQL).toContain("'42'");
+            expect(finalSQL).not.toContain('{{ entityName');
+            expect(finalSQL).not.toContain('{{ recordID');
+        });
+
+        it('should escape {{ }} in block comments when outer query has UsesTemplate=true', () => {
+            const queryID = 'comment-esc-2';
+            const query = makeQueryInfo({
+                ID: queryID,
+                Name: 'Block Comment Query',
+                SQL: `/* This query demonstrates {{query:"Category/Some Query"}} syntax */
+SELECT * FROM Users WHERE Name = {{ userName | sqlString }}`,
+                UsesTemplate: true,
+            });
+
+            vi.spyOn(Metadata, 'Provider', 'get').mockReturnValue({
+                Queries: [],
+                QueryDependencies: [],
+                QueryCategories: [],
+                QueryFields: [],
+                QueryParameters: [
+                    { QueryID: queryID, Name: 'userName', Type: 'string', IsRequired: true },
+                ],
+                QueryPermissions: [],
+                SQLDialects: [],
+                QuerySQLs: [],
+            } as ReturnType<typeof Metadata.Provider>);
+
+            const { finalSQL } = provider.testProcessQueryParameters(
+                query,
+                { userName: 'Alice' },
+                mockUser
+            );
+
+            expect(finalSQL).toContain("'Alice'");
+            // Block comment {{ should be escaped
+            expect(finalSQL).not.toMatch(/\/\*.*\{\{query:/);
+        });
+
+        it('should not corrupt non-comment template tokens when escaping comments', () => {
+            // Ensure that escaping only targets comments, not actual template expressions
+            const queryID = 'comment-esc-3';
+            const query = makeQueryInfo({
+                ID: queryID,
+                Name: 'Mixed Query',
+                SQL: `-- Uses {{someParam}} in a comment
+SELECT * FROM Users WHERE Status = {{ status | sqlString }} AND Name = {{ name | sqlString }}`,
+                UsesTemplate: true,
+            });
+
+            vi.spyOn(Metadata, 'Provider', 'get').mockReturnValue({
+                Queries: [],
+                QueryDependencies: [],
+                QueryCategories: [],
+                QueryFields: [],
+                QueryParameters: [
+                    { QueryID: queryID, Name: 'status', Type: 'string', IsRequired: true },
+                    { QueryID: queryID, Name: 'name', Type: 'string', IsRequired: true },
+                ],
+                QueryPermissions: [],
+                SQLDialects: [],
+                QuerySQLs: [],
+            } as ReturnType<typeof Metadata.Provider>);
+
+            const { finalSQL } = provider.testProcessQueryParameters(
+                query,
+                { status: 'Active', name: 'Bob' },
+                mockUser
+            );
+
+            expect(finalSQL).toContain("'Active'");
+            expect(finalSQL).toContain("'Bob'");
+            // Comment should be escaped
+            expect(finalSQL).toMatch(/-- Uses \{ \{someParam\} \}/);
+        });
     });
 
     // ================================================================
@@ -638,6 +756,87 @@ WHERE m.Region = '{{ Region }}'
 
             expect(result.Success).toBe(false);
             expect(result.ErrorMessage).toContain('Connection failed');
+        });
+
+        it('should produce valid SQL when composition CTEs have comments with apostrophes and paging is applied', async () => {
+            // This reproduces the MSTA lapsed-members bug: a composed CTE with SQL
+            // comments containing unmatched apostrophes (e.g. "member's") must be
+            // handled correctly by the paging engine's CTE splitting.
+            const bridgeQuery = makeQueryInfo({
+                ID: 'bridge-1',
+                Name: 'MSTA NAMS-DESE Member Bridge',
+                CategoryPath: '/Golden-Queries/Membership/',
+                SQL: `-- Bridge query: maps NAMS member accounts to DESE educator records
+-- is in the same district as the member's Institution__c via co_dist_desc.
+-- This eliminates false positives from common names (e.g., "Jennifer Smith")
+SELECT DISTINCT
+    a.Id AS AccountId,
+    a.FirstName,
+    a.LastName,
+    e.edssn,
+    e.co_dist_code
+FROM nams.vwAccounts a
+INNER JOIN dese.vwco_dist_descs d ON d.description = a.Institution__c
+INNER JOIN dese.vweducators e
+    ON UPPER(e.edfname) = UPPER(a.FirstName)
+    AND UPPER(e.edlname) = UPPER(a.LastName)
+    AND e.co_dist_code = d.co_dist_code
+    AND e.year = {{ TargetYear | sqlString }}
+WHERE a.IsPersonAccount = 1`,
+                Reusable: true,
+                UsesTemplate: true,
+            });
+
+            const outerQuery = makeQueryInfo({
+                ID: 'outer-1',
+                Name: 'Lapsed Members District Movers',
+                SQL: `SELECT DISTINCT
+    bridge.AccountId,
+    bridge.FirstName,
+    bridge.LastName,
+    {{ PriorYear }} AS Prior_Year,
+    {{ TargetYear }} AS New_Year
+FROM {{query:"Golden-Queries/Membership/MSTA NAMS-DESE Member Bridge(TargetYear=PriorYear)"}} bridge
+ORDER BY bridge.LastName, bridge.FirstName`,
+                UsesTemplate: true,
+            });
+            outerQuery.GetPlatformSQL = vi.fn().mockReturnValue(outerQuery.SQL);
+
+            vi.spyOn(Metadata, 'Provider', 'get').mockReturnValue({
+                Queries: [bridgeQuery],
+                QueryDependencies: [],
+                QueryCategories: [],
+                QueryFields: [],
+                QueryParameters: [],
+                QueryPermissions: [],
+                SQLDialects: [],
+                QuerySQLs: [],
+            } as ReturnType<typeof Metadata.Provider>);
+
+            provider.setMockQueries([outerQuery]);
+
+            // Paged execution: first call = data rows, second call = count
+            provider.executeSQLResults = [
+                [{ AccountId: '1', FirstName: 'Jane', LastName: 'Doe', Prior_Year: 2024, New_Year: 2025 }],
+                [{ TotalRowCount: 1 }],
+            ];
+
+            const result = await provider.testInternalRunQuery(
+                {
+                    QueryID: 'outer-1',
+                    Parameters: { PriorYear: '2024', TargetYear: '2025' },
+                    MaxRows: 100,
+                    StartRow: 0,
+                },
+                mockUser
+            );
+
+            expect(result.Success).toBe(true);
+
+            // Verify the data SQL has paging appended directly (no __paged CTE wrapping)
+            const dataSql = provider.executeSQLCalls[0]?.sql ?? '';
+            expect(dataSql).not.toContain('__paged');
+            expect(dataSql).toContain('OFFSET 0 ROWS FETCH NEXT 100 ROWS ONLY');
         });
 
         it('should handle ad-hoc SQL queries', async () => {

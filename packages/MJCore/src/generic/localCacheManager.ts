@@ -82,21 +82,25 @@ export interface CachedRunViewData {
     maxUpdatedAt: string;
     /** Cached aggregate results, if aggregates were requested */
     aggregateResults?: AggregateResult[];
+    /** Total row count from the database — may differ from results.length for paginated queries */
+    totalRowCount?: number;
 }
 
 /**
  * Return type for GetRunViewResult and ApplyDifferentialUpdate.
- * Includes rowCount which is derived from results.length.
+ * Includes rowCount (derived from results.length) and totalRowCount (from the database).
  */
 export interface CachedRunViewResult {
     /** The cached result rows */
     results: unknown[];
     /** The maximum __mj_UpdatedAt timestamp from the results */
     maxUpdatedAt: string;
-    /** Row count - always derived from results.length */
+    /** Row count - derived from results.length */
     rowCount: number;
     /** Cached aggregate results, if aggregates were requested */
     aggregateResults?: AggregateResult[];
+    /** Total row count from the database — may differ from rowCount for paginated queries */
+    totalRowCount?: number;
 }
 
 /**
@@ -105,14 +109,30 @@ export interface CachedRunViewResult {
 export interface LocalCacheManagerConfig {
     /** Whether caching is enabled */
     enabled: boolean;
-    /** Maximum cache size in bytes (default: 50MB) */
+    /** Maximum cache size in bytes (default: 150MB) */
     maxSizeBytes: number;
-    /** Maximum number of cache entries (default: 1000) */
-    maxEntries: number;
-    /** Default TTL in milliseconds (default: 5 minutes) */
+    /** Default TTL in milliseconds (default: 0 = no TTL, rely on event-based invalidation) */
     defaultTTLMs: number;
     /** Eviction policy when cache is full */
     evictionPolicy: 'lru' | 'lfu' | 'fifo';
+    /**
+     * Maximum percentage of total cache memory (maxSizeBytes) that any single
+     * entity's cached results can occupy. When exceeded, the least-recently-accessed
+     * entries for that entity are evicted. Default: 50. Set to 0 to disable.
+     */
+    maxPercentOfCachePerEntity: number;
+    /**
+     * Interval in milliseconds for the periodic eviction sweep.
+     * Catches entries that should have been evicted (TTL expired) but weren't
+     * because no new stores triggered eviction. 0 = disabled.
+     * Default: 300000 (5 minutes).
+     */
+    evictionSweepIntervalMs: number;
+    /**
+     * Enable verbose cache logging (hits, misses, evictions, memory stats).
+     * Default: false.
+     */
+    verboseLogging: boolean;
 }
 
 // ============================================================================
@@ -121,10 +141,12 @@ export interface LocalCacheManagerConfig {
 
 const DEFAULT_CONFIG: LocalCacheManagerConfig = {
     enabled: true,
-    maxSizeBytes: 50 * 1024 * 1024, // 50MB
-    maxEntries: 1000,
-    defaultTTLMs: 5 * 60 * 1000, // 5 minutes
-    evictionPolicy: 'lru'
+    maxSizeBytes: 150 * 1024 * 1024, // 150MB
+    defaultTTLMs: 0, // No TTL — event-based invalidation is the primary mechanism
+    evictionPolicy: 'lru',
+    maxPercentOfCachePerEntity: 50,
+    evictionSweepIntervalMs: 300000, // 5 minutes
+    verboseLogging: false,
 };
 
 // ============================================================================
@@ -259,6 +281,14 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     private _stats = { hits: 0, misses: 0 };
     private _config: LocalCacheManagerConfig = { ...DEFAULT_CONFIG };
 
+    /**
+     * Per-fingerprint mutation lock. Serializes concurrent read-modify-write
+     * operations (RemoveSingleEntity, UpsertSingleEntity) on the same cache entry
+     * to prevent lost updates when multiple entity events fire simultaneously
+     * (e.g., TransactionGroup batch deletes).
+     */
+    private _fingerprintLocks = new Map<string, Promise<void>>();
+
     private readonly REGISTRY_KEY = '__MJ_CACHE_REGISTRY__';
 
     /**
@@ -322,6 +352,9 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         await this.loadRegistry();
         this._initialized = true;
 
+        // Start periodic eviction sweep for TTL-expired entries
+        this.startEvictionSweep();
+
         // Subscribe to BaseEntity events for universal cache invalidation.
         // When any entity is saved/deleted, update all cached RunView results for that entity.
         this.subscribeToBaseEntityEvents();
@@ -346,6 +379,17 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      */
     public UpdateConfig(config: Partial<LocalCacheManagerConfig>): void {
         this._config = { ...this._config, ...config };
+    }
+
+    /**
+     * Checks whether caching is enabled for a given entity. Returns the entity's
+     * AllowCaching metadata flag. This is the single source of truth for cache
+     * eligibility — schema-level opt-in is applied at CodeGen time via the
+     * `newEntityDefaults.AllowCachingBySchema` config, which flips this flag when
+     * the entity is first inserted into the metadata.
+     */
+    public IsCachingEnabledForEntity(entityInfo: { AllowCaching: boolean }): boolean {
+        return entityInfo.AllowCaching === true;
     }
 
     /**
@@ -503,6 +547,10 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         if (!baseEntity?.EntityInfo?.Name) return;
 
         const entityName = baseEntity.EntityInfo.Name;
+
+        // Short-circuit: if caching is disabled for this entity, skip the fingerprint scan
+        if (!this.IsCachingEnabledForEntity(baseEntity.EntityInfo)) return;
+
         const fingerprints = this._entityFingerprintIndex.get(entityName);
         if (!fingerprints || fingerprints.size === 0) return;
 
@@ -545,14 +593,17 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         const entityName = entityEvent.entityName;
         if (!entityName) return;
 
+        // Short-circuit: if caching is disabled for this entity, skip processing
+        const md = new Metadata();
+        const entityInfo = md.EntityByName(entityName);
+        if (entityInfo && !this.IsCachingEnabledForEntity(entityInfo)) return;
+
         const fingerprints = this._entityFingerprintIndex.get(entityName);
         if (!fingerprints || fingerprints.size === 0) return;
 
         const action = payload?.action;
 
-        // Look up entity metadata for PK field names
-        const md = new Metadata();
-        const entityInfo = md.Entities.find(e => e.Name === entityName);
+        // entityInfo was looked up above for the AllowCaching check
         if (!entityInfo) {
             LogStatusVerbose(`LocalCacheManager: remote-invalidate — entity "${entityName}" not found in metadata, invalidating caches`);
             for (const fp of [...fingerprints]) {
@@ -973,20 +1024,37 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         // ResultType is intentionally excluded from the fingerprint.
         // The cache always stores plain JSON objects regardless of ResultType.
         // Transformation to entity objects happens post-cache at consumption time.
+        //
+        // Fields is also intentionally excluded. On cache miss, we always fetch ALL
+        // fields from the DB (overriding any caller-specified Fields). This means one
+        // cache entry per entity+filter satisfies all field subsets. On cache hit,
+        // the caller's Fields list is used to filter columns from the cached data.
+        // This avoids N separate cache entries for different field subsets and guarantees
+        // a narrow-field query never poisons the cache for a full-field query.
         const maxRows = params.MaxRows ?? -1;
         const startRow = params.StartRow ?? 0;
         const connection = connectionPrefix || '';
         const aggHash = this.generateAggregateHash(params.Aggregates);
 
+        // UserSearchString affects which rows are returned (generates LIKE/FTS WHERE clauses)
+        // and MUST be part of the fingerprint to prevent cross-query cache poisoning.
+        const userSearch = (params.UserSearchString ?? '').trim();
+
+        // NOTE: ViewID and ViewName are intentionally excluded from the fingerprint.
+        // Views are just containers for entity + filter + orderBy. Two different views
+        // that resolve to the same entity/filter/orderBy produce identical SQL and results,
+        // so they should share the same cache entry.
+
         // Build human-readable fingerprint with pipe separators
-        // Format: Entity|Filter|OrderBy|MaxRows|StartRow|AggHash[|Connection]
+        // Format: Entity|Filter|OrderBy|MaxRows|StartRow|AggHash|UserSearch[|Connection]
         const parts = [
             entity,
             filter || '_',           // Use underscore for empty filter
             orderBy || '_',          // Use underscore for empty orderBy
             maxRows.toString(),
             startRow.toString(),
-            aggHash                  // Aggregate hash (or '_' for no aggregates)
+            aggHash,                 // Aggregate hash (or '_' for no aggregates)
+            userSearch || '_'        // User search string (generates LIKE/FTS clauses)
         ];
 
         // Only include connection if provided
@@ -1051,19 +1119,27 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         params: RunViewParams,
         results: unknown[],
         maxUpdatedAt: string,
-        aggregateResults?: AggregateResult[]
+        aggregateResults?: AggregateResult[],
+        totalRowCount?: number
     ): Promise<void> {
         if (!this._storageProvider || !this._config.enabled) return;
 
-        // Persist results, maxUpdatedAt, and aggregateResults (rowCount is derived from results.length on read)
+        // Persist results, maxUpdatedAt, aggregateResults, and totalRowCount
         const data: CachedRunViewData = { results, maxUpdatedAt };
         if (aggregateResults && aggregateResults.length > 0) {
             data.aggregateResults = aggregateResults;
         }
+        if (totalRowCount !== undefined) {
+            data.totalRowCount = totalRowCount;
+        }
         const value = JSON.stringify(data);
         const sizeBytes = this.estimateSize(value);
 
-        // Check if we need to evict entries
+        // Per-entity memory limit: evict oldest entries for this entity if over budget
+        const entityName = params.EntityName || 'Unknown';
+        await this.enforcePerEntityMemoryLimit(entityName, sizeBytes);
+
+        // Check if we need to evict entries (global budget)
         await this.evictIfNeeded(sizeBytes);
 
         try {
@@ -1117,11 +1193,11 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
                 this._stats.hits++;
                 const parsed = JSON.parse(value) as CachedRunViewData;
                 const results = parsed.results || [];
-                // Always derive rowCount from results.length - never trust persisted rowCount
                 const result: CachedRunViewResult = {
                     results,
                     maxUpdatedAt: parsed.maxUpdatedAt,
-                    rowCount: results.length
+                    rowCount: results.length,
+                    totalRowCount: parsed.totalRowCount
                 };
                 // Include aggregate results if they were cached
                 if (parsed.aggregateResults) {
@@ -1225,6 +1301,10 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             // Convert map back to array
             const mergedResults = Array.from(resultMap.values());
 
+            // For differential updates, the merged result count IS the new total
+            // (differential applies to full-dataset caches, not paginated ones)
+            const mergedTotalRowCount = mergedResults.length;
+
             // Store the updated cache with optional aggregate results
             // Note: If aggregateResults not provided, cached aggregates are cleared (they'd be stale)
             await this.SetRunViewResult(
@@ -1232,14 +1312,16 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
                 params,
                 mergedResults,
                 newMaxUpdatedAt,
-                aggregateResults
+                aggregateResults,
+                mergedTotalRowCount
             );
 
             // Return with rowCount derived from merged results and aggregates if provided
             const result: CachedRunViewResult = {
                 results: mergedResults,
                 maxUpdatedAt: newMaxUpdatedAt,
-                rowCount: mergedResults.length
+                rowCount: mergedResults.length,
+                totalRowCount: mergedTotalRowCount
             };
             if (aggregateResults) {
                 result.aggregateResults = aggregateResults;
@@ -1256,6 +1338,32 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      * Used by BaseEngine for immediate cache sync when an entity is saved.
      * If the entity exists (by primary key), it is replaced; otherwise it is added.
      *
+     * Serializes async operations on the same cache fingerprint to prevent
+     * lost-update races. When multiple entity events fire simultaneously
+     * (e.g., 3 deletes from a TransactionGroup), each read-modify-write cycle
+     * must complete before the next one starts for the same fingerprint.
+     * Different fingerprints run concurrently with no contention.
+     */
+    private async withFingerprintLock<T>(fingerprint: string, fn: () => Promise<T>): Promise<T> {
+        const existing = this._fingerprintLocks.get(fingerprint) ?? Promise.resolve();
+
+        let releaseLock: () => void;
+        const lockPromise = new Promise<void>(resolve => { releaseLock = resolve; });
+        this._fingerprintLocks.set(fingerprint, lockPromise);
+
+        try {
+            await existing; // Wait for any previous operation on this fingerprint
+            return await fn();
+        } finally {
+            releaseLock!();
+            // Clean up if we're the last in the chain
+            if (this._fingerprintLocks.get(fingerprint) === lockPromise) {
+                this._fingerprintLocks.delete(fingerprint);
+            }
+        }
+    }
+
+    /**
      * @param fingerprint - The cache fingerprint to update
      * @param entityData - The entity data as a plain object (use entity.GetAll())
      * @param primaryKeyFieldName - Name of the primary key field
@@ -1270,35 +1378,37 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     ): Promise<boolean> {
         if (!this._storageProvider || !this._config.enabled) return false;
 
-        try {
-            const cached = await this.GetRunViewResult(fingerprint);
-            if (!cached) {
-                LogStatusVerbose(`LocalCacheManager.UpsertSingleEntity: No cached data found for fingerprint "${fingerprint.substring(0, 60)}" — skipping (cache will be populated on next RunView)`);
+        return this.withFingerprintLock(fingerprint, async () => {
+            try {
+                const cached = await this.GetRunViewResult(fingerprint);
+                if (!cached) {
+                    LogStatusVerbose(`LocalCacheManager.UpsertSingleEntity: No cached data found for fingerprint "${fingerprint.substring(0, 60)}" — skipping (cache will be populated on next RunView)`);
+                    return false;
+                }
+                LogStatusVerbose(`LocalCacheManager.UpsertSingleEntity: Found cached data with ${cached.results.length} rows, updating...`);
+
+                const pkFieldNames = key.KeyValuePairs.map(kv => kv.FieldName);
+                const keyStr = key.ToConcatenatedString();
+
+                // Build a map of existing records by composite key string
+                const resultMap = new Map<string, unknown>();
+                for (const row of cached.results) {
+                    const rowObj = row as Record<string, unknown>;
+                    const rowKey = this.buildCompositeKeyFromRow(rowObj, pkFieldNames);
+                    resultMap.set(rowKey.ToConcatenatedString(), row);
+                }
+
+                // Upsert the entity (add or replace)
+                resultMap.set(keyStr, entityData);
+
+                const updatedResults = Array.from(resultMap.values());
+
+                return await this.storeCachedResults(fingerprint, updatedResults, newMaxUpdatedAt);
+            } catch (e) {
+                LogError(`LocalCacheManager.UpsertSingleEntity failed: ${e}`);
                 return false;
             }
-            LogStatusVerbose(`LocalCacheManager.UpsertSingleEntity: Found cached data with ${cached.results.length} rows, updating...`);
-
-            const pkFieldNames = key.KeyValuePairs.map(kv => kv.FieldName);
-            const keyStr = key.ToConcatenatedString();
-
-            // Build a map of existing records by composite key string
-            const resultMap = new Map<string, unknown>();
-            for (const row of cached.results) {
-                const rowObj = row as Record<string, unknown>;
-                const rowKey = this.buildCompositeKeyFromRow(rowObj, pkFieldNames);
-                resultMap.set(rowKey.ToConcatenatedString(), row);
-            }
-
-            // Upsert the entity (add or replace)
-            resultMap.set(keyStr, entityData);
-
-            const updatedResults = Array.from(resultMap.values());
-
-            return await this.storeCachedResults(fingerprint, updatedResults, newMaxUpdatedAt);
-        } catch (e) {
-            LogError(`LocalCacheManager.UpsertSingleEntity failed: ${e}`);
-            return false;
-        }
+        });
     }
 
     /**
@@ -1317,36 +1427,38 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     ): Promise<boolean> {
         if (!this._storageProvider || !this._config.enabled) return false;
 
-        try {
-            const cached = await this.GetRunViewResult(fingerprint);
-            if (!cached) {
+        return this.withFingerprintLock(fingerprint, async () => {
+            try {
+                const cached = await this.GetRunViewResult(fingerprint);
+                if (!cached) {
+                    return false;
+                }
+
+                const pkFieldNames = key.KeyValuePairs.map(kv => kv.FieldName);
+                const keyStr = key.ToConcatenatedString();
+
+                // Build a map of existing records by composite key string
+                const resultMap = new Map<string, unknown>();
+                for (const row of cached.results) {
+                    const rowObj = row as Record<string, unknown>;
+                    const rowKey = this.buildCompositeKeyFromRow(rowObj, pkFieldNames);
+                    resultMap.set(rowKey.ToConcatenatedString(), row);
+                }
+
+                if (!resultMap.has(keyStr)) {
+                    return true; // Not in cache, no-op
+                }
+
+                resultMap.delete(keyStr);
+
+                const updatedResults = Array.from(resultMap.values());
+
+                return await this.storeCachedResults(fingerprint, updatedResults, newMaxUpdatedAt);
+            } catch (e) {
+                LogError(`LocalCacheManager.RemoveSingleEntity failed: ${e}`);
                 return false;
             }
-
-            const pkFieldNames = key.KeyValuePairs.map(kv => kv.FieldName);
-            const keyStr = key.ToConcatenatedString();
-
-            // Build a map of existing records by composite key string
-            const resultMap = new Map<string, unknown>();
-            for (const row of cached.results) {
-                const rowObj = row as Record<string, unknown>;
-                const rowKey = this.buildCompositeKeyFromRow(rowObj, pkFieldNames);
-                resultMap.set(rowKey.ToConcatenatedString(), row);
-            }
-
-            if (!resultMap.has(keyStr)) {
-                return true; // Not in cache, no-op
-            }
-
-            resultMap.delete(keyStr);
-
-            const updatedResults = Array.from(resultMap.values());
-
-            return await this.storeCachedResults(fingerprint, updatedResults, newMaxUpdatedAt);
-        } catch (e) {
-            LogError(`LocalCacheManager.RemoveSingleEntity failed: ${e}`);
-            return false;
-        }
+        });
     }
 
     /**
@@ -1872,21 +1984,20 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
 
         const stats = this.GetStats();
         const wouldExceedSize = (stats.totalSizeBytes + neededBytes) > this._config.maxSizeBytes;
-        const wouldExceedCount = stats.totalEntries >= this._config.maxEntries;
 
-        if (!wouldExceedSize && !wouldExceedCount) return;
+        if (!wouldExceedSize) return;
 
-        // Calculate how much to free
-        const targetFreeBytes = Math.max(neededBytes, this._config.maxSizeBytes * 0.1); // At least 10% of max
-        const targetFreeCount = Math.max(1, Math.floor(this._config.maxEntries * 0.1)); // At least 10% of max
+        // Calculate how much to free — at least the incoming entry's size, but
+        // free 10% of total budget to avoid thrashing on every store.
+        const targetFreeBytes = Math.max(neededBytes, this._config.maxSizeBytes * 0.1);
 
-        await this.evict(targetFreeBytes, targetFreeCount);
+        await this.evict(targetFreeBytes);
     }
 
     /**
      * Evicts entries based on the configured eviction policy.
      */
-    private async evict(targetBytes: number, targetCount: number): Promise<void> {
+    private async evict(targetBytes: number): Promise<void> {
         if (!this._storageProvider) return;
 
         const entries = this.GetAllEntries();
@@ -1905,14 +2016,12 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         }
 
         let freedBytes = 0;
-        let freedCount = 0;
         const toDelete: string[] = [];
 
         for (const entry of entries) {
-            if (freedBytes >= targetBytes && freedCount >= targetCount) break;
+            if (freedBytes >= targetBytes) break;
             toDelete.push(entry.key);
             freedBytes += entry.sizeBytes;
-            freedCount++;
         }
 
         if (toDelete.length > 0) {
@@ -1938,5 +2047,144 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         }
 
         await this.persistRegistry();
+    }
+
+    /**
+     * Returns the memory limit in bytes for a given entity based on
+     * maxPercentOfCachePerEntity. Returns 0 if no limit applies.
+     */
+    private getEntityMemoryLimitBytes(): number {
+        const pct = this._config.maxPercentOfCachePerEntity;
+        if (pct <= 0) return 0;
+        return Math.floor(this._config.maxSizeBytes * pct / 100);
+    }
+
+    /**
+     * Enforces per-entity memory limits. When an entity's total cached bytes
+     * (including the incoming entry) would exceed its limit, evicts the
+     * least-recently-accessed entries for that entity until under the limit.
+     * @param incomingSizeBytes - estimated size of the entry about to be stored
+     */
+    private async enforcePerEntityMemoryLimit(entityName: string, incomingSizeBytes: number): Promise<void> {
+        const limitBytes = this.getEntityMemoryLimitBytes();
+        if (limitBytes <= 0 || !this._storageProvider) return;
+
+        const fingerprints = this._entityFingerprintIndex.get(entityName);
+        if (!fingerprints || fingerprints.size === 0) return;
+
+        // Sum up total bytes for this entity, including the incoming entry
+        const entries = [...fingerprints]
+            .map(fp => this._registry.get(fp))
+            .filter((e): e is CacheEntryInfo => !!e);
+
+        const totalBytes = entries.reduce((sum, e) => sum + e.sizeBytes, 0) + incomingSizeBytes;
+        if (totalBytes <= limitBytes) return;
+
+        // Sort by lastAccessedAt ascending (LRU first)
+        entries.sort((a, b) => a.lastAccessedAt - b.lastAccessedAt);
+
+        let bytesToFree = totalBytes - limitBytes;
+        if (this._config.verboseLogging) {
+            LogStatusEx({ message: `    🗑️ [Cache PER-ENTITY EVICT] Entity "${entityName}" using ${(totalBytes / 1024 / 1024).toFixed(1)}MB (limit: ${(limitBytes / 1024 / 1024).toFixed(1)}MB), evicting LRU entries`, verboseOnly: true });
+        }
+
+        for (const entry of entries) {
+            if (bytesToFree <= 0) break;
+            try {
+                const category = this.getCategoryForType(entry.type);
+                await this._storageProvider.Remove(entry.key, category);
+                this.removeFromEntityIndex(entry.key);
+                bytesToFree -= entry.sizeBytes;
+                this._registry.delete(entry.key);
+            } catch {
+                // Continue evicting
+            }
+        }
+
+        this.debouncedPersistRegistry();
+    }
+
+    /**
+     * Handle for the periodic eviction sweep timer.
+     */
+    private _sweepTimer: ReturnType<typeof setInterval> | null = null;
+
+    /**
+     * Starts the periodic eviction sweep timer. Called during initialization.
+     * The sweep catches entries that should have been evicted (TTL expired)
+     * but weren't because no new stores triggered eviction.
+     */
+    private startEvictionSweep(): void {
+        this.stopEvictionSweep(); // Clear any existing timer
+
+        const intervalMs = this._config.evictionSweepIntervalMs;
+        if (intervalMs <= 0) return; // Disabled
+
+        this._sweepTimer = setInterval(() => {
+            this.runEvictionSweep().catch(err => {
+                LogError(`LocalCacheManager: eviction sweep failed: ${(err as Error).message}`);
+            });
+        }, intervalMs) as unknown as ReturnType<typeof setInterval>;
+
+        // Don't prevent Node.js process from exiting
+        if (typeof this._sweepTimer === 'object' && 'unref' in this._sweepTimer) {
+            (this._sweepTimer as { unref(): void }).unref();
+        }
+    }
+
+    /**
+     * Stops the periodic eviction sweep timer.
+     */
+    private stopEvictionSweep(): void {
+        if (this._sweepTimer) {
+            clearInterval(this._sweepTimer);
+            this._sweepTimer = null;
+        }
+    }
+
+    /**
+     * Runs a single eviction sweep: evicts entries that have exceeded their TTL
+     * or entries for entities that are over their per-entity cap.
+     */
+    private async runEvictionSweep(): Promise<void> {
+        if (!this._storageProvider || !this._config.enabled) return;
+
+        const now = Date.now();
+        const ttlMs = this._config.defaultTTLMs;
+        const toDelete: string[] = [];
+
+        for (const [key, entry] of this._registry) {
+            // TTL expiry check
+            if (ttlMs > 0 && entry.cachedAt + ttlMs < now) {
+                toDelete.push(key);
+                continue;
+            }
+            // expiresAt check (if set individually)
+            if (entry.expiresAt && entry.expiresAt < now) {
+                toDelete.push(key);
+            }
+        }
+
+        if (toDelete.length > 0) {
+            if (this._config.verboseLogging) {
+                LogStatusEx({ message: `    🗑️ [Cache SWEEP] Evicting ${toDelete.length} TTL-expired entries`, verboseOnly: true });
+            }
+
+            for (const key of toDelete) {
+                try {
+                    const entry = this._registry.get(key);
+                    const category = this.getCategoryForType(entry?.type);
+                    await this._storageProvider.Remove(key, category);
+                    if (entry?.fingerprint) {
+                        this.removeFromEntityIndex(entry.fingerprint);
+                    }
+                    this._registry.delete(key);
+                } catch {
+                    // Continue
+                }
+            }
+
+            await this.persistRegistry();
+        }
     }
 }

@@ -160,7 +160,7 @@ export class EditPartDialogComponent implements OnDestroy, AfterViewInit {
     /**
      * Dynamically load the config panel component
      */
-    private loadConfigPanel(): void {
+    private async loadConfigPanel(): Promise<void> {
         this.destroyConfigPanel();
         this.LoadError = null; // Clear any previous error
 
@@ -189,7 +189,7 @@ export class EditPartDialogComponent implements OnDestroy, AfterViewInit {
         try {
             // Use ClassFactory to create the config panel instance
             console.log('[EditPartDialog] Attempting to create instance via ClassFactory:', this.PartType.ConfigDialogClass);
-            const panelInstance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseConfigPanel>(
+            const panelInstance = await MJGlobal.Instance.ClassFactory.CreateInstanceAsync<BaseConfigPanel>(
                 BaseConfigPanel,
                 this.PartType.ConfigDialogClass
             );

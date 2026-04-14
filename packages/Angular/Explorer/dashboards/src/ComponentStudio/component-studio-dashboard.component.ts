@@ -11,10 +11,8 @@ import {
 import { Subject, takeUntil } from 'rxjs';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 import { SharedService } from '@memberjunction/ng-shared';
-import { DialogService, DialogRef } from '@progress/kendo-angular-dialog';
-import { TextImportDialogComponent } from './components/text-import-dialog.component';
-import { ArtifactSelectionDialogComponent, ArtifactSelectionResult } from './components/artifact-selection-dialog.component';
-import { ArtifactLoadDialogComponent, ArtifactLoadResult } from './components/artifact-load-dialog.component';
+import { ArtifactSelectionResult } from './components/artifact-selection-dialog.component';
+import { ArtifactLoadResult } from './components/artifact-load-dialog.component';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ComponentStudioStateService, FileLoadedComponent, ComponentError } from './services/component-studio-state.service';
 import { ComponentVersionService } from './services/component-version.service';
@@ -79,6 +77,9 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
   public ShowNewComponentDialog = false;
   public ShowKeyboardShortcuts = false;
   public ShowSaveVersionDialog = false;
+  public ShowTextImportDialog = false;
+  public ShowArtifactLoadDialog = false;
+  public ShowArtifactSelectionDialog = false;
 
   // --- Status bar ---
   public LastSavedTime: Date | null = null;
@@ -88,14 +89,13 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
 
   @ViewChild('fileInput', { static: false }) fileInput?: ElementRef<HTMLInputElement>;
 
-  private destroy$ = new Subject<void>();
+  protected override destroy$ = new Subject<void>();
   private metadata: Metadata = new Metadata();
 
   constructor(
     public state: ComponentStudioStateService,
     public versionService: ComponentVersionService,
     private cdr: ChangeDetectorRef,
-    private dialogService: DialogService,
     private notificationService: MJNotificationService
   ) {
     super();
@@ -119,6 +119,7 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
   }
 
   ngOnDestroy(): void {
+    super.ngOnDestroy();
     this.destroy$.next();
     this.destroy$.complete();
   }
@@ -423,68 +424,57 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
   }
 
   ImportFromText(): void {
-    const dialogRef = this.dialogService.open({
-      content: TextImportDialogComponent,
-      width: 700,
-      height: 600,
-      minWidth: 500,
-      title: '',
-      actions: []
-    });
-
-    const instance = dialogRef.content.instance as TextImportDialogComponent;
-    instance.importSpec.subscribe((spec: ComponentSpec) => {
-      this.handleSpecImport(spec, 'text-import.json', 'Text');
-      dialogRef.close();
-    });
-    instance.cancelDialog.subscribe(() => dialogRef.close());
+    this.ShowTextImportDialog = true;
+    this.cdr.detectChanges();
   }
 
-  async ImportFromArtifact(): Promise<void> {
-    await new Promise(resolve => setTimeout(resolve, 100));
+  OnTextImportSpec(spec: ComponentSpec): void {
+    this.ShowTextImportDialog = false;
+    this.handleSpecImport(spec, 'text-import.json', 'Text');
+    this.cdr.detectChanges();
+  }
 
-    try {
-      const dialogRef = this.dialogService.open({
-        content: ArtifactLoadDialogComponent,
-        width: 1200,
-        height: 700
-      });
+  OnTextImportCancel(): void {
+    this.ShowTextImportDialog = false;
+    this.cdr.detectChanges();
+  }
 
-      const result = await dialogRef.result.toPromise() as ArtifactLoadResult | undefined;
-      if (!result) return;
+  ImportFromArtifact(): void {
+    this.ShowArtifactLoadDialog = true;
+    this.cdr.detectChanges();
+  }
 
-      const artifactComponent: FileLoadedComponent = {
-        id: this.state.GenerateId(),
-        name: result.spec.name,
-        description: result.spec.description,
-        specification: result.spec,
-        filename: `${result.artifactName} (v${result.versionNumber})`,
-        loadedAt: new Date(),
-        isFileLoaded: true,
-        type: result.spec.type || 'Component',
-        status: 'Artifact',
-        sourceArtifactID: result.artifactID,
-        sourceVersionID: result.versionID
-      };
-
-      this.state.AddFileLoadedComponent(artifactComponent);
-      this.state.ExpandedComponent = artifactComponent;
-      this.state.RunComponent(artifactComponent);
-
-      this.notificationService.CreateSimpleNotification(
-        `Loaded "${result.spec.name}" from artifact`,
-        'success',
-        3000
-      );
-    } catch (error) {
-      if (error && error !== 'cancel') {
-        console.error('Error loading from artifact:', error);
-        this.notificationService.CreateSimpleNotification(
-          'Failed to load from artifact',
-          'error'
-        );
-      }
+  OnArtifactLoadClose(result: ArtifactLoadResult | undefined): void {
+    this.ShowArtifactLoadDialog = false;
+    if (!result) {
+      this.cdr.detectChanges();
+      return;
     }
+
+    const artifactComponent: FileLoadedComponent = {
+      id: this.state.GenerateId(),
+      name: result.spec.name,
+      description: result.spec.description,
+      specification: result.spec,
+      filename: `${result.artifactName} (v${result.versionNumber})`,
+      loadedAt: new Date(),
+      isFileLoaded: true,
+      type: result.spec.type || 'Component',
+      status: 'Artifact',
+      sourceArtifactID: result.artifactID,
+      sourceVersionID: result.versionID
+    };
+
+    this.state.AddFileLoadedComponent(artifactComponent);
+    this.state.ExpandedComponent = artifactComponent;
+    this.state.RunComponent(artifactComponent);
+
+    this.notificationService.CreateSimpleNotification(
+      `Loaded "${result.spec.name}" from artifact`,
+      'success',
+      3000
+    );
+    this.cdr.detectChanges();
   }
 
   async HandleFileSelect(event: Event): Promise<void> {
@@ -524,23 +514,26 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
     this.state.RunComponent(component);
   }
 
-  async ExportToArtifact(): Promise<void> {
+  ExportToArtifact(): void {
     this.exportDropdownOpen = false;
     const currentSpec = this.state.GetCurrentSpec();
     if (!currentSpec || !this.state.SelectedComponent) return;
 
-    await new Promise(resolve => setTimeout(resolve, 100));
+    this.ShowArtifactSelectionDialog = true;
+    this.cdr.detectChanges();
+  }
+
+  async OnArtifactSelectionClose(result: ArtifactSelectionResult | undefined): Promise<void> {
+    this.ShowArtifactSelectionDialog = false;
+    if (!result?.action) {
+      this.cdr.detectChanges();
+      return;
+    }
+
+    const currentSpec = this.state.GetCurrentSpec();
+    if (!currentSpec) return;
 
     try {
-      const dialogRef = this.dialogService.open({
-        content: ArtifactSelectionDialogComponent,
-        width: 1200,
-        height: 900
-      });
-
-      const result = await dialogRef.result.toPromise() as ArtifactSelectionResult | undefined;
-      if (!result?.action) return;
-
       const artifact = result.artifact;
       let version: MJArtifactVersionEntity;
 
@@ -587,6 +580,7 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
       console.error('Error saving to artifact:', error);
       this.notificationService.CreateSimpleNotification('Error saving to artifact', 'error');
     }
+    this.cdr.detectChanges();
   }
 
   ExportToFile(): void {

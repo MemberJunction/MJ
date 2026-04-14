@@ -1,0 +1,23 @@
+[
+  {
+    "fields": {
+      "Name": "Turks & Caicos Islands",
+      "Code": "TC",
+      "ISO3166_2": "TC-TC",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Turks & Caicos Islands"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TC"
+    },
+    "primaryKey": {
+      "ID": "0FFB66F7-D15E-4DE3-A510-B37B8879FCFD"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:33.527Z",
+      "checksum": "7f61917b10b8906b038e5f99e2012a622c81b001a6a982447ed764eae5ec07d0"
+    }
+  }
+]

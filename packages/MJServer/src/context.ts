@@ -5,7 +5,8 @@ import 'reflect-metadata';
 import { Subject, firstValueFrom } from 'rxjs';
 import { AuthenticationError, AuthorizationError } from 'type-graphql';
 import sql from 'mssql';
-import { getSigningKeys, getSystemUser, getValidationOptions, verifyUserRecord, extractUserInfoFromPayload, TokenExpiredError } from './auth/index.js';
+import { getSigningKeys, getSystemUser, getValidationOptions, verifyUserRecord, extractUserInfoFromPayload } from './auth/index.js';
+import { TokenExpiredError, AuthProviderFactory } from '@memberjunction/auth-providers';
 import { authCache } from './cache.js';
 import { userEmailMap, apiKey, mj_core_schema } from './config.js';
 import { DataSourceInfo, UserPayload } from './types.js';
@@ -15,7 +16,6 @@ import e from 'express';
 import type { RequestHandler, Request, Response, NextFunction } from 'express';
 import { DatabaseProviderBase } from '@memberjunction/core';
 import { SQLServerDataProvider, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
-import { AuthProviderFactory } from './auth/AuthProviderFactory.js';
 import { Metadata } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { GetAPIKeyEngine } from '@memberjunction/api-keys';
@@ -167,7 +167,7 @@ export const getUserPayload = async (
       }
 
       // Verify issuer is supported
-      const factory = AuthProviderFactory.getInstance();
+      const factory = AuthProviderFactory.Instance;
       if (!factory.getByIssuer(issuer)) {
         console.warn(`Unsupported issuer: ${issuer}`);
         throw new AuthenticationError(`Unsupported authentication provider: ${issuer}`);

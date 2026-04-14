@@ -1,0 +1,1640 @@
+[
+  {
+    "fields": {
+      "Name": "Abashis Raioni",
+      "Code": "01",
+      "ISO3166_2": "GE-01",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Abashis Raioni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "82D47434-9917-4182-867F-10EC7600DD02"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:54.235Z",
+      "checksum": "220448880286641eac3d23ec6a119f42dea71fc336b444eced08ee5b47d39e5a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Acharis Avtonomiuri Respublika [Ajaria]",
+      "Code": "AJ",
+      "ISO3166_2": "GE-AJ",
+      "Latitude": 41.6552,
+      "Longitude": 42.0537,
+      "BoundaryGeoJSON": "@file:by-country/GE/boundaries/GE-AJ.geojson",
+      "CommonAliases": [
+        "Acharis Avtonomiuri Respublika [Ajaria]"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "D0BC1622-088E-49A2-8369-CECFE27857E4"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:54.251Z",
+      "checksum": "21a40adcf6ee15f097861bce9c5871e813a6396157b0484f623b7998d92f0db5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Adigenis Raioni",
+      "Code": "02",
+      "ISO3166_2": "GE-02",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Adigenis Raioni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "B1DB7065-9811-4DDC-AF1F-B398A732F2E9"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:54.267Z",
+      "checksum": "aebb202b653c6aa1d35e632d6f1c6ccba4a103310d944f4dc877697efc0a4c02"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Akhalgoris Raioni",
+      "Code": "03",
+      "ISO3166_2": "GE-03",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Akhalgoris Raioni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "2014A7D3-97FF-425C-8340-A2A56334CF74"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:54.286Z",
+      "checksum": "160ce71ae584e3f8aa45378960d035b400d8d89ac421740575daf8bd58c6ee21"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Akhalk'alak'is Raioni",
+      "Code": "04",
+      "ISO3166_2": "GE-04",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Akhalk'alak'is Raioni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "149D64D1-B8F7-4E43-8B6A-ED46DB35669F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:54.302Z",
+      "checksum": "9919d1674c8aee336ecbed2cf21280e0bd66f4a8653a2807156db7e69401460f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Akhalts'ikhis Raioni",
+      "Code": "05",
+      "ISO3166_2": "GE-05",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Akhalts'ikhis Raioni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "C70A2AC6-DE83-4C9C-9449-F48443DFFEF1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:54.317Z",
+      "checksum": "1f7cd90a6a661c412b0ca84ea183c70ee2f816ef1f406b0b22625908ed31b324"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Akhmetis Raioni",
+      "Code": "06",
+      "ISO3166_2": "GE-06",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Akhmetis Raioni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "314A69F3-0AA8-4965-840F-566396D2395F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:54.333Z",
+      "checksum": "e4ca14f62b1035ba7a3b0b9db1abda2cefc845d170c8ea5233b4b29ccc1f9d67"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ambrolauris Raioni",
+      "Code": "07",
+      "ISO3166_2": "GE-07",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Ambrolauris Raioni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "21ECBB59-4BBC-46F5-89D2-40C6D3A942F7"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:54.350Z",
+      "checksum": "ccbce6463fe4141feaa0327aeafbca06c444e203516ccf03ef13392ab40b53b9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ap'khazet'is Avtonomiuri Respublika [Abkhazia]",
+      "Code": "AB",
+      "ISO3166_2": "GE-AB",
+      "Latitude": 43.1479,
+      "Longitude": 41.0701,
+      "BoundaryGeoJSON": "@file:by-country/GE/boundaries/GE-AB.geojson",
+      "CommonAliases": [
+        "Ap'khazet'is Avtonomiuri Respublika [Abkhazia]"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "2749D986-B718-4594-9A76-B679DA93FF59"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:54.365Z",
+      "checksum": "6229cf66568fe26a2fdb73f0c1ea53422c5f0da761b59c23010a15a8489bd2a8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Aspindzis Raioni",
+      "Code": "08",
+      "ISO3166_2": "GE-08",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Aspindzis Raioni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "4E175122-3BEA-4833-B109-C2F6D8DD6496"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:54.378Z",
+      "checksum": "69a7d7ab4aef2779097fdcdc46a796d52babb460a5a2e0f76c6b4a9254c150c2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Baghdat'is Raioni",
+      "Code": "09",
+      "ISO3166_2": "GE-09",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Baghdat'is Raioni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "7167F810-AB34-4948-92A6-D9E65CE2D940"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:54.433Z",
+      "checksum": "7b95b44975e8cc429a96e64c5c3b4092e31d1c1ab7324310b93dc54e9827d1d4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bat'umi",
+      "Code": "BUS",
+      "ISO3166_2": "GE-BUS",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Bat'umi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "4F644BB7-B522-4BCE-9D96-AE70102BEF1C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:54.448Z",
+      "checksum": "8e02df1631518aca3ff358cde3738fb23a7acdb2d2c718312d5601f36a3bb258"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bolnisis Raioni",
+      "Code": "10",
+      "ISO3166_2": "GE-10",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Bolnisis Raioni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "4430BBB3-66A5-490C-A27C-5B801568588C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:54.464Z",
+      "checksum": "6f2b5dc8ba35292d12b2ec65699b0f1e36189a9192462cdb896a948304a4695a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Borjomis Raioni",
+      "Code": "11",
+      "ISO3166_2": "GE-11",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Borjomis Raioni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "C4FC658B-C573-4F59-9201-9B5E80D55FFD"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:54.480Z",
+      "checksum": "81b2106789bbddb0752a3fc61f2261b0bb8a05eb89d583264ea032c7051f07a0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ch'khorotsqus Raioni",
+      "Code": "12",
+      "ISO3166_2": "GE-12",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Ch'khorotsqus Raioni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "D6D30437-4D92-489E-BA16-6A6D2013C9B8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:54.495Z",
+      "checksum": "b98a9e0593a5abd79fc0050846dc0306af9a8ed5b1ee387cdac1bf7b387410e2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ch'okhatauris Raioni",
+      "Code": "13",
+      "ISO3166_2": "GE-13",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Ch'okhatauris Raioni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "E9C2B86C-DFF6-44A5-B984-60CAF7306672"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:54.513Z",
+      "checksum": "c5c0fdefa144aa92ba0ddb8e226badaf212aeebfea5720eba56ba714181e8f76"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Chiat'ura",
+      "Code": "CHI",
+      "ISO3166_2": "GE-CHI",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Chiat'ura"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "509B626C-987E-4445-AE2A-858B42A30322"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:54.529Z",
+      "checksum": "bcc64e7e2a79f858f92da027b846e2c001786f7ccfe3887126358015bcf4cca7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Dedop'listsqaros Raioni",
+      "Code": "14",
+      "ISO3166_2": "GE-14",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Dedop'listsqaros Raioni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "4E6A065E-1609-4414-AE50-2FC30E6171EF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:54.544Z",
+      "checksum": "53b26eb4b94833db2390bddad1f43662a6e6424015cfd5bbc93d73fe03cd80b7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Dmanisis Raioni",
+      "Code": "15",
+      "ISO3166_2": "GE-15",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Dmanisis Raioni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "2673C513-02FF-464D-9C3E-82FDD9BE9B62"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:54.561Z",
+      "checksum": "a69a18ee6b90388302ea9de6284a0c242e44e80095b65e470336b1d5ca358d81"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Dushet'is Raioni",
+      "Code": "16",
+      "ISO3166_2": "GE-16",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Dushet'is Raioni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "5F80B3CC-F56F-44FA-BBC6-4952DE1C50B9"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:54.574Z",
+      "checksum": "ff7452228d51de2509172de1e8485994320920e81e628633402a8e47e444fda4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gagra",
+      "Code": "GAG",
+      "ISO3166_2": "GE-GAG",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Gagra"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "202B236D-8B4B-4A4C-AE8E-50CC7ABA9436"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:54.633Z",
+      "checksum": "08d9a4075e343068b004d6b9610b144bdf58883c3d4e4453417ecff895d6b22b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Galis Raioni",
+      "Code": "17",
+      "ISO3166_2": "GE-17",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Galis Raioni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "6F6EC678-D953-467C-BF30-DEAE46525276"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:54.648Z",
+      "checksum": "07e50ef46f7b5a72486299511188eb4389003a47e43e53d5f0d7494d701f52d7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gardabnis Raioni",
+      "Code": "18",
+      "ISO3166_2": "GE-18",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Gardabnis Raioni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "F5DA39E6-1957-4B34-BBEC-A50F90294E01"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:54.663Z",
+      "checksum": "9e182a7d7b3ce0750f40fe56adf86e85a302a45eedda6d36effa1ddeba14c5d6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gori",
+      "Code": "GOR",
+      "ISO3166_2": "GE-GOR",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Gori"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "15315E9A-7553-416E-9E65-7DA7635FAFEF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:54.679Z",
+      "checksum": "95bf6ba2e54c6a3cd5b857dc05c0cf9cc955c7931cc66b20071ca756810389da"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Goris Raioni",
+      "Code": "19",
+      "ISO3166_2": "GE-19",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Goris Raioni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "DA6F16D5-2BE1-4C57-BBC0-528758C127D6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:54.696Z",
+      "checksum": "5a60129e3db1c96a73d433891fbaad74fed24338c14099374196611b3554b1bd"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gudaut'is Raioni",
+      "Code": "20",
+      "ISO3166_2": "GE-20",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Gudaut'is Raioni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "A4252DBD-D5A2-496D-8666-7C015FC1C324"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:54.711Z",
+      "checksum": "de17295957795b725eda9b31ed12108913c34e4165dd1a36e98fc9035e722211"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gulrip'shis Raioni",
+      "Code": "21",
+      "ISO3166_2": "GE-21",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Gulrip'shis Raioni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "304511F8-8843-4A81-9968-D844123326D5"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:54.727Z",
+      "checksum": "7be81b821504fe4e36f8663fcf5da5099654e89dcb05be64ec608f4b772d67fe"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gurjaanis Raioni",
+      "Code": "22",
+      "ISO3166_2": "GE-22",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Gurjaanis Raioni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "6B8B5018-AE9C-4DD9-A662-DB48AEEE4E13"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:54.742Z",
+      "checksum": "309902f3217fce501a99faa12de84840834f38ba3ec5703ec9c58f36c2f19ad2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Javis Raioni",
+      "Code": "23",
+      "ISO3166_2": "GE-23",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Javis Raioni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "793B3B3C-67AB-4EA6-A813-F9523927BD58"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:54.760Z",
+      "checksum": "058bc103641f32ad820f6faa041abfd212e80c6347a88f3950d5f44eff51df0e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "K'arelis Raioni",
+      "Code": "24",
+      "ISO3166_2": "GE-24",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "K'arelis Raioni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "C11D08D6-8FF8-475F-8746-0B3789E8C497"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:54.772Z",
+      "checksum": "ff0b7096aa198a7ee752f7ee7d32c2f7fd465ba1b6ed33db4c72ec5e5332d5da"
+    }
+  },
+  {
+    "fields": {
+      "Name": "K'edis Raioni",
+      "Code": "26",
+      "ISO3166_2": "GE-26",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "K'edis Raioni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "895E1EBB-514E-4883-9408-EEDD7ECAB5CC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:54.827Z",
+      "checksum": "058f3d26a7e6c7bd4e964be606d0b33c521979ae4b87e45ba3ac8b74ce3e6196"
+    }
+  },
+  {
+    "fields": {
+      "Name": "K'obuletis Raioni",
+      "Code": "33",
+      "ISO3166_2": "GE-33",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "K'obuletis Raioni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "C3DE0F32-05E7-4876-8DFD-44723A0B97E1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:54.843Z",
+      "checksum": "0550fbb96679ad9d24dbca3570246810cb2fcfddd1c7c4ab379cb4718a3d98f5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "K'ut'aisi",
+      "Code": "KUT",
+      "ISO3166_2": "GE-KUT",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "K'ut'aisi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "E88B23F5-2CFA-4D78-8342-3FF0BBD4030F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:54.859Z",
+      "checksum": "58511a62be020e6df1f6af30d2e8db35a5efb935524a707b3abcd72da7060f3a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kaspis Raioni",
+      "Code": "25",
+      "ISO3166_2": "GE-25",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Kaspis Raioni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "9087269C-4A32-4F30-A8BB-8BE188C670E4"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:54.874Z",
+      "checksum": "75912ef5af717a5ed0d23ff244f9b5b24cfc1ff19f8ad5f334cd2bf78806b4c9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kharagaulis Raioni",
+      "Code": "27",
+      "ISO3166_2": "GE-27",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Kharagaulis Raioni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "C7F8D5C6-6DA2-4C3C-B93D-A2DCD47813F3"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:54.890Z",
+      "checksum": "b13bc9c07855ab794449df0dc1ca70e4f6f81ddcc98aae1174ce86e38f3f3aea"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Khashuris Raioni",
+      "Code": "28",
+      "ISO3166_2": "GE-28",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Khashuris Raioni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "46161AC2-301F-4ADC-8262-DD6E666629F6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:54.906Z",
+      "checksum": "8e0a5420ed6ffad6c1837460c30f4a66a246f98cfb62c048fbf0ba1b0b81cded"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Khelvach'auris Raioni",
+      "Code": "29",
+      "ISO3166_2": "GE-29",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Khelvach'auris Raioni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "FDB86415-7166-4EB2-880C-3DB20ED89AF8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:54.922Z",
+      "checksum": "85f30e6d8202d333f0ea111f32d9916e7b124d6886807e8b3fb3f69d4908f68c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Khobis Raioni",
+      "Code": "30",
+      "ISO3166_2": "GE-30",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Khobis Raioni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "7D364C67-79CD-4232-93E9-E73D9ABECEDF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:54.938Z",
+      "checksum": "14adbf45d1fcfc422e18ad248b1527f058b4bdfcdd11095fbbeb28ad6d6ea38e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Khonis Raioni",
+      "Code": "31",
+      "ISO3166_2": "GE-31",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Khonis Raioni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "B5C70C72-918D-40F5-8B43-994956F33E30"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:54.953Z",
+      "checksum": "d3a9758f6dc7c122b60297fdc137b118363cc0a015c670721b0f89a64262fba1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Khulos Raioni",
+      "Code": "32",
+      "ISO3166_2": "GE-32",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Khulos Raioni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "DB44688E-77BD-48D9-B7E8-D17D29616EFE"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:54.966Z",
+      "checksum": "328cace7df9fa78819f4b2261df299dda5a43e64874e823f320e7f0e1fd88f1d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Lagodekhis Raioni",
+      "Code": "34",
+      "ISO3166_2": "GE-34",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Lagodekhis Raioni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "576217ED-93B3-4868-9B65-FE410EAFB0D1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:55.027Z",
+      "checksum": "3d5f4d2f3a110a8b59c6dc237a670eac498246c46cf8b625c6a75a4208fdeaae"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Lanch'khut'is Raioni",
+      "Code": "35",
+      "ISO3166_2": "GE-35",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Lanch'khut'is Raioni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "7A1CEE99-8072-4BB2-A721-61E5FA76C554"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:55.043Z",
+      "checksum": "4a806f2b91db6f6f7046d55d336865a45316f6a0ec80ea98955c8601eb5a64da"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Lentekhis Raioni",
+      "Code": "36",
+      "ISO3166_2": "GE-36",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Lentekhis Raioni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "17E9AA98-D7A6-4927-8F4F-FCB9BED7FA1D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:55.058Z",
+      "checksum": "e99d4b7f23c95d2589422f73cb49965d5c78b520b65cc2ca6bd33012e0585d0e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Marneulis Raioni",
+      "Code": "37",
+      "ISO3166_2": "GE-37",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Marneulis Raioni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "63F9CD83-9D7E-4FB3-9F5C-5A39E5658D42"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:55.073Z",
+      "checksum": "298171267214b2dc5ee3ba7a609b24e28eb54c3a54e873122fbd9f41028c588c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Martvilis Raioni",
+      "Code": "38",
+      "ISO3166_2": "GE-38",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Martvilis Raioni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "378D14AD-C3F2-4948-8C75-FF7FAA44EE5F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:55.089Z",
+      "checksum": "138eb7fef17afe8b71fb95c14d757ac35eb8dce6fd0dccc21451029dc0377446"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mestiis Raioni",
+      "Code": "39",
+      "ISO3166_2": "GE-39",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Mestiis Raioni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "37B6E6AC-ECDE-4859-B289-C7F864484F65"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:55.104Z",
+      "checksum": "2f65e46a7d699bb66f87f2d3fa1fb8408b295d948c1571ff748d930cb8663c9a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mts'khet'is Raioni",
+      "Code": "40",
+      "ISO3166_2": "GE-40",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Mts'khet'is Raioni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "5FCEF227-8F39-41F7-ACC9-45CD4DF4BC28"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:55.119Z",
+      "checksum": "1607f555a09860fe17ba397a95f5eb750f33e7312572f64cd9af15a69671c862"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ninotsmindis Raioni",
+      "Code": "41",
+      "ISO3166_2": "GE-41",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Ninotsmindis Raioni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "101827DA-0962-447D-91FE-18FD593EB9B5"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:55.136Z",
+      "checksum": "41ef6a7621d8471d213a6d3ad85043df8468bd670c546e9bda0f2ea47d750925"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Och'amch'iris Raioni",
+      "Code": "42",
+      "ISO3166_2": "GE-42",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Och'amch'iris Raioni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "699E3633-0AE3-431A-BFE1-41867A0D0050"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:55.152Z",
+      "checksum": "2999b66d4d2b8f93ac7e59f994f8454a278047c6b648022df6bb9408cc0b783d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Onis Raioni",
+      "Code": "43",
+      "ISO3166_2": "GE-43",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Onis Raioni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "FF314DBD-D0C3-4C16-97C9-22BA0750C236"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:55.170Z",
+      "checksum": "87102fd4ffd3b1dd1e0736e450a085583c678e340cb0166071011581a30be372"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ozurget'is Raioni",
+      "Code": "44",
+      "ISO3166_2": "GE-44",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Ozurget'is Raioni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "15B64A00-F723-45DD-A2EB-F362286E9E9C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:55.238Z",
+      "checksum": "eaf3ea873544f26bb37f9bd04e32d78e0318de8e706457eede22e204d63a4d8e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "P'ot'i",
+      "Code": "PTI",
+      "ISO3166_2": "GE-PTI",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "P'ot'i"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "CEF51B10-3D3F-4AF1-BDBC-9C23B04E7FA7"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:55.258Z",
+      "checksum": "d97db5b5abc5942fd74d7a0212bd58e25a98ee25b83d2b5e55d60a501d541690"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Qazbegis Raioni",
+      "Code": "45",
+      "ISO3166_2": "GE-45",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Qazbegis Raioni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "E8CE02E2-A7C5-4EE9-9151-DFF3927F5D6A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:55.275Z",
+      "checksum": "f012dbdcfb7bb1b47a96f475cf004e316af7bce5ccf7a949341dc9a52cedd3ee"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Qvarlis Raioni",
+      "Code": "46",
+      "ISO3166_2": "GE-46",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Qvarlis Raioni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "92031CD6-83C1-4077-8404-17CD0FA2D001"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:55.294Z",
+      "checksum": "e806f0f67563a7bc66ade580aa123cdc8841e2815f1602fd2dcfb413e2b32fdf"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rust'avi",
+      "Code": "RUS",
+      "ISO3166_2": "GE-RUS",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Rust'avi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "47AE6CA8-2661-4408-AFEB-3CAACE84CAA6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:55.309Z",
+      "checksum": "d6c134503565d9518f09792db8543bf8116da516a0c13217a856c68c65284aca"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sach'kheris Raioni",
+      "Code": "47",
+      "ISO3166_2": "GE-47",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Sach'kheris Raioni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "4BB4AE1B-FE28-4671-AF82-57FE15179923"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:55.324Z",
+      "checksum": "43c87a58b64a81be598082f112a8e569a0a22581158aae16cac0eabd196b50fd"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sagarejos Raioni",
+      "Code": "48",
+      "ISO3166_2": "GE-48",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Sagarejos Raioni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "30D24896-A75B-4A49-9B77-EE623E9A51FC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:55.340Z",
+      "checksum": "5156bb7a5f16128ce4b4839ff88f19998a12b24b42cd3422d3cde44409716433"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Samtrediis Raioni",
+      "Code": "49",
+      "ISO3166_2": "GE-49",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Samtrediis Raioni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "66E06B39-5315-4DBC-927F-689B69030DE5"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:55.357Z",
+      "checksum": "eadc88b7d2524af4e111d3d6a971e2b212339c969d8bacf0f559956c85902c59"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Senakis Raioni",
+      "Code": "50",
+      "ISO3166_2": "GE-50",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Senakis Raioni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "F7A97C8B-5F74-4F43-91E8-FF4E1AF3CB75"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:55.373Z",
+      "checksum": "0d7cc106b78fa5d99c7ccf9ea989e154700d4866a4cf71f3931acbe1b15cf8e1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Shuakhevis Raioni",
+      "Code": "51",
+      "ISO3166_2": "GE-51",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Shuakhevis Raioni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "C9295785-354C-42D2-8A8B-7DD3F4C401A4"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:55.386Z",
+      "checksum": "6175d60cbc776d8e6d874638c5e25e55922ebc22bd6ecd66a524b46d5b6bcf4b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sighnaghis Raioni",
+      "Code": "52",
+      "ISO3166_2": "GE-52",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Sighnaghis Raioni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "51E701A9-0A8A-4BD5-B485-EF05F9037800"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:55.445Z",
+      "checksum": "fb48ed4465824d6a4bf88b9dbb529046f34bf08d59b124118bc941fca790740b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sokhumi",
+      "Code": "SUI",
+      "ISO3166_2": "GE-SUI",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Sokhumi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "55F445BA-3274-4DAF-927D-C3DE0F067E2D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:55.461Z",
+      "checksum": "f8935e824ecc8fcd95e6261c9110dbc53c0053bc2b5ae073376d51e6498774f5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sokhumis Raioni",
+      "Code": "53",
+      "ISO3166_2": "GE-53",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Sokhumis Raioni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "8768738E-B6B1-4605-B989-92258470F53F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:55.476Z",
+      "checksum": "9ddd9c9da641921d3eff3cebc5e53915a0ec4d263fb21b696bc56fe347874680"
+    }
+  },
+  {
+    "fields": {
+      "Name": "T'bilisi",
+      "Code": "TBS",
+      "ISO3166_2": "GE-TBS",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "T'bilisi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "E3D62A5E-398B-4BF7-8F79-BF3C59480B5C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:55.492Z",
+      "checksum": "ed56b82eda981ee35c33f7f7988f289aec82cfc03c89591c2b08ee8a6b356e66"
+    }
+  },
+  {
+    "fields": {
+      "Name": "T'elavis Raioni",
+      "Code": "54",
+      "ISO3166_2": "GE-54",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "T'elavis Raioni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "21D7FF53-BA14-4E8F-84C1-40EACBE1DD1B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:55.508Z",
+      "checksum": "749d4b8da45663eb6d62df154a20d31d87aab418253f5df01e963280c17ad58d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "T'erjolis Raioni",
+      "Code": "55",
+      "ISO3166_2": "GE-55",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "T'erjolis Raioni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "641255A6-6EAC-44D3-B112-BCD39D51B553"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:55.524Z",
+      "checksum": "b49bec3be0d66159f5c5c4b8b38ebc31e4fd8b3e3cb624677b3e1de000cc073a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "T'et'ritsqaros Raioni",
+      "Code": "56",
+      "ISO3166_2": "GE-56",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "T'et'ritsqaros Raioni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "69523B44-23DD-4443-A81C-2957D292ED36"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:55.542Z",
+      "checksum": "f06a8fa7d29a178c7463345bba093d7e66c9eb00ce8b2b812adaa86d04d1a73b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "T'ianet'is Raioni",
+      "Code": "57",
+      "ISO3166_2": "GE-57",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "T'ianet'is Raioni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "D7C12206-83E1-44D9-97E6-E045440BB5DA"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:55.557Z",
+      "checksum": "22cb47a86dc20bd2741a28035a97e6ffa5788b928c86d626d5c12f34967d2ea4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tqibuli",
+      "Code": "TQI",
+      "ISO3166_2": "GE-TQI",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Tqibuli"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "AB3AAA46-F43A-420F-950B-1EC2BC50496B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:55.573Z",
+      "checksum": "c75a87c38686db5f54a039d3948281fe9f43dc75f31f6390f5ed757c24757887"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tqvarch'eli",
+      "Code": "TQV",
+      "ISO3166_2": "GE-TQV",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Tqvarch'eli"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "602E1EE9-3547-4ED7-989D-68265A75DBF0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:55.587Z",
+      "checksum": "4fbe8fe8a512708ac96edd52edb91fb98a718492407f45b0e6b4399c5143c39e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ts'ageris Raioni",
+      "Code": "58",
+      "ISO3166_2": "GE-58",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Ts'ageris Raioni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "1F8FC19E-B108-4AD3-A129-37C37DF361B6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:55.645Z",
+      "checksum": "66bc3a040e0bb1e7739d54d0d5278ec55dbf24d399505c2d64985c02f562a9a2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tsalenjikhis Raioni",
+      "Code": "59",
+      "ISO3166_2": "GE-59",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Tsalenjikhis Raioni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "D367860D-4A1D-4FA9-AFCE-787BE8BC57A5"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:55.661Z",
+      "checksum": "e8cd59a61c3d4e94b895c0caa306aa94cc5770cb03bede201ba164c711f982d3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tsalkis Raioni",
+      "Code": "60",
+      "ISO3166_2": "GE-60",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Tsalkis Raioni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "4977CA34-72BD-427F-8071-F804EA7618E1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:55.678Z",
+      "checksum": "12a8bd9b5ade5bd3debd79912ac81e14dadd4d0cbcf4b5c930dab9aa406b528a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tsqalmbo",
+      "Code": "TSQ",
+      "ISO3166_2": "GE-TSQ",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Tsqalmbo"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "74D65BD0-7584-45EB-8FBD-9535A5874881"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:55.693Z",
+      "checksum": "60486f369fc893b21cf8f62440b31db7ef6f38757e2f4c189555bb041b8af8c6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Vanis Raioni",
+      "Code": "61",
+      "ISO3166_2": "GE-61",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Vanis Raioni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "59C84839-87FB-4921-945B-028F74AA8A2F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:55.709Z",
+      "checksum": "f4c223d9738f4db70c3a3e7318cb5564a7b41389a9778617119e7d34cad459ff"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Zestap'onis Raioni",
+      "Code": "62",
+      "ISO3166_2": "GE-62",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Zestap'onis Raioni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "474657C0-4685-49A0-9B62-2E2C6E890B1D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:55.724Z",
+      "checksum": "9f5270a79d82bb716c1da1c1621dccf0a60b4eb15f0c2da42d25b46b790fd1f7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Zugdidi",
+      "Code": "ZUG",
+      "ISO3166_2": "GE-ZUG",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Zugdidi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "2BCD7683-DD27-4698-950E-B7733F7568B1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:55.740Z",
+      "checksum": "75e8d988020101f6c73e7d33a575702a426cb09a47dafe30bbbfe8068ee6a333"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Zugdidis Raioni",
+      "Code": "63",
+      "ISO3166_2": "GE-63",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Zugdidis Raioni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GE"
+    },
+    "primaryKey": {
+      "ID": "2259F1B7-540A-4079-BFA6-16E99F23C83B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:55.753Z",
+      "checksum": "81e890407759119636166a18c856a390b748b6cc7efe550be4f150a388f7c02f"
+    }
+  }
+]

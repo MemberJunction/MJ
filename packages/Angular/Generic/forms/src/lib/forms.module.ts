@@ -45,10 +45,8 @@ import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 
-// Kendo UI modules
-import { ButtonsModule } from '@progress/kendo-angular-buttons';
-import { InputsModule } from '@progress/kendo-angular-inputs';
-import { DateInputsModule } from '@progress/kendo-angular-dateinputs';
+// MJ UI components
+import { MJButtonDirective, MJNumericInputComponent, MJDatepickerComponent } from '@memberjunction/ng-ui-components';
 
 // Components
 import { DynamicFormComponent } from './dynamic-form/dynamic-form.component';
@@ -65,9 +63,9 @@ import { DynamicFormResponseComponent } from './dynamic-form-response/dynamic-fo
         CommonModule,
         FormsModule,
         ReactiveFormsModule,
-        ButtonsModule,
-        InputsModule,
-        DateInputsModule
+        MJButtonDirective,
+        MJNumericInputComponent,
+        MJDatepickerComponent
     ],
     exports: [
         DynamicFormComponent,

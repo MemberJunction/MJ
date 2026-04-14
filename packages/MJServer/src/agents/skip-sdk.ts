@@ -21,6 +21,8 @@ import {
     SkipEntityFieldInfo,
     SkipEntityFieldValueInfo,
     SkipEntityRelationshipInfo,
+    SkipEntityOrganicKeyInfo,
+    SkipEntityOrganicKeyRelatedEntityInfo,
     SkipAPIAgentNote,
     SkipAPIAgentNoteType,
     SkipAPIArtifact,
@@ -28,11 +30,12 @@ import {
     SkipAPIArtifactType
 } from '@memberjunction/skip-types';
 import { DataContext } from '@memberjunction/data-context';
-import { UserInfo, LogStatus, LogError, Metadata, RunQuery, EntityInfo, EntityFieldInfo, EntityRelationshipInfo } from '@memberjunction/core';
+import { UserInfo, LogStatus, LogError, Metadata, RunQuery, EntityInfo, EntityFieldInfo, EntityRelationshipInfo, EntityOrganicKeyInfo, EntityOrganicKeyRelatedEntityInfo } from '@memberjunction/core';
 import { request as httpRequest } from 'http';
 import { request as httpsRequest } from 'https';
 import { gzip as gzipCompress, createGunzip } from 'zlib';
 import { configInfo, baseUrl, publicUrl, graphqlPort, graphqlRootPath, apiKey as callbackAPIKey } from '../config.js';
+import { getDbType } from '../index.js';
 import { GetAIAPIKey } from '@memberjunction/ai';
 import { AIEngine } from '@memberjunction/aiengine';
 import { CopyScalarsAndArrays, UUIDsEqual } from '@memberjunction/global';
@@ -293,8 +296,9 @@ export class SkipSDK {
             LogError(`[SkipSDK] Error calling Skip API: ${error}`);
 
             // Provide user-friendly error messages for common failures
-            let userFriendlyError = String(error);
-            const errorStr = String(error).toLowerCase();
+            const rawError = error instanceof Error ? error.message : String(error);
+            let userFriendlyError = rawError;
+            const errorStr = rawError.toLowerCase();
 
             if (errorStr.includes('stream error') || errorStr.includes('aborted') || errorStr.includes('econnreset')) {
                 userFriendlyError = 'The Skip analysis service became unavailable during processing. Please try again.';
@@ -371,7 +375,8 @@ export class SkipSDK {
             callingServerURL: baseRequest.callingServerURL,
             callingServerAPIKey: baseRequest.callingServerAPIKey,
             callingServerAccessToken: baseRequest.callingServerAccessToken,
-            externalReferenceID
+            externalReferenceID,
+            databasePlatform: getDbType()
         };
 
         return request;
@@ -776,6 +781,34 @@ export class SkipSDK {
                 };
 
                 const req = requestFn(options, (res) => {
+                    // Check for non-2xx HTTP status codes before attempting SSE parsing.
+                    // The Skip API returns JSON error bodies for auth/validation failures (401, 403, etc.)
+                    // which won't contain SSE `data:` lines, resulting in an empty events array
+                    // and the misleading "No response received from Skip API" error.
+                    if (res.statusCode && (res.statusCode < 200 || res.statusCode >= 300)) {
+                        let errorBody = '';
+                        res.on('data', (chunk: Buffer) => { errorBody += chunk.toString(); });
+                        res.on('end', () => {
+                            let errorMessage = `Skip API returned HTTP ${res.statusCode}`;
+                            try {
+                                const parsed = JSON.parse(errorBody);
+                                if (parsed.message) {
+                                    errorMessage = parsed.message;
+                                } else if (parsed.error) {
+                                    errorMessage = parsed.error;
+                                }
+                            } catch {
+                                // Non-JSON body — use raw text if available
+                                if (errorBody.trim()) {
+                                    errorMessage += `: ${errorBody.trim().substring(0, 200)}`;
+                                }
+                            }
+                            LogError(`[SkipSDK] HTTP ${res.statusCode} from ${url}: ${errorMessage}`);
+                            reject(new Error(errorMessage));
+                        });
+                        return;
+                    }
+
                     const gunzip = createGunzip();
                     const stream = res.headers['content-encoding'] === 'gzip' ? res.pipe(gunzip) : res;
 
@@ -896,12 +929,91 @@ export class SkipSDK {
 
                 relatedEntities: e.RelatedEntities.map((r) => {
                     return this.packSingleSkipEntityRelationship(r);
-                })
+                }),
+
+                organicKeys: (e.OrganicKeys ?? [])
+                    .filter((ok) => ok.Status === 'Active')
+                    .map((ok) => this.packSingleSkipOrganicKey(ok))
+                    .filter((ok): ok is SkipEntityOrganicKeyInfo => ok !== null)
             };
             return ret;
         }
         catch (e) {
             LogError(`[SkipSDK] packSingleSkipEntityInfo error: ${e}`);
+            return null;
+        }
+    }
+
+    /**
+     * Packs information about a single organic key for Skip.
+     * Organic keys express cross-entity relationships via shared business data
+     * (email, acronym, etc.) rather than database FK constraints.
+     */
+    private packSingleSkipOrganicKey(ok: EntityOrganicKeyInfo): SkipEntityOrganicKeyInfo | null {
+        try {
+            return {
+                id: ok.ID,
+                name: ok.Name,
+                description: ok.Description ?? undefined,
+                matchFieldNames: ok.MatchFieldNamesArray,
+                normalizationStrategy: ok.NormalizationStrategy,
+                customNormalizationExpression: ok.CustomNormalizationExpression ?? undefined,
+                sequence: ok.Sequence,
+                relatedEntities: ok.RelatedEntities
+                    .map((re) => this.packSingleSkipOrganicKeyRelatedEntity(re))
+                    .filter((re): re is SkipEntityOrganicKeyRelatedEntityInfo => re !== null)
+            };
+        }
+        catch (e) {
+            LogError(`[SkipSDK] packSingleSkipOrganicKey error: ${e}`);
+            return null;
+        }
+    }
+
+    /**
+     * Packs information about a single organic key related entity for Skip.
+     * Looks up schema name and base view from metadata since they are not
+     * stored on EntityOrganicKeyRelatedEntityInfo directly.
+     */
+    private packSingleSkipOrganicKeyRelatedEntity(
+        re: EntityOrganicKeyRelatedEntityInfo
+    ): SkipEntityOrganicKeyRelatedEntityInfo | null {
+        try {
+            // Look up the related entity to obtain schema name and base view, which
+            // Skip needs in order to generate schema-qualified SQL.
+            const relatedEntity = Metadata.Provider.Entities.find(
+                (ent) => UUIDsEqual(ent.ID, re.RelatedEntityID)
+            );
+            if (!relatedEntity) {
+                LogError(
+                    `[SkipSDK] packSingleSkipOrganicKeyRelatedEntity: related entity not found for ID ${re.RelatedEntityID}`
+                );
+                return null;
+            }
+
+            return {
+                id: re.ID,
+                relatedEntityID: re.RelatedEntityID,
+                relatedEntityName: relatedEntity.Name,
+                relatedEntitySchemaName: relatedEntity.SchemaName,
+                relatedEntityBaseView: relatedEntity.BaseView,
+                isDirectMatch: re.IsDirectMatch,
+                isTransitiveMatch: re.IsTransitiveMatch,
+                relatedEntityFieldNames: re.IsDirectMatch
+                    ? re.RelatedEntityFieldNamesArray
+                    : undefined,
+                transitiveObjectName: re.TransitiveObjectName ?? undefined,
+                transitiveObjectMatchFieldNames: re.IsTransitiveMatch
+                    ? re.TransitiveObjectMatchFieldNamesArray
+                    : undefined,
+                transitiveObjectOutputFieldName: re.TransitiveObjectOutputFieldName ?? undefined,
+                relatedEntityJoinFieldName: re.RelatedEntityJoinFieldName ?? undefined,
+                displayName: re.DisplayName ?? undefined,
+                sequence: re.Sequence
+            };
+        }
+        catch (e) {
+            LogError(`[SkipSDK] packSingleSkipOrganicKeyRelatedEntity error: ${e}`);
             return null;
         }
     }

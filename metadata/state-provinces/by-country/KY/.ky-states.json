@@ -1,0 +1,23 @@
+[
+  {
+    "fields": {
+      "Name": "Cayman Islands",
+      "Code": "KY",
+      "ISO3166_2": "KY-KY",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Cayman Islands"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KY"
+    },
+    "primaryKey": {
+      "ID": "5CCF7807-E464-4B8C-8E2C-36DAF9767092"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:10.485Z",
+      "checksum": "9243369e3ab7daf1e837303415729ecca82b2e4b66cfcfdd1a2730659d530b07"
+    }
+  }
+]

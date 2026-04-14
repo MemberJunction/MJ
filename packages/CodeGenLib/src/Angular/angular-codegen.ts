@@ -5,7 +5,7 @@ import fs from 'fs';
 import path from 'path';
 import { mjCoreSchema, outputOptionValue, configInfo, resolveEntityPackageName } from '../Config/config';
 import { GenerationResult, RelatedEntityDisplayComponentGeneratorBase } from './related-entity-components';
-import { sortBySequenceAndCreatedAt } from '../Misc/util';
+import { sortBySequenceAndCreatedAt, sortRelatedEntities } from '../Misc/util';
 
 /**
  * Represents metadata about an Angular form section that is generated for an entity
@@ -290,7 +290,6 @@ import { FormsModule } from '@angular/forms';
 import { BaseFormsModule } from '@memberjunction/ng-base-forms';
 import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
 import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
-import { LayoutModule } from '@progress/kendo-angular-layout';
 
 // Import Generated Components
 ${componentImports.join('\n')}
@@ -400,7 +399,6 @@ export class ${modulePrefix}GeneratedFormsModule { }`;
 imports: [
     CommonModule,
     FormsModule,
-    LayoutModule,
     BaseFormsModule,
     EntityViewerModule,
     LinkDirectivesModule${additionalModulesToImport.length > 0 ? ',\n    ' + additionalModulesToImport.join(',\n    ') : ''}
@@ -859,7 +857,7 @@ ${indentedFormHTML}
         const isaChildIDs = new Set(entity.ChildEntities.map(c => c.ID));
 
         // Sort related entities deterministically using the shared sort with cascading tiebreakers
-        const sortedRelatedEntities = sortBySequenceAndCreatedAt(
+        const sortedRelatedEntities = sortRelatedEntities(
             entity.RelatedEntities.filter(re => re.DisplayInForm && !isaChildIDs.has(re.RelatedEntityID))
         );
         let index = startIndex;
@@ -1217,14 +1215,17 @@ ${componentCodeWithIndent}
     (FavoriteToggled)="OnFavoriteToggled()"
     (HistoryRequested)="OnHistoryRequested()"
     (ListManagementRequested)="OnListManagementRequested()">
-    <kendo-splitter orientation="vertical" (layoutChange)="splitterLayoutChange()">
-        <kendo-splitter-pane [collapsible]="true" [size]="TopAreaHeight">
+    <!-- TODO: Evaluate restoring resizable splitter between top/bottom areas.
+         Previously used kendo-splitter (fixed 300px top), then as-split (percentage-based).
+         as-split caused empty space on forms with few top-area fields (40% of nothing = blank).
+         Using plain divs for now until a better sizing strategy is determined.
+         See: angular-split (as-split) or CSS resize for future options. -->
+    <div class="form-top-area">
 ${this.innerTopAreaHTML(topArea)}
-        </kendo-splitter-pane>
-        <kendo-splitter-pane>
+    </div>
+    <div class="form-bottom-area">
 ${this.innerCollapsiblePanelsHTML(additionalSections, relatedEntitySections)}
-        </kendo-splitter-pane>
-    </kendo-splitter>
+    </div>
 </mj-record-form-container>
         `
           return htmlCode;

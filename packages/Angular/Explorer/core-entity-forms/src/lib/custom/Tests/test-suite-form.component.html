@@ -1,4 +1,4 @@
-<div class="test-suite-form" kendoDialogContainer>
+<div class="test-suite-form">
   <!-- Header Section -->
   <div class="suite-header">
     <!-- Breadcrumb Navigation -->
@@ -41,13 +41,13 @@
       </div>
       <div class="header-actions">
         <app-evaluation-mode-toggle></app-evaluation-mode-toggle>
-        <button kendoButton (click)="exportToExcel()" title="Export to CSV">
+        <button mjButton (click)="exportToExcel()" title="Export to CSV">
           <i class="fas fa-file-excel"></i> Export
         </button>
-        <button kendoButton (click)="runSuite()" themeColor="primary">
+        <button mjButton (click)="runSuite()" variant="primary">
           <i class="fas fa-play"></i> Run Suite
         </button>
-        <button kendoButton (click)="refresh()" [disabled]="isRefreshing">
+        <button mjButton (click)="refresh()" [disabled]="isRefreshing">
           <i class="fas" [ngClass]="isRefreshing ? 'fa-sync fa-spin' : 'fa-sync'"></i>
           {{ isRefreshing ? 'Refreshing...' : 'Refresh' }}
         </button>
@@ -305,7 +305,7 @@
             </div>
             <h4>No Suite Runs Yet</h4>
             <p>Run this suite to see execution history and results here.</p>
-            <button kendoButton (click)="runSuite()" themeColor="primary">
+            <button mjButton (click)="runSuite()" variant="primary">
               <i class="fas fa-play"></i> Run Suite Now
             </button>
           </div>
@@ -520,7 +520,7 @@
                       }
                     </div>
                     <span class="matrix-run-count">{{ matrixData.length }} runs · {{ getUniqueTestsFromMatrix().length }} tests</span>
-                    <button kendoButton (click)="exportMatrixToCSV()" [disabled]="matrixData.length === 0" title="Export matrix to CSV">
+                    <button mjButton (click)="exportMatrixToCSV()" [disabled]="matrixData.length === 0" title="Export matrix to CSV">
                       <i class="fas fa-download"></i> Export
                     </button>
                   </div>
@@ -748,7 +748,7 @@
             </div>
             <h4>No Analytics Data</h4>
             <p>Run this suite to start collecting analytics data.</p>
-            <button kendoButton (click)="runSuite()" themeColor="primary">
+            <button mjButton (click)="runSuite()" variant="primary">
               <i class="fas fa-play"></i> Run Suite Now
             </button>
           </div>
@@ -970,7 +970,7 @@
             </div>
             <h4>Not Enough Runs to Compare</h4>
             <p>You need at least 2 suite runs to use the comparison feature.</p>
-            <button kendoButton (click)="runSuite()" themeColor="primary">
+            <button mjButton (click)="runSuite()" variant="primary">
               <i class="fas fa-play"></i> Run Suite Now
             </button>
           </div>
@@ -1009,5 +1009,22 @@
         </div>
       </div>
     </div>
+  }
+
+  <!-- Slide Panel for Suite Execution -->
+  @if (testingDialogService.IsPanelOpen) {
+    <mj-slide-panel
+      Mode="slide"
+      [Title]="testingDialogService.PanelOptions?.suiteId ? 'Suite Execution' : 'Run Suite'"
+      [Resizable]="true"
+      (Closed)="OnPanelClosed()">
+      <app-test-run-dialog
+        [PanelMode]="true"
+        [selectedTestId]="testingDialogService.PanelOptions?.testId ?? null"
+        [selectedSuiteId]="testingDialogService.PanelOptions?.suiteId ?? null"
+        [runMode]="testingDialogService.PanelOptions?.mode ?? 'suite'"
+        (PanelClose)="OnPanelClosed()">
+      </app-test-run-dialog>
+    </mj-slide-panel>
   }
 </div>

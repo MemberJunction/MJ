@@ -1476,7 +1476,7 @@ export interface SystemDiagnosticsUserPreferences {
     styleUrls: ['./system-diagnostics.component.css']
 })
 export class SystemDiagnosticsComponent extends BaseResourceComponent implements OnInit, OnDestroy, AfterViewInit {
-    private destroy$ = new Subject<void>();
+    protected override destroy$ = new Subject<void>();
 
     // User settings persistence
     private metadata = new Metadata();
@@ -1583,13 +1583,13 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
     constructor(
         private cdr: ChangeDetectorRef,
         private ngZone: NgZone,
-        private navigationService: NavigationService,
         private route: ActivatedRoute
     ) {
         super();
     }
 
     async ngOnInit() {
+        super.ngOnInit();
         // Load user preferences first
         await this.loadUserPreferences();
 
@@ -1611,6 +1611,7 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
     }
 
     ngOnDestroy() {
+        super.ngOnDestroy();
         this.destroy$.next();
         this.destroy$.complete();
         // Clear any pending save timeout
@@ -2408,6 +2409,7 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
                     'Engine': { events: 0, avgMs: 0 },
                     'AI': { events: 0, avgMs: 0 },
                     'Cache': { events: 0, avgMs: 0 },
+                    'Coalesce': { events: 0, avgMs: 0 },
                     'Network': { events: 0, avgMs: 0 },
                     'Custom': { events: 0, avgMs: 0 }
                 };

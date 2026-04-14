@@ -1,0 +1,359 @@
+[
+  {
+    "fields": {
+      "Name": "Busan",
+      "Code": "26",
+      "ISO3166_2": "KR-26",
+      "Latitude": 35.1796,
+      "Longitude": 129.0756,
+      "BoundaryGeoJSON": "@file:by-country/KR/boundaries/KR-26.geojson",
+      "CommonAliases": [
+        "Busan"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KR"
+    },
+    "primaryKey": {
+      "ID": "DEF59BC7-1A55-401A-8B2F-E48CBA6A4195"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:10.030Z",
+      "checksum": "1e457afd2c361885d5ff5bb0a4d304ef398a1adf84ac709dbe00f9699b085e50"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Daegu",
+      "Code": "27",
+      "ISO3166_2": "KR-27",
+      "Latitude": 35.8714,
+      "Longitude": 128.6014,
+      "BoundaryGeoJSON": "@file:by-country/KR/boundaries/KR-27.geojson",
+      "CommonAliases": [
+        "Daegu"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KR"
+    },
+    "primaryKey": {
+      "ID": "9FC87F9C-7999-4880-9887-C3457820270D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:10.046Z",
+      "checksum": "f9e5b259f87f7e166f31cbbde8553ce36fba8e44ff11dc1d46a043a24ef89b5f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Daejeon",
+      "Code": "30",
+      "ISO3166_2": "KR-30",
+      "Latitude": 36.3504,
+      "Longitude": 127.3845,
+      "BoundaryGeoJSON": "@file:by-country/KR/boundaries/KR-30.geojson",
+      "CommonAliases": [
+        "Daejeon"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KR"
+    },
+    "primaryKey": {
+      "ID": "AAE50F1C-29BD-420D-8C66-134474089245"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:10.063Z",
+      "checksum": "39c635ce78fc8524c5561a00ae60a09bee5f33253d9940fbf23cf664bf48fbaa"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gangwon",
+      "Code": "42",
+      "ISO3166_2": "KR-42",
+      "Latitude": 37.885,
+      "Longitude": 127.7297,
+      "BoundaryGeoJSON": "@file:by-country/KR/boundaries/KR-42.geojson",
+      "CommonAliases": [
+        "Gangwon"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KR"
+    },
+    "primaryKey": {
+      "ID": "7D629497-989D-4544-8BF3-B9767273118B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:10.081Z",
+      "checksum": "d46a7c33b37ed5ba45ce919b0558e975dbc22d49ab1fde64864eceae2cb2d60c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gwangju",
+      "Code": "29",
+      "ISO3166_2": "KR-29",
+      "Latitude": 35.1595,
+      "Longitude": 126.8526,
+      "BoundaryGeoJSON": "@file:by-country/KR/boundaries/KR-29.geojson",
+      "CommonAliases": [
+        "Gwangju"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KR"
+    },
+    "primaryKey": {
+      "ID": "03D8A034-2410-4CCA-A708-C11FE099C21C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:10.098Z",
+      "checksum": "15e7842dc6d8910a37d26d438e9ff12df93d65616d5ba8b3f947d5d1721c47eb"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gyeonggi",
+      "Code": "41",
+      "ISO3166_2": "KR-41",
+      "Latitude": 37.2885,
+      "Longitude": 127.0535,
+      "BoundaryGeoJSON": "@file:by-country/KR/boundaries/KR-41.geojson",
+      "CommonAliases": [
+        "Gyeonggi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KR"
+    },
+    "primaryKey": {
+      "ID": "CB4ADC6B-9126-4AEC-9780-4F3AEF3957E6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:10.116Z",
+      "checksum": "fbf9f2155896fadcd8df41195a7a0b5f7ace62e17c4bcf56aeffd9a88cd87642"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Incheon",
+      "Code": "28",
+      "ISO3166_2": "KR-28",
+      "Latitude": 37.4563,
+      "Longitude": 126.7052,
+      "BoundaryGeoJSON": "@file:by-country/KR/boundaries/KR-28.geojson",
+      "CommonAliases": [
+        "Incheon"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KR"
+    },
+    "primaryKey": {
+      "ID": "4C1A3BA6-7D6C-496C-8617-812D3F763DA1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:10.132Z",
+      "checksum": "5a0a88636021c54d66e86e310cef8e16d3e8e0915019a0960842ebe64fe9b4d4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Jeju",
+      "Code": "49",
+      "ISO3166_2": "KR-49",
+      "Latitude": 33.4998,
+      "Longitude": 126.5314,
+      "BoundaryGeoJSON": "@file:by-country/KR/boundaries/KR-49.geojson",
+      "CommonAliases": [
+        "Jeju"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KR"
+    },
+    "primaryKey": {
+      "ID": "D51AE714-594D-443D-8625-29E51A2E1B23"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:10.148Z",
+      "checksum": "84f14c9ebdcedcad053fd10a557ecb82c36402c9dc3cb9749d11f6e1626ce836"
+    }
+  },
+  {
+    "fields": {
+      "Name": "North Chungcheong",
+      "Code": "43",
+      "ISO3166_2": "KR-43",
+      "Latitude": 36.6357,
+      "Longitude": 127.4915,
+      "BoundaryGeoJSON": "@file:by-country/KR/boundaries/KR-43.geojson",
+      "CommonAliases": [
+        "North Chungcheong"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KR"
+    },
+    "primaryKey": {
+      "ID": "421A5F27-C357-45C6-BF6B-E4B702351DD4"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:10.164Z",
+      "checksum": "222af76b66d98b901004d165080f76fcdeeb8d7187d8f8db7cf52713a294f2fa"
+    }
+  },
+  {
+    "fields": {
+      "Name": "North Gyeongsang",
+      "Code": "47",
+      "ISO3166_2": "KR-47",
+      "Latitude": 36.5754,
+      "Longitude": 128.5058,
+      "BoundaryGeoJSON": "@file:by-country/KR/boundaries/KR-47.geojson",
+      "CommonAliases": [
+        "North Gyeongsang"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KR"
+    },
+    "primaryKey": {
+      "ID": "ED1BAD43-618C-47E8-8534-AA998A1ECA2A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:10.182Z",
+      "checksum": "99edffb55f673b152068ae8058c49a141f4ecf2244df411a69d09c6b9acc3b88"
+    }
+  },
+  {
+    "fields": {
+      "Name": "North Jeolla",
+      "Code": "45",
+      "ISO3166_2": "KR-45",
+      "Latitude": 35.8199,
+      "Longitude": 127.109,
+      "BoundaryGeoJSON": "@file:by-country/KR/boundaries/KR-45.geojson",
+      "CommonAliases": [
+        "North Jeolla"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KR"
+    },
+    "primaryKey": {
+      "ID": "1525F579-47F5-4818-9881-79CB2A5551AF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:10.240Z",
+      "checksum": "58ffe7141b91402e428db2d9ced2e8eecccfd2f23e0086ee3a3dc6f361268a2d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sejong City",
+      "Code": "50",
+      "ISO3166_2": "KR-50",
+      "Latitude": 36.48,
+      "Longitude": 127.289,
+      "BoundaryGeoJSON": "@file:by-country/KR/boundaries/KR-50.geojson",
+      "CommonAliases": [
+        "Sejong City"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KR"
+    },
+    "primaryKey": {
+      "ID": "55F7FE69-5DEA-4BDE-B24B-8E9D8679CB2E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:10.262Z",
+      "checksum": "06197acbe04c86c5be9d4290e696ffe40a5cdf61aee81759d8185c21a0687117"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Seoul",
+      "Code": "11",
+      "ISO3166_2": "KR-11",
+      "Latitude": 37.5665,
+      "Longitude": 126.978,
+      "BoundaryGeoJSON": "@file:by-country/KR/boundaries/KR-11.geojson",
+      "CommonAliases": [
+        "Seoul"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KR"
+    },
+    "primaryKey": {
+      "ID": "DA676D0F-0C8E-4882-BD06-68C110FE373C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:10.279Z",
+      "checksum": "01a6b27382a133c5562aafacbb7e726fcb6bad8677ede75d28a4d20e1e5a4d40"
+    }
+  },
+  {
+    "fields": {
+      "Name": "South Chungcheong",
+      "Code": "44",
+      "ISO3166_2": "KR-44",
+      "Latitude": 36.6593,
+      "Longitude": 126.6729,
+      "BoundaryGeoJSON": "@file:by-country/KR/boundaries/KR-44.geojson",
+      "CommonAliases": [
+        "South Chungcheong"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KR"
+    },
+    "primaryKey": {
+      "ID": "1C0C04CF-9A2F-4C31-B70D-32B0A7AB70D0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:10.297Z",
+      "checksum": "bb8e817532a01f769e213606fd08b11b05fa48e712b17b72955def937f8d24d1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "South Gyeongsang",
+      "Code": "48",
+      "ISO3166_2": "KR-48",
+      "Latitude": 35.2382,
+      "Longitude": 128.6925,
+      "BoundaryGeoJSON": "@file:by-country/KR/boundaries/KR-48.geojson",
+      "CommonAliases": [
+        "South Gyeongsang"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KR"
+    },
+    "primaryKey": {
+      "ID": "0F488FFF-EE0D-41B0-A245-35C27F989108"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:10.315Z",
+      "checksum": "1d0a5b96f65c4c3ac852a63d99506cbf24dc3519d4924bfba8be64f03cbff35a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "South Jeolla",
+      "Code": "46",
+      "ISO3166_2": "KR-46",
+      "Latitude": 34.8159,
+      "Longitude": 126.4629,
+      "BoundaryGeoJSON": "@file:by-country/KR/boundaries/KR-46.geojson",
+      "CommonAliases": [
+        "South Jeolla"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KR"
+    },
+    "primaryKey": {
+      "ID": "B28D1945-F065-4467-8801-007AA19CDC51"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:10.333Z",
+      "checksum": "752c039419d9946f33a3219746cdcedb36eb1306945fd788e75cbd7a364c2ebe"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ulsan",
+      "Code": "31",
+      "ISO3166_2": "KR-31",
+      "Latitude": 35.5384,
+      "Longitude": 129.3114,
+      "BoundaryGeoJSON": "@file:by-country/KR/boundaries/KR-31.geojson",
+      "CommonAliases": [
+        "Ulsan"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KR"
+    },
+    "primaryKey": {
+      "ID": "806F24C1-DB34-495F-BD7A-316D02FFE2DF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:10.347Z",
+      "checksum": "3ab84580c7407eae7c23755cb6dd593301e1f53a3cfca0f67902a7132a670e79"
+    }
+  }
+]

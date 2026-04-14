@@ -1,6 +1,5 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, Output, EventEmitter } from '@angular/core';
 import { FormGroup, FormBuilder, Validators } from '@angular/forms';
-import { DialogRef, WindowRef } from '@progress/kendo-angular-dialog';
 import { Subject, BehaviorSubject, takeUntil } from 'rxjs';
 import { RunView, Metadata } from '@memberjunction/core';
 import { MJAIAgentPromptEntity, MJAIConfigurationEntity } from '@memberjunction/core-entities';
@@ -64,8 +63,9 @@ export class AgentPromptAdvancedSettingsDialogComponent implements OnInit, OnDes
   // Execution order validation
   executionOrderError: string | null = null;
 
+  @Output() DialogClose = new EventEmitter<void>();
+
   constructor(
-    private dialogRef: WindowRef,
     private fb: FormBuilder,
     private cdr: ChangeDetectorRef
   ) {}
@@ -209,7 +209,7 @@ export class AgentPromptAdvancedSettingsDialogComponent implements OnInit, OnDes
 
   cancel() {
     this.result.next(null);
-    this.dialogRef.close();
+    this.DialogClose.emit();
   }
 
   async save() {
@@ -236,7 +236,7 @@ export class AgentPromptAdvancedSettingsDialogComponent implements OnInit, OnDes
       };
 
       this.result.next(formData);
-      this.dialogRef.close();
+      this.DialogClose.emit();
       
     } catch (error) {
       console.error('Error saving advanced settings:', error);

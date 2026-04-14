@@ -153,6 +153,22 @@ export class GetLearnWorldsUsersAction extends LearnWorldsBaseAction {
    * Calculate summary statistics from the mapped user list
    */
   private calculateUserSummary(users: LearnWorldsUser[]): UsersSummary {
+    const { usersByRole, totalTimeSpent, averageCoursesPerUser } = this.calculateRoleCounts(users);
+
+    return {
+      totalUsers: users.length,
+      activeUsers: users.filter((u) => u.status === 'active').length,
+      inactiveUsers: users.filter((u) => u.status === 'inactive').length,
+      suspendedUsers: users.filter((u) => u.status === 'suspended').length,
+      usersByRole,
+      averageCoursesPerUser,
+      totalTimeSpent,
+      mostActiveUsers: this.findMostActiveUsers(users),
+      recentSignups: this.findRecentSignups(users),
+    };
+  }
+
+  private calculateRoleCounts(users: LearnWorldsUser[]): { usersByRole: Record<string, number>; totalTimeSpent: number; averageCoursesPerUser: number } {
     const usersByRole: Record<string, number> = {};
     let totalTimeSpent = 0;
 
@@ -167,8 +183,11 @@ export class GetLearnWorldsUsersAction extends LearnWorldsBaseAction {
       averageCoursesPerUser = totalCourses / users.length;
     }
 
-    // Find most active users (by completed courses)
-    const mostActiveUsers: Array<{ id: string; name: string; completedCourses?: number }> = users
+    return { usersByRole, totalTimeSpent, averageCoursesPerUser };
+  }
+
+  private findMostActiveUsers(users: LearnWorldsUser[]): Array<{ id: string; name: string; completedCourses?: number }> {
+    return users
       .filter((u) => u.completedCourses && u.completedCourses > 0)
       .sort((a, b) => (b.completedCourses || 0) - (a.completedCourses || 0))
       .slice(0, 5)
@@ -177,12 +196,13 @@ export class GetLearnWorldsUsersAction extends LearnWorldsBaseAction {
         name: u.fullName || u.email,
         completedCourses: u.completedCourses,
       }));
+  }
 
-    // Find recent signups (last 30 days)
+  private findRecentSignups(users: LearnWorldsUser[]): Array<{ id: string; name: string; signupDate: Date }> {
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    const recentSignups: Array<{ id: string; name: string; signupDate: Date }> = users
+    return users
       .filter((u) => u.createdAt > thirtyDaysAgo)
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
       .slice(0, 10)
@@ -191,18 +211,6 @@ export class GetLearnWorldsUsersAction extends LearnWorldsBaseAction {
         name: u.fullName || u.email,
         signupDate: u.createdAt,
       }));
-
-    return {
-      totalUsers: users.length,
-      activeUsers: users.filter((u) => u.status === 'active').length,
-      inactiveUsers: users.filter((u) => u.status === 'inactive').length,
-      suspendedUsers: users.filter((u) => u.status === 'suspended').length,
-      usersByRole,
-      averageCoursesPerUser,
-      totalTimeSpent,
-      mostActiveUsers,
-      recentSignups,
-    };
   }
 
   /**

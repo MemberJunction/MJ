@@ -85,20 +85,20 @@ export class CredentialsOverviewResourceComponent extends BaseResourceComponent 
         'Integration': 'var(--mj-brand-primary)'
     };
 
-    private destroy$ = new Subject<void>();
+    protected override destroy$ = new Subject<void>();
 
     constructor(
-        private cdr: ChangeDetectorRef,
-        private navigationService: NavigationService
-    ) {
+        private cdr: ChangeDetectorRef) {
         super();
     }
 
     ngOnInit(): void {
+        super.ngOnInit();
         this.loadData();
     }
 
     ngOnDestroy(): void {
+        super.ngOnDestroy();
         this.destroy$.next();
         this.destroy$.complete();
     }

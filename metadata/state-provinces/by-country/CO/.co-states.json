@@ -1,0 +1,695 @@
+[
+  {
+    "fields": {
+      "Name": "Amazonas",
+      "Code": "AMA",
+      "ISO3166_2": "CO-AMA",
+      "Latitude": -1.2603,
+      "Longitude": -71.9171,
+      "BoundaryGeoJSON": "@file:by-country/CO/boundaries/CO-AMA.geojson",
+      "CommonAliases": [
+        "Amazonas"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CO"
+    },
+    "primaryKey": {
+      "ID": "D8AFC4C4-8A25-4E20-A457-40FFDFE364EC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:39.097Z",
+      "checksum": "0e124ae094872671145c2aef8f3fdb30a3aa9c2200171fcbefddda012ca1c1d3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Antioguia",
+      "Code": "ANT",
+      "ISO3166_2": "CO-ANT",
+      "Latitude": 6.7037,
+      "Longitude": -75.5071,
+      "BoundaryGeoJSON": "@file:by-country/CO/boundaries/CO-ANT.geojson",
+      "CommonAliases": [
+        "Antioguia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CO"
+    },
+    "primaryKey": {
+      "ID": "202597F1-4E73-4290-852C-7B9C64C5C543"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:39.118Z",
+      "checksum": "5b74c3e0aaeafb54d9025765dab9a31fd8e14d05f3212cdef6294469bd68e826"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Arauca",
+      "Code": "ARA",
+      "ISO3166_2": "CO-ARA",
+      "Latitude": 6.6431,
+      "Longitude": -70.8913,
+      "BoundaryGeoJSON": "@file:by-country/CO/boundaries/CO-ARA.geojson",
+      "CommonAliases": [
+        "Arauca"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CO"
+    },
+    "primaryKey": {
+      "ID": "57EFB957-CED4-44F5-B49E-BFAF3C18CCFA"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:39.138Z",
+      "checksum": "2f2ff66591f9a52a0cd54b28eb66c9c3e402e837aaa481f7a42b8279c9e08f60"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Atlántico",
+      "Code": "ATL",
+      "ISO3166_2": "CO-ATL",
+      "Latitude": 10.6712,
+      "Longitude": -74.9941,
+      "BoundaryGeoJSON": "@file:by-country/CO/boundaries/CO-ATL.geojson",
+      "CommonAliases": [
+        "Atlántico"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CO"
+    },
+    "primaryKey": {
+      "ID": "76EC696E-986B-42B9-BE77-3E964B1D80F1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:39.158Z",
+      "checksum": "2e28922961c54d2654dfca668a3deb40f7aaa84ba5abb920d5a47e035d171a57"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bolívar",
+      "Code": "BOL",
+      "ISO3166_2": "CO-BOL",
+      "Latitude": 8.5782,
+      "Longitude": -74.1807,
+      "BoundaryGeoJSON": "@file:by-country/CO/boundaries/CO-BOL.geojson",
+      "CommonAliases": [
+        "Bolívar"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CO"
+    },
+    "primaryKey": {
+      "ID": "72DD30D7-E7BB-4747-B0F1-187DEE09D227"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:39.178Z",
+      "checksum": "9db6f1b1e3ed3032ead0738a7c0e3df364a23d98410b83a46261d25de2ce0e96"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Boyacá",
+      "Code": "BOY",
+      "ISO3166_2": "CO-BOY",
+      "Latitude": 5.6852,
+      "Longitude": -72.933,
+      "BoundaryGeoJSON": "@file:by-country/CO/boundaries/CO-BOY.geojson",
+      "CommonAliases": [
+        "Boyacá"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CO"
+    },
+    "primaryKey": {
+      "ID": "B9F80977-221A-44B9-9AFA-1F5CC23322E1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:39.196Z",
+      "checksum": "58408ad7ce072879ebe726650bf22d0964ecd558a23e2db59aa523a0174c3496"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Caldas",
+      "Code": "CAL",
+      "ISO3166_2": "CO-CAL",
+      "Latitude": 5.2904,
+      "Longitude": -75.2793,
+      "BoundaryGeoJSON": "@file:by-country/CO/boundaries/CO-CAL.geojson",
+      "CommonAliases": [
+        "Caldas"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CO"
+    },
+    "primaryKey": {
+      "ID": "892D5923-F720-4095-B6C7-ED3189B01366"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:39.213Z",
+      "checksum": "1bd12b481c39fb10f9363261bbfc9c8385ab8eaecc3f5d1be1e0dc49034c78a2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Caquetá",
+      "Code": "CAQ",
+      "ISO3166_2": "CO-CAQ",
+      "Latitude": 0.6155,
+      "Longitude": -73.8097,
+      "BoundaryGeoJSON": "@file:by-country/CO/boundaries/CO-CAQ.geojson",
+      "CommonAliases": [
+        "Caquetá"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CO"
+    },
+    "primaryKey": {
+      "ID": "C09F0DD8-61C3-473D-93B2-807E5B20BDE7"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:39.232Z",
+      "checksum": "1950e47161a2444b052f294bed90a9ab02e2eb3166f77188048ed33fcbcf0b92"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Casanare",
+      "Code": "CAS",
+      "ISO3166_2": "CO-CAS",
+      "Latitude": 5.4625,
+      "Longitude": -71.4622,
+      "BoundaryGeoJSON": "@file:by-country/CO/boundaries/CO-CAS.geojson",
+      "CommonAliases": [
+        "Casanare"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CO"
+    },
+    "primaryKey": {
+      "ID": "654FA58B-7A8E-4E08-BFF0-F5995D11B9DD"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:39.249Z",
+      "checksum": "c56a31bf042054839f7b052115bf549c20329e8792c7c3dc65e6a03986efea0c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Cauca",
+      "Code": "CAU",
+      "ISO3166_2": "CO-CAU",
+      "Latitude": 2.6161,
+      "Longitude": -77.277,
+      "BoundaryGeoJSON": "@file:by-country/CO/boundaries/CO-CAU.geojson",
+      "CommonAliases": [
+        "Cauca"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CO"
+    },
+    "primaryKey": {
+      "ID": "ACB81B0F-7DE8-4B58-B652-772CC2256CD1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:39.265Z",
+      "checksum": "9ece939876f7f85e6995ee60ad3e1e17ad2b15becd3701c9360842808976c921"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Cesar",
+      "Code": "CES",
+      "ISO3166_2": "CO-CES",
+      "Latitude": 9.8489,
+      "Longitude": -73.4339,
+      "BoundaryGeoJSON": "@file:by-country/CO/boundaries/CO-CES.geojson",
+      "CommonAliases": [
+        "Cesar"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CO"
+    },
+    "primaryKey": {
+      "ID": "83486C74-E45F-4A0D-A45E-4D152F280C8E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:39.328Z",
+      "checksum": "9b3d548589b36d227f954781506219bd7ffd2d13fecfb02541ed162b0b340833"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Chocó",
+      "Code": "CHO",
+      "ISO3166_2": "CO-CHO",
+      "Latitude": 5.3828,
+      "Longitude": -76.7263,
+      "BoundaryGeoJSON": "@file:by-country/CO/boundaries/CO-CHO.geojson",
+      "CommonAliases": [
+        "Chocó"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CO"
+    },
+    "primaryKey": {
+      "ID": "30846474-6F4D-42F9-897B-645DF6E8D64E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:39.345Z",
+      "checksum": "dcf9d74af4e9989cc95942d730bf20603944843e47efe739e7e20f112948d9ea"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Córdoba",
+      "Code": "COR",
+      "ISO3166_2": "CO-COR",
+      "Latitude": 8.4389,
+      "Longitude": -75.6522,
+      "BoundaryGeoJSON": "@file:by-country/CO/boundaries/CO-COR.geojson",
+      "CommonAliases": [
+        "Córdoba"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CO"
+    },
+    "primaryKey": {
+      "ID": "A290F5A0-D295-412F-A0A5-3118D61E72E8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:39.361Z",
+      "checksum": "d5de554888d10436cacce86f962decb8056d3046ba6648ecaecd23b2878565c4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Cundinamarca",
+      "Code": "CUN",
+      "ISO3166_2": "CO-CUN",
+      "Latitude": 5.1112,
+      "Longitude": -74.0613,
+      "BoundaryGeoJSON": "@file:by-country/CO/boundaries/CO-CUN.geojson",
+      "CommonAliases": [
+        "Cundinamarca"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CO"
+    },
+    "primaryKey": {
+      "ID": "D8F1B0E6-2865-4DB4-AB6F-69DF06B3391E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:39.377Z",
+      "checksum": "bea07e5417bd2f248818d16f7737f071b78e9d2f34c44252c26d21e17275dbc3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Distrito Capital de Santa Fe de Bogota",
+      "Code": "DC",
+      "ISO3166_2": "CO-DC",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Distrito Capital de Santa Fe de Bogota"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CO"
+    },
+    "primaryKey": {
+      "ID": "A0C588F4-5C37-495A-9D5C-615748FD9159"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:39.392Z",
+      "checksum": "022a02c4f82067884c80aa55412606b21ef0c51dadced129c62091e988e1e547"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Guainía",
+      "Code": "GUA",
+      "ISO3166_2": "CO-GUA",
+      "Latitude": 2.7054,
+      "Longitude": -68.8925,
+      "BoundaryGeoJSON": "@file:by-country/CO/boundaries/CO-GUA.geojson",
+      "CommonAliases": [
+        "Guainía"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CO"
+    },
+    "primaryKey": {
+      "ID": "5C8327AA-61C8-471B-9271-C9E0EB40BB87"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:39.409Z",
+      "checksum": "d88f6f018a29e174f3a274a7765916b2bf6e34f6f76da4f7e571db482d390e45"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Guaviare",
+      "Code": "GUV",
+      "ISO3166_2": "CO-GUV",
+      "Latitude": 1.8514,
+      "Longitude": -71.8348,
+      "BoundaryGeoJSON": "@file:by-country/CO/boundaries/CO-GUV.geojson",
+      "CommonAliases": [
+        "Guaviare"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CO"
+    },
+    "primaryKey": {
+      "ID": "308CE158-2B44-4EEA-B4B9-913D13A14E82"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:39.425Z",
+      "checksum": "d8f3dcf4573bea2b839d691850d44eb91d9acdde94e750a10330fd7939ce90fa"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Huila",
+      "Code": "HUI",
+      "ISO3166_2": "CO-HUI",
+      "Latitude": 2.6547,
+      "Longitude": -75.5471,
+      "BoundaryGeoJSON": "@file:by-country/CO/boundaries/CO-HUI.geojson",
+      "CommonAliases": [
+        "Huila"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CO"
+    },
+    "primaryKey": {
+      "ID": "B447FDE7-A6BC-4FEE-9536-F39755EE96E7"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:39.442Z",
+      "checksum": "5cafde4b63af6956bf2a3b9905a7739de1f3f3b3fbb9c9c00bdf44b1ef54af1f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "La Guajira",
+      "Code": "LAG",
+      "ISO3166_2": "CO-LAG",
+      "Latitude": 11.4245,
+      "Longitude": -72.6702,
+      "BoundaryGeoJSON": "@file:by-country/CO/boundaries/CO-LAG.geojson",
+      "CommonAliases": [
+        "La Guajira"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CO"
+    },
+    "primaryKey": {
+      "ID": "E6CC0F1E-1E6F-4F72-A344-176744109559"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:39.458Z",
+      "checksum": "9fb27f7b70799f54557871d0adadb263f4d5101f050f5b1d320ecf0cd51eeb31"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Magdalena",
+      "Code": "MAG",
+      "ISO3166_2": "CO-MAG",
+      "Latitude": 10.3731,
+      "Longitude": -74.3474,
+      "BoundaryGeoJSON": "@file:by-country/CO/boundaries/CO-MAG.geojson",
+      "CommonAliases": [
+        "Magdalena"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CO"
+    },
+    "primaryKey": {
+      "ID": "904DE446-57C8-46B4-B529-360982F76FA7"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:39.471Z",
+      "checksum": "b278251375228bc008e6bca8bd8b459c2ba74785625d18a80fdd94989c00d088"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Meta",
+      "Code": "MET",
+      "ISO3166_2": "CO-MET",
+      "Latitude": 3.5302,
+      "Longitude": -72.9789,
+      "BoundaryGeoJSON": "@file:by-country/CO/boundaries/CO-MET.geojson",
+      "CommonAliases": [
+        "Meta"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CO"
+    },
+    "primaryKey": {
+      "ID": "9E2523B3-15FA-4F83-8DC9-EDF112842B10"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:39.526Z",
+      "checksum": "12a383e590d87479d0cdeb9fe022e0d2eecacf974fea81202a6da923f5916fba"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nariño",
+      "Code": "NAR",
+      "ISO3166_2": "CO-NAR",
+      "Latitude": 1.6017,
+      "Longitude": -77.9777,
+      "BoundaryGeoJSON": "@file:by-country/CO/boundaries/CO-NAR.geojson",
+      "CommonAliases": [
+        "Nariño"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CO"
+    },
+    "primaryKey": {
+      "ID": "BBA9EBDB-9A93-4078-8356-FFC5F28CEF3F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:39.542Z",
+      "checksum": "58baf30b6f222c041cdc23fc67ff1bd74dd154d10ce3b78934aa3573145a27e2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Norte de Santander",
+      "Code": "NSA",
+      "ISO3166_2": "CO-NSA",
+      "Latitude": 8.086,
+      "Longitude": -72.8175,
+      "BoundaryGeoJSON": "@file:by-country/CO/boundaries/CO-NSA.geojson",
+      "CommonAliases": [
+        "Norte de Santander"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CO"
+    },
+    "primaryKey": {
+      "ID": "36FA27A8-21FB-45BC-9761-55C7CF03398E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:39.560Z",
+      "checksum": "4171698ca6840d4ca6de93453e566d7221b35f4da5d525b5f976959b3719e726"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Putumayo",
+      "Code": "PUT",
+      "ISO3166_2": "CO-PUT",
+      "Latitude": 0.4202,
+      "Longitude": -75.5514,
+      "BoundaryGeoJSON": "@file:by-country/CO/boundaries/CO-PUT.geojson",
+      "CommonAliases": [
+        "Putumayo"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CO"
+    },
+    "primaryKey": {
+      "ID": "E13AE9A0-20E2-4CD8-918A-BD2230312E35"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:39.577Z",
+      "checksum": "b7212e94595e01075d564f89d69bb26d989a11960172c11b833023613c17d59c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Quindío",
+      "Code": "QUI",
+      "ISO3166_2": "CO-QUI",
+      "Latitude": 4.472,
+      "Longitude": -75.64,
+      "BoundaryGeoJSON": "@file:by-country/CO/boundaries/CO-QUI.geojson",
+      "CommonAliases": [
+        "Quindío"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CO"
+    },
+    "primaryKey": {
+      "ID": "29EB6428-4B8E-4E5A-8805-680539FF392C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:39.593Z",
+      "checksum": "8a16664411ce894212949caf322ac81a5ce0895e50e4dacf048486d44c88ecb6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Risaralda",
+      "Code": "RIS",
+      "ISO3166_2": "CO-RIS",
+      "Latitude": 4.8268,
+      "Longitude": -75.6743,
+      "BoundaryGeoJSON": "@file:by-country/CO/boundaries/CO-RIS.geojson",
+      "CommonAliases": [
+        "Risaralda"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CO"
+    },
+    "primaryKey": {
+      "ID": "E027314A-F6AA-4B96-AF07-7D27066E52C5"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:39.610Z",
+      "checksum": "ccda2237cbfe175da8221494cd7dbf8ae97f63cb2d3f4e48312dc1dbd357f817"
+    }
+  },
+  {
+    "fields": {
+      "Name": "San Andrés, Providencia y Santa Catalina",
+      "Code": "SAP",
+      "ISO3166_2": "CO-SAP",
+      "Latitude": 12.5429,
+      "Longitude": -81.7049,
+      "BoundaryGeoJSON": "@file:by-country/CO/boundaries/CO-SAP.geojson",
+      "CommonAliases": [
+        "San Andrés, Providencia y Santa Catalina"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CO"
+    },
+    "primaryKey": {
+      "ID": "BBADA601-C14C-4F08-BF3C-01245940342E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:39.626Z",
+      "checksum": "452b4585f0c81e94f7cdee537e5a9d7d467fabf2e57b1459546e3e915160d75e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Santander",
+      "Code": "SAN",
+      "ISO3166_2": "CO-SAN",
+      "Latitude": 6.854,
+      "Longitude": -73.4981,
+      "BoundaryGeoJSON": "@file:by-country/CO/boundaries/CO-SAN.geojson",
+      "CommonAliases": [
+        "Santander"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CO"
+    },
+    "primaryKey": {
+      "ID": "B413520A-0FB7-448F-B239-D6F3CB2CF083"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:39.643Z",
+      "checksum": "1c4015e2c3dcd6a730de7fece93e8803bbbbd45006c2dab7c5895b500b3d30fe"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sucre",
+      "Code": "SUC",
+      "ISO3166_2": "CO-SUC",
+      "Latitude": 9.0124,
+      "Longitude": -75.1319,
+      "BoundaryGeoJSON": "@file:by-country/CO/boundaries/CO-SUC.geojson",
+      "CommonAliases": [
+        "Sucre"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CO"
+    },
+    "primaryKey": {
+      "ID": "A18D67B7-37CE-444B-B76C-5F46C62A4DF0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:39.659Z",
+      "checksum": "2272f762e84d85821f3a59de35bd96517d4ddf381d38291b791e00f40f086d86"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tolima",
+      "Code": "TOL",
+      "ISO3166_2": "CO-TOL",
+      "Latitude": 3.9375,
+      "Longitude": -75.2073,
+      "BoundaryGeoJSON": "@file:by-country/CO/boundaries/CO-TOL.geojson",
+      "CommonAliases": [
+        "Tolima"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CO"
+    },
+    "primaryKey": {
+      "ID": "863EED0B-D32B-4280-A183-259989517237"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:39.672Z",
+      "checksum": "f7f8cbb0205686a6d1c23fb931250a1d0955e158b1fd493ba5a6dac70034e391"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Valle del Cauca",
+      "Code": "VAC",
+      "ISO3166_2": "CO-VAC",
+      "Latitude": 3.5833,
+      "Longitude": -76.5923,
+      "BoundaryGeoJSON": "@file:by-country/CO/boundaries/CO-VAC.geojson",
+      "CommonAliases": [
+        "Valle del Cauca"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CO"
+    },
+    "primaryKey": {
+      "ID": "D031646C-CFE6-4E5D-8B83-624DB74E1733"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:39.704Z",
+      "checksum": "04b12bd16f075d4138f537a9299d2177a0f1756e7fc0c785f01cf205a3a4784c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Vaupés",
+      "Code": "VAU",
+      "ISO3166_2": "CO-VAU",
+      "Latitude": 0.791,
+      "Longitude": -70.5869,
+      "BoundaryGeoJSON": "@file:by-country/CO/boundaries/CO-VAU.geojson",
+      "CommonAliases": [
+        "Vaupés"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CO"
+    },
+    "primaryKey": {
+      "ID": "18DBBAA4-65EE-4F83-AD4D-E799EF49F3DA"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:39.721Z",
+      "checksum": "e200df639b5edb3c9a266461c0458ba43fb203118f613510145ad18382e4b4a9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Vichada",
+      "Code": "VID",
+      "ISO3166_2": "CO-VID",
+      "Latitude": 4.8922,
+      "Longitude": -69.2414,
+      "BoundaryGeoJSON": "@file:by-country/CO/boundaries/CO-VID.geojson",
+      "CommonAliases": [
+        "Vichada"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CO"
+    },
+    "primaryKey": {
+      "ID": "377482AC-BA8A-45C7-873D-9F51ACFCB213"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:39.735Z",
+      "checksum": "a2fd5cee57f6278fc9069fa059aa7c4d335eb6415062ff11593f57e0c946e3ba"
+    }
+  }
+]

@@ -1,0 +1,548 @@
+[
+  {
+    "fields": {
+      "Name": "A‘ālī an Nīl",
+      "Code": "23",
+      "ISO3166_2": "SD-23",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "A‘ālī an Nīl"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SD"
+    },
+    "primaryKey": {
+      "ID": "C2022C48-5713-418B-B27B-B590AC1BA401"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:30.306Z",
+      "checksum": "ca029178fec5107622d2dd2310c495b361e0749972822865ffad4a2cb88a1c45"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Al Baḩr al Aḩmar",
+      "Code": "26",
+      "ISO3166_2": "SD-26",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Al Baḩr al Aḩmar"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SD"
+    },
+    "primaryKey": {
+      "ID": "F8DBA3B4-8282-4330-8DE5-E39744DAE6AF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:30.327Z",
+      "checksum": "01a6981670dfe6f734788eaf8b84a9ca3b6d9f01fa11d3804fd68de2b2b21d22"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Al Buḩayrāt",
+      "Code": "18",
+      "ISO3166_2": "SD-18",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Al Buḩayrāt"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SD"
+    },
+    "primaryKey": {
+      "ID": "DB7867F6-69B5-41F5-9CC1-5401B43725E1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:30.347Z",
+      "checksum": "ef35b587fec9d6f38e34b00db85ba9f35c259dd1a8d19240d3a8597e49b80d63"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Al Jazīrah",
+      "Code": "07",
+      "ISO3166_2": "SD-07",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Al Jazīrah"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SD"
+    },
+    "primaryKey": {
+      "ID": "4CC9C1AE-C95D-4935-8ACA-F281002C3347"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:30.365Z",
+      "checksum": "69a8dc9e2399365e1aac5ad7a7c99c561e360ff5e40acbab3e602e10fc85d1c2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Al Kharţūm",
+      "Code": "03",
+      "ISO3166_2": "SD-03",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Al Kharţūm"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SD"
+    },
+    "primaryKey": {
+      "ID": "37833E11-3B3F-4BD8-99D8-8D73A9E05172"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:30.382Z",
+      "checksum": "32f60ceac5dbecddbd57c8e696e03d023c8a52c196a627119dccaedb2dfaa6aa"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Al Qaḑārif",
+      "Code": "06",
+      "ISO3166_2": "SD-06",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Al Qaḑārif"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SD"
+    },
+    "primaryKey": {
+      "ID": "45872A4B-4C78-4B80-A9FB-99D9C547CDC2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:30.400Z",
+      "checksum": "0fb5949d002743e18078c81a5642133125fc16dc289d7dd10a22a1423c36002f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Al Waḩdah",
+      "Code": "22",
+      "ISO3166_2": "SD-22",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Al Waḩdah"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SD"
+    },
+    "primaryKey": {
+      "ID": "002B1D6B-F8A5-4962-93D9-D115BBEC77F6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:30.415Z",
+      "checksum": "9bfbebebed7b8f5ac8011199284d91a5188b8a4813a86587bdbec1012a7f312b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "An Nīl",
+      "Code": "04",
+      "ISO3166_2": "SD-04",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "An Nīl"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SD"
+    },
+    "primaryKey": {
+      "ID": "3904170A-0DFB-47C1-9775-04280F8065D0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:30.432Z",
+      "checksum": "4a2007520678cd0eb1749c8eaa8a4e6b9b5735e5b7d0e81107ceeddd71ea6f8a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "An Nīl al Abyaḑ",
+      "Code": "08",
+      "ISO3166_2": "SD-08",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "An Nīl al Abyaḑ"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SD"
+    },
+    "primaryKey": {
+      "ID": "E0843606-CB25-475F-ADB0-5AC379BC51A3"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:30.448Z",
+      "checksum": "755bdac53946859be11e79007ed30d8fe53959764f51dd3d37a073cacdfe9913"
+    }
+  },
+  {
+    "fields": {
+      "Name": "An Nīl al Azraq",
+      "Code": "24",
+      "ISO3166_2": "SD-24",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "An Nīl al Azraq"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SD"
+    },
+    "primaryKey": {
+      "ID": "9492FD3B-27CC-4DCE-8DC8-86655AFC7215"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:30.464Z",
+      "checksum": "c66efbc9597c225c8a6d5bb4d140bca1b87cce894934cfcd76733f62c89920d6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ash Shamālīyah",
+      "Code": "01",
+      "ISO3166_2": "SD-01",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Ash Shamālīyah"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SD"
+    },
+    "primaryKey": {
+      "ID": "A0FA8DF5-BC87-4666-ACD6-4055EEEE3A51"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:30.525Z",
+      "checksum": "32eea0f04eb32ccca68326ebee25defc2664f7ac1d48fd9b3ee132a54ce2c98e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Baḩr al Jabal",
+      "Code": "17",
+      "ISO3166_2": "SD-17",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Baḩr al Jabal"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SD"
+    },
+    "primaryKey": {
+      "ID": "1008050B-4E04-4E05-A3D5-B84F29392A5C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:30.541Z",
+      "checksum": "2a36ec844e99b10f6f2b9277a0fbde394c85621a8c9bad71ba62d0f39d4d3189"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gharb al Istiwā'īyah",
+      "Code": "16",
+      "ISO3166_2": "SD-16",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Gharb al Istiwā'īyah"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SD"
+    },
+    "primaryKey": {
+      "ID": "A16B014A-7735-42BB-9401-194215882AEB"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:30.558Z",
+      "checksum": "28d907291010037858927fce9d139b996e021f00976288ee8695fe63c6f2d757"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gharb Baḩr al Ghazāl",
+      "Code": "14",
+      "ISO3166_2": "SD-14",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Gharb Baḩr al Ghazāl"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SD"
+    },
+    "primaryKey": {
+      "ID": "A3ADA2C0-9F0A-485F-9E08-DC9423C6A5AF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:30.574Z",
+      "checksum": "52d784d37e9d69dd44e32ed11165d1ccf3a8e88cd3dc6202b2e245ffa020cfad"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gharb Dārfūr",
+      "Code": "12",
+      "ISO3166_2": "SD-12",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Gharb Dārfūr"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SD"
+    },
+    "primaryKey": {
+      "ID": "EF3BB7C2-EBDC-42CD-BAD9-02EF367545CC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:30.592Z",
+      "checksum": "9e877aba20acb4ceedc8ac92de216c35c4f0e2fd6dfb59d5694b3a51ba86e682"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gharb Kurdufān",
+      "Code": "10",
+      "ISO3166_2": "SD-10",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Gharb Kurdufān"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SD"
+    },
+    "primaryKey": {
+      "ID": "8F0A8F2B-E19C-4AE5-B541-F7BD98EC3794"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:30.607Z",
+      "checksum": "daff7256212da7aabd20a3e9bfefb4202c721aafd86010ff25d379633be311c9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Janūb Dārfūr",
+      "Code": "11",
+      "ISO3166_2": "SD-11",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Janūb Dārfūr"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SD"
+    },
+    "primaryKey": {
+      "ID": "1BC91B78-A2BA-4D18-911A-41B618C642E7"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:30.622Z",
+      "checksum": "a1b2e5387eb35a865023635aab5705c27b0b8a39dd77fe1a2da424df639676d0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Janūb Kurdufān",
+      "Code": "13",
+      "ISO3166_2": "SD-13",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Janūb Kurdufān"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SD"
+    },
+    "primaryKey": {
+      "ID": "A0AD472D-A15A-4269-8385-CA0D22EF58C5"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:30.638Z",
+      "checksum": "3c578a800acb03763d60b3f6449a07c0f9428658e2a98caccf05b569d5be03c6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Jūnqalī",
+      "Code": "20",
+      "ISO3166_2": "SD-20",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Jūnqalī"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SD"
+    },
+    "primaryKey": {
+      "ID": "689F787D-F3BE-4C61-BEA3-BBD194E4BB45"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:30.655Z",
+      "checksum": "6415c0d8e9f95a70c56038b4788bc6a7c6367c56f6224719267e81f024c3286b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kassalā",
+      "Code": "05",
+      "ISO3166_2": "SD-05",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Kassalā"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SD"
+    },
+    "primaryKey": {
+      "ID": "95D23ABD-1A0E-471B-9223-15D628B270E4"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:30.669Z",
+      "checksum": "4de9a122706b179f2a8311619e424c426a1b9c1bd5cf7f24a766a97d4b6ea81e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Shamāl Baḩr al Ghazāl",
+      "Code": "15",
+      "ISO3166_2": "SD-15",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Shamāl Baḩr al Ghazāl"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SD"
+    },
+    "primaryKey": {
+      "ID": "8DF51CE0-0E9C-4E1E-9242-7CC1BE889C9F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:30.715Z",
+      "checksum": "0b8ebdcc0d245081f068cc4f813bb0dc1e2b2a7fdff6c16de17cc4783e8d0adb"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Shamāl Dārfūr",
+      "Code": "02",
+      "ISO3166_2": "SD-02",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Shamāl Dārfūr"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SD"
+    },
+    "primaryKey": {
+      "ID": "37162180-34F8-4C9C-B0F2-94CB6DFAE712"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:30.734Z",
+      "checksum": "c10103f81be6e19d2b9f7da94dd655a8ce7f4f4ee7268fc72baffe6418fee224"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Shamāl Kurdufān",
+      "Code": "09",
+      "ISO3166_2": "SD-09",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Shamāl Kurdufān"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SD"
+    },
+    "primaryKey": {
+      "ID": "CD32778C-06AE-4376-9C06-7F41C3FB393B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:30.750Z",
+      "checksum": "a49f42b13e7f35640aebce982628145746eb7abd8ed9b690dd70f7662d85c880"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sharq al Istiwā'iyah",
+      "Code": "19",
+      "ISO3166_2": "SD-19",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Sharq al Istiwā'iyah"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SD"
+    },
+    "primaryKey": {
+      "ID": "D333FA6F-AD23-4726-B06F-A87B3CAAD4D4"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:30.766Z",
+      "checksum": "45f2bfe82d3664207a12633cd7c3b4b935126389aa8d3053ee52f35eec6d4b68"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sinnār",
+      "Code": "25",
+      "ISO3166_2": "SD-25",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Sinnār"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SD"
+    },
+    "primaryKey": {
+      "ID": "E5AA55E0-F356-42C8-82C1-2E5D80C2DAB3"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:30.782Z",
+      "checksum": "55c021a424ed7fe793e4404cc19dd23bca18891e35338ef6ab3600ddb8f224a5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Wārāb",
+      "Code": "21",
+      "ISO3166_2": "SD-21",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Wārāb"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SD"
+    },
+    "primaryKey": {
+      "ID": "AA8182BD-C610-4A9F-8BD7-7631A8CB5D07"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:30.795Z",
+      "checksum": "83d8da2b4c37baa5c53dfc44563a3d5d624d65c92860a539bd4b05b10a09a885"
+    }
+  }
+]

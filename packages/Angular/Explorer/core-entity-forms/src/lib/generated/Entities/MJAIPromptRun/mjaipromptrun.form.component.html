@@ -772,6 +772,31 @@
          RELATED ENTITY PANELS
          ======================================== -->
 
+    <!-- Content Process Run Prompt Runs Section -->
+    <mj-collapsible-panel
+        SectionKey="mJContentProcessRunPromptRuns"
+        SectionName="Content Process Run Prompt Runs"
+        Icon="fa fa-robot"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJContentProcessRunPromptRuns')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Content Process Run Prompt Runs','AIPromptRunID')"
+                [NewRecordValues]="NewRecordValues('MJ: Content Process Run Prompt Runs')"
+                [AllowLoad]="IsSectionExpanded('mJContentProcessRunPromptRuns')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJContentProcessRunPromptRuns', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <!-- AI Prompt Runs (Rerun From) Section -->
     <mj-collapsible-panel
         SectionKey="mJAIPromptRunsRerunFromPromptRunID"

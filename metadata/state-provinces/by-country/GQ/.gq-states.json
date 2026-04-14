@@ -1,0 +1,191 @@
+[
+  {
+    "fields": {
+      "Name": "Annobón",
+      "Code": "AN",
+      "ISO3166_2": "GQ-AN",
+      "Latitude": -1.447,
+      "Longitude": 5.6293,
+      "BoundaryGeoJSON": "@file:by-country/GQ/boundaries/GQ-AN.geojson",
+      "CommonAliases": [
+        "Annobón"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GQ"
+    },
+    "primaryKey": {
+      "ID": "B6F4A9E6-9D59-459C-A9CA-9784F8DD165F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:57.073Z",
+      "checksum": "e37c54759899d9bc0979cfdc947364279eb15161cd0ebb83a1d6a52253da4a28"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bioko Norte",
+      "Code": "BN",
+      "ISO3166_2": "GQ-BN",
+      "Latitude": 3.6678,
+      "Longitude": 8.7951,
+      "BoundaryGeoJSON": "@file:by-country/GQ/boundaries/GQ-BN.geojson",
+      "CommonAliases": [
+        "Bioko Norte"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GQ"
+    },
+    "primaryKey": {
+      "ID": "302A7FCD-1744-4519-91AB-6193A54CC66A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:57.089Z",
+      "checksum": "55160b2309b18c0b8d758a0f84e5fdc603f98d27bc164ae7794ff3dd48e2cc09"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bioko Sur",
+      "Code": "BS",
+      "ISO3166_2": "GQ-BS",
+      "Latitude": 3.4256,
+      "Longitude": 8.6429,
+      "BoundaryGeoJSON": "@file:by-country/GQ/boundaries/GQ-BS.geojson",
+      "CommonAliases": [
+        "Bioko Sur"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GQ"
+    },
+    "primaryKey": {
+      "ID": "125E9B65-0F77-451C-A852-EC272FA29483"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:57.105Z",
+      "checksum": "f93d86661e5420eaef961868ad8962aaa664e4a63680efea8d383188014e20ae"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Centro Sur",
+      "Code": "CS",
+      "ISO3166_2": "GQ-CS",
+      "Latitude": 1.4624,
+      "Longitude": 10.4494,
+      "BoundaryGeoJSON": "@file:by-country/GQ/boundaries/GQ-CS.geojson",
+      "CommonAliases": [
+        "Centro Sur"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GQ"
+    },
+    "primaryKey": {
+      "ID": "ADE2BF6C-F465-4768-A725-27BC9F54C699"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:57.122Z",
+      "checksum": "cb6168d7927cc1fc3c73eae74902f61604107a2745cf10ea67cc58ffaa4e9da4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kie-Ntem",
+      "Code": "KN",
+      "ISO3166_2": "GQ-KN",
+      "Latitude": 2.0485,
+      "Longitude": 10.8707,
+      "BoundaryGeoJSON": "@file:by-country/GQ/boundaries/GQ-KN.geojson",
+      "CommonAliases": [
+        "Kie-Ntem"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GQ"
+    },
+    "primaryKey": {
+      "ID": "CFE68E78-ED53-4DC2-9682-C11C8F7539D1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:57.138Z",
+      "checksum": "c4559766aedf41770d467b63118698e6b42d891a764bfaee2ac5eabeef38eace"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Litoral",
+      "Code": "LI",
+      "ISO3166_2": "GQ-LI",
+      "Latitude": 1.3072,
+      "Longitude": 9.7992,
+      "BoundaryGeoJSON": "@file:by-country/GQ/boundaries/GQ-LI.geojson",
+      "CommonAliases": [
+        "Litoral"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GQ"
+    },
+    "primaryKey": {
+      "ID": "7B3C49F7-3301-45C6-8086-B7E3D02F4C53"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:57.161Z",
+      "checksum": "8579137b0dc0ff373b9cec9f27c9fc50abb4fd0b271f1f140230009dd323d303"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Región Continental",
+      "Code": "C",
+      "ISO3166_2": "GQ-C",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Región Continental"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GQ"
+    },
+    "primaryKey": {
+      "ID": "6E717CA4-3A35-4DF8-B74F-E8E3F870C0FB"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:57.182Z",
+      "checksum": "444226a534baa09ca3c87ad8184bffdaa28cb520ab1a19aa6b766d02a1208d9e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Región Insular",
+      "Code": "I",
+      "ISO3166_2": "GQ-I",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Región Insular"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GQ"
+    },
+    "primaryKey": {
+      "ID": "6CB38C70-A405-49B4-AC86-25302112450D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:57.204Z",
+      "checksum": "3d9b901a419b6b845379d271efc9ce37c0f2fa874ca716afceea52e63c37d50b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Wele-Nzás",
+      "Code": "WN",
+      "ISO3166_2": "GQ-WN",
+      "Latitude": 1.3397,
+      "Longitude": 10.9267,
+      "BoundaryGeoJSON": "@file:by-country/GQ/boundaries/GQ-WN.geojson",
+      "CommonAliases": [
+        "Wele-Nzás"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GQ"
+    },
+    "primaryKey": {
+      "ID": "C3431AE5-C159-45CA-A720-D8CD5495D0B3"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:57.221Z",
+      "checksum": "fc1b46caae2b91bf19becf3812248c1349550eb7f7b61a8c361c68fe5f3c127b"
+    }
+  }
+]

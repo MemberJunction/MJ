@@ -37,15 +37,9 @@
   flex: 1;
   min-width: 200px;
 }
-.execution-monitoring .monitoring-header .filters-row .search-container kendo-textbox {
-  width: 100%;
-}
 .execution-monitoring .monitoring-header .filters-row .filter-group {
   display: flex;
   gap: 0.75rem;
-}
-.execution-monitoring .monitoring-header .filters-row .filter-group kendo-dropdownlist {
-  min-width: 140px;
 }
 .execution-monitoring .metrics-summary {
   display: grid;

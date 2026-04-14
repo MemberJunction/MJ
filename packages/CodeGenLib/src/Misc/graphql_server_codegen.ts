@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { logError } from './status_logging';
 import { mjCoreSchema, resolveEntityPackageName } from '../Config/config';
-import { makeDir, sortBySequenceAndCreatedAt } from './util';
+import { makeDir, sortBySequenceAndCreatedAt, sortRelatedEntities } from './util';
 
 /**
  * This class is responsible for generating the GraphQL Server resolvers and types for the entities, you can sub-class this class to extend/modify the logic, make sure to use @memberjunction/global RegisterClass decorator
@@ -94,7 +94,7 @@ export class GraphQLServerGeneratorBase {
       }
 
       // Sort related entities by Sequence, then by __mj_CreatedAt for consistent ordering
-      const sortedRelatedEntities = sortBySequenceAndCreatedAt(entity.RelatedEntities);
+      const sortedRelatedEntities = sortRelatedEntities(entity.RelatedEntities);
 
       for (let j: number = 0; j < sortedRelatedEntities.length; ++j) {
         const r = sortedRelatedEntities[j];
@@ -206,7 +206,7 @@ import { Field, ${entity._floatCount > 0 ? 'Float, ' : ''}Int, ObjectType, GetRe
 import { ${`${entity.ClassName}Entity`} } from '${importLibrary}';
     `;
     // Sort related entities by Sequence, then by __mj_CreatedAt for consistent ordering
-    const sortedRelatedEntities = sortBySequenceAndCreatedAt(entity.RelatedEntities);
+    const sortedRelatedEntities = sortRelatedEntities(entity.RelatedEntities);
 
     for (let i: number = 0; i < sortedRelatedEntities.length; ++i) {
       const r = sortedRelatedEntities[i];
@@ -430,7 +430,7 @@ export class ${typeNameBase}Resolver${entity.CustomResolverAPI ? 'Base' : ''} ex
 
       // now, generate the FieldResolvers for each of the one-to-many relationships
       // Sort related entities by Sequence, then by __mj_CreatedAt for consistent ordering
-      const sortedRelatedEntities = sortBySequenceAndCreatedAt(entity.RelatedEntities);
+      const sortedRelatedEntities = sortRelatedEntities(entity.RelatedEntities);
 
       for (let i = 0; i < sortedRelatedEntities.length; i++) {
         const r = sortedRelatedEntities[i];

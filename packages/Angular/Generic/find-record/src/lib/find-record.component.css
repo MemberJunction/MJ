@@ -23,3 +23,13 @@
     width: 75px;
     margin-bottom: 10px;
 }
+
+.find-grid-wrapper {
+    height: 280px;
+    width: 100%;
+}
+
+.find-grid {
+    width: 100%;
+    height: 100%;
+}

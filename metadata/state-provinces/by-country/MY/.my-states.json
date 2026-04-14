@@ -1,0 +1,317 @@
+[
+  {
+    "fields": {
+      "Name": "Johor",
+      "Code": "J",
+      "ISO3166_2": "MY-J",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Johor"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MY"
+    },
+    "primaryKey": {
+      "ID": "243B61DF-7CA0-4A01-A2BB-07AB6BC5DF7F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:20.350Z",
+      "checksum": "e23580bbac023a24b1003fd30e2693402149aa0c36ea17cd8b84826b1696e846"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kedah",
+      "Code": "K",
+      "ISO3166_2": "MY-K",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Kedah"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MY"
+    },
+    "primaryKey": {
+      "ID": "4EFD6075-65A7-4384-8148-FED27A885FAB"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:20.367Z",
+      "checksum": "79d81a65cc719720cf93d2903018f585271d56a0dd55a514cdfa141753869dde"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kelantan",
+      "Code": "D",
+      "ISO3166_2": "MY-D",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Kelantan"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MY"
+    },
+    "primaryKey": {
+      "ID": "CF133F3D-7B85-4407-8FC7-D34D0E80D691"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:20.383Z",
+      "checksum": "a72302b2368307be3c754309d86fcdfbb80b96dece2363fb5de374a7b26e8e66"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Melaka",
+      "Code": "M",
+      "ISO3166_2": "MY-M",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Melaka"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MY"
+    },
+    "primaryKey": {
+      "ID": "5C650A1A-CCBF-4B16-A73E-CD46484D7B48"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:20.398Z",
+      "checksum": "86e0685e48549e4850379588bb512a2a7ca322e9a8dab602d500c21f7297c8e8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Negeri Sembilan",
+      "Code": "N",
+      "ISO3166_2": "MY-N",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Negeri Sembilan"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MY"
+    },
+    "primaryKey": {
+      "ID": "65D85205-051E-4044-999C-207AE95AD7C8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:20.413Z",
+      "checksum": "c301536109b173b6a7d6da1bc1f4fa6d067741600c2cecb7944e952631dba5ce"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Pahang",
+      "Code": "C",
+      "ISO3166_2": "MY-C",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Pahang"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MY"
+    },
+    "primaryKey": {
+      "ID": "6FE84B85-83BE-4EEC-8793-99733064B4AB"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:20.427Z",
+      "checksum": "e63b85d8a39fac876a7836b1a41bd6f6ec37c315907000c90dce2f9e066d66d2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Perak",
+      "Code": "A",
+      "ISO3166_2": "MY-A",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Perak"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MY"
+    },
+    "primaryKey": {
+      "ID": "02622824-F7CB-4869-88D4-C1292155DA8A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:20.444Z",
+      "checksum": "57f8872296c668ef9144bc148272aa2aacaf83c854d2ff2a2e1a75d6c15ae90b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Perlis",
+      "Code": "R",
+      "ISO3166_2": "MY-R",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Perlis"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MY"
+    },
+    "primaryKey": {
+      "ID": "A0EE3DDF-417F-4D0B-A901-61132103BF1C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:20.461Z",
+      "checksum": "e8fd03b1b2cc96b8320b8cbe7475489c9fd360f0d30f984ef39293006564bf4f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Pulau Pinang",
+      "Code": "P",
+      "ISO3166_2": "MY-P",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Pulau Pinang"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MY"
+    },
+    "primaryKey": {
+      "ID": "D20C236A-1479-4EF5-954E-BE89E5457F61"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:20.477Z",
+      "checksum": "b1bc6fd787e8b798612209de2874c873f171cc02cfcb5b6ff404ce135f82aeeb"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sabah",
+      "Code": "SA",
+      "ISO3166_2": "MY-SA",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Sabah"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MY"
+    },
+    "primaryKey": {
+      "ID": "5F1EDCF3-C16B-4277-92B4-B748ECDE189E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:20.490Z",
+      "checksum": "3573e89cd9c9fa61004bed169bb5956b9e807353135ba8cf456c6cd3883c1e3a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sarawak",
+      "Code": "SK",
+      "ISO3166_2": "MY-SK",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Sarawak"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MY"
+    },
+    "primaryKey": {
+      "ID": "10F25F61-84AE-4041-BF05-16E350C184F5"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:20.528Z",
+      "checksum": "b9aa3075cb854fa07e9d8f2b19c91f79f8998b21b6bddcc06051fa0d2fbd9b30"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Selangor",
+      "Code": "B",
+      "ISO3166_2": "MY-B",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Selangor"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MY"
+    },
+    "primaryKey": {
+      "ID": "E85B7C2F-EB3E-426E-930A-7C130627BAE9"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:20.545Z",
+      "checksum": "5abbd2abea99dbf97c62d47fd8f786b16a402e1cb5a884cb4ba021d128664fc8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Terengganu",
+      "Code": "T",
+      "ISO3166_2": "MY-T",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Terengganu"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MY"
+    },
+    "primaryKey": {
+      "ID": "A44467C1-E7BE-4DF0-AAF1-A51E6B60639A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:20.561Z",
+      "checksum": "8552bce57ada9254c419be732a9b5eda37ff1e52b1ab2507afcb29a178b5a34f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Wilayah Persekutuan Kuala Lumpur",
+      "Code": "W",
+      "ISO3166_2": "MY-W",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Wilayah Persekutuan Kuala Lumpur"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MY"
+    },
+    "primaryKey": {
+      "ID": "DD5E4EED-B168-4FA3-9764-25AB833E501A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:20.576Z",
+      "checksum": "82cd5611f92b5238e03ed404993cb2986f958d8b096198b8a252a71df87dcab3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Wilayah Persekutuan Labuan",
+      "Code": "L",
+      "ISO3166_2": "MY-L",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Wilayah Persekutuan Labuan"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MY"
+    },
+    "primaryKey": {
+      "ID": "530D6156-67C7-49EB-B23F-7A6E58D57E0C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:20.590Z",
+      "checksum": "688d145db4e4c4ae2425d92bbb47b638b31ed919206beb7e279ec3bc6f302246"
+    }
+  }
+]

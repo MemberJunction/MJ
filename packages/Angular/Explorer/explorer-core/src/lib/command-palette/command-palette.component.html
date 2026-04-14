@@ -49,6 +49,24 @@
           </div>
         </div>
       }
+      <!-- Search Knowledge Hub Action -->
+      @if (SearchQuery.trim().length > 0) {
+        <div class="results-section-divider">
+          <span class="section-label">Knowledge Search</span>
+        </div>
+        <div
+          class="result-item result-item-action"
+          [class.selected]="FilteredApps.length === SelectedIndex"
+          (click)="SearchKnowledgeHub()"
+          role="option">
+          <i class="fa-solid fa-brain result-icon result-icon-knowledge" aria-hidden="true"></i>
+          <div class="result-info">
+            <div class="result-name">Search Knowledge Hub</div>
+            <div class="result-description">Search "{{ SearchQuery }}" across entities, documents, and content</div>
+          </div>
+          <kbd class="result-kbd">Enter</kbd>
+        </div>
+      }
       <!-- Empty State -->
       @if (FilteredApps.length === 0 && SearchQuery) {
         <div class="empty-state"
@@ -56,7 +74,7 @@
           aria-live="polite">
           <i class="fa-solid fa-search empty-icon" aria-hidden="true"></i>
           <div class="empty-text">No applications found</div>
-          <div class="empty-subtext">Try a different search term</div>
+          <div class="empty-subtext">Try a different search term or search the Knowledge Hub</div>
         </div>
       }
     </div>

@@ -65,13 +65,13 @@
             <!-- Action Buttons based on tab -->
             @switch (ActiveTab) {
                 @case ('servers') {
-                    <button kendoButton themeColor="primary" (click)="createServer()">
+                    <button mjButton variant="primary" (click)="createServer()">
                         <i class="fa-solid fa-plus"></i>
                         Add Server
                     </button>
                 }
                 @case ('connections') {
-                    <button kendoButton themeColor="primary" (click)="createConnection()">
+                    <button mjButton variant="primary" (click)="createConnection()">
                         <i class="fa-solid fa-plus"></i>
                         Add Connection
                     </button>
@@ -96,13 +96,13 @@
                             <i class="fa-solid fa-list"></i>
                         </button>
                     </div>
-                    <button kendoButton themeColor="primary" (click)="openTestToolDialog()">
+                    <button mjButton variant="primary" (click)="openTestToolDialog()">
                         <i class="fa-solid fa-play"></i>
                         Test Tool
                     </button>
                 }
                 @case ('logs') {
-                    <button kendoButton fillMode="flat" (click)="loadAllData()" [disabled]="IsLoading" title="Refresh">
+                    <button mjButton variant="flat" (click)="loadAllData()" [disabled]="IsLoading" title="Refresh">
                         <i class="fa-solid fa-sync" [class.fa-spin]="IsLoading"></i>
                         Refresh
                     </button>
@@ -153,7 +153,7 @@
                                     <div class="empty-state">
                                         <i class="fa-solid fa-server"></i>
                                         <p>No MCP servers configured</p>
-                                        <button kendoButton themeColor="primary" (click)="createServer()">
+                                        <button mjButton variant="primary" (click)="createServer()">
                                             Add Your First Server
                                         </button>
                                     </div>
@@ -170,10 +170,10 @@
                                                     </span>
                                                 </div>
                                                 <div class="card-actions" (click)="$event.stopPropagation()">
-                                                    <button kendoButton fillMode="flat" (click)="editServer(server)" title="Edit">
+                                                    <button mjButton variant="flat" (click)="editServer(server)" title="Edit">
                                                         <i class="fa-solid fa-pen"></i>
                                                     </button>
-                                                    <button kendoButton fillMode="flat" (click)="deleteServer(server)" title="Delete">
+                                                    <button mjButton variant="flat" (click)="deleteServer(server)" title="Delete">
                                                         <i class="fa-solid fa-trash"></i>
                                                     </button>
                                                 </div>
@@ -240,9 +240,9 @@
                                                                             {{ getParamCount(tool) }} params
                                                                         </span>
                                                                     </div>
-                                                                    <button kendoButton
-                                                                            fillMode="flat"
-                                                                            size="small"
+                                                                    <button mjButton
+                                                                            variant="flat"
+                                                                            size="sm"
                                                                             (click)="runToolFromCard(tool); $event.stopPropagation()"
                                                                             title="Test this tool">
                                                                         <i class="fa-solid fa-play"></i>
@@ -266,7 +266,7 @@
                                     <div class="empty-state">
                                         <i class="fa-solid fa-link"></i>
                                         <p>No connections configured</p>
-                                        <button kendoButton themeColor="primary" (click)="createConnection()">
+                                        <button mjButton variant="primary" (click)="createConnection()">
                                             Add Your First Connection
                                         </button>
                                     </div>
@@ -283,8 +283,8 @@
                                                     </span>
                                                 </div>
                                                 <div class="card-actions" (click)="$event.stopPropagation()">
-                                                    <button kendoButton
-                                                            fillMode="flat"
+                                                    <button mjButton
+                                                            variant="flat"
                                                             (click)="syncConnectionTools(conn)"
                                                             [disabled]="isSyncing(conn.ID)"
                                                             title="Sync Tools">
@@ -294,10 +294,10 @@
                                                             <i class="fa-solid fa-sync"></i>
                                                         }
                                                     </button>
-                                                    <button kendoButton fillMode="flat" (click)="editConnection(conn)" title="Edit">
+                                                    <button mjButton variant="flat" (click)="editConnection(conn)" title="Edit">
                                                         <i class="fa-solid fa-pen"></i>
                                                     </button>
-                                                    <button kendoButton fillMode="flat" (click)="deleteConnection(conn)" title="Delete">
+                                                    <button mjButton variant="flat" (click)="deleteConnection(conn)" title="Delete">
                                                         <i class="fa-solid fa-trash"></i>
                                                     </button>
                                                 </div>
@@ -378,9 +378,9 @@
                                                                             {{ getParamCount(tool) }} params
                                                                         </span>
                                                                     </div>
-                                                                    <button kendoButton
-                                                                            fillMode="flat"
-                                                                            size="small"
+                                                                    <button mjButton
+                                                                            variant="flat"
+                                                                            size="sm"
                                                                             (click)="runToolFromCard(tool, conn); $event.stopPropagation()"
                                                                             title="Test this tool with this connection">
                                                                         <i class="fa-solid fa-play"></i>
@@ -422,7 +422,7 @@
                                                     </span>
                                                 </div>
                                                 <div class="server-actions" (click)="$event.stopPropagation()">
-                                                    <button kendoButton fillMode="flat" (click)="openTestToolDialog(undefined, undefined)" title="Test a tool">
+                                                    <button mjButton variant="flat" (click)="openTestToolDialog(undefined, undefined)" title="Test a tool">
                                                         <i class="fa-solid fa-play"></i>
                                                     </button>
                                                 </div>
@@ -454,11 +454,11 @@
                                                                     <p class="tool-description" [innerHTML]="tool.ToolDescription | highlightSearch:(filters$ | async)?.searchTerm"></p>
                                                                 }
                                                                 <div class="tool-card-actions">
-                                                                    <button kendoButton fillMode="flat" size="small" (click)="openTestToolDialog(tool)" title="Test this tool">
+                                                                    <button mjButton variant="flat" size="sm" (click)="openTestToolDialog(tool)" title="Test this tool">
                                                                         <i class="fa-solid fa-play"></i>
                                                                         Test
                                                                     </button>
-                                                                    <button kendoButton fillMode="flat" size="small" (click)="toggleToolExpand(tool)" title="View details">
+                                                                    <button mjButton variant="flat" size="sm" (click)="toggleToolExpand(tool)" title="View details">
                                                                         <i class="fa-solid" [class.fa-chevron-down]="!isToolExpanded(tool)" [class.fa-chevron-up]="isToolExpanded(tool)"></i>
                                                                         {{ isToolExpanded(tool) ? 'Less' : 'More' }}
                                                                     </button>
@@ -533,10 +533,10 @@
                                                                         </td>
                                                                         <td>{{ formatDate(tool.LastSeenAt) }}</td>
                                                                         <td class="actions-cell">
-                                                                            <button kendoButton fillMode="flat" size="small" (click)="openTestToolDialog(tool)" title="Test">
+                                                                            <button mjButton variant="flat" size="sm" (click)="openTestToolDialog(tool)" title="Test">
                                                                                 <i class="fa-solid fa-play"></i>
                                                                             </button>
-                                                                            <button kendoButton fillMode="flat" size="small" (click)="toggleToolExpand(tool)" title="Details">
+                                                                            <button mjButton variant="flat" size="sm" (click)="toggleToolExpand(tool)" title="Details">
                                                                                 <i class="fa-solid" [class.fa-chevron-down]="!isToolExpanded(tool)" [class.fa-chevron-up]="isToolExpanded(tool)"></i>
                                                                             </button>
                                                                         </td>

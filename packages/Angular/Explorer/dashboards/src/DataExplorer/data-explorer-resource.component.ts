@@ -18,10 +18,13 @@ import { DataExplorerFilter } from './models/explorer-state.interface';
     template: `
         <div class="data-explorer-resource-container">
             <mj-data-explorer-dashboard
+                [ParentTabId]="getTabId()"
                 [entityFilter]="entityFilter"
                 [contextName]="contextName"
                 [contextIcon]="contextIcon"
-                (OpenEntityRecord)="onOpenEntityRecord($event)">
+                [initialQueryParams]="initialQueryParams"
+                (OpenEntityRecord)="onOpenEntityRecord($event)"
+                (DisplayNameChanged)="onDisplayNameChanged($event)">
             </mj-data-explorer-dashboard>
         </div>
     `,
@@ -46,6 +49,8 @@ export class DataExplorerResourceComponent extends BaseResourceComponent impleme
     public entityFilter: DataExplorerFilter | null = null;
     public contextName: string | null = null;
     public contextIcon: string | null = null;
+    /** Initial query params from the URL, forwarded to the dashboard */
+    public initialQueryParams: Record<string, string> = {};
 
     @ViewChild(DataExplorerDashboardComponent) dataExplorer!: DataExplorerDashboardComponent;
 
@@ -57,9 +62,7 @@ export class DataExplorerResourceComponent extends BaseResourceComponent impleme
     // ========================================
 
     constructor(
-        private cdr: ChangeDetectorRef,
-        private navigationService: NavigationService
-    ) {
+        private cdr: ChangeDetectorRef) {
         super();
     }
 
@@ -89,10 +92,23 @@ export class DataExplorerResourceComponent extends BaseResourceComponent impleme
     // ========================================
 
     ngOnInit(): void {
+        super.ngOnInit();
         // Configuration loaded via Data setter
     }
 
+    /**
+     * Forward query param changes from the framework to the inner dashboard.
+     * The shell delivers params here (on the resource wrapper), but the dashboard
+     * needs them for deep linking (entity, viewId, filter, view mode, map mode).
+     */
+    protected override OnQueryParamsChanged(params: Record<string, string>, source: 'popstate' | 'deeplink'): void {
+        if (this.dataExplorer) {
+            this.dataExplorer.HandleQueryParamsChanged(params, source);
+        }
+    }
+
     ngOnDestroy(): void {
+        super.ngOnDestroy();
         this._destroy$.next();
         this._destroy$.complete();
     }
@@ -127,6 +143,18 @@ export class DataExplorerResourceComponent extends BaseResourceComponent impleme
         this.contextName = config['appName'] as string || null;
         this.contextIcon = config['appIcon'] as string || null;
 
+        // Build initial query params: start with workspace-saved params, then let
+        // browser URL params override. The URL is the source of truth for user intent —
+        // if the user navigates to a URL with specific params, those should take priority
+        // over potentially stale workspace state from a prior session.
+        const workspaceParams = (config['queryParams'] as Record<string, string>) || {};
+        const browserParams = new URLSearchParams(window.location.search);
+        const merged = { ...workspaceParams };
+        browserParams.forEach((value, key) => {
+            merged[key] = value;
+        });
+        this.initialQueryParams = merged;
+
         this.cdr.detectChanges();
 
         // Setup LoadCompleteEvent after view initializes
@@ -157,5 +185,9 @@ export class DataExplorerResourceComponent extends BaseResourceComponent impleme
         if (event && event.EntityName && event.RecordPKey) {
             this.navigationService.OpenEntityRecord(event.EntityName, event.RecordPKey);
         }
+    }
+
+    public onDisplayNameChanged(name: string): void {
+        this.NotifyDisplayNameChanged(name);
     }
 }

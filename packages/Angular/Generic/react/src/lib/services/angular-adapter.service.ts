@@ -5,7 +5,7 @@
  */
 
 import { Injectable } from '@angular/core';
-import { 
+import {
   ComponentCompiler,
   ComponentRegistry,
   ComponentResolver,
@@ -15,6 +15,7 @@ import {
   RuntimeContext,
   ExternalLibraryConfig,
   LibraryConfiguration,
+  LibraryLoader,
   SetupStyles
 } from '@memberjunction/react-runtime';
 import { ScriptLoaderService } from './script-loader.service';
@@ -37,6 +38,32 @@ export class AngularAdapterService {
   private initializationPromise: Promise<void> | undefined;
 
   constructor(private scriptLoader: ScriptLoaderService) {}
+
+  /**
+   * Eagerly start loading the React runtime in the background.
+   * Call this at app startup (e.g., in APP_INITIALIZER or after auth) so that
+   * React, ReactDOM, and Babel are already downloaded from CDN by the time the
+   * user opens an interactive component artifact.
+   *
+   * Two-phase approach:
+   * 1. Immediately inject `<link rel="preload">` hints so the browser starts
+   *    downloading the CDN scripts in parallel with other page work.
+   * 2. Fire-and-forget `initialize()` which creates `<script>` tags and
+   *    executes them. If the preload hints already fetched the bytes, the
+   *    script load is nearly instant (served from HTTP cache).
+   *
+   * Safe to call multiple times — the underlying initialize() deduplicates.
+   * Does not block: returns immediately, initialization continues in background.
+   */
+  preload(): void {
+    // Phase 1: Inject browser preload hints for CDN scripts
+    LibraryLoader.preloadCoreScripts();
+
+    // Phase 2: Fire-and-forget full initialization (script execution + runtime setup)
+    this.initialize().catch(err => {
+      console.warn('React runtime preload failed (will retry on demand):', err);
+    });
+  }
 
   /**
    * Initialize the React runtime with Angular-specific configuration

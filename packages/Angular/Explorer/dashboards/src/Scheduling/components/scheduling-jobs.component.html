@@ -24,7 +24,7 @@
     </div>
     <div class="toolbar-right">
       <span class="result-count">{{FilteredJobs.length}} of {{Jobs.length}} jobs</span>
-      <button class="control-btn" (click)="Refresh()">
+      <button mjButton variant="secondary" (click)="Refresh()">
         <i class="fa-solid fa-arrows-rotate"></i> Refresh
       </button>
       <button class="primary-btn" (click)="OpenCreateSlideout()">
@@ -141,15 +141,15 @@
           }
           <!-- Card Footer -->
           <div class="job-card-footer">
-            <button class="action-btn" (click)="ToggleJobStatus(job, $event)">
+            <button mjButton variant="flat" size="sm" (click)="ToggleJobStatus(job, $event)">
               <i [class]="job.status === 'Active' ? 'fa-solid fa-pause' : 'fa-solid fa-play'"></i>
               {{job.status === 'Active' ? 'Pause' : 'Resume'}}
             </button>
-            <button class="action-btn" (click)="OpenEntityRecord(job); $event.stopPropagation()">
+            <button mjButton variant="flat" size="sm" (click)="OpenEntityRecord(job); $event.stopPropagation()">
               <i class="fa-solid fa-up-right-from-square"></i>
               Full Details
             </button>
-            <button class="action-btn action-btn-danger" (click)="ShowDeleteConfirm(job, $event)">
+            <button mjButton variant="danger" size="sm" (click)="ShowDeleteConfirm(job, $event)">
               <i class="fa-solid fa-trash-can"></i>
               Delete
             </button>

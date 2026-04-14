@@ -1,5 +1,5 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
-import { RegisterClass } from "@memberjunction/global";
+import { RegisterClass, BaseSingleton } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
 import axios, { AxiosRequestConfig } from "axios";
 import { Subject, from, Observable } from "rxjs";
@@ -8,15 +8,15 @@ import { concatMap, delay, map, catchError } from "rxjs/operators";
 /**
  * Rate limiter singleton for managing API requests across action instances
  */
-class APIRateLimiterManager {
-    private static instance: APIRateLimiterManager;
+class APIRateLimiterManager extends BaseSingleton<APIRateLimiterManager> {
     private limiters: Map<string, APIRateLimiter> = new Map();
 
-    static getInstance(): APIRateLimiterManager {
-        if (!APIRateLimiterManager.instance) {
-            APIRateLimiterManager.instance = new APIRateLimiterManager();
-        }
-        return APIRateLimiterManager.instance;
+    public constructor() {
+        super();
+    }
+
+    static get Instance(): APIRateLimiterManager {
+        return APIRateLimiterManager.getInstance<APIRateLimiterManager>();
     }
 
     getRateLimiter(key: string, config: RateLimitConfig): APIRateLimiter {
@@ -253,7 +253,7 @@ export class APIRateLimiterAction extends BaseAction {
             }
 
             // Get or create rate limiter
-            const rateLimiterManager = APIRateLimiterManager.getInstance();
+            const rateLimiterManager = APIRateLimiterManager.Instance;
             const rateLimiter = rateLimiterManager.getRateLimiter(rateLimitKey, {
                 maxRequestsPerMinute,
                 maxConcurrent,

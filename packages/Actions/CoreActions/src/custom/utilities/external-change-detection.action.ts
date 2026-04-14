@@ -26,6 +26,14 @@ export class ExternalChangeDetectionAction extends BaseAction {
         await ExternalChangeDetectorEngine.Instance.Config(false, params.ContextUser);
 
         const entities = this.resolveEntityList(params);
+        if (entities.length === 0) {
+            return {
+                Success: true,
+                Message: 'No entities have DetectExternalChanges enabled. Nothing to scan.',
+                ResultCode: 'SUCCESS'
+            };
+        }
+
         const result = await ExternalChangeDetectorEngine.Instance.DetectAndReplayChanges(
             entities,
             replayBatchSize,

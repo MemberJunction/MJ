@@ -7,7 +7,7 @@ import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
 import { MJAIPromptRunFormComponent } from '../../generated/Entities/MJAIPromptRun/mjaipromptrun.form.component';
 import { SharedService } from '@memberjunction/ng-shared';
 import { ChatMessage } from '@memberjunction/ai';
-import { TestHarnessWindowService } from '@memberjunction/ng-ai-test-harness';
+import { TestHarnessWindowManagerService } from '@memberjunction/ng-ai-test-harness';
 import { ParseJSONOptions, ParseJSONRecursive } from '@memberjunction/global';
 
 @RegisterClass(BaseFormComponent, 'MJ: AI Prompt Runs')
@@ -65,8 +65,13 @@ export class MJAIPromptRunFormComponentExtended extends MJAIPromptRunFormCompone
     public validationAttempts: any[] = [];
     public validationSummary: any = null;
 
+    // Full-screen overlay state
+    public FullScreenContent: string | null = null;
+    public FullScreenLanguage = 'json';
+    public FullScreenTitle = '';
+
     // Field injections
-    private testHarnessWindowService = inject(TestHarnessWindowService);
+    private testHarnessWindowService = inject(TestHarnessWindowManagerService);
     private viewContainerRef = inject(ViewContainerRef);
     
     async ngOnInit() {
@@ -485,6 +490,18 @@ export class MJAIPromptRunFormComponentExtended extends MJAIPromptRunFormCompone
         }
     }
     
+    public openFullScreen(content: string, language: string, title: string): void {
+        this.FullScreenContent = content;
+        this.FullScreenLanguage = language;
+        this.FullScreenTitle = title;
+        this.cdr.detectChanges();
+    }
+
+    public closeFullScreen(): void {
+        this.FullScreenContent = null;
+        this.cdr.detectChanges();
+    }
+
     private loadValidationData() {
         const parseOptions: ParseJSONOptions = {
             extractInlineJson: true,

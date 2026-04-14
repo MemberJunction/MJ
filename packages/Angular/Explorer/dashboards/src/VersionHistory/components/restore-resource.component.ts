@@ -37,18 +37,20 @@ export class VersionHistoryRestoreResourceComponent extends BaseResourceComponen
 
     private static readonly PREFS_KEY = 'VersionHistory.Restore.UserPreferences';
     private preferencesLoaded = false;
-    private destroy$ = new Subject<void>();
+    protected override destroy$ = new Subject<void>();
 
     constructor(private cdr: ChangeDetectorRef) {
         super();
     }
 
     ngOnInit(): void {
+        super.ngOnInit();
         this.loadUserPreferences();
         this.LoadData();
     }
 
     ngOnDestroy(): void {
+        super.ngOnDestroy();
         this.destroy$.next();
         this.destroy$.complete();
     }

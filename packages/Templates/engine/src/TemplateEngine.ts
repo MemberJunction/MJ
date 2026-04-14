@@ -142,10 +142,12 @@ export class TemplateEngineServer extends TemplateEngineBase {
     /**
      * Renders a template with the given data.
      * @param templateEntity the template object to render
-     * @param templateContent the template content item (within the template)  
-     * @param data 
+     * @param templateContent the template content item (within the template)
+     * @param data
+     * @param SkipValidation if true, validation is skipped entirely (or reduced to warnings depending on SuppressWarnings)
+     * @param SuppressWarnings if true AND SkipValidation is true, no validation warnings are logged. When SkipValidation is true but SuppressWarnings is false, validation issues are logged as non-fatal warnings. Defaults to false.
      */
-    public async RenderTemplate(templateEntity: MJTemplateEntityExtended, templateContent: MJTemplateContentEntity, data: any, SkipValidation?: boolean): Promise<TemplateRenderResult> {
+    public async RenderTemplate(templateEntity: MJTemplateEntityExtended, templateContent: MJTemplateContentEntity, data: any, SkipValidation?: boolean, SuppressWarnings?: boolean): Promise<TemplateRenderResult> {
         try {
             if (!templateContent) {
                 return {
@@ -162,7 +164,7 @@ export class TemplateEngineServer extends TemplateEngineBase {
                     Message: 'TemplateContent.TemplateText variable is required'
                 };
             }
-    
+
             if(!SkipValidation){
                 // Validate using content-specific parameters
                 const valResult = templateEntity.ValidateTemplateInput(data, templateContent.ID);
@@ -174,6 +176,19 @@ export class TemplateEngineServer extends TemplateEngineBase {
                             return error.Message;
                         }).join(', ')
                     };
+                }
+            }
+            else if (!SuppressWarnings) {
+                // SkipValidation is true but SuppressWarnings is false — log warnings for missing required params without blocking rendering
+                const valResult = templateEntity.ValidateTemplateInput(data, templateContent.ID);
+                if (!valResult.Success) {
+                    const warningMessages = valResult.Errors
+                        .filter((error: ValidationErrorInfo) => error.Type === 'Failure')
+                        .map((error: ValidationErrorInfo) => error.Message)
+                        .join(', ');
+                    if (warningMessages.length > 0) {
+                        LogError(`Template validation warnings (non-fatal) for template "${templateEntity.Name}": ${warningMessages}`);
+                    }
                 }
             }
             
