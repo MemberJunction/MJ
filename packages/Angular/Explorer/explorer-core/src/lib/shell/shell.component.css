@@ -1,6 +1,6 @@
 :host {
   display: block;
-  height: 100vh;
+  height: 100%;
   width: 100%;
   overflow: hidden;
 }
@@ -19,9 +19,10 @@
 .shell-container {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100%;
   width: 100%;
   overflow: hidden;
+  position: relative;
 }
 
 /* Hide shell container while loading - allows tab container to render and load
@@ -775,7 +776,7 @@ mj-tab-container ::ng-deep .lm_stack {
 }
 
 .search-popup {
-  position: fixed;
+  position: absolute;
   top: 60px; /* Below header */
   right: 16px;
   width: 480px;

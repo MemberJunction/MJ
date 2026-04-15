@@ -1,5 +1,13 @@
 # @memberjunction/ai-xai
 
+## 5.26.0
+
+### Patch Changes
+
+- @memberjunction/ai@5.26.0
+- @memberjunction/ai-openai@5.26.0
+- @memberjunction/global@5.26.0
+
 ## 5.25.0
 
 ### Patch Changes

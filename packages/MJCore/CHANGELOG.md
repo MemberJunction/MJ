@@ -1,5 +1,15 @@
 # Change Log - @memberjunction/core
 
+## 5.26.0
+
+### Minor Changes
+
+- a1002f4: - Entities now expose AllowCaching as the runtime source of truth for
+
+### Patch Changes
+
+- @memberjunction/global@5.26.0
+
 ## 5.25.0
 
 ### Minor Changes
