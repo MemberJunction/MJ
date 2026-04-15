@@ -43,6 +43,9 @@ function createMockEntity(overrides: Record<string, unknown> = {}) {
         Set: vi.fn((field: string, value: unknown) => { data[field] = value; }),
         get ID() { return data['ID'] ?? 'generated-id'; },
         set ID(v: string) { data['ID'] = v; },
+        get PrimaryKey() {
+            return { KeyValuePairs: [{ FieldName: 'ID', Value: data['ID'] ?? 'generated-id' }] };
+        },
         // Dynamic property setters used by orchestrator
         set CompanyIntegrationID(v: string) { data['CompanyIntegrationID'] = v; },
         set RunByUserID(v: string) { data['RunByUserID'] = v; },

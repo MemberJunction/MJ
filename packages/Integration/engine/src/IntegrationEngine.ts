@@ -646,8 +646,16 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         }
 
         if (currentWatermark) {
-            await this.watermarkService.Update(entityMapID, currentWatermark, contextUser, 'Pull');
-            result.WatermarkAfter = currentWatermark;
+            // After a clean full sync, advance the watermark to now rather than the max
+            // modification date found in the last batch. HubSpot's list API returns records
+            // in creation order, so the last batch can contain records with very old
+            // hs_lastmodifieddate values. A stale watermark causes the next incremental to
+            // re-fetch the entire change history from that old date.
+            const finalWatermark = (config.fullSync && fetchCompletedCleanly)
+                ? new Date().toISOString()
+                : currentWatermark;
+            await this.watermarkService.Update(entityMapID, finalWatermark, contextUser, 'Pull');
+            result.WatermarkAfter = finalWatermark;
         }
 
         // Orphan detection: on full sync, delete MJ records whose external counterpart no longer exists.
@@ -1131,10 +1139,12 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             case 'Update':
                 await this.UpdateRecord(record, companyIntegration, entityMap, result, contextUser);
                 break;
-            case 'Delete':
-                await this.DeleteRecord(record, entityMap, contextUser);
-                result.RecordsDeleted++;
+            case 'Delete': {
+                const didDelete = await this.DeleteRecord(record, entityMap, contextUser);
+                if (didDelete) result.RecordsDeleted++;
+                else result.RecordsErrored++;
                 break;
+            }
             case 'Skip':
                 result.RecordsSkipped++;
                 break;
@@ -1164,12 +1174,17 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             throw new Error(`Failed to create ${record.MJEntityName} record`);
         }
 
-        // Use the external ID as the entity record identifier in the record map
+        // Use the entity's actual PK (e.g. the UUID assigned by the DB) as the
+        // EntityRecordID in the record map, NOT the external ID. Storing the
+        // external ID as EntityRecordID caused UpdateRecord to fail to load the
+        // entity (UUID lookup with a HubSpot numeric ID) and fall back to
+        // CreateRecord, producing duplicates on every incremental sync.
+        const entityRecordID = entity.PrimaryKey.KeyValuePairs.map(kv => String(kv.Value)).join('|');
         await this.SaveRecordMap(
             companyIntegration.ID,
             record.ExternalRecord.ExternalID,
             entityMap.EntityID,
-            record.ExternalRecord.ExternalID,
+            entityRecordID,
             contextUser
         );
     }
@@ -1251,13 +1266,13 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         record: MappedRecord,
         entityMap: ICompanyIntegrationEntityMap,
         contextUser: UserInfo
-    ): Promise<void> {
+    ): Promise<boolean> {
         if (!record.MatchedMJRecordID) {
             console.log(`[IntegrationEngine] Skipping delete for ${record.ExternalRecord.ObjectType} ExternalID=${record.ExternalRecord.ExternalID} — no MJ record map entry (record was never synced)`);
-            return;
+            return false;
         }
 
-        if (entityMap.DeleteBehavior === 'DoNothing') return;
+        if (entityMap.DeleteBehavior === 'DoNothing') return false;
 
         const md = new Metadata();
         const entity = await md.GetEntityObject(record.MJEntityName, contextUser);
@@ -1266,7 +1281,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         const loaded = await entity.InnerLoad(this.BuildEntityPrimaryKey(record.MatchedMJRecordID, pkFields));
         if (!loaded) {
             console.log(`[IntegrationEngine] Skipping delete for ${record.MJEntityName} ${record.MatchedMJRecordID} — record not found in MJ DB (may have been deleted already)`);
-            return;
+            return false;
         }
 
         const deleted = await entity.Delete();
@@ -1274,6 +1289,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             const reason = entity.LatestResult?.CompleteMessage ?? 'unknown reason';
             console.warn(`[IntegrationEngine] Delete blocked for ${record.MJEntityName} ${record.MatchedMJRecordID} — ${reason}`);
         }
+        return deleted;
     }
 
     /**
