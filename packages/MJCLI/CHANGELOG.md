@@ -1,5 +1,45 @@
 # Change Log - @memberjunction/cli
 
+## 5.26.0
+
+### Patch Changes
+
+- Updated dependencies [55de456]
+- Updated dependencies [a1002f4]
+  - @memberjunction/server-bootstrap-lite@5.26.0
+  - @memberjunction/codegen-lib@5.26.0
+  - @memberjunction/core@5.26.0
+  - @memberjunction/ai-cli@5.26.0
+  - @memberjunction/metadata-sync@5.26.0
+  - @memberjunction/query-gen@5.26.0
+  - @memberjunction/sqlserver-dataprovider@5.26.0
+  - @memberjunction/testing-cli@5.26.0
+  - @memberjunction/db-auto-doc@5.26.0
+  - @memberjunction/config@5.26.0
+  - @memberjunction/installer@5.26.0
+  - @memberjunction/sql-converter@5.26.0
+
+## 5.25.0
+
+### Patch Changes
+
+- f322a53: Add dual-mode installer supporting both distribution and monorepo installation methods.
+- Updated dependencies [fc8cd52]
+- Updated dependencies [4f8e980]
+- Updated dependencies [f322a53]
+  - @memberjunction/core@5.25.0
+  - @memberjunction/server-bootstrap-lite@5.25.0
+  - @memberjunction/codegen-lib@5.25.0
+  - @memberjunction/installer@5.25.0
+  - @memberjunction/ai-cli@5.25.0
+  - @memberjunction/db-auto-doc@5.25.0
+  - @memberjunction/metadata-sync@5.25.0
+  - @memberjunction/query-gen@5.25.0
+  - @memberjunction/sqlserver-dataprovider@5.25.0
+  - @memberjunction/testing-cli@5.25.0
+  - @memberjunction/config@5.25.0
+  - @memberjunction/sql-converter@5.25.0
+
 ## 5.24.0
 
 ### Patch Changes

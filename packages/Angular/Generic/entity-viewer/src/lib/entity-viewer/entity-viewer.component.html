@@ -200,8 +200,10 @@
         [Entity]="effectiveEntity!"
         [Records]="filteredRecords"
         [TotalRecordCount]="totalRecordCount"
+        [RenderMode]="mapRenderMode"
         [DisplayState]="mapDisplayState"
         (MarkerClick)="onMapMarkerClick($event)"
+        (RenderModeChange)="onMapRenderModeChange($event)"
         (DisplayStateChange)="onMapDisplayStateChange($event)">
       </mj-map-view>
     }

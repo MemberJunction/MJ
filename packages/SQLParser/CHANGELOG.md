@@ -1,5 +1,13 @@
 # @memberjunction/sql-parser
 
+## 5.26.0
+
+## 5.25.0
+
+### Patch Changes
+
+- fc8cd52: Autotagging pipeline with run tracking, retry, and tag merge/delete; taxonomy server-side SQL aggregates; vector sync credential engine integration; search resolver and organic key support; unit test fixes across geo-core, ai-vector-sync, MJServer, and UUID compliance.
+
 ## 5.24.0
 
 ## 5.23.0

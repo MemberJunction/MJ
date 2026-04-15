@@ -500,6 +500,11 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
         // queryParams to be lost on the next detach/reattach cycle.
       }
 
+      // Cached component is already loaded — emit load-complete so the shell clears its
+      // loading overlay. Without this, single-tab mode navigation to a cached resource
+      // leaves the overlay blocking all user interaction.
+      this.emitFirstLoadCompleteOnce();
+
       return;
     }
 
@@ -753,10 +758,12 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
         // Keep legacy componentRefs map updated
         this.componentRefs.set(tabId, cached.componentRef);
 
-        // If resource is already loaded, update tab title immediately
+        // If resource is already loaded, update tab title immediately and signal
+        // load-complete so the shell clears any loading overlay.
         const instance = cached.componentRef.instance as BaseResourceComponent;
         if (instance.LoadComplete) {
           this.updateTabTitleFromResource(tabId, instance, resourceData);
+          this.emitFirstLoadCompleteOnce();
         }
 
         return;

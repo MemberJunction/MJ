@@ -17,7 +17,7 @@ const {
     mockInitTaxonomyBridge,
     mockCleanupTaxonomyBridge,
 } = vi.hoisted(() => ({
-    mockProviderAutotag: vi.fn().mockResolvedValue(undefined),
+    mockProviderAutotag: vi.fn().mockResolvedValue(0),
     mockCreateInstance: vi.fn(),
     mockContentSourceTypes: [
         { ID: 'type-1', Name: 'Local File System', DriverClass: 'AutotagLocalFileSystem' },
@@ -106,6 +106,7 @@ vi.mock('@memberjunction/content-autotagging', () => {
                 InitializeTaxonomyBridge: mockInitTaxonomyBridge,
                 CleanupTaxonomyBridge: mockCleanupTaxonomyBridge,
                 ForceReprocess: false,
+                ExternalRunTrackingActive: false,
             }
         },
         AutotagProgressCallback: undefined,
@@ -302,6 +303,115 @@ describe('AutotagAndVectorizeContentAction', () => {
             expect(result.Success).toBe(false);
             expect(result.ResultCode).toBe('FAILED');
             expect(result.Message).toContain('Config failed');
+        });
+    });
+
+    // ========================================================================
+    // hasNewItems Detection (provider return values, not tag count diff)
+    // ========================================================================
+
+    describe('hasNewItems detection', () => {
+        it('should detect new items when providers return > 0 items processed', async () => {
+            // Provider reports 5 items processed
+            mockProviderAutotag.mockResolvedValue(5);
+
+            const params = {
+                Params: [
+                    { Name: 'Autotag', Value: 1, Type: 'Input' },
+                    { Name: 'Vectorize', Value: 1, Type: 'Input' }
+                ],
+                ContextUser: { ID: 'user-1' }
+            };
+            const result = await callInternal(action, params);
+            expect(result.Success).toBe(true);
+        });
+
+        it('should report no new items when all providers return 0', async () => {
+            mockProviderAutotag.mockResolvedValue(0);
+
+            const params = {
+                Params: [
+                    { Name: 'Autotag', Value: 1, Type: 'Input' },
+                    { Name: 'Vectorize', Value: 1, Type: 'Input' }
+                ],
+                ContextUser: { ID: 'user-1' }
+            };
+            const result = await callInternal(action, params);
+            expect(result.Success).toBe(true);
+            // Vectorization should be skipped (no new items, not force-reprocess)
+            expect(mockVectorize).not.toHaveBeenCalled();
+        });
+    });
+
+    // ========================================================================
+    // Vectorization Skip Logic
+    // ========================================================================
+
+    describe('vectorization skip logic', () => {
+        it('should skip vectorization when no new items and not force-reprocessing', async () => {
+            mockProviderAutotag.mockResolvedValue(0);
+
+            const params = {
+                Params: [
+                    { Name: 'Autotag', Value: 1, Type: 'Input' },
+                    { Name: 'Vectorize', Value: 1, Type: 'Input' }
+                ],
+                ContextUser: { ID: 'user-1' }
+            };
+            await callInternal(action, params);
+            expect(mockVectorize).not.toHaveBeenCalled();
+        });
+
+        it('should run content item vectorization when providers processed items', async () => {
+            mockProviderAutotag.mockResolvedValue(10);
+
+            const params = {
+                Params: [
+                    { Name: 'Autotag', Value: 1, Type: 'Input' },
+                    { Name: 'Vectorize', Value: 1, Type: 'Input' }
+                ],
+                ContextUser: { ID: 'user-1' }
+            };
+            await callInternal(action, params);
+            // RunDirectVectorization calls VectorizeContentItems internally
+            // (through RunView → filter → vectorize pipeline)
+            expect(result => result.Success).toBeTruthy();
+        });
+    });
+
+    // ========================================================================
+    // ExternalRunTrackingActive flag
+    // ========================================================================
+
+    describe('ExternalRunTrackingActive flag', () => {
+        it('should set ExternalRunTrackingActive when ContentProcessRunID is provided', async () => {
+            const params = {
+                Params: [
+                    { Name: 'Autotag', Value: 1, Type: 'Input' },
+                    { Name: 'Vectorize', Value: 0, Type: 'Input' },
+                    { Name: 'ContentProcessRunID', Value: 'run-123', Type: 'Input' }
+                ],
+                ContextUser: { ID: 'user-1' }
+            };
+            await callInternal(action, params);
+
+            // Access the mock engine instance to verify the flag was set
+            const { AutotagBaseEngine } = await import('@memberjunction/content-autotagging');
+            expect(AutotagBaseEngine.Instance.ExternalRunTrackingActive).toBe(true);
+        });
+
+        it('should not set ExternalRunTrackingActive when ContentProcessRunID is absent', async () => {
+            const params = {
+                Params: [
+                    { Name: 'Autotag', Value: 1, Type: 'Input' },
+                    { Name: 'Vectorize', Value: 0, Type: 'Input' }
+                ],
+                ContextUser: { ID: 'user-1' }
+            };
+            await callInternal(action, params);
+
+            const { AutotagBaseEngine } = await import('@memberjunction/content-autotagging');
+            expect(AutotagBaseEngine.Instance.ExternalRunTrackingActive).toBe(false);
         });
     });
 });

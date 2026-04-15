@@ -2414,6 +2414,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         const needsTemplateProcessing = query.UsesTemplate || compositionResult.AnyDependencyUsesTemplates;
 
         if (needsTemplateProcessing) {
+            // Escape {{ }} inside SQL comments before Nunjucks processes them.
+            // Without this, patterns like {{query:"..."}} in comments cause
+            // Nunjucks parse errors ("expected variable end").
+            finalSQL = this._compositionEngine.escapeTemplateTokensInComments(finalSQL);
+
             const processingResult = QueryParameterProcessor.processQueryTemplate(
                 query,
                 parameters,
