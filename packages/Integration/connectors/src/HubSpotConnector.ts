@@ -1427,12 +1427,26 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
      * and inferring field names/types from the response.
      */
     /**
-     * Non-CRM objects have fixed, documented schemas. Return the PK field from the
-     * static NON_CRM_OBJECTS config so IntrospectSchema always gets at least the key
-     * field. IntrospectSchema's DB-fallback then supplements with the full static field
-     * list from the metadata JSON. No live API sampling needed.
+     * Non-CRM and association objects have fixed, documented schemas.
+     * - Association objects: return both composite PK fields from ASSOCIATION_OBJECTS config.
+     * - Non-CRM objects: return the PK field from NON_CRM_OBJECTS config.
+     * IntrospectSchema's DB-fallback supplements with the full field list from metadata.
+     * No live API sampling needed.
      */
     private DiscoverNonCRMFields(objectName: string): ExternalFieldSchema[] {
+        const assocConfig = this.GetAssociationObject(objectName);
+        if (assocConfig) {
+            return assocConfig.pkFields.map(pk => ({
+                Name: pk,
+                Label: pk,
+                Description: `Key field for ${assocConfig.label}`,
+                DataType: 'string',
+                IsRequired: true,
+                IsUniqueKey: true,
+                IsReadOnly: true,
+            }));
+        }
+
         const objConfig = this.GetNonCRMObject(objectName);
         if (!objConfig) return [];
         return [{
