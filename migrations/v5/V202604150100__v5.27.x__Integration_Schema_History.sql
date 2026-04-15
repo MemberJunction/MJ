@@ -1,16 +1,14 @@
--- Migration: Create __mj_integration schema and SchemaHistory table
--- Purpose: Track DDL history for integration-created tables (HubSpot, YM, Salesforce, etc.)
---          separately from core __mj Flyway migrations
+-- Migration: Integration schema history table + IsCustom flag on IntegrationObject/Field
 -- =====================================================================
 
--- Create the schema if it doesn't already exist
+-- Create the __mj_integration schema if it doesn't already exist
 IF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = '__mj_integration')
 BEGIN
     EXEC('CREATE SCHEMA [__mj_integration]');
 END
 GO
 
--- Create the DDL history tracking table
+-- Track DDL history for integration-created tables (HubSpot, YM, Salesforce, etc.)
 IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = '__mj_integration' AND TABLE_NAME = 'SchemaHistory')
 BEGIN
     CREATE TABLE [__mj_integration].[SchemaHistory] (
@@ -29,12 +27,35 @@ BEGIN
         CONSTRAINT [PK___mj_integration_SchemaHistory] PRIMARY KEY ([ID])
     );
 
-    -- Index for querying by integration + schema
     CREATE NONCLUSTERED INDEX [IX_SchemaHistory_Integration]
         ON [__mj_integration].[SchemaHistory] ([IntegrationName], [SchemaName], [ExecutedAt] DESC);
 
-    -- Index for querying by table
     CREATE NONCLUSTERED INDEX [IX_SchemaHistory_Table]
         ON [__mj_integration].[SchemaHistory] ([SchemaName], [TableName], [ExecutedAt] DESC);
 END
+GO
+
+-- IsCustom flag: distinguishes static metadata (mj-sync push) from runtime-discovered objects/fields
+ALTER TABLE ${flyway:defaultSchema}.IntegrationObject
+    ADD [IsCustom] BIT NOT NULL CONSTRAINT [DF_IntegrationObject_IsCustom] DEFAULT 0;
+GO
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'When true, this object was dynamically discovered by IntrospectSchema and is not defined in static connector metadata.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'IntegrationObject',
+    @level2type = N'COLUMN', @level2name = N'IsCustom';
+GO
+
+ALTER TABLE ${flyway:defaultSchema}.IntegrationObjectField
+    ADD [IsCustom] BIT NOT NULL CONSTRAINT [DF_IntegrationObjectField_IsCustom] DEFAULT 0;
+GO
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'When true, this field was dynamically discovered by IntrospectSchema and is not defined in static connector metadata.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'IntegrationObjectField',
+    @level2type = N'COLUMN', @level2name = N'IsCustom';
 GO
