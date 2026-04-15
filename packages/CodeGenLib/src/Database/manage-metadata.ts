@@ -7,6 +7,7 @@ import { MJApplicationEntity } from "@memberjunction/core-entities";
 import { logError, logMessage, logStatus } from "../Misc/status_logging";
 import { SQLUtilityBase } from "./sql";
 import { AdvancedGeneration, EntityDescriptionResult, EntityNameResult, SmartFieldIdentificationResult, FormLayoutResult, VirtualEntityDecorationResult } from "../Misc/advanced_generation";
+import { CodeGenReporter } from "../Misc/codegen-reporter";
 import { SQLParser } from "@memberjunction/sql-parser";
 import { createDisplayName, generatePluralName, MJGlobal, RegisterClass, SafeJSONParse, stripTrailingChars, UUIDsEqual } from "@memberjunction/global";
 import { v4 as uuidv4 } from 'uuid';
@@ -4335,9 +4336,16 @@ export class ManageMetadataBase {
       for (let i = 0; i < entities.length; i += batchSize) {
          const batch = entities.slice(i, i + batchSize);
 
-         // Process batch in parallel
+         // Process batch in parallel. entityPhase() sets the reporter's "current entity"
+         // so any LLM calls issued by processEntityAdvancedGeneration get attributed
+         // to the right entity. Also marks the entity as modified in the report flags.
          const batchResults = await Promise.allSettled(
-            batch.map(entity => this.processEntityAdvancedGeneration(pool, entity, allFields, ag, currentUser))
+            batch.map(entity => {
+               CodeGenReporter.Instance.flagEntity(entity.Name, 'modified');
+               return CodeGenReporter.Instance.entityPhase(entity.Name, 'advancedGeneration',
+                  () => this.processEntityAdvancedGeneration(pool, entity, allFields, ag, currentUser),
+               );
+            })
          );
 
          // Tally results

@@ -1,5 +1,5 @@
 import { Command, Flags } from '@oclif/core';
-import type { ParserOutput } from '@oclif/core/lib/interfaces/parser';
+import type { ParserOutput } from '@oclif/core/interfaces';
 import { updatedConfig } from '../../config';
 
 export default class CodeGen extends Command {
