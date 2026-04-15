@@ -33,6 +33,14 @@ export interface NativeFileInput {
   Base64Content: string;
   /** File size in bytes — used by the resolver for limit checks */
   SizeBytes: number;
+  /**
+   * Pre-extracted text content for fallback when the driver doesn't support
+   * native file input. Populated eagerly by ArtifactToolManager so the
+   * Prompts package doesn't need binary parsing dependencies (pdfjs, etc.).
+   * When present and the driver rejects the file, this text is injected
+   * as a plain text block in the user message instead.
+   */
+  TextContent?: string;
 }
 
 /**

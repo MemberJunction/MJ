@@ -3370,6 +3370,7 @@ export class AIPromptRunner {
     const caps = llm.GetFileCapabilities();
     let nativeCount = 0;
     const fileBlocks: { type: 'file_url'; content: string; mimeType: string; fileName?: string }[] = [];
+    const textFallbackBlocks: { type: 'text'; content: string }[] = [];
 
     for (const file of params.nativeFileInputs) {
       const strategy = ResolveFileInputStrategy(file.MimeType, file.SizeBytes, caps, null, nativeCount);
@@ -3380,12 +3381,20 @@ export class AIPromptRunner {
         fileBlocks.push({ type: 'file_url', content: dataUrl, mimeType: file.MimeType, fileName: file.Name });
         nativeCount++;
         this.logStatus('[NativeFileInput] Attaching \'' + file.Name + '\' (' + file.MimeType + ') natively to prompt', verbose, params);
+      } else if (file.TextContent) {
+        // Driver doesn't support this file type natively — fall back to
+        // injecting pre-extracted text so the LLM can still see the content.
+        textFallbackBlocks.push({
+          type: 'text',
+          content: `--- File: ${file.Name} (${file.MimeType}) ---\n${file.TextContent}\n--- End of file ---`,
+        });
+        this.logStatus('[NativeFileInput] Text fallback for \'' + file.Name + '\' (' + file.MimeType + '): ' + strategy.Reason, verbose, params);
       } else {
-        this.logStatus('[NativeFileInput] Skipping \'' + file.Name + '\': ' + strategy.Reason, verbose, params);
+        this.logStatus('[NativeFileInput] Skipping \'' + file.Name + '\': ' + strategy.Reason + ' (no text fallback available)', verbose, params);
       }
     }
 
-    if (fileBlocks.length === 0) return;
+    if (fileBlocks.length === 0 && textFallbackBlocks.length === 0) return;
 
     // Find the last user message and convert its content to content blocks
     for (let i = chatParams.messages.length - 1; i >= 0; i--) {
@@ -3394,6 +3403,7 @@ export class AIPromptRunner {
         const textContent = typeof msg.content === 'string' ? msg.content : '';
         msg.content = [
           ...fileBlocks,
+          ...textFallbackBlocks,
           { type: 'text', content: textContent },
         ];
         break;

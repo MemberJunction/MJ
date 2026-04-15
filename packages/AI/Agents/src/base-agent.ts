@@ -2010,8 +2010,10 @@ export class BaseAgent {
             // Pass file artifacts as candidate native file inputs.
             // The AIPromptRunner will check these against the resolved driver's
             // FileCapabilities and attach qualifying files as native content blocks.
+            // When the driver doesn't support a file type, the runner falls back to
+            // the pre-extracted TextContent on each candidate.
             if (this._artifactToolManager.HasArtifacts()) {
-                promptParams.nativeFileInputs = this._artifactToolManager.GetNativeFileInputCandidates();
+                promptParams.nativeFileInputs = await this._artifactToolManager.GetNativeFileInputCandidates();
             }
         }
 

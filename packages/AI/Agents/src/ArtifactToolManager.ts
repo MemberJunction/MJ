@@ -117,22 +117,73 @@ export class ArtifactToolManager {
    * AIPromptRunner. Only artifacts with a known MIME type and string/Buffer
    * content are included. The runner will check each against the driver's
    * FileCapabilities before actually attaching them.
+   *
+   * For each candidate, eagerly extracts text content so the Prompts package
+   * can fall back to a plain-text injection when the driver doesn't support
+   * native file input (e.g., Cerebras, older OpenAI-compat providers).
    */
-  GetNativeFileInputCandidates(): NativeFileInput[] {
+  async GetNativeFileInputCandidates(): Promise<NativeFileInput[]> {
     const candidates: NativeFileInput[] = [];
     for (const entry of this.artifacts.values()) {
       if (!entry.mimeType) continue;
-      const base64 = typeof entry.content === 'string'
-        ? Buffer.from(entry.content).toString('base64')
-        : entry.content.toString('base64');
+      const contentBuffer = typeof entry.content === 'string'
+        ? Buffer.from(entry.content)
+        : entry.content;
+      const base64 = contentBuffer.toString('base64');
+      const textContent = await this.extractTextFallback(entry.mimeType, contentBuffer, entry.content);
       candidates.push({
         Name: entry.name,
         MimeType: entry.mimeType,
         Base64Content: base64,
-        SizeBytes: typeof entry.content === 'string' ? Buffer.byteLength(entry.content) : entry.content.length,
+        SizeBytes: contentBuffer.length,
+        ...(textContent ? { TextContent: textContent } : {}),
       });
     }
     return candidates;
+  }
+
+  /**
+   * Best-effort text extraction for fallback when the driver doesn't support
+   * native file input. Returns null if extraction fails or isn't applicable
+   * (e.g., images, audio).
+   */
+  private async extractTextFallback(mimeType: string, buffer: Buffer, rawContent: string | Buffer): Promise<string | null> {
+    const mime = mimeType.toLowerCase();
+
+    // Text-based content — decode directly
+    if (mime.startsWith('text/') || mime === 'application/json') {
+      return typeof rawContent === 'string' ? rawContent : buffer.toString('utf-8');
+    }
+
+    // PDF — use pdfjs-dist (already a dependency of this package)
+    if (mime === 'application/pdf') {
+      return this.extractPdfText(buffer);
+    }
+
+    // Office documents — not supported for text extraction yet
+    // (would need mammoth for docx, xlsx-parse for xlsx, etc.)
+    return null;
+  }
+
+  /** Extract all text from a PDF buffer using pdfjs-dist. Returns null on failure. */
+  private async extractPdfText(buffer: Buffer): Promise<string | null> {
+    try {
+      const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs');
+      const pdfDoc = await (pdfjsLib as { getDocument: (opts: { data: Uint8Array }) => { promise: Promise<{ numPages: number; getPage: (n: number) => Promise<{ getTextContent: () => Promise<{ items: Array<{ str: string }> }> }>; destroy: () => void }> } }).getDocument({ data: new Uint8Array(buffer) }).promise;
+      try {
+        const pages: string[] = [];
+        for (let i = 1; i <= pdfDoc.numPages; i++) {
+          const page = await pdfDoc.getPage(i);
+          const tc = await page.getTextContent();
+          pages.push(tc.items.map((item: { str: string }) => item.str).join(' '));
+        }
+        return pages.join('\n\n');
+      } finally {
+        pdfDoc.destroy();
+      }
+    } catch {
+      return null;
+    }
   }
 
   // ─── PROMPT INJECTION ───
